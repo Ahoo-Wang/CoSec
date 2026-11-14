@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cocache
 
 import kotlinx.coroutines.CoroutineScope
@@ -21,6 +23,7 @@ import kotlinx.coroutines.future.await
 import kotlinx.coroutines.future.future
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -61,7 +64,7 @@ fun interface MembershipLoader {
  * Call [invalidate] when a principal's memberships change. An invalidation that arrives while another request is
  * loading the old memberships can be overwritten by them; the TTL still bounds that.
  */
-class CoCacheMembershipProvider(
+class CoCacheMembershipProvider @InternalCoSecApi constructor(
     private val cache: MembershipCache,
     /**
      * How long one fill may take. Requests on this instance that miss the same key wait for the same fill, which no

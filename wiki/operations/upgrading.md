@@ -325,6 +325,44 @@ and have to be provisioned again.
     `Identifiers.isUnpairedSurrogateAt`. The constructors of `ScopeResolution.Resolved` and `ScopeResolution.Rejected`
     are internal; `ScopeResolution.Rejected.Reason` stays.
 
+- **The public API of `cosec-runtime` and the web adapters is classified for 8.0** (R9). With the starter nothing
+  changes at runtime; in code:
+  - Assembling a pipeline without Spring is experimental. `Pipeline`'s constructor and `evaluate`, `RequestGate`,
+    `PipelineComponents`, `PipelineOptions`, `SnapshotOptions`, `SuspendingSnapshotSource`, `AttributeProviders`,
+    `DecisionListeners`, `IdentityIssuer`, `IdentityGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`,
+    `ProblemEncoder`, `RequestSecurity` and `CoSecParameters.read` are `@ExperimentalCoSecApi`: opt in with
+    `@OptIn(ExperimentalCoSecApi::class)`. A test that built a pipeline this way gets one from `PipelineFixture`
+    (`cosec-testkit`). `Pipeline` itself, `AuthorizationChecker(pipeline)`, `ProblemType` and the `CoSecParameters`
+    header names stay stable.
+  - Internal now (`@InternalCoSecApi`): `IdentityCodec` (the `CoSec-Identity` format on
+    [Web integration](../integration/web.md) is the contract), `RemoteIpResolver`, `PathNormalizer`, `HttpAttributes`,
+    `PolicyDocument.attributes`, `PolicyDocumentCodec.encode`, `ATTRIBUTE_TYPES`, `WILDCARD` and `SCHEMA`,
+    `PolicyDocumentCompiler`'s limits, `PERMISSION_PREFIX` and `permissionPrefix`, and the `AuthorizationChecker.check`
+    and `decide` that take a `RequestSecurity` (those that take a `SecurityContext` and strings stay). So are the
+    constructors of `PipelineWebFilter`, `PipelineServletFilter` and `PipelineGatewayFilter` (declare the starter's
+    beans, never your own), `LoggingAuditEventSink(KLogger)` (the constructor without arguments stays) and
+    `MetricsListener.bind(registry, listeners)`. The constructors of `RouteResolution.Mapped` and `Invalid` are
+    internal: `RouteMap.resolve` answers them.
+  - `InstanceStatus.FORMAT_LEVEL` is no longer a `const`.
+
+- **The public API of `cosec-control` and `cosec-cocache` is classified for 8.0** (R9):
+  - `ControlStore`, `InMemoryControlStore`, `CoCacheControlStore` and the records a store keeps (`ChangeRequest`,
+    `ChangeRequestCodec`, `ChangeState`, `Base`, `Approval`, `CheckedApps`, `Finding`, `Severity`, `Operation`,
+    `ShadowState`, `StageSlot`, `AppList`, `PendingRecord`, `RevisionEntry`, `RevisionIndex`, `StoredDocument`,
+    `Versioned`, `HeadWrite`), with the shadow window ports and their reports (`CandidateStore`, `ShadowReportSink`,
+    `ShadowReportReader`, `CoCacheShadowReports`, `InstanceStatus`, `InstalledDocument`, `ShadowReport`,
+    `ShadowSample`, `StoredCandidate`, `ShadowOutcome`) and `ProvenanceKind`, are `@ExperimentalCoSecApi`: a store of your
+    own opts in. `ChangeListener`, `ChangeEvent` and what it carries stay stable; `Escalation` and `Confirmation` are no
+    longer `data class`es (no `copy`, no `componentN`; equality is unchanged).
+  - The CoCache caches (`RevokedTokenCache`, `RevokedSubjectCache`, `MembershipCache`, `PolicySnapshotCache`) are
+    `@InternalCoSecApi`, as are the constructors and factories of `cosec-cocache`'s classes that take CoCache or Spring
+    Data types (`CoCacheTokenStore`, `CoCacheMembershipProvider`, `CoCacheTokenFamilyStore`, `RedisApiKeyReader`,
+    `RedisApiKeyStore`, `ReactiveRedisRateLimiter`, `RedisSnapshotDocumentStore` and its digest helpers,
+    `CoCacheControlStore.create`, `CoCacheShadowReports.create`) and the `DEFAULT_*_KEY_PREFIX` constants. Only
+    `CoSecCacheSpecs`, internal already, could build those caches: the starter builds them, and an application declares
+    its beans' types (`RedisApiKeyStore`, `CoCacheMembershipProvider`, ...) to use them. The cache names in
+    `cocache.caches.[<CacheName>]` do not change.
+
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference

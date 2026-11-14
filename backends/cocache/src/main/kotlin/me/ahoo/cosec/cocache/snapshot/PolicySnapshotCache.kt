@@ -37,6 +37,7 @@ import java.time.Duration
  * hint for it. Besides the store, it carries what [RedisSnapshotDocumentStore] needs to subscribe to the keyspace's
  * invalidations and to bound the age of a local copy.
  */
+@InternalCoSecApi
 class PolicySnapshotCache internal constructor(
     delegate: Store<SnapshotKey, SnapshotDocument>,
     /** The CoCache keyspace, which also names the invalidation channel (`{keyPrefix}inv:{namespace}`). */

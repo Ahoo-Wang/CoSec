@@ -234,6 +234,9 @@ would reach access logs and `Referer` headers.
 | `CoSec-Device-Id` | The caller's device. Informational unless a policy or the blacklist reads it. | `environment.device` |
 | `CoSec-Request-Id` | Header only: the request id ([Response headers](#response-headers)). | |
 
+In code, the header names are `CoSecParameters.SPACE_ID`, `DEVICE_ID` and `REQUEST_ID` (`me.ahoo.cosec.runtime.http`),
+for a client or a filter of your own that sends or forwards them.
+
 The client does not say which app a request is for: `scope.app` comes from the credential and the host
 ([Apps](./authentication.md#apps)).
 
@@ -258,7 +261,8 @@ declared.
 ## Accessing the security context
 
 For a request that proceeds, the adapter binds a `SecurityContext` (`me.ahoo.cosec.api.context`) built from the
-pipeline's outcome. A refused request never reaches your handler.
+pipeline's outcome. A refused request never reaches your handler. Its `principal` is a `CoSecPrincipal`
+(`me.ahoo.cosec.api.principal`) and its `scope` a `SecurityScope` (`me.ahoo.cosec.api.context`).
 
 | Member | Content |
 |---|---|

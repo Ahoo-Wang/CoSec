@@ -12,7 +12,9 @@
  */
 
 package me.ahoo.cosec.runtime.http
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
+@InternalCoSecApi
 fun interface RemoteIpResolver<R> {
     fun resolve(request: R): String
 }

@@ -139,8 +139,9 @@ Two artifacts are not dependencies of an application:
   [Deployment](../operations/deployment.md)).
 
 Without Spring Boot, assemble a `Pipeline` from `PipelineComponents` and `SuspendingSnapshotSource.of(store)` yourself,
-and call it from your own transport. See
-[Extending CoSec](../architecture/extending.md).
+and call it from your own transport. These types are `@ExperimentalCoSecApi`: they grow with every new port, and may
+change in a minor release. To test your code against a real pipeline, use `PipelineFixture` (`cosec-testkit`). See
+[Extending CoSec](../architecture/extending.md) and [Testing policies](../policies/testing.md#testing-your-code-against-a-real-pipeline).
 
 ## Where to go next
 

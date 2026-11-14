@@ -79,7 +79,9 @@ class DocumentCompileException @InternalCoSecApi constructor(
  */
 class PolicyDocumentCompiler @InternalCoSecApi constructor(
     private val policies: PolicyCompiler = PolicyCompiler(ConditionChecker(zones = JavaZones.RESOLVER)),
+    @property:InternalCoSecApi
     val principalBindingLimit: Int = DEFAULT_PRINCIPAL_BINDING_LIMIT,
+    @property:InternalCoSecApi
     val roleGrantLimit: Int = RoleExpansion.DEFAULT_ROLE_GRANT_LIMIT,
 ) : SnapshotCompiler<CompiledDocument> {
     /**
@@ -463,11 +465,14 @@ class PolicyDocumentCompiler @InternalCoSecApi constructor(
         )
 
         /** RFC 0004 Q2. */
+        @InternalCoSecApi
         const val DEFAULT_PRINCIPAL_BINDING_LIMIT: Int = 1_000
 
         /** Permission policies are named `perm:<app>/<permission>` (RFC 0004 §5.1). */
+        @InternalCoSecApi
         const val PERMISSION_PREFIX: String = "perm:"
 
+        @InternalCoSecApi
         fun permissionPrefix(app: String): String = "$PERMISSION_PREFIX$app/"
     }
 }

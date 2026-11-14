@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.shadow
 
@@ -20,6 +20,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.isActive
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
@@ -145,6 +146,7 @@ class ShadowRecorder(
 }
 
 /** One window as [ShadowRecorder.windows] lists it: the document it is a candidate of, its report, and its samples. */
+@InternalCoSecApi
 class RecordedWindow(val key: SnapshotKey, val report: ShadowReport, val recorded: Long)
 
 /**

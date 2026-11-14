@@ -43,6 +43,7 @@ import java.io.ByteArrayOutputStream
  *
  * Decoding is single: `%252e%252e` decodes to the literal `%2e%2e`, as it does in the matchers.
  */
+@InternalCoSecApi
 object PathNormalizer {
     /** The longest path accepted, in characters as received. Common proxies and servers limit the whole URI to 8 KB. */
     const val MAX_PATH_LENGTH = 2048

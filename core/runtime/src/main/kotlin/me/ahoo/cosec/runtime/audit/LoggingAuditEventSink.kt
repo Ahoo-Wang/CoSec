@@ -28,9 +28,12 @@ import me.ahoo.cosec.spi.audit.AuditEventSink
  * [LOGGER_NAME]. DENY/TOO_MANY_REQUESTS log at WARN, ERROR at ERROR, ALLOW at DEBUG,
  * so default INFO level only surfaces denials.
  */
-class LoggingAuditEventSink(
-    private val logger: KLogger = KotlinLogging.logger(LoggingAuditEventSink.LOGGER_NAME),
+class LoggingAuditEventSink @InternalCoSecApi constructor(
+    private val logger: KLogger,
 ) : AuditEventSink {
+    /** Writes to the logger named [LOGGER_NAME]. */
+    @OptIn(InternalCoSecApi::class)
+    constructor() : this(KotlinLogging.logger(LOGGER_NAME))
 
     override fun publish(event: AuditEvent) {
         when (event.authorization.decision) {

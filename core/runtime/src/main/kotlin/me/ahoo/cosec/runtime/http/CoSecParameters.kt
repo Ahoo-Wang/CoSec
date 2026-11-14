@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.runtime.http
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+
 /**
  * The `CoSec-*` request parameters a client may send, as headers only: a scope in a URL would reach the access logs and
  * the `Referer` of the next request. Empty means not sent.
@@ -32,6 +34,7 @@ class CoSecParameters internal constructor(val spaceId: String, val deviceId: St
         const val REQUEST_ID = "CoSec-Request-Id"
 
         /** The parameters of [facts], or null when one of them is ambiguous. Header names match ignoring case. */
+        @ExperimentalCoSecApi
         fun read(facts: HttpFacts): CoSecParameters? {
             val spaceId = single(facts.headers.values(SPACE_ID)) ?: return null
             val deviceId = single(facts.headers.values(DEVICE_ID)) ?: return null

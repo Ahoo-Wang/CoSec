@@ -30,19 +30,28 @@ import kotlin.reflect.jvm.kotlinFunction
  */
 object PublicSignatures {
     private const val INTERNAL_API = "me.ahoo.cosec.annotations.InternalCoSecApi"
+    private const val EXPERIMENTAL_API = "me.ahoo.cosec.annotations.ExperimentalCoSecApi"
 
     /** The public classes of the projects [inProject] accepts. */
     fun classes(inProject: (String) -> Boolean): List<JavaClass> = SourceRulesTest.CLASSES
         .filter { javaClass -> SourceRulesTest.projectOf(javaClass)?.let(inProject) == true }
         .filter(::isPublicKotlin)
 
-    /** Each public supertype and member signature of [classes] that names a type matching [type]. */
-    fun violations(classes: List<JavaClass>, type: Regex): List<String> = classes.flatMap { javaClass ->
+    /**
+     * Each public supertype and member signature of [classes] that names a type matching [type]. With [stableOnly], a
+     * member marked `@ExperimentalCoSecApi` is left out too: it promises no more than the type it names.
+     */
+    fun violations(
+        classes: List<JavaClass>,
+        type: Regex,
+        stableOnly: Boolean = false
+    ): List<String> = classes.flatMap { javaClass ->
         val supertypes = (listOfNotNull(javaClass.rawSuperclass.orElse(null)) + javaClass.rawInterfaces)
             .filter { type.containsMatchIn(it.name) }
             .map { "${javaClass.name} extends ${it.name}" }
         val members = (javaClass.methods + javaClass.constructors + javaClass.fields)
             .filter(::isPublic)
+            .filterNot { stableOnly && isMarked(it, EXPERIMENTAL_API) }
             .map(::signature)
             .filter { type.containsMatchIn(it) }
         supertypes + members
@@ -68,16 +77,24 @@ object PublicSignatures {
         val modifiers = member.modifiers
         if (JavaModifier.SYNTHETIC in modifiers || JavaModifier.BRIDGE in modifiers) return true
         if (JavaModifier.PUBLIC !in modifiers && JavaModifier.PROTECTED !in modifiers) return true
+        // A protected member of a final class has no subclass to be called from.
+        if (JavaModifier.PUBLIC !in modifiers && JavaModifier.FINAL in member.owner.modifiers) return true
         if (member.isAnnotatedWith(INTERNAL_API)) return true
         // Kotlin mangles the names of internal functions and accessors with the module name.
         return '$' in member.name
     }
 
-    private fun isPublic(member: JavaMember): Boolean {
-        if (isInternalMember(member)) return false
+    /** Whether [member], or the property it is an accessor of, carries [marker]. */
+    private fun isMarked(member: JavaMember, marker: String): Boolean {
+        if (member.isAnnotatedWith(marker)) return true
         // A property's annotations live on its synthetic `getX$annotations` method, not on the getter.
         val getter = member.name.removePrefix("set").let { if (it != member.name) "get$it" else member.name }
-        if (member.owner.methods.any { it.name == getter + "\$annotations" && it.isAnnotatedWith(INTERNAL_API) }) return false
+        return member.owner.methods.any { it.name == getter + "\$annotations" && it.isAnnotatedWith(marker) }
+    }
+
+    private fun isPublic(member: JavaMember): Boolean {
+        if (isInternalMember(member)) return false
+        if (isMarked(member, INTERNAL_API)) return false
         val reflected = (member as? JavaCodeUnit)?.let { runCatching { it.reflect() }.getOrNull() }
         val visibility = when (reflected) {
             is Method -> reflected.kotlinFunction?.visibility

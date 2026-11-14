@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.cocache.shadow
 
@@ -27,6 +27,7 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.StoreSpec
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
@@ -213,7 +214,8 @@ class CoCacheCandidateStore(private val candidates: Store<SnapshotKey, StoredCan
  * [ShadowCacheSpecs.INDEX_EXPIRY]. [statuses] reads the list and each listed status, and skips a listed instance whose
  * status has expired (it is gone), as one older than a minute. A status or list that cannot be read fails it.
  */
-class CoCacheShadowReports(
+@ExperimentalCoSecApi
+class CoCacheShadowReports @InternalCoSecApi constructor(
     private val reports: Store<String, ShadowReport>,
     private val reporters: Store<String, Set<String>>,
     private val statuses: Store<String, InstanceStatus>,
@@ -351,6 +353,7 @@ class CoCacheShadowReports(
         private const val READ_BATCH = 64
 
         /** Creates the report caches under [keyPrefix] through [factory], with CoSec's locks ([CoSecCacheSpecs.locks]). */
+        @InternalCoSecApi
         fun create(
             factory: CoCacheFactory,
             keyPrefix: String = CoSec.COSEC,

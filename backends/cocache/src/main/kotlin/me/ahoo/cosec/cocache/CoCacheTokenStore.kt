@@ -10,10 +10,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cocache
 
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -35,7 +38,9 @@ import java.time.Instant
  * @see RevokedTokenCache
  * @see RevokedSubjectCache
  */
-class CoCacheTokenStore @JvmOverloads constructor(
+class CoCacheTokenStore
+@InternalCoSecApi @JvmOverloads
+constructor(
     private val cache: RevokedTokenCache,
     private val subjectCache: RevokedSubjectCache? = null
 ) : TokenStore {

@@ -2,11 +2,10 @@
 # Mutant: repair-references removes a reference the referrer's head does not have yet, which a publish still in flight indexed
 # Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index e68a55fe..bd0470b9 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -118,7 +118,7 @@ class ReferrerHeads {
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerHeads.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerHeads.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerHeads.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerHeads.kt
+@@ -30,7 +30,7 @@
  
      /** Whether [referrer], whose reference to [policy] of [target] was indexed by [revision], no longer has it. */
      internal fun gone(referrer: SnapshotKey, revision: Long, target: SnapshotKey, policy: PolicyId): Boolean =

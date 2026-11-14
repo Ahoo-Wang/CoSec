@@ -32,6 +32,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.resumeOffIo
 import me.ahoo.cosec.runtime.withLazyTimeoutOrNull
@@ -62,6 +63,7 @@ private val log = KotlinLogging.logger {}
  * drops the rest: what a host calls on shutdown (`cosec.observability.listener.drain-timeout`). Failures and drops are
  * counted in [stats] and logged at most once per [warnInterval] per listener.
  */
+@ExperimentalCoSecApi
 class DecisionListeners(
     listeners: List<DecisionListener>,
     /** `cosec.observability.listener.required-timeout`: how long one REQUIRED listener may take. */

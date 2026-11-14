@@ -43,7 +43,7 @@ import java.time.Instant
  * It fails closed: a read Redis cannot answer throws (`unknown-read: throw`, [CoSecCacheSpecs.locks]), and so does a
  * write whose outcome is unknown, which is never read back as done: the caller issues nothing.
  */
-class CoCacheTokenFamilyStore(
+class CoCacheTokenFamilyStore @InternalCoSecApi constructor(
     private val cache: Store<String, TokenFamily>,
     private val clock: Clock = Clock.systemUTC(),
 ) : TokenFamilyStore {

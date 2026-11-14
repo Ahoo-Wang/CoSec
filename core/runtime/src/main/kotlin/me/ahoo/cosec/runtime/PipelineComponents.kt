@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.FlatEngine
@@ -35,6 +36,7 @@ import java.time.Clock
  * default. A host without Spring Boot assembles one with [SuspendingSnapshotSource.of] and the constructor below; a new
  * component is a new field with a default here, added with another secondary constructor, not a new [Pipeline] parameter.
  */
+@ExperimentalCoSecApi
 class PipelineComponents private constructor(
     val authenticator: Authenticator,
     val snapshots: SuspendingSnapshotSource,

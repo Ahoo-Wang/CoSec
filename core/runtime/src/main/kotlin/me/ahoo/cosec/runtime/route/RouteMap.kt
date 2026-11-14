@@ -42,13 +42,13 @@ sealed interface RouteResolution {
     /** No route matches: the request stays in the `http` namespace (RFC 0005 §5.3, `ACT-2`). */
     data object Unmapped : RouteResolution
 
-    class Mapped(val route: Route, val action: Action, val resource: Resource) : RouteResolution
+    class Mapped internal constructor(val route: Route, val action: Action, val resource: Resource) : RouteResolution
 
     /**
      * A route matches, but a value it captured cannot be part of a typed resource id: it holds `/` (a decoded
      * `%2F`), which would change the id's segments. The request is refused, never evaluated as another resource.
      */
-    class Invalid(val reason: String) : RouteResolution
+    class Invalid internal constructor(val reason: String) : RouteResolution
 }
 
 /**

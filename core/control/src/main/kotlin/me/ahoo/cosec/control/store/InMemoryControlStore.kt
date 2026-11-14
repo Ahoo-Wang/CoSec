@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.control.store
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
@@ -35,6 +36,7 @@ import java.time.Instant
  * bytes and, for the indexes, of their rendering, as CoCache's are (RFC 0003 §4.1). They address content; they are not a
  * security control. Every write is atomic under one lock.
  */
+@ExperimentalCoSecApi
 class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : ControlStore {
     private val lock = Any()
     private val heads = HashMap<SnapshotKey, SnapshotDocument>()

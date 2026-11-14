@@ -197,6 +197,7 @@ class TraceContext(val traceId: String, val spanId: String, val sampled: Boolean
  * attributes already fetched. It keeps the view reachable, so the pipeline creates one only when a shadow listener
  * sampled the request ([sampledBy]).
  */
+@InternalCoSecApi
 class ReplayHandle internal constructor(
     internal val request: FlatRequest,
     internal val view: SnapshotView,

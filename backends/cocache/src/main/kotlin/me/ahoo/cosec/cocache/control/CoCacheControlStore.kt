@@ -27,6 +27,7 @@ import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CoCacheFactory
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
@@ -69,6 +70,7 @@ import java.time.Instant
  * Every read is a conditional read without a digest, so it answers from Redis, not from a local copy, and a failed
  * read throws (a `Store`'s conditional read always does). Nothing here blocks the caller: it awaits CoCache's async view.
  */
+@ExperimentalCoSecApi
 class CoCacheControlStore internal constructor(
     private val heads: Store<SnapshotKey, SnapshotDocument>,
     private val records: Store<RevisionRecordKey, SnapshotDocument>,
@@ -392,6 +394,7 @@ class CoCacheControlStore internal constructor(
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)
 
         /** The digest CoCache computes for [value] stored with [codec]. */
+        @InternalCoSecApi
         fun <V> digest(codec: Codec<V>, value: V): SnapshotDigest = snapshotDigest(
             Digest.ofPayload(codec.encode(value))
         )
@@ -400,6 +403,7 @@ class CoCacheControlStore internal constructor(
          * Creates the control caches under [keyPrefix] through [factory], with CoSec's locks ([CoSecCacheSpecs.locks]),
          * next to the snapshot heads [heads].
          */
+        @InternalCoSecApi
         fun create(
             factory: CoCacheFactory,
             heads: PolicySnapshotCache,

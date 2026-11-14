@@ -11,12 +11,16 @@
  * limitations under the License.
  */
 
+@file:OptIn(ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.micrometer
 
 import io.micrometer.core.instrument.FunctionCounter
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Tags
 import io.micrometer.core.instrument.Timer
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.StatementRef
@@ -107,8 +111,9 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
 
         /**
          * Registers what [listeners] count (§9.5.2): `cosec.listener.dropped` and `cosec.listener.failures` by listener,
-         * and `cosec.audit.required.failures`.
+         * and `cosec.audit.required.failures`. The starter's: it holds the listeners.
          */
+        @InternalCoSecApi
         fun bind(registry: MeterRegistry, listeners: DecisionListeners) {
             for (stats in listeners.stats) {
                 FunctionCounter.builder("cosec.listener.dropped", stats) { it.dropped.toDouble() }

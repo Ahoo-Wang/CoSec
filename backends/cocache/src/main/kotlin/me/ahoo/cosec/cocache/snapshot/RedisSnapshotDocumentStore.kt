@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cocache.snapshot
 
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -20,6 +22,7 @@ import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.api.spi.InvalidationListener
 import me.ahoo.cocache.api.spi.NodeId
 import me.ahoo.cocache.core.ForeignFormatException
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -52,7 +55,7 @@ import java.util.concurrent.ForkJoinPool
  * not keep, is computed on [digestExecutor] rather than the caller's thread. A stored value that cannot be decoded fails
  * the read with a [SnapshotFormatException] in its cause chain; any other failure is the read's own.
  */
-class RedisSnapshotDocumentStore(
+class RedisSnapshotDocumentStore @InternalCoSecApi constructor(
     private val cache: PolicySnapshotCache,
     private val digestExecutor: Executor = ForkJoinPool.commonPool(),
 ) : SnapshotDocumentStore {
@@ -160,14 +163,17 @@ class RedisSnapshotDocumentStore(
         private val log = KotlinLogging.logger {}
 
         /** The digest CoCache computes for the stored bytes of [document]: the codec writes the body unchanged. */
+        @InternalCoSecApi
         fun digestOf(
             document: SnapshotDocument
         ): SnapshotDigest = snapshotDigest(Digest.ofPayload(document.bodyBytes()))
 
         /** CoCache's SHA-256 [digest], with its algorithm, as a [SnapshotDigest]. */
+        @InternalCoSecApi
         fun snapshotDigest(digest: Digest): SnapshotDigest = SnapshotDigest(digest.algorithm, digest.bytes)
 
         /** [digest] as CoCache's, for a conditional read or write. */
+        @InternalCoSecApi
         fun cocacheDigest(digest: SnapshotDigest): Digest = Digest(digest.algorithm, digest.toByteArray())
 
         /**

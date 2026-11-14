@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class)
+@file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.control.change
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.Head
@@ -135,6 +136,7 @@ class ChangeChecks(
      * Reads what the checks and the grant analysis combine a candidate with: current heads, the back-references of the
      * platform's and apps' policies, and the app list ([me.ahoo.cosec.control.store.ControlStore.apps], RC1-4).
      */
+    @InternalCoSecApi
     interface Context {
         suspend fun head(key: SnapshotKey): Head?
 

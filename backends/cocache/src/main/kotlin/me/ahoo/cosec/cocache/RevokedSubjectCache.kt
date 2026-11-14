@@ -31,7 +31,9 @@ import me.ahoo.cosec.model.TenantId
  *
  * @see CoCacheTokenStore
  */
+@InternalCoSecApi
 interface RevokedSubjectCache : Store<String, Long> {
+    @InternalCoSecApi
     companion object {
         /**
          * `{length of tenant}:{tenant}:{principal}`. The length keeps the key unambiguous whatever characters the ids

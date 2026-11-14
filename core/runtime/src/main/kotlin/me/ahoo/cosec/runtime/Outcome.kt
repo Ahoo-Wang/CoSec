@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.spi.identity.Identity
@@ -22,6 +23,7 @@ import me.ahoo.cosec.spi.identity.Identity
  * encoded [problem]. Only [StatusMapping] constructs one, so status codes and bodies have one definition, and adapters
  * never see a [Decision] or a [Cause] (`OneDecisionPathTest`).
  */
+@ExperimentalCoSecApi
 class Outcome internal constructor(
     /** The status to write; 200 when [proceed]. */
     val status: Int,
@@ -82,6 +84,7 @@ internal sealed interface Unavailability {
  * The body of an outcome that does not proceed: an RFC 9457 problem (RFC 0006 §6.2). It holds what a client can act on
  * and nothing more: no policy, statement, binding, cause or exception (P16).
  */
+@ExperimentalCoSecApi
 class Problem internal constructor(
     val type: ProblemType,
     /** Equals the `CoSec-Request-Id` response header. */

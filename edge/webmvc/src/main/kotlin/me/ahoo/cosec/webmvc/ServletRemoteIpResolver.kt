@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.http.HttpServletRequest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 
 internal object ServletRemoteIpResolver : RemoteIpResolver<HttpServletRequest> {

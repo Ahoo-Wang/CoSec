@@ -1,6 +1,4 @@
 public final class me/ahoo/cosec/webmvc/PipelineServletFilter : jakarta/servlet/Filter {
-	public fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/RequestGate;Ljava/util/List;Lme/ahoo/cosec/runtime/http/RemoteIpResolver;Lme/ahoo/cosec/model/scope/HostScope;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun doFilter (Ljakarta/servlet/ServletRequest;Ljakarta/servlet/ServletResponse;Ljakarta/servlet/FilterChain;)V
 }
 

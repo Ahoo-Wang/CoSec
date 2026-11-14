@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cocache.limiter
 
 import io.lettuce.core.cluster.SlotHash
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.test.asserts.assert

@@ -26,7 +26,7 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate
  * through the reactive client, so a lookup never blocks the calling thread, which may be an event loop. A Redis failure
  * throws, so the request fails closed with 503; an unknown key is null.
  */
-class RedisApiKeyReader(
+class RedisApiKeyReader @InternalCoSecApi constructor(
     private val redisTemplate: ReactiveStringRedisTemplate,
     private val keyPrefix: String = DEFAULT_API_KEY_KEY_PREFIX,
 ) : ApiKeyReader {
