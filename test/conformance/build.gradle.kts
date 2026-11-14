@@ -36,9 +36,6 @@ dependencies {
 
 val repositoryRoot = rootProject.layout.projectDirectory
 
-/** The line of a `git diff` that names the file a hunk changes. */
-val PATCHED_FILE = "+++ b/"
-
 /*
  * RFC 0011: the projects by name, `name=directory;…`, for the rule guards (`project:Class#test`). Computed here, so no
  * code assumes where a module sits.
@@ -53,13 +50,16 @@ tasks.named<Test>("test") {
     inputs.dir(repositoryRoot.dir("wiki/examples")).withPathSensitivity(PathSensitivity.RELATIVE)
     // MutationCheckTest applies every mutant to the files it names, which live in other modules: they are inputs too,
     // so a refactoring that strands a mutant runs the test again.
+    // Locals, not the script's: the configuration cache cannot store a lambda that captures the script.
     val mutants = layout.projectDirectory.dir("mutants")
+    val root = repositoryRoot.asFile
+    val patchedFile = "+++ b/" // the line of a `git diff` that names the file a hunk changes
     inputs.dir(mutants).withPathSensitivity(PathSensitivity.RELATIVE)
     inputs.files(
         mutants.asFileTree.matching { include("*.patch") }.elements.map { patches ->
             patches.flatMap { patch ->
-                patch.asFile.readLines().filter { it.startsWith(PATCHED_FILE) }
-                    .map { repositoryRoot.file(it.removePrefix(PATCHED_FILE)) }
+                patch.asFile.readLines().filter { it.startsWith(patchedFile) }
+                    .map { root.resolve(it.removePrefix(patchedFile)) }
             }
         }
     ).withPathSensitivity(PathSensitivity.RELATIVE)
