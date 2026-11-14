@@ -16,9 +16,9 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.TenantId

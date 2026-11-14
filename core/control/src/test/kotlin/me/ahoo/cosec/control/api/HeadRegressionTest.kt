@@ -28,7 +28,7 @@ import me.ahoo.cosec.control.change.PLATO
 import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.StoreFixtures
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId

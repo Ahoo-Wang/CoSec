@@ -11,12 +11,16 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.engine.trace.CandidateOutcome
+import me.ahoo.cosec.engine.trace.CandidateTrace
+import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.StatementRef
@@ -62,7 +66,7 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
             enumerate()
             withObligations(allowDecision().let { if (view.bounded) withinBoundary(it) else it })
         }
-        return FlatEvaluation(decision, FlatTrace(request.scope, candidates, expired, allUnresolved(), boundary))
+        return FlatEvaluation(decision, EvaluationTrace(request.scope, candidates, expired, allUnresolved(), boundary))
     }
 
     private fun traceOnly(): Boolean = !inBoundary && !obligating && (decided || matched != null)

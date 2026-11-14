@@ -13,6 +13,8 @@
 
 package me.ahoo.cosec.spi.token
 
+import me.ahoo.cosec.model.CoSecException
+
 /**
  * A [RevocationReader] could not read its store (Redis down, a read that timed out), so it cannot say whether a token
  * was revoked. It is not an answer: what it means is the caller's to decide. The pipeline's `TokenAuthenticator`,
@@ -21,4 +23,4 @@ package me.ahoo.cosec.spi.token
  *
  * Any other exception a reader throws, content it cannot decode included, is an error, never an unavailable store.
  */
-class RevocationUnavailableException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+class RevocationUnavailableException(message: String, cause: Throwable? = null) : CoSecException(message, cause)

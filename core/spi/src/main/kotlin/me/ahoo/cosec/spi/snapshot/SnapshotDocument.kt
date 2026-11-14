@@ -67,8 +67,13 @@ class SnapshotDocument(
         "SnapshotDocument(schema=$schema, revision=$revision, publishedAt=$publishedAt, bodySize=$bodySize)"
 
     companion object {
-        /** The platform, app and tenant documents (RFC 0004 §7.1): the one 8.0 format (RFC 0008 Q5). */
-        const val DOCUMENT_SCHEMA = 2
+        /**
+         * The platform, app and tenant documents (RFC 0004 §7.1): the one 8.0 format (RFC 0008 Q5). Not a `const`, so
+         * that code compiled against one release reads the schema of the release it runs on.
+         */
+        @JvmField
+        @Suppress("MayBeConst") // on purpose: a const is inlined into the caller's class file
+        val DOCUMENT_SCHEMA: Int = 2
     }
 }
 

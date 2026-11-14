@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.micrometer
 
@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.engine.TraceLevel

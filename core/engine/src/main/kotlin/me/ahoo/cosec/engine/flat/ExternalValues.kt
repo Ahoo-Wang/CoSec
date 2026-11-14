@@ -16,6 +16,7 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.AttributeStatus
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.IpAddress
@@ -75,8 +76,6 @@ class ExternalValues internal constructor(
         }
     }
 }
-
-enum class AttributeStatus { PRESENT, ABSENT, UNAVAILABLE }
 
 /**
  * An external attribute a condition read is missing, or `environment.ip` when the host reported something that is no

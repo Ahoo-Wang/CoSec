@@ -210,7 +210,11 @@ private class ConstantInput(private val constants: (Attribute) -> Constant?) : C
     override fun time(attribute: Attribute): Long = ConditionInput.NO_TIME
 }
 
-/** The attributes that depend on who asks (RFC 0007 §7.4.3): the grantor's and a grantee's values differ. */
+/**
+ * The attributes that depend on who asks (RFC 0007 §7.4.3): the grantor's and a grantee's values differ. Marked as well as
+ * `internal`: its getter is a public static of the file's facade, which `PublicSignatures` cannot read as internal.
+ */
+@InternalCoSecApi
 internal val SUBJECT_KINDS: Set<Kind> = setOf(
     Kind.SUBJECT_ID,
     Kind.SUBJECT_TENANT,

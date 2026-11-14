@@ -78,7 +78,6 @@ PR 都是破坏性变更，标题要带 `!`
 | 集合 | 增长方式 |
 |---|---|
 | `AuthnResult.RejectReason` | 新的拒绝原因，例如新的令牌检查 |
-| `Attribute.Kind` | 新的目录属性 |
 | `ProblemType` | 新的 problem，例如 `413` 或 `415` |
 | `Obligation` | 新的义务种类 |
 | `Cause` | 决策为 Indeterminate 的新原因，例如一个会失败的新端口；`DecisionListener` 从决策事件中读到它 |
@@ -93,7 +92,7 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 - **永远不阻塞调用线程。** 这些 SPI 都是 `suspend` 函数（快照存储返回 `CompletableFuture`）。使用挂起式客户端没有问题。基于阻塞客户端（JDBC、阻塞式 HTTP 客户端）的实现，要用 `runInterruptible(myDispatcher) { ... }` 把调用移到自己的有界执行器上，并按该依赖设定大小：使用 `Dispatchers.IO.limitedParallelism(n)` 或你自己的执行器，就像 `JustAuthProvider` 那样。裸的 `Dispatchers.IO` 与进程内其他代码共享，`RuntimeBoundaryTest` 也禁止在 `cosec-runtime` 中使用它。
 - **被取消时停下。** 超时是协作式的：到了 SPI 的超时或 `cosec.pipeline.timeout`，Pipeline 取消调用，并等它返回之后才应答 `503`。`withContext(myDispatcher)` 停不下阻塞调用，所以挂住 30 秒的 JDBC 查询会让请求等 30 秒，而不是它的 300 ms 超时；在 WebMvc 上还会占住一个请求线程。`runInterruptible` 在取消时中断线程；对不响应中断的调用，再给客户端设置它自己的超时（JDBC 查询超时、HTTP 读取超时）。
 - **用抛出异常报告失败。** 查找失败时，永远不要返回“什么都没有”：空的成员关系、缺失的属性或“未吊销”，都可能把拒绝变成放行。Pipeline 把抛出的异常或超时变成 `Indeterminate`，除非有 DENY 匹配，否则应答 `503`。
-- **给出的 id 是文本。** SPI 给出的 id（主体、租户、凭证 id、角色、空间、策略 id）不能带落单的 UTF-16 代理项：Redis key 会在它的位置写 `?`，与另一个 id 共用一个 key（`IDN-10`）。`AuthenticatedPrincipal` 与 `ApiKey` 在构造时拒绝它，所以给出这种 id 的认证器或 API key 存储会抛出异常，带这种 id 的 `MembershipProvider` 答复也会失败：都是 `503`。判断用 `Identifiers.isWellFormed`（`cosec-model`）。
+- **给出的 id 是文本。** SPI 给出的 id（主体、租户、凭证 id、角色、空间、策略 id）不能带落单的 UTF-16 代理项：Redis key 会在它的位置写 `?`，与另一个 id 共用一个 key（`IDN-10`）。`AuthenticatedPrincipal` 与 `ApiKey` 在构造时拒绝它，所以给出这种 id 的认证器或 API key 存储会抛出异常，带这种 id 的 `MembershipProvider` 答复也会失败：都是 `503`。判断用 `Identifiers.isWellFormed`（`cosec-model`）；把 id 写进异常消息或日志行时用 `Identifiers.printable`，它不会让 id 伪造出一行。
 - **不要捕获取消。** 客户端离开会取消请求的协程。重新抛出 `CancellationException`，也不要用 `runCatching` 包裹挂起调用。
 - **保持廉价。** 每次调用都有超时（见[配置](../operations/configuration.md)）；整个请求受 `cosec.pipeline.timeout` 约束。不挂起的本地应答不切换线程，也不设定时器。
 
@@ -197,7 +196,7 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
 
 - **声明每个属性**，形式为 `ext.<provider>.<name>`，并给出类型：`STRING`、`BOOL`、`STRING_SET` 或 `IP`。每个路径在所有提供者中只能声明一次。这些声明构成文档编译所依据的属性目录：读取了无人声明的 `ext.` 路径的策略无法编译。平台文档也可以声明这个目录，让控制面和每个实例保持一致。
 - **在每个主机上注册相同的提供者。** 控制面按平台的声明和它自己主机的提供者检查变更，每个实例按自己的提供者编译。某个实例缺少提供者时，读取它的变更在该实例上会失败：该实例报告 `CANDIDATE_ERROR` 并阻塞影子窗口（[部署网关服务](../operations/deployment.md#before-the-first-request)）。
-- **取值。** 按路径返回值，类型与声明一致。没有返回的路径是*缺省*。类型错误的值、抛出的异常或超时，会让被请求的属性*不可用*，读取它们的每个语句按其 `onMissing` 设置处理（[策略语言](../policies/language.md)）。
+- **取值。** 按路径返回值，类型与声明一致：`String`、`Boolean`、`Set<String>`，`IP` 则是 `IpAddress`（`cosec-model`；`IpAddress.parse` 从文本读取）。没有返回的路径是*缺省*。类型错误的值、抛出的异常或超时，会让被请求的属性*不可用*，读取它们的每个语句按其 `onMissing` 设置处理（[策略语言](../policies/language.md)）。
 - **阶段。** B 阶段属性（默认）只在引擎的计划表明本请求可能读取它时才获取，发生在作用域解析之后。A 阶段属性在每个请求上都获取，发生在作用域之前，与成员关系一起获取。只有决定要加载什么的属性才用 A 阶段，例如黑名单。`AuthorizationChecker` 的检查在两个阶段都询问它自己的动作与资源可能读取的属性：那时 A 阶段提供者会再被询问一次，仍不带作用域。
 - **提供者能看到什么。** `AttributeRequest` 包含租户、主体、已解析的作用域（A 阶段为 null）、动作、资源、客户端地址、请求 id 和设备 id，绝不包含其他属性的值。
 

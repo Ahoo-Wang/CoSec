@@ -17,7 +17,6 @@ package me.ahoo.cosec.cocache
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.apikey.ApiKey
-import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.apikey.ApiKeys
 import org.springframework.data.redis.core.StringRedisTemplate
 
@@ -34,7 +33,7 @@ const val DEFAULT_API_KEY_KEY_PREFIX = "cosec:api-key"
 class RedisApiKeyStore(
     private val stringRedisTemplate: StringRedisTemplate,
     keyPrefix: String = DEFAULT_API_KEY_KEY_PREFIX
-) : ApiKeyStore {
+) {
     private val keyPrefix = keyPrefix.trimEnd(':')
 
     companion object {
@@ -42,7 +41,8 @@ class RedisApiKeyStore(
         fun redisKey(keyPrefix: String, hash: String): String = "${keyPrefix.trimEnd(':')}:$hash"
     }
 
-    override fun findByHash(hash: String): ApiKey? =
+    /** The key stored under [hash], read from Redis (blocking); null when there is none. */
+    fun findByHash(hash: String): ApiKey? =
         stringRedisTemplate.opsForValue().get(
             redisKey(hash)
         )?.let(ApiKeyCodec::decode)

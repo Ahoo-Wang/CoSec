@@ -11,20 +11,21 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.control.api
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest

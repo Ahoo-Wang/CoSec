@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.spring.boot.control
 
@@ -19,6 +19,7 @@ import io.mockk.mockk
 import jakarta.servlet.ReadListener
 import jakarta.servlet.ServletInputStream
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane

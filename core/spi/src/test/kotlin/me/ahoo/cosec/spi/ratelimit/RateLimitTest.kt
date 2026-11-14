@@ -17,6 +17,7 @@ import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
+import java.time.Duration
 
 class RateLimitTest {
     @Test
@@ -71,5 +72,21 @@ class RateLimitTest {
         remaining(permitsPerSecond = 2.0, estimate = 1.0).assert().isZero()
         remaining(permitsPerSecond = 2.0, estimate = 1.5).assert().isZero()
         remaining(permitsPerSecond = 2.0, estimate = 2.0, allowed = false).assert().isZero()
+    }
+
+    /** RFC 0010 C4: a plain class, so a new field is a new constructor; it still compares by value. */
+    @Test
+    fun resultComparesByValue() {
+        val result = RateLimitResult(allowed = true, limit = 10, remaining = 3, resetAfter = Duration.ofMillis(250))
+        val same = RateLimitResult(allowed = true, limit = 10, remaining = 3, resetAfter = Duration.ofMillis(250))
+        result.assert().isEqualTo(same)
+        result.hashCode().assert().isEqualTo(same.hashCode())
+        result.assert().isEqualTo(result)
+        result.assert().isNotEqualTo(RateLimitResult(false, 10, 3, Duration.ofMillis(250)))
+        result.assert().isNotEqualTo(RateLimitResult(true, 11, 3, Duration.ofMillis(250)))
+        result.assert().isNotEqualTo(RateLimitResult(true, 10, 2, Duration.ofMillis(250)))
+        result.assert().isNotEqualTo(RateLimitResult(true, 10, 3, Duration.ofMillis(251)))
+        result.assert().isNotEqualTo("RateLimitResult")
+        result.toString().assert().isEqualTo("RateLimitResult(allowed=true, limit=10, remaining=3, resetAfter=PT0.25S)")
     }
 }

@@ -11,16 +11,18 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.CallLog
 import me.ahoo.cosec.engine.GuardBehavior
 import me.ahoo.cosec.engine.MatcherException
 import me.ahoo.cosec.engine.RuleBehavior
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.engine.trace.CandidateOutcome
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.TenantId

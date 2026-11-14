@@ -16,6 +16,7 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -100,9 +101,3 @@ class SnapshotView(
         val NOT_LOADED_APP = Cause.NotLoaded(DocumentKind.APP)
     }
 }
-
-/**
- * The revisions of the documents one view composes (RFC 0004 §7.2, RFC 0003 Q20): [app] and [tenant] are null when
- * the view has no such document, 0 for one that is not stored.
- */
-data class ViewVersion(val platform: Long, val app: Long?, val tenant: Long?)

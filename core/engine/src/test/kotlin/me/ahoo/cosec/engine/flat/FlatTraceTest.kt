@@ -11,14 +11,16 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.GuardBehavior
 import me.ahoo.cosec.engine.RuleBehavior
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Condition
@@ -34,11 +36,11 @@ import org.junit.jupiter.api.Test
 class FlatTraceTest {
     private val fixture = FlatFixture()
 
-    private fun trace(request: FlatRequest, view: SnapshotView, level: TraceLevel): FlatTrace =
+    private fun trace(request: FlatRequest, view: SnapshotView, level: TraceLevel): EvaluationTrace =
         CoSecFlatEngine.evaluate(request, view, level).trace!!
 
     /** `<policy>.<index>:<outcome>[:after]` for each recorded statement. */
-    private fun FlatTrace.lines(): List<String> =
+    private fun EvaluationTrace.lines(): List<String> =
         candidates.map { "${it.ref.name}:${it.outcome}" + if (it.afterDecision) ":after" else "" }
 
     @Test

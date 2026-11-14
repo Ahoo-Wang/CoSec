@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spi.token
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Duration
@@ -58,8 +59,10 @@ interface RevocationReader {
 /**
  * RFC 0004 §4.5.3: the one rule for revoking all tokens of a principal. Every token path reads it with the same skew
  * (`cosec.authentication.revocation.skew`), through `TokenRevocation`: the pipeline's `TokenAuthenticator` and
- * refresh, so a token the pipeline refuses cannot be refreshed into one it accepts.
+ * refresh, so a token the pipeline refuses cannot be refreshed into one it accepts. CoSec's own: a [RevocationReader]
+ * answers an instant and never compares it.
  */
+@InternalCoSecApi
 object SubjectRevocation {
     /**
      * Five seconds: clocks kept by NTP agree within milliseconds, so this covers an issuer drifting well beyond that,

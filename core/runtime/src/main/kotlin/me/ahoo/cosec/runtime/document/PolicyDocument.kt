@@ -75,6 +75,7 @@ class PolicyDocument @InternalCoSecApi constructor(
      * The external attributes the platform declares (RFC 0007 §3.1 N3, RFC 0006 §5.4.1): the catalog conditions of every
      * document are checked against, with their types. Null: the instance's providers decide. Platform only.
      */
+    @property:InternalCoSecApi
     val attributes: List<Attribute>? = null,
     /**
      * Its rate limit rules, in order (RFC 0006 §8.1): a permit's obligations. Every kind of document may have them; the

@@ -17,7 +17,7 @@ package me.ahoo.cosec.runtime.attribute
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.AttributeStatus
+import me.ahoo.cosec.engine.AttributeStatus
 import me.ahoo.cosec.engine.flat.ExternalValues
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
