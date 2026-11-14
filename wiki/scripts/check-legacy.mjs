@@ -47,6 +47,22 @@ const TERMS = [
   { term: 'me.ahoo.cosec.spring.boot.starter', hint: 'renamed in 8.0: `me.ahoo.cosec.spring.boot` (`cosec-spring-boot`)' },
   { term: 'cosec-migrate cocache8', hint: 'removed at GA: an 8.0.0-alpha deployment moves its CoCache 6 data with the 8.0.0-alpha.4 tool (operations/upgrading.md)' },
   { term: 'UuidGenerator', hint: 'CoSec takes its ids from `IdGenerator` (architecture/extending.md#ids)' },
+  // R3 to R9 (8.0 batches): what they removed or renamed.
+  { term: 'KafkaAuditEventSink', hint: 'removed in 8.0 (R3): Kafka audit is `KafkaAuditListener` (operations/observability.md)' },
+  { term: 'SimpleSecurityContext', hint: 'removed in 8.0 (R3): the adapter binds the pipeline\'s `SecurityContext` (integration/web.md)' },
+  { term: 'RemovedKeyPrefixes', hint: 'removed in 8.0 (R6) with the 7.x key table' },
+  { term: 'PolicyType', hint: 'removed in 8.0 (R7a): the audit record names the binding (`authorization.source.via`)' },
+  { term: 'RoleCapable', hint: 'removed in 8.0 (R7b): a principal\'s roles are its memberships (integration/authentication.md)' },
+  { term: 'RevocableTokenVerifier', hint: 'removed in 8.0: revocation is read through `TokenRevocation` and a `RevocationReader`' },
+  { term: 'TokenStore.NoOp', hint: 'removed in 8.0: revocations are read through a `RevocationReader`' },
+  { term: 'SnapshotVersion', hint: 'removed in 8.0: a decision event carries a `ViewVersion` (`me.ahoo.cosec.engine`)' },
+  { term: 'CoSec-App-Id', hint: 'removed in 8.0: the credential declares the app (integration/authentication.md#apps)' },
+  { term: 'ApiKeyStore', hint: 'removed in 8.0 (R9): read keys through `ApiKeyReader`; manage them with `InMemoryApiKeyStore` or `RedisApiKeyStore`' },
+  { term: 'FlatTrace', hint: 'renamed in 8.0 (R9): `EvaluationTrace` (`me.ahoo.cosec.engine.trace`)' },
+  { term: 'supportCredentials', hint: 'renamed in 8.0 (R9): `Authentication.credentialsType`' },
+  { term: 'AbstractRefreshTokenAuthentication', hint: 'removed in 8.0 (R9): `SimpleRefreshTokenAuthentication` implements `Authentication` itself' },
+  { term: 'PipelineWebFilterKt', hint: 'renamed in 8.0 (R9): `checkMono` is in `AuthorizationCheckers` (`cosec-webflux`)' },
+  { term: 'PipelineServletFilterKt', hint: 'renamed in 8.0 (R9): `checkBlocking` is in `AuthorizationCheckers` (`cosec-webmvc`)' },
 ]
 
 const EXEMPT_SECTIONS = [
@@ -69,6 +85,15 @@ const ALLOWED = [
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
     terms: ['me.ahoo.cosec.cache', 'me.ahoo.cosec.servlet', 'me.ahoo.cosec.spring.boot.starter'],
     reason: 'the upgrade entry that renames the three packages names the old ones',
+  },
+  {
+    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    terms: [
+      'KafkaAuditEventSink', 'SimpleSecurityContext', 'PolicyType', 'RoleCapable', 'RevocableTokenVerifier',
+      'TokenStore.NoOp', 'SnapshotVersion', 'CoSec-App-Id', 'ApiKeyStore', 'FlatTrace', 'supportCredentials',
+      'AbstractRefreshTokenAuthentication', 'PipelineWebFilterKt', 'PipelineServletFilterKt',
+    ],
+    reason: 'the 8.0.0-alpha upgrade entries that remove or rename them name the old ones',
   },
   {
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
