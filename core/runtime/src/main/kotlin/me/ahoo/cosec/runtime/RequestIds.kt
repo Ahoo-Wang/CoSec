@@ -13,12 +13,6 @@
 
 package me.ahoo.cosec.runtime
 
-import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.spi.id.IdGenerator
-import me.ahoo.cosec.spi.id.RandomIdGenerator
-import java.time.Duration
-import java.util.concurrent.atomic.AtomicLong
-
 /** Which client request ids the pipeline accepts. */
 internal object RequestIds {
     /** The longest id accepted; a UUID is 36 characters. */
@@ -39,39 +33,5 @@ internal object RequestIds {
             }
         }
         return true
-    }
-}
-
-/**
- * The ids of [ids], or a random one when it throws (round 2 M6): an id only names a request or an event, so a generator
- * that fails (CosId's `ClockBackwardsException` after its clock went back, a lost machine slot) must not take the
- * request's answer with it. Without this the exception left `Pipeline.evaluate` before any outcome: no problem body, no
- * `CoSec-Request-Id`, no decision event, and each adapter answered its own way. The failure is logged at most once
- * per [interval]. An [Error] goes through, as everywhere in the pipeline.
- */
-internal class FallbackIds(private val ids: IdGenerator, private val interval: Duration = Duration.ofSeconds(10)) {
-    private val last = AtomicLong(Long.MIN_VALUE)
-
-    @Suppress("TooGenericExceptionCaught")
-    fun generate(): String = try {
-        ids.generate()
-    } catch (e: Exception) {
-        report(e)
-        RandomIdGenerator.generate()
-    }
-
-    private fun report(failure: Exception) {
-        val now = System.nanoTime()
-        val previous = last.get()
-        if (previous != Long.MIN_VALUE && now - previous < interval.toNanos()) {
-            return
-        }
-        if (last.compareAndSet(previous, now)) {
-            log.warn(failure) { "The IdGenerator [$ids] failed: a random id names the request or event instead." }
-        }
-    }
-
-    private companion object {
-        val log = KotlinLogging.logger {}
     }
 }
