@@ -48,6 +48,21 @@ tasks.named<Test>("test") {
     // DocumentationExamplesTest reads the samples of the wiki's scenario pages.
     systemProperty("cosec.repository.root", repositoryRoot.asFile.absolutePath)
     inputs.dir(repositoryRoot.dir("wiki/examples")).withPathSensitivity(PathSensitivity.RELATIVE)
+    // MutationCheckTest applies every mutant to the files it names, which live in other modules: they are inputs too,
+    // so a refactoring that strands a mutant runs the test again.
+    // Locals, not the script's: the configuration cache cannot store a lambda that captures the script.
+    val mutants = layout.projectDirectory.dir("mutants")
+    val root = repositoryRoot.asFile
+    val patchedFile = "+++ b/" // the line of a `git diff` that names the file a hunk changes
+    inputs.dir(mutants).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(
+        mutants.asFileTree.matching { include("*.patch") }.elements.map { patches ->
+            patches.flatMap { patch ->
+                patch.asFile.readLines().filter { it.startsWith(patchedFile) }
+                    .map { root.resolve(it.removePrefix(patchedFile)) }
+            }
+        }
+    ).withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 /*

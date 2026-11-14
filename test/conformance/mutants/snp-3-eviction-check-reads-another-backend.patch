@@ -3,16 +3,16 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.SnapshotEvictionHealthIndicatorTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
-index b71e1db..4071f85 100644
+index 123db118..230ff65e 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
-@@ -127,10 +127,11 @@ class CoSecSnapshotAutoConfiguration {
+@@ -135,10 +135,11 @@ class CoSecSnapshotAutoConfiguration {
          @Bean
          fun cosecEvictionPolicyCheck(
              factory: CoCacheFactory,
 +            backend: CoherenceBackend,
              properties: RuntimeAuthorizationProperties,
-         ): SmartInitializingSingleton = SmartInitializingSingleton {
+         ): StartupTask = StartupTask.AfterSingletons {
              EvictionPolicyCheck.check(
 -                EvictionPolicyCheck.read(factory.runtime.backend),
 +                EvictionPolicyCheck.read(backend),
