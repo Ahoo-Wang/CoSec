@@ -355,7 +355,7 @@ internal class PathActionMatcherFactory : ActionMatcherFactory {
 }
 
 /** A bounded LRU of parsed patterns. Synchronized: a converted matcher may be shared between threads. */
-private class PathPatternCache(private val maximumSize: Int) {
+internal class PathPatternCache(private val maximumSize: Int) {
     private val patterns = object : LinkedHashMap<String, PathPattern>(16, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PathPattern>): Boolean =
             size > maximumSize
