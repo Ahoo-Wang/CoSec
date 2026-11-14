@@ -296,7 +296,9 @@ class SnapshotEvictionHealthIndicatorTest {
     fun `an eviction policy that cannot be read fails startup, lazily too`() {
         for (runner in listOf(opaque(), opaque().lazily())) {
             runner.run { context ->
-                val messages = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+                val messages = generateSequence(
+                    context.startupFailure
+                ) { it.cause }.mapNotNull { it.message }.joinToString()
                 messages.assert().contains("Cannot tell whether Redis may evict CoSec's policy snapshot")
             }
         }

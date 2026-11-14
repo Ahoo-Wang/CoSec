@@ -35,7 +35,9 @@ import java.lang.reflect.Method
 class StartupCheckTest {
     /** Every auto-configuration the starter declares. */
     private val autoConfigurations: List<Class<*>> by lazy {
-        val imports = javaClass.classLoader.getResources("META-INF/spring/${AutoConfiguration::class.java.name}.imports")
+        val imports = javaClass.classLoader.getResources(
+            "META-INF/spring/${AutoConfiguration::class.java.name}.imports"
+        )
             .toList().flatMap { url -> url.openStream().bufferedReader().readLines() }
             .map { it.substringBefore('#').trim() }
             .filter { it.startsWith("me.ahoo.cosec.") }

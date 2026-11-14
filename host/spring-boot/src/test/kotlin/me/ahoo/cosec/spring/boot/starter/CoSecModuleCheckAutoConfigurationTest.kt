@@ -257,20 +257,28 @@ class CoSecModuleCheckAutoConfigurationTest {
 
     @Test
     fun `a Spring MVC host without cosec-webmvc fails startup lazily too`() {
-        failsNaming(servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.servlet.PipelineServletFilter")).lazily(), "cosec-webmvc")
+        failsNaming(
+            servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.servlet.PipelineServletFilter")).lazily(),
+            "cosec-webmvc"
+        )
     }
 
     @Test
     fun `a WebFlux host without cosec-webflux fails startup lazily too`() {
         failsNaming(
-            reactive.withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER, "me.ahoo.cosec.webflux.PipelineWebFilter")).lazily(),
+            reactive.withClassLoader(
+                FilteredClassLoader(GATEWAY_GLOBAL_FILTER, "me.ahoo.cosec.webflux.PipelineWebFilter")
+            ).lazily(),
             "cosec-webflux",
         )
     }
 
     @Test
     fun `a Spring Cloud Gateway host without cosec-gateway fails startup lazily too`() {
-        failsNaming(reactive.withClassLoader(FilteredClassLoader("me.ahoo.cosec.gateway.IdentityStripFilter")).lazily(), "cosec-gateway")
+        failsNaming(
+            reactive.withClassLoader(FilteredClassLoader("me.ahoo.cosec.gateway.IdentityStripFilter")).lazily(),
+            "cosec-gateway"
+        )
     }
 
     @Test
@@ -303,7 +311,9 @@ class CoSecModuleCheckAutoConfigurationTest {
     @Test
     fun `cosec-cocache without a Redis template fails startup lazily too`() {
         ApplicationContextRunner().withConfiguration(config).lazily().run { context ->
-            generateSequence(context.startupFailure) { it.cause }.any { "spring-boot-data-redis" in it.message.orEmpty() }
+            generateSequence(
+                context.startupFailure
+            ) { it.cause }.any { "spring-boot-data-redis" in it.message.orEmpty() }
                 .assert().describedAs(context.startupFailure.toString()).isTrue()
         }
     }
@@ -311,7 +321,9 @@ class CoSecModuleCheckAutoConfigurationTest {
     @Test
     fun `cosec-cocache without a CacheRuntime fails startup lazily too`() {
         failsNamingTheStarter(
-            ApplicationContextRunner().withConfiguration(config).withBean(ReactiveStringRedisTemplate::class.java, redis).lazily()
+            ApplicationContextRunner().withConfiguration(
+                config
+            ).withBean(ReactiveStringRedisTemplate::class.java, redis).lazily()
         )
     }
 }

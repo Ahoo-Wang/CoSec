@@ -24,7 +24,6 @@ import me.ahoo.cosec.spring.boot.starter.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.starter.jwt.ConditionalOnJwtEnabled
 import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
-
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition

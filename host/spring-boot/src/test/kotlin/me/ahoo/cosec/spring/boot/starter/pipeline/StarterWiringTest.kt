@@ -525,10 +525,19 @@ class StarterWiringTest {
     fun `a primary second control-plane authorization bean fails startup, lazily too`() {
         val authorizer = ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
         for (runner in listOf(controlRunner, controlRunner.lazily())) {
-            runner.withBean("ownControlAuthorizer", ControlAuthorizer::class.java, { authorizer }, { it.isPrimary = true })
+            runner.withBean(
+                "ownControlAuthorizer",
+                ControlAuthorizer::class.java,
+                { authorizer },
+                { it.isPrimary = true }
+            )
                 .run { context ->
-                    val messages = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
-                    messages.assert().contains("The control plane's ControlAuthorizer is CoSec's own [cosecControlAuthorizer]")
+                    val messages = generateSequence(
+                        context.startupFailure
+                    ) { it.cause }.mapNotNull { it.message }.joinToString()
+                    messages.assert().contains(
+                        "The control plane's ControlAuthorizer is CoSec's own [cosecControlAuthorizer]"
+                    )
                         .contains("ownControlAuthorizer")
                 }
         }

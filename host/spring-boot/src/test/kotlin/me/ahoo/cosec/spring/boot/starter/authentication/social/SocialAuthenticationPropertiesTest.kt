@@ -16,10 +16,10 @@ package me.ahoo.cosec.spring.boot.starter.authentication.social
 import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.config.AuthDefaultSource
 import org.junit.jupiter.api.Test
-import java.util.UUID
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.context.annotation.Configuration
+import java.util.UUID
 
 class SocialAuthenticationPropertiesTest {
 
@@ -50,7 +50,9 @@ class SocialAuthenticationPropertiesTest {
     @Test
     fun `an unknown field of a registration fails startup`() {
         runner.withPropertyValues("cosec.authentication.login.social.registration.github.pcke=true").run { context ->
-            val messages = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
+            val messages = generateSequence(
+                context.startupFailure
+            ) { it.cause }.mapNotNull { it.message }.joinToString()
             messages.assert().contains("cosec.authentication.login.social.registration.github.pcke")
         }
     }

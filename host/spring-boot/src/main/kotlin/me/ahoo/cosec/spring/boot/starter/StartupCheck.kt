@@ -45,7 +45,9 @@ interface StartupCheck {
     @InternalCoSecApi
     companion object {
         /** Every [StartupCheck] bean is created at startup, lazy initialization or not. */
-        val EAGER: LazyInitializationExcludeFilter = LazyInitializationExcludeFilter.forBeanTypes(StartupCheck::class.java)
+        val EAGER: LazyInitializationExcludeFilter = LazyInitializationExcludeFilter.forBeanTypes(
+            StartupCheck::class.java
+        )
     }
 }
 
@@ -54,6 +56,8 @@ interface StartupCheck {
  * is there wherever a check is, whichever auto-configurations an application excludes; imported many times, it is one
  * bean.
  */
+// A class, not an object: Spring instantiates what it imports.
+@Suppress("UtilityClassWithPublicConstructor")
 @Configuration(proxyBeanMethods = false)
 @InternalCoSecApi
 class StartupCheckExclusion {
