@@ -439,10 +439,10 @@ records no credential id does not count either: one made before the upgrade to t
 accepted, or one given with a credential that has no id; approve it again. A credential that does not say when it was
 issued, from an authenticator of yours that sets no `issuedAt`, loses its approvals to any revocation of its
 principal's tokens. Once the approver's access token has expired, `TokenRevoker.revoke` no longer takes it, so only
-`revokeSubject` takes its approvals back. Revocations are read as the pipeline reads them, so a degraded read counts as
-"not revoked" here too, for as long as an approval counts
-([Authentication](../integration/authentication.md#logout-and-revocation)); any other failure to read them is a `503`,
-and the change keeps its approval for when the store answers. They are kept for
+`revokeSubject` takes its approvals back. Revocations are judged as the pipeline judges them, but a store that cannot
+be read is no "not revoked" here: like any other failure to read them, it is a `503`
+([Authentication](../integration/authentication.md#logout-and-revocation)), and the change keeps its approval for when
+the store answers. They are kept for
 `cosec.jwt.token-validity.refresh`, which must be no shorter than `cosec.control.approval.expire-after`, or the starter
 does not start. An approver whose memberships come from the membership provider is decided twice at publish: on the
 roles it held when it approved and still holds, and on everything the provider answers now; both must permit, so a DENY

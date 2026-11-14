@@ -15,12 +15,14 @@ package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
-import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.runtime.token.DefaultTokenRevoker
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.IdGenerator
-import me.ahoo.cosec.spi.token.DefaultTokenRevoker
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -45,6 +47,7 @@ class CoSecJwtAutoConfigurationTest {
             )
             .withBean(IdGenerator::class.java, { IdGenerator { "app-token-id" } })
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecJwtAutoConfiguration::class.java,
@@ -67,6 +70,7 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java,
             )
@@ -122,6 +126,7 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.secret=$secret"
             )
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
             .run(check)
         val refused = { context: AssertableApplicationContext ->
@@ -150,6 +155,7 @@ class CoSecJwtAutoConfigurationTest {
                 "${JwtProperties.PREFIX}.token-validity.refresh=PT72H",
             )
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java,
             )
@@ -157,27 +163,29 @@ class CoSecJwtAutoConfigurationTest {
                 AssertionsForInterfaceTypes.assertThat(context)
                     .hasSingleBean(TokenStore::class.java)
                     .hasSingleBean(TokenRevoker::class.java)
+                // pure computation: revocation is TokenRevocation's question
                 context.getBean(TokenVerifier::class.java)
                     .assert()
-                    .isInstanceOf(RevocableTokenVerifier::class.java)
+                    .isInstanceOf(JwtTokenVerifier::class.java)
                 val revoker = context.getBean(TokenRevoker::class.java)
                 revoker.assert().isInstanceOf(DefaultTokenRevoker::class.java)
                 ReflectionTestUtils.getField(revoker, "revocationTtl").assert().isEqualTo(refreshValidity)
             }
     }
 
-    /** Review A7: refresh reads subject revocations with the same skew as the pipeline. */
+    /** Review A7: refresh and logout read subject revocations with the same skew as the pipeline. */
     @Test
-    fun theRefreshVerifierTakesTheRevocationSkew() {
+    fun theRevocationJudgementTakesTheRevocationSkew() {
         contextRunner
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
                 "cosec.authentication.revocation.skew=PT30S",
             )
             .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
-                ReflectionTestUtils.getField(context.getBean(TokenVerifier::class.java), "skew")
+                ReflectionTestUtils.getField(context.getBean(TokenRevocation::class.java), "skew")
                     .assert().isEqualTo(Duration.ofSeconds(30))
             }
     }
@@ -202,14 +210,14 @@ class CoSecJwtAutoConfigurationTest {
     @Test
     fun contextLoadsWhenCustomTokenStore() {
         val customTokenStore = object : TokenStore {
-            override fun revoke(tokenId: String, ttl: Duration) = Unit
-            override fun isRevoked(tokenId: String): Boolean = false
+            override suspend fun revoke(tokenId: String, ttl: Duration) = Unit
         }
         contextRunner
             .withPropertyValues(
                 "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             )
             .withBean(TokenStore::class.java, { customTokenStore })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withUserConfiguration(
                 CoSecJwtAutoConfiguration::class.java,
             )
@@ -222,9 +230,7 @@ class CoSecJwtAutoConfigurationTest {
 private class RecordingTokenStore : TokenStore {
     private val revoked = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
-    override fun revoke(tokenId: String, ttl: Duration) {
+    override suspend fun revoke(tokenId: String, ttl: Duration) {
         revoked += tokenId
     }
-
-    override fun isRevoked(tokenId: String): Boolean = tokenId in revoked
 }

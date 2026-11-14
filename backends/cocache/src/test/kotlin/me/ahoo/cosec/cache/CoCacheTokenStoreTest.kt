@@ -12,46 +12,35 @@
  */
 package me.ahoo.cosec.cache
 
-import io.mockk.every
-import io.mockk.mockk
-import io.mockk.verify
+import kotlinx.coroutines.runBlocking
 import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
 
+/** [CoCacheTokenStore] over CoCache's in-memory backend; the entry's lifetime is in `CoCacheTokenStoreIntegrationTest`. */
 class CoCacheTokenStoreTest {
+    private val caches = CoSecTestCaches()
+    private val tokenStore = CoCacheTokenStore(caches.revokedTokenCache)
 
-    private val cache = mockk<RevokedTokenCache>(relaxed = true)
-    private val tokenStore = CoCacheTokenStore(cache)
+    @AfterEach
+    fun close() {
+        caches.close()
+    }
 
     @Test
-    fun revoke() {
+    fun revoke() = runBlocking<Unit> {
         tokenStore.revoke("tokenId", Duration.ofMinutes(10))
-        // one extra second, so the entry never expires before the token does
-        verify(exactly = 1) { cache.put("tokenId", true, Duration.ofSeconds(601)) }
+
+        tokenStore.reader.isRevoked("tokenId").assert().isTrue()
+        tokenStore.reader.isRevoked("other").assert().isFalse()
     }
 
+    /** One extra second: a token already past its lifetime is still revoked when the call returns. */
     @Test
-    fun revokeExpiredToken() {
+    fun revokeExpiredToken() = runBlocking<Unit> {
         tokenStore.revoke("tokenId", Duration.ofSeconds(-5))
-        verify(exactly = 1) { cache.put("tokenId", true, Duration.ofSeconds(1)) }
-    }
 
-    @Test
-    fun isRevokedWhenTrue() {
-        every { cache.get("tokenId") } returns true
-        tokenStore.isRevoked("tokenId").assert().isTrue()
-    }
-
-    @Test
-    fun isRevokedWhenFalse() {
-        every { cache.get("tokenId") } returns false
-        tokenStore.isRevoked("tokenId").assert().isFalse()
-    }
-
-    @Test
-    fun isRevokedWhenMiss() {
-        every { cache.get("tokenId") } returns null
-        tokenStore.isRevoked("tokenId").assert().isFalse()
+        tokenStore.reader.isRevoked("tokenId").assert().isTrue()
     }
 }

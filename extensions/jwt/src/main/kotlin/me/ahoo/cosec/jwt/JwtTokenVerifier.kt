@@ -73,7 +73,12 @@ class JwtTokenVerifier(
             throw TokenVerificationException(exception.message ?: "The access token is malformed.", exception)
         }
         verifyAccessTokenSignature(decodedAccessToken)
-        if (decodedRefreshToken.subject != decodedAccessToken.id) {
+        Jwts.requireRefreshToken(decodedRefreshToken)
+        // The converter issues the pair together: the refresh token's `sub` is the access token's `jti`, and both carry
+        // the same `iat`.
+        if (decodedRefreshToken.subject != decodedAccessToken.id ||
+            decodedRefreshToken.issuedAtAsInstant != decodedAccessToken.issuedAtAsInstant
+        ) {
             throw RefreshTokenMismatchException()
         }
         return Jwts.toVerifiedToken(decodedAccessToken)

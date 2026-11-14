@@ -80,6 +80,21 @@ internal object Jwts {
         )
     }
 
+    /**
+     * A refresh presents a refresh token where one belongs (`IDN-13`, both ways): its [TOKEN_USE_CLAIM] is
+     * [REFRESH_TOKEN] and it has an `iat`. An access token there would pass for one whose `sub`, a principal id, is the
+     * id of the access token it is presented with: whoever could pick that principal id would refresh another
+     * principal's token (round-2 review M1).
+     */
+    fun requireRefreshToken(decodedRefreshToken: DecodedJWT) {
+        if (decodedRefreshToken.getClaim(TOKEN_USE_CLAIM).asString() != REFRESH_TOKEN) {
+            throw TokenVerificationException("The refresh token is not a refresh token.")
+        }
+        if (decodedRefreshToken.issuedAtAsInstant == null) {
+            throw TokenVerificationException("The refresh token has no iat.")
+        }
+    }
+
     private fun required(claim: String?, name: String): String =
         claim ?: throw TokenVerificationException("The token has no $name.")
 

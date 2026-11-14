@@ -237,10 +237,11 @@ object CoSecCacheSpecs {
      * documented as, and a failed Redis read throws (`read-failure` and `unknown-read` locked to `throw`): the request
      * fails closed with 503.
      *
-     * The revocation tables read "not revoked" when Redis fails ([revokedToken]); an operator may still choose `throw`
-     * (`cocache.caches.[RevokedTokenCache].unknown-read`), but not a read timeout shorter than the store's command
-     * timeout, under which more reads would fail and read "not revoked". The shadow caches fail a failed read, and keep
-     * their declared lifetimes.
+     * The revocation tables read a failed Redis read as unknown (`unknown-read` locked to `throw`), which their reader
+     * reports as unavailable: never "not revoked", which would let refresh issue a token on a read that failed (round-2
+     * review H1). What an unavailable store means is the caller's: only the pipeline's verification lets a token through
+     * on it (PIP-7). Their read timeout is the store's command timeout, which no layer shortens: a shorter one would make
+     * more reads fail. The shadow caches fail a failed read, and keep their declared lifetimes.
      *
      * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
      */
@@ -269,9 +270,11 @@ object CoSecCacheSpecs {
 
             REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
-                // A read that times out reads "not revoked" (unknown-read: absent, PIP-7): a timeout shorter than the
-                // store's command timeout, from cocache.defaults.store.read-timeout say, would widen that.
-                lock(PolicyField.READ_TIMEOUT)
+                // A failed read is unknown, never absent: absent would read "not revoked" to refresh too (H1).
+                lock(PolicyField.UNKNOWN_READ, PolicyField.READ_TIMEOUT)
+                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+                // A read that times out is unavailable, which the pipeline lets through (PIP-7): a timeout shorter than
+                // the store's command timeout, from cocache.defaults.store.read-timeout say, would widen that.
                 constrain(PolicyField.READ_TIMEOUT) { COMMAND_TIMEOUT }
             }
 
@@ -338,11 +341,10 @@ object CoSecCacheSpecs {
      *   fails the read, so a revocation the table cannot read is never reclaimed (deleting it would accept the token
      *   again);
      * - "not revoked" is kept locally for [RevokedTokenCache.MISSING_TTL_SECONDS];
-     * - a failed Redis read reads as "not revoked" (`unknownRead = ABSENT`), the documented exception to failing closed:
-     *   tokens are still signature-verified and expire on their own, and failing closed would reject every
-     *   authenticated request during a Redis outage. Such a read caches nothing: every read during the outage asks
-     *   Redis again, and a revocation applies as soon as Redis answers. `cocache.caches.[name].unknown-read: throw`
-     *   fails the revocation check closed with 503 instead.
+     * - a failed Redis read is unknown (`unknownRead = THROW`, locked): [CoCacheRevocationReader] reports it as
+     *   unavailable, and only the pipeline's verification lets a token through on it (PIP-7), never refresh (`IDN-14`).
+     *   Such a read caches nothing: every read during the outage asks Redis again, and a revocation applies as soon as
+     *   Redis answers.
      */
     private fun <V : Any> revocation(cacheName: String, keyPrefix: String, codec: Codec<V>): StoreSpec<String, V> {
         val layout = layout(keyPrefix, cacheName)
@@ -351,7 +353,7 @@ object CoSecCacheSpecs {
             .namespace(layout.namespace)
             .keyEncoder(KeyEncoder.ofToString())
             .codec(codec)
-            .unknownRead(UnknownReadMode.ABSENT)
+            .unknownRead(UnknownReadMode.THROW)
             .policy { absentTtl = Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS) }
             .build()
     }

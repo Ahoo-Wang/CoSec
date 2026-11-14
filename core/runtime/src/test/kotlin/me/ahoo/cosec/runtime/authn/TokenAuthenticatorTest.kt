@@ -33,6 +33,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
@@ -346,5 +347,37 @@ class TokenAuthenticatorTest {
             override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
         }
         failure { authenticate({ token() }, failing) }.message.assert().isEqualTo("unreadable")
+    }
+
+    /**
+     * PIP-7: the one place an unavailable revocation store lets a token through is verifying it here; with
+     * `fail-closed` the request fails instead, which the pipeline answers 503.
+     */
+    @Test
+    fun anUnavailableRevocationStoreAcceptsTheTokenItVerifies() = runTest {
+        val unavailable = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = throw RevocationUnavailableException("down")
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                throw RevocationUnavailableException("down")
+        }
+        val unchecked = UncheckedRevocations()
+        TokenAuthenticator(Verifier(mapOf("t" to { token() })), unavailable, unchecked = unchecked)
+            .authenticate(Credentials("t", null)).principal().id.assert().isEqualTo(PrincipalId("alice"))
+        // L6: counted, so an operator sees the tokens accepted without a check
+        unchecked.count.assert().isEqualTo(1)
+
+        val refusing = TokenAuthenticator(
+            Verifier(mapOf("t" to { token() })),
+            unavailable,
+            acceptUnavailableRevocations = false,
+        )
+        val refused = try {
+            refusing.authenticate(Credentials("t", null))
+            null
+        } catch (e: RevocationUnavailableException) {
+            e
+        }
+        refused.assert().isNotNull()
     }
 }

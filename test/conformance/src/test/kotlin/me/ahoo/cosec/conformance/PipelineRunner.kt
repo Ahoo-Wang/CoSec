@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.conformance
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -98,6 +96,7 @@ import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -170,7 +169,14 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       "apiKeys": [{ "key": "k", "id": "billing", "principalId": "svc", "tenantId": "acme", "roles": [...],
  *                                     "policies": [...], "enabled": true, "expiresAt": "..." }],
  * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] }
- *                       | { "fails": "message" },                       // the check reports an error
+ *                       | { "fails": "message" }                        // the check reports an error
+ *                       | { "unavailable": "message" },                 // the store cannot be read
+ * // Instead of a request: a refresh (SimpleRefreshTokenAuthentication over the real JwtTokenVerifier and the scenario's
+ * // revocations) of the pair signed from these claims, as "jwt" signs one ("iat": epoch seconds). The outcome is
+ * // { "status": 200, "proceed": true } when a token would be issued, 401 with the token-* type of the refusal, or
+ * // { "status": 503, "type": "unavailable" } when the revocations cannot be read.
+ * "refresh":            { "access": { "jti": "a1", "sub": "alice", "iat": 1790000000 },
+ *                         "refresh": { "jti": "r1", "sub": "a1", "iat": 1790000000, "claims": { "cosec.token": "refresh" } } },
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true }
  *                       // knows the authentication's principal; or, by tenant and id, exactly these principals
  *                       // ("active": false deactivates one; any other is unknown, RFC 0009 §4.2)
@@ -213,8 +219,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check",
+            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check", "refresh",
         )
+        node.get("refresh")?.let { return ScenarioRefresh.refreshed(it, revocations(node.get("revocations"))) }
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
@@ -551,7 +558,16 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     private fun revocations(node: JsonNode?): RevocationReader {
         if (node == null) return RevocationReader.NONE
-        node.only("tokens", "subjects", "fails")
+        node.only("tokens", "subjects", "fails", "unavailable")
+        node.get("unavailable")?.let { unavailable ->
+            return object : RevocationReader {
+                override suspend fun isRevoked(tokenId: String): Boolean =
+                    throw RevocationUnavailableException(unavailable.text())
+
+                override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                    throw RevocationUnavailableException(unavailable.text())
+            }
+        }
         node.get("fails")?.let { fails ->
             return object : RevocationReader {
                 override suspend fun isRevoked(tokenId: String): Boolean = throw IllegalStateException(fails.text())
@@ -615,48 +631,6 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             authenticator.authenticate(
                 if (credentials.token == null) credentials else Credentials(token, credentials.apiKey)
             )
-        }
-    }
-
-    /** A token signed from the scenario's claims. */
-    private class ScenarioJwt(node: JsonNode) {
-        val token: String
-
-        init {
-            node.only("jti", "sub", "tenantId", "aud", "claims")
-            val builder = JWT.create()
-                .withJWTId(node.get("jti")?.text() ?: "t1")
-                .withSubject(node.get("sub")?.text() ?: "alice")
-                .withExpiresAt(Instant.now().plusSeconds(3600))
-            node.get("tenantId")?.let { builder.withClaim(MembershipClaims.TENANT_KEY, it.text()) }
-            node.get("aud")?.let { aud ->
-                if (aud.isArray) {
-                    builder.withAudience(
-                        *aud.strings().toTypedArray()
-                    )
-                } else {
-                    builder.withAudience(aud.text())
-                }
-            }
-            node.get("claims")?.fields().orEmpty().forEach { (name, value) ->
-                @Suppress("UNCHECKED_CAST")
-                when (val claim = CoSecJson.mapper.treeToValue(value, Any::class.java)) {
-                    null -> builder.withNullClaim(name)
-                    is String -> builder.withClaim(name, claim)
-                    is Map<*, *> -> builder.withClaim(name, claim as Map<String, Any?>)
-                    is List<*> -> builder.withClaim(name, claim)
-                    is Int -> builder.withClaim(name, claim)
-                    else -> throw ScenarioFormatException(
-                        "Claim $name must be a string, an object, an array, an int or null."
-                    )
-                }
-            }
-            token = builder.sign(ALGORITHM)
-        }
-
-        companion object {
-            private val ALGORITHM: Algorithm = Algorithm.HMAC256("conformance-scenario-secret")
-            val VERIFIER = JwtTokenVerifier(ALGORITHM)
         }
     }
 

@@ -55,6 +55,7 @@ import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.starter.NoTokenStore
 import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.control.CoSecControlRoutesAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.control.ControlProperties
@@ -112,7 +113,7 @@ class CoSecPipelineAutoConfigurationTest {
             "cosec.authorization.routes.location=file:${routes.absolutePath}",
         )
         // Without Redis an application brings its own revocation store and reader; here, explicitly, none.
-        .withBean(TokenStore::class.java, { TokenStore.NoOp })
+        .withBean(TokenStore::class.java, { NoTokenStore })
         .withBean(RevocationReader::class.java, { RevocationReader.NONE })
 
     private fun facts(token: String? = null, cookie: String? = null) = HttpFacts(
@@ -177,7 +178,7 @@ class CoSecPipelineAutoConfigurationTest {
             )
             .withPropertyValues("cosec.authorization.routes.location=")
             .withBean(Algorithm::class.java, { Algorithm.HMAC256("FyN0Igd80Gas8stTavArGKOYnS9uLwGA_") })
-            .withBean(TokenStore::class.java, { TokenStore.NoOp })
+            .withBean(TokenStore::class.java, { NoTokenStore })
             .run { context ->
                 context.startupFailure!!.stackTraceToString().assert().contains("no revocation reader")
             }

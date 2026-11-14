@@ -1,0 +1,31 @@
+{
+  "rules": [
+    "IDN-14"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice's pair is valid, but the revocation store cannot be read: the refresh is refused with 503, never issued on a read that could not say the token is not revoked.",
+  "refresh": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1790000000
+    },
+    "refresh": {
+      "jti": "r1",
+      "sub": "a1",
+      "iat": 1790000000,
+      "claims": {
+        "cosec.token": "refresh"
+      }
+    }
+  },
+  "revocations": {
+    "unavailable": "Redis is down"
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "PIP-7"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The revocation store cannot be read: alice's token, verified on the request, is accepted (the documented exception), and her binding permits.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "p:alice:read",
+            "subject": {
+              "principal": "alice"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "read"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "issuedAt": "2026-10-01T00:00:00Z"
+    }
+  },
+  "revocations": {
+    "unavailable": "Redis is down"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

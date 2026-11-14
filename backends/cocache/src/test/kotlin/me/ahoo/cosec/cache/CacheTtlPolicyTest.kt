@@ -181,8 +181,8 @@ class CacheTtlPolicyTest {
     }
 
     /**
-     * Review L2 of #1203: a read that times out reads "not revoked" (`unknown-read: absent`, PIP-7), so no layer may give
-     * the revocation tables a read timeout shorter than the store's command timeout.
+     * Review L2 of #1203: a read that times out is unavailable, which the pipeline's verification lets through (PIP-7),
+     * so no layer may give the revocation tables a read timeout shorter than the store's command timeout.
      */
     @Test
     fun revocationTablesReadForTheWholeCommandTimeout() {
@@ -252,25 +252,31 @@ class CacheTtlPolicyTest {
     }
 
     @Test
-    fun revokedTokenCacheBoundsMissingTtlAndReadsAbsentWhenRedisFails() {
+    fun revokedTokenCacheBoundsMissingTtlAndReadsUnknownWhenRedisFails() {
         val spec = CoSecCacheSpecs.revokedToken()
         spec.policy.absentTtl.assert().isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
-        spec.unknownRead.assert().isEqualTo(UnknownReadMode.ABSENT)
+        spec.unknownRead.assert().isEqualTo(UnknownReadMode.THROW)
     }
 
     /**
-     * The absent read is CoSec's declaration, not a lock: an operator can still make the revocation check fail closed
-     * (`cocache.caches.[RevokedTokenCache].unknown-read: throw`).
+     * Round-2 review H1: a failed read is unknown in both tables, and no layer can make it absent, which would read "not
+     * revoked" to refresh as well as to the pipeline.
      */
     @Test
     fun revokedSubjectCacheIsConfiguredLikeRevokedTokens() {
         val spec = CoSecCacheSpecs.revokedSubject()
         spec.policy.absentTtl.assert().isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
-        spec.unknownRead.assert().isEqualTo(UnknownReadMode.ABSENT)
+        spec.unknownRead.assert().isEqualTo(UnknownReadMode.THROW)
         (spec.keyPrefix + spec.namespace).assert().isEqualTo("cosec:token:subject:revoked")
         listOf(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME).forEach { name ->
-            CoSecCacheSpecs.locks(name).isLocked(PolicyField.UNKNOWN_READ).assert().isFalse()
+            CoSecCacheSpecs.locks(name).isLocked(PolicyField.UNKNOWN_READ).assert().isTrue()
             CoSecCacheSpecs.locks(name).isLocked(LayoutField.KEY_PREFIX).assert().isTrue()
+        }
+        weakened { factory ->
+            listOf(CoSecCacheSpecs.revokedToken(), spec).forEach {
+                factory.create(it, CoSecCacheSpecs.locks(it.name))
+                factory.effective(it.name, PolicyField.UNKNOWN_READ).assert().describedAs(it.name).isEqualTo("throw")
+            }
         }
     }
 

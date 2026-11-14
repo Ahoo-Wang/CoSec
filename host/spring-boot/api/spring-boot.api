@@ -509,7 +509,9 @@ public final class me/ahoo/cosec/spring/boot/starter/pipeline/RevocationProperti
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/pipeline/RevocationProperties$Companion;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> ()V
+	public final fun getFailClosed ()Z
 	public final fun getSkew ()Ljava/time/Duration;
+	public final fun setFailClosed (Z)V
 	public final fun setSkew (Ljava/time/Duration;)V
 }
 
