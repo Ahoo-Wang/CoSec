@@ -204,6 +204,13 @@
         "runtime:XForwardedRemoteIpResolverTest#withoutTheConnectionsPeerAnAddressComesFromTheHeaderOnly"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-17",
+      "source": "RFC 0006 §5.3.1; round-2 review L3",
+      "statement": "A client address the host reported that is not an address (`unknown`, an obfuscated identifier) is unavailable, never absent: a statement that reads `environment.ip` errs as on a missing external attribute (a DENY is Indeterminate unless `onMissing: nomatch`), and the blacklist cannot be read for it. A trusted `X-Forwarded-For` entry or a peer written with a port, brackets or a zone is read as its address, and several `X-Forwarded-For` lines are one list, in order.",
+      "level": "pipeline",
+      "pending": null
     }
   ]
 }

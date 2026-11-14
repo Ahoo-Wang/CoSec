@@ -305,9 +305,12 @@ the other cloud platforms it detects. The startup log names the reading in a lin
 | `native` on a server CoSec cannot tell, such as a war in an external container | Startup fails: set `server.forward-headers-strategy=none` and the index | |
 
 The entry counted from the right is the one the outermost of your proxies appended, so a value the client put at the
-left of the header is never used. When the header has fewer entries than that, the leftmost one is used. A request
-without `X-Forwarded-For`, or with more than one such header, uses the connection's peer, and has no address on Reactor
-Netty or Jetty under `native`. The IP is never resolved through reverse DNS.
+left of the header is never used. When the header has fewer entries than that, the leftmost one is used. Several
+`X-Forwarded-For` lines are one list, in the order received, so a client's own line stays left of your proxy's. A
+request without the header uses the connection's peer, and has no address on Reactor Netty or Jetty under `native`.
+An entry written with a port, brackets or a zone (`192.0.2.1:8080`, `[2001:db8::1]:443`, `fe80::1%en0`) is read as its
+address. One that is no address (`unknown`) makes `environment.ip` unavailable: a DENY that reads it is `503`, and the
+blacklist cannot be read for it (`PIP-17`). The IP is never resolved through reverse DNS.
 
 CoSec reads `X-Forwarded-For` only. A proxy in front of it must append to that header, or overwrite it; one that writes
 only `Forwarded` (RFC 7239) and passes a client's `X-Forwarded-For` on lets the client choose the address, so configure

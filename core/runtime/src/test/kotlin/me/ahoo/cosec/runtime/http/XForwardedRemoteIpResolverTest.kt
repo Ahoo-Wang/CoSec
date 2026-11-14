@@ -64,6 +64,26 @@ class XForwardedRemoteIpResolverTest {
         assertThrownBy<IllegalArgumentException> { Resolver(-1) }
     }
 
+    /** Several lines are one list, in order (RFC 9110 §5.3): a client's own line goes left of the proxy's. */
+    @Test
+    fun severalLinesAreOneList() {
+        Resolver(1).resolve(listOf("10.6.6.6", "198.51.100.2, 203.0.113.7")).assert().isEqualTo("203.0.113.7")
+        Resolver(1).resolve(listOf("10.6.6.6", "203.0.113.7")).assert().isEqualTo("203.0.113.7")
+        Resolver(2).resolve(listOf("10.6.6.6", "203.0.113.7")).assert().isEqualTo("10.6.6.6")
+    }
+
+    /** PIP-17: an entry is read as the address it writes; one that is no address stays as it is. */
+    @Test
+    fun anEntryIsReadAsItsAddress() {
+        Resolver(1).resolve(listOf("203.0.113.7:8080")).assert().isEqualTo("203.0.113.7")
+        Resolver(1).resolve(listOf("[2001:db8::1]:443")).assert().isEqualTo("2001:db8::1")
+        Resolver(1).resolve(listOf("[2001:db8::1]")).assert().isEqualTo("2001:db8::1")
+        Resolver(1).resolve(listOf("fe80::1%en0")).assert().isEqualTo("fe80::1")
+        Resolver(1).resolve(listOf("2001:db8::1")).assert().isEqualTo("2001:db8::1")
+        Resolver(1).resolve(listOf("unknown")).assert().isEqualTo("unknown")
+        Resolver(1).resolve(listOf("_hidden")).assert().isEqualTo("_hidden")
+    }
+
     private companion object {
         const val PEER = "192.0.2.1"
     }

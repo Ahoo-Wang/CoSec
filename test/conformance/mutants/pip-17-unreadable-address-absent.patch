@@ -1,0 +1,17 @@
+# Rule: PIP-17
+# Mutant: a client address that is no address reads as absent, so a DENY on environment.ip does not match
+# Tests: :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+index d0ea6129..6db34fd8 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+@@ -745,7 +745,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+         // address could not be read, so it is unavailable, as a missing external attribute is (PIP-17), never absent,
+         // which a DENY would read as "no match". An empty one is absent: nothing was reported, as in a check or a
+         // simulation that names no address.
+-        if (remoteIp == null && authz.environment.remoteIp.isNotEmpty()) {
++        if (false) {
+             throw AttributeMissing(Attribute.Kind.ENVIRONMENT_IP.path)
+         }
+         return remoteIp

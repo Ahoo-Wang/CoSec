@@ -231,7 +231,8 @@ val securityContext = httpServletRequest.getSecurityContext()
 | CoSec 无法判断的服务器上的 `native`，例如部署在外部容器中的 war | 启动失败：设置 `server.forward-headers-strategy=none` 和该索引 | |
 
 从右侧数起的那一条是你最外层代理追加的，因此客户端写在该请求头左侧的值永远不会被使用。条目数少于该值时，使用最左侧的条目。
-没有 `X-Forwarded-For`、或有多个这样的请求头的请求使用连接的对端；在 `native` 下的 Reactor Netty 或 Jetty 上则没有地址。IP 永远不会通过反向 DNS 解析。
+多行 `X-Forwarded-For` 按收到的顺序视为一个列表，因此客户端自己写的那一行位于你的代理那一行的左侧。没有该请求头的请求使用连接的对端；在 `native` 下的 Reactor Netty 或 Jetty 上则没有地址。
+带端口、方括号或 zone 的条目（`192.0.2.1:8080`、`[2001:db8::1]:443`、`fe80::1%en0`）按其中的地址读取。不是地址的条目（`unknown`）使 `environment.ip` 取不到：读取它的 DENY 返回 `503`，黑名单也无法为它查询（`PIP-17`）。IP 永远不会通过反向 DNS 解析。
 
 CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追加，或覆盖它；只写 `Forwarded`（RFC 7239）、却把客户端的
 `X-Forwarded-For` 原样转发的代理，会让客户端自选地址，所以要把它配置为覆盖或删除 `X-Forwarded-For`。在客户端可直接访问的宿主上，

@@ -25,6 +25,11 @@ and have to be provisioned again.
   `max-trusted-index: 0` on Reactor Netty or Jetty under `native`, and under `native` on a server CoSec cannot tell.
   Migration: the message names what to change ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-client-address)).
   `XForwardedRemoteIpResolver` is now internal API.
+- **Several `X-Forwarded-For` lines are one list, and an unreadable client address is unavailable** (`PIP-17`). A
+  request with two header lines used the connection's peer, which let a client step around a block on its own address;
+  the lines are now read in order. A trusted entry with a port, brackets or a zone is read as its address. One that is no
+  address (`unknown`) made `environment.ip` absent, which a DENY read as no match; it is now unavailable: such a DENY is
+  `503`, and the blacklist answers unavailable too.
 - **A credential's tenant must be a tenant id** (`IDN-11`). A token whose `tenantId` is blank, `*`, holds a `:` or a
   control character, or is longer than 128 characters is now `401 token-invalid` (it was `503`, or `500` for a blank
   one), and `JwtTokenConverter` does not issue it; an `ApiKey` with such a tenant cannot be built, so a stored one fails
