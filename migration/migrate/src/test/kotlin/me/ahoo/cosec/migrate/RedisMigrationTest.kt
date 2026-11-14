@@ -427,6 +427,53 @@ class RedisMigrationTest {
             .contains("--to-redis $REDIS ").contains("--resume")
     }
 
+    /** A marker that is not what the upgrade wrote is refused all the same: it still marks a run that stopped. */
+    @Test
+    fun `publish refuses an unreadable marker too`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+        redis.sync().set("$keyPrefix:meta:cocache8".encodeToByteArray(), "not json".encodeToByteArray())
+
+        val (refused, output) = run("publish", "--to-redis", REDIS, "--key-prefix", keyPrefix, "--in", out.toString())
+
+        refused.assert().isEqualTo(MigrateMain.FAILED)
+        output.assert().contains(
+            "$keyPrefix:meta:cocache8"
+        ).doesNotContain("(its export:").contains("Nothing was written.")
+    }
+
+    /**
+     * `--cluster` against a Redis that is not a cluster fails before anything is written, and the error Lettuce gives,
+     * which names the seed nodes, holds no credentials of them.
+     */
+    @Test
+    fun `publish with cluster seed nodes that are no cluster fails and prints no credentials`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+        val seeds = REDIS.replace("redis://", "redis://default:s3cret-of-the-seeds@")
+
+        val (failed, output) = run(
+            "publish",
+            "--to-redis",
+            seeds,
+            "--cluster",
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString()
+        )
+
+        failed.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().doesNotContain("s3cret-of-the-seeds")
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val store = me.ahoo.cosec.cocache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
+        runBlocking { store.head(SnapshotKey.Platform) }.assert().isNull()
+    }
+
     @Test
     fun `resume refuses a document in Redis that is not the converted one`() {
         write7x()
