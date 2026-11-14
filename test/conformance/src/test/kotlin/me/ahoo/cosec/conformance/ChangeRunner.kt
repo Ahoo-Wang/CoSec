@@ -52,7 +52,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships

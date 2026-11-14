@@ -56,6 +56,7 @@ class Action(val namespace: String, val verb: String)
 /** For HTTP, `type` is `http`, `id` the request path and `attributes` the request's `resource.*` attributes. */
 class Resource(val type: String, val id: String, val attributes: Map<String, String>)
 
+@InternalCoSecApi
 class Environment(
     val remoteIp: String,
     val requestId: String,

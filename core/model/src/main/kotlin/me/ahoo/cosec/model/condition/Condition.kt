@@ -92,8 +92,11 @@ sealed interface Operand {
 }
 
 /** A JSON literal. Its type is its JSON type: a string never stands for a boolean (RFC 0005 §3.2). */
+@InternalCoSecApi
 sealed interface Literal : Operand {
+    @InternalCoSecApi
     data class Str(val value: String) : Literal
 
+    @InternalCoSecApi
     data class Bool(val value: Boolean) : Literal
 }

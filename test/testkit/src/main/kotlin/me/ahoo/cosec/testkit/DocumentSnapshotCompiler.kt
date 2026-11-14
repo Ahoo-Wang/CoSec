@@ -179,7 +179,7 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
 
     private const val FAULT_FIELD = "fault"
     private const val CONDITION = "condition"
-    private const val SCHEMA = PolicyDocumentCodec.SCHEMA
+    private val SCHEMA = PolicyDocumentCodec.SCHEMA
     private const val PUBLISHED_AT = "2026-10-26T00:00:00Z"
 }
 

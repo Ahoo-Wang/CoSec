@@ -21,6 +21,7 @@ import me.ahoo.cosec.engine.GuardBehavior
 import me.ahoo.cosec.engine.MatcherException
 import me.ahoo.cosec.engine.RuleBehavior
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.engine.trace.CandidateOutcome
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.TenantId

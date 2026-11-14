@@ -22,8 +22,8 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
-import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.apikey.ApiKeys
+import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
@@ -60,7 +60,7 @@ internal class CoSecApiKeyAutoConfigurationTest {
     @Test
     fun disabledByDefault() {
         contextRunner.run { context ->
-            assertThat(context).hasNotFailed().doesNotHaveBean(ApiKeyStore::class.java)
+            assertThat(context).hasNotFailed().doesNotHaveBean(InMemoryApiKeyStore::class.java)
             val result = runBlocking {
                 context.getBean(Authenticator::class.java).authenticate(Credentials(null, key))
             }
@@ -81,7 +81,7 @@ internal class CoSecApiKeyAutoConfigurationTest {
                 "cosec.api-key.keys[0].expires-at=2999-01-01T00:00:00Z",
             )
             .run { context ->
-                assertThat(context).hasNotFailed().hasSingleBean(ApiKeyStore::class.java)
+                assertThat(context).hasNotFailed().hasSingleBean(InMemoryApiKeyStore::class.java)
                 val authenticator = context.getBean(Authenticator::class.java)
                 val result = runBlocking { authenticator.authenticate(Credentials(null, key)) }
                 result.assert().isInstanceOf(AuthnResult.Authenticated::class.java)
@@ -105,7 +105,7 @@ internal class CoSecApiKeyAutoConfigurationTest {
             }
         }
         contextRunner.withPropertyValues("cosec.api-key.enabled=FALSE").run { context ->
-            assertThat(context).hasNotFailed().doesNotHaveBean(ApiKeyStore::class.java)
+            assertThat(context).hasNotFailed().doesNotHaveBean(InMemoryApiKeyStore::class.java)
         }
     }
 
@@ -276,7 +276,7 @@ internal class CoSecApiKeyAutoConfigurationTest {
             .withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store=redis")
             .run { context ->
                 assertThat(context).hasNotFailed()
-                assertThat(context.getBean(ApiKeyStore::class.java)).isInstanceOf(RedisApiKeyStore::class.java)
+                assertThat(context.getBean(RedisApiKeyStore::class.java)).isNotNull()
                 assertThat(context.getBean(ApiKeyReader::class.java)).isInstanceOf(RedisApiKeyReader::class.java)
             }
     }

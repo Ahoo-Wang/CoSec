@@ -29,7 +29,7 @@ import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Identifiers

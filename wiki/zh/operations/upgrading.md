@@ -87,6 +87,14 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **回滚可以带 `confirmations`**，恢复带 `onMissing: "nomatch"` 的 DENY 时与提议相同。此前这样的回滚根本无法确认。
 - **`repair-references` 也会删除**未能写入头的发布登记的条目，并输出 `Removed <n> reference(s) no head refers to.`。见[修复反向引用索引](#repair-the-back-reference-index)。
 
+- **`cosec-model`、`cosec-engine` 和 `cosec-spi` 的公开 API 已按 8.0 归类**（R9、RFC 0010 C4）：仍然公开的，就是 8.0 保持稳定的。应用会注意到：
+  - `ApiKeyStore` 已删除。请求通过 `ApiKeyReader` 读取 key。管理 key 请用 `InMemoryApiKeyStore` 或 `RedisApiKeyStore` 这个 Bean，它们的方法不变；按 Bean 自己的类型注入。流水线从不读取应用自己声明的 `ApiKeyStore` Bean：要从别处查找 key，请声明 `ApiKeyReader`。
+  - 评估轨迹换了包，并且是实验性的。`me.ahoo.cosec.engine.flat.FlatTrace` 改为 `me.ahoo.cosec.engine.trace.EvaluationTrace`，`CandidateTrace` 和 `CandidateOutcome` 在同一个包中。这些类型和 `DecisionEvent.evaluationTrace` 是 `@ExperimentalCoSecApi`（用 `@OptIn(ExperimentalCoSecApi::class)` 选择使用），构造器是内部的。`ViewVersion` 和 `AttributeStatus` 在 `me.ahoo.cosec.engine` 中，保持稳定。审计记录及其 JSON 不变。
+  - `RevocationUnavailableException` 继承 `CoSecException`，与 `MembershipUnavailableException` 一样。把所有 `CoSecException`（一种 `SecurityException`）都答成 `401` 的处理器现在也会捕获它：请先处理它，它表示吊销存储不可用。
+  - `RateLimitResult` 不再是 `data class`：没有了 `copy` 和 `componentN`，相等性不变。
+  - `SnapshotDocument.DOCUMENT_SCHEMA` 不再是 `const`，已编译的代码读取的是运行时 CoSec 的 schema。用它初始化的 `const val` 不再能编译：改为 `val`。
+  - 以下现在是内部 API（`@InternalCoSecApi`）：`Environment`、条件字面量（`Literal`）、`Attribute` 及其 `Kind`、`ScopeResolver`、`ScopeSubject`、`SubjectRevocation`、`IdentityFormatException`、`IdentityOverflowException` 和 `Identifiers.isUnpairedSurrogateAt`。`ScopeResolution.Resolved` 和 `ScopeResolution.Rejected` 的构造器是内部的；`ScopeResolution.Rejected.Reason` 保留。
+
 ## 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 是预览版，没有兼容性承诺。它保存的数据仍然可读，只有反向引用集合、已批准的变更以及用其他拼法写星期的文档例外（见下）。
@@ -813,7 +821,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http`（`cosec-runtime`） | `RemoteIpResolver`、`XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit`（`cosec-spi`） | `AuditEventSink` |
 | `me.ahoo.cosec.audit` | `me.ahoo.cosec.runtime.audit`（`cosec-runtime`） | `LoggingAuditEventSink`、`AuditEventData` |
-| `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey`（`cosec-spi`） | `ApiKey`、`ApiKeyReader`、`ApiKeyStore`、`InMemoryApiKeyStore` |
+| `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey`（`cosec-spi`） | `ApiKey`、`ApiKeyReader`、`InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit`（`cosec-spi`） | `RateLimit`、`RateLimitResult`、`RateLimiter`（[见下文](#removed-and-replaced-apis)） |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model`（`cosec-model`） | `CoSecException` |
 
@@ -845,6 +853,7 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `CoSecAuthorizationCustomizer` | `Authenticator`、`DecisionListener`、`AttributeProvider`、`MembershipProvider`、`RateLimiter` 的 bean。 |
 | `Policy`、`Statement`、`PermissionVerifier`、`ActionMatcher`、`ConditionMatcher`、`AppPermission`、`AppRolePermission`、`RolePermission` 以及 `cosec-api` 中其余的策略与权限模型 | 文档（[策略语言](../policies/language.md)）。覆写了 `verify` 的 `Statement` 没有对应物。 |
 | `ActionMatcherFactory`、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、内置匹配器、OGNL 与 SpEL | 只有内置的动作和条件。自定义条件读取的值改由 `AttributeProvider` 提供（[扩展](../architecture/extending.md)）。 |
+| `ApiKeyStore` | 查找 key 用 `ApiKeyReader`；管理 key 用 `InMemoryApiKeyStore` 或 `RedisApiKeyStore` Bean。 |
 | `BlockingAware` | 无：没有条件会执行代码。阻塞的查询放进会挂起的 `AttributeProvider`。 |
 | `RootPrincipalMatcher`、`CoSecPrincipal.isRoot`、`root-enabled` | break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）。 |
 | `BlacklistChecker` | 放在 `AttributeProvider` bean（`BlacklistAttributeProvider`）后面的 `BlacklistSource`。 |

@@ -63,8 +63,6 @@ class PublicApiStabilityTest {
             val storeRecord = "A record of the control store or its change events: an application reads it or stores it " +
                 "whole (ChangeRequestCodec), and only cosec-control constructs or copies it, so a new field breaks no caller."
             listOf(
-                "model.condition.Literal\$Bool" to "A literal value.",
-                "model.condition.Literal\$Str" to "A literal value.",
                 "model.decision.RateLimitSpec" to "A rate limit rule read from a document, complete as RFC 0006 §8 states it.",
                 "model.decision.Obligation\$RateLimit" to decision,
                 "model.decision.BindingRef\$Attached" to decision,
@@ -80,9 +78,8 @@ class PublicApiStabilityTest {
                 "AmbiguousPolicy", "AttributeUnavailable", "BoundaryUnavailable", "MatcherFailed", "MembershipUnavailable",
                 "MissingPolicies", "NotLoaded", "RateLimiterUnavailable", "RequiredListenerFailed", "SourceUnavailable",
             ).map { "model.decision.Cause\$$it" to decision } + listOf(
-                "engine.flat.ViewVersion" to value,
+                "engine.ViewVersion" to value,
                 "spi.ratelimit.RateLimit" to value,
-                "spi.ratelimit.RateLimitResult" to value,
                 "spi.snapshot.SnapshotKey\$App" to value,
                 "spi.snapshot.SnapshotKey\$Tenant" to value,
                 "runtime.token.SimpleCompositeToken" to "An access token and a refresh token: the pair is the whole of a composite token.",

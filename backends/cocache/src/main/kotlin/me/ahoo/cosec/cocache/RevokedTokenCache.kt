@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cocache
 
 import me.ahoo.cocache.api.Store
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 
 /**

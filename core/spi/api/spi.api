@@ -21,19 +21,15 @@ public abstract interface class me/ahoo/cosec/spi/apikey/ApiKeyReader {
 	public abstract fun findByHash (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
-public abstract interface class me/ahoo/cosec/spi/apikey/ApiKeyStore {
-	public abstract fun findByHash (Ljava/lang/String;)Lme/ahoo/cosec/spi/apikey/ApiKey;
-}
-
 public final class me/ahoo/cosec/spi/apikey/ApiKeys {
 	public static final field INSTANCE Lme/ahoo/cosec/spi/apikey/ApiKeys;
 	public final fun generate ()Ljava/lang/String;
 	public final fun hash (Ljava/lang/String;)Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/spi/apikey/InMemoryApiKeyStore : me/ahoo/cosec/spi/apikey/ApiKeyStore {
+public final class me/ahoo/cosec/spi/apikey/InMemoryApiKeyStore {
 	public fun <init> (Ljava/util/Map;)V
-	public fun findByHash (Ljava/lang/String;)Lme/ahoo/cosec/spi/apikey/ApiKey;
+	public final fun findByHash (Ljava/lang/String;)Lme/ahoo/cosec/spi/apikey/ApiKey;
 	public final fun getReader ()Lme/ahoo/cosec/spi/apikey/ApiKeyReader;
 }
 
@@ -241,26 +237,6 @@ public final class me/ahoo/cosec/spi/identity/Identity$Method$Companion {
 	public final fun getJWT ()Lme/ahoo/cosec/spi/identity/Identity$Method;
 }
 
-public final class me/ahoo/cosec/spi/identity/IdentityFormatException : java/lang/IllegalArgumentException {
-	public fun <init> (Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;Ljava/lang/String;Ljava/lang/Throwable;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getReason ()Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
-}
-
-public final class me/ahoo/cosec/spi/identity/IdentityFormatException$Reason : java/lang/Enum {
-	public static final field MALFORMED Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
-	public static final field OVERSIZE Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
-	public static final field UNBOUNDED Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
-	public static final field UNSUPPORTED_VERSION Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
-	public static fun values ()[Lme/ahoo/cosec/spi/identity/IdentityFormatException$Reason;
-}
-
-public final class me/ahoo/cosec/spi/identity/IdentityOverflowException : java/lang/IllegalStateException {
-	public fun <init> (Ljava/lang/String;)V
-}
-
 public final class me/ahoo/cosec/spi/membership/InMemoryMembershipProvider : me/ahoo/cosec/spi/membership/MembershipProvider {
 	public fun <init> ()V
 	public fun memberships-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -306,7 +282,6 @@ public final class me/ahoo/cosec/spi/membership/MembershipUnavailableException :
 }
 
 public final class me/ahoo/cosec/spi/ratelimit/RateLimit {
-	public static final field Companion Lme/ahoo/cosec/spi/ratelimit/RateLimit$Companion;
 	public fun <init> (DJ)V
 	public synthetic fun <init> (DJILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()D
@@ -323,17 +298,8 @@ public final class me/ahoo/cosec/spi/ratelimit/RateLimit {
 	public fun toString ()Ljava/lang/String;
 }
 
-public final class me/ahoo/cosec/spi/ratelimit/RateLimit$Companion {
-}
-
 public final class me/ahoo/cosec/spi/ratelimit/RateLimitResult {
 	public fun <init> (ZJJLjava/time/Duration;)V
-	public final fun component1 ()Z
-	public final fun component2 ()J
-	public final fun component3 ()J
-	public final fun component4 ()Ljava/time/Duration;
-	public final fun copy (ZJJLjava/time/Duration;)Lme/ahoo/cosec/spi/ratelimit/RateLimitResult;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/ratelimit/RateLimitResult;ZJJLjava/time/Duration;ILjava/lang/Object;)Lme/ahoo/cosec/spi/ratelimit/RateLimitResult;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getAllowed ()Z
 	public final fun getLimit ()J
@@ -543,15 +509,9 @@ public final class me/ahoo/cosec/spi/token/RevocationReader$Companion {
 	public final fun getNONE ()Lme/ahoo/cosec/spi/token/RevocationReader;
 }
 
-public final class me/ahoo/cosec/spi/token/RevocationUnavailableException : java/lang/RuntimeException {
+public final class me/ahoo/cosec/spi/token/RevocationUnavailableException : me/ahoo/cosec/model/CoSecException {
 	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-}
-
-public final class me/ahoo/cosec/spi/token/SubjectRevocation {
-	public static final field INSTANCE Lme/ahoo/cosec/spi/token/SubjectRevocation;
-	public final fun getDEFAULT_SKEW ()Ljava/time/Duration;
-	public final fun revokes (Ljava/time/Instant;Ljava/time/Instant;Ljava/time/Duration;)Z
 }
 
 public final class me/ahoo/cosec/spi/token/TokenExpiredException : me/ahoo/cosec/spi/token/TokenVerificationException {

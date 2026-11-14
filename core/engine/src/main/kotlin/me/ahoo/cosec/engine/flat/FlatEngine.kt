@@ -17,6 +17,7 @@ package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.condition.Attribute
@@ -88,7 +89,7 @@ object AbsentAttributes : ConditionInput {
 
 /** [trace] is null at [TraceLevel.OFF]. */
 @InternalCoSecApi
-class FlatEvaluation(val decision: Decision, val trace: FlatTrace?)
+class FlatEvaluation(val decision: Decision, val trace: EvaluationTrace?)
 
 /** The default [FlatEngine]: stateless and thread-safe. */
 @InternalCoSecApi

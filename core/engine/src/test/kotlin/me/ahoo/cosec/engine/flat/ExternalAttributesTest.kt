@@ -16,6 +16,7 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.AttributeStatus
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId

@@ -1,3 +1,12 @@
+public final class me/ahoo/cosec/engine/AttributeStatus : java/lang/Enum {
+	public static final field ABSENT Lme/ahoo/cosec/engine/AttributeStatus;
+	public static final field PRESENT Lme/ahoo/cosec/engine/AttributeStatus;
+	public static final field UNAVAILABLE Lme/ahoo/cosec/engine/AttributeStatus;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/engine/AttributeStatus;
+	public static fun values ()[Lme/ahoo/cosec/engine/AttributeStatus;
+}
+
 public final class me/ahoo/cosec/engine/TraceLevel : java/lang/Enum {
 	public static final field EXHAUSTIVE Lme/ahoo/cosec/engine/TraceLevel;
 	public static final field FULL Lme/ahoo/cosec/engine/TraceLevel;
@@ -7,62 +16,49 @@ public final class me/ahoo/cosec/engine/TraceLevel : java/lang/Enum {
 	public static fun values ()[Lme/ahoo/cosec/engine/TraceLevel;
 }
 
-public final class me/ahoo/cosec/engine/flat/AttributeStatus : java/lang/Enum {
-	public static final field ABSENT Lme/ahoo/cosec/engine/flat/AttributeStatus;
-	public static final field PRESENT Lme/ahoo/cosec/engine/flat/AttributeStatus;
-	public static final field UNAVAILABLE Lme/ahoo/cosec/engine/flat/AttributeStatus;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/engine/flat/AttributeStatus;
-	public static fun values ()[Lme/ahoo/cosec/engine/flat/AttributeStatus;
-}
-
-public final class me/ahoo/cosec/engine/flat/CandidateOutcome : java/lang/Enum {
-	public static final field ACTION_MISS Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static final field CONDITION_MISS Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static final field ERROR Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static final field GUARD_ERROR Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static final field GUARD_MISS Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static final field MATCHED Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static final field NOT_EVALUATED Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static final field RESOURCE_MISS Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public static fun values ()[Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-}
-
-public final class me/ahoo/cosec/engine/flat/CandidateTrace {
-	public fun <init> (Lme/ahoo/cosec/model/decision/StatementRef$Policy;Lme/ahoo/cosec/model/Effect;Lme/ahoo/cosec/engine/flat/CandidateOutcome;Ljava/lang/Throwable;Z)V
-	public synthetic fun <init> (Lme/ahoo/cosec/model/decision/StatementRef$Policy;Lme/ahoo/cosec/model/Effect;Lme/ahoo/cosec/engine/flat/CandidateOutcome;Ljava/lang/Throwable;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getAfterDecision ()Z
-	public final fun getEffect ()Lme/ahoo/cosec/model/Effect;
-	public final fun getError ()Ljava/lang/Throwable;
-	public final fun getOutcome ()Lme/ahoo/cosec/engine/flat/CandidateOutcome;
-	public final fun getRef ()Lme/ahoo/cosec/model/decision/StatementRef$Policy;
-	public final fun getVia ()Lme/ahoo/cosec/model/decision/BindingRef;
-}
-
-public final class me/ahoo/cosec/engine/flat/FlatTrace {
-	public fun <init> (Lme/ahoo/cosec/model/scope/Scope;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/model/scope/Scope;Ljava/util/List;Ljava/util/List;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getBoundary ()Ljava/util/List;
-	public final fun getCandidates ()Ljava/util/List;
-	public final fun getExpired ()Ljava/util/List;
-	public final fun getScope ()Lme/ahoo/cosec/model/scope/Scope;
-	public final fun getUnresolved ()Ljava/util/List;
-}
-
-public final class me/ahoo/cosec/engine/flat/ViewVersion {
+public final class me/ahoo/cosec/engine/ViewVersion {
 	public fun <init> (JLjava/lang/Long;Ljava/lang/Long;)V
 	public final fun component1 ()J
 	public final fun component2 ()Ljava/lang/Long;
 	public final fun component3 ()Ljava/lang/Long;
-	public final fun copy (JLjava/lang/Long;Ljava/lang/Long;)Lme/ahoo/cosec/engine/flat/ViewVersion;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/engine/flat/ViewVersion;JLjava/lang/Long;Ljava/lang/Long;ILjava/lang/Object;)Lme/ahoo/cosec/engine/flat/ViewVersion;
+	public final fun copy (JLjava/lang/Long;Ljava/lang/Long;)Lme/ahoo/cosec/engine/ViewVersion;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/engine/ViewVersion;JLjava/lang/Long;Ljava/lang/Long;ILjava/lang/Object;)Lme/ahoo/cosec/engine/ViewVersion;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApp ()Ljava/lang/Long;
 	public final fun getPlatform ()J
 	public final fun getTenant ()Ljava/lang/Long;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/engine/trace/CandidateOutcome : java/lang/Enum {
+	public static final field ACTION_MISS Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static final field CONDITION_MISS Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static final field ERROR Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static final field GUARD_ERROR Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static final field GUARD_MISS Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static final field MATCHED Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static final field NOT_EVALUATED Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static final field RESOURCE_MISS Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public static fun values ()[Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+}
+
+public final class me/ahoo/cosec/engine/trace/CandidateTrace {
+	public final fun getAfterDecision ()Z
+	public final fun getEffect ()Lme/ahoo/cosec/model/Effect;
+	public final fun getError ()Ljava/lang/Throwable;
+	public final fun getOutcome ()Lme/ahoo/cosec/engine/trace/CandidateOutcome;
+	public final fun getRef ()Lme/ahoo/cosec/model/decision/StatementRef$Policy;
+	public final fun getVia ()Lme/ahoo/cosec/model/decision/BindingRef;
+}
+
+public final class me/ahoo/cosec/engine/trace/EvaluationTrace {
+	public final fun getBoundary ()Ljava/util/List;
+	public final fun getCandidates ()Ljava/util/List;
+	public final fun getExpired ()Ljava/util/List;
+	public final fun getScope ()Lme/ahoo/cosec/model/scope/Scope;
+	public final fun getUnresolved ()Ljava/util/List;
 }
 

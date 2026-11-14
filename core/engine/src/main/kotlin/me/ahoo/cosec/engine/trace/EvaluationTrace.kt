@@ -11,11 +11,9 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+package me.ahoo.cosec.engine.trace
 
-package me.ahoo.cosec.engine.flat
-
-import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
@@ -32,8 +30,12 @@ import me.ahoo.cosec.model.scope.Scope
  * except that it finishes the pass that decided; the rest is [CandidateOutcome.NOT_EVALUATED]. EXHAUSTIVE evaluates the
  * ALLOW pass even when the DENY pass decided. A Permit is then held to the platform boundary, whose statements are in
  * [boundary].
+ *
+ * Experimental: its shape follows the evaluator's, and may change in a minor release. A `DecisionListener` reads it
+ * from `DecisionEvent.evaluationTrace`; CoSec constructs it.
  */
-class FlatTrace(
+@ExperimentalCoSecApi
+class EvaluationTrace internal constructor(
     val scope: Scope,
     val candidates: List<CandidateTrace>,
     /** Bindings that would apply to the request had they not expired, in candidate order. */
@@ -51,7 +53,8 @@ class FlatTrace(
 )
 
 /** One statement of a candidate. [ref] says through which binding or attachment it applied. */
-class CandidateTrace(
+@ExperimentalCoSecApi
+class CandidateTrace internal constructor(
     val ref: StatementRef.Policy,
     val effect: Effect,
     val outcome: CandidateOutcome,
@@ -66,6 +69,8 @@ class CandidateTrace(
     val via: BindingRef get() = ref.via
 }
 
+/** What ruled one statement in or out ([CandidateTrace.outcome]). */
+@ExperimentalCoSecApi
 enum class CandidateOutcome {
     MATCHED,
     ACTION_MISS,

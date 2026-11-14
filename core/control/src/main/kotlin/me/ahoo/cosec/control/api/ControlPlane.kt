@@ -34,7 +34,7 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.engine.pattern.ResourceTarget
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Binding

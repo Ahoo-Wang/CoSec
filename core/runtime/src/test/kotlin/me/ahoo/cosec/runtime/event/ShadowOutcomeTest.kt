@@ -22,7 +22,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause

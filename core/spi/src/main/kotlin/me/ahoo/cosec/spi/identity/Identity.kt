@@ -146,11 +146,13 @@ class Identity(
 }
 
 /** Why an identity header cannot be read; a downstream service answers it with a problem, never as anonymous. */
+@InternalCoSecApi
 class IdentityFormatException(
     val reason: Reason,
     message: String,
     cause: Throwable? = null,
 ) : IllegalArgumentException(message, cause) {
+    @InternalCoSecApi
     enum class Reason {
         /** Not base64url, not JSON, or not this format: 400. */
         MALFORMED,
@@ -167,4 +169,5 @@ class IdentityFormatException(
 }
 
 /** An identity a gateway cannot encode within its limits (too many roles or claims): the request fails closed. */
+@InternalCoSecApi
 class IdentityOverflowException(message: String) : IllegalStateException(message)

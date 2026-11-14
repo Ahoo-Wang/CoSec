@@ -42,7 +42,7 @@ import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding

@@ -37,6 +37,7 @@ enum class AttributeType {
  *
  * Header names are case-insensitive, so `http.header.<name>` keeps the name in ASCII lower case.
  */
+@InternalCoSecApi
 class Attribute private constructor(
     val kind: Kind,
     val name: String,
@@ -69,6 +70,7 @@ class Attribute private constructor(
      *
      * A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when` over it needs an `else`.
      */
+    @InternalCoSecApi
     enum class Kind(val path: String, val type: AttributeType, val parameterized: Boolean = false) {
         SUBJECT_ID("subject.id", AttributeType.STRING),
         SUBJECT_TENANT("subject.tenant", AttributeType.STRING),
@@ -114,6 +116,7 @@ class Attribute private constructor(
         EXTERNAL("ext.", AttributeType.STRING, parameterized = true),
     }
 
+    @InternalCoSecApi
     companion object {
         private val FIXED: Map<String, Attribute> = Kind.entries.filterNot { it.parameterized }
             .associate { it.path to Attribute(it, "") }

@@ -99,7 +99,6 @@ one has an `else`, and a listener or store never relies on the set being complet
 | Set | Grows by |
 |---|---|
 | `AuthnResult.RejectReason` | a new reason, such as a new token check |
-| `Attribute.Kind` | a new catalog attribute |
 | `ProblemType` | a new problem, such as `413` or `415` |
 | `Obligation` | a new kind of obligation |
 | `Cause` | a new reason a decision is Indeterminate, such as a new port that can fail; a `DecisionListener` reads it from a decision event |
@@ -132,7 +131,8 @@ endpoint, on the same threads. Every SPI here follows the same contract:
   id) must not hold an unpaired UTF-16 surrogate: a Redis key would hold `?` in its place and share another id's key
   (`IDN-10`). `AuthenticatedPrincipal` and `ApiKey` refuse one when made, so an authenticator or an API key store
   that gives one throws, and a `MembershipProvider` answer with one fails: each is a `503`. `Identifiers.isWellFormed`
-  (`cosec-model`) is the test.
+  (`cosec-model`) is the test; `Identifiers.printable` writes an id into an exception message or a log line without
+  letting it forge a line.
 - **Do not catch cancellation.** A client that goes away cancels the request's coroutine. Rethrow
   `CancellationException`, and do not use `runCatching` around a suspending call.
 - **Keep it cheap.** Each call has a timeout (see [Configuration](../operations/configuration.md)); the whole request
@@ -301,8 +301,9 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
   declarations and its own host's providers, and every instance compiles against its own. A provider missing on one
   instance makes a change it reads fail there: the instance reports `CANDIDATE_ERROR` and blocks the shadow window
   ([Deploying the gateway server](../operations/deployment.md#before-the-first-request)).
-- **Values.** Return values by path, of the declared type. A path left out is *absent*. A value of the wrong type, a
-  thrown exception or a timeout makes the attributes asked for *unavailable*, and each statement that reads them follows
+- **Values.** Return values by path, of the declared type: a `String`, a `Boolean`, a `Set<String>`, or for `IP` an
+  `IpAddress` (`cosec-model`; `IpAddress.parse` reads one from text). A path left out is *absent*. A value of the wrong
+  type, a thrown exception or a timeout makes the attributes asked for *unavailable*, and each statement that reads them follows
   its `onMissing` setting ([Policy language](../policies/language.md)).
 - **Stages.** A stage-B attribute (the default) is fetched only when the engine's plan says this request could read it,
   after the scope is resolved. A stage-A attribute is fetched on every request, before the scope, together with the

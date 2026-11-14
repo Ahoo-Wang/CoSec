@@ -304,6 +304,27 @@ and have to be provisioned again.
 - **`repair-references` also removes** what a publish indexed before a head write it lost, and prints
   `Removed <n> reference(s) no head refers to.`. [Repair the back-reference index](#repair-the-back-reference-index).
 
+- **The public API of `cosec-model`, `cosec-engine` and `cosec-spi` is classified for 8.0** (R9, RFC 0010 C4): what
+  stays public is what 8.0 keeps stable. What an application notices:
+  - `ApiKeyStore` is removed. Requests read keys through `ApiKeyReader`. Manage keys through the `InMemoryApiKeyStore`
+    or the `RedisApiKeyStore` bean, whose methods do not change; inject the bean by its own type. The pipeline never read
+    an `ApiKeyStore` bean of an application's own: to look keys up elsewhere, declare an `ApiKeyReader`.
+  - The evaluation trace moved, and is experimental. `me.ahoo.cosec.engine.flat.FlatTrace` is
+    `me.ahoo.cosec.engine.trace.EvaluationTrace`, with `CandidateTrace` and `CandidateOutcome` beside it. These types and
+    `DecisionEvent.evaluationTrace` are `@ExperimentalCoSecApi` (opt in with `@OptIn(ExperimentalCoSecApi::class)`),
+    and their constructors are internal. `ViewVersion` and `AttributeStatus` are in `me.ahoo.cosec.engine`, and stay
+    stable. Audit records and their JSON do not change.
+  - `RevocationUnavailableException` extends `CoSecException`, as `MembershipUnavailableException` does. A handler that
+    answers every `CoSecException` (a `SecurityException`) with `401` now catches it too: handle it first, as the
+    revocation store being unavailable.
+  - `RateLimitResult` is no longer a `data class`: `copy` and `componentN` are gone, and equality is unchanged.
+  - `SnapshotDocument.DOCUMENT_SCHEMA` is no longer a `const`, so compiled code reads the schema of the CoSec it runs
+    with. A `const val` set from it no longer compiles: make it a `val`.
+  - Internal now (`@InternalCoSecApi`): `Environment`, the condition literals (`Literal`), `Attribute` and its `Kind`,
+    `ScopeResolver`, `ScopeSubject`, `SubjectRevocation`, `IdentityFormatException`, `IdentityOverflowException` and
+    `Identifiers.isUnpairedSurrogateAt`. The constructors of `ScopeResolution.Resolved` and `ScopeResolution.Rejected`
+    are internal; `ScopeResolution.Rejected.Reason` stays.
+
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 is a preview with no compatibility promise. What it stored still reads, except its back-reference
@@ -1538,7 +1559,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |
 | `me.ahoo.cosec.audit` | `me.ahoo.cosec.runtime.audit` (`cosec-runtime`) | `LoggingAuditEventSink`, `AuditEventData` |
-| `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey` (`cosec-spi`) | `ApiKey`, `ApiKeyReader`, `ApiKeyStore`, `InMemoryApiKeyStore` |
+| `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey` (`cosec-spi`) | `ApiKey`, `ApiKeyReader`, `InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit` (`cosec-spi`) | `RateLimit`, `RateLimitResult`, `RateLimiter` ([below](#removed-and-replaced-apis)) |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model` (`cosec-model`) | `CoSecException` |
 
@@ -1586,6 +1607,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `CoSecAuthorizationCustomizer` | Beans of `Authenticator`, `DecisionListener`, `AttributeProvider`, `MembershipProvider`, `RateLimiter`. |
 | `Policy`, `Statement`, `PermissionVerifier`, `ActionMatcher`, `ConditionMatcher`, `AppPermission`, `AppRolePermission`, `RolePermission` and the rest of `cosec-api`'s policy and permission model | Documents ([policy language](../policies/language.md)). A `Statement` that overrode `verify` has no counterpart. |
 | `ActionMatcherFactory`, `ConditionMatcherFactory`, `MatcherFactoryRegistry`, the built-in matchers, OGNL and SpEL | Built-in actions and conditions only. A value a custom condition read comes from an `AttributeProvider` ([Extending](../architecture/extending.md)). |
+| `ApiKeyStore` | `ApiKeyReader` to look keys up; the `InMemoryApiKeyStore` or `RedisApiKeyStore` bean to manage them. |
 | `BlockingAware` | None: no condition runs code. Blocking lookups go into an `AttributeProvider`, which suspends. |
 | `RootPrincipalMatcher`, `CoSecPrincipal.isRoot`, `root-enabled` | Break-glass bindings ([Root becomes break-glass](#root-becomes-break-glass)). |
 | `BlacklistChecker` | A `BlacklistSource` behind an `AttributeProvider` bean (`BlacklistAttributeProvider`). |

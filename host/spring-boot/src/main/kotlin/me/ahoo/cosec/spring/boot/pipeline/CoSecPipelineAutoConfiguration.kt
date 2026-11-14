@@ -38,7 +38,6 @@ import me.ahoo.cosec.runtime.route.RouteMap
 import me.ahoo.cosec.runtime.route.RouteMapCodec
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
-import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.audit.AuditEventSink
@@ -155,7 +154,7 @@ class CoSecPipelineAutoConfiguration {
         revocationReader: ObjectProvider<RevocationReader>,
         tokenStore: ObjectProvider<TokenStore>,
         apiKeyReader: ObjectProvider<ApiKeyReader>,
-        apiKeyStore: ObjectProvider<ApiKeyStore>,
+        apiKeyStore: ObjectProvider<InMemoryApiKeyStore>,
         revocationProperties: RevocationProperties,
         environment: Environment,
         unchecked: ObjectProvider<UncheckedRevocations>,
@@ -287,13 +286,12 @@ class CoSecPipelineAutoConfiguration {
         /** The API keys the pipeline reads: an [ApiKeyReader] bean, else the in-memory store's. */
         internal fun apiKeyReader(
             reader: ObjectProvider<ApiKeyReader>,
-            store: ObjectProvider<ApiKeyStore>
+            store: ObjectProvider<InMemoryApiKeyStore>
         ): ApiKeyReader {
             reader.ifAvailable?.let { return it }
-            val keys = store.ifAvailable
-            check(keys is InMemoryApiKeyStore) {
-                "API keys are enabled, but no ApiKeyReader is available for the store ${keys?.javaClass?.name}: " +
-                    "with cosec.api-key.store=redis, a ReactiveStringRedisTemplate is needed."
+            val keys = checkNotNull(store.ifAvailable) {
+                "API keys are enabled, but no ApiKeyReader is available: with cosec.api-key.store=redis, " +
+                    "a ReactiveStringRedisTemplate is needed."
             }
             return keys.reader
         }

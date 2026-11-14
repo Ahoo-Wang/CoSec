@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.attribute
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.IpAddress

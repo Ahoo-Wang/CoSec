@@ -26,7 +26,6 @@ import me.ahoo.cosec.cocache.RedisApiKeyStore
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
-import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.apikey.CoSecApiKeyAutoConfiguration
@@ -107,8 +106,7 @@ class DeploymentKeyPrefixTest {
                     runtime.admin(name)
                 ).keyspace.storagePrefix.assert().describedAs(name).startsWith("$prefix:")
             }
-            context.getBean(ApiKeyStore::class.java).assert().isInstanceOf(RedisApiKeyStore::class.java)
-            context.getBean(ApiKeyStore::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
+            context.getBean(RedisApiKeyStore::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
             context.getBean(ApiKeyReader::class.java).assert().isInstanceOf(RedisApiKeyReader::class.java)
             context.getBean(ApiKeyReader::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
             context.getBean(RateLimiter::class.java).assert().isInstanceOf(ReactiveRedisRateLimiter::class.java)

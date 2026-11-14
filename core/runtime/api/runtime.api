@@ -324,7 +324,7 @@ public final class me/ahoo/cosec/runtime/event/DecisionEvent {
 	public final fun getBy ()Lme/ahoo/cosec/model/decision/StatementRef;
 	public final fun getDecision ()Lme/ahoo/cosec/model/decision/Decision;
 	public final fun getElapsedNanos ()J
-	public final fun getEvaluationTrace ()Lme/ahoo/cosec/engine/flat/FlatTrace;
+	public final fun getEvaluationTrace ()Lme/ahoo/cosec/engine/trace/EvaluationTrace;
 	public final fun getId ()Ljava/lang/String;
 	public final fun getKind ()Lme/ahoo/cosec/runtime/event/DecisionEvent$Kind;
 	public final fun getOutcome ()Lme/ahoo/cosec/runtime/event/OutcomeSummary;
@@ -333,7 +333,7 @@ public final class me/ahoo/cosec/runtime/event/DecisionEvent {
 	public final fun getRequiredFailures ()Ljava/util/List;
 	public final fun getResource ()Lme/ahoo/cosec/model/Resource;
 	public final fun getScope ()Lme/ahoo/cosec/model/scope/Scope;
-	public final fun getSnapshotVersion ()Lme/ahoo/cosec/engine/flat/ViewVersion;
+	public final fun getSnapshotVersion ()Lme/ahoo/cosec/engine/ViewVersion;
 	public final fun getSubject ()Lme/ahoo/cosec/runtime/event/SubjectSummary;
 	public final fun getTime ()J
 	public final fun getTrace ()Lme/ahoo/cosec/runtime/event/TraceContext;

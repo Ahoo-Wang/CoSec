@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spi.apikey
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -78,15 +81,6 @@ class ApiKey(
 }
 
 /**
- * Looks up API keys by hash, synchronously: the store keys are provisioned into (`InMemoryApiKeyStore`, and
- * `RedisApiKeyStore` in `cosec-cocache`). Requests never read it: the pipeline reads keys through [ApiKeyReader].
- */
-@CoSecSpi
-fun interface ApiKeyStore {
-    fun findByHash(hash: String): ApiKey?
-}
-
-/**
  * The read side of an API key store for the coroutine pipeline (RFC 0006 §5.3.2): never blocks the calling thread, which
  * may be an event loop. A lookup that fails throws: the request is answered 503.
  */
@@ -96,10 +90,13 @@ fun interface ApiKeyReader {
 }
 
 /**
+ * API keys held in memory, by hash: the keys the starter reads from `cosec.api-key.keys`, or a test's. The pipeline reads
+ * them through [reader].
+ *
  * @param keys API keys by hash
  */
-class InMemoryApiKeyStore(private val keys: Map<String, ApiKey>) : ApiKeyStore {
-    override fun findByHash(hash: String): ApiKey? = keys[hash]
+class InMemoryApiKeyStore(private val keys: Map<String, ApiKey>) {
+    fun findByHash(hash: String): ApiKey? = keys[hash]
 
     /** The same keys for the pipeline: a map lookup, which never blocks. */
     val reader: ApiKeyReader = ApiKeyReader { keys[it] }

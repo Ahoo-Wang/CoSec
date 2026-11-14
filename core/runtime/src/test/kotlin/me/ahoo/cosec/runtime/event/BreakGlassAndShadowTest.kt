@@ -22,7 +22,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute

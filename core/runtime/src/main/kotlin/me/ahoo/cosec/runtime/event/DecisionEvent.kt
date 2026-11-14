@@ -11,16 +11,17 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime.event
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.AttributeStatus
+import me.ahoo.cosec.engine.AttributeStatus
 import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.FlatTrace
+import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.BindingRef
@@ -53,9 +54,11 @@ class DecisionEvent internal constructor(
     val decision: Decision?,
     /**
      * What the engine looked at, to the depth `cosec.pipeline.trace-level` asks for: null at `OFF` (the default, which
-     * costs nothing) and when the request did not reach the engine.
+     * costs nothing) and when the request did not reach the engine. Experimental, as its type is: its shape follows the
+     * evaluator.
      */
-    val evaluationTrace: FlatTrace?,
+    @property:ExperimentalCoSecApi
+    val evaluationTrace: EvaluationTrace?,
     /** Whether the permit applied through a break-glass binding (RFC 0004 §4.8). */
     val breakGlass: Boolean,
     /** The revisions of the documents the decision read, (platform, app, tenant). */

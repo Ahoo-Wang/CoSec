@@ -113,6 +113,7 @@ object Identifiers {
      * Whether the character of [text] at [index] is a surrogate without its other half: a high surrogate not followed by a
      * low one, or a low surrogate not preceded by a high one.
      */
+    @InternalCoSecApi
     fun isUnpairedSurrogateAt(text: CharSequence, index: Int): Boolean {
         val c = text[index]
         return when {

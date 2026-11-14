@@ -28,6 +28,7 @@ import me.ahoo.cosec.model.TenantId
  * to [TenantId.DEFAULT]. [app] is the app the credential declares (a token's `aud`, an API key's app, RFC 0012 §3.5),
  * null when it declares none.
  */
+@InternalCoSecApi
 class ScopeSubject(
     val tenant: TenantId,
     val authenticated: Boolean,
@@ -53,9 +54,9 @@ class HostScope(val app: AppId?) {
 }
 
 sealed interface ScopeResolution {
-    class Resolved(val scope: Scope) : ScopeResolution
+    class Resolved internal constructor(val scope: Scope) : ScopeResolution
 
-    class Rejected(val reason: Reason) : ScopeResolution {
+    class Rejected internal constructor(val reason: Reason) : ScopeResolution {
         enum class Reason { APP_MISMATCH, SPACE_NOT_MEMBER }
     }
 }
@@ -80,6 +81,7 @@ sealed interface ScopeResolution {
  *
  * The app is checked before the space, so a request failing both is always rejected for the app.
  */
+@InternalCoSecApi
 object ScopeResolver {
     private val APP_MISMATCH = ScopeResolution.Rejected(ScopeResolution.Rejected.Reason.APP_MISMATCH)
     private val SPACE_NOT_MEMBER = ScopeResolution.Rejected(ScopeResolution.Rejected.Reason.SPACE_NOT_MEMBER)

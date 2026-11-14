@@ -11,15 +11,16 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.FlatTrace
+import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
@@ -52,7 +53,7 @@ internal class RequestRecord(val startNanos: Long, val time: Long, val trace: Tr
     var request: FlatRequest? = null
     var fetched: FetchedAttributes? = null
     var decision: Decision? = null
-    var evaluationTrace: FlatTrace? = null
+    var evaluationTrace: EvaluationTrace? = null
     var breakGlass: Boolean = false
     var requiredFailures: List<String> = emptyList()
 

@@ -19,7 +19,6 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.RedisApiKeyReader
 import me.ahoo.cosec.cocache.RedisApiKeyStore
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
-import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spring.boot.CoSecProperties
@@ -41,8 +40,8 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.data.redis.core.StringRedisTemplate
 
 /**
- * API keys for machine clients, active only with `cosec.api-key.enabled=true`. Provides the [ApiKeyStore] keys are
- * managed through and, for Redis, the [ApiKeyReader] the pipeline reads them with ([CoSecPipelineAutoConfiguration]).
+ * API keys for machine clients, active only with `cosec.api-key.enabled=true`. Provides the store keys are managed
+ * through ([InMemoryApiKeyStore], or [RedisApiKeyStore]) and, for Redis, the [ApiKeyReader] the pipeline reads them with ([CoSecPipelineAutoConfiguration]).
  */
 @AutoConfiguration(
     before = [CoSecPipelineAutoConfiguration::class],
@@ -74,7 +73,7 @@ internal class CoSecApiKeyAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     @ConditionalOnProperty(value = [ApiKeyProperties.STORE_KEY], havingValue = "memory", matchIfMissing = true)
-    fun apiKeyStore(apiKeyProperties: ApiKeyProperties): ApiKeyStore {
+    fun apiKeyStore(apiKeyProperties: ApiKeyProperties): InMemoryApiKeyStore {
         val keys = apiKeyProperties.keys.map { it.hash to it.toApiKey() }
         val duplicates = keys.groupBy { it.second.id }.filterValues { it.size > 1 }.keys
         require(duplicates.isEmpty()) { "Duplicate API key ids: $duplicates." }
@@ -93,7 +92,7 @@ internal class CoSecApiKeyAutoConfiguration {
         fun redisApiKeyStore(
             stringRedisTemplate: StringRedisTemplate,
             cosec: CoSecProperties,
-        ): ApiKeyStore = RedisApiKeyStore(stringRedisTemplate, CoSecCacheSpecs.apiKeyPrefix(cosec.keyPrefix))
+        ): RedisApiKeyStore = RedisApiKeyStore(stringRedisTemplate, CoSecCacheSpecs.apiKeyPrefix(cosec.keyPrefix))
 
         /** Reads without blocking, since the pipeline may look a key up on an event loop. */
         @Bean

@@ -44,7 +44,6 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.route.RouteMap
-import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
@@ -75,6 +74,7 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
 import org.springframework.boot.web.servlet.FilterRegistrationBean
+import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.MockHttpServletRequest
@@ -234,7 +234,9 @@ class CoSecPipelineAutoConfigurationTest {
                 context.getBean(Authenticator::class.java).authenticate(Credentials(null, "unknown"))
             }.assert().isInstanceOf(AuthnResult.Rejected::class.java)
         }
-        keys.withBean(ApiKeyStore::class.java, { ApiKeyStore { null } })
+        // The Redis store without its reactive reader: nothing the pipeline could read keys with.
+        keys.withPropertyValues("cosec.api-key.store=redis")
+            .withBean(StringRedisTemplate::class.java, { StringRedisTemplate() })
             .run { context -> context.startupFailure!!.stackTraceToString().assert().contains("no ApiKeyReader") }
     }
 

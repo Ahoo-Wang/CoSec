@@ -20,6 +20,7 @@ import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.ResourceTarget
+import me.ahoo.cosec.engine.trace.CandidateOutcome
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.condition.Attribute

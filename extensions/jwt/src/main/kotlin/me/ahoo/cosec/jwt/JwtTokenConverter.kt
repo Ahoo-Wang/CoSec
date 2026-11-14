@@ -10,11 +10,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.JWTCreator
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject

@@ -22,7 +22,7 @@ import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
-import me.ahoo.cosec.engine.flat.ViewVersion
+import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
