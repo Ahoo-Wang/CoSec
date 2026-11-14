@@ -44,10 +44,10 @@ tests get a real pipeline from `PipelineFixture` (`cosec-testkit`).
 Packages are under `me.ahoo.cosec`. The ports whose signatures need only the model and the contracts live in
 `cosec-spi`, with their value types and in-memory implementations (`InMemorySnapshotDocumentStore`,
 `InMemoryMembershipProvider`, `InMemoryApiKeyStore`); it depends on `cosec-model`, `cosec-api`, `cosec-annotations`
-and kotlinx-coroutines only, so an implementation of one of them needs nothing else from CoSec. A port whose signature
-carries a layer's own types stays with that layer: `DecisionListener` takes the runtime's `DecisionEvent`, the shadow
-window ports (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`) the runtime's candidates and reports, and
-`ControlStore` and `ChangeListener` the control plane's records and events.
+and kotlinx-coroutines only, so an implementation of one of them needs nothing else from CoSec. The shadow window ports
+(`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`, in `spi.shadow`) are among them: their candidates and
+reports are plain values. A port whose signature carries a layer's own types stays with that layer: `DecisionListener`
+takes the runtime's `DecisionEvent`, and `ControlStore` and `ChangeListener` the control plane's records and events.
 
 Each of these interfaces carries `@CoSecSpi`: changing one, rather than implementing it, breaks every application that
 implements it ([Stability levels](#stability-levels)).
@@ -499,7 +499,7 @@ With `cosec-kafka` and a `KafkaOperations` bean, the starter registers `KafkaCha
 With `cosec-control`, the control plane keeps revisions, change requests, staging slots, candidates and leases in a
 `ControlStore`; the starter's is `CoCacheControlStore` on Redis. The store, its records (`ChangeRequest`, `RevisionIndex`,
 `StageSlot`, ...) and the shadow window ports (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader` and their
-reports) are `@ExperimentalCoSecApi`: the control plane's contract is its HTTP API, and these change with it, so they
+reports, in `cosec-spi`) are `@ExperimentalCoSecApi`: the control plane's contract is its HTTP API, and these change with it, so they
 may change in a minor release. `ChangeListener` and the `ChangeEvent` it receives are stable. Besides reading and
 writing those records by key, a store answers what the maintenance passes visit:
 

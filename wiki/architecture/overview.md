@@ -44,7 +44,7 @@ flowchart BT
     document[cosec-document] --> engine & spi
     runtime[cosec-runtime] --> document & engine & spi & annotations
     control[cosec-control] --> runtime & document
-    cocache[cosec-cocache] --> spi
+    cocache[cosec-cocache] --> spi & document
     kafka[cosec-kafka] --> spi & runtime
     login[cosec-login] --> runtime
     jwt[cosec-jwt] --> login
@@ -82,12 +82,13 @@ The rules behind the picture:
 - **`cosec-spi`** (directory `core/spi/`) holds the ports a request or a store calls, with their values and in-memory
   implementations, under `me.ahoo.cosec.spi.*`: the snapshot store (`SnapshotDocumentStore`), memberships, token
   verification and revocation (`TokenVerifier`, `RevocationReader`, `TokenStore`, `TokenRevoker`), API keys, rate
-  limiters, attribute providers, authenticators, the forwarded identity, the audit sink and the id generator
-  (`IdGenerator`, with its default `RandomIdGenerator`). It depends on
+  limiters, attribute providers, authenticators, the forwarded identity, the audit sink, the id generator
+  (`IdGenerator`, with its default `RandomIdGenerator`) and the shadow window's candidates and reports
+  (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`). It depends on
   `cosec-model`, `cosec-api`, `cosec-annotations` and kotlinx-coroutines only, so a third party implements a port
   against it alone. A port
-  whose signature needs a layer's types stays with that layer: `DecisionListener`, `RequestGate`, the shadow window
-  ports in `cosec-runtime`; `ControlStore` and `ChangeListener` in `cosec-control`
+  whose signature needs a layer's types stays with that layer: `DecisionListener` and `RequestGate` in
+  `cosec-runtime`; `ControlStore` and `ChangeListener` in `cosec-control`
   ([Extending](./extending.md)).
 - **`cosec-document`** (directory `core/document/`, `me.ahoo.cosec.document`) holds the formats CoSec stores and
   exchanges: the platform, app and tenant documents with their codec (`PolicyDocumentCodec`) and compiler
@@ -135,14 +136,17 @@ The rules behind the picture:
   as `cosec-kafka` on `cosec-control` for `ChangeListener`, are listed with their reason in `DependencyRules`), when
   `cosec-annotations`, `cosec-api`, `cosec-model` or `cosec-engine` resolves anything but the Kotlin standard library
   (`cosec-spi` adds coroutines, `cosec-document` Jackson), when `cosec-runtime` or `cosec-control` resolves Reactor,
-  Spring, the Servlet API or a Redis client, or when a project other than `cosec-cosid` and the starter declares or
-  resolves CosId, or another build script names it (a BOM importing CosId included): CoSec makes its own ids
-  (`IdGenerator`), so that an application can use any CosId version.
-- `SourceRulesTest` scans the compiled classes: Reactor only in the edge and the host (and
-  `cosec-cocache`, whose reactive Redis client the suspending ports await); no Spring, Servlet API or Redis client in
-  `api/` and `core/`; the backends and extensions use only their own Spring technology; the backends reach into
-  `cosec-runtime` and `cosec-control` only through the listed ports; only `cosec-cosid`'s and the starter's
-  sources name CosId's packages; a package belongs to one module; opt-ins to the internal API only in CoSec's own sources.
+  Spring, the Servlet API or a Redis client, when a backend declares `cosec-runtime` or resolves it at run time (a
+  backend implements store ports of `cosec-spi`, so a Redis store does not bring the request path), or when a project
+  other than `cosec-cosid` and the starter declares or resolves CosId, or another build script names it (a BOM
+  importing CosId included): CoSec makes its own ids (`IdGenerator`), so that an application can use any CosId
+  version.
+- `SourceRulesTest` scans the compiled classes: Reactor only in the edge and the host (and `cosec-cocache`, whose
+  reactive Redis client the suspending ports await); no Spring, Servlet API or Redis client in `api/` and `core/`; the
+  backends and extensions use only their own Spring technology; no backend class references `cosec-runtime`, and the
+  backends and `cosec-kafka` reach into `cosec-control` only through the listed ports; only `cosec-cosid`'s and the
+  starter's sources name CosId's packages; a package belongs to one module; opt-ins to the internal API only in
+  CoSec's own sources.
 - `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
   `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
   (`ProjectListTest`) and the version catalog.
