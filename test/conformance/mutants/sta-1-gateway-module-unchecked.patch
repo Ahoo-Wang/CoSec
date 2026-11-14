@@ -1,11 +1,11 @@
 # Rule: STA-1
 # Mutant: a Spring Cloud Gateway host starts without cosec-gateway, passing a client's CoSec-Identity to every backend
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfigurationTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.CoSecModuleCheckAutoConfigurationTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 index 19fb0505..acc2e49e 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt
 @@ -82,20 +82,6 @@ internal class CoSecModuleCheckAutoConfiguration {
              )
      }

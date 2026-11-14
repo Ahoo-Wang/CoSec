@@ -17,9 +17,9 @@ package me.ahoo.cosec.e2e
 
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.MembershipLoader
-import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
-import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cocache.MembershipLoader
+import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
@@ -45,10 +45,10 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecMembershipAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineIntegrationAutoConfiguration
-import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecMembershipAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineIntegrationAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecSnapshotAutoConfiguration
 import org.springframework.boot.Banner
 import org.springframework.boot.WebApplicationType
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration

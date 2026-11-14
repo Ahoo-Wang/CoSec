@@ -1,6 +1,6 @@
 # Rule: RTE-4
 # Mutant: the generated routes drop the servers path
-# Tests: :openapi:test --tests me.ahoo.cosec.openapi.generator.OpenAPIServiceGeneratorTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.actuate.CoSecServiceGeneratorEndpointTest
+# Tests: :openapi:test --tests me.ahoo.cosec.openapi.generator.OpenAPIServiceGeneratorTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.actuate.CoSecServiceGeneratorEndpointTest
 
 diff --git a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
 index 46850511..64981f25 100644

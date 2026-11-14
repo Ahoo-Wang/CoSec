@@ -1,0 +1,109 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class)
+
+package me.ahoo.cosec.spring.boot.control
+
+import io.github.oshai.kotlinlogging.KotlinLogging
+import kotlinx.coroutines.CoroutineName
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.store.ControlMaintenance
+import org.springframework.context.SmartLifecycle
+import java.time.Duration
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toKotlinDuration
+
+private val log = KotlinLogging.logger {}
+
+/**
+ * Runs the control plane's periodic tasks on every instance while the application runs: [ControlMaintenance.reclaim]
+ * every [reclaimInterval] and [ControlMaintenance.closeShadowWindows] every [shadowInterval], each after one interval
+ * first. Leases keep two instances from doing the same work; a failed pass is logged and the next one tries again.
+ * [ControlMaintenance.reconcileApps] runs at start, without waiting for the first reclamation pass, and again with a
+ * backoff until it succeeds once (RC1-4); until then the grant analysis reconciles before it trusts the app list.
+ */
+internal class ControlMaintenanceScheduler(
+    private val maintenance: ControlMaintenance,
+    private val reclaimInterval: Duration,
+    private val shadowInterval: Duration,
+) : SmartLifecycle {
+    init {
+        require(reclaimInterval > Duration.ZERO) { "cosec.control.revisions.reclaim-interval must be positive." }
+        require(shadowInterval > Duration.ZERO) { "cosec.control.shadow.check-interval must be positive." }
+    }
+
+    @Volatile
+    private var scope: CoroutineScope? = null
+
+    override fun start() {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-control-maintenance"))
+        scope.launch { untilReconciled() }
+        scope.every(reclaimInterval) { maintenance.reclaim() }
+        scope.every(shadowInterval) { maintenance.closeShadowWindows() }
+        this.scope = scope
+    }
+
+    /**
+     * Runs [pass] every [interval] until [stop]. Whatever a pass throws, a timeout's cancellation or an `Error` included,
+     * is logged and the next pass runs; only the cancellation of this scheduler's own scope ends the loop.
+     */
+    private fun CoroutineScope.every(interval: Duration, pass: suspend () -> Unit) = launch {
+        while (isActive) {
+            delay(interval.toKotlinDuration())
+            pass("run a control-plane maintenance pass", pass)
+        }
+    }
+
+    /** [ControlMaintenance.reconcileApps] until it succeeds, waiting twice as long after each failure, up to a minute. */
+    private suspend fun CoroutineScope.untilReconciled() {
+        var wait = FIRST_RETRY
+        while (isActive && !pass("reconcile the app list at startup") { maintenance.reconcileApps() }) {
+            delay(wait)
+            wait = minOf(wait * 2, LAST_RETRY)
+        }
+    }
+
+    /** Runs [pass]; whether it succeeded. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun pass(what: String, pass: suspend () -> Unit): Boolean = try {
+        pass()
+        true
+    } catch (e: Throwable) {
+        currentCoroutineContext().ensureActive()
+        log.warn(e) { "Could not $what; the next pass tries again." }
+        false
+    }
+
+    override fun stop() {
+        scope?.cancel()
+        scope = null
+    }
+
+    override fun isRunning(): Boolean = scope != null
+
+    private companion object {
+        val FIRST_RETRY = 1.seconds
+        val LAST_RETRY = 1.minutes
+    }
+}

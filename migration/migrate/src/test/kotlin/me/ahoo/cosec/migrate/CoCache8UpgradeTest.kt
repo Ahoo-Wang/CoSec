@@ -23,10 +23,10 @@ import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cache.CoSecCacheSpecs
-import me.ahoo.cosec.cache.control.CoCacheControlStore
-import me.ahoo.cosec.cache.createLocked
-import me.ahoo.cosec.cache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.control.CoCacheControlStore
+import me.ahoo.cosec.cocache.createLocked
+import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.Revisions

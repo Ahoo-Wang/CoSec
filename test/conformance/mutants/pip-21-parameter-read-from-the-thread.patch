@@ -1,11 +1,11 @@
 # Rule: PIP-21
 # Mutant: the SecurityContext parameter is read from the thread-bound holder: a suspend handler resumed on another request's thread gets that request's principal
-# Tests: :webmvc:test --tests me.ahoo.cosec.servlet.SecurityContextArgumentResolverTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.realserver.SuspendingHandlerContextTest
+# Tests: :webmvc:test --tests me.ahoo.cosec.webmvc.SecurityContextArgumentResolverTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.SuspendingHandlerContextTest
 
-diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/SecurityContextArgumentResolver.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/SecurityContextArgumentResolver.kt
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/SecurityContextArgumentResolver.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/SecurityContextArgumentResolver.kt
 index d8f3f60b..ba2c852c 100644
---- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/SecurityContextArgumentResolver.kt
-+++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/SecurityContextArgumentResolver.kt
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/SecurityContextArgumentResolver.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/SecurityContextArgumentResolver.kt
 @@ -38,7 +38,7 @@ class SecurityContextArgumentResolver : HandlerMethodArgumentResolver {
          webRequest: NativeWebRequest,
          binderFactory: WebDataBinderFactory?,

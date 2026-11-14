@@ -1,11 +1,11 @@
 # Rule: STA-2
 # Mutant: the check reads only operation endpoints, so a controller endpoint, Spring Cloud Gateway's gateway among them, is served on the application port unchecked (R1-2)
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecGatewayEndpointCheckAutoConfigurationTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.CoSecGatewayEndpointCheckAutoConfigurationTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecGatewayEndpointCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecGatewayEndpointCheckAutoConfiguration.kt
 index 3d3677e6..44700262 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecGatewayEndpointCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecGatewayEndpointCheckAutoConfiguration.kt
 @@ -60,8 +60,8 @@ internal class CoSecGatewayEndpointCheckAutoConfiguration {
              val endpoints = context.getBeanProvider(PathMappedEndpoints::class.java).ifAvailable
                  ?: return@AfterSingletons

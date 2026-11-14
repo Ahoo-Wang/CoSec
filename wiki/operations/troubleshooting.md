@@ -301,7 +301,7 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 Each instance reads every Redis node's `maxmemory-policy` every [`revalidate-interval`](./configuration.md#snapshot),
 on a thread of its own, and logs this at `ERROR` from
-`me.ahoo.cosec.spring.boot.starter.pipeline.EvictionPolicyMonitor` when a node starts to allow eviction: someone ran
+`me.ahoo.cosec.spring.boot.pipeline.EvictionPolicyMonitor` when a node starts to allow eviction: someone ran
 `CONFIG SET maxmemory-policy`, Redis failed over to a node set up otherwise, or a node restarted with another
 configuration. The `cosecSnapshotEviction` health indicator is then `DOWN`, with the same text in its `eviction`
 detail. Requests are still decided; an app or tenant document Redis evicts is read as absent by the next instance that

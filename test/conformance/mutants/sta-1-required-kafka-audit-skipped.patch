@@ -1,11 +1,11 @@
 # Rule: STA-1
 # Mutant: a required Kafka audit that was never created is skipped, and decisions go unrecorded
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.StarterWiringTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.StarterWiringTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
 index 87be7aee..a9c4f42f 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
 @@ -117,15 +117,6 @@ class CoSecPipelineAutoConfiguration {
              sinks.orderedStream().toList().filter { it !is DecisionListener }
                  .map { it to AuditListener.of(it, names.getValue(it)) }

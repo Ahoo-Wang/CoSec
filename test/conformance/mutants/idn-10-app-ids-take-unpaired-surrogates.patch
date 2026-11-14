@@ -1,6 +1,6 @@
 # Rule: IDN-10
 # Mutant: an app or tenant id may hold an unpaired surrogate, so tenant beta\uD800 reads the Redis key of tenant beta?
-# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :cocache:test --tests me.ahoo.cosec.cache.UnpairedSurrogateKeyTest
+# Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :cocache:test --tests me.ahoo.cosec.cocache.UnpairedSurrogateKeyTest
 
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
 index e04e33f4..e6b72e57 100644

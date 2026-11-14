@@ -1,0 +1,101 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@file:OptIn(InternalCoSecApi::class)
+
+package me.ahoo.cosec.spring.boot.authorization.cache
+
+import me.ahoo.cocache.api.CacheReadException
+import me.ahoo.cocache.api.spi.CoherenceBackend
+import me.ahoo.cocache.core.CacheRuntime
+import me.ahoo.cocache.core.memory.InMemoryBackend
+import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cocache.test.HookedBackend
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.RevokedTokenCache
+import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
+import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
+import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
+import me.ahoo.cosec.spring.boot.pipeline.CoSecSnapshotAutoConfiguration
+import me.ahoo.test.asserts.assert
+import org.assertj.core.api.AssertionsForInterfaceTypes.assertThat
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import org.springframework.boot.autoconfigure.AutoConfigurations
+import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
+import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import java.time.Instant
+import java.util.concurrent.ExecutionException
+
+/**
+ * The policy snapshot fails closed when Redis is unavailable, whatever the CoCache properties say: the cache the
+ * starter creates never expires a document and rethrows a failed read, so the pipeline answers 503 instead of
+ * deciding on a missing document.
+ */
+class StrictCacheFailureTest {
+
+    @Test
+    fun snapshotCacheRethrowsRemoteFailuresDespiteDegradeDefaults() {
+        val backend = HookedBackend(InMemoryBackend())
+        ApplicationContextRunner()
+            .withPropertyValues(
+                "cocache.backend=memory",
+                // an application's global layers must not weaken CoSec's store of record
+                "cocache.defaults.cache.read-failure=degrade",
+                "cocache.defaults.cache.ttl=60s",
+                "cocache.defaults.store.local-max-age=1h",
+                "cocache.overrides.cache.ttl=60s",
+                "cosec.authorization.routes.location=",
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+            )
+            .withBean(CoherenceBackend::class.java, { backend })
+            .withConfiguration(
+                AutoConfigurations.of(
+                    JacksonAutoConfiguration::class.java,
+                    CoCacheAutoConfiguration::class.java,
+                    CoSecTokenRevocationCacheAutoConfiguration::class.java,
+                    CoSecSnapshotAutoConfiguration::class.java,
+                    CoSecPipelineAutoConfiguration::class.java,
+                )
+            )
+            .run { context ->
+                assertThat(context).hasNotFailed()
+                val runtime = context.getBean(CacheRuntime::class.java)
+                val cache = context.getBean(PolicySnapshotCache::class.java)
+                val store = context.getBean(RedisSnapshotDocumentStore::class.java)
+                cache.put(SnapshotKey.Platform, SnapshotDocument(2, 1, Instant.EPOCH, PLATFORM.encodeToByteArray()))
+                // never expires in Redis, whatever the global layers say
+                checkNotNull(runtime.admin(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME))
+                    .inspect(SnapshotKeyEncoder.PLATFORM).remote.ttl.assert().isNull()
+
+                runtime.admin(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME)!!.clearLocal()
+                backend.failAll = true
+                assertThrows<ExecutionException> { store.read(SnapshotKey.Platform).get() }
+                    .cause.assert().isInstanceOf(CacheReadException::class.java)
+                assertThrows<ExecutionException> { store.readIfChanged(SnapshotKey.Platform, null).get() }
+                    .cause.assert().isInstanceOf(CacheReadException::class.java)
+                // the revocation tables report the failure too, never "not revoked" (round-2 review H1): what it means
+                // is the caller's (PIP-7, IDN-14)
+                assertThrows<CacheReadException> { context.getBean(RevokedTokenCache::class.java)["jti"] }
+            }
+    }
+
+    private companion object {
+        const val PLATFORM = """{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z"}"""
+    }
+}

@@ -1,11 +1,11 @@
 # Rule: STA-2
 # Mutant: cosec.gateway.unprotected-endpoints accepts gateway, the endpoint that writes routes
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecGatewayEndpointCheckAutoConfigurationTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.CoSecGatewayEndpointCheckAutoConfigurationTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecGatewayEndpointCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecGatewayEndpointCheckAutoConfiguration.kt
 index 85af7fc8..128dc951 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecGatewayEndpointCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecGatewayEndpointCheckAutoConfiguration.kt
 @@ -81,7 +81,7 @@ class CoSecGatewayEndpointCheckAutoConfiguration {
              if (port != ManagementPortType.SAME) {
                  return

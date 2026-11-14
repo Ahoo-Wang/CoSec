@@ -1,11 +1,11 @@
 # Rule: OBL-4
 # Mutant: a count leaves the key as it found it, so a key without an expiry never gets one and a bucket value lives forever
-# Tests: :cocache:test --tests me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiterTest
 
-diff --git a/backends/cocache/src/main/resources/me/ahoo/cosec/cache/limiter/redis-rate-limiter.lua b/backends/cocache/src/main/resources/me/ahoo/cosec/cache/limiter/redis-rate-limiter.lua
+diff --git a/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua b/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
 index f9339102..d1f4e62c 100644
---- a/backends/cocache/src/main/resources/me/ahoo/cosec/cache/limiter/redis-rate-limiter.lua
-+++ b/backends/cocache/src/main/resources/me/ahoo/cosec/cache/limiter/redis-rate-limiter.lua
+--- a/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
++++ b/backends/cocache/src/main/resources/me/ahoo/cosec/cocache/limiter/redis-rate-limiter.lua
 @@ -41,5 +41,4 @@ if estimate >= quota then
    return {0, scaledEstimate, resetAfter}
  end

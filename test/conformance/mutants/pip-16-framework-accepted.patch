@@ -1,11 +1,11 @@
 # Rule: PIP-16
 # Mutant: the framework strategy is read as none: Spring's filter made the client's leftmost entry the remote address
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.ClientIpReadingsTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ClientIpReadingsTest
 
-diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/ClientIp.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/ClientIp.kt
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ClientIp.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ClientIp.kt
 index 9c7937f2..6611d718 100644
---- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/ClientIp.kt
-+++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/ClientIp.kt
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ClientIp.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ClientIp.kt
 @@ -101,7 +101,7 @@ internal object ClientIpReadings {
                      "the X-Forwarded-For entry $maxTrustedIndex from the right, or the connection's peer without one"
                  },

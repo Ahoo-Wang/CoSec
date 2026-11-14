@@ -111,7 +111,7 @@ The rules behind the picture:
   [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts),
   and its auto-configuration is guarded by `@ConditionalOnClass`, so it is active only when the application adds the
   module. A module that a turned-on feature needs is checked at startup (STA-1,
-  [`CoSecModuleCheckAutoConfiguration`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt)):
+  [`CoSecModuleCheckAutoConfiguration`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt)):
   a forgotten adapter would otherwise leave a web host without a filter, so startup fails and names the artifact.
   The modules and what each needs are listed in the [introduction](../guide/introduction.md#modules).
 - **`cosec-testkit`** (directory `test/testkit/`) runs scenarios against an application's own documents in JUnit 5. It
@@ -333,7 +333,7 @@ holds them:
   so every request fails closed until one is published.
 
 The store is an SPI, `SnapshotDocumentStore`. With `cosec-cocache` it is
-[`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/backends/cocache/src/main/kotlin/me/ahoo/cosec/cache/snapshot/RedisSnapshotDocumentStore.kt):
+[`RedisSnapshotDocumentStore`](https://github.com/Ahoo-Wang/CoSec/blob/main/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/RedisSnapshotDocumentStore.kt):
 Redis is the store of record, CoCache keeps a local copy for at most `local-max-age`, conditional reads bypass every
 local copy, and CoCache's invalidation channel carries the change notifications. Without it, the starter uses an
 in-memory store. Redis keys, the `noeviction` requirement and behavior when Redis is unavailable are in
