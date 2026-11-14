@@ -42,10 +42,10 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.http.HttpMethod

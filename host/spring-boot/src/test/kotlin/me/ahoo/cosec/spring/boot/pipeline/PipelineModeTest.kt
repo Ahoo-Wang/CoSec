@@ -22,7 +22,6 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
-import me.ahoo.cosec.webmvc.PipelineServletFilter
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -32,6 +31,7 @@ import me.ahoo.cosec.spring.boot.NoTokenStore
 import me.ahoo.cosec.spring.boot.apikey.CoSecApiKeyAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.webmvc.PipelineServletFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations

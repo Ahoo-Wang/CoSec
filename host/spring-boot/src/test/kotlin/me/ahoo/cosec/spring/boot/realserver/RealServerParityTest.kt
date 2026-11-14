@@ -16,8 +16,8 @@
 package me.ahoo.cosec.spring.boot.realserver
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
+import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.TestInstance

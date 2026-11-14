@@ -26,7 +26,6 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.ProblemType
 import me.ahoo.cosec.runtime.RequestSecurity
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
@@ -34,6 +33,7 @@ import me.ahoo.cosec.spring.boot.pipeline.ReactiveClientIp
 import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean

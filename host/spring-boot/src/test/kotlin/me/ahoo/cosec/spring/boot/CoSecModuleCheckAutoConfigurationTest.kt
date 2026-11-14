@@ -248,7 +248,9 @@ class CoSecModuleCheckAutoConfigurationTest {
     @Test
     fun `without cosec-cocache, or with CoSec off, no Redis template is needed`() {
         val noRedis = ApplicationContextRunner().withConfiguration(config)
-        starts(noRedis.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore")))
+        starts(
+            noRedis.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore"))
+        )
         starts(noRedis.withPropertyValues("cosec.enabled=false"))
         starts(plain)
     }

@@ -44,7 +44,6 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.route.RouteMap
-import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
 import me.ahoo.cosec.spi.apikey.ApiKeyStore
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -66,6 +65,7 @@ import me.ahoo.cosec.spring.boot.control.ControlRoutesWebFilter
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import me.ahoo.cosec.webflux.PipelineWebFilter
+import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
