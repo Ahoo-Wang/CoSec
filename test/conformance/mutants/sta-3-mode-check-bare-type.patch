@@ -1,16 +1,16 @@
 # Rule: STA-3
 # Mutant: the pipeline mode check is a bare InitializingBean again, which lazy initialization defers
-# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.IdentityGuardAutoConfigurationTest --tests me.ahoo.cosec.spring.boot.starter.StartupCheckTest
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.IdentityGuardAutoConfigurationTest --tests me.ahoo.cosec.spring.boot.starter.StartupTaskTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecIdentityGuardAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecIdentityGuardAutoConfiguration.kt
 index f2336610..5b726d48 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecIdentityGuardAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecIdentityGuardAutoConfiguration.kt
 @@ -44,7 +44,7 @@ import org.springframework.util.ClassUtils
- @Import(StartupCheckExclusion::class)
+ @Import(StartupTaskExclusion::class)
  internal class CoSecIdentityGuardAutoConfiguration {
      @Bean
--    fun cosecPipelineModeCheck(properties: PipelineProperties): StartupCheck = StartupCheck.OnCreation {
+-    fun cosecPipelineModeCheck(properties: PipelineProperties): StartupTask = StartupTask.OnCreation {
 +    fun cosecPipelineModeCheck(properties: PipelineProperties): org.springframework.beans.factory.InitializingBean = org.springframework.beans.factory.InitializingBean {
          check(
              properties.mode != PipelineProperties.Mode.GATEWAY || !ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, null)

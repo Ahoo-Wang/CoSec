@@ -24,8 +24,8 @@ import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupCheck
-import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
+import me.ahoo.cosec.spring.boot.starter.StartupTask
+import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -55,7 +55,7 @@ import org.springframework.data.redis.core.StringRedisTemplate
 @ConditionalOnEnforceMode
 @ConditionalOnProperty(value = [ApiKeyProperties.ENABLED_KEY], havingValue = "true")
 @EnableConfigurationProperties(ApiKeyProperties::class, CoSecProperties::class)
-@Import(StartupCheckExclusion::class)
+@Import(StartupTaskExclusion::class)
 internal class CoSecApiKeyAutoConfiguration {
 
     /**
@@ -63,7 +63,7 @@ internal class CoSecApiKeyAutoConfiguration {
      * every key would be a 503, so startup fails instead.
      */
     @Bean
-    fun cosecApiKeyMembershipProviderCheck(context: ApplicationContext): StartupCheck = StartupCheck.OnCreation {
+    fun cosecApiKeyMembershipProviderCheck(context: ApplicationContext): StartupTask = StartupTask.OnCreation {
         check(context.getBeanNamesForType(MembershipProvider::class.java).isNotEmpty()) {
             "${ApiKeyProperties.ENABLED_KEY}=true needs a MembershipProvider bean: an API key's memberships are its " +
                 "principal's (RFC 0009 §4.2). Add cosec-cocache and a MembershipLoader bean, which configures " +

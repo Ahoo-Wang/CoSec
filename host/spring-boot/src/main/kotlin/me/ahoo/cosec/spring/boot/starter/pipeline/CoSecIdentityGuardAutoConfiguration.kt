@@ -18,8 +18,8 @@ package me.ahoo.cosec.spring.boot.starter.pipeline
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
 import me.ahoo.cosec.gateway.IdentityStripFilter
-import me.ahoo.cosec.spring.boot.starter.StartupCheck
-import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
+import me.ahoo.cosec.spring.boot.starter.StartupTask
+import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -41,10 +41,10 @@ import org.springframework.util.ClassUtils
  */
 @AutoConfiguration
 @EnableConfigurationProperties(PipelineProperties::class)
-@Import(StartupCheckExclusion::class)
+@Import(StartupTaskExclusion::class)
 internal class CoSecIdentityGuardAutoConfiguration {
     @Bean
-    fun cosecPipelineModeCheck(properties: PipelineProperties): StartupCheck = StartupCheck.OnCreation {
+    fun cosecPipelineModeCheck(properties: PipelineProperties): StartupTask = StartupTask.OnCreation {
         check(
             properties.mode != PipelineProperties.Mode.GATEWAY || !ClassUtils.isPresent(GATEWAY_GLOBAL_FILTER, null)
         ) {

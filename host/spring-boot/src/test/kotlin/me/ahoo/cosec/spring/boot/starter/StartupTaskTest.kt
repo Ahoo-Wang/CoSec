@@ -29,11 +29,11 @@ import org.springframework.core.annotation.AnnotatedElementUtils
 import java.lang.reflect.Method
 
 /**
- * `STA-3`: the starter's checks are [StartupCheck]s, which lazy initialization never defers. A `@Bean` method that returns
+ * `STA-3`: the starter's checks are [StartupTask]s, which lazy initialization never defers. A `@Bean` method that returns
  * a bare [InitializingBean] or [SmartInitializingSingleton] (or hides its type as `Any`) would be lazy again under
  * `spring.main.lazy-initialization=true`, and its check would never run: no auto-configuration of the starter has one.
  */
-class StartupCheckTest {
+class StartupTaskTest {
     /** Every auto-configuration the starter declares. */
     private val autoConfigurations: List<Class<*>> by lazy {
         val imports = javaClass.classLoader.getResources(
@@ -64,7 +64,7 @@ class StartupCheckTest {
             val type = method.returnType
             val runsOnItsOwn = InitializingBean::class.java.isAssignableFrom(type) ||
                 SmartInitializingSingleton::class.java.isAssignableFrom(type)
-            (runsOnItsOwn || type == Any::class.java) && !StartupCheck::class.java.isAssignableFrom(type)
+            (runsOnItsOwn || type == Any::class.java) && !StartupTask::class.java.isAssignableFrom(type)
         }
         lazy.map { "${it.declaringClass.simpleName}.${it.name}: ${it.returnType.simpleName}" }.assert().isEmpty()
     }
@@ -74,9 +74,9 @@ class StartupCheckTest {
     fun `every auto-configuration with a check imports the exclusion`() {
         val missing = autoConfigurations.filter { configuration ->
             val checks = nested(configuration).flatMap { it.declaredMethods.toList() }
-                .any { isBean(it) && StartupCheck::class.java.isAssignableFrom(it.returnType) }
+                .any { isBean(it) && StartupTask::class.java.isAssignableFrom(it.returnType) }
             val imported = configuration.getAnnotation(Import::class.java)?.value.orEmpty()
-                .any { it == StartupCheckExclusion::class }
+                .any { it == StartupTaskExclusion::class }
             checks && !imported
         }
         missing.map { it.simpleName }.assert().isEmpty()
@@ -84,8 +84,8 @@ class StartupCheckTest {
 
     /** The guard sees what it is meant to: the checks of `STA-1`, `STA-2`, `SNP-3`, `IDN-6` and the others. */
     @Test
-    fun `the checks are found and are startup checks`() {
-        val checks = beanMethods.filter { StartupCheck::class.java.isAssignableFrom(it.returnType) }.map { it.name }
+    fun `the checks are found and are startup tasks`() {
+        val checks = beanMethods.filter { StartupTask::class.java.isAssignableFrom(it.returnType) }.map { it.name }
         checks.assert().contains(
             "cosecWebMvcModuleCheck",
             "cosecUnknownPropertiesCheck",
@@ -101,11 +101,11 @@ class StartupCheckTest {
     }
 
     @Test
-    fun `the exclusion keeps startup checks, and only them, eager`() {
+    fun `the exclusion keeps startup tasks, and only them, eager`() {
         val definition = mockk<BeanDefinition>()
-        StartupCheck.EAGER.isExcluded("check", definition, StartupCheck.OnCreation::class.java).assert().isTrue()
-        StartupCheck.EAGER.isExcluded("check", definition, StartupCheck.AfterSingletons::class.java).assert().isTrue()
-        StartupCheck.EAGER.isExcluded("other", definition, InitializingBean::class.java).assert().isFalse()
-        StartupCheck.EAGER.isExcluded("other", definition, String::class.java).assert().isFalse()
+        StartupTask.EAGER.isExcluded("check", definition, StartupTask.OnCreation::class.java).assert().isTrue()
+        StartupTask.EAGER.isExcluded("check", definition, StartupTask.AfterSingletons::class.java).assert().isTrue()
+        StartupTask.EAGER.isExcluded("other", definition, InitializingBean::class.java).assert().isFalse()
+        StartupTask.EAGER.isExcluded("other", definition, String::class.java).assert().isFalse()
     }
 }

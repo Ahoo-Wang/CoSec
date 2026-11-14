@@ -56,8 +56,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupCheck
-import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
+import me.ahoo.cosec.spring.boot.starter.StartupTask
+import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -92,7 +92,7 @@ import java.util.concurrent.TimeUnit
 @ConditionalOnEnforceMode
 @EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
 @InternalCoSecApi
-@Import(StartupCheckExclusion::class)
+@Import(StartupTaskExclusion::class)
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
@@ -136,7 +136,7 @@ class CoSecSnapshotAutoConfiguration {
         fun cosecEvictionPolicyCheck(
             factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
-        ): StartupCheck = StartupCheck.AfterSingletons {
+        ): StartupTask = StartupTask.AfterSingletons {
             EvictionPolicyCheck.check(
                 EvictionPolicyCheck.read(factory.runtime.backend),
                 properties.snapshot.evictionCheck
@@ -193,7 +193,7 @@ class CoSecSnapshotAutoConfiguration {
             beans: ListableBeanFactory,
             templates: ObjectProvider<org.springframework.data.redis.core.StringRedisTemplate>,
             reactiveTemplates: ObjectProvider<org.springframework.data.redis.core.ReactiveStringRedisTemplate>,
-        ): StartupCheck = StartupCheck.AfterSingletons {
+        ): StartupTask = StartupTask.AfterSingletons {
             ReplicaReads.check(
                 ReplicaReads.injected(beans, templates, org.springframework.data.redis.core.StringRedisTemplate::class.java) {
                     it.connectionFactory
@@ -371,11 +371,11 @@ class CoSecSnapshotAutoConfiguration {
 }
 
 /**
- * Runs [reporter] every interval from the start of the context until it closes. A [StartupCheck] (`STA-3`): nothing
+ * Runs [reporter] every interval from the start of the context until it closes. A [StartupTask] (`STA-3`): nothing
  * depends on it, and lazily created it would never report, so this instance would count for nothing in a shadow window.
  */
 @InternalCoSecApi
-class ShadowReporting(val reporter: ShadowReporter) : AutoCloseable, StartupCheck {
+class ShadowReporting(val reporter: ShadowReporter) : AutoCloseable, StartupTask {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-shadow-reporter"))
 
     init {
@@ -539,7 +539,7 @@ internal object ReplicaReads {
  * on every read. One that cannot be read is down under [mode] `fail`; under `warn` the operator accepted that at startup,
  * so it is up, as `unknown`, logged once at WARN.
  *
- * A [StartupCheck] (`STA-3`): the runtime half of `SNP-3`, it must read from startup on, not from the first health
+ * A [StartupTask] (`STA-3`): the runtime half of `SNP-3`, it must read from startup on, not from the first health
  * probe, or a Redis that starts evicting is logged by no one.
  */
 @InternalCoSecApi
@@ -547,7 +547,7 @@ class EvictionPolicyMonitor internal constructor(
     private val read: () -> EvictionPolicyCheck.Reading,
     private val interval: Duration,
     private val mode: RuntimeAuthorizationProperties.EvictionCheck = RuntimeAuthorizationProperties.EvictionCheck.FAIL,
-) : AutoCloseable, StartupCheck {
+) : AutoCloseable, StartupTask {
     /** Whether Redis may evict the snapshot ([down]), and what the health indicator's `eviction` detail says, if anything. */
     @InternalCoSecApi
     class Status internal constructor(val down: Boolean, val detail: String?) {
