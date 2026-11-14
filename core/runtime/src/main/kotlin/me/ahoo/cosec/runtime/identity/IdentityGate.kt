@@ -33,6 +33,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
+import me.ahoo.cosec.runtime.FallbackIds
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.ProblemType
 import me.ahoo.cosec.runtime.RequestGate
@@ -76,8 +77,11 @@ class IdentityGate(
     private val skew: Duration = DEFAULT_SKEW,
     private val clock: Clock = Clock.systemUTC(),
     /** The ids of requests without a plain `CoSec-Request-Id` header. */
-    private val idGenerator: IdGenerator = RandomIdGenerator,
+    idGenerator: IdGenerator = RandomIdGenerator,
 ) : RequestGate {
+    /** [idGenerator], falling back to a random id when it throws (round 2 M6). */
+    private val ids = FallbackIds(idGenerator)
+
     init {
         require(maxBytes > 0) { "The identity size limit must be positive, not $maxBytes." }
         require(maxAge > Duration.ZERO) { "The identity maximum age must be positive, not $maxAge." }
@@ -88,7 +92,7 @@ class IdentityGate(
     @Suppress("TooGenericExceptionCaught")
     override suspend fun evaluate(facts: HttpFacts): Outcome {
         val requestId = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
-            ?: idGenerator.generate()
+            ?: ids.generate()
         val traceId = currentCoroutineContext()[TraceContext]?.traceId
         return try {
             decide(facts, requestId, traceId)

@@ -182,6 +182,37 @@ class PipelineTest {
         engine.requests.assert().isEmpty()
     }
 
+    /**
+     * `PIP-23`: an IdGenerator that throws does not take the answer: a random id names the request and its event, and
+     * the outcome is StatusMapping's.
+     */
+    @Test
+    fun aFailingIdGeneratorFallsBackToARandomId() = runTest {
+        val events = java.util.concurrent.CopyOnWriteArrayList<me.ahoo.cosec.runtime.event.DecisionEvent>()
+        val listener = object : me.ahoo.cosec.runtime.event.DecisionListener {
+            override val name = "recorder"
+            override val delivery = me.ahoo.cosec.runtime.event.Delivery.REQUIRED
+
+            override suspend fun onDecision(event: me.ahoo.cosec.runtime.event.DecisionEvent) {
+                events += event
+            }
+        }
+        val listeners = me.ahoo.cosec.runtime.event.DecisionListeners(listOf(listener))
+        try {
+            val pipeline = pipeline(engine = StubEngine(IMPLICIT_DENY)) {
+                it.copy(idGenerator = { throw IllegalStateException("Clock moved backwards") }, listeners = listeners)
+            }
+            val outcome = pipeline.evaluate(facts())
+            outcome.problem.assert().isNotNull()
+            outcome.requestId.assert().hasSize(36)
+            outcome.headers[me.ahoo.cosec.runtime.http.CoSecParameters.REQUEST_ID].assert().isEqualTo(outcome.requestId)
+            events.single().requestId.assert().isEqualTo(outcome.requestId)
+            events.single().id.assert().hasSize(36)
+        } finally {
+            listeners.cancel()
+        }
+    }
+
     /** `PIP-18`: a lower-case method is refused before authentication; HEAD reaches the engine as GET. */
     @Test
     fun aLowerCaseMethodIsInvalidAndHeadIsDecidedAsGet() = runTest {

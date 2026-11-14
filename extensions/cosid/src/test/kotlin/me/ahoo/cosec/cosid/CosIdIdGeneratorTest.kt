@@ -76,4 +76,24 @@ class CosIdIdGeneratorTest {
     fun `an unknown generator fails at once`() {
         assertThrows<NoSuchElementException> { CosIdIdGenerator.of(runtime, "missing") }
     }
+
+    /** Round 2 M6: a CosId failure is never the request's: a random id names it. */
+    @Test
+    fun `a failing generator falls back to a random id`() {
+        var calls = 0
+        val failing = me.ahoo.cosid.StringIdGenerator(
+            me.ahoo.cosid.IdGenerator {
+                calls++
+                if (calls > 1) throw me.ahoo.cosid.ClockBackwardsException("default", 3000) else 42L
+            },
+            object : me.ahoo.cosid.codec.IdCodec {
+                override fun encode(id: Long): String = id.toString()
+
+                override fun decode(text: String): Long = text.toLong()
+            },
+        )
+        val ids = CosIdIdGenerator(failing)
+        ids.generate().assert().hasSize(36)
+        ids.generate().assert().hasSize(36)
+    }
 }

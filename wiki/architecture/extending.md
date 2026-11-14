@@ -399,8 +399,9 @@ never blocks, rather than from `SecureRandom`, which can.
 
 - An id is unique across every instance that shares the stores, and is 1 to 64 characters of `A-Z a-z 0-9 . _ -`: it
   goes into response headers, URLs and Redis keys.
-- `generate` runs on every request, on the request's thread, an event loop included, before there is an outcome: it
-  never blocks and never throws.
+- `generate` runs on every request, on the request's thread, an event loop included: it never blocks, and should not
+  throw. One that throws costs only its id (`PIP-23`): a random id names the request or event, the answer is the one
+  CoSec would have given, and the failure is logged at most every ten seconds.
 - An id is not a secret and need not be unpredictable: a token is signed, and a request id only correlates logs and
   audit events. The OAuth `state` of social login and the secret of an API key, which must be unpredictable, never
   come from it: CoSec draws both from `SecureRandom` itself.
@@ -408,7 +409,11 @@ never blocks, rather than from `SecureRandom`, which can.
 CoSec's core depends on no id library. For CosId 5, add `cosec-cosid`. When the application has CosId's
 `CosIdRuntime` and no `IdGenerator` of its own, the starter gives CoSec the ids of the generator
 `cosec.cosid.generator` names, CosId's `default` unless set, as that generator's codec writes them
-(`CosIdIdGenerator`). A generator whose ids break the first rule above fails startup.
+(`CosIdIdGenerator`). A generator whose ids break the first rule above fails startup. Pick a time-based generator
+(Snowflake, CosId80) whose clock regression policy fails rather than waits (a wait of zero, CosId's
+`ClockRegressionPolicy.FAIL`): CosId's default waits up to a second on the event loop when the clock goes back, and a
+segment generator waits for its store when its range runs out. CosId does not expose a generator's policy, so CoSec
+cannot check it; a CosId failure is answered with a random id, logged at most every ten seconds.
 
 ```kotlin
 implementation("me.ahoo.cosec:cosec-cosid")

@@ -22,8 +22,8 @@ import me.ahoo.cosec.annotations.CoSecSpi
  *
  * An id must be unique across every instance that shares the stores, and safe in a URL and in an HTTP header: keep to
  * 1 to 64 characters of `A-Z a-z 0-9 . _ -`, as a client's `CoSec-Request-Id` must. [generate] runs on every request,
- * on the request's thread, an event loop included, before there is an outcome to answer a failure with: it must be
- * cheap, and must never block or throw.
+ * on the request's thread, an event loop included: it must be cheap and never block, and should not throw. One that
+ * throws costs only its id: the pipeline names the request or event with a random id instead (`PIP-23`).
  *
  * An id identifies; it is not a secret. Nothing CoSec relies on needs it to be unpredictable: a token is signed, and a
  * request id only correlates logs and audit events. Never use one where guessing it would grant something.

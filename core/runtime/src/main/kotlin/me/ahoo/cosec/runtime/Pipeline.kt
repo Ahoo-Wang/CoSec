@@ -98,7 +98,10 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     private val authenticator = components.authenticator
     private val snapshots = components.snapshots
     private val engine = components.engine
-    private val idGenerator = components.idGenerator
+
+    /** The application's generator, falling back to a random id when it throws (round 2 M6). */
+    private val ids = FallbackIds(components.idGenerator)
+
     private val clock = components.clock
     private val options = components.options
 
@@ -292,7 +295,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         return sampled?.let { ReplayHandle(request, view, it) }
     }
 
-    private fun eventId(): String = idGenerator.generate()
+    private fun eventId(): String = ids.generate()
 
     private suspend fun decide(input: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
         val facts = routed(input)
@@ -859,7 +862,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
      */
     private fun requestId(facts: HttpFacts): String {
         val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
-        return given ?: idGenerator.generate()
+        return given ?: ids.generate()
     }
 
     /**

@@ -16,6 +16,10 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A failing `IdGenerator` costs only its id** (`PIP-23`). One that threw (CosId's `ClockBackwardsException` after the
+  clock went back) left the pipeline before any outcome: no problem body, no `CoSec-Request-Id`, no decision event, and
+  each adapter answered its own way. A random id now stands in, with a WARN at most every ten seconds; `CosIdIdGenerator`
+  does the same for a CosId failure. Configure CosId's clock regression policy to fail rather than wait.
 - **A handler reads the security context from a `SecurityContext` parameter** (round 2 M4). The starter registers
   `SecurityContextArgumentResolver`. `SecurityContextHolder` is for blocking code on the request thread: a `suspend`
   handler that resumes on another request's thread read that request's context from it. With

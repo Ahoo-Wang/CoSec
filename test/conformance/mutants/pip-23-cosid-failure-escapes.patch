@@ -1,0 +1,18 @@
+# Rule: PIP-23
+# Mutant: CosIdIdGenerator lets a CosId failure (a clock gone back) through to the token, change or request it names
+# Tests: :cosid:test --tests me.ahoo.cosec.cosid.CosIdIdGeneratorTest
+
+diff --git a/extensions/cosid/src/main/kotlin/me/ahoo/cosec/cosid/CosIdIdGenerator.kt b/extensions/cosid/src/main/kotlin/me/ahoo/cosec/cosid/CosIdIdGenerator.kt
+index 2192bc38..11782a52 100644
+--- a/extensions/cosid/src/main/kotlin/me/ahoo/cosec/cosid/CosIdIdGenerator.kt
++++ b/extensions/cosid/src/main/kotlin/me/ahoo/cosec/cosid/CosIdIdGenerator.kt
+@@ -51,8 +51,7 @@ class CosIdIdGenerator(private val ids: StringIdGenerator) : IdGenerator {
+     override fun generate(): String = try {
+         ids.generate()
+     } catch (e: CosIdException) {
+-        report(e)
+-        RandomIdGenerator.generate()
++        throw e
+     }
+ 
+     private fun report(failure: CosIdException) {

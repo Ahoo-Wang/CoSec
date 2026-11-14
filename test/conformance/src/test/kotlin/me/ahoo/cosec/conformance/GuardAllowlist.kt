@@ -24,6 +24,10 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "spring-boot:RealServerFailingIdsTest#a failing IdGenerator still answers through StatusMapping on every server",
+            "runtime:PipelineTest#aFailingIdGeneratorFallsBackToARandomId",
+            "runtime:IdentityGateTest#a failing id generator falls back to a random id",
+            "cosid:CosIdIdGeneratorTest#a failing generator falls back to a random id",
             "spring-boot:SuspendingHandlerContextTest#without context propagation the holder fails loudly in a suspend handler",
             "spring-boot:SuspendingHandlerContextTest#a blocking handler reads the holder",
             "webmvc:SuspendingHandlerHolderInterceptorTest#aSuspendHandlerFindsTheHolderUnbound",

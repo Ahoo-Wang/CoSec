@@ -66,6 +66,17 @@ class IdentityGateTest {
         )
     }
 
+    /** `PIP-23`: a generator that throws does not take the answer: a random id names the request. */
+    @Test
+    fun `a failing id generator falls back to a random id`() = runBlocking<Unit> {
+        val failing = IdentityGate(clock = Clock.fixed(now, ZoneOffset.UTC), idGenerator = { error("down") })
+        val outcome = failing.evaluate(
+            HttpFacts("GET", "/orders", null, Headers.EMPTY, Cookies.EMPTY, "10.0.0.1", HostScope(null))
+        )
+        outcome.proceed.assert().isTrue()
+        outcome.requestId.assert().hasSize(36)
+    }
+
     /** `SCP-11`: the forwarded identity is the credential here, and a host with an app serves only its own. */
     @Test
     fun `an identity that names no app is refused by a host with one`() {

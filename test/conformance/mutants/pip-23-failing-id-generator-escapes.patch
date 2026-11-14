@@ -1,0 +1,18 @@
+# Rule: PIP-23
+# Mutant: an IdGenerator that throws escapes Pipeline.evaluate: no outcome of StatusMapping, no request id, no event, each adapter answering its own way
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineTest --tests me.ahoo.cosec.runtime.identity.IdentityGateTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.realserver.RealServerFailingIdsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/RequestIds.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/RequestIds.kt
+index 6f6b3ada..6f162894 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/RequestIds.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/RequestIds.kt
+@@ -56,8 +56,7 @@ internal class FallbackIds(private val ids: IdGenerator, private val interval: D
+     fun generate(): String = try {
+         ids.generate()
+     } catch (e: Exception) {
+-        report(e)
+-        RandomIdGenerator.generate()
++        throw e
+     }
+ 
+     private fun report(failure: Exception) {
