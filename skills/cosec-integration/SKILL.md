@@ -130,6 +130,9 @@ in-memory store without it. **Until a platform document exists, every request is
   revisions only, never overwrites, and reads a `report.json` with each file's SHA-256 (`convert` writes it; for
   hand-written files write `{"accepted": true, "outputSha256": {"platform.json": "<sha256>"}}`). Migrating 7.x data:
   `cosec-migrate convert`, then `publish`; see https://cosec.ahoo.me/operations/upgrading.
+  The tool is `cosec-migrate-<version>.zip` on each GitHub release (Java 21+; as a Kubernetes Job in the same page). Seed
+  hand-written app and tenant documents after the platform document with `bootstrap` and the control plane's
+  `POST .../documents/app:<id>:apply` (https://cosec.ahoo.me/operations/storage#seeding-documents-you-wrote-by-hand).
 - Later changes go through the control plane (below). `cosec-migrate bootstrap` writes only the platform tenant's
   document; it does not create the platform document. **The first platform document must let authenticated callers
   reach `/cosec/control/v1/**`** (`http:GET`, `http:POST`, `http:DELETE` on `http:path:/cosec/control/v1/**`, condition

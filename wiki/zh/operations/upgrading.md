@@ -302,12 +302,15 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 ### 迁移数据 {#migrating-the-data}
 
-`cosec-migrate` 是 `migration/migrate/` 模块中的一次性命令行工具。没有应用依赖它，starter 也从不依赖它。它的契约是命令行：它的类不是库 API，任何版本都可能改变。用你要部署的版本的 CoSec 源码构建它：
+`cosec-migrate` 是 `migration/migrate/` 模块中的一次性命令行工具。没有应用依赖它，starter 也从不依赖它。它的契约是命令行：它的类不是库 API，任何版本都可能改变。使用你要部署的版本的工具：每个 [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases) 都带有 `cosec-migrate-<version>.zip`，旁边是 `cosec-migrate-<version>.zip.sha256`。它不在 Maven Central。需要 Java 21 或更高版本：
 
 ```bash
-./gradlew :migrate:installDist
-migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
+sha256sum -c cosec-migrate-8.0.0.zip.sha256   # macOS：shasum -a 256 -c
+unzip cosec-migrate-8.0.0.zip
+cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 ```
+
+要从 CoSec 源码构建，运行 `./gradlew :migrate:installDist`；工具在 `migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`。
 
 它的命令如下。退出码：`0` 完成，`1` 数据被拒绝或写入失败，`2` 用法错误。`publish`、`bootstrap` 与 `repair-references` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster，会拒绝这个选项。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
 
@@ -435,6 +438,81 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 在写这个 Redis 的每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后再运行它，不要在滚动升级期间运行；降级之后要再运行一次。只要还有旧版本实例在运行，它就按旧的分析自行判断：它检查的变更不受 RC1-4 的保护，它发布的 app 文档也不会被列入。每个新实例在启动时对账一次，之后每次回收任务再对账：完整的列表缺了某份有头的 app 文档时，列表被标回不完整（[存储](./storage.md#publishing-through-the-control-plane)），新实例于是让覆盖所有 app 的授出退回审批。升级完成之后运行的那次 `repair-references`，才结束这个窗口。
 
 然后它把文档中的每份 app 文档列入 app 列表，并把列表标记为完整，输出 `The app list is complete: <n> app(s).`；在此之前，授出分析把覆盖所有 app 的每个授出都当作未知。如果列表在它执行期间一直在变，它输出 `FAILED the app list could not be completed` 并以 `1` 退出：再运行一次即可。它补全的列表只和 `<s>:control:list:documents` 一样可靠：只要那个列表没有丢失，它就列着控制面或 `cosec-migrate` 发布过的每一份文档；以其他方式写进 Redis 的文档两个列表里都没有。
+
+#### 以 Kubernetes Job 运行 {#run-as-a-kubernetes-job}
+
+在集群里，把每条命令作为 Job 运行，放在能连上 Redis 的命名空间，这样不必从你的机器访问 Redis。init 容器下载 release 的 zip、校验 SHA-256 并解压到一个卷；主容器在普通 JRE 上运行工具。带凭据的 Redis 地址来自一个 Secret，作为 `--to-redis` 交给工具（工具只从选项读取 Redis 地址；Kubernetes 会展开 `args` 里的 `$(REDIS_URI)`）：
+
+```bash
+kubectl -n cosec create secret generic cosec-migrate-redis --from-literal=uri='redis://:<password>@redis:6379'
+```
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cosec-repair-references
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tool
+          emptyDir: {}
+      initContainers:
+        - name: fetch
+          image: eclipse-temurin:21-jdk # 有 curl 和 jar；JRE 镜像没有 jar
+          env:
+            - name: VERSION
+              value: 8.0.0 # 你要部署的 CoSec 版本
+          volumeMounts:
+            - name: tool
+              mountPath: /tool
+          command: ["sh", "-ec"]
+          args:
+            - |
+              cd /tool
+              base="https://github.com/Ahoo-Wang/CoSec/releases/download/v${VERSION}"
+              curl -fsSLO "$base/cosec-migrate-${VERSION}.zip"
+              curl -fsSLO "$base/cosec-migrate-${VERSION}.zip.sha256"
+              sha256sum -c "cosec-migrate-${VERSION}.zip.sha256"
+              jar xf "cosec-migrate-${VERSION}.zip"
+              mv "cosec-migrate-${VERSION}" cosec-migrate
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+      containers:
+        - name: migrate
+          image: eclipse-temurin:21-jre
+          env:
+            - name: REDIS_URI
+              valueFrom:
+                secretKeyRef:
+                  name: cosec-migrate-redis
+                  key: uri
+          volumeMounts:
+            - name: tool
+              mountPath: /tool
+          # `jar` 不恢复可执行位，所以启动脚本经由 `sh` 运行。
+          command: ["sh", "/tool/cosec-migrate/bin/cosec-migrate"]
+          args: ["repair-references", "--to-redis", "$(REDIS_URI)", "--key-prefix", "cosec"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+```
+
+`kubectl -n cosec logs job/cosec-repair-references` 显示工具的输出；命令失败时（退出码 `1` 或 `2`）Job 也失败。`--key-prefix` 设为你的实例的 [`cosec.key-prefix`](./configuration.md#key-prefix)。运行 `bootstrap` 时把 `args` 改为 `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`。Redis Cluster 则给支持的命令加上 `--cluster`，并在 Secret 里写以逗号分隔的种子节点。
+
+`convert`、`publish`、`partition plan` 与 `api-keys` 读写目录：在主容器的 `/data` 挂载一个 PersistentVolumeClaim，路径写成 `--out /data/converted` 与 `--in /data/converted`。把 `convert` 作为一个 Job 运行，从卷上读 `report.json`（再起一个挂载它的 Pod，或用 `kubectl cp`），转换被接受之后才把 `publish` 作为另一个 Job 运行：`publish` 只接受 `report.json` 列出的、SHA-256 与之一致的文件。
 
 #### 回滚 {#rollback}
 
