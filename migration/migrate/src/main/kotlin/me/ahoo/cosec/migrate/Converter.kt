@@ -34,7 +34,11 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Operand
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.document.Catalog
@@ -96,7 +100,16 @@ class Provenance(val policies: List<PolicyOrigin>, val bindings: List<BindingOri
  * Converts 7.x policy data into 8.0 platform, app and tenant documents (RFC 0004 §5.1, §8.3), refusing what §8.4 and
  * RFC 0008 §4.1 refuse. Every document it returns compiles with [compiler]; a run with any rejection returns none.
  */
-class Converter(private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler()) {
+class Converter(
+    /**
+     * What every converted policy compiles with: the default limits, and the one external attribute a conversion may
+     * write, `ext.ip2region.country` (RFC 0006 §5.4.5), which the platform document then declares ([IP2REGION_COUNTRY]).
+     */
+    private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler.forPlatform(
+        null,
+        AttributeCatalog.of(listOf(IP2REGION_COUNTRY)),
+    ),
+) {
     fun convert(source: Source7x, options: ConvertOptions = ConvertOptions()): Conversion =
         Run(source, options, compiler).convert()
 
@@ -113,6 +126,9 @@ class Converter(private val compiler: PolicyDocumentCompiler = PolicyDocumentCom
 
         fun permissionPolicyId(appId: String, permissionId: String): String =
             PolicyDocumentCompiler.permissionPrefix(appId) + permissionId
+
+        /** The declaration a converted platform document holds when a converted condition reads the client's country. */
+        val IP2REGION_COUNTRY: Attribute = Attribute.external(Parts.IP2REGION_COUNTRY, AttributeType.STRING)
     }
 }
 
@@ -761,6 +777,17 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
 
     private fun documents(): Map<SnapshotKey, PolicyDocument> {
         val documents = LinkedHashMap<SnapshotKey, PolicyDocument>()
+        // Declared by the platform document, so the documents compile by themselves (RFC 0006 §5.4.5).
+        val country = readsCountry()
+        if (country) {
+            changes += SemanticChange(
+                "IP2REGION",
+                CONVERSION,
+                "statements read ext.ip2region.country, which the platform document declares: every host that enforces " +
+                    "them needs cosec-ip2region, without which the attribute is unavailable and such a DENY is " +
+                    "Indeterminate (503); an address no loaded database covers is unavailable too (ATR-9)",
+            )
+        }
         for ((key, keyPolicies) in policies) {
             val (kind, owner) = when (key) {
                 is SnapshotKey.App -> DocumentKind.APP to key.appId
@@ -775,6 +802,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
                 keyPolicies,
                 bindings[key].orEmpty(),
                 catalogs[key],
+                attributes = if (country && key == SnapshotKey.Platform) listOf(Converter.IP2REGION_COUNTRY) else null,
                 rateLimits = rateLimits.of(key),
             )
             // Every policy compiled on its own; the whole document must too (ids, bindings, break-glass rules, and the
@@ -793,6 +821,27 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             }
         }
         return documents
+    }
+
+    /** Whether a converted condition, of a policy, a statement or a rate limit rule, reads the client's country. */
+    private fun readsCountry(): Boolean {
+        val conditions = policies.values.flatten().flatMap { policy ->
+            listOfNotNull(policy.condition) + policy.statements.mapNotNull { it.condition }
+        } + rateLimits.mapNotNull { it.statement.condition }
+        return conditions.any { reads(it, Parts.IP2REGION_COUNTRY) }
+    }
+
+    private fun reads(condition: Condition, path: String): Boolean = when (condition) {
+        is Condition.Eq -> condition.attribute == path || (condition.value as? Operand.Attr)?.path == path
+        is Condition.In -> condition.attribute == path || condition.values.any { (it as? Operand.Attr)?.path == path }
+        is Condition.Contains -> condition.attribute == path || (condition.value as? Operand.Attr)?.path == path
+        is Condition.Prefix -> condition.attribute == path || (condition.value as? Operand.Attr)?.path == path
+        is Condition.Cidr -> condition.attribute == path
+        is Condition.Time -> false
+        is Condition.Exists -> condition.attribute == path
+        is Condition.And -> condition.conditions.any { reads(it, path) }
+        is Condition.Or -> condition.conditions.any { reads(it, path) }
+        is Condition.Not -> reads(condition.condition, path)
     }
 
     /** Whether [policy] compiles in a document of [key]'s kind; its errors are rejected at [statements]' locations. */

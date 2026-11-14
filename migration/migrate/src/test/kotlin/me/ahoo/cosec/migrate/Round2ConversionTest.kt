@@ -23,6 +23,10 @@ import me.ahoo.cosec.migrate.Fixtures7x.statement
 import me.ahoo.cosec.migrate.v7.api.policy.ActionMatcher
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.condition.AttributeType
+import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -141,7 +145,8 @@ class Round2ConversionTest {
             )
         geo.documents.assert().isEmpty()
         rejected(geo, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert()
-            .contains("request.attributes.ipRegion").contains("always absent").contains("ext.ip2region")
+            .contains("request.attributes.ipRegion").contains("ext.ip2region.country").contains("ext.ip2region.province")
+            .contains("ext.ip2region.city").contains("ext.ip2region.isp")
         val resource = convert(statement(effect = "deny", condition = on("resource.owner", "bob")))
         rejected(resource, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert().contains("resource.owner")
     }
@@ -150,9 +155,11 @@ class Round2ConversionTest {
     fun `what 8_0 sets, a DENY that holds on the absent value, and an ALLOW translate`() {
         convert(statement(effect = "deny", condition = on("request.attributes.cosec.audit.routeId", "admin")))
             .report.rejections.assert().isEmpty()
-        // Absent in 8.0, "" in 7.x: the DENY holds wherever 7.x's held, and more often.
+        // Absent in 8.0, "" in 7.x: the DENY holds wherever 7.x's held, and more often; the ALLOW would hold always.
         convert(statement(effect = "deny", condition = on("request.attributes.ipRegion", "")))
             .report.rejections.assert().isEmpty()
+        rejected(convert(statement(condition = on("resource.owner", ""))), RejectionKind.CONDITION_NOT_TRANSLATED)
+            .single().message.assert().contains("would hold for every request")
         val allow = convert(statement(condition = on("request.attributes.ipRegion", "x")))
         allow.report.rejections.assert().isEmpty()
         allow.report.semanticChanges.filter { it.change == "NOT-IN-8.0" }.single().shape.assert()
@@ -165,5 +172,61 @@ class Round2ConversionTest {
             )
         )
             .report.rejections.assert().isEmpty()
+    }
+
+    private fun region(condition: String, effect: String = "deny") = convert(statement(effect = effect, condition = condition))
+
+    /** RFC 0006 §5.4.5: the one shape of 7.x's region that says one 8.0 attribute, the country prefix. */
+    @ParameterizedTest
+    @CsvSource(
+        delimiterString = "@@",
+        value = [
+            """{"startsWith":{"part":"request.attributes.ipRegion","value":"中国|"}}""",
+            """{"regular":{"part":"request.attributes.ipRegion","pattern":"^中国\\|.*$"}}""",
+        ],
+    )
+    fun `a country prefix reads ext_ip2region_country, declared by the platform document`(condition: String) {
+        val conversion = region(condition)
+        conversion.report.rejections.assert().isEmpty()
+        val platform = conversion.documents.getValue(SnapshotKey.Platform)
+        StatementTranslator.render(platform.policies.single { it.id.value == "p" }.statements.single().condition)
+            .assert().contains("ext.ip2region.country").contains("s:2:中国")
+        platform.attributes!!.map { it.path }.assert().containsExactly("ext.ip2region.country")
+        conversion.report.semanticChanges.single { it.change == "IP2REGION" && it.location == "conversion" }.shape
+            .assert().contains("cosec-ip2region").contains("ATR-9")
+        // By itself, as an instance without the provider compiles it, and beside the provider's own declarations.
+        PolicyDocumentCompiler.forPlatform(platform).compile(platform)
+        val provider = AttributeCatalog.of(
+            listOf("country", "province", "city", "isp").map { Attribute.external("ext.ip2region.$it", AttributeType.STRING) },
+        )
+        PolicyDocumentCompiler.forPlatform(platform, provider).compile(platform)
+    }
+
+    @Test
+    fun `a conversion that reads no country declares nothing`() {
+        val conversion = convert(statement())
+        conversion.documents.getValue(SnapshotKey.Platform).attributes.assert().isNull()
+        conversion.report.semanticChanges.none { it.change == "IP2REGION" }.assert().isTrue()
+    }
+
+    /** Anything else on the region is by direction: the region field cannot be read, and `0` fields are absent. */
+    @ParameterizedTest
+    @CsvSource(
+        delimiterString = "@@",
+        value = [
+            """{"eq":{"part":"request.attributes.ipRegion","value":"中国|0|上海|上海市|电信"}}""",
+            """{"in":{"part":"request.attributes.ipRegion","value":["中国|0|上海|上海市|电信"]}}""",
+            """{"startsWith":{"part":"request.attributes.ipRegion","value":"中国|0|上海|"}}""",
+            """{"startsWith":{"part":"request.attributes.ipRegion","value":"0|"}}""",
+        ],
+    )
+    fun `any other region condition is refused as a DENY and narrows an ALLOW`(condition: String) {
+        val deny = region(condition)
+        deny.documents.assert().isEmpty()
+        rejected(deny, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert()
+            .contains("ext.ip2region.province").contains("by hand")
+        val allow = region(condition, effect = "allow")
+        allow.report.rejections.assert().isEmpty()
+        allow.report.semanticChanges.map { it.change }.assert().contains("NOT-IN-8.0")
     }
 }

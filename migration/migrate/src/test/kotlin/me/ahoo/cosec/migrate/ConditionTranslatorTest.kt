@@ -45,6 +45,35 @@ class ConditionTranslatorTest {
         )
             .translate(CoSecJson.mapper.readTree(json), "c", deny)
 
+    /**
+     * Round 2 addition C: the same rows against 8.0 as enforcement fills a request, not as the 7.x request held it. 7.x's
+     * appenders filled request attributes and `resource.*`, which no 8.0 host fills, and 8.0 decides a HEAD request as
+     * GET (PIP-18, reported once per conversion). A translation may be narrower in the ALLOW direction, never in the
+     * DENY one.
+     */
+    @Test
+    fun `no row widens access against what enforcement fills`() {
+        val random = Random(SEED)
+        val facts = (List(REQUESTS) { Facts.random(random) } + FIXED).filter { it.reachesDecision }
+        Matchers7x.use {
+            for (row in CORPUS) {
+                val matcher = Matchers7x.matcher(row.json)
+                for (deny in listOf(false, true)) {
+                    val translated = translate(row.json, deny) ?: continue
+                    val ast = Matchers7x.evaluator(translated) { it.enforced }
+                    for (request in facts) {
+                        val old = Matchers7x.matches(matcher, request)
+                        val new = ast(request)
+                        val safe = if (deny) !old || new else !new || old || request.method == "HEAD"
+                        if (!safe) {
+                            fail("${row.json} (deny=$deny): 7.x=$old 8.0 as enforced=$new on $request; ${render(translated)}")
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     fun `every row agrees with 7x on adversarial requests, never widening`() {
         val random = Random(SEED)
@@ -284,7 +313,8 @@ class ConditionTranslatorTest {
                 directional("""{"inRole":{"value":"admin"}}"""),
                 directional("""{"inRole":{"value":"admin@team"}}"""),
                 exact("""{"eq":{"part":"request.path","value":"/orders/1"}}"""),
-                exact("""{"eq":{"part":"request.method","value":"GET"}}"""),
+                // Negated in a DENY it denied HEAD in 7.x; 8.0 decides HEAD as GET (PIP-18): that DENY is refused.
+                directional("""{"eq":{"part":"request.method","value":"GET"}}"""),
                 exact("""{"eq":{"part":"request.appId","value":""}}"""),
                 exact("""{"eq":{"part":"request.appId","value":"order"}}"""),
                 exact("""{"eq":{"part":"request.spaceId","value":""}}"""),
@@ -297,7 +327,8 @@ class ConditionTranslatorTest {
                 exact("""{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"alice"}}"""),
                 // Only 7.x set this one (addition C): an ALLOW narrows to nothing, a DENY is rejected.
                 directional("""{"eq":{"part":"request.attributes.owner","value":"alice"}}"""),
-                exact("""{"eq":{"part":"resource.owner","value":""}}"""),
+                // 8.0 never sets resource attributes: holding on the empty value, the DENY translates, the ALLOW cannot.
+                directional("""{"eq":{"part":"resource.owner","value":""}}"""),
                 exact("""{"eq":{"part":"request.path.var.id","value":"owner-1"}}"""),
                 exact("""{"eq":{"part":"context.principal.id","value":"alice"}}"""),
                 exact("""{"eq":{"part":"context.principal.id","value":"(0)"}}"""),
@@ -313,6 +344,11 @@ class ConditionTranslatorTest {
                 ),
                 directional("""{"eq":{"part":"resource.owner","value":"#{tenant.tenantId}"}}"""),
                 exact("""{"in":{"part":"request.path","value":["/orders","/orders/1"]}}"""),
+                // RFC 0006 §5.4.5: the country prefix of 7.x's region is ext.ip2region.country; nothing else of it is.
+                exact("""{"startsWith":{"part":"request.attributes.ipRegion","value":"中国|"}}"""),
+                exact("""{"regular":{"part":"request.attributes.ipRegion","pattern":"^中国\\|.*$"}}"""),
+                directional("""{"eq":{"part":"request.attributes.ipRegion","value":"中国|0|上海|上海市|电信"}}"""),
+                directional("""{"startsWith":{"part":"request.attributes.ipRegion","value":"中国"}}"""),
                 exact("""{"in":{"part":"request.header.x-debug","value":["","1"]}}"""),
                 exact("""{"in":{"part":"context.principal.id","value":["(0)","alice"]}}"""),
                 exact("""{"in":{"part":"request.path","value":[]}}"""),
@@ -342,7 +378,7 @@ class ConditionTranslatorTest {
                 ),
                 exact("""{"time":{"daysOfWeek":["SAT","SUN"],"zone":"America/New_York"}}"""),
                 exact("""{"time":{"from":"02:00","to":"03:00","zone":"Europe/Berlin"}}"""),
-                exact("""{"bool":{"and":[{"authenticated":{}},{"eq":{"part":"request.method","value":"GET"}}]}}"""),
+                directional("""{"bool":{"and":[{"authenticated":{}},{"eq":{"part":"request.method","value":"GET"}}]}}"""),
                 exact(
                     """{"bool":{"or":[{"inTenant":{"value":"platform"}},{"eq":{"part":"request.header.x-debug","value":""}}]}}"""
                 ),

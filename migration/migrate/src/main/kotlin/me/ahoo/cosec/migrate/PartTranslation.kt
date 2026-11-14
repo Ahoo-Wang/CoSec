@@ -56,6 +56,11 @@ internal object Parts {
     const val PRINCIPAL_ID = "context.principal.id"
     const val REMOTE_IP = "request.remoteIp"
     const val METHOD = "request.method"
+
+    /** The region 7.x's ip2region appender wrote (RFC 0006 §5.4.5), and what 8.0's provider reads instead. */
+    const val IP_REGION = "request.attributes.ipRegion"
+    const val IP2REGION_COUNTRY = "ext.ip2region.country"
+    val IP2REGION_ATTRIBUTES = listOf(IP2REGION_COUNTRY, "ext.ip2region.province", "ext.ip2region.city", "ext.ip2region.isp")
     private const val REQUEST_ATTRIBUTES = "request.attributes."
     private const val RESOURCE = "resource."
 
@@ -101,6 +106,8 @@ internal class PartTranslation(
     private val config: JsonNode,
     private val location: String,
     private val deny: Boolean,
+    /** Whether the statement refuses, whatever [deny] reads after negations. */
+    private val statementDeny: Boolean = deny,
 ) {
     private val part: String? = config.get("part")?.takeIf { it.isString }?.asString()
     private val ignoreCase: Boolean = config.get("ignoreCase")?.asBoolean() ?: false
@@ -160,6 +167,7 @@ internal class PartTranslation(
         if (value.isEmpty()) {
             return Translated.Always
         }
+        country(mapped, value, ignoreCase)?.let { return it }
         if (!caseFoldable(value)) return null
         val base = Translated.Ast(Condition.Prefix(mapped.attribute, Literal.Str(value), ignoreCase))
         return absent(mapped, base) { it.startsWith(value, ignoreCase) }
@@ -211,6 +219,10 @@ internal class PartTranslation(
             location,
             "regular [$pattern] is not a literal, a literal prefix or a choice of literals: rewrite it as eq, in or startsWith",
         )
+        if (shape is LiteralRegex.Prefix) {
+            // 7.x compiles every pattern ignoring case.
+            country(mapped, shape.prefix, folds = true)?.let { return it }
+        }
         val base = when (shape) {
             is LiteralRegex.Exact -> {
                 if (!shape.choices.all { caseFoldable(it, folds = true) }) return null
@@ -245,6 +257,29 @@ internal class PartTranslation(
         }
         translator.note("D3", location, "regular [$pattern]: compared exactly in 8.0, so its timeout errors disappear")
         return absent(mapped, base) { regex.matches(it) }
+    }
+
+    /**
+     * RFC 0006 §5.4.5: 7.x's ip2region appender wrote the whole region, `country|region|province|city|isp`, as the
+     * request attribute `ipRegion`; 8.0's provider reads the same database into `ext.ip2region.country`, `.province`,
+     * `.city` and `.isp`, without the region field, and a field `0` is absent. Exactly one shape says one of them: the
+     * prefix `X|` of the country (`X` not empty, no `|`, not `0`), which is `eq(ext.ip2region.country, X)`. Anything
+     * else on `ipRegion` is a part 8.0 never sets ([unmatched]). Null when [prefix] is not that shape, or folding refuses it.
+     */
+    private fun country(mapped: Parts.Mapped, prefix: String, folds: Boolean): Translated? {
+        if (mapped.part != Parts.IP_REGION || !prefix.endsWith(REGION_SEPARATOR)) {
+            return null
+        }
+        val country = prefix.dropLast(1)
+        if (country.isEmpty() || REGION_SEPARATOR in country || country == UNKNOWN_FIELD || !caseFoldable(country, folds)) {
+            return null
+        }
+        translator.note(
+            "IP2REGION",
+            location,
+            "the region prefix [$prefix] of ipRegion reads ext.ip2region.country: it needs cosec-ip2region on the host",
+        )
+        return Translated.Ast(Condition.Eq(Parts.IP2REGION_COUNTRY, Literal.Str(country), ignoreCase = folds))
     }
 
     /**
@@ -357,22 +392,42 @@ internal class PartTranslation(
      * A predicate that holds on the absent value, or on GET, matches at least what 7.x matched, which a DENY may.
      */
     private fun unmatched(mapped: Parts.Mapped, matches: (String) -> Boolean): Boolean {
+        // Always absent in 8.0, where 7.x read "": an ALLOW that holds on "" would hold for every request, though 7.x's
+        // appender filled the part (found by the enforcement-only property test).
+        if (!deny && mapped.setBy7x != null && matches(mapped.absentAs)) {
+            translator.rejected<Unit>(
+                RejectionKind.CONDITION_NOT_TRANSLATED,
+                location,
+                "in the ALLOW direction, a condition that holds when part [${mapped.part}] is empty: it was set by " +
+                    "${mapped.setBy7x}, 8.0 sets no such attribute, so it would hold for every request; rewrite it " +
+                    "with an ext.* attribute of an AttributeProvider",
+            )
+            return true
+        }
         val reason = when {
+            mapped.part == Parts.IP_REGION && !matches(mapped.absentAs) ->
+                "part [${mapped.part}] was the whole region 7.x's ip2region appender wrote; 8.0 has the region as " +
+                    "${Parts.IP2REGION_ATTRIBUTES.joinToString()}, and only a country prefix (startsWith \"<country>|\") " +
+                    "translates: rewrite this condition with them by hand"
             mapped.setBy7x != null && !matches(mapped.absentAs) ->
                 "part [${mapped.part}] was set by ${mapped.setBy7x}; 8.0 sets no such attribute, so " +
                     "[${mapped.attribute}] is always absent there and this condition never holds: rewrite it with an " +
-                    "ext.* attribute of an AttributeProvider (7.x's ipRegion is ext.ip2region.*)"
-            mapped.part == Parts.METHOD && matches(HEAD) && !matches(GET) ->
+                    "ext.* attribute of an AttributeProvider"
+            // A DENY statement must still hold for a HEAD request wherever 7.x's held. Read as GET, a condition that
+            // tells HEAD from GET may stop holding for it, directly or under a negation (`not eq GET`).
+            mapped.part == Parts.METHOD && statementDeny && !deny && matches(GET) && !matches(HEAD) ->
+                "a condition that holds on method GET but not HEAD: 8.0 decides a HEAD request as GET (PIP-18), so " +
+                    "the DENY no longer holds for one"
+            // Under a negation in a DENY, one that holds on HEAD but not GET only makes the DENY hold more.
+            mapped.part == Parts.METHOD && matches(HEAD) && !matches(GET) && (deny || !statementDeny) ->
                 "a condition on method HEAD but not GET: 8.0 decides a HEAD request as GET (PIP-18), so action.verb is " +
                     "never HEAD and this condition no longer holds for one"
             else -> return false
         }
-        if (deny) {
-            translator.rejected<Unit>(
-                RejectionKind.CONDITION_NOT_TRANSLATED,
-                location,
-                "in the DENY direction, $reason"
-            )
+        val refusedUnderNegation = mapped.part == Parts.METHOD && statementDeny && !deny
+        if (deny || refusedUnderNegation) {
+            val direction = if (deny) "in the DENY direction" else "under a negation in a DENY"
+            translator.rejected<Unit>(RejectionKind.CONDITION_NOT_TRANSLATED, location, "$direction, $reason")
             return true
         }
         translator.note("NOT-IN-8.0", location, "in the ALLOW direction, $reason: the ALLOW matches fewer requests")
@@ -383,6 +438,8 @@ internal class PartTranslation(
         const val ANONYMOUS_ID = "(0)"
         const val HEAD = "HEAD"
         const val GET = "GET"
+        const val REGION_SEPARATOR = '|'
+        const val UNKNOWN_FIELD = "0"
 
         /**
          * Whether a character of [value] has any case mapping, and so a spelling 7.x folds to it. Not only letters
