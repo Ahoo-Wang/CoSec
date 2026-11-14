@@ -241,11 +241,29 @@ class HttpFacts(
     val rawQuery: String?,
     val headers: Headers,                   // 只读视图，名字不区分大小写
     val cookies: Cookies,
-    val remoteAddress: String,              // 经 RemoteIpResolver 之前的原始地址
+    val remoteAddress: String,              // 经 RemoteIpResolver 读取的客户端地址（2026-11-14 修订，见下）
     val host: HostScope,                    // RFC 0004 §4.6：宿主配置的应用（Gateway 来自路由元数据）
     val requestAttributes: Map<String, String>,   // Gateway 的 routeId 等，原 RequestAttributesAppender 的输出
 )
 ```
+
+> **2026-11-14 修订（第 2 轮审查 edge 组的 H1、L3，#1326，`PIP-16`、`PIP-17`）**：`remoteAddress` 是客户端地址，由适配器的 `RemoteIpResolver` 读取**一次**，
+> 读法由 starter 按服务器及其 forward-headers 策略决定，绝不既用服务器的解析又用 CoSec 的：没有策略时，取对端，有 `X-Forwarded-For` 时按 `max-trusted-index` 取；
+> Tomcat `native`，取 `RemoteIpValve` 解析出的地址；Reactor Netty 或 Jetty `native`，只取 `X-Forwarded-For`。`framework` 策略、会改写请求的 forwarded-header bean、
+> 无法识别服务器的 `native`、Tomcat `native` 下显式设置的 index、Netty 或 Jetty `native` 下的 index 0，都使启动失败。此前 Spring Boot 在 Kubernetes 等平台上默认打开的
+> `native` 与 CoSec 自己的解析叠加，`environment.ip` 取到的是客户端写的值。多行头按顺序合为一个列表；条目读作不带端口、方括号与 zone 的地址；不是地址的值
+> （`unknown`）让 `environment.ip` 成为“取不到”（读它的语句按缺失的外部属性出错，由 `onMissing` 决定），而不是“缺失”；黑名单对它同样回答取不到。
+> CoSec 只读 `X-Forwarded-For`，不读 RFC 7239 的 `Forwarded`：代理必须追加或覆盖前者。
+>
+> **2026-11-14 修订（第 2 轮审查 edge 组的 M1、M2、M3，#1328，`PIP-18`、`PIP-19`、`PIP-20`）**：CoSec 授权的是应用将要执行的那个请求。
+> - **方法**（`PIP-18`）：含 ASCII 小写字母的方法在认证之前答 400 `invalid-request`（会折叠大小写的后端把 `delete` 当作 DELETE 执行，而 `http:DELETE` 上的 DENY 不点名它）。
+>   HEAD 按 GET 决策：它是不带内容的 GET，服务器用 GET 的处理器服务它；路由映射里有 HEAD 路由时用它，否则用 GET 的路由，未映射时是 `http:GET`，所以
+>   `http:HEAD` 不匹配任何请求。宿主代码的检查与控制面的模拟、解释、分析按同样的读法读 `http` 动作（`PathNormalizer.enforceable(action)`，`PIP-15`、`CTL-3`）。
+> - **过滤器顺序**（`PIP-19`）：WebMvc 上 CoSec 的过滤器排在 Spring Boot 改写请求的过滤器之后（紧随 hidden-method 过滤器），在一切对请求采取动作的过滤器之前，
+>   与 WebFlux 一致；改写方法或路径的过滤器必须排在 CoSec 之前。此前 `POST` 加 `_method=DELETE` 在 WebMvc 上按 `POST` 授权、由 DELETE 处理器执行。
+> - **应用内路径**（`PIP-20`）：`rawPath` 由 `runtime` 的一个函数（`ApplicationPaths.within`）从请求 URI 与 context path 按段得出，两者对不上即 400。
+>   此前 Jetty 上编码后的 context path 不被剥离，授权的路径多出一段。
+> - 拒绝响应带 `Content-Length`；只有 `REQUEST` 分派经过管道。
 
 - `PathNormalizer` 是 [`RequestPaths`](../../core/src/main/kotlin/me/ahoo/cosec/context/request/RequestPaths.kt) 的规则原样搬进 `runtime/`（解码一次、
   合并斜杠、处理 `.`/`..`、剥离 `;` 矩阵参数、拒绝二次编码与编码后的 `/`），不改任何一条规则：门槛 C 要求 400 零差异。
@@ -649,6 +667,9 @@ CoSec 不使用 `Dispatchers.IO`，不使用 `GlobalScope`。BEST_EFFORT 消费�
 以测试为准。
 
 ### 7.3 适配器桥接
+
+> **2026-11-14 修订（#1326）**：三个适配器的一致性除了 `WebAdapterParityTest`（模拟请求）之外，还在真实服务器上检查（`RealServerParityTest`：由 Spring Boot 自己的工厂
+> 构建的 Tomcat、Jetty、Reactor Netty 与网关过滤器，请求按原始字节发出，比较状态、CoSec 的头与响应体）。各服务器自己对请求的转换只有这样才经过测试。
 
 ```kotlin
 // cosec-webflux / cosec-gateway：ReactiveSecurityFilter
