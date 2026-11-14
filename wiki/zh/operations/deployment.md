@@ -237,6 +237,8 @@ management:
 [JEP 515](https://openjdk.org/jeps/515)）：网关启动时加载的类，已经读取、解析、加载和链接，外加一次训练运行得到的方法 profile。
 JVM 启动时直接映射这个文件，不再重复这些工作。不需要改代码，也不涉及 Spring AOT。
 
+**8.0 不支持 Spring AOT 和 GraalVM 原生镜像。** CoSec 的构建不处理它们（`processAot`），也不测试原生镜像，所以 CoSec 能否在其中运行是未知的。CoSec 带有的运行时提示（hints）只有 `cosec-cocache` 为解码快照文档的 Jackson 模块注册的那些；它们并不完整（starter 的配置元数据和它通过反射读取的框架成员都没有提示），也从未被原生构建验证过。计划在之后的 8.x 版本中支持。这里描述的 JDK AOT 缓存是受支持的加快启动的方式。如果你仍然尝试，预期它会失败关闭而不是不加检查地运行：[未知属性检查](./configuration.md#unknown-properties)从类路径读取 CoSec 的配置元数据，找不到时会把每个 `cosec.*` 键都当作未知键，并拒绝启动。
+
 ### 它改变了什么 {#what-it-changes}
 
 - **启动，以及启动后的最初几秒。** 到 `Started GatewayServerKt` 的时间减少约四分之一，见[启动实测](#measured-startup)。
