@@ -29,13 +29,10 @@ public final class me/ahoo/cosec/webflux/ReactiveSecurityContexts {
 	public static final field INSTANCE Lme/ahoo/cosec/webflux/ReactiveSecurityContexts;
 	public final fun getSecurityContext (Lreactor/util/context/ContextView;)Lme/ahoo/cosec/api/context/SecurityContext;
 	public final fun getSecurityContextOrEmpty (Lreactor/util/context/ContextView;)Lme/ahoo/cosec/api/context/SecurityContext;
-	public final fun setSecurityContext (Lreactor/util/context/Context;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/util/context/Context;
-	public final fun writeSecurityContext (Lreactor/core/publisher/Mono;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/core/publisher/Mono;
 }
 
 public final class me/ahoo/cosec/webflux/ServerWebExchanges {
 	public static final field INSTANCE Lme/ahoo/cosec/webflux/ServerWebExchanges;
 	public static final fun getSecurityContext (Lorg/springframework/web/server/ServerWebExchange;)Lme/ahoo/cosec/api/context/SecurityContext;
-	public static final fun setSecurityContext (Lorg/springframework/web/server/ServerWebExchange;Lme/ahoo/cosec/api/context/SecurityContext;)V
 }
 

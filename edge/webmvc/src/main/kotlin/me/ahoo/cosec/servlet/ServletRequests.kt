@@ -13,6 +13,7 @@
 package me.ahoo.cosec.servlet
 
 import jakarta.servlet.http.HttpServletRequest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 
 /**
@@ -21,6 +22,8 @@ import me.ahoo.cosec.api.context.SecurityContext
  * @author ahoo wang
  */
 object ServletRequests {
+    /** Only the adapter binds it (round 2 L5): applications read it with [getSecurityContext]. */
+    @InternalCoSecApi
     fun HttpServletRequest.setSecurityContext(securityContext: SecurityContext) {
         setAttribute(SecurityContext.KEY, securityContext)
     }

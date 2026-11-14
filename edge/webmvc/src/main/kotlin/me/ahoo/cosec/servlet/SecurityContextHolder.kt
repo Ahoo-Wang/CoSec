@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.servlet
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 
 /**
@@ -30,10 +31,11 @@ object SecurityContextHolder {
     private val SECURITY_CONTEXT_THREAD_LOCAL: ThreadLocal<SecurityContext> = ThreadLocal()
 
     /**
-     * Sets the security context for the current thread.
+     * Sets the security context for the current thread. Only the adapter binds it (round 2 L5): applications read.
      *
      * @param context The security context to set
      */
+    @InternalCoSecApi
     @JvmStatic
     fun setContext(context: SecurityContext) {
         SECURITY_CONTEXT_THREAD_LOCAL.set(context)
@@ -59,8 +61,9 @@ object SecurityContextHolder {
         get() = requireNotNull(context) { "SecurityContext is null." }
 
     /**
-     * Removes the security context from the current thread.
+     * Removes the security context from the current thread. Only the adapter does, when the request completes.
      */
+    @InternalCoSecApi
     @JvmStatic
     fun remove() {
         SECURITY_CONTEXT_THREAD_LOCAL.remove()

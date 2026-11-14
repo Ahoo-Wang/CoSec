@@ -12,13 +12,10 @@ public final class me/ahoo/cosec/servlet/SecurityContextHolder {
 	public static final field INSTANCE Lme/ahoo/cosec/servlet/SecurityContextHolder;
 	public static final fun getContext ()Lme/ahoo/cosec/api/context/SecurityContext;
 	public static final fun getRequiredContext ()Lme/ahoo/cosec/api/context/SecurityContext;
-	public static final fun remove ()V
-	public static final fun setContext (Lme/ahoo/cosec/api/context/SecurityContext;)V
 }
 
 public final class me/ahoo/cosec/servlet/ServletRequests {
 	public static final field INSTANCE Lme/ahoo/cosec/servlet/ServletRequests;
 	public final fun getSecurityContext (Ljakarta/servlet/http/HttpServletRequest;)Lme/ahoo/cosec/api/context/SecurityContext;
-	public final fun setSecurityContext (Ljakarta/servlet/http/HttpServletRequest;Lme/ahoo/cosec/api/context/SecurityContext;)V
 }
 

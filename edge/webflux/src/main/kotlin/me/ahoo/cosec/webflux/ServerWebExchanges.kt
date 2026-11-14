@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import org.springframework.web.server.ServerWebExchange
 
@@ -21,6 +22,8 @@ import org.springframework.web.server.ServerWebExchange
  * @author ahoo wang
  */
 object ServerWebExchanges {
+    /** Only the adapter binds it (round 2 L5): applications read it with [getSecurityContext]. */
+    @InternalCoSecApi
     @JvmStatic
     fun ServerWebExchange.setSecurityContext(securityContext: SecurityContext) {
         attributes[SecurityContext.KEY] = securityContext
