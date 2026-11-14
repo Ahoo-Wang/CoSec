@@ -181,7 +181,20 @@ class PolicyTestKitTest {
         }
     }
 
-    private fun scenario(expect: String, action: String = "order:read") = ScenarioJson.parse(
+    private fun scenario(expect: String, action: String = "order:read") =
         """{"credential": {"tenant": "acme", "roles": ["reader"]}, "request": {"action": "$action"}, "expect": $expect}"""
-    )
+
+    /** Round 2 L2: an expect that names no decision would pass whatever the documents decide. */
+    @Test
+    fun `an expect without a decision is a format error`() {
+        assertThrows<ScenarioFormatException> { kit.check("expects nothing", scenario("{}")) }
+            .message.assert().contains("expect names no decision")
+        assertThrows<ScenarioFormatException> { kit.check("by alone", scenario("""{"by": null}""")) }
+    }
+
+    @Test
+    fun `an outcome describes itself as expect writes it`() {
+        kit.evaluate(scenario("""{"decision": "Permit"}""", action = "order:delete")).describe().assert()
+            .startsWith("""{"decision":"Deny"""")
+    }
 }
