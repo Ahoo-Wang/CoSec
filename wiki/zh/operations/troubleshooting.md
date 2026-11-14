@@ -337,6 +337,24 @@ cosec.gateway.unprotected-endpoints lists [gateway], which it never accepts: tha
 
 第二条消息：`gateway` 会修改路由，所以那里从不接受它；把它放在管理端口上，或者完全不暴露（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）。
 
+### 客户端地址导致启动失败 {#startup-fails-on-the-client-address}
+
+```text
+server.forward-headers-strategy=framework: Spring's ForwardedHeaderFilter and ForwardedHeaderTransformer make the leftmost X-Forwarded-For entry, which the client writes, the remote address ... (https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address).
+cosec.authorization.remote-ip.max-trusted-index is set, but Tomcat's RemoteIpValve resolves the client address on this host ...
+cosec.authorization.remote-ip.max-trusted-index=0 reads the connection's peer, but with the native forward-headers strategy ... the peer cannot be read. ...
+The native forward-headers strategy is on (configured or inferred from the cloud platform), but CoSec cannot tell how this host's server resolves the client address ...
+```
+
+CoSec 只读取一次客户端地址，且只从它信任的一方读取（`PIP-16`）；无法判断该信任哪一方时，拒绝启动。即使你没有设置，native 策略也可能已开启：Spring Boot 在 Kubernetes 以及它识别出的其他云平台上会自行开启。按消息处理：
+
+- `framework`，或会改写请求的 `ForwardedHeaderFilter`、`ForwardedHeaderTransformer` bean：改用 `server.forward-headers-strategy=native` 并在服务器上配置代理，或者用 `none` 并设置 `cosec.authorization.remote-ip.max-trusted-index`。只删除这些请求头的过滤器（`removeOnly`）是可以的。
+- Tomcat 上的 `native`：删除 `max-trusted-index`；Tomcat 信任哪些代理由 `server.tomcat.remoteip.internal-proxies` 和 `trusted-proxies` 决定。或者设置 `server.forward-headers-strategy=none`，让 CoSec 自己读取 `X-Forwarded-For`。
+- Reactor Netty 或 Jetty 上的 `native` 且 `max-trusted-index: 0`：把该索引设为宿主前面的代理数量；客户端直接访问的宿主则设置 `server.forward-headers-strategy=none`。
+- CoSec 无法判断的服务器，例如部署在外部容器中的 war：设置 `server.forward-headers-strategy=none` 和该索引。
+
+对照表见[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)。
+
 ### 驱逐检查导致启动失败 {#startup-fails-on-the-eviction-check}
 
 ```text

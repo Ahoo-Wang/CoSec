@@ -193,7 +193,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 | 空间 | `CoSec-Space-Id`，仅当主体在该空间有角色时接受 | 客户端，限凭证中的空间 |
 | 设备 | `CoSec-Device-Id` | 客户端 |
 | 方法、路径、查询 | HTTP 请求；路由映射把方法和路径变成动作和资源 | 客户端，限于你的路由映射 |
-| 客户端 IP | 连接地址，或 `X-Forwarded-For` 中不超过 `cosec.authorization.remote-ip.max-trusted-index` 跳的条目 | 客户端，限于你信任的代理之外 |
+| 客户端 IP | 连接地址、`X-Forwarded-For` 中不超过 `cosec.authorization.remote-ip.max-trusted-index` 跳的条目，或 Tomcat 的 `RemoteIpValve` 解析出的地址；只读取一次（`PIP-16`） | 客户端，限于你信任的代理之外 |
 | 请求头、`Origin`、`Referer`（`http.*`） | HTTP 请求 | 客户端 |
 | 请求属性（`request.attributes.*`） | 适配器，例如网关的路由 id | 你 |
 | 外部属性（`ext.*`） | 你的 `AttributeProvider` Bean | 你 |
@@ -215,7 +215,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 **路由映射决定哪些语句适用。**一个请求只有一个动作。匹配了服务[路由映射](../integration/web.md#route-maps)中某条路由的请求，是该路由在类型化资源上的 `service:verb`；其他请求是 `http:path:<path>` 上的 `http:<METHOD>`。`http:` 上的语句永远不匹配已映射的请求，`service:verb` 上的语句永远不匹配未映射的请求，[限流规则](../policies/rate-limiting.md#rules)的匹配方式也一样。所以映射是决策的一个输入，由拥有该服务的团队掌管：加一条路由，就把它的请求移出了 `http` 命名空间，也就移出了任何写在 `http:` 上的平台 DENY 或限流的作用范围。不论路径是否被映射都必须生效的限制，要写两次，一次针对 `http` 形式，一次针对动作（[按业务动作授权](../scenarios/route-maps.md)）。目前没有针对请求路径的条件，无法一次写完。
 
-**客户端 IP。** `max-trusted-index` 是应用前面的代理数量；默认值 `1` 假定有一个代理。CoSec 从 `X-Forwarded-For` 右侧数起取该位置的条目，也就是你的代理追加的那一条。在客户端可直接访问的宿主上，请设置为 `0`，否则客户端可以在该请求头里写入任意地址（[代理之后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
+**客户端 IP。** CoSec 只读取一次客户端地址，且只从它信任的一方读取（`PIP-16`）。没有转发头策略时，`max-trusted-index` 是应用前面的代理数量（默认 `1`），CoSec 从 `X-Forwarded-For` 右侧数起取该位置的条目，也就是你的代理追加的那一条；在客户端可直接访问的宿主上，请设置为 `0`，否则客户端可以在该请求头里写入任意地址。Spring Boot 在它识别出的云平台上会自行开启 `native`：此时 Tomcat 的 `RemoteIpValve` 已经解析出地址，CoSec 直接采用；在 Reactor Netty 或 Jetty 上，CoSec 读取该请求头，绝不使用服务器转发来的地址。在 `framework` 下，Spring 的过滤器取的是客户端自己写的条目，所以启动失败（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 
 **请求头是客户端输入。** 条件可以读取请求头（`http.header.<name>`）、`Origin` 和 `Referer`（`http.origin`、`http.referer` 及其主机）：它们全部由客户端写入。针对请求头的 DENY 只是客户端可以省略的提示，针对请求头的 ALLOW 则是客户端可以冒领的授权。以不同的值发送多次的请求头没有单一的值：请求所依据的文档读取它时，请求在求值之前即为 `400`，无论语句的效果是什么，因此这个回答既不暴露 DENY，也不暴露它读取哪个请求头（[请求头](../policies/language.md#headers)、`PIP-12`）。请求属性（`request.attributes.<name>`，例如网关的路由 id）由宿主设置，而不是客户端。
 
@@ -286,7 +286,7 @@ CoSec 决定请求能否到达你的处理器。它不会：
 上线之前：
 
 - 从密钥存储中读取 `cosec.jwt.secret`，并让访问令牌保持较短的有效期。
-- 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`，客户端可直接访问的宿主设为 `0`。
+- 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`，客户端可直接访问的宿主设为 `0`；使用 `native` 转发头策略时，改为在服务器上配置代理链（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 - 在每个只服务一个应用的服务上设置 `cosec.authorization.scope.app-id`，在面向多个应用的网关的每条路由上设置 `cosec-app-id`。
 - 在网关上，只给指向你自己服务、又不是 `lb://` 的路由标上 `cosec-identity: true`，并把 actuator 放在管理端口上。
 - 把 Redis 的写权限当成对每一个决策的权限：能写 CoSec 的 key 的人，就能改写每个请求据以决策的文档，也能撤销或恢复令牌。

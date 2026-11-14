@@ -1,0 +1,17 @@
+# Rule: PIP-16
+# Mutant: on Tomcat under native, CoSec reads X-Forwarded-For again after the RemoteIpValve resolved it, one hop further left
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.realserver.RealServerClientIpTest --tests me.ahoo.cosec.spring.boot.starter.pipeline.ClientIpReadingsTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/ClientIp.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/ClientIp.kt
+index 9c7937f2..5bc54f7d 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/ClientIp.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/ClientIp.kt
+@@ -119,7 +119,7 @@ internal object ClientIpReadings {
+                         "($TROUBLESHOOTING).",
+                 )
+             }
+-            ClientIpReading(0, true, "the address Tomcat's RemoteIpValve resolved (server.tomcat.remoteip.*)")
++            ClientIpReading(maxTrustedIndex, true, "the address Tomcat's RemoteIpValve resolved (server.tomcat.remoteip.*)")
+         }
+         // Reactor Netty and Jetty make the leftmost X-Forwarded-For entry, or a client's Forwarded header, the remote
+         // address and keep the header: CoSec reads the header and never that address.

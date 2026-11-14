@@ -13,6 +13,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
 
+- **客户端地址只读取一次**（`PIP-16`）。服务器自己解析转发头时（`server.forward-headers-strategy=native`，Spring Boot 在 Kubernetes 以及它识别出的其他云平台上也会自行开启），CoSec 不再第二次读取 `X-Forwarded-For`：在 Tomcat 上采用 `RemoteIpValve` 解析出的地址，在 Reactor Netty 和 Jetty 上读取该请求头而绝不使用服务器转发来的地址。此前在 Tomcat 上，两次读取叠加会取到客户端写的条目。现在以下情形启动失败：`framework`；`native` 下的 Tomcat 显式设置了 `cosec.authorization.remote-ip.max-trusted-index`；`native` 下的 Reactor Netty 或 Jetty 设置了 `max-trusted-index: 0`；CoSec 无法判断的服务器上的 `native`。迁移方法：按消息修改（[故障排查](./troubleshooting.md#startup-fails-on-the-client-address)）。`XForwardedRemoteIpResolver` 现在是内部 API。
 - **凭证的租户必须是租户 id**（`IDN-11`）。`tenantId` 为空白、`*`、含 `:` 或控制字符、或超过 128 个字符的令牌现在是 `401 token-invalid`（此前为 `503`，空白时为 `500`），`JwtTokenConverter` 也不签发；租户如此的 `ApiKey` 无法构造，所以已存储的会查找失败（`503`），配置的会启动失败。
 - **`cosec-spi` 的 `SnapshotVersion` 已删除**：它表示 7.x 的两份文档。决策事件的 `snapshotVersion` 仍是 `ViewVersion`（`platform`、`app`、`tenant`）。
 - **限流窗口至多一年**（`windowSeconds` 至多 `31536000`），`permitsPerSecond × windowSeconds` 至多 2⁶³：更大的窗口或配额会使限流器的算术溢出，规则匹配的每个请求都会失败或计错。这样的文档不再能解码；`RateLimit` 拒绝同样的取值。

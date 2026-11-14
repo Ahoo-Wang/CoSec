@@ -16,6 +16,15 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **The client address is read once** (`PIP-16`). Where the server resolves forwarded headers itself
+  (`server.forward-headers-strategy=native`, which Spring Boot also turns on by itself on Kubernetes and the other
+  cloud platforms it detects), CoSec no longer reads `X-Forwarded-For` a second time: on Tomcat it takes the address the
+  `RemoteIpValve` resolved, and on Reactor Netty and Jetty it reads the header and never the address the server
+  forwarded. Before, on Tomcat, the two readings together took an entry the client wrote. Startup now fails under
+  `framework`, with an explicit `cosec.authorization.remote-ip.max-trusted-index` on Tomcat under `native`, with
+  `max-trusted-index: 0` on Reactor Netty or Jetty under `native`, and under `native` on a server CoSec cannot tell.
+  Migration: the message names what to change ([Troubleshooting](./troubleshooting.md#startup-fails-on-the-client-address)).
+  `XForwardedRemoteIpResolver` is now internal API.
 - **A credential's tenant must be a tenant id** (`IDN-11`). A token whose `tenantId` is blank, `*`, holds a `:` or a
   control character, or is longer than 128 characters is now `401 token-invalid` (it was `503`, or `500` for a blank
   one), and `JwtTokenConverter` does not issue it; an `ApiKey` with such a tenant cannot be built, so a stored one fails
