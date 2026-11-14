@@ -45,6 +45,7 @@ const TERMS = [
   { term: 'me.ahoo.cosec.cache', hint: 'renamed in 8.0: `me.ahoo.cosec.cocache` (`cosec-cocache`)' },
   { term: 'me.ahoo.cosec.servlet', hint: 'renamed in 8.0: `me.ahoo.cosec.webmvc` (`cosec-webmvc`)' },
   { term: 'me.ahoo.cosec.spring.boot.starter', hint: 'renamed in 8.0: `me.ahoo.cosec.spring.boot` (`cosec-spring-boot`)' },
+  { term: 'cosec-migrate cocache8', hint: 'removed at GA: an 8.0.0-alpha deployment moves its CoCache 6 data with the 8.0.0-alpha.4 tool (operations/upgrading.md)' },
   { term: 'UuidGenerator', hint: 'CoSec takes its ids from `IdGenerator` (architecture/extending.md#ids)' },
 ]
 
@@ -68,6 +69,11 @@ const ALLOWED = [
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
     terms: ['me.ahoo.cosec.cache', 'me.ahoo.cosec.servlet', 'me.ahoo.cosec.spring.boot.starter'],
     reason: 'the upgrade entry that renames the three packages names the old ones',
+  },
+  {
+    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    terms: ['cosec-migrate cocache8'],
+    reason: 'the alpha.2 section says how to move CoCache 6 data with the 8.0.0-alpha.4 tool, and the entry that removes the command names it',
   },
   {
     files: ['wiki/guide/roadmap.md', 'wiki/zh/guide/roadmap.md'],

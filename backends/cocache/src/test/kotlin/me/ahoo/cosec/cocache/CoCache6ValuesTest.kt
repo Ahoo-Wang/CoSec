@@ -40,7 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * What CoSec reads where a deployment of CoSec 8.0.0-alpha.2 (on CoCache 6) left a value: CoCache 6's format 1, which
  * CoCache 8 does not read. Every family read through CoCache must fail closed on it, never read it as absent, until
- * `cosec-migrate cocache8` rewrites it: above all the revocation tables, whose `unknown-read: absent` would otherwise
+ * the `cosec-migrate` of 8.0.0-alpha.4 moves it (`cocache8`, removed at GA): above all the revocation tables, whose `unknown-read: absent` would otherwise
  * accept a revoked token again. Memberships, a cache of what the loader says, are the exception: they load again.
  * Real Redis, values written byte for byte as CoCache 6 stores them.
  */

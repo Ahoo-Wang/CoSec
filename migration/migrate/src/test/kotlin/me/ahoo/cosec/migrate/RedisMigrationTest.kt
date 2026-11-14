@@ -361,6 +361,119 @@ class RedisMigrationTest {
         }
     }
 
+    /**
+     * 8.0.0-alpha's CoCache 6 to 8 upgrade (`cosec-migrate cocache8`, removed at GA) wrote `<prefix>:meta:cocache8`
+     * after it exported the documents and before it deleted them. One left is a run that stopped half-way: `publish`
+     * refuses, writing nothing, and says how to finish it, rather than publish over the documents it deleted.
+     */
+    @Test
+    fun `publish refuses while an interrupted alpha upgrade's marker is there`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+        val marker = "$keyPrefix:meta:cocache8".encodeToByteArray()
+        // The export as the marker says it, with an escape sequence a marker should not be able to send to a terminal.
+        redis.sync().set(marker, """{"out":"/srv/cocache8\u001b[2J","documents":["platform"]}""".encodeToByteArray())
+        val publish = arrayOf("publish", "--to-redis", REDIS, "--key-prefix", keyPrefix, "--in", out.toString())
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val store = me.ahoo.cosec.cocache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
+
+        val (refused, output) = run(*publish)
+
+        refused.assert().isEqualTo(MigrateMain.FAILED)
+        output.assert().contains(
+            "$keyPrefix:meta:cocache8"
+        ).contains("/srv/cocache8\\u001B[2J").contains("8.0.0-alpha.4")
+            .contains("Nothing was written.").doesNotContain("\u001b")
+        runBlocking { store.head(SnapshotKey.Platform) }.assert().isNull()
+
+        redis.sync().del(marker)
+        run(*publish).first.assert().isEqualTo(MigrateMain.OK)
+        runBlocking { store.head(SnapshotKey.Platform) }.assert().isNotNull()
+    }
+
+    /**
+     * The documented Job takes `--to-redis` from a Secret as `redis://:<password>@redis:6379` (#1333): what a failed
+     * publish prints, its resume command included, leaves the credentials out (review of #1351).
+     */
+    @Test
+    fun `a failed publish prints no credentials of the Redis it was given`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val store = me.ahoo.cosec.cocache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
+        // A first run that stopped after the platform document, so that a publish without --resume fails.
+        DocumentPublisher(store).publish(
+            mapOf(SnapshotKey.Platform to ConvertedDirectory.read(out).getValue(SnapshotKey.Platform))
+        )
+        // The test Redis's default user has no password, so it accepts any: the URI connects, and the publish fails.
+        val withPassword = REDIS.replace("redis://", "redis://default:s3cret-of-the-job@")
+
+        val (failed, output) = run(
+            "publish",
+            "--to-redis",
+            withPassword,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString()
+        )
+
+        failed.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().doesNotContain("s3cret-of-the-job").contains("credentials of --to-redis left out")
+            .contains("--to-redis $REDIS ").contains("--resume")
+    }
+
+    /** A marker that is not what the upgrade wrote is refused all the same: it still marks a run that stopped. */
+    @Test
+    fun `publish refuses an unreadable marker too`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+        redis.sync().set("$keyPrefix:meta:cocache8".encodeToByteArray(), "not json".encodeToByteArray())
+
+        val (refused, output) = run("publish", "--to-redis", REDIS, "--key-prefix", keyPrefix, "--in", out.toString())
+
+        refused.assert().isEqualTo(MigrateMain.FAILED)
+        output.assert().contains(
+            "$keyPrefix:meta:cocache8"
+        ).doesNotContain("(its export:").contains("Nothing was written.")
+    }
+
+    /**
+     * `--cluster` against a Redis that is not a cluster fails before anything is written, and the error Lettuce gives,
+     * which names the seed nodes, holds no credentials of them.
+     */
+    @Test
+    fun `publish with cluster seed nodes that are no cluster fails and prints no credentials`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+        val seeds = REDIS.replace("redis://", "redis://default:s3cret-of-the-seeds@")
+
+        val (failed, output) = run(
+            "publish",
+            "--to-redis",
+            seeds,
+            "--cluster",
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString()
+        )
+
+        failed.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().doesNotContain("s3cret-of-the-seeds")
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val store = me.ahoo.cosec.cocache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
+        runBlocking { store.head(SnapshotKey.Platform) }.assert().isNull()
+    }
+
     @Test
     fun `resume refuses a document in Redis that is not the converted one`() {
         write7x()
