@@ -23,6 +23,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.document.route.RouteMapCodec
@@ -64,7 +65,6 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.StoredCandidate

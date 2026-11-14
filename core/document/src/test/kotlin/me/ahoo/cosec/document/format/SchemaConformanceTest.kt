@@ -21,9 +21,9 @@ import com.networknt.schema.SchemaRegistry
 import com.networknt.schema.SpecificationVersion
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode
