@@ -105,6 +105,12 @@ class CompiledPolicy(
      * part ([CompiledStatement.sameContent]). A tenant policy and a platform policy of the same id resolve only then
      * (RFC 0007 N2, Q15); otherwise the id is ambiguous. Never a joined text: patterns may hold any separator, so two
      * different policies could join into the same one (`BND-7`, round 2 review L1).
+     *
+     * It compares what was written: conditions by their canonical text, which names an external attribute without its
+     * declared type and a zone by its id. Two copies mean the same only when both were compiled against the same platform
+     * inputs (attribute declarations, limits, zones), as the documents of a view of one platform revision are. The
+     * engine therefore evaluates the platform's copy whenever the two compare equal ([CandidateOrder]): this comparison
+     * decides whether the id resolves, never which rules apply.
      */
     fun sameContent(other: CompiledPolicy): Boolean {
         if (this === other) {

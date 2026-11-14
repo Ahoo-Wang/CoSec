@@ -19,10 +19,16 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.Literal
+import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
+import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -92,5 +98,43 @@ class SameContentTest {
         ).assert().isFalse()
         policy(http("/a"), condition = Condition.Eq("scope.app", Literal.Str("x")))
             .sameContent(policy(http("/a"), condition = Condition.Eq("scope.app", Literal.Str("x")))).assert().isTrue()
+    }
+
+    /**
+     * Same content is a comparison of what was written, so two copies compiled against different platform inputs can
+     * pass for the same and still decide differently: here `ext.p.flag` is a Bool for the platform's copy and a String
+     * for the tenant's, which an older platform revision declared. The engine evaluates the platform's copy, so the
+     * comparison only decides whether the id resolves, never which rules apply.
+     */
+    @Test
+    fun `when both layers define the same content, the platform's copy decides`() {
+        val path = "ext.p.flag"
+        fun copy(type: AttributeType) = PolicyCompiler(
+            ConditionChecker(catalog = AttributeCatalog.of(listOf(Attribute.external(path, type))))
+        ).compile(
+            PolicyId("p"),
+            null,
+            listOf(StatementSource("s", Effect.DENY, listOf("*"), condition = Condition.Exists(path))),
+            attachable = true,
+        )
+        val shared = copy(AttributeType.BOOL)
+        val own = copy(AttributeType.STRING)
+        own.sameContent(shared).assert().isTrue()
+        val allow = compiler.compile(PolicyId("allow"), null, listOf(StatementSource("a", Effect.ALLOW, listOf("*"))))
+        val platform = CompiledDocument.platform(listOf(shared, allow), listOf(anyone("b", "allow")))
+        val external = ExternalValues(mapOf(path to true), setOf(path))
+        fun decide(tenant: CompiledDocument, attachments: List<String>): Decision {
+            val base = flatRequest(attachments = attachments)
+            val request = FlatRequest(base.request, base.scope, base.memberships, base.time, base.attributes, external)
+            val view = SnapshotView(platform, null, tenant)
+            return TraceLevel.entries.map { CoSecFlatEngine.evaluate(request, view, it).decision }.distinct().single()
+        }
+        val attached = decide(tenant(own), listOf("p"))
+        (attached as Decision.Deny).by.assert().isEqualTo(
+            ref("p", 0, BindingRef.Attached(PolicyId("p"))).copy(name = "s")
+        )
+        val bound = decide(tenant(own, bindings = listOf(anyone("t", "p"))), emptyList())
+        (bound as Decision.Deny).by.assert()
+            .isEqualTo(ref("p", 0, bound("t", DocumentKind.TENANT)).copy(name = "s"))
     }
 }

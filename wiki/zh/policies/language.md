@@ -91,7 +91,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 
 - `perm:<appId>/<permission>` 是应用的权限策略。只有该应用的文档能定义它，且它不能被附加（[角色权限](./role-permissions.md)）。
 - `cosec:blacklist`、`cosec:root`、`cosec:platform-admin`、`cosec:tenant-admin` 和 `cosec:tenant-viewer` 是内置策略，任何文档都不能定义它们。控制面还会拒绝以 `cosec:`、`g:` 或 `r:` 开头的新 id，这些前缀保留给内置策略和 `cosec-migrate`。
-- 租户策略不能复用平台策略的 id。控制面会拒绝；在数据面，绑定或附加策略指向这样的 id 时，除非有 DENY 匹配或两个策略内容相同，请求为 Indeterminate（`503`）。
+- 租户策略不能复用平台策略的 id。控制面会拒绝；在数据面，绑定或附加策略指向这样的 id 时，除非有 DENY 匹配或两个策略内容相同，请求为 Indeterminate（`503`）；内容相同时求值的是平台的那条策略。
 
 ## 语句 {#statements}
 

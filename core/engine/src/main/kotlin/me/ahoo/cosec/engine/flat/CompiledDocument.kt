@@ -157,9 +157,9 @@ class CompiledDocument private constructor(
 
     /**
      * A slot for each policy id several of [bindings] name, in binding order; none for an id bound once. Two bindings of
-     * one document that name an id and both resolve resolve to the same policy: the document's own, else the
-     * platform's, else that of the one app both are scoped to ([CandidateOrder]), since one scoped to any app finds
-     * only the platform's.
+     * one document that name an id and both resolve resolve to the same policy: the platform's (a tenant's own copy of
+     * it resolves to the platform's too), else the document's own, else that of the one app both are scoped to
+     * ([CandidateOrder]), since one scoped to any app finds only the platform's.
      */
     private fun repeatSlots(bindings: List<Binding>): Map<String, Int> {
         if (bindings.size < 2) {

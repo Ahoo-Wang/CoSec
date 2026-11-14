@@ -108,7 +108,7 @@ Policy ids:
   `g:` or `r:`, which are reserved for built-in policies and `cosec-migrate`.
 - A tenant policy must not reuse the id of a platform policy. The control plane refuses it. On the data plane, a
   binding or attachment that names such an id makes the request Indeterminate (`503`) unless a DENY matches or both
-  policies have the same content.
+  policies have the same content; then the platform's policy is the one evaluated.
 
 ## Statements
 

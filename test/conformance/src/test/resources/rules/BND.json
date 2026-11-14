@@ -60,12 +60,13 @@
     {
       "id": "BND-7",
       "source": "RFC 0004 §4.4 (#1029 review)",
-      "statement": "When an attached or bound policy id names both a policy of the principal's tenant document and a platform policy with different content, the request is Indeterminate(AmbiguousPolicy), unless a DENY matches; neither policy silently wins. The same content resolves (RFC 0007 N2). Content is compared part by part (attachability, policy condition, and each statement's name, effect, action patterns, resource patterns with their options, condition and onMissing), never as a joined text two different policies could share.",
+      "statement": "When an attached or bound policy id names both a policy of the principal's tenant document and a platform policy with different content, the request is Indeterminate(AmbiguousPolicy), unless a DENY matches; neither policy silently wins. The same content resolves (RFC 0007 N2). Content is compared part by part (attachability, policy condition, and each statement's name, effect, action patterns, resource patterns with their options, condition and onMissing), never as a joined text two different policies could share. When the two compare equal, the platform's policy is the one evaluated, so the comparison decides whether the id resolves, never which rules apply.",
       "level": "engine",
       "guards": [
         "engine:SameContentTest#two policies whose parts join into the same text are not the same",
         "engine:SameContentTest#an attachment both layers define with joined-text twins is ambiguous",
-        "engine:SameContentTest#every part of a statement counts"
+        "engine:SameContentTest#every part of a statement counts",
+        "engine:SameContentTest#when both layers define the same content, the platform's copy decides"
       ],
       "pending": null
     },

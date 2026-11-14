@@ -192,7 +192,9 @@ class PatternCapturesTest {
         fun allow(id: String, vararg patterns: String) = compiler.compile(
             PolicyId(id),
             null,
-            listOf(StatementSource("a", Effect.ALLOW, listOf("*"), patterns.map { ResourceSource("http:path:$it") }, vIsA)),
+            listOf(
+                StatementSource("a", Effect.ALLOW, listOf("*"), patterns.map { ResourceSource("http:path:$it") }, vIsA)
+            ),
         )
         val several = allow("several", "/a/{v}", "/{v}/b")
         val one = allow("one", "/a/{v}")
