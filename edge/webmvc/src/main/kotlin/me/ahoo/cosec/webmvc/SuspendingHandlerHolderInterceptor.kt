@@ -45,6 +45,7 @@ class SuspendingHandlerHolderInterceptor : HandlerInterceptor {
         return true
     }
 
+    @InternalCoSecApi
     companion object {
         private const val CONTEXT_PROPAGATION = "io.micrometer.context.ContextRegistry"
         private val PROPAGATION_PRESENT =
