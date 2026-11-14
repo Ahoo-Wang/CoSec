@@ -222,8 +222,12 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   "provider"` and no roles or policies takes them from a `MembershipProvider` bean instead; a `JwtTokenConverter` bean
   of your own with `membershipClaimLimit` set issues such tokens when the claims would exceed that many bytes (the
   starter's converter never does). Register the provider before issuing them, or those requests are 503.
-- Logout: `TokenRevoker.revoke(accessToken)`. Emergency: `TokenRevoker.revokeSubject(tenant, principal)` revokes every
-  token of a principal issued until now (needs the Redis token store).
+- Sessions: issue tokens through `TokenCompositeAuthentication`, which starts a session (a token family); refresh with
+  `SimpleRefreshTokenAuthentication(verifier, tokenRevocation, tokenFamilies)`. Only the newest pair refreshes, an older
+  one presented again ends the session, and a session lasts `cosec.jwt.session.lifetime` (30 days).
+- Logout: `TokenRevoker.revoke(accessToken)` ends the session, or `revoke(compositeToken)` once the access token has
+  expired. Emergency: `TokenRevoker.revokeSubject(tenant, principal)` revokes every token of a principal issued until now
+  (needs the Redis token store).
 - API keys: `cosec.api-key.enabled=true`, keys in `cosec.api-key.keys[n]` (`id`, `hash` = SHA-256 hex of the key,
   `principal-id`, `tenant-id` (required), exactly one of `roles` and `uncapped: true`, `expires-at`, `enabled`; any
   other field fails startup) or `cosec.api-key.store=redis`. They arrive in `X-API-Key` (`cosec.pipeline.api-key-header`). A key grants nothing of

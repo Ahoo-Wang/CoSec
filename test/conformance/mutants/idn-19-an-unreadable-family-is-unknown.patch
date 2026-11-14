@@ -1,0 +1,17 @@
+# Rule: IDN-19
+# Mutant: a family record that cannot be read is taken as missing, so the store's failure becomes an ordinary refusal and nothing tells the outage apart
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+index d38f7bef..aec78f64 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+@@ -104,7 +104,7 @@ class TokenFamilies @JvmOverloads constructor(
+             throw TokenExpiredException("The session that began at ${session.authTime} has ended: sign in again.")
+         }
+         repeat(MAX_ATTEMPTS) {
+-            val read = store.read(session.id)
++            val read = runCatching { store.read(session.id) }.getOrNull()
+                 ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
+             val family = read.family
+             checkOwner(family, token, session)

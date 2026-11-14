@@ -91,10 +91,12 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 访问令牌的有效期已过。刷新它（[认证](../integration/authentication.md)），或检查时钟和
 [`cosec.jwt.token-validity.access`](./configuration.md#jwt)。在网关之后，转发来的身份也可能太旧（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
+刷新以 `token-expired` 被拒绝：会话的有效期已过（[`cosec.jwt.session.lifetime`](./configuration.md#jwt)，从登录起 30 天）。请重新登录。
+
 ### `token-revoked` {#token-revoked}
 
 令牌已被登出吊销，或者它所属主体在一次主体吊销之前签发的所有令牌都已被吊销（[认证](../integration/authentication.md)）。
-重新登录。在主体吊销之后 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒）以内签发的
+重新登录。刷新以 `token-revoked` 被拒绝，还说明它的会话已经结束：因为登出，或者因为在更新的一对签发之后又出示了该会话更早的一对（重放：某对令牌被复制，或某个客户端保留了旧的一对）。请检查是否有两个客户端共用一个会话的令牌。在主体吊销之后 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒）以内签发的
 令牌也会被吊销，所以紧接着吊销之后的登录可能需要等几秒。刷新令牌时应用同样的偏差。
 
 登出后令牌在另一个实例上仍然可用：本地会把"未吊销"的回答缓存 30 秒，这限定了失效消息丢失时一个实例错过吊销的最长
@@ -441,10 +443,11 @@ Remove or rename them: https://cosec.ahoo.me/operations/upgrading#removed-and-re
 ```text
 JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache or a TokenStore bean, or set cosec.jwt.enabled=false.
 Tokens are verified, but no revocation reader is available: add cosec-cocache or a RevocationReader bean, or set cosec.jwt.enabled=false.
+JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add cosec-cocache or a TokenFamilyStore bean, or set cosec.jwt.enabled=false.
 ```
 
-启用 JWT 时令牌吊销始终开启，starter 绝不会把吊销写进空处。添加 `cosec-cocache`，注册你自己的 `TokenStore` 和
-`RevocationReader` bean，或者在既不签发也不校验令牌的服务中关闭 JWT。
+启用 JWT 时令牌吊销始终开启，starter 绝不会把吊销写进空处。添加 `cosec-cocache`，注册你自己的 `TokenStore`、
+`RevocationReader` 和 `TokenFamilyStore` bean，或者在既不签发也不校验令牌的服务中关闭 JWT。
 
 ### JWT 密钥错误导致启动失败 {#startup-fails-with-a-jwt-secret-error}
 
