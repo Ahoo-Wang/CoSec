@@ -17,6 +17,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
@@ -50,7 +51,7 @@ class MutationCheckTest {
         val root = Path(requireNotNull(System.getProperty("cosec.repository.root")) { "cosec.repository.root" })
         val stranded = Mutant.all(Path("mutants")).filter { mutant ->
             val check = ProcessBuilder(
-                "git",
+                GIT,
                 "apply",
                 "--check",
                 "--whitespace=nowarn",
@@ -84,3 +85,12 @@ class MutationCheckTest {
 }
 
 private const val APPLY_TIMEOUT_SECONDS = 60L
+
+/** `git` by its absolute path on the `PATH`, so the test runs the binary it found, not whatever a relative name finds. */
+private val GIT: String by lazy {
+    System.getenv("PATH").orEmpty().split(File.pathSeparator)
+        .map { Path(it, "git") }
+        .firstOrNull { Files.isExecutable(it) }
+        ?.toAbsolutePath()?.toString()
+        ?: error("git is not on the PATH")
+}
