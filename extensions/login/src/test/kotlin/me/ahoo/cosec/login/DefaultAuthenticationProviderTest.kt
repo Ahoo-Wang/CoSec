@@ -55,6 +55,32 @@ internal class DefaultAuthenticationProviderTest {
             .assert().isNull()
     }
 
+    /** Round-2 review L3: credentials two registered authentications support are refused, never sent to either. */
+    @Test
+    fun `credentials more than one authentication supports are refused`() {
+        val refresh = SimpleRefreshTokenAuthentication(mockk())
+        val social = object : Authentication<OtherCredentials> {
+            override val supportCredentials: Class<OtherCredentials> = OtherCredentials::class.java
+
+            override suspend fun authenticate(credentials: OtherCredentials) = throw UnsupportedOperationException()
+        }
+        authenticationProvider.register(refresh)
+        authenticationProvider.register(social)
+
+        assertThrows(IllegalStateException::class.java) {
+            authenticationProvider.get<Credentials, Authentication<Credentials>>(BothCredentials::class.java)
+        }
+        // Registered for the type itself, it is chosen.
+        authenticationProvider.register(BothCredentials::class.java, refresh as Authentication<BothCredentials>)
+        authenticationProvider.get<Credentials, Authentication<Credentials>>(BothCredentials::class.java)
+            .assert().isSameAs(refresh)
+    }
+
+    interface OtherCredentials : Credentials
+
+    class BothCredentials(override val accessToken: String, override val refreshToken: String) :
+        RefreshTokenCredentials, OtherCredentials
+
     data class MockRefreshTokenCredentials(override val accessToken: String, override val refreshToken: String) :
         RefreshTokenCredentials
 }
