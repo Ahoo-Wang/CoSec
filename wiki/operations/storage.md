@@ -49,15 +49,19 @@ them ([Precedence](./configuration.md#precedence)):
 key encoding, codec, data source, key filter and per-entry lifetime ([Precedence](./configuration.md#precedence)).
 Unreadable revocations fail the read, and memberships always expire, without jitter, and fail closed on a failed read.
 The shadow caches keep their declared lifetimes, and the revocation tables read for the store's whole command timeout
-(`cocache.redis.command-timeout`): a read that times out reads "not revoked", so no `read-timeout` may shorten it.
+(`cocache.redis.command-timeout`): a read that times out is unavailable, which the pipeline's verification accepts, so
+no `read-timeout` may shorten it.
 The rest of the cache policy stays the application's, through customizers and `cocache.*` properties
 ([Precedence](./configuration.md#precedence) lists every field CoSec locks): on every cache the local cache's size and
 `expireAfterAccess`, and but for the snapshot store `local-max-age`; on every cache but the revocation tables
-`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl` and
-`unknown-read`; on memberships `ttl` (never forever), `absent-ttl`, `lease-*`, `load-*` and `invalidate-failure`. None
-of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer `local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
+`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl`; on
+memberships `ttl` (never forever), `absent-ttl`, `degraded-local-max-age`, `lease-*`, `load-*` and `invalidate-failure`.
+None of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer
+`local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
 when the revocation's invalidation message is lost (`cosec.authentication.revocation.cache.local-max-age`, 30 seconds, is the
-default bound), and a longer membership `ttl` keeps a removed role applied that long.
+default bound). On memberships, a longer `ttl` keeps a removed role applied that long; so does a longer `local-max-age`
+on an instance that missed the invalidation, and a longer `degraded-local-max-age` for memberships an instance loaded
+while Redis could not store them, which only it holds and no invalidation reaches.
 
 ### Redis keys
 
@@ -70,7 +74,7 @@ contain `:`, so a key names one document only.
 | `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces |
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest (`SHA-256:` and 64 hex digits, as CoCache computes it) |
 | `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document, and the records reclamation took out of it and has not yet seen deleted |
-| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`, each with the revision of it that last indexed the reference: a revision removes only what it or an earlier one indexed (`CTL-25`); for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses |
+| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`, each with the revision of it that last indexed the reference: a revision removes only what it or an earlier one indexed (`CTL-25`); for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses, and removes what a publish indexed before a head write it lost |
 | `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done, only while it still holds it (`CTL-26`); a holder that takes its own lease again holds it for the full duration from then on |
 | `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane, `cosec-migrate` | the documents that have revisions, and the change requests that may still be open, so the maintenance passes and `repair-references` can visit each |
 | `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
@@ -85,8 +89,9 @@ contain `:`, so a key names one document only.
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
-| `<s>:rate-limiter:{<ruleId>:<bucket>}:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows. `{...}` is a hash tag: a bucket's two windows share a Redis Cluster slot, so the script that reads both runs on a cluster |
-| `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress; expires after 3 minutes |
+| `<s>:rate-limiter:<ruleId>:<bucket>` | the Redis rate limiter | a hash of one rule's bucket: the window it counts in and that window's and the previous window's counts; expires two windows after its last count. One key per bucket value: a rule keyed on what a client chooses, with a long window, is memory the client controls ([Rate limiting](../policies/rate-limiting.md#counting-and-backends)) |
+| `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress, as JustAuth keeps it; expires after 3 minutes |
+| `<s>:oauth:binding:<state>` | social login | the SHA-256 of the binding of the browser the state was issued to; taken (`GETDEL`) by the callback, so a state is used once; expires after 3 minutes |
 
 - When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
   key, so an API key one issues is never accepted by the other, and their rate limit counters stay apart.
@@ -265,7 +270,7 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | A document that disappeared from Redis after it was seen | Failed until a document returns (`Snapshot document [<doc>] disappeared from the store; failing closed.` at `ERROR`). Requests that need it are **`503`**, unless a DENY matches first. |
 | A tenant listed in `fail-closed.tenants`, once its documents lag past `fail-closed.max-lag` | **`503`**, unless a DENY matches first ([How instances read documents](#how-instances-read-documents)). |
 | No platform document published | Every request is **`503`** ([The first documents](#the-first-documents)). |
-| Revoked tokens and principals | The check answers "not revoked" and the token is **accepted**, so an outage does not reject every authenticated request. Tokens are still signature-verified and expire on their own. A failed read is not cached: each check asks Redis again, and a revocation applies as soon as Redis answers. |
+| Revoked tokens and principals | Verifying a request's token, the pipeline **accepts** it, so an outage does not reject every authenticated request (**`503`** with `cosec.authentication.revocation.fail-closed`). Tokens are still signature-verified and expire on their own. A failed read is not cached: each check asks Redis again, and a revocation applies as soon as Redis answers. A **refresh fails** instead (`IDN-14`): a token issued then would escape every revocation. |
 | Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
 | API keys in Redis (`cosec.api-key.store=redis`) | **`503`**. |
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |
@@ -421,7 +426,7 @@ it, the shadow window and the change it came from. The control API reads them (`
 | `GET /documents/<doc>/revisions/<n>` | revision `<n>`; `410` when it is not kept |
 | `GET /documents/<doc>/diff?from=&to=` | what changed between two revisions |
 | `GET /documents/<doc>/revisions/<n>/propagation` | how many of the instances that reported a status in the last minute have installed revision `<n>` or later (needs instances with [shadow windows](./configuration.md#shadow-windows) on) |
-| `POST /documents/<doc>:rollback` with `{"revision": <n>, "note": "..."}` | a change (`201`) that makes the document what it was at revision `<n>` |
+| `POST /documents/<doc>:rollback` with `{"revision": <n>, "note": "..."}`, and `confirmations` when it brings back a `nomatch` DENY | a change (`201`) that makes the document what it was at revision `<n>` |
 
 A rollback is a change like any other: it is checked, shadowed and approved as its content requires, and publishing
 it makes a new revision, so the history only grows and records who rolled back. A rollback that would bring a

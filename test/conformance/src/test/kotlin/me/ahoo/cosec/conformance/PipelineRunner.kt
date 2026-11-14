@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.conformance
 
-import com.auth0.jwt.JWT
-import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
@@ -43,6 +41,7 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
@@ -67,6 +66,8 @@ import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.route.RouteMap
 import me.ahoo.cosec.runtime.route.RouteMapCodec
 import me.ahoo.cosec.runtime.route.RouteMapException
+import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
@@ -95,6 +96,7 @@ import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -167,7 +169,14 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       "apiKeys": [{ "key": "k", "id": "billing", "principalId": "svc", "tenantId": "acme", "roles": [...],
  *                                     "policies": [...], "enabled": true, "expiresAt": "..." }],
  * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] }
- *                       | { "fails": "message" },                       // the check reports an error
+ *                       | { "fails": "message" }                        // the check reports an error
+ *                       | { "unavailable": "message" },                 // the store cannot be read
+ * // Instead of a request: a refresh (SimpleRefreshTokenAuthentication over the real JwtTokenVerifier and the scenario's
+ * // revocations) of the pair signed from these claims, as "jwt" signs one ("iat": epoch seconds). The outcome is
+ * // { "status": 200, "proceed": true } when a token would be issued, 401 with the token-* type of the refusal, or
+ * // { "status": 503, "type": "unavailable" } when the revocations cannot be read.
+ * "refresh":            { "access": { "jti": "a1", "sub": "alice", "iat": 1790000000 },
+ *                         "refresh": { "jti": "r1", "sub": "a1", "iat": 1790000000, "claims": { "cosec.token": "refresh" } } },
  * "membershipProvider": { "roles": { "<space>": [...] }, "attachments": [...] } | { "fails": "message" } | { "hangs": true }
  *                       // knows the authentication's principal; or, by tenant and id, exactly these principals
  *                       // ("active": false deactivates one; any other is unknown, RFC 0009 §4.2)
@@ -176,6 +185,11 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       | { "failClosed": { "tenants": ["acme"], "maxLagSeconds": 300 }, "lagSeconds": 301 },
  *                       // the host's DocumentSnapshotViews over a SnapshotSource that loaded the documents
  *                       // lagSeconds before the request
+ *                       | { "platformChange": { "staged": {...} } | { "published": {...} } },
+ *                       // the same source, after that platform document was staged and compiled as the shadow
+ *                       // comparison compiles a candidate, or published, and the installed documents loaded again
+ * // A check of the permitted request (AuthorizationChecker): the outcome's "check" is the decision's kind
+ * "check":              { "action": "http:GET", "resource": "/orders/1" },
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
  *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000,
  *                         // the API key header, which the documents are compiled against too (CND-5)
@@ -205,8 +219,9 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway",
+            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check", "refresh",
         )
+        node.get("refresh")?.let { return ScenarioRefresh.refreshed(it, revocations(node.get("revocations"))) }
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
@@ -278,7 +293,19 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             val apiKeyHeader = node.get("options")?.get("apiKeyHeader")?.text() ?: DEFAULT_API_KEY_HEADER
             return throughGateway(pipeline, http, facts.host, it, apiKeyHeader)
         }
-        return answered(runBlocking { pipeline.evaluate(facts) }, node.has("identity"))
+        return runBlocking {
+            val outcome = pipeline.evaluate(facts)
+            answered(outcome, node.has("identity"), node.get("check")?.let { checked(pipeline, outcome, it) })
+        }
+    }
+
+    /** The kind of decision of `"check"`, for the request [outcome] permitted; null when it did not. */
+    private suspend fun checked(pipeline: Pipeline, outcome: PipelineOutcome, check: JsonNode): String? {
+        check.only("action", "resource")
+        val security = outcome.security ?: return null
+        val decision = AuthorizationChecker(pipeline)
+            .decide(security.securityContext, check.required("action").text(), check.required("resource").text())
+        return decision.javaClass.simpleName
     }
 
     /** The scenario's route map, loaded as a host loads it; none without one. */
@@ -440,12 +467,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
 
     /** The outcome; with [gateway], a gateway's pipeline that forwards identities, also what it forwards. */
-    private fun answered(outcome: PipelineOutcome, gateway: Boolean): Outcome =
+    private fun answered(outcome: PipelineOutcome, gateway: Boolean, check: String? = null): Outcome =
         Outcome.Answered(
             outcome.status,
             outcome.proceed,
             outcome.problem?.type?.slug,
             if (gateway) forwarded(outcome) else false to null,
+            check = check,
         )
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
@@ -530,7 +558,16 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     private fun revocations(node: JsonNode?): RevocationReader {
         if (node == null) return RevocationReader.NONE
-        node.only("tokens", "subjects", "fails")
+        node.only("tokens", "subjects", "fails", "unavailable")
+        node.get("unavailable")?.let { unavailable ->
+            return object : RevocationReader {
+                override suspend fun isRevoked(tokenId: String): Boolean =
+                    throw RevocationUnavailableException(unavailable.text())
+
+                override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
+                    throw RevocationUnavailableException(unavailable.text())
+            }
+        }
         node.get("fails")?.let { fails ->
             return object : RevocationReader {
                 override suspend fun isRevoked(tokenId: String): Boolean = throw IllegalStateException(fails.text())
@@ -597,48 +634,6 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
     }
 
-    /** A token signed from the scenario's claims. */
-    private class ScenarioJwt(node: JsonNode) {
-        val token: String
-
-        init {
-            node.only("jti", "sub", "tenantId", "aud", "claims")
-            val builder = JWT.create()
-                .withJWTId(node.get("jti")?.text() ?: "t1")
-                .withSubject(node.get("sub")?.text() ?: "alice")
-                .withExpiresAt(Instant.now().plusSeconds(3600))
-            node.get("tenantId")?.let { builder.withClaim(MembershipClaims.TENANT_KEY, it.text()) }
-            node.get("aud")?.let { aud ->
-                if (aud.isArray) {
-                    builder.withAudience(
-                        *aud.strings().toTypedArray()
-                    )
-                } else {
-                    builder.withAudience(aud.text())
-                }
-            }
-            node.get("claims")?.fields().orEmpty().forEach { (name, value) ->
-                @Suppress("UNCHECKED_CAST")
-                when (val claim = CoSecJson.mapper.treeToValue(value, Any::class.java)) {
-                    null -> builder.withNullClaim(name)
-                    is String -> builder.withClaim(name, claim)
-                    is Map<*, *> -> builder.withClaim(name, claim as Map<String, Any?>)
-                    is List<*> -> builder.withClaim(name, claim)
-                    is Int -> builder.withClaim(name, claim)
-                    else -> throw ScenarioFormatException(
-                        "Claim $name must be a string, an object, an array, an int or null."
-                    )
-                }
-            }
-            token = builder.sign(ALGORITHM)
-        }
-
-        companion object {
-            private val ALGORITHM: Algorithm = Algorithm.HMAC256("conformance-scenario-secret")
-            val VERIFIER = JwtTokenVerifier(ALGORITHM)
-        }
-    }
-
     private fun provider(authentication: JsonNode, node: JsonNode, reached: () -> Unit): MembershipProvider {
         node.only("roles", "attachments", "fails", "hangs", "principals")
         node.get("fails")?.let { fails ->
@@ -697,39 +692,75 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node: JsonNode?,
         attributes: AttributeProviders,
         reach: () -> Unit,
-    ): SnapshotViews = node?.takeIf { it.has("failClosed") }?.let { freshness(documents, it, attributes) }
-        ?: views(snapshot, documents, node, reach)
+    ): SnapshotViews = when {
+        node?.has("failClosed") == true -> freshness(documents, node, attributes)
+        node?.has("platformChange") == true -> platformChange(documents, node, attributes)
+        else -> views(snapshot, documents, node, reach)
+    }
+
+    /** [body] as a stored document of [revision]. */
+    private fun stored(body: JsonNode, revision: Long): SnapshotDocument {
+        val text = (body.deepCopy() as ObjectNode)
+            .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", revision).put("publishedAt", NOW)
+        return SnapshotDocument(
+            SnapshotDocument.DOCUMENT_SCHEMA,
+            revision,
+            Instant.parse(NOW),
+            text.toString().encodeToByteArray()
+        )
+    }
+
+    /** Puts the scenario's documents in [store]; the keys of the app and tenant ones. */
+    private fun install(store: InMemorySnapshotDocumentStore, documents: JsonNode): List<SnapshotKey> {
+        val keys = ArrayList<SnapshotKey>()
+        documents.get("platform")?.let { store.put(SnapshotKey.Platform, stored(it, 1)) }
+        for ((id, body) in documents.get("tenants")?.fields().orEmpty()) {
+            val key = SnapshotKey.Tenant(id)
+            keys += key
+            store.put(key, stored(body, 1))
+        }
+        for ((id, body) in documents.get("apps")?.fields().orEmpty()) {
+            val key = SnapshotKey.App(id)
+            keys += key
+            store.put(key, stored(body, 1))
+        }
+        return keys
+    }
+
+    /**
+     * `SNP-10`: the documents installed, then a change of the platform document, staged or published. Each installed
+     * document is loaded again afterwards, so that whatever the change set off has ended before the request.
+     */
+    private fun platformChange(documents: JsonNode, node: JsonNode, attributes: AttributeProviders): SnapshotViews {
+        node.only("platformChange")
+        val change = node.required("platformChange")
+        change.only("staged", "published")
+        val store = InMemorySnapshotDocumentStore()
+        val keys = install(store, documents)
+        val compiler = PlatformCompiler(attributes.catalog)
+        val options = SnapshotOptions(revalidateInterval = SnapshotOptions().lagWarn.minusSeconds(1))
+        val source = DocumentSnapshots.source(store, compiler, options).also(compiler::bind)
+        source.load().join()
+        source.loadAll(keys).join()
+        change.get("staged")?.let { body ->
+            val staged = StoredCandidate("window", 1, stored(body, 2))
+            val candidates = CachingCandidateSource({ staged }, compiler::compileCandidate)
+            runBlocking { candidates.candidate(SnapshotKey.Platform) }
+        }
+        change.get("published")?.let { body ->
+            store.put(SnapshotKey.Platform, stored(body, 2))
+            source.reload(SnapshotKey.Platform).join()
+        }
+        keys.forEach { source.reload(it).join() }
+        return DocumentSnapshotViews(source, platformRequired = true)
+    }
 
     private fun freshness(documents: JsonNode, node: JsonNode, attributes: AttributeProviders): SnapshotViews {
         node.only("failClosed", "lagSeconds")
         val failClosed = node.required("failClosed")
         failClosed.only("tenants", "maxLagSeconds")
         val store = InMemorySnapshotDocumentStore()
-        fun put(key: SnapshotKey, body: JsonNode) {
-            val stored = (body.deepCopy() as ObjectNode)
-                .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", 1).put("publishedAt", NOW)
-            store.put(
-                key,
-                SnapshotDocument(
-                    SnapshotDocument.DOCUMENT_SCHEMA,
-                    1,
-                    Instant.parse(NOW),
-                    stored.toString().encodeToByteArray()
-                )
-            )
-        }
-        val keys = ArrayList<SnapshotKey>()
-        documents.get("platform")?.let { put(SnapshotKey.Platform, it) }
-        for ((id, body) in documents.get("tenants")?.fields().orEmpty()) {
-            val key = SnapshotKey.Tenant(id)
-            keys += key
-            put(key, body)
-        }
-        for ((id, body) in documents.get("apps")?.fields().orEmpty()) {
-            val key = SnapshotKey.App(id)
-            keys += key
-            put(key, body)
-        }
+        val keys = install(store, documents)
         val clock = MovingClock(Instant.parse(NOW))
         val maxLag = java.time.Duration.ofSeconds(failClosed.required("maxLagSeconds").asLong())
         // The periodic pass cannot be turned off (SNP-6): the longest the bounds allow, so it never runs within a

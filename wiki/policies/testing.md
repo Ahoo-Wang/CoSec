@@ -20,15 +20,17 @@ published is in [Storage](../operations/storage.md).
 A control request is an ordinary request first: the host pipeline authenticates it and must permit it, so the
 documents must allow the operators' requests to the API path. Each step is then authorized again as that principal,
 in the app `cosec.control.app-id` (default `cosec-control`), with a `cosec:<verb>` action on the document
-(`doc/platform`, `doc/app/<appId>`, `doc/tenant/<tenantId>`) or entry it touches. Before any policy, a hard rule
+(`doc/platform`, `doc/app/<appId>`, `doc/tenant/<tenantId>`) or entry it touches. An entry's id is one segment of its
+resource, so a change cannot put an id with a `/`; the one exception is a permission policy's `perm:<app>/<id>`, which a
+rule reaches with `**`. Before any policy, a hard rule
 applies: a tenant's principals act only on their own tenant document; the platform and app documents belong to
 principals of the `(platform)` tenant.
 
 | Step | Needs |
 |---|---|
 | Read a document, its history, a diff | `cosec:read` |
-| Propose, `apply`, rebase | `cosec:write` on each entry it puts or removes, `cosec:grant` on the scope of each binding it puts; `apply` and rollback also `cosec:read` |
-| Start a shadow window, publish | `cosec:publish` |
+| Propose, `apply`, rebase | `cosec:write` on each entry it puts or removes, `cosec:grant` on the scope of each binding it puts and of each role that comes to derive a binding; `apply` and rollback also `cosec:read` |
+| Start a shadow window, publish | `cosec:publish`; for a break-glass request or revoke, `cosec:breakglass` instead |
 | Skip a shadow window | `cosec:skip-shadow` |
 | Approve, reject | `cosec:approve` |
 | `simulate`, `explain`, `analyze` | `cosec:simulate`, `cosec:explain` on the tenant document that decides the request (`(0)`'s for one without a principal); `cosec:analyze` on the tenant document asked about |
@@ -63,7 +65,7 @@ unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`), anywhere, is a `40
 a Redis key would write it as `?`, naming another id. A stored document or record that does not decode, such as
 one a newer version wrote during a rolling upgrade, is a `500`. A request no principal stands behind, an anonymous permit
 of the pipeline included, is a `401` before any of its body is read. Only a route's exact path is served: one with a
-trailing `/` or an empty segment is a `404`. A change whose record does not decode, one of an app that cannot be an app id included, is a `503` without detail to
+trailing `/` is a `404`, and the pipeline refuses one with an empty segment with `400` before it gets there. A change whose record does not decode, one of an app that cannot be an app id included, is a `503` without detail to
 every caller (`SCP-10`). The control
 host logs why at `INFO`, with the problem's `requestId`
 ([Troubleshooting](../operations/troubleshooting.md#control-plane-errors)).
@@ -77,9 +79,9 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
+| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); an id a change puts holds a `/` (`422`; a permission policy's `perm:<app>/<id>` may, and an entry that already holds one can stay or be removed); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
-| `REFERENCES` | 422 | A binding names a policy that resolves nowhere; a platform change removes a policy another document refers to (a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
+| `REFERENCES` | 422 | A binding names a policy that resolves nowhere, or a platform boundary, which is not bound; a platform change removes a policy another document refers to, or turns one into a boundary or a boundary into a policy (`CTL-30`; a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
 | `IF_MATCH` | 412 | An entry is no longer what the operation's `ifMatch` says. |
 | `V3` (warning) | | The platform's `limits` or `attributes` change: other documents are compiled again on every instance, and one that no longer compiles fails closed. |
@@ -257,6 +259,8 @@ that app's installed document where the request read none, and one that removes 
 |---|---|
 | `SAME` | The same decision, by the same statement. |
 | `BY_CHANGED` | The same decision, by another statement. |
+| `OBLIGATIONS_CHANGED` | The same permit, by the same statement, with other rate limit rules applying. |
+| `BECAME_DENIED` | Enforcement could not decide; the candidate denies. |
 | `WIDENED` | The candidate permits where enforcement did not. |
 | `NARROWED` | Enforcement permitted; the candidate does not. |
 | `BECAME_INDETERMINATE` | The candidate is Indeterminate where enforcement was not, for a reason other than a missing attribute. |
@@ -359,7 +363,7 @@ author, and anything it cannot prove contained in the author's own permissions b
 | `UNRESOLVED` | A new or changed binding names a policy no document defines, so what it grants cannot be told. |
 | `ANONYMOUS` | A grant to `Anyone` in the default tenant `(0)`, where unauthenticated callers are: it reaches them too. |
 | `UNREADABLE` | An app document the grant reaches could not be read, so what the author holds there is not known; or the app list cannot be trusted and the grant reaches every app ([Storage](../operations/storage.md#publishing-through-the-control-plane)). |
-| `NOT_ANALYZED` | A platform or app document change, or a tenant boundary change, by someone who is not the trust root. |
+| `NOT_ANALYZED` | By someone who is not the trust root: a platform or app document change that puts anything, or that removes a DENY (`CTL-31`, one per policy or binding, below), or a tenant boundary change. |
 | `TENANT_BINDING` | With `NOT_ANALYZED` on an app document: a tenant binding of a permission policy whose ALLOWs the change adds or widens, one per binding, naming only the binding and its tenant document, so the approver sees whom the change reaches. Informational: the approval is for `NOT_ANALYZED`, and a change in these entries alone never sends an approved change back to `AWAITING_APPROVAL`. |
 | `BREAK_GLASS` | A new or changed break-glass binding: always needs a second person. |
 
@@ -391,7 +395,17 @@ The analysis reads the author's rights as enforcement does:
 Removing entries and narrowing ALLOWs grant nothing, with one exception: removing one of the tenant's own policies
 whose id the platform also defines re-points the tenant's bindings of that id, and its attachments when the
 platform's policy is attachable, to the platform's policy. That is analyzed as granting the platform's policy to
-them. A platform principal holding `cosec:approve` on the document is the trust root:
+them.
+
+A tenant removes its own DENYs alone: the platform's and the apps' DENYs and its boundary still hold over it. Nothing
+holds over the platform's and the apps' documents, so a change of one that removes a DENY needs a second person
+(`CTL-31`), one `NOT_ANALYZED` escalation for each `policy <id> of <document>` that holds a DENY and each
+`binding <id> of <document>` whose policy holds one or cannot be found. The documents are read
+[expanded](./role-permissions.md#roles): removing a role, or a `putRole` that drops a permission, counts for each
+binding the role no longer derives. Revoking a break-glass binding is not such a removal: it ends an emergency, one
+person alone ([break-glass](../guide/security-model.md#break-glass)).
+
+A platform principal holding `cosec:approve` on the document is the trust root:
 its own changes are not analyzed, unless `cosec.control.approval.four-eyes` is on, in which case they are analyzed like
 anyone's and what needs approval needs another platform principal's. A tenant principal the platform gave
 `cosec:approve` on its tenant's document approves others' changes, and its own are analyzed. A tenant's boundary is the
@@ -425,10 +439,10 @@ records no credential id does not count either: one made before the upgrade to t
 accepted, or one given with a credential that has no id; approve it again. A credential that does not say when it was
 issued, from an authenticator of yours that sets no `issuedAt`, loses its approvals to any revocation of its
 principal's tokens. Once the approver's access token has expired, `TokenRevoker.revoke` no longer takes it, so only
-`revokeSubject` takes its approvals back. Revocations are read as the pipeline reads them, so a degraded read counts as
-"not revoked" here too, for as long as an approval counts
-([Authentication](../integration/authentication.md#logout-and-revocation)); any other failure to read them is a `503`,
-and the change keeps its approval for when the store answers. They are kept for
+`revokeSubject` takes its approvals back. Revocations are judged as the pipeline judges them, but a store that cannot
+be read is no "not revoked" here: like any other failure to read them, it is a `503`
+([Authentication](../integration/authentication.md#logout-and-revocation)), and the change keeps its approval for when
+the store answers. They are kept for
 `cosec.jwt.token-validity.refresh`, which must be no shorter than `cosec.control.approval.expire-after`, or the starter
 does not start. An approver whose memberships come from the membership provider is decided twice at publish: on the
 roles it held when it approved and still holds, and on everything the provider answers now; both must permit, so a DENY
@@ -441,8 +455,8 @@ does not have, and the approver approves again.
 
 ## Publishing and rolling back
 
-`POST /changes/{id}:publish` publishes a `READY` change. When its window saw `WIDENED`, `NARROWED` or
-`BECAME_INDETERMINATE` requests, or closed as insufficient, the publisher must acknowledge exactly those numbers, or
+`POST /changes/{id}:publish` publishes a `READY` change. When its window saw `WIDENED`, `NARROWED`,
+`BECAME_INDETERMINATE`, `BECAME_DENIED` or `OBLIGATIONS_CHANGED` requests, or closed as insufficient, the publisher must acknowledge exactly those numbers, or
 the answer is `428`:
 
 ```json
@@ -471,7 +485,8 @@ says why that is safe, and how to review such an event.
 
 To undo a revision, `POST /documents/{key}:rollback` with `{"revision": 11, "note": "..."}` proposes a `ROLLBACK`
 change that makes the document what it was at that revision. It goes through the same checks, window, approval and
-publish as any change. Which revisions are kept, and how long, is in [Storage](../operations/storage.md).
+publish as any change, so one that brings back a DENY with `onMissing: "nomatch"` needs its `confirmations`, as a
+proposal does: the old revision's confirmation was given for another change. Which revisions are kept, and how long, is in [Storage](../operations/storage.md).
 
 ## Access reviews
 

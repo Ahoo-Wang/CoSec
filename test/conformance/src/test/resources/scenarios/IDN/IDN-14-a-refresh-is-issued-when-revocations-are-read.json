@@ -1,0 +1,31 @@
+{
+  "rules": [
+    "IDN-14"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same pair with a revocation store that answers: nothing is revoked, and the refresh would issue a token.",
+  "refresh": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1790000000
+    },
+    "refresh": {
+      "jti": "r1",
+      "sub": "a1",
+      "iat": 1790000000,
+      "claims": {
+        "cosec.token": "refresh"
+      }
+    }
+  },
+  "revocations": {
+    "tokens": []
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

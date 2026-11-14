@@ -74,17 +74,24 @@ Which rules a request is held to:
   ([Role permissions](./role-permissions.md#app-documents));
 - the tenant document's rules, for requests of that tenant.
 
-They run in that order, and in document order within a document. Each matching rule spends one permit. The first rule
-whose bucket is exhausted answers `429`; the rules after it spend nothing, and the rules before it keep what they
-spent. Rules add up: a tenant or app rule never replaces or relaxes a platform rule, even one with the same id, so a
-request passes only while every rule it matches has permits left.
+They run in that order, platform first, then app, then tenant, and in document order within a document. Each matching
+rule spends one permit. The first rule whose bucket is exhausted answers `429`; the rules after it spend nothing, and
+the rules before it keep what they spent. Because the platform's rules run first, a platform rule bounds a request
+before any app or tenant rule spends anything. Rules add up: a tenant or app rule never replaces or relaxes a platform
+rule, even one with the same id, so a request passes only while every rule it matches has permits left.
+
+Every rule a permitted request matches costs one call to the limiter, made one after another: with the Redis limiter,
+one round trip each. So a document holds at most 64 rules (`DOC-6`): a document with more does not compile, and the
+control plane answers a change that would make one with a `COMPILE` finding, `422`. Keep the rules a request matches
+few; one rule with a `key` replaces many rules that differ only in what they count.
 
 ## Keys
 
 `key` names the attribute whose value picks the bucket: a String or Ip attribute of the
 [catalog](./language.md#attributes), such as `environment.ip`, `subject.id`, `scope.tenant`,
 `subject.attributes.plan` or `resource.var.orderId`. A `resource.var.<name>` key must be captured by every resource
-pattern of the rule.
+pattern of the rule; when several match, the value is the first pattern's, in written order, under whose captures the
+rule's condition holds ([path variables](./language.md#path-variables)).
 
 | `key` | Buckets |
 |---|---|
@@ -115,8 +122,18 @@ refused requests are not counted.
 
 | Limiter | Used when | Scope |
 |---|---|---|
-| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Counters live under `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>` and expire after two windows. The braces are a Redis Cluster hash tag: the two windows of a bucket, which the script reads together, are on one slot, and different buckets spread over the cluster. |
+| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Each bucket is one key, `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`, which holds its current and previous window and expires two windows after its last count. The script takes the time from Redis, so instances whose clocks differ count in the same window, and it touches only that key, so it runs on a Redis Cluster as on one node. |
 | `LocalRateLimiter` | otherwise | Per JVM: with N instances the effective limit is N times higher. Keeps at most 100,000 buckets and drops buckets idle for an hour; a dropped bucket starts again from zero. |
+
+**The counters are memory a client can grow.** They live in the same Redis as the documents, which must not evict
+([Storage](../operations/storage.md#redis-requirements)): one key per bucket value, for two windows. A rule whose `key`
+reads something the client chooses, a header above all, with a long window, lets a client create keys as fast as it
+sends requests, and keep them for two windows; a full Redis then refuses every write, publishing and revocations
+included. That is why a window is at most a day. Key a rule on what a client cannot multiply (the principal, the
+address a trusted proxy reports) and keep windows short; to keep the counters away from the documents altogether, give
+the limiter a Redis of its own: declare a `RateLimiter` bean,
+`ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(<a connection factory of its own>), "<prefix>:rate-limiter")`, and
+the starter's is not created.
 
 Your own `RateLimiter` bean replaces both ([Extending](../architecture/extending.md)). Each call has
 `cosec.authorization.rate-limit.timeout` (default `500ms`, [Configuration](../operations/configuration.md)); a call
@@ -181,7 +198,8 @@ evaluate or check: `simulate`, `explain`, `analyze` and `changes`, under `cosec.
   and every `(platform)` principal spends the platform's. Permit the control paths in the pipeline only to principals
   bound to a control role, so that no other principal can hold off a tenant's administrators.
 - An exhausted bucket answers `429` before the control API does any work. The control API serves only these exact
-  paths: one with a trailing `/` or an empty segment (`//`) is a `404`, so the patterns cover every request it serves.
+  paths: one with a trailing `/` is a `404`, and the pipeline refuses one with an empty segment (`//`) with `400`, so
+  the patterns cover every request it serves.
 - Leave the break-glass routes (`/break-glass` and below) out of it: give them a rule of their own, or none, so that
   a spent bucket never holds off an emergency revoke. `changes/*` still covers three steps of break-glass: the
   `:publish` that makes an approved break-glass grant take effect, the `:publish` that recovers a stalled revoke, and
@@ -195,7 +213,8 @@ size.
 ## Publishing rules
 
 Rules are part of their documents, so they are checked and compiled with them: an invalid id, a duplicate id in one
-document, `permitsPerSecond` not above `0`, `windowSeconds` below `1`, a `key` that is not a String or Ip attribute,
+document, more than 64 rules in one document, `permitsPerSecond` not above `0`, `windowSeconds` below `1` or above a
+day (`86400`), a quota `permitsPerSecond × windowSeconds` above 2⁶³, a `key` that is not a String or Ip attribute,
 or a variable a pattern does not capture fails the whole document ([Testing policies](./testing.md#validating-policies)).
 
 Change rules through the control plane like any other entry ([Changes](./testing.md#changes)):

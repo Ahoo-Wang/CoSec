@@ -48,4 +48,18 @@ class JavaZonesTest {
             assertThrownBy<IllegalArgumentException> { SnapshotKey.Tenant(id) }
         }
     }
+
+    /**
+     * A document names its zone, so the ids that reach the resolver are any text an author writes: only the zones the
+     * JVM knows are kept, never an unknown id, which would grow the cache with every new one (round 2 review).
+     */
+    @Test
+    fun `unknown zone ids are not kept`() {
+        JavaZones.resolve("Asia/Shanghai")
+        val before = JavaZones.cachedZones()
+        repeat(1_000) { JavaZones.resolve("Nowhere/Zone-$it").assert().isNull() }
+        JavaZones.RESOLVER.resolve("Nowhere/Else").assert().isNull()
+        JavaZones.cachedZones().assert().isEqualTo(before)
+        JavaZones.resolve("Asia/Shanghai").assert().isSameAs(JavaZones.resolve("Asia/Shanghai"))
+    }
 }

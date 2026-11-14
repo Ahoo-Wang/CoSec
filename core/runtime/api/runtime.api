@@ -224,13 +224,25 @@ public final class me/ahoo/cosec/runtime/authn/CompositeAuthenticator : me/ahoo/
 public final class me/ahoo/cosec/runtime/authn/TokenAuthenticator : me/ahoo/cosec/spi/authn/Authenticator {
 	public static final field Companion Lme/ahoo/cosec/runtime/authn/TokenAuthenticator$Companion;
 	public static final field METHOD Ljava/lang/String;
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/lang/String;Ljava/time/Duration;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/lang/String;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/lang/String;Ljava/time/Duration;ZLme/ahoo/cosec/runtime/authn/UncheckedRevocations;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/lang/String;Ljava/time/Duration;ZLme/ahoo/cosec/runtime/authn/UncheckedRevocations;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun authenticate (Lme/ahoo/cosec/spi/authn/Credentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/runtime/authn/TokenAuthenticator$Companion {
 	public final fun getRESERVED_ATTRIBUTES ()Ljava/util/Set;
+}
+
+public final class me/ahoo/cosec/runtime/authn/UncheckedRevocations {
+	public static final field Companion Lme/ahoo/cosec/runtime/authn/UncheckedRevocations$Companion;
+	public fun <init> ()V
+	public fun <init> (Ljava/time/Duration;)V
+	public synthetic fun <init> (Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getCount ()J
+}
+
+public final class me/ahoo/cosec/runtime/authn/UncheckedRevocations$Companion {
+	public final fun getDEFAULT_INTERVAL ()Ljava/time/Duration;
 }
 
 public final class me/ahoo/cosec/runtime/document/Actor {
@@ -690,11 +702,13 @@ public final class me/ahoo/cosec/runtime/shadow/RecordedWindow {
 
 public final class me/ahoo/cosec/runtime/shadow/ShadowOutcome : java/lang/Enum {
 	public static final field BASE_MISMATCH Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
+	public static final field BECAME_DENIED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field BECAME_INDETERMINATE Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field BY_CHANGED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field CANDIDATE_ERROR Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field CANDIDATE_INDETERMINATE Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field NARROWED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
+	public static final field OBLIGATIONS_CHANGED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field SAME Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public static final field WIDENED Lme/ahoo/cosec/runtime/shadow/ShadowOutcome;
 	public final fun getEffective ()Z
@@ -800,11 +814,12 @@ public final class me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource$Compa
 	public static synthetic fun of$default (Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource$Companion;Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;
 }
 
-public final class me/ahoo/cosec/runtime/token/RevocableTokenVerifier : me/ahoo/cosec/spi/token/TokenVerifier {
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun refresh (Lme/ahoo/cosec/api/token/CompositeToken;)Lme/ahoo/cosec/spi/token/VerifiedToken;
-	public fun verify (Ljava/lang/String;)Lme/ahoo/cosec/spi/token/VerifiedToken;
+public final class me/ahoo/cosec/runtime/token/DefaultTokenRevoker : me/ahoo/cosec/spi/token/TokenRevoker {
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun revoke (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/runtime/token/SimpleCompositeToken : me/ahoo/cosec/api/token/CompositeToken {
@@ -818,5 +833,11 @@ public final class me/ahoo/cosec/runtime/token/SimpleCompositeToken : me/ahoo/co
 	public fun getRefreshToken ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/token/TokenRevocation {
+	public fun <init> (Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/time/Duration;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun check (Lme/ahoo/cosec/spi/token/VerifiedToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

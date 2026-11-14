@@ -40,21 +40,30 @@ object JavaZones : ZoneResolver {
 
     private val zones = ConcurrentHashMap<String, Optional<ZoneOffsets>>()
 
-    /** A zone that cannot be loaded resolves to nothing, like an unknown one, and is not tried again. */
-    override fun resolve(id: String): ZoneOffsets? = zones.computeIfAbsent(id) {
-        Optional.ofNullable(
-            try {
-                load(it)
-            } catch (_: DateTimeException) {
-                null
-            },
-        )
-    }.orElse(null)
-
-    private fun load(id: String): ZoneOffsets? {
+    /**
+     * A zone that cannot be loaded resolves to nothing, like an unknown one, and is not tried again. Only ids the JVM's
+     * zone database names are kept, so the cache holds at most its few hundred zones: a document's author writes the
+     * id, and an unknown one kept would grow it with every new text (round 2 review).
+     */
+    override fun resolve(id: String): ZoneOffsets? {
         if (id !in ZoneId.getAvailableZoneIds()) {
             return null
         }
+        return zones.computeIfAbsent(id) {
+            Optional.ofNullable(
+                try {
+                    load(it)
+                } catch (_: DateTimeException) {
+                    null
+                },
+            )
+        }.orElse(null)
+    }
+
+    /** How many zones are kept: for the test that unknown ids are not. */
+    internal fun cachedZones(): Int = zones.size
+
+    private fun load(id: String): ZoneOffsets {
         val rules = ZoneId.of(id).rules
         val transitions = ArrayList<ZoneOffsetTransition>(rules.transitions)
         val lastYear = transitions.lastOrNull()?.dateTimeBefore?.year ?: Instant.EPOCH.atZone(ZoneId.of("UTC")).year

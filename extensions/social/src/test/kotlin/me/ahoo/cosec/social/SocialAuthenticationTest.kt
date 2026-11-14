@@ -26,15 +26,19 @@ internal class SocialAuthenticationTest {
     private val authentication = SocialAuthentication(DirectSocialUserPrincipalConverter(null), providers)
 
     @Test
-    fun authorizeUrl() = runTest {
+    fun authorize() = runTest {
         providers.register(
-            "authorizeUrl",
+            "authorize",
             mockk {
-                coEvery { authorizeUrl() } returns "authorizeUrl"
+                coEvery { authorize() } returns SocialAuthorization("authorizeUrl", "binding")
             }
         )
         authentication.supportCredentials.assert().isEqualTo(SocialCredentials::class.java)
-        authentication.authorizeUrl("authorizeUrl").assert().isEqualTo("authorizeUrl")
+        authentication.authorize("authorize").url.assert().isEqualTo("authorizeUrl")
+        SocialAuthorization("u", "b").setCookie("/login/callback")
+            .assert().isEqualTo(
+                "cosec_oauth_binding=b; Path=/login/callback; Max-Age=180; HttpOnly; Secure; SameSite=Lax"
+            )
     }
 
     @Test
@@ -42,7 +46,6 @@ internal class SocialAuthenticationTest {
         providers.register(
             "authenticate",
             mockk {
-                coEvery { authorizeUrl() } returns "authenticate"
                 coEvery { authenticate(any()) } returns SocialUser(
                     id = "id",
                     username = "username",
@@ -51,7 +54,9 @@ internal class SocialAuthenticationTest {
             }
         )
 
-        authentication.authenticate(JustAuthCredentials("authenticate")).id.assert().isEqualTo("id@authenticate")
+        authentication.authenticate(
+            JustAuthCredentials("authenticate", "binding")
+        ).id.assert().isEqualTo("id@authenticate")
     }
 
     /** #1222: another manager's registration signs nobody in here. */
@@ -59,6 +64,10 @@ internal class SocialAuthenticationTest {
     fun `a provider of another manager is unknown`() = runTest {
         SocialProviderManager().register("elsewhere", mockk())
 
-        assertThrows<IllegalArgumentException> { authentication.authenticate(JustAuthCredentials("elsewhere")) }
+        assertThrows<IllegalArgumentException> {
+            authentication.authenticate(
+                JustAuthCredentials("elsewhere", "binding")
+            )
+        }
     }
 }

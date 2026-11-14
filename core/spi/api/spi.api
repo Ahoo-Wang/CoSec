@@ -520,27 +520,6 @@ public final class me/ahoo/cosec/spi/snapshot/SnapshotUnavailableException : me/
 	public final fun getKey ()Lme/ahoo/cosec/spi/snapshot/SnapshotKey;
 }
 
-public final class me/ahoo/cosec/spi/snapshot/SnapshotVersion {
-	public fun <init> (JJ)V
-	public final fun component1 ()J
-	public final fun component2 ()J
-	public final fun copy (JJ)Lme/ahoo/cosec/spi/snapshot/SnapshotVersion;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/spi/snapshot/SnapshotVersion;JJILjava/lang/Object;)Lme/ahoo/cosec/spi/snapshot/SnapshotVersion;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getScoped ()J
-	public final fun getShared ()J
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/spi/token/DefaultTokenRevoker : me/ahoo/cosec/spi/token/TokenRevoker {
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;)V
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;Ljava/time/Clock;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun revoke (Ljava/lang/String;)Lme/ahoo/cosec/spi/token/VerifiedToken;
-	public fun revokeSubject-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;)V
-}
-
 public final class me/ahoo/cosec/spi/token/DelegationUnsupportedException : me/ahoo/cosec/spi/token/TokenVerificationException {
 	public fun <init> (Ljava/lang/String;)V
 }
@@ -553,6 +532,11 @@ public abstract interface class me/ahoo/cosec/spi/token/RevocationReader {
 
 public final class me/ahoo/cosec/spi/token/RevocationReader$Companion {
 	public final fun getNONE ()Lme/ahoo/cosec/spi/token/RevocationReader;
+}
+
+public final class me/ahoo/cosec/spi/token/RevocationUnavailableException : java/lang/RuntimeException {
+	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 }
 
 public final class me/ahoo/cosec/spi/token/SubjectRevocation {
@@ -573,34 +557,23 @@ public final class me/ahoo/cosec/spi/token/TokenRevokedException : me/ahoo/cosec
 }
 
 public abstract interface class me/ahoo/cosec/spi/token/TokenRevoker {
-	public abstract fun revoke (Ljava/lang/String;)Lme/ahoo/cosec/spi/token/VerifiedToken;
-	public fun revokeSubject-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;)V
-	public static synthetic fun revokeSubject-hPxUw84$default (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;ILjava/lang/Object;)V
+	public abstract fun revoke (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun revokeSubject-opWVSHk$default (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/spi/token/TokenRevoker$DefaultImpls {
-	public static fun revokeSubject-hPxUw84 (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;)V
-	public static synthetic fun revokeSubject-hPxUw84$default (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;ILjava/lang/Object;)V
+	public static fun revokeSubject-opWVSHk (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun revokeSubject-opWVSHk$default (Lme/ahoo/cosec/spi/token/TokenRevoker;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
 }
 
 public abstract interface class me/ahoo/cosec/spi/token/TokenStore {
-	public abstract fun isRevoked (Ljava/lang/String;)Z
-	public abstract fun revoke (Ljava/lang/String;Ljava/time/Duration;)V
-	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;)V
-	public fun subjectRevokedBefore-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
+	public abstract fun revoke (Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun revokeSubject-_BkUC70 (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/spi/token/TokenStore$DefaultImpls {
-	public static fun revokeSubject-opWVSHk (Lme/ahoo/cosec/spi/token/TokenStore;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;)V
-	public static fun subjectRevokedBefore-xnbzu10 (Lme/ahoo/cosec/spi/token/TokenStore;Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
-}
-
-public final class me/ahoo/cosec/spi/token/TokenStore$NoOp : me/ahoo/cosec/spi/token/TokenStore {
-	public static final field INSTANCE Lme/ahoo/cosec/spi/token/TokenStore$NoOp;
-	public fun isRevoked (Ljava/lang/String;)Z
-	public fun revoke (Ljava/lang/String;Ljava/time/Duration;)V
-	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;)V
-	public fun subjectRevokedBefore-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
+	public static fun revokeSubject-_BkUC70 (Lme/ahoo/cosec/spi/token/TokenStore;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public class me/ahoo/cosec/spi/token/TokenVerificationException : me/ahoo/cosec/model/CoSecException {

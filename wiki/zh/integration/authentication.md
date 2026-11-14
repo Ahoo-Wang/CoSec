@@ -135,15 +135,16 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 访问令牌过期的客户端把两个令牌都发回来。`TokenVerifier.refresh(compositeToken)` 检查：
 
 - 刷新令牌签名有效且未过期；
+- 它确实是刷新令牌（`cosec.token: "refresh"`，`IDN-13`）：放在它位置上的访问令牌会被拒绝，即使该访问令牌的 `sub`（一个主体 id）恰好是访问令牌的 `jti`；
 - 访问令牌（可以已过期）由同一个密钥有效签名；
-- 刷新令牌属于该访问令牌（其 `sub` 是访问令牌的 `jti`）；
-- 该访问令牌未被吊销，其主体的令牌也未被吊销。
+- 刷新令牌属于该访问令牌：其 `sub` 是访问令牌的 `jti`，其 `iat` 与访问令牌的相同，因为 `JwtTokenConverter` 同时签发这两个令牌。
 
-检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。它返回旧访问令牌中的主体；用 `TokenConverter.toToken` 为该主体签发新令牌。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。starter 不注册刷新端点。`SimpleRefreshTokenAuthentication` 以 `Authentication` 的形式完成上述检查，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录：
+检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。吊销不由校验器判断：调用方接着检查该访问令牌未被吊销，其主体的令牌也未被吊销（下文的 `SimpleRefreshTokenAuthentication` 会这样做）。它返回旧访问令牌中的主体；用 `TokenConverter.toToken` 为该主体签发新令牌。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。starter 不注册刷新端点。`SimpleRefreshTokenAuthentication` 以 `Authentication` 的形式完成上述检查，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算），再通过 starter 提供的 Bean `TokenRevocation` 读取吊销，判断方式与流水线相同；全程没有阻塞：
 
 ```kotlin
 @Bean
-fun refreshTokenAuthentication(tokenVerifier: TokenVerifier) = SimpleRefreshTokenAuthentication(tokenVerifier)
+fun refreshTokenAuthentication(tokenVerifier: TokenVerifier, tokenRevocation: TokenRevocation) =
+    SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -156,18 +157,19 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 刷新不会做两件事：
 
 - **不会重新读取用户。** 新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，请为刷新凭证编写自己的 `Authentication`：先用 `TokenVerifier.refresh` 校验，再加载用户。
-- **不会让旧的刷新令牌失效。** 刷新令牌在过期之前一直可用。要结束一个会话，请[吊销](#logout-and-revocation)它的访问令牌，这也会阻止与之绑定的刷新令牌。
+- **不会让旧的刷新令牌失效。** 刷新令牌在过期之前一直可用，而且每次刷新都签发一对带有自己刷新令牌的新令牌：一对令牌只要用户一直刷新，就一直有效。吊销访问令牌会阻止该令牌以及与之绑定的刷新令牌，但不会阻止由它刷新出来、或它由之刷新而来的令牌对（见[登出与吊销](#logout-and-revocation)）。
 
 ## 登出与吊销 {#logout-and-revocation}
 
 JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore` 和 `RevocationReader` Bean。开启 JWT 但两者都没有时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验、从不吊销令牌的服务仍然需要读取器；既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
 
-在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。此后每个实例都以 `token-revoked` 拒绝该访问令牌，刷新它也会失败。请在访问令牌过期之前吊销：已过期的令牌无法吊销，它的刷新令牌随后仍然可用。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 是同步的：请在事件循环之外调用它。
+在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。此后每个实例都以 `token-revoked` 拒绝该访问令牌，刷新它也会失败。登出结束的只有这些：客户端出示的这一对令牌。该会话由之刷新而来的令牌对，以及由那一对再刷新出的令牌对，仍然可用，所以更早被复制的一对令牌会比登出活得更久；用户的其他会话也是如此。请在访问令牌过期之前吊销：已过期的令牌无法吊销，它的刷新令牌随后仍然可用。要结束用户的所有会话（例如账号被盗后），请调用 [`revokeSubject`](#revoking-every-token-of-a-principal)。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 的调用都是挂起函数，不会阻塞：在任何线程上从 `suspend` 处理函数里调用即可。
 
 每个已认证的请求都会以非阻塞方式检查吊销。这个检查有三点值得注意：
 
 - **“未吊销”在本地缓存 30 秒**（`cosec.authentication.revocation.cache.*`）。通过 `TokenRevoker` 吊销会让所有实例上的这个答案立即失效。如果失效消息丢失，或吊销记录通过其他方式写入 Redis，某个实例可能在之后最多 30 秒内仍接受该令牌。
-- **降级读取视为“未吊销”。** Redis 无法读取时，吊销缓存按记录不存在回答，令牌被接受。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小。
+- **Redis 无法读取时，请求的令牌被接受。** 吊销读取器报告无法读取（`RevocationUnavailableException`），流水线在校验令牌时放行它。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小，或设置 `cosec.authentication.revocation.fail-closed: true` 改为应答 `503`。每个这样被接受的令牌都会计数（`cosec.revocation.unchecked`，[指标](../operations/observability.md#metrics)），并以 `WARN` 记录日志，最多每 10 秒一次。
+- **Redis 无法读取时，刷新失败。** 绝不在一次失败的吊销读取上签发令牌（`IDN-14`）：此时签发的令牌不在任何吊销记录中，既不受旧令牌的吊销约束，也不受其主体的吊销约束，会比两者都活得久。`SimpleRefreshTokenAuthentication` 抛出 `RevocationUnavailableException`，请以 `503` 应答。
 - **其他任何错误都会让请求失败。** Redis 返回但 CoSec 无法解码的吊销记录，或自定义 `RevocationReader` 抛出的错误，结果都是 `503`，绝不会接受令牌。
 
 ### 吊销主体的全部令牌 {#revoking-every-token-of-a-principal}
@@ -179,7 +181,7 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 - `iat` 来自签发方的时钟，`issuedBefore` 来自执行吊销的实例的时钟。为了防止时钟偏快的签发方给吊销前签发的令牌打上更晚的 `iat`，请求还会拒绝在 `issuedBefore` 之后 `cosec.authentication.revocation.skew`（5 秒）内签发的令牌。在这个窗口内重新登录的用户需要再登录一次。[刷新](#refreshing-tokens)使用同样的偏差，因此这样的令牌也无法刷新成新令牌。
 - 该记录在 `issuedBefore` 之后再保留一个刷新令牌有效期。之后以更早的 `issuedBefore` 再次调用不会缩短它，即使两个实例同时吊销同一主体也是如此。
 - 它需要与吊销单个令牌相同的存储。无法记录它的 `TokenStore` 会抛出 `UnsupportedOperationException`，而不是什么都不做。
-- 检查行为与上文相同：失效消息丢失时，本地的“未吊销”答案最多保留 30 秒；降级读取时令牌被接受。
+- 检查行为与上文相同：失效消息丢失时，本地的“未吊销”答案最多保留 30 秒；存储无法读取时，请求的令牌被接受，刷新则失败。
 
 ## API key {#api-keys}
 
@@ -235,7 +237,7 @@ cosec:
 
 ## 租户 {#tenants}
 
-主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空或不是字符串（数字、`null`、对象）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为租户 id 为空的主体签发令牌。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
+主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空、不是字符串（数字、`null`、对象），或不能作为租户 id（空白、`*`、含 `:` 或控制字符、超过 128 个字符）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为这样的租户签发令牌。租户不能作为租户 id 的 API key 加载失败（`503`）。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
 要让用户切换租户，继承 `AbstractSwitchTenantAuthentication` 并实现 `switchTenant(targetTenantId, previous)`（`previous` 是发起切换的请求的 `SecurityContext`）：检查用户是否属于目标租户（不属于时抛出异常以拒绝），并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。它保留原令牌的应用：切换租户不会改变令牌所属的应用。
 
@@ -261,11 +263,11 @@ cosec:
 
 启用 `cosec-social` 后，`SocialAuthentication` 通过 [JustAuth](https://github.com/justauth/JustAuth) 的提供方登录用户。在 `cosec.authentication.login.social.registration.<name>` 下配置每个提供方，包括它的 JustAuth `type`、client id、secret 和 redirect URI（[配置](../operations/configuration.md)）。
 
-1. 把用户引导到挂起函数 `socialAuthentication.authorizeUrl("<name>")` 返回的地址。该 URL 带有新生成的 OAuth `state`：来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为 state 必须不可预测，而那些 id 不必如此。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
-2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
+1. 用挂起函数 `socialAuthentication.authorize("<name>")` 开始登录。它返回一个 `SocialAuthorization`：提供方的 `url`（带有新生成的 OAuth `state`），以及新生成的 `binding`。两者都是来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为它们必须不可预测，而那些 id 不必如此。把绑定值设为浏览器上的 Cookie：`Set-Cookie: <authorization.setCookie(path)>`（`cosec_oauth_binding`，`HttpOnly; Secure; SameSite=Lax`，与 state 同样只活 3 分钟，作用于你的回调路径），然后把浏览器重定向到 `url`。CoSec 在 Redis 中把 state 与绑定值的 SHA-256 一起保存 3 分钟，从不保存绑定值本身，因此社交登录需要 `StringRedisTemplate`（或你自己的 `SocialStateStore` 与 JustAuth `AuthStateCache` Bean）。
+2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>", <绑定 Cookie 的值，没有则为 "">)`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。只有当回调的 `state` 是 CoSec 签发的、未过期、未被使用过（在调用提供方之前就以 `GETDEL` 立即从 Redis 取走），并且浏览器的绑定值哈希后与记录的一致（以恒定时间比较）时，回调才被接受。来自另一个浏览器、重复发送或伪造的 state 会抛出 `SocialAuthenticationException`。这就是阻止登录 CSRF 的方式：攻击者为自己的账户拿到的回调 URL，在受害者的浏览器中打开时，带的是攻击者的 state，却没有攻击者的 Cookie。注册上设置 `ignore-check-state: true` 会让启动失败。
 3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 令牌属于 `cosec.authorization.scope.app-id`（用户登录的宿主的应用，未配置则不属于任何应用），并创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。登录只需要提供方的用户 id：提供方不返回用户名（StackOverflow）、性别（Figma）或原始用户信息时仍可登录，此时 `SocialUser.username` 取用户 id，`gender` 为 `UNKNOWN`，`rawInfo` 为空。成功响应里没有用户 id 或没有用户，则以 `SocialAuthenticationException` 拒绝。
 
-JustAuth 是阻塞的：`authorizeUrl` 从 `SecureRandom` 抽取 state 并写入 state 缓存，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，最多 16 个线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
+JustAuth 是阻塞的：`authorize` 把 state 写入 Redis，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，最多 16 个线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
 
 ## 网关之后 {#behind-a-gateway}
 

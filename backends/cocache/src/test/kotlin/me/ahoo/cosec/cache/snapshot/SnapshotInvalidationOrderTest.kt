@@ -141,15 +141,15 @@ class SnapshotInvalidationOrderTest {
             val listener = ReadingListener(reader)
             DocumentSnapshots.source(Unnotified(reader.store), compileToRevision, quietPasses).use { source ->
                 reader.store.subscribe(listener).use {
-                    source.load().get().version.shared.assert().isEqualTo(1L)
+                    source.load().get().policiesEntry.revision.assert().isEqualTo(1L)
                     writer.writer.publish(SnapshotKey.Platform).block()
                     awaitTrue(what = "the invalidation") { listener.reads.isNotEmpty() }
                     // the listener heard first: its read was answered by the stale local copy
                     listener.revisionsRead().first().assert().isEqualTo(1L)
                     // the source was told of nothing, and no pass of its own is due
-                    source.peek()!!.version.shared.assert().isEqualTo(1L)
+                    source.peek()!!.policiesEntry.revision.assert().isEqualTo(1L)
                     source.revalidate().get()
-                    source.peek()!!.version.shared.assert().isEqualTo(2L)
+                    source.peek()!!.policiesEntry.revision.assert().isEqualTo(2L)
                 }
             }
         }
@@ -160,12 +160,12 @@ class SnapshotInvalidationOrderTest {
     fun revalidationConvergesWhenNotificationsAreLost(target: RedisTarget) {
         withCopyOfRevisionOne(target, ::SilentChannelBackend) { reader, writer ->
             DocumentSnapshots.source(reader.store, compileToRevision, quietPasses).use { source ->
-                source.load().get().version.shared.assert().isEqualTo(1L)
+                source.load().get().policiesEntry.revision.assert().isEqualTo(1L)
                 writer.writer.publish(SnapshotKey.Platform).block()
                 // nothing told the source, and no pass of its own is due
-                source.peek()!!.version.shared.assert().isEqualTo(1L)
+                source.peek()!!.policiesEntry.revision.assert().isEqualTo(1L)
                 source.revalidate().get()
-                source.peek()!!.version.shared.assert().isEqualTo(2L)
+                source.peek()!!.policiesEntry.revision.assert().isEqualTo(2L)
                 // nor the reader: its local copy still holds revision 1
                 (reader.cache.async().lookup(SnapshotKey.Platform).get() as Lookup.Present).value.revision
                     .assert().isEqualTo(1L)

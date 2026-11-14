@@ -26,6 +26,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `Authentication` | `cosec-login`，`login` | 校验另一种登录凭证，并说明其令牌的内容。通过抛出异常拒绝。 | 所有 bean，按其支持的凭证类型注册 |
 | `TokenConverter` | `cosec-login`，`login.token` | 以其他格式签发令牌。 | 一个 bean，替换 `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`，`social` | 把提供方的用户转换成你的主体。 | 一个 bean，替换 `DirectSocialUserPrincipalConverter` |
+| `SocialStateStore` | `cosec-social`，`social` | 把社交登录签发的 OAuth state 存在 Redis 以外的地方：`put` 记下一个 state 及其绑定值的哈希，`take` 原子地取走它，因此一个 state 只能用一次。两者都是挂起函数：基于阻塞客户端实现时，在你自己的调度器上调用它。存储失败时抛出异常。 | 一个 bean，替换 `RedisSocialStateStore` |
 | `BlacklistSource` | `cosec-runtime`，`runtime.attribute` | 说明哪些主体、地址和设备被拦截。 | 一个 bean，包装进 `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`，`runtime.event` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
@@ -80,6 +81,7 @@ PR 都是破坏性变更，标题要带 `!`
 | `Attribute.Kind` | 新的目录属性 |
 | `ProblemType` | 新的 problem，例如 `413` 或 `415` |
 | `Obligation` | 新的义务种类 |
+| `Cause` | 决策为 Indeterminate 的新原因，例如一个会失败的新端口；`DecisionListener` 从决策事件中读到它 |
 | `ChangeEvent.Kind` | 新的变更事件种类 |
 
 这里没有列出的集合在 8.0 GA 之后不会增加成员。公共 `data class` 只会是不会增长的值，即形状固定的记录（`PublicApiStabilityTest` 读取已评审的清单）；可能增长的记录是普通类，新增字段时增加一个构造器。
@@ -136,19 +138,19 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 
 自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`roles`、`policies`、`attributes`、时间和成员关系标记。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
 
-交给 `TokenAuthenticator` 的是普通校验器（`JwtTokenVerifier`），绝不是 `RevocableTokenVerifier` 或其他包装：吊销通过挂起式的 `RevocationReader` 检查，而且只有普通校验器的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
+按契约，`TokenVerifier` 是纯计算：不做 I/O，不做任何阻塞的事，因为流水线在请求的线程上调用它。令牌是否被吊销不由它回答：`TokenAuthenticator`、刷新（`SimpleRefreshTokenAuthentication`）和 `TokenRevoker` 都通过挂起式的 `RevocationReader` 读取，并共用同一个判断 `TokenRevocation`。只有 CoSec 自己的校验器签发的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
 
 ## 凭证与吊销 {#credentials-and-revocation}
 
 | 扩展点 | 契约 |
 |---|---|
-| `TokenStore` | 吊销的写入侧，供登出使用：`revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
+| `TokenStore` | 吊销的写入侧，供登出使用：`revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`，两者都是挂起函数，不阻塞。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
 | `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。 |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`，挂起函数。未知的 key 返回 null；查找失败时抛出异常（请求应答 `503`）。 |
 
 使用 `cosec-cocache` 时，starter 装配 `CoCacheTokenStore` 及其读取器。不使用时，除非你注册了 `TokenStore` 和 `RevocationReader`（或设置 `cosec.jwt.enabled=false`），JWT 会让启动失败。注册 `RevocationReader.NONE` 是明确选择不吊销任何令牌。
 
-吊销读取是失败即拒绝的两个有文档说明的例外之一：存储在降级读取无法应答时，自己报告“未吊销”。`RevocationReader` 抛出的任何异常仍然应答 `503`。这些例外列在[安全模型](../guide/security-model.md)中。
+`RevocationReader` 只报告它知道的事实：存储无法读取时，它抛出 `RevocationUnavailableException`，绝不回答“未吊销”。这意味着什么由调用方决定：`TokenAuthenticator` 校验请求的令牌时放行该令牌，这是失败即拒绝的两个有文档说明的例外之一；会签发令牌的刷新则失败（`IDN-14`）。`RevocationReader` 抛出的其他任何异常都应答 `503`。这些例外列在[安全模型](../guide/security-model.md)中。
 
 ## 成员关系 {#memberships}
 

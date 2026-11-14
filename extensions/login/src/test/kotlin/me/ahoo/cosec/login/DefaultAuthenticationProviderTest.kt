@@ -16,6 +16,8 @@ package me.ahoo.cosec.login
 import io.mockk.mockk
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.*
 import org.junit.jupiter.api.Test
@@ -30,7 +32,10 @@ internal class DefaultAuthenticationProviderTest {
                 RefreshTokenCredentials::class.java,
             )
         }
-        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(mockk())
+        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(
+            mockk(),
+            TokenRevocation(RevocationReader.NONE)
+        )
         authenticationProvider.register(refreshTokenAuthentication)
         (
             authenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
@@ -48,12 +53,40 @@ internal class DefaultAuthenticationProviderTest {
     /** #1222: registries share nothing. */
     @Test
     fun `a registration stays in its registry`() {
-        authenticationProvider.register(SimpleRefreshTokenAuthentication(mockk()))
+        authenticationProvider.register(
+            SimpleRefreshTokenAuthentication(mockk(), TokenRevocation(RevocationReader.NONE))
+        )
 
         DefaultAuthenticationProvider()
             .get<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(RefreshTokenCredentials::class.java)
             .assert().isNull()
     }
+
+    /** Round-2 review L3: credentials two registered authentications support are refused, never sent to either. */
+    @Test
+    fun `credentials more than one authentication supports are refused`() {
+        val refresh = SimpleRefreshTokenAuthentication(mockk(), TokenRevocation(RevocationReader.NONE))
+        val social = object : Authentication<OtherCredentials> {
+            override val supportCredentials: Class<OtherCredentials> = OtherCredentials::class.java
+
+            override suspend fun authenticate(credentials: OtherCredentials) = throw UnsupportedOperationException()
+        }
+        authenticationProvider.register(refresh)
+        authenticationProvider.register(social)
+
+        assertThrows(IllegalStateException::class.java) {
+            authenticationProvider.get<Credentials, Authentication<Credentials>>(BothCredentials::class.java)
+        }
+        // Registered for the type itself, it is chosen.
+        authenticationProvider.register(BothCredentials::class.java, refresh as Authentication<BothCredentials>)
+        authenticationProvider.get<Credentials, Authentication<Credentials>>(BothCredentials::class.java)
+            .assert().isSameAs(refresh)
+    }
+
+    interface OtherCredentials : Credentials
+
+    class BothCredentials(override val accessToken: String, override val refreshToken: String) :
+        RefreshTokenCredentials, OtherCredentials
 
     data class MockRefreshTokenCredentials(override val accessToken: String, override val refreshToken: String) :
         RefreshTokenCredentials

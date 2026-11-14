@@ -135,7 +135,7 @@ class SnapshotStoreBlockHoundTest {
                     SnapshotOptions(),
                 ).use { source ->
                     val loading = onNonBlockingThread { source.load("app") }
-                    loading.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).version.scoped.assert().isEqualTo(1L)
+                    loading.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).appEntry!!.revision.assert().isEqualTo(1L)
                     onNonBlockingThread { source.peek("app") }.assert().isNotNull()
                 }
             }

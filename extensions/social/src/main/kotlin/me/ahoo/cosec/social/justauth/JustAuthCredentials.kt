@@ -20,4 +20,8 @@ import me.zhyd.oauth.model.AuthCallback
  *
  * @author ahoo wang
  */
-class JustAuthCredentials(override val provider: String) : AuthCallback(), SocialCredentials
+class JustAuthCredentials(
+    override val provider: String,
+    /** The browser's binding cookie ([me.ahoo.cosec.social.SocialAuthorization.BINDING_COOKIE]), empty without one. */
+    override val binding: String,
+) : AuthCallback(), SocialCredentials

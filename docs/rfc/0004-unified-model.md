@@ -11,6 +11,9 @@
 > §5.3 的 C1–C6 不再是差异类别，而是登记在一致性套件中的规则；P1′、P8–P12 作为规范性质保留（RFC 0008 §3.5）。下文保留原样以便追溯。
 
 > **2026-11-08 修订（#1284，`IDN-11`）**：§4.5.1 的租户声明：缺失是默认租户，空字符串让令牌无效（401）。
+>
+> **2026-11-13 修订（#1318，`IDN-11`）**：令牌的租户声明与 API Key 的租户必须是一个租户 id（`SnapshotKey.Tenant` 的规则：非空白、不是 `*`、不含 `:` 与控制字符、
+> 至多 128 个字符），否则凭据无效：令牌 401（此前 503，空白为 500），签发端不签发；API Key 记录读取失败，配置的 key 使启动失败。每个入口用同一条规则。
 
 > **2026-11-08 修订（#1286）**：读取早期构建写下的“无名 app”记录不再容错，一律是格式错误并失败即拒绝；`SCP-7` 由 `SCP-10` 取代，拒绝的一半全部保留。
 
@@ -335,6 +338,12 @@ interface MembershipProvider {
 > `read-failure: degrade`；customizer 或属性仍可改为 `throw`，吊销检查随之 fail closed（503）。降级读不再缓存"未吊销"，Redis 恢复后吊销立即生效。
 >
 > **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：两个吊销表是 CoCache 8 的 `Store`，读失败按 `unknown-read: absent` 读作"没有吊销"（仍是 `PIP-7` 文档化的例外），但只在 Redis 读失败时：CoCache 6 写的值（包括缓存缺失标记）抛出格式错误，答 503，从不读成"没有吊销"（`CoCache6ValuesTest`）。吊销表的 `read-timeout` 固定为命令超时，`cocache.defaults.store.read-timeout` 一类的全局默认值不能把它缩短，否则更多的读会超时并读作"没有吊销"。
+
+> **实现说明（2026-11-14，#1321，第 2 轮审查后端与登录组的 H1、L5）**：取代上面两条关于 `read-failure: degrade` 与 `unknown-read: absent` 的说明，以及本节的
+> `RevocableTokenVerifier`。吊销的判断只有一处，`TokenRevocation`（`cosec-runtime`），管道、刷新与登出共用，拒绝 `iat < issuedBefore` 的 token。两个吊销表的
+> `unknown-read` 锁定为 `throw`：`RevocationReader` 读不到时抛出 `RevocationUnavailableException`，从不回答“未吊销”。只有 `TokenAuthenticator` 验证请求令牌时放行并计数
+> （`cosec.revocation.unchecked`，`PIP-7`；`cosec.authentication.revocation.fail-closed=true` 改为 503），签发令牌的刷新失败（`IDN-14`）。`TokenVerifier` 是纯计算；
+> `TokenStore` 只剩写入并改为挂起，`TokenRevoker` 是挂起函数。刷新槽必须是与访问令牌同时签发的刷新令牌（`IDN-13` 双向）。
 
 ### 4.6 `ScopeResolver`
 

@@ -34,8 +34,8 @@ import kotlin.random.Random
 /**
  * RFC 0007 §7.4.5: the grant analysis is sound (A5), narrowing is sound (A6), and a sequence of changes that all
  * analyze as contained never lets anyone do what no grantor could (A8). The oracle is [GrantOracle], which shares no
- * code with the analysis; it reads statements with several matching resources in the way least favorable to the
- * analysis ([CaptureReading]).
+ * code with the analysis; it reads a statement with several matching resources as the engine does, holding under any
+ * of their captures (`ALG-10`).
  *
  * Requests are made at several times, now and after some bindings expired, as long as the granted fragment's own
  * binding lives: what the grantor holds only until then cannot be granted for longer (RC1-3).
@@ -44,8 +44,8 @@ class GrantPropertyTest {
     private val iterations = maxOf(3_000, Integer.getInteger("cosec.property.iterations", 0))
     private val analyzer = GrantAnalyzer()
 
-    /** Permitted for the grantor however a statement reads its captures, leaving out what binds everyone (Q8). */
-    private val strict = GrantOracle(CaptureReading.ALL, CaptureReading.ANY, ignoreAnyone = true)
+    /** Permitted for the grantor, leaving out what binds everyone (Q8). */
+    private val strict = GrantOracle(ignoreAnyone = true)
 
     @Test
     fun `A5 the grant analysis is sound`() {
@@ -77,14 +77,16 @@ class GrantPropertyTest {
             }
         }
         contained.assert().isGreaterThan(iterations / 4)
-        checked.assert().isGreaterThan(iterations * 2)
+        // A statement with several resources now holds under any of their captures (ALG-10), so more changes narrow
+        // and fewer fragments are left to check than with the first-match reading.
+        checked.assert().isGreaterThan(iterations * 9 / 5)
     }
 
     @Test
     fun `A6 narrowing is sound`() {
         val random = Random(0xA6)
         val generator = GrantGenerator(random)
-        val permissive = GrantOracle(CaptureReading.ANY, CaptureReading.ANY, ignoreAnyone = false)
+        val permissive = GrantOracle(ignoreAnyone = false)
         var narrowing = 0
         var checked = 0
         repeat(iterations * 2) {
@@ -102,9 +104,9 @@ class GrantPropertyTest {
                     statement.actions.random(random),
                     statement.resources.random(random),
                 )
-                if (!permissive.matches(statement, condition, request, CaptureReading.ANY)) return@repeat
+                if (!permissive.matches(statement, condition, request)) return@repeat
                 checked++
-                strict.matches(previous, previousCondition, request, CaptureReading.ALL).assert()
+                strict.matches(previous, previousCondition, request).assert()
                     .describedAs("narrowed statement matches $request, the previous one does not")
                     .isTrue()
             }
@@ -117,13 +119,11 @@ class GrantPropertyTest {
     fun `A8 changes analyzed as contained never grant beyond the grantors`() {
         val random = Random(0xA8)
         val generator = GrantGenerator(random)
-        // One reading on both sides: the analysis is sound for any, and a different one per side would make a
-        // principal's unchanged rights look new.
-        val first = GrantOracle(CaptureReading.FIRST, CaptureReading.FIRST, ignoreAnyone = false)
+        val oracle = GrantOracle(ignoreAnyone = false)
         // What a grantor could do before is read with ambiguous ids left out: removing the tenant's own policy of an id
         // the platform defines ends a failure without granting anything, and a failure only hides rights (RC1-9).
-        val firstIgnoringAnyone =
-            GrantOracle(CaptureReading.FIRST, CaptureReading.FIRST, ignoreAnyone = true, ambiguousFails = false)
+        val oracleIgnoringAnyone =
+            GrantOracle(ignoreAnyone = true, ambiguousFails = false)
         var published = 0
         var permitted = 0
         repeat(iterations / 6) { round ->
@@ -148,10 +148,10 @@ class GrantPropertyTest {
                     ResourcePattern.AnyResource
                 )
                 val time = generator.time()!!
-                if (first.decide(snapshot.at(time), request) != OracleDecision.PERMIT) return@repeat
+                if (oracle.decide(snapshot.at(time), request) != OracleDecision.PERMIT) return@repeat
                 permitted++
                 val before = (people + subject).any {
-                    firstIgnoringAnyone.decide(initial.at(time), request.by(it)) == OracleDecision.PERMIT
+                    oracleIgnoringAnyone.decide(initial.at(time), request.by(it)) == OracleDecision.PERMIT
                 }
                 before.assert().describedAs(
                     "${subject.id} is permitted $request at $time, which no grantor was"
@@ -231,7 +231,7 @@ class GrantPropertyTest {
             listOf(fragment.resource),
             fragment.condition
         )
-        return request.takeIf { strict.matches(statement, fragment.condition, it, CaptureReading.ANY) }
+        return request.takeIf { strict.matches(statement, fragment.condition, it) }
     }
 
     private fun GrantSnapshot.at(time: Long) = GrantSnapshot(platform, apps, tenants, time, unreadApps)

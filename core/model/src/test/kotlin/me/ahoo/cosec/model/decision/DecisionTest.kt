@@ -20,6 +20,7 @@ import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 class DecisionTest {
@@ -57,5 +58,18 @@ class DecisionTest {
         Cause.SourceUnavailable(DocumentKind.TENANT, error).document.assert().isEqualTo(DocumentKind.TENANT)
         Cause.NotLoaded(DocumentKind.APP).document.assert().isEqualTo(DocumentKind.APP)
         DocumentKind.entries.assert().containsExactly(DocumentKind.PLATFORM, DocumentKind.APP, DocumentKind.TENANT)
+    }
+
+    /** Round 2 review L5: a quota the limiters' window arithmetic can hold, and nothing larger. */
+    @Test
+    fun `a rate limit spec is bounded`() {
+        RateLimitSpec(1.0, RateLimitSpec.MAX_WINDOW_SECONDS).windowSeconds.assert().isEqualTo(86_400L)
+        assertThrownBy<IllegalArgumentException> { RateLimitSpec(1.0, RateLimitSpec.MAX_WINDOW_SECONDS + 1) }
+        assertThrownBy<IllegalArgumentException> { RateLimitSpec(1.0, 1L shl 61) }
+        assertThrownBy<IllegalArgumentException> { RateLimitSpec(1e300, 1_000) }
+        assertThrownBy<IllegalArgumentException> { RateLimitSpec(Double.POSITIVE_INFINITY) }
+        assertThrownBy<IllegalArgumentException> { RateLimitSpec(Double.NaN) }
+        RateLimitSpec(Long.MAX_VALUE / 2.0, 1).permitsPerSecond.assert().isEqualTo(Long.MAX_VALUE / 2.0)
+        assertThrownBy<IllegalArgumentException> { RateLimitSpec(Long.MAX_VALUE.toDouble(), 2) }
     }
 }

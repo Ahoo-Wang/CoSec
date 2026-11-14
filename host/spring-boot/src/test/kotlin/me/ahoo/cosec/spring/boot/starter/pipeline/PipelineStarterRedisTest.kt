@@ -166,16 +166,16 @@ class PipelineStarterRedisTest {
             // A revoked token, by token and by subject, is 401 token-revoked (#1072).
             val alice = token(context, "acme", "alice")
             client.status("/orders/1", alice).assert().isEqualTo(200)
-            context.getBean(TokenRevoker::class.java).revoke(
-                alice
-            )
+            runBlocking { context.getBean(TokenRevoker::class.java).revoke(alice) }
             val revoked = client.get().uri("/orders/1").header(HttpHeaders.AUTHORIZATION, alice)
                 .exchange().expectStatus().isEqualTo(401).expectBody(String::class.java).returnResult().responseBody!!
             revoked.assert().contains("token-revoked")
             val bob = token(context, "acme", "bob")
             client.status("/orders/1", bob).assert().isEqualTo(200)
-            context.getBean(TokenRevoker::class.java)
-                .revokeSubject(TenantId("acme"), PrincipalId("bob"), Instant.now().plusSeconds(60))
+            runBlocking {
+                context.getBean(TokenRevoker::class.java)
+                    .revokeSubject(TenantId("acme"), PrincipalId("bob"), Instant.now().plusSeconds(60))
+            }
             client.status("/orders/1", bob).assert().isEqualTo(401)
 
             // The control API behind the pipeline: a permitted request, authorized again as its principal.

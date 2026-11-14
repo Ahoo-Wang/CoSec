@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.ratelimit
 
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.assertThrows
 import org.junit.jupiter.api.Test
@@ -30,6 +31,21 @@ class RateLimitTest {
         assertThrows(IllegalArgumentException::class.java) {
             RateLimit(permitsPerSecond = 1.0, windowSeconds = 0)
         }
+    }
+
+    /** Round 2 review L5: the window arithmetic of both limiters holds every quota a rule can state. */
+    @Test
+    fun initWhenTheWindowArithmeticWouldOverflow() {
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) { RateLimit(permitsPerSecond = 1.0, windowSeconds = 1L shl 61) }
+        assertThrows(
+            IllegalArgumentException::class.java
+        ) { RateLimit(permitsPerSecond = 1e300, windowSeconds = 1_000) }
+        val day = RateLimit(permitsPerSecond = 1.0, windowSeconds = 86_400)
+        day.windowMillis.assert().isEqualTo(86_400_000L)
+        RateLimiter.window(RateLimitSpec(1.0, 86_400)).assert().isEqualTo(day)
+        assertThrows(IllegalArgumentException::class.java) { RateLimit(permitsPerSecond = 1.0, windowSeconds = 86_401) }
     }
 
     @Test

@@ -228,20 +228,27 @@ lifetime, call `TokenConverter.toToken(principal)` or `toToken(principal, access
 A client whose access token expired sends both tokens back. `TokenVerifier.refresh(compositeToken)` checks that:
 
 - the refresh token is validly signed and not expired;
+- it is a refresh token (`cosec.token: "refresh"`, `IDN-13`): an access token in its place is refused, even one whose
+  `sub`, a principal id, is the access token's `jti`;
 - the access token, which may be expired, is validly signed with the same key;
-- the refresh token belongs to that access token (its `sub` is the access token's `jti`);
-- the access token was not revoked, and neither were its principal's tokens.
+- the refresh token belongs to that access token: its `sub` is the access token's `jti`, and its `iat` the access
+  token's, as `JwtTokenConverter` issues the two together.
 
 A failed check throws a `TokenVerificationException`; a refresh token that was issued with another access token
-throws its subclass `RefreshTokenMismatchException`. It returns the principal from the old access token; issue new
+throws its subclass `RefreshTokenMismatchException`. Revocation is not the verifier's question: the caller checks next
+that the access token was not revoked, and neither were its principal's tokens (`SimpleRefreshTokenAuthentication`
+does, below). It returns the principal from the old access token; issue new
 tokens for it with `TokenConverter.toToken`. Refreshing a [delegation token](#tokens) (one with an `act` claim) fails
 too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
 `SimpleRefreshTokenAuthentication` does the check above as an `Authentication`, so with it declared as a bean, a
-refresh is a login with credentials that implement `RefreshTokenCredentials`:
+refresh is a login with credentials that implement `RefreshTokenCredentials`. It verifies the pair on the caller's
+thread, which is pure computation, and reads revocations through `TokenRevocation`, the starter's bean, which judges them
+as the pipeline does; nothing blocks:
 
 ```kotlin
 @Bean
-fun refreshTokenAuthentication(tokenVerifier: TokenVerifier) = SimpleRefreshTokenAuthentication(tokenVerifier)
+fun refreshTokenAuthentication(tokenVerifier: TokenVerifier, tokenRevocation: TokenRevocation) =
+    SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -256,8 +263,10 @@ Two things a refresh does not do:
 - **It does not re-read the user.** The new token carries the claims of the old one. To pick up changed roles on
   refresh, write your own `Authentication` for refresh credentials that verifies them with `TokenVerifier.refresh`
   and then loads the user.
-- **It does not invalidate the old refresh token.** A refresh token stays usable until it expires. To end a
-  session, [revoke](#logout-and-revocation) its access token, which also blocks the refresh token bound to it.
+- **It does not invalidate the old refresh token.** A refresh token stays usable until it expires, and every refresh
+  issues a pair with a refresh token of its own: one pair refreshed again and again lasts as long as its user keeps
+  refreshing. Revoking an access token blocks that token and the refresh token bound to it, not the pairs refreshed
+  from it or before it (see [Logout and revocation](#logout-and-revocation)).
 
 ## Logout and revocation
 
@@ -269,20 +278,29 @@ can set `cosec.jwt.enabled=false`.
 
 From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, then records its `jti`
 in Redis for the refresh token's lifetime. From then on every instance rejects the access token as `token-revoked`,
-and refreshing it fails. Revoke before the access token expires: an expired token cannot be revoked, and its refresh
-token then stays usable. Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to
-revoke. `TokenRevoker` is synchronous: call it off the event loop.
+and refreshing it fails. That is all a logout ends: the pair the client presents. A pair the session was refreshed
+from, and any pair refreshed from that one, stays usable, so a pair that was copied earlier outlives the logout; so
+does any other session of the user. Revoke before the access token expires: an expired token cannot be revoked, and its
+refresh token then stays usable. To end every session of a user, after a compromise for one, call
+[`revokeSubject`](#revoking-every-token-of-a-principal). Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to
+revoke. `TokenRevoker`'s calls suspend and never block: call them from a `suspend` handler, on any thread.
 
 Every authenticated request checks revocation, without blocking. Three properties of the check matter:
 
 - **"Not revoked" is cached locally for 30 seconds** (`cosec.authentication.revocation.cache.*`). A revocation through
   `TokenRevoker` invalidates that answer on every instance at once. If the invalidation message is lost, or the
   revocation is written to Redis some other way, an instance may accept the token for up to 30 seconds more.
-- **A degraded read counts as "not revoked".** When Redis cannot be read, the revocation caches answer as for a
-  missing entry, and the token is accepted. This is one of
+- **While Redis cannot be read, a request's token is accepted.** The revocation reader says it cannot read
+  (`RevocationUnavailableException`), and the pipeline, verifying the token, lets it through. This is one of
   [the two documented exceptions](../guide/security-model.md#the-two-documented-exceptions) to failing closed: the
   signature and expiry are still checked, and rejecting every authenticated request during a Redis outage would be
-  worse. Keep access tokens short-lived so this window stays small.
+  worse. Keep access tokens short-lived so this window stays small, or set
+  `cosec.authentication.revocation.fail-closed: true` to answer `503` instead. Each token so accepted is counted
+  (`cosec.revocation.unchecked`, [Metrics](../operations/observability.md#metrics)) and logged at `WARN`, at most every
+  10 seconds.
+- **A refresh fails while Redis cannot be read.** A token is never issued on a revocation read that failed (`IDN-14`):
+  issued then, it would be named by no revocation, neither the old token's nor its principal's, and outlive both.
+  `SimpleRefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`.
 - **Any other error fails the request.** A revocation entry that Redis returns but CoSec cannot decode, or an error
   a custom `RevocationReader` throws, is `503`, never an accepted token.
 
@@ -306,7 +324,7 @@ refresh token of that principal in that tenant whose `iat` is before `issuedBefo
 - It needs the same store as revoking one token. A `TokenStore` that cannot record it throws
   `UnsupportedOperationException` instead of doing nothing.
 - The check behaves as described above: a local "not revoked" answer for up to 30 seconds if an invalidation is
-  lost, and the token is accepted on a degraded read.
+  lost; a request's token is accepted, and a refresh fails, while the store cannot be read.
 
 ## API keys
 
@@ -403,7 +421,9 @@ With API keys enabled and neither the in-memory store nor an `ApiKeyReader`, sta
 
 A principal may act within a tenant. The `TokenSubject` your `Authentication` returns decides it: its `tenant` goes in
 the token's `tenantId` claim; a token without the claim belongs to the default tenant `(0)`, and one whose claim is empty or not a string (a number,
-`null`, an object) is invalid (`token-invalid`, `IDN-11`), so `JwtTokenConverter` refuses an empty tenant id. The tenant decides which tenant
+`null`, an object), or cannot be a tenant id (blank, `*`, with a `:` or a control character, longer than 128
+characters), is invalid (`token-invalid`, `IDN-11`), so `JwtTokenConverter` refuses such a tenant id. An API key whose
+tenant cannot be one fails to load (`503`). The tenant decides which tenant
 document a request reads, and conditions read it as `subject.tenant` or `scope.tenant`. What CoSec does and does not
 isolate between tenants is in [Tenant isolation](../guide/security-model.md#tenant-isolation).
 
@@ -450,11 +470,22 @@ With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](ht
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
 `type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
 
-1. Send the user to `socialAuthentication.authorizeUrl("<name>")`, a suspending function. The URL carries a fresh OAuth `state`, 128
-   random bits from a `SecureRandom`, never an id of the application's `IdGenerator`, since the state must be
-   unpredictable and those ids need not be. The state is kept in Redis for 3 minutes, so social login needs a `StringRedisTemplate` (or your own JustAuth `AuthStateCache` bean).
+1. Start the sign-in with `socialAuthentication.authorize("<name>")`, a suspending function. It answers a
+   `SocialAuthorization`: the provider's `url`, which carries a fresh OAuth `state`, and a fresh `binding`. Both are 128
+   random bits from a `SecureRandom`, never an id of the application's `IdGenerator`, since they must be unpredictable
+   and those ids need not be. Set the binding as a cookie on the browser, `Set-Cookie: <authorization.setCookie(path)>`
+   (`cosec_oauth_binding`, `HttpOnly; Secure; SameSite=Lax`, for the 3 minutes the state lives, scoped to your callback
+   path), then redirect the browser to `url`. CoSec keeps the state in Redis for 3 minutes with the SHA-256 of the
+   binding, never the binding itself, so social login needs a `StringRedisTemplate` (or your own `SocialStateStore`
+   and JustAuth `AuthStateCache` beans).
 2. In your callback endpoint, bind the provider's callback parameters (`code`, `state`, ...) to
-   `JustAuthCredentials("<name>")`, and pass it to `TokenCompositeAuthentication.authenticateAsToken`.
+   `JustAuthCredentials("<name>", <the binding cookie, or "">)`, and pass it to
+   `TokenCompositeAuthentication.authenticateAsToken`. The callback is accepted only when its `state` is one CoSec
+   issued, has not expired and has not been used (it is taken from Redis at once, `GETDEL`, before the provider is
+   called), and the browser's binding hashes to the one recorded with it, compared in constant time. A state sent from
+   another browser, sent twice, or made up is a `SocialAuthenticationException`. This is what stops login CSRF: a
+   callback URL an attacker obtained for their own account, opened in a victim's browser, carries the attacker's state
+   but not the attacker's cookie. `ignore-check-state: true` on a registration fails startup.
 3. A `SocialUserPrincipalConverter` turns the provider's user into your principal. The default,
    `DirectSocialUserPrincipalConverter`, makes its token for `cosec.authorization.scope.app-id`, the app of the host the
    user signs in to, or none without one, and a principal with the id `<provider user id>@<name>`, two attributes,
@@ -467,7 +498,7 @@ providers. Configure each provider under `cosec.authentication.login.social.regi
    the user id, `gender` to `UNKNOWN` and `rawInfo` empty. A success response without a user id, or without a user, is
    refused with a `SocialAuthenticationException`.
 
-JustAuth blocks: `authorizeUrl` draws the state from a `SecureRandom` and writes it to the state cache, and the callback
+JustAuth blocks: `authorize` writes the state to Redis, and the callback
 calls the provider over blocking HTTP. CoSec runs both on a dispatcher of each provider's own, of at most 16 threads, so
 you can call them from any thread, an event loop included. A provider that hangs delays only its own logins, and
 cancelling a request interrupts its call.

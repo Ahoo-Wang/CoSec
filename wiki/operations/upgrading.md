@@ -16,6 +16,60 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A credential's tenant must be a tenant id** (`IDN-11`). A token whose `tenantId` is blank, `*`, holds a `:` or a
+  control character, or is longer than 128 characters is now `401 token-invalid` (it was `503`, or `500` for a blank
+  one), and `JwtTokenConverter` does not issue it; an `ApiKey` with such a tenant cannot be built, so a stored one fails
+  its lookup (`503`) and a configured one fails startup.
+- **`SnapshotVersion` is removed** from `cosec-spi`: it named the two documents of 7.x. A decision event's
+  `snapshotVersion` is a `ViewVersion` (`platform`, `app`, `tenant`), as before.
+- **A rate limit window is at most a day** (`windowSeconds` up to `86400`), and `permitsPerSecond × windowSeconds`
+  at most 2⁶³: a larger quota overflowed the limiters' arithmetic, and a longer window kept one Redis key per bucket
+  value for two windows in a Redis that must not evict (round-2 review M3). Such a document no longer decodes;
+  `RateLimit` refuses the same values. To migrate: express a daily or longer quota as a per-second rate over a day.
+- **The Redis rate limiter keeps one key per bucket and counts by Redis's clock** (round-2 review L1). A bucket is now
+  the hash `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`, not a key per window
+  (`...:{<rule>:<bucket>}:<window>`), and the script takes the time from Redis, so instances whose clocks differ no
+  longer count apart. Counters written by an earlier version are not read and expire on their own: a bucket starts
+  from zero once, at the upgrade. `ReactiveRedisRateLimiter` no longer takes a `clock`.
+- **A document holds at most 64 rate limit rules** (`DOC-6`). Every rule a permitted request matches costs one call
+  to the limiter, so a document with more no longer compiles: a stored one is installed as failed (its requests are
+  `503`), and the control plane refuses a change that would make one with `422`. To migrate: merge rules that differ
+  only in what they count into one rule with a `key`.
+- **A statement with several resource patterns means one statement per pattern** (`ALG-10`). When its condition reads
+  a path variable and a request matches more than one of its patterns, the condition is now tested under each matching
+  pattern's captures and the statement matches if any holds; before, only the first matching pattern's captures were
+  read, so a DENY could miss a request one of its own patterns denied, and the order of the patterns changed the
+  decision. A DENY written this way now denies at least what it did; an ALLOW may permit more. A rate limit rule keyed
+  by a variable takes it from the first pattern under whose captures its condition holds. To check: search your
+  documents for statements with several `resource` patterns whose `condition` reads `resource.var.*`.
+- **A path with an empty segment, an encoded separator or a backslash is a `400`** (`PIP-14`). `//admin`, `/admin//x`,
+  `/;x/admin`, `/admin%2Fx`, `/admin\x` and `/admin%5Cx` were decided as paths of their own, so a `DENY` under `/admin` did not match them, while a backend
+  that merges slashes, decodes separators or reads `\` as `/` served them as `/admin/...`. A trailing `/` is unchanged: `/admin/` stays
+  its own path. Requests that were served before and are refused now:
+  - a `\` in a path, raw or encoded: no client is expected to send one, as browsers turn it into `/`;
+  - a `/` encoded inside a path variable, such as `/files/a%2Fb.txt` or `/repos/group%2Fproject`: send the value in the
+    query, or encode its `/` twice (`%252F`), which the pipeline decodes once, to the text `%2F`, and the application
+    decodes again;
+  - a URL whose parts were joined with a `/` each (`https://host/api/` + `/orders`): fix the client;
+  - a path parameter alone in a segment before the last (`/;jsessionid=x/orders`): URL rewriting puts it at the end of
+    the last segment (`/orders;jsessionid=x`), which is still accepted.
+
+  There is no switch to accept them: a pattern cannot say what a backend will make of these paths, so deciding them
+  would bring the bypass back.
+- **A check refuses what enforcement refuses** (`PIP-15`). `AuthorizationChecker.check` and `decide` now read a path as
+  the pipeline reads a request: one the pipeline answers `400` for is a deny, as is any resource over a request path's
+  length bounds. Before, `/public/../admin` could be permitted by an `ALLOW` under `/public`.
+- **Shadow windows count two more outcomes**: `BECAME_DENIED` and `OBLIGATIONS_CHANGED` were counted as `SAME`, and a
+  publish must now acknowledge them. Finish or abandon open windows before a rolling upgrade: an instance of the
+  previous version cannot read a report that holds them.
+- **A social login's state is single use and bound to the browser that started it** (round-2 review M4). JustAuth only
+  checked that a state existed: one state signed in any browser that opened a callback holding it, as often as it was
+  opened within 3 minutes, which allowed login CSRF. `SocialAuthentication.authorizeUrl(provider)` becomes
+  `authorize(provider)`, which answers a `SocialAuthorization` (`url`, `binding`); `SocialAuthenticationProvider` does
+  the same. Set `authorization.setCookie(path)` on the browser before redirecting it, and pass the cookie's value to
+  `JustAuthCredentials(provider, binding)`, which takes it as a second argument; `SocialCredentials` has a `binding`. The
+  state is taken from Redis on the callback (`<s>:oauth:binding:<state>`, Redis 6.2 or later for `GETDEL`).
+  `JustAuthProvider` takes a `SocialStateStore`. `ignore-check-state: true` on a registration fails startup.
 - **Tokens and API keys declare their app** (batch R7b, RFC 0012 §3.5, `SCP-11`). A token's `aud` and an API key's `app`
   name the app the credential belongs to, and `ScopeResolver` compares them with the host's: a host with an app
   (`cosec.authorization.scope.app-id`, or a route's `cosec-app-id`) refuses a credential declaring another app, or none,
@@ -82,12 +136,51 @@ and have to be provisioned again.
   `TokenSubject`, `SocialUser`, `ForwardedIdentity`, `Audit*Data`, `ShadowReport`, `ShadowSample`, `InstalledDocument`,
   `InstanceStatus` and the starter's `*Properties` lost `copy` and `componentN`. `Identity`, `Identity.Credential`,
   `TokenSubject` and the shadow records still compare by value; the others no longer define `equals`.
-- **A refresh token is refused where an access token is expected** (`IDN-13`). `JwtTokenConverter` writes
-  `cosec.token: "refresh"` on every refresh token; a token with that claim authenticates nothing. Tokens issued before
-  this version keep working until they expire.
+- **A refresh token is refused where an access token is expected, and an access token where a refresh token is**
+  (`IDN-13`). `JwtTokenConverter` writes `cosec.token: "refresh"` on every refresh token; a token with that claim
+  authenticates nothing, and a refresh reads only a token with it, whose `iat` is the access token's. Access tokens
+  issued before this version keep working until they expire; their refresh tokens, which lack the claim, no longer
+  refresh, so their users sign in again.
+- **Revocation is one judgement, and the token contracts do no blocking I/O.** `TokenVerifier` is pure computation by
+  contract. `RevocableTokenVerifier` is removed: the pipeline, refresh and logout all read revocations through
+  `TokenRevocation` (`cosec-runtime`), over the `RevocationReader`. `TokenStore` keeps only its writes, `revoke` and
+  `revokeSubject`, now `suspend`; its synchronous `isRevoked` and `subjectRevokedBefore` are gone (read them through
+  `RevocationReader`), as is `TokenStore.NoOp`. `TokenRevoker.revoke` and `revokeSubject` are `suspend`: call them from a
+  `suspend` handler instead of moving them off the event loop. `DefaultTokenRevoker` moves to
+  `me.ahoo.cosec.runtime.token` and takes the `TokenRevocation`. `SimpleRefreshTokenAuthentication(tokenVerifier)` becomes
+  `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)` and no longer runs on a dispatcher of its own. The
+  starter's `TokenVerifier` bean is the plain `JwtTokenVerifier`, and it adds a `TokenRevocation` bean. A `TokenStore` of
+  your own implements the two writes as `suspend` functions, and its reads as a `RevocationReader` bean.
+- **A revocation store that cannot be read is reported, never read as "not revoked"** (round-2 review H1, `IDN-14`).
+  A `RevocationReader` throws `RevocationUnavailableException` when its store cannot be read; the revocation tables'
+  `unknown-read` is locked to `throw`, so `cocache.caches.[RevokedTokenCache].unknown-read` fails startup. The pipeline
+  still accepts a request's token then, as before; a refresh now fails instead of issuing a token, and the control plane
+  publishes nothing on an approval whose approver's revocations cannot be read. A custom `RevocationReader` that
+  answered "not revoked" on a failure throws `RevocationUnavailableException` instead. To refuse requests too, set
+  `cosec.authentication.revocation.fail-closed: true`, which replaces `unknown-read: throw` on the revocation tables.
 - **Instance statuses carry the document format level** (RFC 0010 C5): an instance reporting without `formatLevel` is
   refused by a control plane of this version, and a shadow window reading one fails until every instance has been
   upgraded (a status expires after a minute).
+- **The control plane refuses what used to fail at run time.** A platform change that turns a policy other documents
+  refer to into a boundary, or a boundary they refer to into a policy, is `REFERENCES` (`422`, `CTL-30`). A binding that
+  names a platform boundary is `REFERENCES` too: such a binding never granted, every request it applied to was `503`,
+  and a document that holds one has to remove it before it publishes again. An id a change puts holds no `/` (`V2`,
+  `422`): a rule ending in `*` did not reach such an entry. A permission policy's `perm:<app>/<id>` may; entries that
+  already hold one can stay or be removed.
+- **Removing a DENY from the platform or an app document needs a second person** (RFC 0007 §7.4.4, `CTL-31`). Until
+  now, a platform principal without `cosec:approve` could publish alone a change that only removed entries. A removal
+  that takes away a DENY, a policy that holds one or a binding whose policy holds one (also through a role removed or put
+  with fewer permissions), now waits in `AWAITING_APPROVAL` with a `NOT_ANALYZED` escalation for each, as does the trust
+  root's under `four-eyes` ([Approval](../policies/testing.md#approval)). Removing ALLOWs, a tenant's own DENYs and
+  break-glass revokes are unchanged. Plan an approver for emergency removals of a platform DENY.
+- **`cosec:grant` follows what a role derives** (RFC 0012 §7.2): a `putCatalog` or `putPolicy` that makes a `"*"` role
+  derive a binding it did not needs `cosec:grant` on the role's scope, as a `putRole` does.
+- **`cosec:breakglass` is enough for break-glass** (RFC 0007 §8): requesting one, publishing it once approved and
+  revoking it no longer also need `cosec:publish`. No other change takes `cosec:breakglass` in its place.
+- **A rollback carries `confirmations`**, as a proposal does, when it brings back a DENY with `onMissing: "nomatch"`.
+  Until now such a rollback could not be confirmed at all.
+- **`repair-references` also removes** what a publish indexed before a head write it lost, and prints
+  `Removed <n> reference(s) no head refers to.`. [Repair the back-reference index](#repair-the-back-reference-index).
 
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
@@ -516,7 +609,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
 CoCache 8 does not read CoCache 6's format. What it finds in that format fails closed, as unreadable content: a request
 that needs such a document is `503` (`SourceUnavailable`), a token or principal revoked there is `503` instead of
 `401`, and the control API answers `500`. Nothing reads such a value as absent, so a revoked token is never accepted
-again, not even through the revocation tables' "Redis failed, not revoked" degradation.
+again.
 
 | Data | Keys | On 8.0.0, before the move | `cosec-migrate cocache8` |
 |---|---|---|---|
@@ -673,7 +766,7 @@ example, is a usage error before anything is read or written, never ignored.
 | `publish` | Writes the documents of an accepted conversion to Redis as their first revisions, through the control plane's store. Never touches the 7.x keys. |
 | `bootstrap` | Binds one principal of the platform tenant to `cosec:platform-admin`, so the control plane has someone who may write. |
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
-| `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, and completes the app list. Only adds. |
+| `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, removes what no head has, and completes the app list. |
 
 #### Convert
 
@@ -818,8 +911,11 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 The control plane keeps an index of which documents refer to which policy, so that a platform change cannot remove a
 policy a document still uses, nor add one whose id a tenant document uses ([Storage](./storage.md#redis-keys)).
 `repair-references` reads the head of every document the store lists and adds whatever the index misses; it prints
-how many documents it visited and how many references it added. It only adds, so it may run while the control plane
-runs, and running it again adds nothing: an entry the index has stays, and an extra one blocks a removal at most. A
+how many documents it visited and how many references it added. Then it removes the references no head has, which a
+publish indexed before a head write it lost, and prints how many: left there, one would block removing that policy for
+good. A reference goes only once its document's head is at or above the revision that indexed it, so a publish still in
+flight keeps its own, and a lost one stays until that document has published past it. So it may run while the control
+plane runs, and running it again changes nothing. A
 document whose head cannot be read is printed as `FAILED <doc>: <reason>`, the others are still visited, and the
 command exits with `1`.
 
@@ -869,6 +965,7 @@ In 8.0 these are the rules; each has an id in the conformance suite. Without err
 | **D1** | `inRole: r` in an ALLOW matches only a role in effect in the requested space; `inRole: r@s` in an ALLOW matches only while the request is in space `s`; `inRole: r` in a DENY matches the role held in any space. | Literal role match, a bare role also matching `r@<requested space>`. | `inRole` conditions. A DENY never narrows and an ALLOW never widens. |
 | **D2** (`CND-1`) | An absent attribute equals no value, not the empty string. | An absent part read as `""`. | `eq` against `#{principal.id}`, `#{principal.attributes['k']}` or `#{tenant.tenantId}`. In an ALLOW, an absent part no longer matches an empty attribute (narrower). In a DENY, `convert` keeps 7.x's reading by adding the 7.x cases. |
 | **D3** | No regular expressions, so no regex timeouts. | A `RegexTimeoutException` was an implicit deny. | `regular` conditions; only literal, literal-prefix and choice-of-literals patterns translate. |
+| **D4** (`ALG-10`) | A statement with several path patterns matches when its condition holds under the variables of any matching pattern. | Only the first matching pattern's variables were read. | Path actions with several patterns and a condition on `request.path.var.*`: a DENY now denies what any of its patterns would, an ALLOW permits what any of them would. |
 
 #### Anonymous requests that declare a space are 401
 
@@ -1210,7 +1307,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractRefreshTokenAuthentication`, `AbstractSwitchTenantAuthentication` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleCompositeToken`, `RevocableTokenVerifier` |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleCompositeToken` (`RevocableTokenVerifier` is removed: [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.servlet` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |

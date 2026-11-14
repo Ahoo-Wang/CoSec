@@ -38,7 +38,7 @@ Indeterminate in an explanation.
 
 | Status | Problem `type` slug | Meaning |
 |---|---|---|
-| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize, two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), a route-map capture that cannot be a resource id segment, or a header sent with different values that a document of the request's view reads (any statement, policy condition, boundary or rate limit rule, whatever its effect; PIP-12): typically `X-Forwarded-For` from two proxies that each append a line; have them send one line, or read `environment.ip`. The engine never saw it. |
+| 400 | `invalid-request` | The request is ambiguous: a path that does not normalize (a dot segment, a malformed escape, an empty segment before its end such as `//`, an encoded `/`, a `\` or `%5C`), two different values of one `CoSec-*` parameter (header vs query; a blank value beside a non-blank one counts, and only ASCII whitespace is blank), a route-map capture that cannot be a resource id segment, or a header sent with different values that a document of the request's view reads (any statement, policy condition, boundary or rate limit rule, whatever its effect; PIP-12): typically `X-Forwarded-For` from two proxies that each append a line; have them send one line, or read `environment.ip`. The engine never saw it. |
 | 401 | `unauthorized` | Denied, and the caller is anonymous (no credentials, or an anonymous caller asking for a space). |
 | 401 | `token-invalid`, `token-expired`, `token-revoked` | The credentials were rejected (an invalid API key is `token-invalid`); the request was evaluated as anonymous and denied. |
 | 403 | `forbidden` | Denied for an authenticated principal: a DENY matched, or nothing allowed (both look the same on purpose). |
@@ -209,8 +209,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **Rate limiter cannot count** and the matching rule has `strictFailure: true` (on a Redis Cluster, `CROSSSLOT` in
   the log: see Rate limiting).
 - **A REQUIRED decision listener failed or timed out** (`cosec.observability.listener.required-timeout`): it turns a permit into 503.
-- **The authenticator's dependency failed** (for example the API key or revocation store); a revocation read that
-  fails answers "not revoked" instead (the documented exception to fail closed).
+- **The authenticator's dependency failed** (for example the API key or revocation store); a revocation store that
+  cannot be read lets the request's token through instead (the documented exception to fail closed), unless
+  `cosec.authentication.revocation.fail-closed` is on. A refresh fails then (`RevocationUnavailableException`, `IDN-14`):
+  answer it 503 and retry once Redis answers.
 - **An id with an unpaired UTF-16 surrogate** (IDN-10, RC1-52): an authenticator gave a principal whose id, tenant,
   credential id or claimed roles hold one (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16
   surrogate`), an API key record names one (`API key [<id>] holds an id ...`), or the `MembershipProvider` answered a
@@ -337,8 +339,8 @@ header: anonymous. Otherwise never anonymous:
 - A `key` value with an unpaired UTF-16 surrogate counts in a bucket of its own, `e:` and the value escaped (`\uD800`,
   `\` doubled), never in the bucket of the value with `?` in its place (IDN-10). Other values count in `k:<value>`.
 - On a Redis Cluster, `CROSSSLOT Keys in request don't hash to the same slot` in that log line means a version whose
-  counters have no hash tag (8.0.0-alpha.2 or earlier): every rule is skipped, or with `strictFailure` every permit is
-  503. Upgrade; counters are `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>`. A `cosec.key-prefix` with
+  counters span two keys without a hash tag (8.0.0-alpha.2 or earlier): every rule is skipped, or with `strictFailure`
+  every permit is 503. Upgrade; a bucket is one key, `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`. A `cosec.key-prefix` with
   its own hash tag (`{cosec}`) puts every counter on one slot.
 
 ### Control-plane errors
@@ -349,6 +351,14 @@ unreachable (403 from the pipeline, before any control check) and `cosec-migrate
 the control plane, so a deployment without it must be re-published into an empty Redis or key prefix. A control token
 is issued for tenant `(platform)` (or the tenant) and app `cosec.control.app-id`; a token for another app is
 `scope-rejected` on a host with an app.
+
+A change refused with `REFERENCES` or `V2` (422) names what it met: `[<id>] is referred to by [<doc>]` for a `<doc>` that
+does not refer to it is a publish of `<doc>` that indexed the reference and lost its head write (run `cosec-migrate
+repair-references`); `changes between a policy and a boundary` needs `<doc>` moved off it first; `a boundary is not bound`
+is a binding of a platform boundary; `an entry's id has no [/]` needs the entry renamed.
+
+A platform or app change that only removes entries and waits in `AWAITING_APPROVAL` with `NOT_ANALYZED`
+`policy|binding <id> of <doc>` removes a DENY (`CTL-31`): a second platform principal holding `cosec:approve` approves it.
 
 Problem bodies of the control API: 401 no authenticated caller; 403 the operator lacks the `cosec:*` action on that
 document (bound through `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer` in app `cosec-control`);

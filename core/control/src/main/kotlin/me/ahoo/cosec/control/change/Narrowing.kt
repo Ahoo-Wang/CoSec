@@ -65,6 +65,34 @@ internal object Narrowing {
         return operations.all { narrows(it, base, candidate, shadows, policyOf) }
     }
 
+    /**
+     * Each DENY [base] has that [candidate] no longer has (RFC 0007 §7.4.4, amended on 2026-11-09; `CTL-31`): a policy
+     * of [base] holding one that [candidate] does not define, and a binding of [base] that [candidate] does not have
+     * whose policy holds one. A policy holds a DENY unless [allowsOnly] says otherwise, so one that cannot be found holds
+     * one. Both documents are read expanded ([RoleExpansion.effective]): a role removed, or put with fewer permissions,
+     * counts for each binding it no longer derives, and a short-form permission for the policy it no longer writes out.
+     * A break-glass binding does not count: revoking one ends an emergency, which RFC 0007 §8 leaves to one person.
+     */
+    suspend fun removedDenies(
+        base: PolicyDocument,
+        candidate: PolicyDocument,
+        policyOf: suspend (PolicyId) -> PolicyDefinition?,
+    ): List<String> {
+        val before = RoleExpansion.effective(base)
+        val after = RoleExpansion.effective(candidate)
+        val policies = after.policies.mapTo(HashSet()) { it.id }
+        val bindings = after.bindings.mapTo(HashSet()) { it.id }
+        val removed = ArrayList<String>()
+        before.policies.filter { it.id !in policies && it.statements.any { s -> s.effect == Effect.DENY } }
+            .mapTo(removed) { "policy ${it.id.value}" }
+        for (binding in before.bindings) {
+            if (binding.id !in bindings && !binding.breakGlass && !allowsOnly(base, binding.policy, policyOf, before)) {
+                removed += "binding ${binding.id.value}"
+            }
+        }
+        return removed
+    }
+
     /** Whether [operation] is one of the whitelist's on [base], giving [candidate]. */
     private suspend fun narrows(
         operation: Operation,
@@ -93,16 +121,20 @@ internal object Narrowing {
         else -> false
     }
 
-    /** Whether [policy], as [base] or another document defines it, is ALLOWs only and not the blacklist. */
+    /**
+     * Whether [policy], as [base] or another document defines it, is ALLOWs only and not the blacklist; [effective] is
+     * [base] expanded, when the caller has it.
+     */
     private suspend fun allowsOnly(
         base: PolicyDocument,
         policy: PolicyId,
         policyOf: suspend (PolicyId) -> PolicyDefinition?,
+        effective: PolicyDocument? = null,
     ): Boolean {
         val statements = when (policy) {
             BuiltinPolicies.BLACKLIST -> return false
             BuiltinPolicies.ROOT -> return true
-            else -> RoleExpansion.effective(base).policies.firstOrNull { it.id == policy }?.statements
+            else -> (effective ?: RoleExpansion.effective(base)).policies.firstOrNull { it.id == policy }?.statements
                 ?: BuiltinPolicies.CONTROL[policy]
                 ?: policyOf(policy)?.statements
         }
@@ -183,17 +215,26 @@ internal class Preemption(
     private suspend fun platform(policy: PolicyId): PolicyDefinition? =
         revisions.head(SnapshotKey.Platform)?.document?.policies?.firstOrNull { it.id == policy }
 
-    /** [policy] as another document than [key]'s defines it: the platform's, or the app's of a permission policy. */
-    private suspend fun elsewhere(key: SnapshotKey, policy: PolicyId): PolicyDefinition? {
-        if (key != SnapshotKey.Platform) {
-            platform(policy)?.let { return it }
-        }
-        val prefix = PolicyDocumentCompiler.PERMISSION_PREFIX
-        val app = policy.value.removePrefix(prefix).substringBefore('/')
-        if (!policy.value.startsWith(prefix) || !SnapshotKey.App.isValidAppId(app)) {
-            return null
-        }
-        return revisions.head(SnapshotKey.App(app))?.document?.let(RoleExpansion::effective)
-            ?.policies?.firstOrNull { it.id == policy }
+    private suspend fun elsewhere(key: SnapshotKey, policy: PolicyId): PolicyDefinition? =
+        policyElsewhere(key, policy) { revisions.head(it)?.document }
+}
+
+/**
+ * [policy] as another document than [key]'s defines it, read through [documentOf]: the platform's, or the app's of a
+ * permission policy, expanded.
+ */
+internal suspend fun policyElsewhere(
+    key: SnapshotKey,
+    policy: PolicyId,
+    documentOf: suspend (SnapshotKey) -> PolicyDocument?,
+): PolicyDefinition? {
+    if (key != SnapshotKey.Platform) {
+        documentOf(SnapshotKey.Platform)?.policies?.firstOrNull { it.id == policy }?.let { return it }
     }
+    val prefix = PolicyDocumentCompiler.PERMISSION_PREFIX
+    val app = policy.value.removePrefix(prefix).substringBefore('/')
+    if (!policy.value.startsWith(prefix) || !SnapshotKey.App.isValidAppId(app)) {
+        return null
+    }
+    return documentOf(SnapshotKey.App(app))?.let(RoleExpansion::effective)?.policies?.firstOrNull { it.id == policy }
 }

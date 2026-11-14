@@ -88,7 +88,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key, with a trailing `:` removed. Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. With the Redis rate limiter, a prefix whose first `{` is immediately followed by `}` (an empty hash tag) fails startup, and one with a hash tag of its own, such as `{cosec}`, puts every rate limit counter on one Redis Cluster slot ([Rate limiting](../policies/rate-limiting.md)). |
+| `cosec.key-prefix` | string | `cosec` | The prefix of every Redis key, with a trailing `:` removed. Every service of one deployment, its control plane and `cosec-migrate --key-prefix` use the same value. With the Redis rate limiter, a prefix with a hash tag of its own, such as `{cosec}`, puts every rate limit counter on one Redis Cluster slot ([Rate limiting](../policies/rate-limiting.md)). |
 
 ## Pipeline
 
@@ -194,6 +194,7 @@ How windows work: [Testing changes](../policies/testing.md).
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authentication.revocation.skew` | duration | `5s` | How much later than a subject revocation a token may have been issued and still be revoked by it: room for an issuer whose clock runs ahead. |
+| `cosec.authentication.revocation.fail-closed` | boolean | `false` | Whether a request's token is refused (`503`) while the revocations cannot be read, instead of accepted ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)). A refresh fails then either way. |
 
 ## JWT
 
@@ -266,7 +267,7 @@ These size and age the local copy only. A revocation's lifetime in Redis is set 
 |---|---|---|---|
 | `cosec.observability.listener.required-timeout` | duration | `1s` | How long one `REQUIRED` decision listener may take. A failure or timeout turns a permit into `503`. |
 | `cosec.observability.listener.queue-capacity` | int | `1024` | Events one `BEST_EFFORT` listener may have waiting. A full queue drops the next event and counts it (`cosec.listener.dropped`). |
-| `cosec.observability.listener.drain-timeout` | duration | `5s` | On shutdown, how long queued events still go out; the rest is then dropped. The Kafka audit listener gets as long again for the sends it still holds. |
+| `cosec.observability.listener.drain-timeout` | duration | `5s` | On shutdown, how long queued events still go out; the rest is then dropped. The Kafka audit listener, and the control plane's Kafka change listener, get as long again for the sends they still hold. |
 
 ## Control plane
 
@@ -328,8 +329,9 @@ cosec:
 `usertype`, `domain-prefix`, `http-config`, `ignore-check-state`, `scopes`, `device-id`, `client-os-type`, `pack-id`,
 `pkce`, `auth-server-id`, `ignore-check-redirect-uri`, `tenant-id`, `kid`, `team-id`, `login-type` (default
 `CorpApp`), `lang` (default `zh`), `ding-talk-org-type`, `ding-talk-corp-id`, `ding-talk-exclusive-login` and
-`ding-talk-exclusive-corp-id`. Booleans default to `false`, the others to none. Social login keeps its OAuth state in
-Redis through a `StringRedisTemplate`.
+`ding-talk-exclusive-corp-id`. Booleans default to `false`, the others to none; `ignore-check-state: true` fails
+startup, since the state is what keeps a forged callback out. Social login keeps its OAuth states in Redis through a
+`StringRedisTemplate`.
 
 ## CoCache properties that affect CoSec
 
@@ -361,8 +363,7 @@ Every CoSec cache is assembled by CoCache's layers, field by field; a later step
 1. CoCache's type default (`store`: no `ttl`, `local-max-age` 30 s; `cache`: `ttl` 1 h);
 2. `cocache.defaults.cache.*` or `cocache.defaults.store.*`, for the fields CoSec's declaration leaves unwritten;
 3. CoSec's declaration: `cosec.authorization.snapshot.local-max-age` for the snapshot store,
-   `cosec.authentication.revocation.cache.*` and `unknown-read: absent` for the revocation tables (a failed read answers
-   "not revoked"; `unknown-read: throw` in step 6 makes the revocation check fail closed with `503` instead);
+   `cosec.authentication.revocation.cache.*` for the revocation tables;
 4. the application's CoCache `CacheSpecCustomizer` beans;
 5. `cocache.overrides.*`, which only tighten;
 6. `cocache.caches.[<CacheName>].*`;
@@ -379,7 +380,7 @@ constrained (step 7), so even `unlock` cannot change them:
 | `PolicySnapshotCache` and the control plane's and shadow window's stores of record (`RevisionRecordCache`, `RevisionIndexCache`, `ReferenceIndexCache`, `ControlLeaseCache`, `ControlListCache`, `ControlAppListCache`, `ChangeRequestCache`, `StageCache`, `CandidateCache`) | `ttl`, `unknown-read`; the snapshot store also `local-max-age` | `ttl` never expires, `unknown-read: throw` | Redis is the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry or a failed read taken for "absent" would silently drop a document, and with it its DENY statements. As CoCache `Store`s, they never reclaim content they cannot read, and a failed delete throws instead of being retried later, when it could delete a newer write. |
 | `ShadowReportCache`, `ShadowReporterCache`, `InstanceStatusCache`, `InstanceIndexCache` | `unknown-read`, `ttl` | `unknown-read: throw`; `ttl` the declared 8 days (reports, reporters) or 2 minutes (statuses; the list of instances keeps the 8 days) | An outage must not read as "no samples" or "no instance", and an instance's samples must not expire from a window it reported in. |
 | `MembershipCache` | `read-failure`, `unknown-read` | `ttl` finite (one minute when `forever`), `ttl-jitter: 0s`, `read-failure` and `unknown-read: throw` | A failed read must never become "no memberships", and a lost invalidation must expire. |
-| `RevokedTokenCache`, `RevokedSubjectCache` | `read-timeout` | `read-timeout`: the store's command timeout | As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. A read that times out reads "not revoked" (`unknown-read: absent`), so no layer, `cocache.defaults.store.read-timeout` included, may time it out sooner. |
+| `RevokedTokenCache`, `RevokedSubjectCache` | `read-timeout`, `unknown-read` | `read-timeout`: the store's command timeout; `unknown-read: throw` | As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. A failed read is unknown, never "not revoked": absent would let a refresh issue a token on a read that failed (`IDN-14`). A read that times out is unavailable, which the pipeline's verification accepts, so no layer, `cocache.defaults.store.read-timeout` included, may time it out sooner. Whether verification accepts it is `cosec.authentication.revocation.fail-closed`. |
 | every CoSec cache | key prefix, namespace, key encoder, codec, key filter, `ttl` function, data source | — | The storage layout is CoSec's, where every instance and the control plane look for it. |
 
 **Next:** where the documents live and how instances read them, in [Storage and caching](./storage.md).

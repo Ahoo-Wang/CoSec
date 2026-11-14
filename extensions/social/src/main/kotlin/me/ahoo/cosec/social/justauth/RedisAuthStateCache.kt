@@ -44,8 +44,9 @@ class RedisAuthStateCache(
         redisTemplate.opsForValue()[withPredix(key), value, timeout] = TimeUnit.MILLISECONDS
     }
 
+    /** The cached value; empty when there is none, never an exception (round-2 review M4). */
     override fun get(key: String): String {
-        return redisTemplate.opsForValue()[withPredix(key)]!!
+        return redisTemplate.opsForValue()[withPredix(key)].orEmpty()
     }
 
     override fun containsKey(key: String): Boolean {

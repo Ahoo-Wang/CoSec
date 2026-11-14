@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "CTL-32"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "shared is an ordinary policy of the platform. acme binds editors to it, which checks clean and publishes.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "fence",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "shared",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "b",
+              "subject": {
+                "role": "editor"
+              },
+              "app": "order",
+              "space": "*",
+              "policy": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}

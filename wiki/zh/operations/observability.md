@@ -148,7 +148,13 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 | `cosec.listener.failures` | `listener` | 抛异常的监听器调用，以及超时的 `REQUIRED` 监听器调用 |
 | `cosec.audit.required.failures` | 无 | 发生在它无法改变的决策（非放行）上的 `REQUIRED` 失败 |
 
-按 `cause` 对 `result=indeterminate` 的速率、对 `explicit_deny` 以及对 `cosec.listener.dropped` 设置告警。
+吊销存储无法读取时，流水线未经吊销检查就接受的令牌也会计数（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）：
+
+| 指标 | 标签 | 计数 |
+|---|---|---|
+| `cosec.revocation.unchecked` | 无 | 吊销无法读取时被接受的令牌；每段这样的时间还会以 `WARN` 记录 `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).`，最多每 10 秒一次 |
+
+按 `cause` 对 `result=indeterminate` 的速率、对 `explicit_deny`、对 `cosec.listener.dropped` 设置告警，并对 `cosec.revocation.unchecked` 的任何上升告警：它上升期间，被吊销的令牌会被接受。
 `indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到（[故障排查](./troubleshooting.md#unavailable)）。
 CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标（[CoCache 文档](https://cocache.ahoo.me)）。
 

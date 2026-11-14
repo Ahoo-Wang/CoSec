@@ -54,6 +54,9 @@ class ApiKeyReaderTest {
     @Test
     fun aKeyBelongsToATenantAndAPrincipal() {
         assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "", null, null) }
+        for (tenant in listOf(" ", "*", "a:b", "a\nb", "x".repeat(129))) {
+            assertThrows<IllegalArgumentException> { ApiKey("k", "svc", tenant, null, null) }
+        }
         assertThrows<IllegalArgumentException> { ApiKey("k", "", "acme", null, null) }
         assertThrows<IllegalArgumentException> { ApiKey("", "svc", "acme", null, null) }
     }

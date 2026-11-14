@@ -20,7 +20,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
-import me.ahoo.cosec.spi.snapshot.SnapshotVersion
 import java.time.Duration
 import java.time.Instant
 
@@ -122,8 +121,6 @@ class Snapshot<out P : Any, out A : Any> internal constructor(
     val policies: DocumentState<P> get() = policiesEntry.state
 
     val app: DocumentState<A>? get() = appEntry?.state
-
-    val version: SnapshotVersion get() = SnapshotVersion(policiesEntry.revision, appEntry?.revision ?: 0)
 
     /** The lag of the older of the documents (RFC 0003 §4.5). */
     fun lagAt(now: Instant): Duration {

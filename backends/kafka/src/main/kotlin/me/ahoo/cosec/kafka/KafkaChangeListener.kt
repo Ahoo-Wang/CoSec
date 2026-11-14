@@ -15,20 +15,15 @@
 
 package me.ahoo.cosec.kafka
 
-import kotlinx.coroutines.future.await
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeEventJson
 import me.ahoo.cosec.control.audit.ChangeListener
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
-import java.util.concurrent.ArrayBlockingQueue
-import java.util.concurrent.CompletableFuture
-import java.util.concurrent.RejectedExecutionException
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
-import kotlin.coroutines.cancellation.CancellationException
+import kotlin.time.Duration
 
 /**
  * Writes each control-plane change event to [topic] (RFC 0007 §10.5, default `cosec-control-audit`): the key is the
@@ -39,8 +34,10 @@ import kotlin.coroutines.cancellation.CancellationException
  *   cannot record does not happen (503). Configure the producer with `acks=all`. Break-glass needs one (RFC 0007 §8).
  * - [Delivery.BEST_EFFORT] (the default): a failed send is reported to the control plane, which logs it.
  *
- * As [KafkaAuditListener] does, sends run on this listener's own thread with at most [queueCapacity] waiting, never on
- * the caller's: `KafkaOperations.send` may block on metadata or buffer space.
+ * As [KafkaAuditListener] does, sends run on this listener's own [BoundedSender], with at most [queueCapacity] waiting,
+ * never on the caller's: `KafkaOperations.send` may block on metadata or buffer space. [destroy] waits up to
+ * [drainTimeout] for what is queued and unanswered, as the audit listener does, so a change event made just before
+ * shutdown is not lost (round-2 review L2).
  */
 class KafkaChangeListener(
     private val kafkaOperations: KafkaOperations<String, String>,
@@ -48,34 +45,24 @@ class KafkaChangeListener(
     override val delivery: Delivery = Delivery.BEST_EFFORT,
     override val name: String = NAME,
     queueCapacity: Int = KafkaAuditListener.DEFAULT_QUEUE_CAPACITY,
+    /** `cosec.observability.listener.drain-timeout`: how long [destroy] waits for the sends this listener holds. */
+    drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT,
 ) : ChangeListener,
     DisposableBean {
     init {
         require(topic.isNotBlank()) { "topic must not be blank." }
     }
 
-    private val sender = ThreadPoolExecutor(1, 1, 0, TimeUnit.MILLISECONDS, ArrayBlockingQueue(queueCapacity)) {
-        Thread(it, THREAD_NAME).apply { isDaemon = true }
-    }
+    private val sender = BoundedSender("Kafka change audit queue of [$topic]", THREAD_NAME, queueCapacity, drainTimeout)
 
     override suspend fun onChange(event: ChangeEvent) {
         val key = event.document.toString()
         val value = ChangeEventJson.write(event)
-        val queued = try {
-            CompletableFuture.supplyAsync({ kafkaOperations.send(topic, key, value) }, sender)
-        } catch (e: RejectedExecutionException) {
-            throw IllegalStateException("The Kafka change audit queue of [$topic] is full.", e)
-        }
-        try {
-            queued.thenCompose { it }.await()
-        } catch (e: CancellationException) {
-            queued.cancel(false)
-            throw e
-        }
+        sender.send { kafkaOperations.send(topic, key, value) }.await()
     }
 
     override fun destroy() {
-        sender.shutdown()
+        sender.close()
     }
 
     override fun toString(): String = "KafkaChangeListener($topic, $delivery)"

@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index d9db8190..aad42999 100644
+index 75e8f88a..efd8aca0 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -369,7 +369,7 @@ class DefaultControlPlane(
-      */
-     private fun enforceable(resource: Resource): Resource {
-         val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
--            PathNormalizer.normalize(resource.id)
-+            PathNormalizer.normalize(resource.id)?.let { resource.id }
-         } else {
-             resource.id.takeIf { PathNormalizer.withinBounds(it) }
-         }
+@@ -383,7 +383,7 @@ class DefaultControlPlane(
+     }
+ 
+     /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [PathNormalizer.enforceable]. */
+-    private fun enforceable(resource: Resource): Resource = PathNormalizer.enforceable(resource)
++    private fun enforceable(resource: Resource): Resource = PathNormalizer.enforceable(resource)?.let { resource }
+         ?: throw ChangeRejectedException(
+             BAD_REQUEST,
+             "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +

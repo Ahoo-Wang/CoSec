@@ -11,13 +11,13 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 控制面随 `cosec-control` 模块提供（它需要 `cosec-cocache`，因为文档保存在 Redis 中）。它在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供 HTTP API；其设置为 `cosec.control.*`（[配置](../operations/configuration.md)），文档如何存储以及如何首次发布见[存储](../operations/storage.md)。
 
-控制请求首先是一个普通请求：宿主管道对它认证，并且必须允许它，因此文档必须允许运维人员访问该 API 路径。之后每一步都以该主体的身份再次授权，所在应用为 `cosec.control.app-id`（默认 `cosec-control`），动作为针对所涉及文档（`doc/platform`、`doc/app/<appId>`、`doc/tenant/<tenantId>`）或条目的 `cosec:<verb>`。在任何策略之前，先执行一条硬性规则：租户的主体只能操作自己租户的文档；平台文档和应用文档属于 `(platform)` 租户的主体。
+控制请求首先是一个普通请求：宿主管道对它认证，并且必须允许它，因此文档必须允许运维人员访问该 API 路径。之后每一步都以该主体的身份再次授权，所在应用为 `cosec.control.app-id`（默认 `cosec-control`），动作为针对所涉及文档（`doc/platform`、`doc/app/<appId>`、`doc/tenant/<tenantId>`）或条目的 `cosec:<verb>`。条目的 id 是其资源中的一段，所以变更不能写入含 `/` 的 id；唯一的例外是权限策略的 `perm:<app>/<id>`，规则要用 `**` 才能匹配到它。在任何策略之前，先执行一条硬性规则：租户的主体只能操作自己租户的文档；平台文档和应用文档属于 `(platform)` 租户的主体。
 
 | 步骤 | 需要 |
 |---|---|
 | 读取文档、历史、差异 | `cosec:read` |
-| 提议、`apply`、rebase | 对写入或删除的每个条目需要 `cosec:write`，对写入的每个绑定的作用域需要 `cosec:grant`；`apply` 和回滚还需要 `cosec:read` |
-| 开启影子窗口、发布 | `cosec:publish` |
+| 提议、`apply`、rebase | 对写入或删除的每个条目需要 `cosec:write`，对写入的每个绑定的作用域、以及因此派生出新绑定的每个角色的作用域需要 `cosec:grant`；`apply` 和回滚还需要 `cosec:read` |
+| 开启影子窗口、发布 | `cosec:publish`；break-glass 的申请和撤销改为需要 `cosec:breakglass` |
 | 跳过影子窗口 | `cosec:skip-shadow` |
 | 审批、驳回 | `cosec:approve` |
 | `simulate`、`explain`、`analyze` | 在决定该请求的租户文档上分别需要 `cosec:simulate`、`cosec:explain`（没有主体的请求是 `(0)` 的文档）；在所查询租户的文档上需要 `cosec:analyze` |
@@ -39,7 +39,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、撤销绑定（[安全模型](../guide/security-model.md#break-glass)）。撤销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
 
-错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息。路径、查询或请求体中任何位置的字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就是 `400`（`IDN-10`）：Redis key 会把它写成 `?`，指向另一个 id。存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有主体的请求（包括管道匿名放行的请求），在读取请求体之前就是 `401`。只服务路由的确切路径：末尾带 `/` 或含空段的路径是 `404`。记录解码失败的变更（包括属于不能作为应用 id 的应用的变更），对每个调用方都是不带详情的 `503`（`SCP-10`）。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
+错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息。路径、查询或请求体中任何位置的字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就是 `400`（`IDN-10`）：Redis key 会把它写成 `?`，指向另一个 id。存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有主体的请求（包括管道匿名放行的请求），在读取请求体之前就是 `401`。只服务路由的确切路径：末尾带 `/` 的路径是 `404`，含空段的路径在到达之前就被管道以 `400` 拒绝。记录解码失败的变更（包括属于不能作为应用 id 的应用的变更），对每个调用方都是不带详情的 `503`（`SCP-10`）。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
 
 ## 校验策略 {#validating-policies}
 
@@ -48,9 +48,9 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | 检查 | 状态码 | 发现 |
 |---|---|---|
 | `V1` | 400 | 候选无法读回为文档。 |
-| `V2` | 400、422、503 | 文档超过 8 MB；id 使用了保留前缀（`cosec:`、`g:`、`r:`）；租户策略复用了平台策略的 id 但不是它的完全相同的副本（完全相同的副本是[分区流程](../operations/upgrading.md#partition-plan)的第一步）；平台策略使用了某个租户文档已经定义或绑定的 id，或在某个租户文档持有它的副本时被修改，发现中列出这些文档（这类租户的文档读不到时为 `503`）；候选中任何位置的绑定所在的应用不能作为应用 id（空白、`*`、含 `:`、控制字符或落单的代理项、超过 128 个字符；位于 `$.bindings[i].app` 的 `400`：仍含有这种绑定的文档必须移除它，只移除它的变更是合法的）。 |
+| `V2` | 400、422、503 | 文档超过 8 MB；id 使用了保留前缀（`cosec:`、`g:`、`r:`）；变更写入的 id 含 `/`（`422`；权限策略的 `perm:<app>/<id>` 可以含，文档中已有这种 id 的条目可以保留或删除）；租户策略复用了平台策略的 id 但不是它的完全相同的副本（完全相同的副本是[分区流程](../operations/upgrading.md#partition-plan)的第一步）；平台策略使用了某个租户文档已经定义或绑定的 id，或在某个租户文档持有它的副本时被修改，发现中列出这些文档（这类租户的文档读不到时为 `503`）；候选中任何位置的绑定所在的应用不能作为应用 id（空白、`*`、含 `:`、控制字符或落单的代理项、超过 128 个字符；位于 `$.bindings[i].app` 的 `400`：仍含有这种绑定的文档必须移除它，只移除它的变更是合法的）。 |
 | `COMPILE` | 422 | 某个策略、条件、模式、绑定或规则无法用平台的限制、平台声明的属性以及控制面主机的属性提供者声明的属性编译。 |
-| `REFERENCES` | 422 | 绑定指向的策略无处可解析；平台变更删除了其他文档引用的策略（自己定义了同 id 策略的租户不算）；租户的 `boundary` 不是平台边界。 |
+| `REFERENCES` | 422 | 绑定指向的策略无处可解析，或指向平台边界（边界不能被绑定）；平台变更删除了其他文档引用的策略，或把被引用的策略改成边界、把被引用的边界改成策略（`CTL-30`；自己定义了同 id 策略的租户不算）；租户的 `boundary` 不是平台边界。 |
 | `OPERATION` | 422 | 操作删除了不存在的内容，或设置了该文档没有的字段。 |
 | `IF_MATCH` | 412 | 条目已不再是操作的 `ifMatch` 所说的样子。 |
 | `V3`（警告） | | 平台的 `limits` 或 `attributes` 有变化：其他文档会在每个实例上重新编译，不再能编译的文档失败即拒绝。 |
@@ -179,6 +179,8 @@ flowchart LR
 |---|---|
 | `SAME` | 相同的决策，由相同的语句做出。 |
 | `BY_CHANGED` | 相同的决策，由另一条语句做出。 |
+| `OBLIGATIONS_CHANGED` | 相同的放行，由相同的语句做出，但适用的限流规则不同。 |
+| `BECAME_DENIED` | 执行时无法决定，候选拒绝。 |
 | `WIDENED` | 执行时没有允许，候选允许。 |
 | `NARROWED` | 执行时允许，候选不允许。 |
 | `BECAME_INDETERMINATE` | 执行时不是 Indeterminate，候选是，原因不是属性不可用。 |
@@ -227,7 +229,7 @@ flowchart LR
 | `UNRESOLVED` | 新增或修改的绑定指向一条没有任何文档定义的策略，它授予什么无从判断。 |
 | `ANONYMOUS` | 授给默认租户 `(0)` 中的 `Anyone`：未认证的调用方都在这个租户中，授出也会作用于它们。 |
 | `UNREADABLE` | 授出触及的某个 app 文档读不到，作者在那里持有什么无从得知；或 app 列表不可信，而授出触及所有 app（[存储](../operations/storage.md#publishing-through-the-control-plane)）。 |
-| `NOT_ANALYZED` | 非信任根所做的平台或应用文档变更，或租户边界变更。 |
+| `NOT_ANALYZED` | 由非信任根所做：放入任何内容、或删除一条 DENY 的平台或应用文档变更（`CTL-31`，每条策略或绑定一项，见下文），或租户边界变更。 |
 | `TENANT_BINDING` | 与应用文档的 `NOT_ANALYZED` 一起出现：变更新增或放宽了某条权限策略的 ALLOW，租户文档中每条绑定该策略的绑定各是一项，只写出绑定 id 和它所在的租户文档，审批人由此看到变更影响到谁。仅供参考：审批针对的是 `NOT_ANALYZED`，只有这些条目变化时，已审批的变更不会退回 `AWAITING_APPROVAL`。 |
 | `BREAK_GLASS` | 新增或修改的 break-glass 绑定：总是需要第二个人。 |
 
@@ -240,7 +242,11 @@ flowchart LR
 - **租户与平台都定义的 id。** 执行时，两条策略内容不同，这样的绑定或附加才因二义而被拒绝。分析不比较内容，把每个这样的 id 都当作二义，这只会减少权利：作者经它什么也不持有；它绑定到作者的地方，按拒绝一切的 DENY 计。
 - **每一份 app 文档。** app 文档绑定角色，所以无论变更是否点名该 app，它都可能在该 app 中拒绝作者某些东西。分析读取 app 列表列出的每一份 app 文档；读不到的那份，使触及它所在 app 的每个授出成为 `UNREADABLE`。app 列表完整之前（升级后，在 [`cosec-migrate repair-references`](../operations/upgrading.md#repair-the-back-reference-index) 运行之前），覆盖所有 app 的每个授出（app 为 `*` 的绑定或附加）都是 `UNREADABLE`，经条件收窄到变更没有点名的 app 的授出也是：分析从绑定的作用域取 app，不从条件中取。
 
-删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
+删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。
+
+租户可以独自删除自己的 DENY：平台和各应用的 DENY 以及它的边界仍然约束着它。平台文档和应用文档之上没有这样的约束，所以删除其中一条 DENY 的变更需要第二个人（`CTL-31`）：每条含 DENY 的 `policy <id> of <document>`、每条所绑策略含 DENY 或找不到的 `binding <id> of <document>`，各是一项 `NOT_ANALYZED` 升级。两份文档按[展开后](./role-permissions.md#roles)的形式读取：删除角色，或用 `putRole` 去掉一项权限，按角色不再派生的每条绑定计。撤销 break-glass 绑定不算这样的删除：它结束的是一次应急，一个人即可（[break-glass](../guide/security-model.md#break-glass)）。
+
+对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
 
 API key 无论其主体持有什么，都不是信任根，也从不审批。CoSec 按校验来源识别自己的 API key，任何名为 `api-key` 的凭证（包括网关转发的身份所带的）也算作 API key。你自己的认证器认可的凭证，在 CoSec 看来是人的凭证：不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。
 
@@ -250,11 +256,11 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 - **针对个人的限制。** 绑定到 `Anyone`、带 `subject.id` 条件的 DENY 限制的是该主体能做什么，而不是它能授出什么：分析把 `Anyone` 的 DENY 读作对每个被授予者同样生效。请把这条 DENY 绑定到该主体。
 - **信任根。** 不开启 four-eyes 时，它的变更完全不经分析；这时 break-glass 的两个人和时间上限也都约束不了它（[安全模型](../guide/security-model.md#break-glass)）。
 
-有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。审批是人的行为：以 API key 认证的主体不能审批（`403`），凭证不带 id 的主体也不能（`403`），因为发布时不会计入它的审批。审批记录审批人的令牌（`jti` 与 `iat`）；变更发布之前，如果这个令牌，或审批人截至当时签发的全部令牌被吊销，审批就不再算数。没有记下凭证 id 的审批也不算数：升级到本版本之前做的、旧版本实例接受的，或用不带 id 的凭证给出的审批；请重新审批。凭证不说明签发时间时（你的认证器没有设置 `issuedAt`），该主体的令牌只要有一次吊销，其审批就作废。审批人的访问令牌过期之后，`TokenRevoker.revoke` 不再接受它，只有 `revokeSubject` 能收回其审批。吊销按数据面管道的方式读取，所以在审批有效期内，这里同样把降级读当作"未吊销"（[认证](../integration/authentication.md#logout-and-revocation)）；读取以其他方式失败时返回 `503`，变更保留其审批，等存储恢复后再发布。吊销保留 `cosec.jwt.token-validity.refresh` 这么久，它不能短于 `cosec.control.approval.expire-after`，否则 starter 不会启动。成员关系来自成员关系提供者的审批人，发布时判定两次：一次按审批时持有且现在仍持有的角色，一次按提供者现在答复的全部内容；两次都必须放行，所以绑定在其后新获得角色上的 DENY 会让审批作废。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。`GET /changes/{id}` 显示谁审批、何时、为何审批，不显示审批人的凭证、成员关系、属性，以及其凭证能触及什么；这些只保存在存储中的变更记录里，任何变更事件都不带它们。break-glass 的审批先由 REQUIRED 变更监听器记录，再存入变更：之后存入失败时，记录中会有一条变更上没有的审批，由审批人重新审批。
+有升级的变更在窗口关闭或被跳过后停留在 `AWAITING_APPROVAL`。另一位持有 `cosec:approve` 的人通过 `POST /changes/{id}:approve` 审批，并带上他们评审过的 `candidate` 摘要（来自 `GET /changes/{id}`）；摘要不同返回 `409`，作者不能审批自己的变更。审批是人的行为：以 API key 认证的主体不能审批（`403`），凭证不带 id 的主体也不能（`403`），因为发布时不会计入它的审批。审批记录审批人的令牌（`jti` 与 `iat`）；变更发布之前，如果这个令牌，或审批人截至当时签发的全部令牌被吊销，审批就不再算数。没有记下凭证 id 的审批也不算数：升级到本版本之前做的、旧版本实例接受的，或用不带 id 的凭证给出的审批；请重新审批。凭证不说明签发时间时（你的认证器没有设置 `issuedAt`），该主体的令牌只要有一次吊销，其审批就作废。审批人的访问令牌过期之后，`TokenRevoker.revoke` 不再接受它，只有 `revokeSubject` 能收回其审批。吊销按数据面管道的方式判断，但这里无法读取的存储不算"未吊销"：与其他读取失败一样返回 `503`（[认证](../integration/authentication.md#logout-and-revocation)），变更保留其审批，等存储恢复后再发布。吊销保留 `cosec.jwt.token-validity.refresh` 这么久，它不能短于 `cosec.control.approval.expire-after`，否则 starter 不会启动。成员关系来自成员关系提供者的审批人，发布时判定两次：一次按审批时持有且现在仍持有的角色，一次按提供者现在答复的全部内容；两次都必须放行，所以绑定在其后新获得角色上的 DENY 会让审批作废。`:reject` 带上 `reason` 结束该变更。审批在 `cosec.control.approval.expire-after`（72 小时）内有效，且只对该候选有效。`GET /changes/{id}` 显示谁审批、何时、为何审批，不显示审批人的凭证、成员关系、属性，以及其凭证能触及什么；这些只保存在存储中的变更记录里，任何变更事件都不带它们。break-glass 的审批先由 REQUIRED 变更监听器记录，再存入变更：之后存入失败时，记录中会有一条变更上没有的审批，由审批人重新审批。
 
 ## 发布与回滚 {#publishing-and-rolling-back}
 
-`POST /changes/{id}:publish` 发布一个 `READY` 的变更。如果它的窗口出现了 `WIDENED`、`NARROWED` 或 `BECAME_INDETERMINATE` 的请求，或以证据不足关闭，发布者必须确认这些数字，否则返回 `428`：
+`POST /changes/{id}:publish` 发布一个 `READY` 的变更。如果它的窗口出现了 `WIDENED`、`NARROWED`、`BECAME_INDETERMINATE`、`BECAME_DENIED` 或 `OBLIGATIONS_CHANGED` 的请求，或以证据不足关闭，发布者必须确认这些数字，否则返回 `428`：
 
 ```json
 { "ack": { "window": "<window id>", "counts": { "SAME": 4180, "NARROWED": 3 } } }
@@ -264,7 +270,7 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 
 写入时只比较该文档自己的头。检查读过的其他文档（例如同一时刻落地的平台变更）可能在发布的最后一次检查与写入之间变化；这时控制面重新分析这次变更，记 `HEADS_MOVED`，分析发现了无人审批的升级项时记 `REVIEW_NEEDED`。变更保持已发布：为什么这是安全的、如何复核这类事件，见[一次发布比较什么](../operations/storage.md#what-a-publish-compares)。
 
-要撤销某个修订，用 `{"revision": 11, "note": "..."}` 调用 `POST /documents/{key}:rollback`，它会提议一个 `ROLLBACK` 变更，把文档恢复为该修订时的样子。它和其他变更一样经过检查、窗口、审批和发布。保留哪些修订、保留多久，见[存储](../operations/storage.md)。
+要撤销某个修订，用 `{"revision": 11, "note": "..."}` 调用 `POST /documents/{key}:rollback`，它会提议一个 `ROLLBACK` 变更，把文档恢复为该修订时的样子。它和其他变更一样经过检查、窗口、审批和发布，所以恢复带 `onMissing: "nomatch"` 的 DENY 时要像提议一样带上 `confirmations`：旧修订中的确认是为另一个变更给出的。保留哪些修订、保留多久，见[存储](../operations/storage.md)。
 
 ## 访问审查 {#access-reviews}
 

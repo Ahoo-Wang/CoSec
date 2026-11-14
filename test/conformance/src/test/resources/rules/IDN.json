@@ -133,7 +133,7 @@
     {
       "id": "IDN-11",
       "source": "RFC 0004 §4.5.1 (RC1-22, R5)",
-      "statement": "A token's tenant claim names a tenant or is absent. Absent, the principal is in the default tenant (0). An empty claim makes the token invalid (401 token-invalid) on every path that verifies one, the pipeline's and refresh's, whichever verifier read it: read as no tenant, it would put the principal in the default tenant with the token's roles. CoSec's issuer refuses to sign a token with an empty tenant.",
+      "statement": "A token's tenant claim names a tenant or is absent. Absent, the principal is in the default tenant (0). An empty claim makes the token invalid (401 token-invalid) on every path that verifies one, the pipeline's and refresh's, whichever verifier read it: read as no tenant, it would put the principal in the default tenant with the token's roles. A claim that cannot name a tenant document (blank, `*`, holding `:` or a control character, longer than 128 characters: the rule of `SnapshotKey.Tenant`) makes the token invalid as well, and an API key record with such a tenant fails (503), so every credential applies one rule. CoSec's issuer refuses to sign a token with an empty tenant or one it would refuse.",
       "level": "pipeline",
       "pending": null,
       "guards": [
@@ -143,7 +143,11 @@
         "runtime:TokenAuthenticatorTest#aTokenClaimingAnEmptyTenantIsInvalid",
         "spi:VerifiedTokenTest#verifyAndRefreshRefuseAnEmptyTenant",
         "runtime:TokenAuthenticatorTest#aTokenWithoutTenantIsInTheDefaultTenant",
-        "runtime:MembershipClaimsTest#aBlankTenantIsRefusedByTheScope"
+        "runtime:MembershipClaimsTest#aBlankTenantIsRefusedByTheScope",
+        "spi:VerifiedTokenTest#aTenantThatCannotNameATenantIsRefused",
+        "spi:ApiKeyReaderTest#aKeyBelongsToATenantAndAPrincipal",
+        "jwt:JwtTokenVerifierTest#aTenantIdThatCannotBeATenantIsInvalid",
+        "jwt:JwtTokenConverterTest#aTenantThatCannotBeATenantIdIsNotIssued"
       ]
     },
     {
@@ -161,11 +165,36 @@
     {
       "id": "IDN-13",
       "source": "Batch RFC 0010 C4 (2026-11-08)",
-      "statement": "A refresh token (the claim cosec.token, which the converter writes as refresh) is invalid wherever an access token is expected, on every path that verifies one: signed and unexpired, it never authenticates as a principal, so a principal named after the access token's id cannot exist. A token without the claim is an access token, whoever issued it. Refreshing reads the refresh token where it belongs and is unaffected.",
+      "statement": "A refresh token (the claim cosec.token, which the converter writes as refresh) is invalid wherever an access token is expected, on every path that verifies one: signed and unexpired, it never authenticates as a principal, so a principal named after the access token's id cannot exist. A token without the claim is an access token, whoever issued it. The other way too: a refresh reads only a refresh token where one belongs, issued with the access token it is presented with (its sub is that token's jti, its iat that token's iat); an access token there is refused, so whoever holds a token of a principal named after another token's id cannot refresh that token.",
       "level": "pipeline",
       "pending": null,
       "guards": [
-        "jwt:JwtTokenVerifierTest#aRefreshTokenIsRefusedWhereAnAccessTokenIsExpected"
+        "jwt:JwtTokenVerifierTest#aRefreshTokenIsRefusedWhereAnAccessTokenIsExpected",
+        "jwt:JwtTokenVerifierTest#anAccessTokenIsRefusedWhereARefreshTokenIsExpected"
+      ]
+    },
+    {
+      "id": "IDN-14",
+      "source": "Round-2 review H1 (2026-11-13); RFC 0009 §5",
+      "statement": "A token is never issued on a revocation read that failed: a refresh whose revocations cannot be read (RevocationUnavailableException) fails, never reads the old token as not revoked, so a revoked token, or a token of a revoked principal, cannot be refreshed into one that no revocation names. The pipeline's degraded verification (PIP-7) applies to verifying a token only.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:SimpleRefreshTokenAuthenticationTest#a refresh is refused when the revocations cannot be read",
+        "cocache:CoCacheRevocationReaderTest#aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails",
+        "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens"
+      ]
+    },
+    {
+      "id": "IDN-20",
+      "source": "Round-2 review M4 (2026-11-13)",
+      "statement": "A social sign-in's callback is accepted only with a state CoSec issued, once, and only from the browser that started the sign-in: the state is taken from the SocialStateStore (removed atomically) before the provider is called, whatever follows, and the browser's binding must hash to the one recorded with the state. A callback whose state is unknown, expired, already used or issued to another browser is refused, and the provider is never called for it.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "social:JustAuthProviderTest#a state is used once",
+        "social:JustAuthProviderTest#another browser's state is refused",
+        "social:RedisAuthStateCacheTest#aStateIsTakenOnce"
       ]
     }
   ]

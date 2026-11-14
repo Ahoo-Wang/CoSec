@@ -66,6 +66,44 @@ class JwtTokenVerifierTest {
         .apply(builder)
         .sign(JwtFixture.ALGORITHM)
 
+    private val issuedAt: Instant = Instant.now().minusSeconds(60).truncatedTo(java.time.temporal.ChronoUnit.SECONDS)
+
+    /** The refresh token the converter would issue with [access]: its `jti` as `sub`, the same `iat`. */
+    private fun refreshOf(access: String, iat: Instant? = JWT.decode(access).issuedAtAsInstant): String = JWT.create()
+        .withJWTId("r-" + JWT.decode(access).id)
+        .withSubject(JWT.decode(access).id)
+        .apply { iat?.let(::withIssuedAt) }
+        .withExpiresAt(Instant.now().plusSeconds(3600))
+        .withClaim(Jwts.TOKEN_USE_CLAIM, Jwts.REFRESH_TOKEN)
+        .sign(JwtFixture.ALGORITHM)
+
+    /**
+     * `IDN-13`, the other way (round-2 review M1): an access token is refused where the refresh token belongs, even one
+     * whose `sub`, a principal id someone chose, is the victim's access token id; so is a refresh token issued with
+     * another access token, or without an `iat`.
+     */
+    @Test
+    fun anAccessTokenIsRefusedWhereARefreshTokenIsExpected() {
+        val victim = jwtTokenConverter.toToken(
+            TokenSubject("alice", null, tenant = "acme", roles = setOf("admin")),
+            Duration.ofSeconds(-3600),
+            Duration.ofDays(7),
+        )
+        val attacker = jwtTokenConverter.toToken(TokenSubject(JWT.decode(victim.accessToken).id, null))
+        assertThrownBy<TokenVerificationException> {
+            jwtTokenVerifier.refresh(SimpleCompositeToken(victim.accessToken, attacker.accessToken))
+        }.message().contains("not a refresh token")
+
+        val access = signed { withIssuedAt(issuedAt) }
+        jwtTokenVerifier.refresh(SimpleCompositeToken(access, refreshOf(access))).principal.assert().isEqualTo("alice")
+        assertThrownBy<RefreshTokenMismatchException> {
+            jwtTokenVerifier.refresh(SimpleCompositeToken(access, refreshOf(access, issuedAt.plusSeconds(1))))
+        }
+        assertThrownBy<TokenVerificationException> {
+            jwtTokenVerifier.refresh(SimpleCompositeToken(access, refreshOf(access, iat = null)))
+        }.message().contains("no iat")
+    }
+
     /** `IDN-13`: a refresh token is signed and unexpired, and is still not an access token: it never becomes a principal. */
     @Test
     fun aRefreshTokenIsRefusedWhereAnAccessTokenIsExpected() {
@@ -102,9 +140,11 @@ class JwtTokenVerifierTest {
 
     @Test
     fun refreshingADelegationTokenIsRefused() {
-        val access = signed { withClaim("act", mapOf("sub" to "agent")) }
-        val refresh = JWT.create().withSubject("t1").withExpiresAt(Instant.now().plusSeconds(3600))
-            .sign(JwtFixture.ALGORITHM)
+        val access = signed {
+            withClaim("act", mapOf("sub" to "agent"))
+            withIssuedAt(issuedAt)
+        }
+        val refresh = refreshOf(access)
         assertThrownBy<DelegationUnsupportedException> {
             jwtTokenVerifier.refresh(SimpleCompositeToken(access, refresh))
         }
@@ -146,14 +186,26 @@ class JwtTokenVerifierTest {
     /** `IDN-11`: an empty `tenantId` claim is invalid on both paths that read one, never the default tenant. */
     @Test
     fun anEmptyTenantIdIsInvalid() {
-        val access = signed { withClaim("tenantId", "") }
-        val refresh = JWT.create().withSubject("t1").withExpiresAt(Instant.now().plusSeconds(3600))
-            .sign(JwtFixture.ALGORITHM)
+        val access = signed {
+            withClaim("tenantId", "")
+            withIssuedAt(issuedAt)
+        }
+        val refresh = refreshOf(access)
         for (read in listOf<() -> VerifiedToken>(
             { jwtTokenVerifier.verify(access) },
             { jwtTokenVerifier.refresh(SimpleCompositeToken(access, refresh)) },
         )) {
             val thrown = assertThrows(TokenVerificationException::class.java) { read() }
+            assertFalse(thrown is TokenExpiredException)
+        }
+    }
+
+    /** A tenant that cannot name a tenant document is invalid too, before any document is read (IDN-11). */
+    @Test
+    fun aTenantIdThatCannotBeATenantIsInvalid() {
+        for (tenant in listOf(" ", "*", "a:b", "x".repeat(129))) {
+            val access = signed { withClaim("tenantId", tenant) }
+            val thrown = assertThrows(TokenVerificationException::class.java) { jwtTokenVerifier.verify(access) }
             assertFalse(thrown is TokenExpiredException)
         }
     }

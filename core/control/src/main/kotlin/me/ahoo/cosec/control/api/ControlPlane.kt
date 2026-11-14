@@ -34,7 +34,7 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.engine.pattern.ResourcePattern
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.engine.pattern.ResourceTarget
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Binding
@@ -91,7 +91,7 @@ data class Simulation(
 
 /** A decision at the revisions an audit event recorded, or on the current heads. */
 @InternalCoSecApi
-data class Explanation(val version: SnapshotVersion, val decision: DecisionView, val trace: TraceView?)
+data class Explanation(val version: ViewVersion, val decision: DecisionView, val trace: TraceView?)
 
 /** Which bindings could permit, and which DENYs could deny, [action] on [resource] in a scope of [tenant] (§10.3). */
 @InternalCoSecApi
@@ -153,7 +153,13 @@ interface ControlPlane {
 
     suspend fun apply(operator: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String): ChangeRequest
 
-    suspend fun rollback(operator: Operator, key: SnapshotKey, toRevision: Long, note: String): ChangeRequest
+    suspend fun rollback(
+        operator: Operator,
+        key: SnapshotKey,
+        toRevision: Long,
+        note: String,
+        confirmations: List<Confirmation> = emptyList(),
+    ): ChangeRequest
 
     suspend fun rebase(operator: Operator, change: ChangeId): ChangeRequest
 
@@ -175,7 +181,7 @@ interface ControlPlane {
 
     suspend fun simulate(operator: Operator, request: SimulatedRequest, candidate: ChangeId? = null): Simulation
 
-    suspend fun explain(operator: Operator, request: SimulatedRequest, at: SnapshotVersion? = null): Explanation
+    suspend fun explain(operator: Operator, request: SimulatedRequest, at: ViewVersion? = null): Explanation
 
     suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport
 
@@ -257,9 +263,15 @@ class DefaultControlPlane(
         return changes.apply(operator, key, desired, mode, note)
     }
 
-    override suspend fun rollback(operator: Operator, key: SnapshotKey, toRevision: Long, note: String): ChangeRequest {
+    override suspend fun rollback(
+        operator: Operator,
+        key: SnapshotKey,
+        toRevision: Long,
+        note: String,
+        confirmations: List<Confirmation>,
+    ): ChangeRequest {
         authority.require(operator, key, ControlActions.READ)
-        return changes.rollback(operator, key, toRevision, note)
+        return changes.rollback(operator, key, toRevision, note, confirmations)
     }
 
     override suspend fun rebase(operator: Operator, change: ChangeId): ChangeRequest = changes.rebase(operator, change)
@@ -326,14 +338,14 @@ class DefaultControlPlane(
         )
     }
 
-    override suspend fun explain(operator: Operator, request: SimulatedRequest, at: SnapshotVersion?): Explanation {
+    override suspend fun explain(operator: Operator, request: SimulatedRequest, at: ViewVersion?): Explanation {
         val decidable = decidable(operator, request, ControlActions.EXPLAIN)
         val tenant = decidable.tenant
         val explained = decidable.request
         val scope = resolved(explained)
         if (scope == null) {
             val rejected = rejected(explained)
-            return Explanation(at ?: SnapshotVersion(0, null, 0), rejected.enforced, null)
+            return Explanation(at ?: ViewVersion(0, null, 0), rejected.enforced, null)
         }
         // The tenant's document at the revision decided on first: it decides, by enforcement's rule, whether the app's
         // was read (RC1-17), so the app revision an audit event recorded is the one explained.
@@ -383,27 +395,15 @@ class DefaultControlPlane(
         return Decidable(key, request.copy(resource = enforceable(request.resource)))
     }
 
-    /**
-     * [resource] as enforcement would decide it (RC1-41, review L5 of #1200): an `http` path goes through the
-     * normalization every request's path does ([PathNormalizer.normalize]), which a path enforcement answers 400 for (a
-     * dot segment after decoding, a malformed escape, over the length bounds) fails here too, and its path parameters
-     * are removed as there. A typed id, which no request carries as written, is held to the same length bounds: what no
-     * request path can be is not decided either, as its globs would cost more than any request's.
-     */
-    private fun enforceable(resource: Resource): Resource {
-        val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
-            PathNormalizer.normalize(resource.id)
-        } else {
-            resource.id.takeIf { PathNormalizer.withinBounds(it) }
-        }
-        id ?: throw ChangeRejectedException(
+    /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [PathNormalizer.enforceable]. */
+    private fun enforceable(resource: Resource): Resource = PathNormalizer.enforceable(resource)
+        ?: throw ChangeRejectedException(
             BAD_REQUEST,
-            "The resource is not one enforcement decides: an http path is refused for a dot segment, a malformed " +
-                "escape or its length, as a request's is, and any resource is at most " +
-                "${PathNormalizer.MAX_PATH_LENGTH} characters, ${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
+            "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
+                "an empty segment, an encoded separator, a backslash, a malformed escape or its length), and any " +
+                "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
+                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
         )
-        return if (id == resource.id) resource else Resource(resource.type, id, resource.attributes)
-    }
 
     /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
     private suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }

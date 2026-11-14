@@ -96,6 +96,19 @@ internal class JwtTokenConverterTest {
         error!!.message!!.assert().contains("empty tenant")
     }
 
+    /** A tenant a verified token would refuse is not issued either (IDN-11). */
+    @Test
+    fun aTenantThatCannotBeATenantIdIsNotIssued() {
+        for (tenant in listOf(" ", "*", "a:b", "a\nb", "x".repeat(129))) {
+            val error = runCatching {
+                jwtTokenConverter.toToken(
+                    TokenSubject("alice", null, tenant = tenant)
+                )
+            }.exceptionOrNull()
+            error.assert().isInstanceOf(IllegalArgumentException::class.java)
+        }
+    }
+
     /**
      * RC1-52, `IDN-10`: java-jwt writes an unpaired surrogate as `?`, so a token issued for `alice\uD800` would be a token
      * of `alice?`. It is refused where it is issued, whichever string of the principal holds one.

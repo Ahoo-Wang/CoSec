@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.decision
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PolicyId
 
 sealed interface Decision {
@@ -32,6 +35,9 @@ sealed interface Decision {
 /**
  * Why a decision is [Decision.Indeterminate]. The engine finds some of them itself (missing
  * policies, documents not loaded), so not every cause carries an exception: the adapter builds the one it reports.
+ *
+ * A set that grows: a minor release may add a member, such as the failure of a new port (RFC 0010 Q6), so a `when`
+ * over it needs an `else`, and a decision listener never matches it exhaustively.
  */
 sealed interface Cause {
     /**
@@ -110,6 +116,28 @@ sealed interface Obligation {
 data class RateLimitSpec(val permitsPerSecond: Double, val windowSeconds: Long = 1) {
     init {
         require(permitsPerSecond > 0) { "permitsPerSecond must be positive, not $permitsPerSecond." }
-        require(windowSeconds >= 1) { "windowSeconds must be at least 1, not $windowSeconds." }
+        require(windowSeconds in 1..MAX_WINDOW_SECONDS) {
+            "windowSeconds must be between 1 and $MAX_WINDOW_SECONDS (a day), not $windowSeconds."
+        }
+        // The limiters count in a window of windowSeconds * 1000 milliseconds and report the quota as a Long.
+        require(fitsInLong(permitsPerSecond, windowSeconds)) {
+            "permitsPerSecond x windowSeconds must be a finite number within a Long, not $permitsPerSecond x $windowSeconds."
+        }
+    }
+
+    companion object {
+        /**
+         * The longest window: a day (round-2 review M3 of the backends). A counter key lives two windows in a Redis that
+         * must not evict, one key per bucket value, so a long window keyed by something a client chooses is memory the
+         * client controls; and its milliseconds never overflow. A bound can be raised after GA, never lowered.
+         */
+        const val MAX_WINDOW_SECONDS: Long = 86_400L
+
+        /** Whether [permitsPerSecond] x [windowSeconds] is finite and at most [Long.MAX_VALUE]. For CoSec's own types. */
+        @InternalCoSecApi
+        fun fitsInLong(permitsPerSecond: Double, windowSeconds: Long): Boolean {
+            val perWindow = permitsPerSecond * windowSeconds
+            return perWindow.isFinite() && perWindow <= Long.MAX_VALUE.toDouble()
+        }
     }
 }

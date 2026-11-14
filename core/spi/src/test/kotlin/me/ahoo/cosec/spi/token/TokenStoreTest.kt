@@ -13,9 +13,9 @@
 
 package me.ahoo.cosec.spi.token
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
@@ -23,22 +23,14 @@ import java.time.Instant
 
 class TokenStoreTest {
 
+    /** A store that cannot record a principal's revocation throws, so an emergency revocation never does nothing. */
     @Test
-    fun noOpIsRevoked() {
-        TokenStore.NoOp.isRevoked("tokenId").assert().isFalse()
-    }
-
-    @Test
-    fun noOpRevoke() {
-        TokenStore.NoOp.revoke("tokenId", Duration.ofDays(7))
-        TokenStore.NoOp.isRevoked("tokenId").assert().isFalse()
-    }
-
-    @Test
-    fun noOpCannotRevokeSubject() {
-        assertThrows<UnsupportedOperationException> {
-            TokenStore.NoOp.revokeSubject(TenantId("t"), PrincipalId("alice"), Instant.now(), Duration.ofDays(7))
+    fun aStoreWithoutSubjectRevocationThrows() {
+        val store = object : TokenStore {
+            override suspend fun revoke(tokenId: String, ttl: Duration) = Unit
         }
-        TokenStore.NoOp.subjectRevokedBefore(TenantId("t"), PrincipalId("alice")).assert().isNull()
+        assertThrows<UnsupportedOperationException> {
+            runBlocking { store.revokeSubject(TenantId("t"), PrincipalId("alice"), Instant.now(), Duration.ofDays(7)) }
+        }
     }
 }

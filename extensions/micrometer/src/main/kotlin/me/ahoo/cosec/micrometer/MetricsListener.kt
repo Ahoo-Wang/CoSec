@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.Timer
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -101,6 +102,7 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
         const val SOURCE_TAG = "source"
         const val CAUSE_TAG = "cause"
         const val LISTENER_TAG = "listener"
+        const val UNCHECKED_REVOCATIONS = "cosec.revocation.unchecked"
         private const val INDETERMINATE = "indeterminate"
 
         /**
@@ -122,6 +124,16 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
                 it.requiredFailuresOnNonPermits.toDouble()
             }
                 .description("REQUIRED listener failures on decisions they could not change")
+                .register(registry)
+        }
+
+        /**
+         * Registers `cosec.revocation.unchecked`: the tokens accepted without a revocation check because the revocation
+         * store could not be read (PIP-7). While it rises, a revoked token is accepted.
+         */
+        fun bind(registry: MeterRegistry, unchecked: UncheckedRevocations) {
+            FunctionCounter.builder(UNCHECKED_REVOCATIONS, unchecked) { it.count.toDouble() }
+                .description("Tokens accepted without a revocation check, the revocation store unreadable")
                 .register(registry)
         }
     }

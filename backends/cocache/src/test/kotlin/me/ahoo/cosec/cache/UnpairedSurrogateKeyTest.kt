@@ -134,11 +134,10 @@ class UnpairedSurrogateKeyTest {
             store.revoke("jti?", Duration.ofMinutes(1))
             refused { runBlocking { store.reader.isRevoked("jti\uD800") } }
                 .assert().isInstanceOf(IllegalArgumentException::class.java)
-            refused { store.isRevoked("jti\uD800") }.assert().isInstanceOf(IllegalArgumentException::class.java)
             // Revoking it would revoke the other token.
-            refused { store.revoke("other\uD800", Duration.ofMinutes(1)) }
+            refused { runBlocking { store.revoke("other\uD800", Duration.ofMinutes(1)) } }
                 .assert().isInstanceOf(IllegalArgumentException::class.java)
-            store.isRevoked("other?").assert().isFalse()
+            store.reader.isRevoked("other?").assert().isFalse()
         }
     }
 
@@ -150,15 +149,17 @@ class UnpairedSurrogateKeyTest {
             refused { runBlocking { store.reader.subjectRevokedBefore(tenant, PrincipalId("alice\uD800")) } }
                 .assert().isInstanceOf(IllegalArgumentException::class.java)
             refused {
-                store.revokeSubject(
-                    TenantId("beta\uD800"),
-                    PrincipalId("bob"),
-                    Instant.now(),
-                    Duration.ofMinutes(1)
-                )
+                runBlocking {
+                    store.revokeSubject(
+                        TenantId("beta\uD800"),
+                        PrincipalId("bob"),
+                        Instant.now(),
+                        Duration.ofMinutes(1)
+                    )
+                }
             }
                 .assert().isInstanceOf(IllegalArgumentException::class.java)
-            store.subjectRevokedBefore(TenantId("beta?"), PrincipalId("bob")).assert().isNull()
+            store.reader.subjectRevokedBefore(TenantId("beta?"), PrincipalId("bob")).assert().isNull()
         }
     }
 
@@ -183,7 +184,7 @@ class UnpairedSurrogateKeyTest {
             val limiter = ReactiveRedisRateLimiter(
                 ReactiveStringRedisTemplate(factory),
                 "cosec:test:rate:${UUID.randomUUID()}",
-            ) { ReactiveRedisRateLimiterTest.FIXED_NOW }
+            )
             val limit = ReactiveRedisRateLimiterTest.quotaOf(1)
             limiter.tryAcquire("rule", CompiledRateLimit.keyedBucket("x?"), limit).allowed.assert().isTrue()
             limiter.tryAcquire("rule", CompiledRateLimit.keyedBucket("x\uD800"), limit).allowed

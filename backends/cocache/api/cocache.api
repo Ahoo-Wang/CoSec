@@ -15,10 +15,8 @@ public final class me/ahoo/cosec/cache/CoCacheTokenStore : me/ahoo/cosec/spi/tok
 	public fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;Lme/ahoo/cosec/cache/RevokedSubjectCache;)V
 	public synthetic fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;Lme/ahoo/cosec/cache/RevokedSubjectCache;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getReader ()Lme/ahoo/cosec/spi/token/RevocationReader;
-	public fun isRevoked (Ljava/lang/String;)Z
-	public fun revoke (Ljava/lang/String;Ljava/time/Duration;)V
-	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;)V
-	public fun subjectRevokedBefore-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Ljava/time/Instant;
+	public fun revoke (Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun revokeSubject-_BkUC70 (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public abstract interface class me/ahoo/cosec/cache/MembershipCache : me/ahoo/cocache/api/Cache {
@@ -112,8 +110,8 @@ public final class me/ahoo/cosec/cache/control/CoCacheControlStore$Companion {
 
 public final class me/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter : me/ahoo/cosec/spi/ratelimit/RateLimiter {
 	public static final field Companion Lme/ahoo/cosec/cache/limiter/ReactiveRedisRateLimiter$Companion;
-	public fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;Lkotlin/jvm/functions/Function0;)V
-	public synthetic fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;Lkotlin/jvm/functions/Function0;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;)V
+	public synthetic fun <init> (Lorg/springframework/data/redis/core/ReactiveStringRedisTemplate;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun tryAcquire (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/model/decision/RateLimitSpec;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

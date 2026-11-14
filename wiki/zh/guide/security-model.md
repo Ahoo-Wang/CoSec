@@ -64,6 +64,10 @@ flowchart TD
 
 策略可以有自己的 `condition`。它在每个请求中最多求值一次，而且只在该策略的某条语句已经按动作和资源命中之后才求值。条件不成立时，策略中的所有语句都不命中，DENY 也一样。条件抛出异常时，经由它到达的 DENY 视为失败的 DENY（Indeterminate），ALLOW 视为未命中。必须始终生效的 DENY，应放在没有条件的策略里。
 
+### 有多个资源模式的语句 {#statements-with-several-resource-patterns}
+
+有多个资源模式的语句，含义与每个模式各写一条语句完全相同。条件读取[路径变量](../policies/language.md#path-variables)且请求匹配其中多个模式时，按书写顺序依次用每个匹配模式的捕获值判断条件：任一成立即命中；都不成立且其中某次判断失败时，语句失败（DENY 使决策为 Indeterminate，ALLOW 视为未命中）。模式换个顺序写永远不改变决策，DENY 也不会漏掉它的某个模式单独就会拒绝的请求。
+
 ## 拒绝优先 {#deny-first}
 
 ALLOW 永远不会胜过命中的 DENY。所有候选的 DENY 语句都在任何 ALLOW 语句之前求值，不论它们来自哪个文档、哪个绑定或附加策略。平台的 ALLOW 推翻不了租户的 DENY，租户的 ALLOW 推翻不了平台的 DENY，break-glass 也推翻不了任何 DENY。
@@ -119,7 +123,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 
 有两项检查在其后端失败时让请求通过，因为在这两处失败即拒绝会把一次 Redis 故障变成全面故障，而换来的保护很少：
 
-- **令牌吊销的降级读取。** 吊销存储无法读取时，吊销表的降级读取（CoSec 为它们声明的 `unknown-read: absent`）回答“未吊销”。令牌的签名和有效期仍会校验，因此暴露窗口受访问令牌有效期限制。只有这种降级读取才会把令牌当作未吊销：吊销检查报告的错误会让请求以 `503` 失败，无法解码的吊销记录同样会让读取失败（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。控制面在发布时以同样方式读取审批人的吊销，这时暴露窗口受审批的有效期 `cosec.control.approval.expire-after`（72 小时）限制，而不是令牌的有效期；读取以其他方式失败时，什么都不发布（`503`）（[测试策略](../policies/testing.md#approval)）。
+- **校验请求令牌时的令牌吊销。** 吊销存储无法读取时，读取器如实报告（`RevocationUnavailableException`），流水线在校验请求的令牌时接受它。令牌的签名和有效期仍会校验，因此暴露窗口受访问令牌有效期限制。这个例外只适用于校验：会签发令牌的刷新在读不到吊销时失败（`IDN-14`），因为此时签发的令牌不在任何吊销记录中，会比故障活得更久；控制面检查审批人时什么都不发布（`503`，[测试策略](../policies/testing.md#approval)）。吊销检查报告的其他错误会让请求以 `503` 失败，无法解码的吊销记录同样会让读取失败（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。设置 `cosec.authentication.revocation.fail-closed: true` 可关闭这个例外，请求改为 `503`。
 - **未设置 `strictFailure` 的限流规则。** 规则无法计数时（限流器失败、超时或缺失），该规则被跳过。设置了 `"strictFailure": true` 的规则则以 `503` 拒绝请求。限流只作用于策略已经放行的请求，跳过一条规则不会授予策略没有授予的权限（[限流](../policies/rate-limiting.md)）。
 
 默认情况下没有其他失败即放行的地方。还有一种失效只在你有意写出时存在：带 `onMissing: nomatch` 的 DENY，见下文。

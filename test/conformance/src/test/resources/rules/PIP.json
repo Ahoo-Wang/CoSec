@@ -79,12 +79,14 @@
     {
       "id": "PIP-7",
       "source": "AGENTS.md (Fail closed); RFC 0006 §5.3.2",
-      "statement": "Only the revocation store's own degraded read may count a token as not revoked (the documented exception to failing closed); an error the revocation check reports fails the request with 503, never accepts the token.",
+      "statement": "Only verifying a request's token may count it as not revoked while the revocation store cannot be read (the reader throws RevocationUnavailableException: the documented exception to failing closed, which cosec.authentication.revocation.fail-closed turns off); a reader never answers \"not revoked\" for a read that failed, and any other error the revocation check reports fails the request with 503, never accepts the token.",
       "level": "pipeline",
       "guards": [
-        "cocache:CoCacheRevocationReaderTest#anUnreadableStoreMeansNotRevoked",
+        "cocache:CoCacheRevocationReaderTest#anUnreadableStoreIsUnavailable",
+        "runtime:TokenAuthenticatorTest#anUnavailableRevocationStoreAcceptsTheTokenItVerifies",
         "runtime:TokenAuthenticatorTest#otherFailuresPropagate",
         "cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout",
+        "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens",
         "cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked"
       ],
       "pending": null
@@ -155,6 +157,30 @@
       "guards": [
         "runtime:PipelineTest#theAuthorizationCookieIsReadOnlyWhenAllowed",
         "spring-boot:CoSecPipelineAutoConfigurationTest#the authorization cookie is a credential only with allow-cookie-token"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-14",
+      "source": "RFC 0006 §5.3.1; round-2 review M1",
+      "statement": "A path with an empty segment before its end (`//`, also as removing a path parameter leaves it), an encoded separator (`%2F`, in either case) or a backslash (`\\`, or `%5C` in either case) is answered 400 before authentication: a pattern reads them as segments of their own or as part of one, so a DENY would not match what a backend that merges slashes, decodes separators or reads a backslash as a separator serves. A trailing `/` is read as written, and a double-encoded separator (`%252F`, `%255C`) decodes to text.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PathNormalizerTest#emptySegmentsAndEncodedSeparatorsAreRejected",
+        "runtime:PathNormalizerTest#aTrailingSeparatorIsKept",
+        "runtime:PipelineTest#ambiguousPathIsInvalidRequestBeforeAuthentication"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-15",
+      "source": "RFC 0006 §7.6; round-2 review M2",
+      "statement": "A check by host code (`AuthorizationChecker`) never permits what enforcement would refuse to decide: an `http` path is normalized as a request's path is, one enforcement answers 400 for is a deny, and any other resource is held to a request path's length bounds.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:AuthorizationCheckerTest#a path enforcement refuses is never permitted",
+        "runtime:AuthorizationCheckerTest#a path is decided as enforcement normalizes it",
+        "runtime:AuthorizationCheckerTest#a resource longer than a request path can be is denied"
       ],
       "pending": null
     }

@@ -77,7 +77,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
-| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀，去掉末尾的 `:`。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。使用 Redis 限流器时，第一个 `{` 紧跟 `}`（空 hash tag）的前缀会启动失败；自带 hash tag 的前缀（如 `{cosec}`）让所有限流计数器落在 Redis Cluster 的同一个 slot 上（[限流](../policies/rate-limiting.md)）。 |
+| `cosec.key-prefix` | string | `cosec` | 每个 Redis key 的前缀，去掉末尾的 `:`。同一部署的所有服务、它的控制面以及 `cosec-migrate --key-prefix` 使用同一个值。使用 Redis 限流器时，自带 hash tag 的前缀（如 `{cosec}`）让所有限流计数器落在 Redis Cluster 的同一个 slot 上（[限流](../policies/rate-limiting.md)）。 |
 
 ## 管道 {#pipeline}
 
@@ -180,6 +180,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.authentication.revocation.skew` | duration | `5s` | 签发时间比主体吊销晚多少的令牌仍被该吊销覆盖：为时钟偏快的签发方留出余量。 |
+| `cosec.authentication.revocation.fail-closed` | boolean | `false` | 吊销无法读取时，是否拒绝请求的令牌（`503`）而不是接受它（[已写明的例外](../guide/security-model.md#the-two-documented-exceptions)）。无论如何，此时刷新都会失败。 |
 
 ## JWT {#jwt}
 
@@ -249,7 +250,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 |---|---|---|---|
 | `cosec.observability.listener.required-timeout` | duration | `1s` | 一个 `REQUIRED` 决策监听器最多用多久。失败或超时会把放行变成 `503`。 |
 | `cosec.observability.listener.queue-capacity` | int | `1024` | 一个 `BEST_EFFORT` 监听器最多可以有多少个待处理的事件。队列满时丢弃下一个事件并计数（`cosec.listener.dropped`）。 |
-| `cosec.observability.listener.drain-timeout` | duration | `5s` | 关闭时，排队的事件还能继续发出多久；之后剩下的被丢弃。Kafka 审计监听器还会再用同样长的时间等待它手中的发送。 |
+| `cosec.observability.listener.drain-timeout` | duration | `5s` | 关闭时，排队的事件还能继续发出多久；之后剩下的被丢弃。Kafka 审计监听器以及控制面的 Kafka 变更监听器，还会再用同样长的时间等待它们手中的发送。 |
 
 ## 控制面 {#control-plane}
 
@@ -309,8 +310,8 @@ cosec:
 `domain-prefix`、`http-config`、`ignore-check-state`、`scopes`、`device-id`、`client-os-type`、`pack-id`、`pkce`、
 `auth-server-id`、`ignore-check-redirect-uri`、`tenant-id`、`kid`、`team-id`、`login-type`（默认 `CorpApp`）、`lang`
 （默认 `zh`）、`ding-talk-org-type`、`ding-talk-corp-id`、`ding-talk-exclusive-login` 和
-`ding-talk-exclusive-corp-id`。布尔值默认 `false`，其余默认无。社交登录通过 `StringRedisTemplate` 把 OAuth 状态保存在
-Redis 中。
+`ding-talk-exclusive-corp-id`。布尔值默认 `false`，其余默认无；`ignore-check-state: true` 会让启动失败，因为 state
+正是挡住伪造回调的东西。社交登录通过 `StringRedisTemplate` 把 OAuth 状态保存在 Redis 中。
 
 ## 影响 CoSec 的 CoCache 配置项 {#cocache-properties-that-affect-cosec}
 
@@ -341,8 +342,7 @@ Redis 中。
 1. CoCache 的类型默认值（`store`：没有 `ttl`，`local-max-age` 30 s；`cache`：`ttl` 1 h）；
 2. `cocache.defaults.cache.*` 或 `cocache.defaults.store.*`，只作用于 CoSec 的声明没有写出的字段；
 3. CoSec 的声明：快照存储取 `cosec.authorization.snapshot.local-max-age`，吊销表取
-   `cosec.authentication.revocation.cache.*` 和 `unknown-read: absent`（读取失败时回答“未吊销”；在第 6 步设置
-   `unknown-read: throw`，吊销检查就改为以 `503` 失败即拒绝）；
+   `cosec.authentication.revocation.cache.*`；
 4. 应用的 CoCache `CacheSpecCustomizer` bean；
 5. `cocache.overrides.*`，只能收紧；
 6. `cocache.caches.[<CacheName>].*`；
@@ -358,7 +358,7 @@ CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache
 | `PolicySnapshotCache` 以及控制面与影子窗口的权威存储（`RevisionRecordCache`、`RevisionIndexCache`、`ReferenceIndexCache`、`ControlLeaseCache`、`ControlListCache`、`ControlAppListCache`、`ChangeRequestCache`、`StageCache`、`CandidateCache`） | `ttl`、`unknown-read`；快照存储还有 `local-max-age` | `ttl` 永不过期，`unknown-read: throw` | Redis 是权威存储（[存储](./storage.md#redis-is-the-store-of-record)）：过期、或把读取失败当作“不存在”，都会悄悄丢掉一个文档，连同它的 DENY 语句。作为 CoCache 的 `Store`，它们从不回收读不懂的内容，失败的删除直接抛出，而不是稍后重试、删掉更新的写入。 |
 | `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache`、`InstanceIndexCache` | `unknown-read`、`ttl` | `unknown-read: throw`；`ttl` 为声明的 8 天（报告、报告者）或 2 分钟（状态；实例列表仍是 8 天） | 故障不能读成“没有样本”或“没有实例”，实例的样本也不能从它报告过的窗口中过期。 |
 | `MembershipCache` | `read-failure`、`unknown-read` | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s`，`read-failure` 与 `unknown-read: throw` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
-| `RevokedTokenCache`、`RevokedSubjectCache` | `read-timeout` | `read-timeout`：存储的命令超时 | 作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。超时的读取会读成“未吊销”（`unknown-read: absent`），所以任何一层，包括 `cocache.defaults.store.read-timeout`，都不能让它更早超时。 |
+| `RevokedTokenCache`、`RevokedSubjectCache` | `read-timeout`、`unknown-read` | `read-timeout`：存储的命令超时；`unknown-read: throw` | 作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。读取失败是“未知”，绝不是“未吊销”：读成不存在会让刷新在一次失败的读取上签发令牌（`IDN-14`）。超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何一层，包括 `cocache.defaults.store.read-timeout`，都不能让它更早超时。校验时是否接受由 `cosec.authentication.revocation.fail-closed` 决定。 |
 | 每个 CoSec 缓存 | key 前缀、命名空间、key 编码器、编解码器、key 过滤器、`ttl` 函数、数据来源 | — | 存储布局由 CoSec 决定，每个实例与控制面都在那里找它。 |
 
 **下一步：** 文档存在哪里、实例如何读取它们，见[存储与缓存](./storage.md)。

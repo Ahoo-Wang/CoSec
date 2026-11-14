@@ -29,7 +29,6 @@ import me.ahoo.cosec.control.api.DecisionView
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.EntryChanges
 import me.ahoo.cosec.control.api.SimulatedRequest
-import me.ahoo.cosec.control.api.SnapshotVersion
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
@@ -53,6 +52,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships
@@ -524,7 +524,7 @@ object ChangeRunner : ScenarioRunner {
             argument.only("by", "request", "at")
             val at = argument.get("at")?.let {
                 it.only("platform", "app", "tenant")
-                SnapshotVersion(
+                ViewVersion(
                     it.required("platform").asLong(),
                     it.get("app")?.asLong(),
                     it.required("tenant").asLong()

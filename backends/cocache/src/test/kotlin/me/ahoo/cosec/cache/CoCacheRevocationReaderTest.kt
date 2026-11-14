@@ -20,7 +20,11 @@ import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.RandomIdGenerator
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
+import me.ahoo.cosec.spi.token.TokenRevokedException
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -33,8 +37,8 @@ import kotlin.coroutines.startCoroutine
 
 /**
  * [CoCacheRevocationReader] against real Redis: it reads what [CoCacheTokenStore] writes, from another instance too,
- * answers a local hit without suspending (RFC 0006 T1), and keeps the documented degradation: an unreadable store
- * means not revoked.
+ * answers a local hit without suspending (RFC 0006 T1), and reports a store it cannot read as unavailable, never as "not
+ * revoked": what that means is the caller's (PIP-7, `IDN-14`).
  */
 class CoCacheRevocationReaderTest {
     private val redis = CoSecTestCaches.redisBackend()
@@ -94,7 +98,7 @@ class CoCacheRevocationReaderTest {
     @Test
     fun aLocalHitDoesNotSuspend() {
         val revoked = tokenId()
-        CoCacheTokenStore(reading.revokedTokenCache).revoke(revoked, Duration.ofMinutes(1))
+        runBlocking { CoCacheTokenStore(reading.revokedTokenCache).revoke(revoked, Duration.ofMinutes(1)) }
         var answer: Result<Boolean>? = null
         repeat(PRIMING_ATTEMPTS) {
             if (answer != null) return@repeat
@@ -107,18 +111,36 @@ class CoCacheRevocationReaderTest {
         answer!!.getOrThrow().assert().isTrue()
     }
 
-    /** The documented exception to failing closed (AGENTS.md): Redis down means not revoked, not an error. */
+    /** Redis down is no answer: the reader says it cannot read, never "not revoked" (round-2 review H1). */
     @Test
-    fun anUnreadableStoreMeansNotRevoked() = runBlocking<Unit> {
+    fun anUnreadableStoreIsUnavailable() = runBlocking<Unit> {
         val revoked = tokenId()
         store.revoke(revoked, Duration.ofMinutes(1))
         store.revokeSubject(tenant, alice, Instant.now(), Duration.ofMinutes(1))
         backend.failAll = true
-        reader.isRevoked(revoked).assert().isFalse()
-        reader.subjectRevokedBefore(tenant, alice).assert().isNull()
+        unavailable { reader.isRevoked(revoked) }
+        unavailable { reader.subjectRevokedBefore(tenant, alice) }
     }
 
-    /** A degraded read caches nothing: once Redis answers again, the next read sees the revocation. */
+    /**
+     * H1 against real Redis: a revoked token and a revoked principal, read while Redis fails, are never judged "not
+     * revoked", so nothing that issues a token on that judgement (refresh) can issue one.
+     */
+    @Test
+    fun aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails() = runBlocking<Unit> {
+        val token = VerifiedToken(tokenId(), alice.value, tenant.value, null, issuedAt = Instant.now().minusSeconds(60))
+        val judgement = TokenRevocation(reader)
+        store.revoke(token.id, Duration.ofMinutes(1))
+        store.revokeSubject(tenant, alice, Instant.now(), Duration.ofMinutes(1))
+        assertThrows<TokenRevokedException> { runBlocking { judgement.check(token) } }
+
+        reading.clearLocal(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
+        reading.clearLocal(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME)
+        backend.failAll = true
+        assertThrows<RevocationUnavailableException> { runBlocking { judgement.check(token) } }
+    }
+
+    /** An unavailable read caches nothing: once Redis answers again, the next read sees the revocation. */
     @Test
     fun aRevocationAppliesAsSoonAsTheStoreIsReadableAgain() = runBlocking<Unit> {
         val revoked = tokenId()
@@ -126,16 +148,16 @@ class CoCacheRevocationReaderTest {
         store.revoke(revoked, Duration.ofMinutes(1))
         store.revokeSubject(tenant, alice, issuedBefore, Duration.ofMinutes(1))
         backend.failAll = true
-        reader.isRevoked(revoked).assert().isFalse()
-        reader.subjectRevokedBefore(tenant, alice).assert().isNull()
+        unavailable { reader.isRevoked(revoked) }
+        unavailable { reader.subjectRevokedBefore(tenant, alice) }
         backend.failAll = false
         reader.isRevoked(revoked).assert().isTrue()
         reader.subjectRevokedBefore(tenant, alice).assert().isEqualTo(issuedBefore)
     }
 
     /**
-     * Only reads fail (CoCache 8.0.0-rc.1's `HookedBackend.failReads`): the reader degrades to "not revoked", the
-     * documented exception, while a revocation made meanwhile still lands, and applies as soon as reads succeed again.
+     * Only reads fail (CoCache 8.0.0-rc.1's `HookedBackend.failReads`): the reader is unavailable, while a revocation made
+     * meanwhile still lands, and applies as soon as reads succeed again.
      */
     @Test
     fun aRevocationMadeWhileReadsFailAppliesOnceTheyRecover() = runBlocking<Unit> {
@@ -143,7 +165,7 @@ class CoCacheRevocationReaderTest {
         backend.failReads = true
         CoCacheTokenStore(reading.revokedTokenCache).revoke(revoked, Duration.ofMinutes(1))
         reading.clearLocal(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
-        reader.isRevoked(revoked).assert().isFalse()
+        unavailable { reader.isRevoked(revoked) }
         backend.failReads = false
         reading.clearLocal(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME)
         reader.isRevoked(revoked).assert().isTrue()
@@ -152,7 +174,7 @@ class CoCacheRevocationReaderTest {
     /**
      * A key Redis cannot hold losslessly (an unpaired surrogate, which UTF-8 turns into `?`) is refused on reads and
      * writes, by the revocation tables' keys (`IDN-10`) and by CoCache 8 itself. It is not the degraded read: the
-     * reader throws and never says "not revoked" for it, though the tables read a failed Redis read as absent.
+     * reader throws and never says "not revoked" for it, nor that the store is unavailable.
      */
     @Test
     fun aKeyRedisCannotHoldIsAnErrorNotARevocationMiss() = runBlocking<Unit> {
@@ -163,6 +185,10 @@ class CoCacheRevocationReaderTest {
         // The write is refused the same way, so no token is revoked under an id that is not its own.
         refused { store.revoke(unpaired, Duration.ofMinutes(1)) }
         reader.isRevoked(unpaired.dropLast(1) + "?").assert().isFalse()
+    }
+
+    private fun unavailable(call: suspend () -> Any?) {
+        assertThrows<RevocationUnavailableException> { runBlocking { call() } }
     }
 
     private fun refused(call: suspend () -> Any?) {

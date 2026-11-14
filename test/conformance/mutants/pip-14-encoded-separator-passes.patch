@@ -1,0 +1,18 @@
+# Rule: PIP-14
+# Mutant: an encoded separator is decided as a character of one segment
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.PathNormalizerTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+index 90132c2d..b24fe709 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+@@ -120,9 +120,6 @@ object PathNormalizer {
+         if (isPlain(path)) {
+             return false
+         }
+-        if (path.contains(ENCODED_SEPARATOR, ignoreCase = true)) {
+-            return true
+-        }
+         // fail-closed: a malformed percent-escape is never a traversal-free path.
+         val decoded = PercentDecoder.decode(path, plusIsSpace = false) ?: return true
+         if ('\\' in decoded) {

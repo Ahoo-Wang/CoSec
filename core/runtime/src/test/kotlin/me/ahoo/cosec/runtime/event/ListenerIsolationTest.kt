@@ -46,6 +46,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
@@ -138,6 +139,18 @@ class ListenerIsolationTest {
     }
 
     /** RFC 0007 §6.4: a candidate source that fails or hangs costs the shadow its samples, never a request its outcome. */
+    /** Nothing restarts a consumer: an Error of one event must not cost the listener every later one. */
+    @Test
+    fun anErrorOfABestEffortListenerDoesNotEndItsConsumer() {
+        val first = AtomicBoolean(true)
+        val recording = Recording(before = { if (first.compareAndSet(true, false)) throw StackOverflowError() })
+        val listeners = listeners(recording)
+        evaluate(listeners)
+        evaluate(listeners)
+        recording.await(1)
+        listeners.stats.single().failures.assert().isEqualTo(1)
+    }
+
     @Test
     fun aFailingOrHangingCandidateSourceNeverChangesTheOutcome() {
         val recorder = ShadowRecorder("instance-1")

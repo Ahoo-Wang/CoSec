@@ -3,11 +3,11 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.CandidateWithdrawalRaceTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
-index f75c685e..535ff6ae 100644
+index aeb8ac7c..89785bb4 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
-@@ -142,7 +142,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
-     }
+@@ -154,7 +154,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
+         }
  
      override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean = synchronized(lock) {
 -        candidates[key]?.window == window && candidates.remove(key) != null

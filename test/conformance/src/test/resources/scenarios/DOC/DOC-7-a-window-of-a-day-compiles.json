@@ -1,0 +1,56 @@
+{
+  "rules": [
+    "DOC-7"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The near miss: a tenant rule keyed by a header the client sends, with a window of a day, compiles, and the request is decided.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "rateLimits": [
+          {
+            "id": "daily",
+            "action": "*",
+            "key": "http.header.x-client",
+            "permitsPerSecond": 0.01,
+            "windowSeconds": 86400
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "read",
+      "statement": 0,
+      "via": {
+        "binding": "read",
+        "document": "platform"
+      }
+    }
+  }
+}

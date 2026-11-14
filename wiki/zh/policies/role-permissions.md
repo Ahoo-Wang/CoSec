@@ -218,7 +218,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 
 ### 授权者需要什么 {#what-a-grantor-needs}
 
-`putRole` 需要对该角色（`doc/tenant/<t>/role/<id>`）的 `cosec:write`。它新增派生绑定时，还需要对它唯一作用域的 `cosec:grant`；`removeRole` 和只减少权限的 `putRole` 只需要 `cosec:write`。因此管理员可以比 `cosec:tenant-admin` 更窄：
+`putRole` 需要对该角色（`doc/tenant/<t>/role/<id>`）的 `cosec:write`。它新增派生绑定时，还需要对它唯一作用域的 `cosec:grant`；`removeRole` 和只减少权限的 `putRole` 只需要 `cosec:write`。让 `"*"` 角色派生出新绑定的 `putCatalog` 或 `putPolicy` 同样需要这项 `cosec:grant`：看的是角色实际派生了什么，而不是由哪个操作造成的。因此管理员可以比 `cosec:tenant-admin` 更窄：
 
 | 管理员 | `cosec:write` | `cosec:grant` |
 |---|---|---|

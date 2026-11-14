@@ -32,6 +32,7 @@ implementation to the class that uses it.
 | `Authentication` | `cosec-login`, `login` | Check another kind of login credential and say what its token holds. Throw to refuse. | every bean, by the credential type it supports |
 | `TokenConverter` | `cosec-login`, `login.token` | Issue tokens in another format. | one bean, replacing `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`, `social` | Turn a provider's user into your principal. | one bean, replacing `DirectSocialUserPrincipalConverter` |
+| `SocialStateStore` | `cosec-social`, `social` | Keep the OAuth states social login issues somewhere other than Redis: `put` a state with its binding's hash, and `take` removes it atomically, so a state is used once. Both suspend: over a blocking client, make the calls on a dispatcher of your own. Throw when the store fails. | one bean, replacing `RedisSocialStateStore` |
 | `BlacklistSource` | `cosec-runtime`, `runtime.attribute` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`, `runtime.event` | Observe every decision: audit, alerting, analytics. | every bean |
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
@@ -101,6 +102,7 @@ one has an `else`, and a listener or store never relies on the set being complet
 | `Attribute.Kind` | a new catalog attribute |
 | `ProblemType` | a new problem, such as `413` or `415` |
 | `Obligation` | a new kind of obligation |
+| `Cause` | a new reason a decision is Indeterminate, such as a new port that can fail; a `DecisionListener` reads it from a decision event |
 | `ChangeEvent.Kind` | a new kind of change event |
 
 A set not listed here does not gain a member after 8.0 GA. A public `data class` is only ever a value that cannot
@@ -202,9 +204,10 @@ membership marker. Its constructor throws `TokenVerificationException` for claim
 beginning with `(`, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
 verifier read them.
 
-Give `TokenAuthenticator` the plain verifier (`JwtTokenVerifier`), never a `RevocableTokenVerifier` or another wrapper:
-revocation is checked through the suspending `RevocationReader`, and only the plain verifier's tokens may use
-break-glass. A token with an `act` claim must never become a principal
+A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the
+request's thread. Whether a token was revoked is not its question: `TokenAuthenticator`, refresh
+(`SimpleRefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one
+judgement, `TokenRevocation`. Only CoSec's own verifier's tokens may use break-glass. A token with an `act` claim must never become a principal
 (`IDN-4`): a `TokenVerifier` of your own throws `DelegationUnsupportedException` for it, which `TokenAuthenticator`
 turns into a `token-invalid` refusal, and an `Authenticator` of your own that reads tokens itself returns
 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)` instead of a principal for its `sub`. How tokens, claims and memberships work for
@@ -214,7 +217,7 @@ users is in [Authentication](../integration/authentication.md).
 
 | Extension point | Contract |
 |---|---|
-| `TokenStore` | The write side of revocation, used by logout: `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
+| `TokenStore` | The write side of revocation, used by logout: `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`, both suspending and non-blocking. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
 | `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`, suspending. Return null for an unknown key; throw when the lookup fails (the request answers `503`). |
 
@@ -222,8 +225,10 @@ With `cosec-cocache`, the starter wires `CoCacheTokenStore` and its reader. With
 register a `TokenStore` and a `RevocationReader` (or set `cosec.jwt.enabled=false`). Registering
 `RevocationReader.NONE` is an explicit choice to revoke nothing.
 
-The revocation read is one of the two documented exceptions to failing closed: a store whose degraded read cannot answer
-reports "not revoked" itself. Anything a `RevocationReader` throws still answers `503`. The exceptions are listed in the
+A `RevocationReader` reports what it knows: when its store cannot be read, it throws `RevocationUnavailableException`,
+never "not revoked". What that means is the caller's: `TokenAuthenticator`, verifying a request's token, lets the token
+through, one of the two documented exceptions to failing closed; refresh, which issues a token, fails (`IDN-14`). Anything
+else a `RevocationReader` throws answers `503`. The exceptions are listed in the
 [security model](../guide/security-model.md).
 
 ## Memberships

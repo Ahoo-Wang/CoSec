@@ -3,11 +3,11 @@
 # Tests: :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-index df6510af..5838d5bd 100644
+index 164cd7dd..9fd5f676 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-@@ -151,7 +151,7 @@ class ChangeChecks(
-             }
+@@ -177,7 +177,7 @@ class ChangeChecks(
+             sharesPlatformIds(candidate, platform, findings)
          }
          try {
 -            PolicyDocumentCompiler.forPlatform(platform, attributes, options.principalBindingLimit, credentialHeaders)
