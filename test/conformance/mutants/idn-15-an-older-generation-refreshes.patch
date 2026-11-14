@@ -1,12 +1,12 @@
 # Rule: IDN-15
-# Mutant: any generation up to the current one refreshes, so a pair refreshes again after its refresh
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest
+# Mutant: any generation up to the current one moves the family, so a pair refreshes again after its refresh
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
-index d38f7bef..34f05624 100644
+index a07e8edf..cde2cc12 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
-@@ -115,7 +115,7 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -121,7 +121,7 @@ class TokenFamilies @JvmOverloads constructor(
                  throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
              }
              when {

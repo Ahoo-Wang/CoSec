@@ -1,14 +1,14 @@
 # Rule: IDN-16
 # Mutant: an older generation presented again is refused, but its family goes on, so a copied pair is never noticed
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
-index b006417b..cfe447bc 100644
+index a07e8edf..a516ff79 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
-@@ -125,7 +125,7 @@ class TokenFamilies @JvmOverloads constructor(
-                 session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true ->
-                     throw RefreshSupersededException()
+@@ -132,7 +132,7 @@ class TokenFamilies @JvmOverloads constructor(
+                     // A retry, or another tab: the pair was current a moment ago. Nothing is written.
+                     return Issue(TokenSession(family.id, family.authTime, family.generation), family.expiresAt)
                  session.generation < family.generation -> {
 -                    if (revoke(read)) {
 +                    if (read.family.id.isNotEmpty()) {
