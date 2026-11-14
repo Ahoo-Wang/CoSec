@@ -95,6 +95,10 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     // SCAN_GUARDS they are found by scanning these arrays, which allocates nothing and costs less than hashing for the few
     // a request usually reaches. A request that reaches more moves them all to [guardMap], so that finding one never
     // costs more than a hash lookup however many it reaches: a scan would make P conditions cost P² steps (#1212).
+    // Never by value (CheckedCondition.equals compares canonical text): two conditions with the same text can decide
+    // differently, as an `exists` on one external path declared String by one document's catalog and Bool by another's,
+    // or a `time` with another zone table; and comparing texts that differ only late costs their length, up to megabytes
+    // for large `in` sets, on every lookup. Policies meant to share a condition share the instance instead.
     private var guards: Array<CheckedCondition?>? = null
     private var guardResults: IntArray? = null
     private var guardErrors: Array<Throwable?>? = null
