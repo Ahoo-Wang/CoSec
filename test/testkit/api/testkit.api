@@ -4,20 +4,34 @@ public final class me/ahoo/cosec/testkit/DocumentException : java/lang/RuntimeEx
 }
 
 public abstract interface class me/ahoo/cosec/testkit/EngineOutcome {
+	public fun describe ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/testkit/EngineOutcome$Decided : me/ahoo/cosec/testkit/EngineOutcome {
 	public fun <init> (Lme/ahoo/cosec/model/decision/Decision;)V
+	public fun describe ()Ljava/lang/String;
 	public final fun getDecision ()Lme/ahoo/cosec/model/decision/Decision;
+}
+
+public final class me/ahoo/cosec/testkit/EngineOutcome$DefaultImpls {
+	public static fun describe (Lme/ahoo/cosec/testkit/EngineOutcome;)Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/testkit/EngineOutcome$InvalidRequest : me/ahoo/cosec/testkit/EngineOutcome {
+	public fun <init> (Ljava/lang/String;)V
+	public fun describe ()Ljava/lang/String;
+	public final fun getWhat ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/testkit/EngineOutcome$NotCompiled : me/ahoo/cosec/testkit/EngineOutcome {
 	public fun <init> (Ljava/lang/String;)V
+	public fun describe ()Ljava/lang/String;
 	public final fun getError ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/testkit/EngineOutcome$Rejected : me/ahoo/cosec/testkit/EngineOutcome {
 	public fun <init> (Lme/ahoo/cosec/model/scope/ScopeResolution$Rejected$Reason;)V
+	public fun describe ()Ljava/lang/String;
 	public final fun getReason ()Lme/ahoo/cosec/model/scope/ScopeResolution$Rejected$Reason;
 }
 
@@ -53,10 +67,9 @@ public final class me/ahoo/cosec/testkit/PolicyTestKit {
 	public static final field Companion Lme/ahoo/cosec/testkit/PolicyTestKit$Companion;
 	public static final field PLATFORM_FILE Ljava/lang/String;
 	public static final field TENANTS_DIRECTORY Ljava/lang/String;
-	public final fun check (Ljava/lang/String;Ltools/jackson/databind/JsonNode;)V
+	public final fun check (Ljava/lang/String;Ljava/lang/String;)V
 	public final fun check (Ljava/nio/file/Path;)V
 	public final fun evaluate (Ljava/lang/String;)Lme/ahoo/cosec/testkit/EngineOutcome;
-	public final fun evaluate (Ltools/jackson/databind/JsonNode;)Lme/ahoo/cosec/testkit/EngineOutcome;
 	public final fun tests (Ljava/nio/file/Path;)Ljava/util/List;
 }
 

@@ -36,13 +36,15 @@ import tools.jackson.databind.node.ObjectNode
  * { "decision": "Indeterminate", "cause": { "type": "MissingPolicies", "policies": ["p"] } }
  * { "decision": "Rejected", "reason": "SPACE_NOT_MEMBER" }
  * { "decision": "NotCompiled", "error": "a part of the error message" }
+ * { "decision": "InvalidRequest", "what": "method" | "path" }          // enforcement answers 400
  * ```
  *
  * `via` is `{ "binding": id, "document": "platform" | "app" | "tenant" }`, `{ "attached": policy }` or `"builtin"`; a
  * statement's `name` appears when it has one. Errors are not compared, only where they happened.
  *
  * An exact comparison (the conformance suite) requires the `expect` to say everything about the decision. Otherwise
- * only the fields the `expect` names are compared, so `{ "decision": "Permit" }` passes whichever statement permits.
+ * only the fields the `expect` names are compared, so `{ "decision": "Permit" }` passes whichever statement permits;
+ * an `expect` that names no `decision` is a format error, since it would pass whatever the documents decide.
  */
 @InternalCoSecApi
 object EngineExpectations {
@@ -50,6 +52,9 @@ object EngineExpectations {
 
     /** Throws [AssertionError] naming the scenario [name] when [outcome] is not what [expected] says. */
     fun check(name: String, expected: JsonNode, outcome: EngineOutcome, exact: Boolean) {
+        if (expected.get("decision") == null) {
+            throw ScenarioFormatException("$name: expect names no decision, so it would pass whatever is decided: $expected")
+        }
         val notCompiled = expected.get("decision")?.textOrNull() == "NotCompiled"
         if (outcome is EngineOutcome.NotCompiled || notCompiled) {
             if (outcome !is EngineOutcome.NotCompiled) {
@@ -82,6 +87,7 @@ object EngineExpectations {
         is EngineOutcome.Decided -> render(outcome.decision)
         is EngineOutcome.Rejected -> json.objectNode().put("decision", "Rejected").put("reason", outcome.reason.name)
         is EngineOutcome.NotCompiled -> json.objectNode().put("decision", "NotCompiled").put("error", outcome.error)
+        is EngineOutcome.InvalidRequest -> json.objectNode().put("decision", "InvalidRequest").put("what", outcome.what)
     }
 
     fun render(decision: Decision): JsonNode = when (decision) {

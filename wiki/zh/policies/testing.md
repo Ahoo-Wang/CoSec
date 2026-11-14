@@ -368,7 +368,7 @@ class PolicyTest {
 }
 ```
 
-文档无法编译时 `load` 失败；没有 `platform.json` 时平台文档为空。`tests` 为目录下每个 `.json` 文件生成一个以其路径命名的测试，一个都没有时失败。`check(file)` 检查单个场景，`evaluate(json)` 只返回决策而不检查；`PolicyTestKit.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。
+文档无法编译时 `load` 失败；没有 `platform.json` 时平台文档为空。`tests` 为目录下每个 `.json` 文件生成一个以其路径命名的测试，一个都没有时失败。`convert` 缩短过文件名的文件（id 长于文件名的上限：截断、`~`、id 的 SHA-256）所装的 id，以其旁边 `report.json` 记录的为准；缺少该报告时 `load` 失败。`check(file)` 和 `check(name, json)` 检查单个场景，`evaluate(json)` 只返回决策而不检查，其 `describe()` 按 `expect` 的写法给出结果；`PolicyTestKit.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。
 
 | 场景字段 | 含义 |
 |---|---|
@@ -376,13 +376,13 @@ class PolicyTest {
 | `credential` | 主体：`tenant`（默认 `acme`）、`id`（默认 `alice`）、`roles`（`role` 或 `role@space`）、`policies`（附加策略）、`attributes`；匿名调用方用 `"anonymous": true`。 |
 | `membershipProvider` | `MembershipProvider` 返回的成员关系，按管道的方式与凭证中的合并：按空间分组的 `roles`（`{"": ["reader"]}`）和 `attachments`；或 `{"fails": "message"}`。 |
 | `request` | `action`（默认 `order:read`）、`resource`（`type`、`id`、`attributes`；默认 `order/1`）、`space`、`hostApp`、`time`（ISO 时刻）、`ip`、`device`、`blocked`、`headers`、`attributes`（`request.attributes.*`）。 |
-| `expect` | `decision`：`Permit`、`Deny`、`Indeterminate` 或 `Rejected`，以及 `by`（作出决策的语句；隐式拒绝为 `null`）、`cause` 或 `reason`。 |
+| `expect` | `decision`：`Permit`、`Deny`、`Indeterminate`、`Rejected` 或 `InvalidRequest`，以及 `by`（作出决策的语句；隐式拒绝为 `null`）、`cause`、`reason` 或 `what`（`method`、`path`）。必填：没有 `decision` 的 `expect` 是错误，因为它无论决策如何都会通过。 |
 
-`http.origin.host` 和 `http.referer.host` 读取 `headers` 的方式与实例一致：取 `Origin` 或 `Referer` URL 的主机并折叠为 ASCII 小写，`https://EXAMPLE.com` 即 `example.com`。`cosec-testkit` 会带上其 API 用到的依赖（引擎、JUnit 的 `DynamicTest`，以及 `evaluate(JsonNode)` 中 Jackson 的 `JsonNode`）：应用只需声明上面那一条依赖。
+`http.origin.host` 和 `http.referer.host` 读取 `headers` 的方式与实例一致：取 `Origin` 或 `Referer` URL 的主机并折叠为 ASCII 小写，`https://EXAMPLE.com` 即 `example.com`。`cosec-testkit` 会带上其 API 用到的依赖（引擎和 JUnit 的 `DynamicTest`）：应用只需声明上面那一条依赖。场景和文档以文本或文件传入，测试工具的 API 不含任何 Jackson 类型。
 
 只比较 `expect` 写出的字段：`{"decision": "Permit"}` 不论哪条语句允许都通过，写上 `by` 则固定为某条语句，并整体比较。拼错的字段是错误，不会被忽略。
 
-测试工具只评估决策。文档的编译方式与实例相同：使用平台文档的 `limits` 和它声明的 `ext.*` 属性。只由宿主的 `AttributeProvider` 声明的属性在测试工具中无法编译，而且不运行任何提供者，所以读取 `ext.*` 的语句会发现它不可用并按其 `onMissing` 处理。限流规则不运行；请求直接给出动作和资源，不经过路由映射。依赖外部属性值的决策可用 [`simulate`](#simulating-a-request) 试验，它按控制面主机的提供者编译。
+测试工具只评估决策。文档的编译方式与实例相同：使用平台文档的 `limits` 和它声明的 `ext.*` 属性。只由宿主的 `AttributeProvider` 声明的属性在测试工具中无法编译，而且不运行任何提供者，所以读取 `ext.*` 的语句会发现它不可用并按其 `onMissing` 处理。限流规则不运行；请求直接给出动作和资源，不经过路由映射。测试工具按执行读取请求的方式读取它们（`PIP-15`、`PIP-18`）：`http:HEAD` 按 `http:GET` 判定，所以 `http:HEAD` 上的语句什么也匹配不到；`http` 路径会被规范化；管道回答 `400` 的（含小写字母的方法、带点段的路径）是 `{"decision": "InvalidRequest"}`。依赖外部属性值的决策可用 [`simulate`](#simulating-a-request) 试验，它按控制面主机的提供者编译。
 
 ### 用真实管道测试代码 {#testing-your-code-against-a-real-pipeline}
 
