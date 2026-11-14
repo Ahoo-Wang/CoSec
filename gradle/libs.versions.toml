@@ -24,7 +24,7 @@ jmh = "1.37"
 archunit = "1.5.1"
 blockhound = "1.0.18.RELEASE"
 # SchemaConformanceTest only (RFC 0007 §10.4); never on a runtime classpath
-json-schema-validator = "3.0.8"
+json-schema-validator = "3.0.9"
 # plugins
 detekt = "1.23.8"
 dokka = "2.2.0"
