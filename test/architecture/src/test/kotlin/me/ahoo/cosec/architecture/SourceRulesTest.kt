@@ -79,6 +79,17 @@ class SourceRulesTest {
             "me.ahoo.cosec.kafka" to listOf("me.ahoo.cosec.control.audit."),
         )
 
+        /**
+         * What a backend may use of `cosec-document`: the one mapper (RFC 0011 D3), which writes its stored formats, and
+         * the codec of a format it stores (`ShadowCodec`, the shadow window's candidates and reports). A backend stores
+         * bytes (`SnapshotDocument`) and never reads what a document grants, so the document codec, the compiler and
+         * `RoleExpansion` stay out of its reach, as they were while they were in `cosec-runtime` (RFC 0013 §3).
+         */
+        val BACKEND_DOCUMENT_REACH: List<String> = listOf(
+            "me.ahoo.cosec.document.json.CoSecJson",
+            "me.ahoo.cosec.document.shadow.ShadowCodec",
+        )
+
         /** The main source files of [project], by extension. */
         fun mainSources(project: String, extensions: Set<String> = setOf("kt", "java")): List<Path> {
             val main = Projects.directory(project).resolve("src/main")
@@ -129,14 +140,17 @@ class SourceRulesTest {
     }
 
     @Test
-    fun `backends never reach into runtime, and into control only through the listed ports`() {
+    fun `backends never reach into runtime; into control and document only through what is listed`() {
         violations { project, target ->
-            Projects.groupOf(project) == "backends" &&
-                (target.startsWith("me.ahoo.cosec.runtime.") || target.startsWith("me.ahoo.cosec.control."))
+            Projects.groupOf(project) == "backends" && listOf(
+                "me.ahoo.cosec.runtime.",
+                "me.ahoo.cosec.control.",
+                "me.ahoo.cosec.document.",
+            ).any { target.startsWith(it) }
         }.filterNot { violation ->
             val origin = violation.substringBefore(" -> ")
             val target = violation.substringAfter(" -> ")
-            BACKEND_REACH.any { (from, to) ->
+            BACKEND_DOCUMENT_REACH.any { reach(target, it) } || BACKEND_REACH.any { (from, to) ->
                 origin.substringBeforeLast('.') == from && to.any { reach(target, it) }
             }
         }.assert().isEmpty()

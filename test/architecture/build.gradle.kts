@@ -16,7 +16,7 @@
 // where each project sits, by name.
 /** The library modules the rules analyze: the classpath the starter's tests had, where these rules lived before. */
 val analyzed = listOf(
-    "annotations", "api", "model", "engine", "spi", "runtime", "control",
+    "annotations", "api", "model", "engine", "spi", "document", "runtime", "control",
     "cocache", "kafka", "webflux", "webmvc", "gateway", "openapi",
     "jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "spring-boot", "testkit",
 )
