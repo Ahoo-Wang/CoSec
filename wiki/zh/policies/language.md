@@ -122,7 +122,7 @@ DENY 不能写裸资源类型，例如 `order`：它只覆盖 id 为空的那个
 请求的动作从哪里来：
 
 - 路由在服务[路由映射](#route-maps)中的 HTTP 请求，动作和类型化资源取自该路由的 `service:verb`。HEAD 请求使用 HEAD 路由，没有时使用 GET 的路由。
-- 其他 HTTP 请求的动作是 `http:<METHOD>`（按收到的方法，例如 `http:GET`），资源类型为 `http`、id 为请求路径。HEAD 按 `http:GET` 判定：它就是不带内容的 GET，服务器也用 GET 的处理器处理它，所以除非路由映射映射了它，`http:HEAD` 不匹配任何请求。含小写字母的方法在任何判定之前就是 `400`（`PIP-18`）。针对 `service:verb` 的语句永远不会匹配它，针对 `http:*` 的语句也永远不会匹配已映射的请求。
+- 其他 HTTP 请求的动作是 `http:<METHOD>`（按收到的方法，例如 `http:GET`），资源类型为 `http`、id 为请求路径。HEAD 按 `http:GET` 判定：它就是不带内容的 GET，服务器也用 GET 的处理器处理它，所以 `http:HEAD` 不匹配任何请求，路由映射也把 HEAD 映射为 `service:verb` 动作。含小写字母的方法在任何判定之前就是 `400`（`PIP-18`）。因此 `http:HEAD` 上的语句或限流规则，以及动词含小写字母的 `http` 动作（`http:get`），都不能编译（`DOC-8`）：这样的 DENY 什么也拒绝不了。请写 `http:GET`，或者大写的方法。针对 `service:verb` 的语句永远不会匹配它，针对 `http:*` 的语句也永远不会匹配已映射的请求。
 - 代码中的检查自己指定动作和资源（[代码中的检查](../integration/checks.md)）。
 
 ### 路由映射 {#route-maps}

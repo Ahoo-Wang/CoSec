@@ -186,6 +186,26 @@ class PolicyCompiler(
         return checked
     }
 
+    /**
+     * `DOC-8`: an `http` action no request can have (`PIP-18`). A DENY on it is a hole its author believes closed, so it
+     * does not compile: `http:HEAD`, since a HEAD request is decided as GET, and a verb holding an ASCII lower-case
+     * letter, since a method that holds one is refused before any decision. `http:*` and upper-case verbs stay valid.
+     */
+    private fun deadHttpAction(pattern: ActionPattern): String? {
+        val verb = pattern.verb
+        if (pattern.service != ResourcePattern.HTTP_TYPE || verb == null) {
+            return null
+        }
+        if (verb == HEAD) {
+            return "$pattern matches no request: a HEAD request is decided as GET; write http:GET (DOC-8, PIP-18)"
+        }
+        if (verb.any { it in 'a'..'z' }) {
+            return "$pattern matches no request: a method holds no lower-case letter, one that does is refused; " +
+                "write ${pattern.service}:${verb.uppercase()} (DOC-8, PIP-18)"
+        }
+        return null
+    }
+
     private fun statement(
         index: Int,
         source: StatementSource,
@@ -199,6 +219,7 @@ class PolicyCompiler(
         }
         val actions = source.actions.mapIndexedNotNull { i, action ->
             parse("$path.action[$i]", errors) { ActionPattern.parse(action) }
+                ?.also { pattern -> deadHttpAction(pattern)?.let { errors += CompileError("$path.action[$i]", it) } }
         }
         val resources = source.resources.mapIndexedNotNull { i, resource ->
             parse("$path.resource[$i]", errors) {
@@ -323,3 +344,6 @@ class PolicyCompiler(
             null
         }
 }
+
+/** The namespace and method of `DOC-8`. */
+private const val HEAD = "HEAD"

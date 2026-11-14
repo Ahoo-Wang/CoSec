@@ -52,15 +52,21 @@ internal object FormatPatterns {
     private const val NO_SPACE = """\s\x00-\x1F\x7F-\x9F"""
     private const val NAME = "[^:*$NO_SPACE]+"
 
-    /** An 8.0 action: `service:verb`, `service:*` or `*` (`ActionPattern`). */
-    const val ACTION_PATTERN = """^(\*|$NAME:(\*|$NAME))$"""
+    /**
+     * An 8.0 action: `service:verb`, `service:*` or `*` (`ActionPattern`), but no `http` action no request can have
+     * (`DOC-8`): `http:HEAD`, decided as `http:GET`, and a verb holding an ASCII lower-case letter.
+     */
+    const val ACTION_PATTERN = """^(?!http:(HEAD|[^:]*[a-z][^:]*)$)(\*|$NAME:(\*|$NAME))$"""
     val ACTION_PATTERN_COUNTER_EXAMPLES = listOf(
         "order",
         "order:",
         ":read",
         "order:read:all",
         "or*der:read",
-        "order: read"
+        "order: read",
+        "http:HEAD",
+        "http:get",
+        "http:Delete",
     )
 
     /** A capture name: not empty, not starting with a digit or `-` (a looser form of a Java identifier). */

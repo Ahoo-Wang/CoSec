@@ -34,6 +34,9 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -96,7 +99,16 @@ class Provenance(val policies: List<PolicyOrigin>, val bindings: List<BindingOri
  * Converts 7.x policy data into 8.0 platform, app and tenant documents (RFC 0004 §5.1, §8.3), refusing what §8.4 and
  * RFC 0008 §4.1 refuse. Every document it returns compiles with [compiler]; a run with any rejection returns none.
  */
-class Converter(private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler()) {
+class Converter(
+    /**
+     * What every converted policy compiles with: the default limits, and the one external attribute a conversion may
+     * write, `ext.ip2region.country` (RFC 0006 §5.4.5), which the platform document then declares ([IP2REGION_COUNTRY]).
+     */
+    private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler.forPlatform(
+        null,
+        AttributeCatalog.of(listOf(IP2REGION_COUNTRY)),
+    ),
+) {
     fun convert(source: Source7x, options: ConvertOptions = ConvertOptions()): Conversion =
         Run(source, options, compiler).convert()
 
@@ -113,6 +125,9 @@ class Converter(private val compiler: PolicyDocumentCompiler = PolicyDocumentCom
 
         fun permissionPolicyId(appId: String, permissionId: String): String =
             PolicyDocumentCompiler.permissionPrefix(appId) + permissionId
+
+        /** The declaration a converted platform document holds when a converted condition reads the client's country. */
+        val IP2REGION_COUNTRY: Attribute = Attribute.external(Parts.IP2REGION_COUNTRY, AttributeType.STRING)
     }
 }
 
@@ -212,6 +227,12 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     fun convert(): Conversion {
         policies[SnapshotKey.Platform] = ArrayList()
         bindings[SnapshotKey.Platform] = ArrayList()
+        // What PIP-18 changes for every converted deployment, whatever its statements say: reported once.
+        changes += SemanticChange(
+            "PIP-18",
+            CONVERSION,
+            "a HEAD request is decided as GET: it is permitted wherever GET is, and denied wherever GET is",
+        )
         checkMarker()
         convertPolicies()
         source.apps.forEach(::convertApp)
@@ -273,17 +294,19 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val type = decoded?.type ?: tree.get(TYPE)?.takeIf { it.isString }?.let { typeOf(it.asString()) }
         val global = isGlobal(id, type, entry.location) ?: return
         val key = placement(id, global, tree, entry.location) ?: return
-        val locations = tree.get(STATEMENTS)?.values().orEmpty().indices.map { "${entry.location}#$.$STATEMENTS[$it]" }
+        val written = tree.get(STATEMENTS)?.values().orEmpty().indices.map { "${entry.location}#$.$STATEMENTS[$it]" }
         // Translated even when it does not decode, so one run reports every problem of the policy.
-        val translated = translatePolicy(tree, locations, entry.location)
+        val translated = translatePolicy(tree, written, entry.location)
         if (translated == null || decoded == null) {
             return
         }
+        // The locations of the statements kept: a dropped one (PIP-18) has none in the 8.0 policy.
+        val locations = translated.locations
         val definition = PolicyDefinition(
             PolicyId(id),
             attachable = !global,
-            condition = translated.first,
-            translated.second
+            condition = translated.condition,
+            translated.statements
         )
         if (!compiles(key, definition, locations)) {
             return
@@ -354,13 +377,22 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         tree: JsonNode,
         locations: List<String>,
         location: String,
-    ): Pair<Condition?, List<StatementSource>>? {
+    ): TranslatedPolicy? {
         val condition = tree.get(CONDITION)
         val nodes = tree.get(STATEMENTS)?.values().orEmpty()
         scan.policyCondition(condition, "$location#$.$CONDITION")
         val translated = nodes.mapIndexed { i, statement -> translateStatement(statement, condition, locations[i]) }
-        val policy = statements.policy(condition, "$location#$.$CONDITION", translated.filterNotNull())
-        return if (translated.none { it == null }) policy else null
+        val kept = translated.indices.filter { translated[it] is StatementTranslator.Translation.Kept }
+        val policy = statements.policy(
+            condition,
+            "$location#$.$CONDITION",
+            kept.map { (translated[it] as StatementTranslator.Translation.Kept).statement },
+        )
+        return if (policy != null && translated.none { it == null }) {
+            TranslatedPolicy(policy.first, policy.second, kept.map { locations[it] })
+        } else {
+            null
+        }
     }
 
     /** Whether [tree] names an id other than the [id] its key or position names. */
@@ -413,18 +445,23 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         policyCondition: JsonNode?,
         location: String,
         name: String = statement.get(NAME)?.takeIf { it.isString }?.asString().orEmpty(),
-    ): StatementSource? {
+    ): StatementTranslator.Translation? {
         if (!statement.isObject) {
             reject(RejectionKind.UNDECODABLE, location, "a statement is an object")
             return null
         }
         scan.statement(isDeny(statement), statement.get(ACTION), statement.get(CONDITION), policyCondition, location)
-        return statements.statement(statement, location, name)
+        return statements.translation(statement, location, name)
     }
 
     // ---- apps (RFC 0004 §5.1: app permissions and role grants) ----
 
-    private class AppPermissionStatement(val permissionId: String, val statement: StatementSource, val location: String)
+    /** A permission of an app; [statement] null when it was an ALLOW 8.0 could never match, dropped (PIP-18). */
+    private class AppPermissionStatement(
+        val permissionId: String,
+        val statement: StatementSource?,
+        val location: String
+    )
 
     private fun convertApp(app: Source7x.App) {
         count("apps")
@@ -444,7 +481,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val guard = statements.policy(
             appCondition,
             "$location#$.$CONDITION",
-            permissions?.values?.map {
+            permissions?.values?.mapNotNull {
                 it.statement
             }.orEmpty()
         )
@@ -524,14 +561,15 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val definitions = sources.map { (permissionId, members, origin) ->
             val id = Converter.permissionPolicyId(appId, permissionId)
             // The app condition is the policy condition of every permission policy (RFC 0004 §5.1).
+            val kept = members.filter { it.statement != null }
             val (condition, guarded) = statements.policy(
                 appCondition, conditionLocation,
-                members.map {
-                    it.statement
+                kept.map {
+                    it.statement!!
                 }
             ) ?: return null
             val definition = PolicyDefinition(PolicyId(id), attachable = false, condition = condition, guarded)
-            val locations = members.map { it.location }
+            val locations = kept.map { it.location }
             if (!compiles(key, definition, locations)) {
                 return null
             }
@@ -570,11 +608,13 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
 
                     else -> {
                         // An app condition guards every permission statement, as a policy condition does.
-                        val statement = translateStatement(permission, appCondition, at, name = permissionId)
-                        if (statement == null) {
-                            ok = false
-                        } else {
-                            permissions[permissionId] = AppPermissionStatement(permissionId, statement, at)
+                        when (val statement = translateStatement(permission, appCondition, at, name = permissionId)) {
+                            null -> ok = false
+                            is StatementTranslator.Translation.Kept ->
+                                permissions[permissionId] = AppPermissionStatement(permissionId, statement.statement, at)
+                            // Still a permission grants may name: its policy holds no statement.
+                            StatementTranslator.Translation.Dropped ->
+                                permissions[permissionId] = AppPermissionStatement(permissionId, null, at)
                         }
                     }
                 }
@@ -636,12 +676,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return ids
     }
 
-    private fun isValidGrant(grant: Source7x.Grant): Boolean {
-        val separator = SpacedRoleId.SPACE_ID_SEPARATOR
-        val validRole = grant.roleId.isNotEmpty() && !grant.roleId.contains(separator)
-        return validRole && grant.spaceId != Match.WILDCARD && !grant.spaceId.contains(separator)
-    }
-
     private fun permissionIdsOf(bytes: ByteArray): List<String>? {
         val node = try {
             treeReader.readTree(bytes)
@@ -672,23 +706,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             )
         }
     }
-
-    private fun catalogOf(tree: JsonNode): Catalog = Catalog(
-        tree.get(GROUPS)?.values().orEmpty().map { group ->
-            CatalogGroup(
-                name = group.get(NAME)?.asString().orEmpty(),
-                description = group.get(DESCRIPTION)?.asString()?.ifEmpty { null },
-                spaced = group.get(SPACED)?.asBoolean() ?: false,
-                permissions = group.get(PERMISSIONS)?.values().orEmpty().map { permission ->
-                    CatalogPermission(
-                        id = permission.get(ID).asString(),
-                        name = permission.get(NAME)?.asString()?.ifEmpty { null },
-                        description = permission.get(DESCRIPTION)?.asString()?.ifEmpty { null },
-                    )
-                },
-            )
-        },
-    )
 
     // ---- rate limit rules (RFC 0005 §7.3) ----
 
@@ -729,6 +746,17 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
 
     private fun documents(): Map<SnapshotKey, PolicyDocument> {
         val documents = LinkedHashMap<SnapshotKey, PolicyDocument>()
+        // Declared by the platform document, so the documents compile by themselves (RFC 0006 §5.4.5).
+        val country = conditions.readsCountry
+        if (country) {
+            changes += SemanticChange(
+                "IP2REGION",
+                CONVERSION,
+                "statements read ext.ip2region.country, which the platform document declares: every host that enforces " +
+                    "them needs cosec-ip2region, without which the attribute is unavailable and such a DENY is " +
+                    "Indeterminate (503); an address no loaded database covers is unavailable too (ATR-9)",
+            )
+        }
         for ((key, keyPolicies) in policies) {
             val (kind, owner) = when (key) {
                 is SnapshotKey.App -> DocumentKind.APP to key.appId
@@ -743,6 +771,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
                 keyPolicies,
                 bindings[key].orEmpty(),
                 catalogs[key],
+                attributes = if (country && key == SnapshotKey.Platform) listOf(Converter.IP2REGION_COUNTRY) else null,
                 rateLimits = rateLimits.of(key),
             )
             // Every policy compiled on its own; the whole document must too (ids, bindings, break-glass rules, and the
@@ -820,21 +849,11 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         null
     }
 
-    private fun isDeny(statement: JsonNode): Boolean =
-        statement.get(EFFECT)?.takeIf { it.isString }?.asString()?.equals("deny", ignoreCase = true) == true
-
-    @Suppress("SwallowedException")
-    private fun typeOf(text: String): PolicyType? = try {
-        PolicyType.valueOf(text.uppercase())
-    } catch (_: IllegalArgumentException) {
-        null
-    }
-
-    private fun grantKey(grant: Source7x.Grant): String =
-        if (grant.spaceId.isEmpty()) grant.roleId else "${grant.roleId}${SpacedRoleId.SPACE_ID_SEPARATOR}${grant.spaceId}"
-
     companion object {
         const val SCHEMA_7 = "7"
+
+        /** The location of what the conversion as a whole reports. */
+        const val CONVERSION = "conversion"
         const val REVISION = 1L
         const val RATE_LIMIT_POLICY = "rate-limit/"
         val RESERVED = Converter.RESERVED_PREFIXES
@@ -853,3 +872,48 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         const val SPACED = "spaced"
     }
 }
+
+/** A policy translated: its condition, the statements kept, and where each of them came from. */
+private class TranslatedPolicy(
+    val condition: Condition?,
+    val statements: List<StatementSource>,
+    val locations: List<String>,
+)
+
+// Pure helpers of [Run]: what they read is their arguments alone.
+
+private fun isValidGrant(grant: Source7x.Grant): Boolean {
+    val separator = SpacedRoleId.SPACE_ID_SEPARATOR
+    val validRole = grant.roleId.isNotEmpty() && !grant.roleId.contains(separator)
+    return validRole && grant.spaceId != Match.WILDCARD && !grant.spaceId.contains(separator)
+}
+
+private fun catalogOf(tree: JsonNode): Catalog = Catalog(
+    tree.get(Run.GROUPS)?.values().orEmpty().map { group ->
+        CatalogGroup(
+            name = group.get(Run.NAME)?.asString().orEmpty(),
+            description = group.get(Run.DESCRIPTION)?.asString()?.ifEmpty { null },
+            spaced = group.get(Run.SPACED)?.asBoolean() ?: false,
+            permissions = group.get(Run.PERMISSIONS)?.values().orEmpty().map { permission ->
+                CatalogPermission(
+                    id = permission.get(Run.ID).asString(),
+                    name = permission.get(Run.NAME)?.asString()?.ifEmpty { null },
+                    description = permission.get(Run.DESCRIPTION)?.asString()?.ifEmpty { null },
+                )
+            },
+        )
+    },
+)
+
+private fun isDeny(statement: JsonNode): Boolean =
+    statement.get(Run.EFFECT)?.takeIf { it.isString }?.asString()?.equals("deny", ignoreCase = true) == true
+
+@Suppress("SwallowedException")
+private fun typeOf(text: String): PolicyType? = try {
+    PolicyType.valueOf(text.uppercase())
+} catch (_: IllegalArgumentException) {
+    null
+}
+
+private fun grantKey(grant: Source7x.Grant): String =
+    if (grant.spaceId.isEmpty()) grant.roleId else "${grant.roleId}${SpacedRoleId.SPACE_ID_SEPARATOR}${grant.spaceId}"

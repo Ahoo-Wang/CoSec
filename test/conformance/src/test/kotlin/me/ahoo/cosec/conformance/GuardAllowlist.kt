@@ -24,6 +24,17 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "migrate:ConditionTranslatorTest#no row widens access against what enforcement fills",
+            "migrate:ConditionTranslatorTest#every row agrees with 7x on adversarial requests, never widening",
+            "migrate:ConditionTranslatorTest#a template on a part only 7x filled never holds as enforced, and is recorded",
+            "migrate:Round2ConversionTest#a DENY on HEAD without GET is refused",
+            "migrate:Round2ConversionTest#an ALLOW on HEAD alone is dropped and recorded, one with others loses HEAD",
+            "migrate:Round2ConversionTest#a DENY on method HEAD but not GET is refused, one that holds on GET is kept",
+            "migrate:Round2ConversionTest#a DENY on a request attribute only 7x set is refused",
+            "migrate:Round2ConversionTest#a condition that holds on the absent value of a part only 7x filled is refused in both directions",
+            "migrate:Round2ConversionTest#a negated condition on a part only 7x filled is refused in a DENY",
+            "migrate:Round2ConversionTest#an ALLOW against a template on a part only 7x filled is recorded as never holding",
+            "migrate:Round2ConversionTest#a DENY with no action is rejected, an ALLOW with none is dropped",
             "spi:AuthenticatedPrincipalTest#attributesAreReadOnly",
             "jwt:JwtTokenConverterTest#verifiedAttributesAreReadOnlyAtEveryLevel",
             "testkit:PipelineFixtureTest#aFurtherCheckCannotBeWidenedThroughThePrincipalsAttributes",

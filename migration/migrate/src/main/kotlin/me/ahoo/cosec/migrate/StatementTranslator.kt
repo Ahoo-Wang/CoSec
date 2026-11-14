@@ -16,6 +16,7 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.condition.Condition
@@ -33,11 +34,29 @@ internal class StatementTranslator(
     private val conditions: ConditionTranslator,
     private val reject: (RejectionKind, String, String) -> Unit,
 ) {
+    /** A statement translated: [Kept] as an 8.0 statement, or [Dropped], since no 8.0 request could match it. */
+    sealed interface Translation {
+        class Kept(val statement: StatementSource) : Translation
+
+        /** An ALLOW only on what 8.0 decides otherwise (HEAD alone, `PIP-18`): dropped, a narrowing it records. */
+        data object Dropped : Translation
+    }
+
     /**
      * A 7.x statement (or permission) at [location] as an 8.0 statement without its policy condition, or null when a
-     * part of it is rejected. Every part is translated even after one is rejected, so one run reports them all.
+     * part of it is rejected. Every part is translated even after one is rejected, so one run reports them all. A rate
+     * limit rule reads in the DENY direction, where nothing is dropped.
      */
-    fun statement(node: JsonNode, location: String, name: String, direction: Boolean? = null): StatementSource? {
+    fun statement(node: JsonNode, location: String, name: String, direction: Boolean? = null): StatementSource? =
+        when (val translation = translation(node, location, name, direction)) {
+            null -> null
+            is Translation.Kept -> translation.statement
+            // [assembled] drops only an ALLOW, and a rate limit rule reads as a DENY.
+            Translation.Dropped -> error("Only an ALLOW is dropped, and a rate limit rule reads as a DENY: $location")
+        }
+
+    /** [statement], with an ALLOW 8.0 could never match [Translation.Dropped] instead of rejected. */
+    fun translation(node: JsonNode, location: String, name: String, direction: Boolean? = null): Translation? {
         // A rate limit rule has no effect; its condition limits, so it reads in the DENY direction ([direction]).
         val deny = direction ?: isDeny(node)
         val actionNode = node.get(ACTION)
@@ -45,7 +64,7 @@ internal class StatementTranslator(
             reject(RejectionKind.UNDECODABLE, location, "a statement needs an action")
             return null
         }
-        val action = actions.action(actionNode, "$location.$ACTION")
+        val action = actions.action(actionNode, "$location.$ACTION")?.let { head(it, deny, "$location.$ACTION") }
         val conditionNode = node.get(CONDITION)
         // A path condition on request.path is the resource when the action names none (RFC 0005 §7.1). A 7.x path
         // condition captures nothing, so where the rest reads path variables (`""` in 7.x) a resource that captured
@@ -64,6 +83,22 @@ internal class StatementTranslator(
         if (path != null && resources == null) {
             return null
         }
+        return assembled(name, deny, action, resources ?: action.resources, condition, location)
+    }
+
+    /**
+     * The statement of [action], [resources] and [condition]; null when it is rejected: the condition can never hold, or
+     * a DENY (or a rate limit rule) is left with no action 8.0 can decide. Only an ALLOW is [Translation.Dropped],
+     * whatever left it with none, so a DENY is never dropped (`MIG-1`).
+     */
+    internal fun assembled(
+        name: String,
+        deny: Boolean,
+        action: MatcherTranslator.Action,
+        resources: List<ResourceSource>,
+        condition: Translated,
+        location: String,
+    ): Translation? {
         if (condition == Translated.Never) {
             reject(
                 RejectionKind.CONDITION_NOT_TRANSLATED,
@@ -72,13 +107,61 @@ internal class StatementTranslator(
             )
             return null
         }
-        return StatementSource(
-            name = name,
-            effect = if (deny) Effect.DENY else Effect.ALLOW,
-            actions = action.actions,
-            resources = resources ?: action.resources,
-            condition = (condition as? Translated.Ast)?.condition,
+        if (action.actions.isEmpty()) {
+            if (!deny) {
+                return Translation.Dropped
+            }
+            reject(
+                RejectionKind.ACTION_NOT_TRANSLATED,
+                "$location.$ACTION",
+                "a DENY left with no action 8.0 can decide: dropping it would permit what 7.x denied",
+            )
+            return null
+        }
+        return Translation.Kept(
+            StatementSource(
+                name = name,
+                effect = if (deny) Effect.DENY else Effect.ALLOW,
+                actions = action.actions,
+                resources = resources,
+                condition = (condition as? Translated.Ast)?.condition,
+            ),
         )
+    }
+
+    /**
+     * The methods of [action] as 8.0 decides a request's (`PIP-18`): a HEAD request is decided as GET, so `http:HEAD`
+     * matches no request (`DOC-8`). Beside GET, HEAD says nothing more and goes. Without GET, a DENY on HEAD cannot be
+     * said in 8.0 apart from GET: rejected. An ALLOW on it only narrows: HEAD goes, recorded, and an ALLOW on HEAD alone
+     * is left with no action, which drops the statement. Null when rejected.
+     */
+    private fun head(action: MatcherTranslator.Action, deny: Boolean, location: String): MatcherTranslator.Action? {
+        if (HTTP_HEAD !in action.actions) {
+            return action
+        }
+        val others = action.actions - HTTP_HEAD
+        if (HTTP_GET in action.actions) {
+            return MatcherTranslator.Action(others, action.resources)
+        }
+        if (deny) {
+            reject(
+                RejectionKind.ACTION_NOT_TRANSLATED,
+                location,
+                "a DENY on method HEAD without GET: 8.0 decides a HEAD request as GET (PIP-18), so it cannot deny HEAD " +
+                    "apart from GET; deny GET too, or remove HEAD",
+            )
+            return null
+        }
+        conditions.note(
+            "PIP-18",
+            location,
+            if (others.isEmpty()) {
+                "an ALLOW on method HEAD alone is dropped: 8.0 decides a HEAD request as GET, so it is allowed where GET is"
+            } else {
+                "method HEAD is dropped from this ALLOW: 8.0 decides a HEAD request as GET, so it is allowed where GET is"
+            },
+        )
+        return MatcherTranslator.Action(others, action.resources)
     }
 
     private fun isDeny(node: JsonNode): Boolean =
@@ -155,6 +238,8 @@ internal class StatementTranslator(
 
     companion object {
         const val EFFECT = "effect"
+        private const val HTTP_HEAD = "http:HEAD"
+        private const val HTTP_GET = "http:GET"
         const val ACTION = "action"
         const val CONDITION = "condition"
         private const val PATH = "path"

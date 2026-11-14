@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "DOC-8"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The near miss: http:GET, http:DELETE and http:* can match a request, and a service's lower-case verb (order:head) is no HTTP method: the document compiles, and a request with action order:head meets the DENY.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "dead",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": [
+                "http:GET",
+                "http:DELETE",
+                "http:*",
+                "order:head"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "dead",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "dead"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "order:head"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "dead",
+      "statement": 0,
+      "via": {
+        "binding": "dead",
+        "document": "platform"
+      }
+    }
+  }
+}

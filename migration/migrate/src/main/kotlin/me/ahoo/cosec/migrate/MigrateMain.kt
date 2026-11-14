@@ -85,14 +85,14 @@ object MigrateMain {
      * would otherwise be accepted and ignored, as `publish --dry-run` was, which published for real (#1225). `--cluster`
      * is for the commands that write through the control plane's store; the others use plain Redis clients.
      */
-    private val OPTIONS = mapOf(
+    internal val OPTIONS = mapOf(
         "convert" to setOf("from-redis", "from-files", "key-prefix", "out", "partition", "rate-limit-rules"),
         "publish" to setOf("to-redis", "cluster", "key-prefix", "in", "resume"),
         "bootstrap" to setOf("to-redis", "cluster", "key-prefix", "platform-admin", "force"),
         "repair-references" to setOf("to-redis", "cluster", "key-prefix"),
         "partition plan" to setOf("from-redis", "from-files", "key-prefix", "out"),
         "api-keys" to setOf(
-            "redis", "key-prefix", "out", "memberships", "grant-to-principal", "role-prefix", "dry-run"
+            "redis", "key-prefix", "out", "app", "memberships", "grant-to-principal", "role-prefix", "dry-run"
         ),
         "cocache8" to setOf("redis", "cluster", "key-prefix", "out", "discard-pending", "dry-run"),
     )
@@ -100,7 +100,7 @@ object MigrateMain {
     private const val STATUS_PLANNED = "planned"
     private val REPLACEABLE_STATUS = setOf(ApiKeyMigrationPlan.STATUS_DRY_RUN, ApiKeyMigrationPlan.STATUS_REJECTED)
 
-    private val USAGE_TEXT = """
+    internal val USAGE_TEXT = """
         Usage:
           convert (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
                   [--partition platform|by-owner]
@@ -153,7 +153,9 @@ object MigrateMain {
                 )
             }
         }
-        return command(command, options, out)
+        // What a command reads is in its table (round 2 M3): reading another option fails, so a test that runs the
+        // command finds it, instead of an operator whose option is refused.
+        return command(command, OPTIONS[command]?.let(options::readableOnly) ?: options, out)
     }
 
     private fun command(command: String?, options: Options, out: PrintStream): Int = when (command) {
@@ -172,13 +174,28 @@ object MigrateMain {
 
     private class UsageException(message: String) : IllegalArgumentException(message)
 
-    /** `--name value` pairs and `--flag`s; a repeated or unknown option is a usage error. */
-    private class Options(private val values: Map<String, String>, private val flags: Set<String>) {
-        fun value(name: String): String? = values[name]
+    /**
+     * `--name value` pairs and `--flag`s; a repeated or unknown option is a usage error. With [readable], reading an
+     * option outside it is a defect of the command, never a usage error.
+     */
+    private class Options(
+        private val values: Map<String, String>,
+        private val flags: Set<String>,
+        private val readable: Set<String>? = null,
+    ) {
+        fun value(name: String): String? = values[readable(name)]
 
-        fun required(name: String): String = values[name] ?: throw UsageException("Missing --$name.")
+        fun required(name: String): String = values[readable(name)] ?: throw UsageException("Missing --$name.")
 
-        fun flag(name: String): Boolean = name in flags
+        fun flag(name: String): Boolean = readable(name) in flags
+
+        /** These options, of which the command may read only [names]: its table in [OPTIONS]. */
+        fun readableOnly(names: Set<String>): Options = Options(values, flags, names)
+
+        private fun readable(name: String): String {
+            check(readable == null || name in readable) { "The command reads --$name, which its table does not list." }
+            return name
+        }
 
         /** Every option given, valued or not. */
         val names: Set<String> get() = values.keys + flags
