@@ -17,7 +17,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `TokenStore`、`RevocationReader` | `cosec-spi`，`spi.token` | 把被吊销的令牌存放在 Redis 以外的地方。 | 各一个 bean |
 | `ApiKeyReader` | `cosec-spi`，`spi.apikey` | 从内存或 Redis 以外的地方查找 API key。 | 一个 bean |
 | `MembershipProvider` | `cosec-spi`，`spi.membership` | 为凭证不携带角色和附加策略的主体提供它们：带 provider 标记的令牌，以及每个 API key。说明主体是否已知且处于启用状态。 | 一个 bean；启用 API key 时必需 |
-| `MembershipLoader` | `cosec-cocache`，`cache` | 加载 `CoCacheMembershipProvider` 在 Redis 中为所有实例缓存的成员关系。 | 一个 bean，没有 `MembershipProvider` 时包装进 `CoCacheMembershipProvider` |
+| `MembershipLoader` | `cosec-cocache`，`cocache` | 加载 `CoCacheMembershipProvider` 在 Redis 中为所有实例缓存的成员关系。 | 一个 bean，没有 `MembershipProvider` 时包装进 `CoCacheMembershipProvider` |
 | `AttributeProvider` | `cosec-spi`，`spi.attribute` | 为条件提供外部属性（`ext.<provider>.<name>`）。 | 所有 bean |
 | `AuditEventSink` | `cosec-spi`，`spi.audit` | 接收每次决策的扁平审计记录。 | 所有 bean，作为 `BEST_EFFORT` 监听器 |
 | `RateLimiter` | `cosec-spi`，`spi.ratelimit` | 在 Redis 或内存以外的地方计数限流许可。 | 一个 bean，替换内置实现 |
