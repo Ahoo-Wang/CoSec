@@ -111,10 +111,18 @@ class DenyRemovalTest {
             .assert().containsExactly("policy spare of platform NOT_ANALYZED")
         changes.escalated(SnapshotKey.Platform, Operation.RemoveBinding(BindingId("readers"))).assert().isEmpty()
         // The review's scenario: skipping the window does not publish it; it waits for a second person.
-        val change = changes.propose(PLATO, SnapshotKey.Platform, head(SnapshotKey.Platform), listOf(Operation.RemoveBinding(BindingId("everyone"))), "m2")
+        val change = changes.propose(
+            PLATO,
+            SnapshotKey.Platform,
+            head(SnapshotKey.Platform),
+            listOf(Operation.RemoveBinding(BindingId("everyone"))),
+            "m2"
+        )
         changes.skipShadow(PLATO, change.id, "m2").state.assert().isEqualTo(ChangeState.AWAITING_APPROVAL)
         assertThrows<ChangeRejectedException> { changes.publish(PLATO, change.id) }
-        harness.revisions.head(SnapshotKey.Platform)!!.document.bindings.map { it.id.value }.assert().contains("everyone")
+        harness.revisions.head(
+            SnapshotKey.Platform
+        )!!.document.bindings.map { it.id.value }.assert().contains("everyone")
     }
 
     @Test
@@ -151,7 +159,10 @@ class DenyRemovalTest {
             .assert().containsExactly("binding role:guard@wms:no-ship of app:wms NOT_ANALYZED")
         changes.escalated(wms, Operation.RemoveRole(RoleId("reader"))).assert().isEmpty()
         // A put needs a second person anyway; the approver also sees which DENY it drops.
-        changes.escalated(wms, Operation.PutRole(RoleDefinition(RoleId("guard"), RolePermissions.Listed(listOf("read")))))
+        changes.escalated(
+            wms,
+            Operation.PutRole(RoleDefinition(RoleId("guard"), RolePermissions.Listed(listOf("read"))))
+        )
             .assert().containsExactly(
                 "document app:wms NOT_ANALYZED",
                 "binding role:guard@wms:no-ship of app:wms NOT_ANALYZED",
@@ -161,7 +172,9 @@ class DenyRemovalTest {
     @Test
     fun `a tenant removes its own DENY alone`() = runBlocking<Unit> {
         seed(ACME, Operation.PutPolicy(deny("no-export")), Operation.PutBinding(bind("guard", "no-export")))
-        val change = changes(notTrustRoot).propose(ALICE_OP, ACME, head(ACME), listOf(Operation.RemoveBinding(BindingId("guard"))), "m2")
+        val change = changes(
+            notTrustRoot
+        ).propose(ALICE_OP, ACME, head(ACME), listOf(Operation.RemoveBinding(BindingId("guard"))), "m2")
         change.state.assert().isEqualTo(ChangeState.CHECKED)
         change.escalations.assert().isEmpty()
     }
@@ -184,7 +197,14 @@ class DenyRemovalTest {
             listOf(deny("no-export")),
             listOf(glass, everyone("elsewhere", "unknown"), everyone("read", "read")),
         )
-        val candidate = PolicyDocument(DocumentKind.PLATFORM, "", 1, Instant.EPOCH, listOf(deny("no-export")), emptyList())
+        val candidate = PolicyDocument(
+            DocumentKind.PLATFORM,
+            "",
+            1,
+            Instant.EPOCH,
+            listOf(deny("no-export")),
+            emptyList()
+        )
         Narrowing.removedDenies(base, candidate) { policy -> allow(policy.value).takeIf { policy.value == "read" } }
             .assert().containsExactly("binding elsewhere")
     }

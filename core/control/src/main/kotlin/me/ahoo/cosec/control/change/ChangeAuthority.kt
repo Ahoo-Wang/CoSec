@@ -503,7 +503,13 @@ class ChangeAuthority(
         } catch (e: Exception) {
             throw ChangeRejectedException(UNAVAILABLE, "the DENYs [$key] removes could not be read: ${e.message}", e)
         }
-        return removed.map { Escalation("$it of $key", NOT_ANALYZED, "it removes a DENY: only the trust root does it alone") }
+        return removed.map {
+            Escalation(
+                "$it of $key",
+                NOT_ANALYZED,
+                "it removes a DENY: only the trust root does it alone"
+            )
+        }
     }
 
     /**
