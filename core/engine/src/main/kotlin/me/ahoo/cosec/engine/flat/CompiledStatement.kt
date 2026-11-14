@@ -101,22 +101,12 @@ class CompiledStatement internal constructor(
     }
 
     /**
-     * What the statement means, as text: two statements with the same content decide every request alike. Patterns
-     * are compared as written with their options, conditions by their canonical form.
+     * Whether [other] means the same: its name, effect, action patterns, resource patterns with their options and
+     * condition (by its canonical form) and [onMissing], each compared as a value, in order.
      */
-    internal val content: String = buildString {
-        append(name.length).append(':').append(name).append('|').append(effect).append('|')
-        actions.joinTo(this, ",")
-        append('|')
-        resources.joinTo(this, ",") { resource ->
-            if (resource is ResourcePattern.Http) {
-                "$resource(${resource.path.caseSensitive},${resource.path.decodeAndParseSegments})"
-            } else {
-                resource.toString()
-            }
-        }
-        append('|').append(condition?.canonical ?: "").append('|').append(onMissing)
-    }
+    internal fun sameContent(other: CompiledStatement): Boolean =
+        other.name == name && other.effect === effect && other.actions.contentEquals(actions) &&
+            other.resources.contentEquals(resources) && other.condition == condition && other.onMissing === onMissing
 
     override fun toString(): String = "$effect $name ${actionPatterns}${resourcePatterns}${condition ?: ""}"
 }

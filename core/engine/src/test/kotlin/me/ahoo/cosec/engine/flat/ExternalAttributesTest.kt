@@ -269,6 +269,7 @@ class ExternalAttributesTest {
     fun onMissingIsPartOfWhatAStatementMeans() {
         val a = compiler.statement(PolicyId("p"), 0, statement(Effect.ALLOW, inFence(true)))
         val b = compiler.statement(PolicyId("p"), 0, statement(Effect.ALLOW, inFence(true), OnMissing.NOMATCH))
-        a.content.assert().isNotEqualTo(b.content)
+        a.sameContent(b).assert().isFalse()
+        a.sameContent(a).assert().isTrue()
     }
 }
