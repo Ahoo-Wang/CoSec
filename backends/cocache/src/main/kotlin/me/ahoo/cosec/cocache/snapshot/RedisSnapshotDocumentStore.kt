@@ -159,6 +159,7 @@ class RedisSnapshotDocumentStore @InternalCoSecApi constructor(
         }
     }
 
+    @InternalCoSecApi
     companion object {
         private val log = KotlinLogging.logger {}
 

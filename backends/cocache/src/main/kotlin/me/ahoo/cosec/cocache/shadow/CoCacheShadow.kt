@@ -346,6 +346,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
             ConditionalGet.Absent -> null
         }
 
+    @InternalCoSecApi
     companion object {
         private const val MAX_ATTEMPTS = 16
 
