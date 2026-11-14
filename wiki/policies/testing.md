@@ -596,9 +596,12 @@ With `tenants/acme.json` binding the role `reader` to an ALLOW on `order:read`, 
 }
 ```
 
-`load` fails when a document does not compile; a missing `platform.json` is an empty platform document. `tests` makes one
-test per `.json` file under the directory, named by its path, and fails when there is none. `check(file)` checks one
-scenario and `evaluate(json)` returns the decision without checking; `PolicyTestKit.of(platform, apps, tenants)` takes
+`load` fails when a document does not compile; a missing `platform.json` is an empty platform document. A file whose
+name `cosec-migrate convert` shortened (an id too long for a file name: cut, `~`, the SHA-256 of the id) holds the id
+`report.json` records beside it; without that report, `load` fails. `tests` makes one
+test per `.json` file under the directory, named by its path, and fails when there is none. `check(file)` and
+`check(name, json)` check one scenario, and `evaluate(json)` returns the decision without checking, its `describe()` in
+the syntax of `expect`; `PolicyTestKit.of(platform, apps, tenants)` takes
 documents as JSON text.
 
 | Scenario field | Meaning |
@@ -607,12 +610,12 @@ documents as JSON text.
 | `credential` | The principal: `tenant` (default `acme`), `id` (default `alice`), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; `"anonymous": true` for an anonymous caller. |
 | `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
 | `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
-| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate` or `Rejected`, with `by` (the deciding statement; `null` for the implicit deny), `cause` or `reason`. |
+| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate`, `Rejected` or `InvalidRequest`, with `by` (the deciding statement; `null` for the implicit deny), `cause`, `reason` or `refused` (`action`: an `http` method with a lower-case letter; `resource`: a path the pipeline refuses, or a typed id beyond a request path's bounds). Required: an `expect` without a `decision` is an error, since it would pass whatever is decided. |
 
 `http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or
 `Referer` URL, folded to ASCII lower case, so `https://EXAMPLE.com` is `example.com`. `cosec-testkit` brings what its API
-names (the engine, JUnit's `DynamicTest` and Jackson's `JsonNode` in `evaluate(JsonNode)`): the dependency above is all
-an application declares.
+names (the engine and JUnit's `DynamicTest`): the dependency above is all an application declares. Scenarios and
+documents go in as text or files; no Jackson type is part of the kit's API.
 
 Only the fields `expect` names are compared: `{"decision": "Permit"}` passes whichever statement permits, and `by`
 pins one, compared whole. A misspelt field is an error, not ignored.
@@ -620,7 +623,10 @@ pins one, compared whole. A misspelt field is an error, not ignored.
 The kit evaluates the decision only. Documents compile as an instance compiles them: against the platform document's
 `limits` and the `ext.*` attributes it declares. An attribute that only a host's `AttributeProvider` declares does
 not compile in the kit, and no provider runs, so a statement that reads `ext.*` finds it unavailable and follows its
-`onMissing`. Rate limit rules do not run, and a request names its action and resource: no route map is applied.
+`onMissing`. Rate limit rules do not run, and a request names its action and resource: no route map is applied. The
+kit reads them as enforcement reads a request (`PIP-15`, `PIP-18`): `http:HEAD` is decided as `http:GET`, so a statement
+on `http:HEAD` matches nothing, an `http` path is normalized, and what the pipeline answers `400` (a lower-case method, a
+path with a dot segment) is `{"decision": "InvalidRequest"}`.
 Decisions that depend on external values can be tried with [`simulate`](#simulating-a-request), which compiles
 against the control host's providers.
 

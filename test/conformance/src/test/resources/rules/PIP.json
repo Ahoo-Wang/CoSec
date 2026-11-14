@@ -176,13 +176,17 @@
     {
       "id": "PIP-15",
       "source": "RFC 0006 §7.6; round-2 review M2",
-      "statement": "A check by host code (`AuthorizationChecker`) never permits what enforcement would refuse to decide: an `http` path is normalized as a request's path is, one enforcement answers 400 for is a deny, and any other resource is held to a request path's length bounds. An `http` action is read as a request's method is (`PIP-18`): a verb with a lower-case letter is a deny, and `http:HEAD` is decided as `http:GET`.",
+      "statement": "A check by host code (`AuthorizationChecker`) never permits what enforcement would refuse to decide: an `http` path is normalized as a request's path is, one enforcement answers 400 for is a deny, and any other resource is held to a request path's length bounds. An `http` action is read as a request's method is (`PIP-18`): a verb with a lower-case letter is a deny, and `http:HEAD` is decided as `http:GET`. The test kit (`PolicyTestKit`) reads a scenario's action and resource the same way, so it decides what the pipeline decides for that request, and what enforcement answers 400 for is its `InvalidRequest` (round 2 review of host and tools, M2).",
       "level": "pipeline",
       "guards": [
         "runtime:AuthorizationCheckerTest#a path enforcement refuses is never permitted",
         "runtime:AuthorizationCheckerTest#a path is decided as enforcement normalizes it",
         "runtime:AuthorizationCheckerTest#a resource longer than a request path can be is denied",
-        "runtime:AuthorizationCheckerTest#a check reads an http method as enforcement does"
+        "runtime:AuthorizationCheckerTest#a check reads an http method as enforcement does",
+        "testkit:KitEnforcementTest#a HEAD is decided as the GET it is, by the kit as by the pipeline",
+        "testkit:KitEnforcementTest#a lower-case method is refused, by the kit as by the pipeline",
+        "testkit:KitEnforcementTest#a path the pipeline refuses is refused by the kit too",
+        "testkit:KitEnforcementTest#a request the pipeline decides is decided alike by the kit"
       ],
       "pending": null
     },
