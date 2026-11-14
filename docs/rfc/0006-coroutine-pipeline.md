@@ -410,6 +410,11 @@ fun Engine.plan(request: AuthzRequest, view: SnapshotView): AttributePlan
 > 库覆盖该地址但不知道某个字段时，该字段缺失。地域封禁因此按任何取不到的外部属性来决策：Indeterminate，或语句的 `onMissing`，不会因为客户端改用 IPv6 而被绕过。
 > 这个回答是稳态而不是故障：异常不带栈，管道对同一个提供者的失败按间隔限量记录日志，每个请求的原因在决策里（`Cause.AttributeUnavailable`）。
 
+> **2026-11-14 修订（第二轮审查，宿主与工具组）**：上文“转换工具把 7.x 中读 `request.attributes.ipRegion*` 的条件改写为这些路径”只对一种形状成立。
+> 7.x 的 `ipRegion` 是整串 `国家|地区|省|市|运营商`，8.0 暴露其中四个字段，地区字段读不到，`0` 字段是缺失。转换工具只翻译国家前缀
+> （`startsWith "X|"`，或等价的正则前缀）为 `ext.ip2region.country` 等于 X，并在转换出的平台文档里声明该属性，报告里写明执行它的宿主需要 `cosec-ip2region`。
+> 其余形状按方向处理，与 8.0 的执行路径不填的任何请求属性一样：DENY 拒绝转换（信息里列出四个属性，由运维手工改写），ALLOW 收窄并记录。
+
 ### 5.5 挂起包装
 
 #### 5.5.1 `SnapshotSource`
