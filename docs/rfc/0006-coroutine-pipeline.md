@@ -264,6 +264,10 @@ class HttpFacts(
 
 #### 5.3.2 `Authenticator`
 
+> **2026-11-14 修订（#1321）**：本节与 Q11、§15 文件清单中的“`TokenStore` 读接口”和“`RevocableTokenVerifier` 同步读取 `TokenStore`”不再成立。`TokenStore` 只有写入且为挂起函数；
+> 读取属于 `RevocationReader`，经 `TokenRevocation`（`runtime/token/TokenRevocation.kt`）判断；`RevocableTokenVerifier` 已删除，`DefaultTokenRevoker` 移到 `runtime/token/`。
+> 读不到吊销表的含义由调用方决定，见 [RFC 0004](0004-unified-model.md) §4.5.3 的 2026-11-14 说明与 [RFC 0009](0009-identity-and-credentials.md) 的同日修订。
+
 ```kotlin
 /** SPI。不阻塞调用线程（§7.7）；不同步抛出——失败用 Unavailable 表达。 */
 fun interface Authenticator {
@@ -809,6 +813,11 @@ suspend fun execute(permit: Decision.Permit, request: AuthzRequest): Outcome {
 > **实现说明（2026-10-27，#1078）**：每次计数的上界是 `PipelineOptions.rateLimitTimeout`（默认 500 ms），S1 映射为 `cosec.authorization.rate-limit.timeout`。
 
 ### 8.4 `RateLimiter`
+
+> **2026-11-14 修订（#1322，第 2 轮审查后端与登录组的 M3、L1）**：Redis 限流器此前“每个桶两个带 hash tag 的键”（#1229）的做法被取代。每个桶是一个键
+> `<prefix>:rate-limiter:<rule>:<bucket>`，是一个哈希：所在窗口 `w`、该窗口计数 `c`、上一窗口计数 `p`。时间取自 Redis（`TIME`），时钟不同的实例在同一个窗口里计数；
+> 脚本只碰它声明的这一个键，在 Redis Cluster 上与单节点相同；每次计数都把键的过期时间设为两个窗口（`OBL-4` 重写）。`windowSeconds` 至多 86,400（`DOC-7`）：
+> 计数键是客户端可以撑大的内存，而这个 Redis 不允许淘汰。要把限流器放到单独的 Redis，应用提供自己的 `RateLimiter` bean。旧布局的计数键不再读取，自行过期。
 
 ```kotlin
 fun interface RateLimiter {
