@@ -504,7 +504,8 @@ cannot influence.
 
 With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](https://github.com/justauth/JustAuth)
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
-`type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
+`type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)). In 8.0 the providers are
+JustAuth's: an application cannot add one of its own, since the provider interface and its registry are internal.
 
 1. Start the sign-in with `socialAuthentication.authorize("<name>")`, a suspending function. It answers a
    `SocialAuthorization`: the provider's `url`, which carries a fresh OAuth `state`, and a fresh `binding`. Both are 128
