@@ -63,6 +63,9 @@ const TERMS = [
   { term: 'AbstractRefreshTokenAuthentication', hint: 'removed in 8.0 (R9): `SimpleRefreshTokenAuthentication` implements `Authentication` itself' },
   { term: 'PipelineWebFilterKt', hint: 'renamed in 8.0 (R9): `checkMono` is in `AuthorizationCheckers` (`cosec-webflux`)' },
   { term: 'PipelineServletFilterKt', hint: 'renamed in 8.0 (R9): `checkBlocking` is in `AuthorizationCheckers` (`cosec-webmvc`)' },
+  // A1 (RFC 0013 §3): packages that moved to cosec-document.
+  { term: 'me.ahoo.cosec.runtime.document', hint: 'moved in 8.0 (A1): `me.ahoo.cosec.document` (`cosec-document`)' },
+  { term: 'me.ahoo.cosec.runtime.route', hint: 'moved in 8.0 (A1): `me.ahoo.cosec.document.route` (`cosec-document`)' },
 ]
 
 const EXEMPT_SECTIONS = [
@@ -85,6 +88,11 @@ const ALLOWED = [
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
     terms: ['me.ahoo.cosec.cache', 'me.ahoo.cosec.servlet', 'me.ahoo.cosec.spring.boot.starter'],
     reason: 'the upgrade entry that renames the three packages names the old ones',
+  },
+  {
+    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    terms: ['me.ahoo.cosec.runtime.document', 'me.ahoo.cosec.runtime.route'],
+    reason: 'the upgrade entry that moves them to cosec-document names the old packages',
   },
   {
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],

@@ -510,12 +510,12 @@ tenant. So a platform binding of `principal:globex/bob` is not listed for `acme`
 ## Policies in CI
 
 Validate document files with the [JSON Schemas](./language.md#json-schema), then compile them with the reader and
-compiler the control plane and every instance use, from `cosec-runtime`:
+compiler the control plane and every instance use, from `cosec-document`:
 
 ```kotlin
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.PolicyDocumentCompiler
 import java.io.File
 
 val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", File("platform.json").readBytes())

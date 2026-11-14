@@ -24,6 +24,16 @@ and have to be provisioned again.
   `@ConditionalOnClass(name = ...)` strings (`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` is now
   `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`); and the logger names in its logging configuration
   (`logging.level.me.ahoo.cosec.cache` is now `logging.level.me.ahoo.cosec.cocache`).
+- **The policy documents, route maps and the JSON formats are a module of their own, `cosec-document`.**
+  `me.ahoo.cosec.runtime.document` is now `me.ahoo.cosec.document`, `me.ahoo.cosec.runtime.document.format` is
+  `me.ahoo.cosec.document.format`, and `me.ahoo.cosec.runtime.route` is `me.ahoo.cosec.document.route`; the classes
+  (`PolicyDocument`, `PolicyDocumentCodec`, `PolicyDocumentCompiler`, `DocumentCompileException`, `Actor`, `RouteMap`,
+  `RouteMapCodec` and the rest) keep their names. No document, schema, `cosec.*` property, bean or Redis key changes.
+  In an application, change the imports. `cosec-runtime` and the starter bring `cosec-document`, so no dependency
+  changes; code that only reads or writes documents (a generator, a [CI check](../policies/testing.md#policies-in-ci))
+  can depend on `me.ahoo.cosec:cosec-document` alone instead of `cosec-runtime`. `cosec-openapi` now depends on
+  `cosec-document`, not `cosec-runtime`: an application that compiled against the pipeline through it adds
+  `cosec-runtime`, or the starter, itself.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

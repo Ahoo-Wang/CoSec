@@ -123,10 +123,10 @@ a Spring Cloud Gateway host lacks `cosec-gateway` (even with `cosec.enabled=fals
 lacks `cosec-cocache`, `cosec.audit.kafka.delivery=required` lacks `cosec-kafka`, or `cosec.cosid.generator` lacks
 `cosec-cosid` ([Troubleshooting](../operations/troubleshooting.md#startup-fails-on-a-missing-module)).
 
-The starter always brings `cosec-runtime` (the coroutine request pipeline, the policy documents, snapshots and token
-verification), `cosec-spi` (the extension points), `cosec-engine` and `cosec-model` (the pure decision engine),
-`cosec-api` (the public contracts), `cosec-login` (login and token issuing) and `cosec-jwt` (JWT tokens). `cosec-bom`
-aligns the versions of every published module.
+The starter always brings `cosec-runtime` (the coroutine request pipeline, snapshots and token verification),
+`cosec-document` (the policy documents, route maps and their formats), `cosec-spi` (the extension points),
+`cosec-engine` and `cosec-model` (the pure decision engine), `cosec-api` (the public contracts), `cosec-login` (login
+and token issuing) and `cosec-jwt` (JWT tokens). `cosec-bom` aligns the versions of every published module.
 
 `cosec-testkit` is a test dependency: it runs scenarios against your own policy documents in JUnit 5, the way
 CoSec's conformance suite does ([Testing policies](../policies/testing.md)).
