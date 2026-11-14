@@ -3,15 +3,15 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.flat.PolicyCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
-index d9f0100d..3a4b3b48 100644
+index 1a8e168f..95f40b89 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
 @@ -199,7 +199,7 @@ class PolicyCompiler(
          if (verb == HEAD) {
-             return "$pattern matches no request: a HEAD request is decided as GET; write $HTTP:GET (DOC-8, PIP-18)"
+             return "$pattern matches no request: a HEAD request is decided as GET; write http:GET (DOC-8, PIP-18)"
          }
 -        if (verb.any { it in 'a'..'z' }) {
 +        if (false && verb.any { it in 'a'..'z' }) {
              return "$pattern matches no request: a method holds no lower-case letter, one that does is refused; " +
-                 "write $HTTP:${verb.uppercase()} (DOC-8, PIP-18)"
+                 "write ${pattern.service}:${verb.uppercase()} (DOC-8, PIP-18)"
          }
