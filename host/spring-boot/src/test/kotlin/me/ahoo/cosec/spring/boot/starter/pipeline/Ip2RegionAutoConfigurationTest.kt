@@ -49,6 +49,16 @@ class Ip2RegionAutoConfigurationTest {
         line.formattedMessage.assert().contains("[IPv4]", "The IPv6 addresses are unavailable", "ipv6-location")
     }
 
+    /** The location is read; a second database of a version already loaded fails startup, one per version. */
+    @Test
+    fun `a location holding a database of the bundled version fails startup`() {
+        runner.withPropertyValues("cosec.ip2region.ipv6-location=classpath:ip2region.xdb").run { context ->
+            generateSequence(context.startupFailure) { it.cause }
+                .any { it.message.orEmpty().contains("One ip2region database per IP version") }
+                .assert().isTrue()
+        }
+    }
+
     @Test
     fun `a location that does not exist fails startup`() {
         runner.withPropertyValues("cosec.ip2region.ipv6-location=file:/no/such/ip2region_v6.xdb").run { context ->
