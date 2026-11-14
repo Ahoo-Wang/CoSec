@@ -317,7 +317,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | R7b 主体与令牌契约（✅ #1302） | 验证结果与签发输入改成不可变值，删 `Delegated` 链；`SecurityContext` 只读；删 `RoleCapable` 等；`authenticated` 显式；token 绑定 App（RFC 0012 §3.5）；`AttributeRequest` 带上租户后删除 `Subject.tenantId`（R3 发现） | ABI 冻结前 |
 | R7c 登录协程化（✅ #1303） | `cosec-login`、`cosec-social` 转 `suspend`，注册表改实例 | R7b 之后 |
 | R8 包名对齐（✅ #1348） | `me.ahoo.cosec.cache` → `cocache`、`me.ahoo.cosec.servlet` → `webmvc`、`me.ahoo.cosec.spring.boot.starter` → `spring.boot`；165 个文件只移动，46 个变异体补丁改路径，三个 ABI 转储只有改名 | 其余批次之后，ABI 冻结前 |
-| R9 GA 收尾（进行中） | ✅ 删除 `cosec-migrate cocache8`（#1351）；公共声明归类（方案已分诊，六个 PR，决定见 §9）；JWT 验证基准；`guava`；文档守卫词表；`MutationCheckTest` 支持 `git.exe`。打 GA tag 时、由维护者发话：最后一次 v7/v8 门禁后删除工作流，删除升级文档的 alpha 章节；路线图页 | GA tag 前 |
+| R9 GA 收尾（进行中） | ✅ 删除 `cosec-migrate cocache8`（#1351）；✅ 公共声明归类的前三批（#1354 `model`、`engine`、`spi`；#1356 runtime、Web 适配器、`control`、`cocache`；#1355 测试工具的路由映射、监听器与 `AttributeRequests`），第四、五批审核通过待合入（#1358 starter、登录、社交登录、Web 适配器；#1359 转储检查）；结果见 [RFC 0010](rfc/0010-ga-extension-points.md) 的 2026-11-14 修订；JWT 验证基准；`guava`；文档守卫词表；`MutationCheckTest` 支持 `git.exe`。打 GA tag 时、由维护者发话：最后一次 v7/v8 门禁后删除工作流，删除升级文档的 alpha 章节；路线图页 | GA tag 前 |
 | R10 结构拆分（维护者 2026-11-14："审查可维护性、扩展性，避免单个类、文件过大"；"守住架构质量"） | 主代码 447 个文件、6.1 万行，其中 12 个文件不少于 600 行：`SnapshotSource.kt` 1,640 行（一个类、96 个函数、31 个字段，六个共享外层状态的 `inner` 类；并发核心）、`FlatEvaluator.kt` 970（为零分配有意保持，需实测能否拆出非内循环部分）、`Changes.kt` 937、`Pipeline.kt` 928、`Converter.kt` 920、`Revisions.kt` 861、`ControlHttp.kt` 774、`ChangeAuthority.kt` 770、`PolicyDocumentCodec.kt` 668、`MigrateMain.kt` 643、`CoSecSnapshotAutoConfiguration.kt` 624、`ControlPlane.kt` 605。做法：先出设计说明（每个类今天的职责、切法、各自拥有的状态、如何证明行为不变、热路径代价），协调者读过后再动；不改行为；并发核心与请求路径各自一个 PR，带 BlockHound、性质测试、JMH A/B 与百万次性质压力；加防回退的守护（`test/architecture` 里按文件行数与类的函数数的只减不增清单，打开 detekt 目前关掉的三条规则） | 公共声明归类之后，RC 门禁之前（门禁要验证的是最终结构） |
 | R11 真实项目演练（维护者 2026-11-14："GA 前使用实际项目演练。关注易用性"） | 在一个真实的下游应用上接入 8.0：只按公开文档（快速开始、集成技能、升级指南）操作，像用户一样走完依赖、配置、策略文档、登录与令牌、控制面，逐条记录卡住的地方（文档缺口、缺失或难用的 API、读不懂的错误信息、名字）。该应用现在用的是 4.x，有自定义条件匹配器和自己的策略管理，所以也检验“没有 7.x 数据的老用户怎么上 8.0”。用 `main` 发布到本地 Maven 仓库的 `8.0.0-SNAPSHOT`，不发版。演练记录留在协调者笔记，不进本仓库；CoSec 一侧的修复照常走 PR | 公共声明归类合入之后、ABI 冻结之前（易用性发现可能改公共 API） |
 
@@ -515,5 +515,7 @@ GA 之后（8.1），在 8.0 GA 之前不派发：
     - 密钥轮换；
     - 一个部署同时接受 CoSec 自己的 token 和外部 token 时怎么组合认证器；
     - 拒绝带 `act` 的 token：这道闸门今天只在 `cosec-jwt` 的 `Jwts.toPrincipal`，要移到每个认证器都经过的地方。
+- **手工装配 `Pipeline` 转为稳定**（R9 的 D1）：现在是实验性 API；转稳定时提供构建器，不再是十一个参数的构造器。
+- **社交登录提供者的 SPI**（R9）：8.0 里注册表与提供者接口是内部的，应用不能添加 JustAuth 之外的提供者；与外部身份提供者的 RFC 一起设计。
 - **测试工具场景里的外部属性**（第二轮审查 L9，2026-11-14 决定）：`PolicyTestKit.load` 接受应用的属性声明作为目录，场景在 `request.external` 里给出取值或“取不到”，复用 conformance 格式的 `declares`。8.0 里读 `ext.*` 的文档在测试工具中不编译，`wiki/policies/testing.md` 已写明并指向 `simulate`。
 - **委托（RFC 8693 `act`）**，[RFC 0009](rfc/0009-identity-and-credentials.md) 已定在 8.1：外部 IdP 的 token exchange 是它的主要来源，两份 RFC 一起排期。

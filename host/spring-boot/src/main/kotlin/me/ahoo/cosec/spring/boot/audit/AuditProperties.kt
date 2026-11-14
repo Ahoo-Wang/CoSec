@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.audit
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spring.boot.ENABLED_SUFFIX_KEY
 import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -24,10 +25,12 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * @author ahoo wang
  */
 @ConfigurationProperties(AuditProperties.PREFIX)
+@InternalCoSecApi
 class AuditProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
 ) : EnabledCapable {
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX: String = "cosec.audit"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY

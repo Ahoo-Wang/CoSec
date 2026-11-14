@@ -1,9 +1,9 @@
-public final class me/ahoo/cosec/webmvc/PipelineServletFilter : jakarta/servlet/Filter {
-	public fun doFilter (Ljakarta/servlet/ServletRequest;Ljakarta/servlet/ServletResponse;Ljakarta/servlet/FilterChain;)V
+public final class me/ahoo/cosec/webmvc/AuthorizationCheckers {
+	public static final fun checkBlocking (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;)Z
 }
 
-public final class me/ahoo/cosec/webmvc/PipelineServletFilterKt {
-	public static final fun checkBlocking (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;)Z
+public final class me/ahoo/cosec/webmvc/PipelineServletFilter : jakarta/servlet/Filter {
+	public fun doFilter (Ljakarta/servlet/ServletRequest;Ljakarta/servlet/ServletResponse;Ljakarta/servlet/FilterChain;)V
 }
 
 public final class me/ahoo/cosec/webmvc/SecurityContextArgumentResolver : org/springframework/web/method/support/HandlerMethodArgumentResolver {
@@ -22,16 +22,5 @@ public final class me/ahoo/cosec/webmvc/SecurityContextHolder {
 public final class me/ahoo/cosec/webmvc/ServletRequests {
 	public static final field INSTANCE Lme/ahoo/cosec/webmvc/ServletRequests;
 	public final fun getSecurityContext (Ljakarta/servlet/http/HttpServletRequest;)Lme/ahoo/cosec/api/context/SecurityContext;
-}
-
-public final class me/ahoo/cosec/webmvc/SuspendingHandlerHolderInterceptor : org/springframework/web/servlet/HandlerInterceptor {
-	public static final field Companion Lme/ahoo/cosec/webmvc/SuspendingHandlerHolderInterceptor$Companion;
-	public fun <init> ()V
-	public fun preHandle (Ljakarta/servlet/http/HttpServletRequest;Ljakarta/servlet/http/HttpServletResponse;Ljava/lang/Object;)Z
-	public static final fun restored ()Z
-}
-
-public final class me/ahoo/cosec/webmvc/SuspendingHandlerHolderInterceptor$Companion {
-	public final fun restored ()Z
 }
 

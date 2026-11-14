@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.authentication
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -22,8 +23,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * your `Authentication` beans, social login). Authenticating requests in the pipeline is not switched by it.
  */
 @ConfigurationProperties(prefix = LoginProperties.PREFIX)
+@InternalCoSecApi
 class LoginProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "authentication.login"
     }

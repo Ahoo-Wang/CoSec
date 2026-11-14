@@ -15,14 +15,10 @@ package me.ahoo.cosec.login.token
 
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
-import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.TokenVerifier
-
-abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials>(
-    override val supportCredentials: Class<C>
-) : Authentication<C>
 
 /**
  * Refreshes a token pair (`authentication.md`, Refreshing tokens): [tokenVerifier] checks the pair, pure computation on
@@ -40,7 +36,9 @@ class SimpleRefreshTokenAuthentication(
     private val tokenVerifier: TokenVerifier,
     private val revocation: TokenRevocation,
     private val families: TokenFamilies,
-) : AbstractRefreshTokenAuthentication<RefreshTokenCredentials>(RefreshTokenCredentials::class.java) {
+) : Authentication<RefreshTokenCredentials> {
+    override val credentialsType: Class<RefreshTokenCredentials> = RefreshTokenCredentials::class.java
+
     override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
         val token = tokenVerifier.refresh(credentials)
         revocation.check(token)
@@ -48,4 +46,4 @@ class SimpleRefreshTokenAuthentication(
     }
 }
 
-interface RefreshTokenCredentials : Credentials, CompositeToken
+interface RefreshTokenCredentials : LoginCredentials, CompositeToken

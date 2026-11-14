@@ -17,11 +17,10 @@ public final class me/ahoo/cosec/social/InMemorySocialStateStore$Companion {
 }
 
 public final class me/ahoo/cosec/social/SocialAuthentication : me/ahoo/cosec/login/Authentication {
-	public fun <init> (Lme/ahoo/cosec/social/SocialUserPrincipalConverter;Lme/ahoo/cosec/social/SocialProviderManager;)V
-	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public synthetic fun authenticate (Lme/ahoo/cosec/login/LoginCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun authorize (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun getSupportCredentials ()Ljava/lang/Class;
+	public fun getCredentialsType ()Ljava/lang/Class;
 }
 
 public final class me/ahoo/cosec/social/SocialAuthenticationException : me/ahoo/cosec/model/CoSecException {
@@ -29,12 +28,6 @@ public final class me/ahoo/cosec/social/SocialAuthenticationException : me/ahoo/
 	public fun <init> (Ljava/lang/String;)V
 	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
 	public fun <init> (Ljava/lang/Throwable;)V
-}
-
-public abstract interface class me/ahoo/cosec/social/SocialAuthenticationProvider {
-	public abstract fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public abstract fun authorize (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public abstract fun getName ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/social/SocialAuthorization {
@@ -52,17 +45,9 @@ public final class me/ahoo/cosec/social/SocialAuthorization {
 public final class me/ahoo/cosec/social/SocialAuthorization$Companion {
 }
 
-public abstract interface class me/ahoo/cosec/social/SocialCredentials : me/ahoo/cosec/login/Credentials {
+public abstract interface class me/ahoo/cosec/social/SocialCredentials : me/ahoo/cosec/login/LoginCredentials {
 	public abstract fun getBinding ()Ljava/lang/String;
 	public abstract fun getProvider ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/social/SocialProviderManager {
-	public fun <init> ()V
-	public final fun get (Ljava/lang/String;)Lme/ahoo/cosec/social/SocialAuthenticationProvider;
-	public final fun getRequired (Ljava/lang/String;)Lme/ahoo/cosec/social/SocialAuthenticationProvider;
-	public final fun register (Ljava/lang/String;Lme/ahoo/cosec/social/SocialAuthenticationProvider;)V
-	public final fun register (Lme/ahoo/cosec/social/SocialAuthenticationProvider;)V
 }
 
 public abstract interface class me/ahoo/cosec/social/SocialStateStore {
@@ -112,12 +97,9 @@ public final class me/ahoo/cosec/social/justauth/JustAuthCredentials : me/zhyd/o
 }
 
 public final class me/ahoo/cosec/social/justauth/JustAuthProvider : me/ahoo/cosec/social/SocialAuthenticationProvider {
-	public fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;Lme/ahoo/cosec/social/SocialStateStore;I)V
-	public synthetic fun <init> (Ljava/lang/String;Lme/zhyd/oauth/request/AuthRequest;Lme/ahoo/cosec/social/SocialStateStore;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun authenticate (Lme/ahoo/cosec/social/SocialCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun authorize (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getName ()Ljava/lang/String;
-	public final fun name ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/social/justauth/RedisSocialStateStore : me/ahoo/cosec/social/SocialStateStore {

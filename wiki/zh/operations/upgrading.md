@@ -104,6 +104,29 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
   - `ControlStore`、`InMemoryControlStore`、`CoCacheControlStore` 和存储保存的记录（`ChangeRequest`、`ChangeRequestCodec`、`ChangeState`、`Base`、`Approval`、`CheckedApps`、`Finding`、`Severity`、`Operation`、`ShadowState`、`StageSlot`、`AppList`、`PendingRecord`、`RevisionEntry`、`RevisionIndex`、`StoredDocument`、`Versioned`、`HeadWrite`），连同影子窗口端口及其报告（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`、`CoCacheShadowReports`、`InstanceStatus`、`InstalledDocument`、`ShadowReport`、`ShadowSample`、`StoredCandidate`、`ShadowOutcome`）和 `ProvenanceKind`，是 `@ExperimentalCoSecApi`：自己实现的存储需要选择使用。`ChangeListener`、`ChangeEvent` 及其携带的内容保持稳定；`Escalation` 和 `Confirmation` 不再是 `data class`（没有 `copy` 和 `componentN`，相等性不变）。
   - CoCache 缓存（`RevokedTokenCache`、`RevokedSubjectCache`、`MembershipCache`、`PolicySnapshotCache`）是 `@InternalCoSecApi`，`cosec-cocache` 中接收 CoCache 或 Spring Data 类型的构造器和工厂（`CoCacheTokenStore`、`CoCacheMembershipProvider`、`CoCacheTokenFamilyStore`、`RedisApiKeyReader`、`RedisApiKeyStore`、`ReactiveRedisRateLimiter`、`RedisSnapshotDocumentStore` 及其摘要辅助函数、`CoCacheControlStore.create`、`CoCacheShadowReports.create`）以及 `DEFAULT_*_KEY_PREFIX` 常量也是。这些缓存只能由本来就是内部的 `CoSecCacheSpecs` 构建：starter 构建它们，应用按 Bean 的类型（`RedisApiKeyStore`、`CoCacheMembershipProvider` 等）使用。`cocache.caches.[<CacheName>]` 中的缓存名不变。
 
+- **starter、`cosec-login`、`cosec-social` 和 Web 适配器的公开 API 已按 8.0 归类**（R9）：
+  - **`cosec-login` 的 `Credentials` 改为 `LoginCredentials`，`Authentication.supportCredentials` 改为 `credentialsType`。** 一个产品里有两个公开的 `Credentials`，指的却是不同的东西：管道的那个（`me.ahoo.cosec.spi.authn.Credentials`，请求的令牌或 API key）保留原名。你自己的 `Authentication` 这样改：
+
+    ```kotlin
+    // 之前
+    data class PasswordCredentials(val username: String, val password: String) : Credentials
+    class PasswordAuthentication : Authentication<PasswordCredentials> {
+        override val supportCredentials = PasswordCredentials::class.java
+        // ...
+    }
+    // 之后
+    data class PasswordCredentials(val username: String, val password: String) : LoginCredentials
+    class PasswordAuthentication : Authentication<PasswordCredentials> {
+        override val credentialsType = PasswordCredentials::class.java
+        // ...
+    }
+    ```
+
+  - `AbstractRefreshTokenAuthentication` 已删除：`SimpleRefreshTokenAuthentication` 自己实现 `Authentication<RefreshTokenCredentials>`。`AuthenticationProvider`、`DefaultAuthenticationProvider` 和 `CompositeAuthentication` 的构造器是 `@InternalCoSecApi`：starter 注册每个 `Authentication` Bean。
+  - `cosec-social`：`SocialProviderManager` 和 `SocialAuthenticationProvider` 是 `@InternalCoSecApi`，`SocialAuthentication` 和 `JustAuthProvider` 的构造器（后者用到 JustAuth 的 `AuthRequest`）也是。`JustAuthProvider.name()` 已删除：读取 `name`。
+  - starter 的 `*Properties` 类和 `EnabledCapable` 是 `@InternalCoSecApi`，`@ConditionalOn*` 注解是 `internal`。契约是 `cosec.*` 配置键，它们不变。读取配置值请用 `@Value("\${cosec.jwt.enabled}")` 或 `Environment`，不要注入 CoSec 的 `*Properties` Bean；给你自己的 Bean 加条件请用 `@ConditionalOnProperty("cosec.jwt.enabled")`，不要用 `@ConditionalOnJwtEnabled`。
+  - `checkMono`（`cosec-webflux`）和 `checkBlocking`（`cosec-webmvc`）位于名为 `AuthorizationCheckers` 的 Java 类中，不再是 `PipelineWebFilterKt` 和 `PipelineServletFilterKt`；Kotlin 调用方不受影响。`SuspendingHandlerHolderInterceptor` 是 `@InternalCoSecApi`：starter 会注册它。
+
 ## 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 是预览版，没有兼容性承诺。它保存的数据仍然可读，只有反向引用集合、已批准的变更以及用其他拼法写星期的文档例外（见下）。
@@ -821,8 +844,8 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 
 | 7.x 包 | 8.0 包（模块） | 类型 |
 |---|---|---|
-| `me.ahoo.cosec.api.authentication`、`me.ahoo.cosec.authentication` | `me.ahoo.cosec.login`（`cosec-login`） | `Authentication`、`AuthenticationProvider`、`Credentials`、`CompositeAuthentication`、`DefaultAuthenticationProvider` |
-| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `AbstractRefreshTokenAuthentication`、`AbstractSwitchTenantAuthentication` |
+| `me.ahoo.cosec.api.authentication`、`me.ahoo.cosec.authentication` | `me.ahoo.cosec.login`（`cosec-login`） | `Authentication`、`Credentials`（现为 `LoginCredentials`）、`CompositeAuthentication` |
+| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `AbstractSwitchTenantAuthentication` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `TokenConverter`、`TokenCompositeAuthentication`、`RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token`（`cosec-spi`） | `TokenVerifier`、`TokenStore`、`TokenRevoker`、`RevocationReader`、`TokenVerificationException`、`TokenExpiredException`、`TokenRevokedException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token`（`cosec-runtime`） | `SimpleCompositeToken`（`RevocableTokenVerifier` 已移除：见[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)） |
@@ -862,6 +885,8 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `CoSecAuthorizationCustomizer` | `Authenticator`、`DecisionListener`、`AttributeProvider`、`MembershipProvider`、`RateLimiter` 的 bean。 |
 | `Policy`、`Statement`、`PermissionVerifier`、`ActionMatcher`、`ConditionMatcher`、`AppPermission`、`AppRolePermission`、`RolePermission` 以及 `cosec-api` 中其余的策略与权限模型 | 文档（[策略语言](../policies/language.md)）。覆写了 `verify` 的 `Statement` 没有对应物。 |
 | `ActionMatcherFactory`、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、内置匹配器、OGNL 与 SpEL | 只有内置的动作和条件。自定义条件读取的值改由 `AttributeProvider` 提供（[扩展](../architecture/extending.md)）。 |
+| `AuthenticationProvider`、`DefaultAuthenticationProvider` | 声明 `Authentication` Bean：starter 会注册它们。 |
+| `AbstractRefreshTokenAuthentication` | `SimpleRefreshTokenAuthentication`，或你自己的 `Authentication<RefreshTokenCredentials>`。 |
 | `ApiKeyStore` | 查找 key 用 `ApiKeyReader`；管理 key 用 `InMemoryApiKeyStore` 或 `RedisApiKeyStore` Bean。 |
 | `BlockingAware` | 无：没有条件会执行代码。阻塞的查询放进会挂起的 `AttributeProvider`。 |
 | `RootPrincipalMatcher`、`CoSecPrincipal.isRoot`、`root-enabled` | break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）。 |

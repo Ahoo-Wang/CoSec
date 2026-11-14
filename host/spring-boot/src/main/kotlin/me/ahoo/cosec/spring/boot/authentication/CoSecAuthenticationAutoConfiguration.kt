@@ -10,13 +10,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.authentication
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.login.CompositeAuthentication
-import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
+import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -49,7 +52,7 @@ internal class CoSecAuthenticationAutoConfiguration {
         val authenticationProvider = DefaultAuthenticationProvider()
         applicationContext.getBeansOfType(Authentication::class.java).values.forEach {
             @Suppress("UNCHECKED_CAST")
-            it as Authentication<Credentials>
+            it as Authentication<LoginCredentials>
             authenticationProvider.register(it)
         }
         return authenticationProvider

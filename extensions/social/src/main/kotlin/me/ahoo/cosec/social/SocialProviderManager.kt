@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.social
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -20,6 +21,7 @@ import java.util.concurrent.ConcurrentHashMap
  *
  * @author ahoo wang
  */
+@InternalCoSecApi
 class SocialProviderManager {
     private val providers: ConcurrentHashMap<String, SocialAuthenticationProvider> = ConcurrentHashMap()
 
