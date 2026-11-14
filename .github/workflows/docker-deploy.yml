@@ -109,9 +109,11 @@ jobs:
     name: Mirror Docker image to Aliyun
     needs: docker-deploy
     runs-on: ubuntu-latest
-    # The copy script ends by itself within about 11 minutes (3 x (60 s login + 120 s copy) + 80 s of backoff), so this
-    # limit is never what stops it: a job that hits its limit is cancelled, not failed.
-    timeout-minutes: 15
+    # Sized from measured runs: a cold copy of the whole image (about 800 MB for both platforms) took 5 min 25 s, a copy
+    # of what Aliyun already holds about 5 s, and the old single-job push of only the changed layers about 20 s. A
+    # copy attempt gets 10 minutes; the script ends by itself within about 35 (3 x (60 s login + 600 s copy) + 80 s of
+    # backoff), so this limit, 40 minutes, is never what stops it: a job that hits its limit is cancelled, not failed.
+    timeout-minutes: 40
     continue-on-error: true
     permissions:
       contents: read
@@ -153,9 +155,11 @@ jobs:
           while IFS= read -r tag; do
             [ -n "$tag" ] && tag_args+=(--tag "$tag")
           done <<<"$TAGS"
+          # A cancelled attempt keeps the blobs it finished (the next one skips them), and loses the one in flight.
           copy() {
             echo "$ALIYUN_CR_TOKEN" | timeout 60 docker login "$ALIYUN_REGISTRY" --username "$ALIYUN_CR_USERNAME" --password-stdin \
-              && timeout 120 docker buildx imagetools create "${tag_args[@]}" "$SOURCE"
+              && timeout 600 docker buildx imagetools create "${tag_args[@]}" "$SOURCE" \
+              && docker buildx imagetools inspect "${tag_args[1]}"
           }
           for delay in 0 20 60; do
             sleep "$delay"
