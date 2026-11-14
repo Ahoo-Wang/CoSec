@@ -316,7 +316,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | R7a 审计记录（✅ #1297） | `authorization.source` 改用绑定词汇，删死字段和 `PolicyType`；`KafkaAuditListener.destroy()` 要等队列写完（R3 发现） | 与 G1 对齐 |
 | R7b 主体与令牌契约（✅ #1302） | 验证结果与签发输入改成不可变值，删 `Delegated` 链；`SecurityContext` 只读；删 `RoleCapable` 等；`authenticated` 显式；token 绑定 App（RFC 0012 §3.5）；`AttributeRequest` 带上租户后删除 `Subject.tenantId`（R3 发现） | ABI 冻结前 |
 | R7c 登录协程化（✅ #1303） | `cosec-login`、`cosec-social` 转 `suspend`，注册表改实例 | R7b 之后 |
-| R8 包名对齐 | `cocache`、`webmvc`、`spring-boot` | 其余批次之后，ABI 冻结前 |
+| R8 包名对齐（#1348，已审核，自动合并中） | `me.ahoo.cosec.cache` → `cocache`、`me.ahoo.cosec.servlet` → `webmvc`、`me.ahoo.cosec.spring.boot.starter` → `spring.boot`；165 个文件只移动，46 个变异体补丁改路径，三个 ABI 转储只有改名 | 其余批次之后，ABI 冻结前 |
 | R9 GA 收尾 | 最后一次 v7/v8 门禁后删除工作流；文档守卫词表；alpha 升级章节；路线图页；`guava` | GA tag 前 |
 
 **未关闭 issue 的分批**（2026-11-08 按摘要分诊，都自述 P2/P3，没有放行类问题；每个修复先复现）：
@@ -348,9 +348,12 @@ E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；
 观察项（2026-11-14）：`ChangesB1Test` 的 RC1-33 用例在 #1318 的会话本地失败一次，重跑三次通过，该 PR 未改动它。再失败就按“可能放行”调查，不只重跑。
 
 **2026-11-14：第二轮按模块审查的六组全部完成。** 之后的顺序：过期的变异体重新生成并加“每个补丁都能打上”的检查（13 个补丁在 `main` 上已打不上，对应规则暂时没有变异体守护）→ R8 → R9 → RC 门禁。
+过期的变异体已重新生成（14 个，全部被杀死），`:conformance:check` 现在要求每个补丁都能打到工作区上（#1347）。
 R9 清单增加：JWT 验证的基准（`PipelineBenchmark` 用测试令牌认证，没有任何基准覆盖 JWT 验证）；发布说明单列的几条（ip2region 只带 IPv4 库；延迟初始化不再跳过启动检查；`http:HEAD` 不编译；转换工具拒绝更多情形；主体属性只读）。
 
 观察项（2026-11-14，已处理）：`SnapshotSourceTest#lagIsReportedAboveTheThresholds` 在 #1342 的 CI 上失败一次。根因是测试自己的 `tick()` 排队的上报与测试线程的上报竞争；生产里只有一个后台线程、一个调用者，顺序不会颠倒。测试修复在 #1345，修复前本地 500 次失败 1 次、1000 次失败 3 次，修复后为 0。
+
+观察项（2026-11-14，已处理）：`KafkaAuditListenerTest#shutdownEndsAtItsBoundWhenTheBrokerNeverAnswers` 在 #1347 的 CI 上失败一次。根因是冷启动：该类的第一个测试里首次处理事件超过 5 秒，测试借用的默认排空时限先放弃了；被测的 300 毫秒关闭上限不受影响。测试修复在 #1349，改为等记录确实交到监听器后再测关闭。
 
 R9 开始前要核对的 RC 前事项（2026-11-14，由一个并行的 Sonnet 子会话完成）：
 - ✅ `cosec-migrate` 发行包作为 release 资产，文档写明以 Kubernetes Job 运行，以及手写文档的播种路径（平台文档 `publish`，然后 `bootstrap`，其余文档走控制面 `apply`）：#1333。发布作业本身只有下次发版才能验证。
