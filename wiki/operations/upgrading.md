@@ -16,6 +16,11 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **ip2region: what it cannot locate is unavailable** (round 2 M5). An IPv6 client, with only the bundled IPv4
+  database, had no country, so a geo-block DENY written as `country in [...]` let it through; it is now unavailable, so
+  that DENY makes the request `503` (or lets it through with `onMissing: nomatch`). Load an IPv6 database with
+  `cosec.ip2region.ipv6-location`. `Ip2RegionAttributeProvider` takes its databases as a list, each for the version its
+  header names, instead of one database and a version.
 - **A failing `IdGenerator` costs only its id** (`PIP-23`). One that threw (CosId's `ClockBackwardsException` after the
   clock went back) left the pipeline before any outcome: no problem body, no `CoSec-Request-Id`, no decision event, and
   each adapter answered its own way. A random id now stands in, with a WARN at most every ten seconds; `CosIdIdGenerator`

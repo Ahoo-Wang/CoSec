@@ -49,6 +49,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.io.ResourceLoader
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
 import kotlin.time.toKotlinDuration
@@ -201,7 +202,21 @@ class CoSecPipelineIntegrationAutoConfiguration {
     class Ip2Region {
         @Bean
         @ConditionalOnMissingBean
-        fun cosecIp2RegionAttributeProvider(): Ip2RegionAttributeProvider = Ip2RegionAttributeProvider()
+        fun cosecIp2RegionAttributeProvider(
+            properties: Ip2RegionProperties,
+            resources: ResourceLoader,
+        ): Ip2RegionAttributeProvider {
+            val ipv6 = properties.ipv6Location?.takeIf { it.isNotBlank() }?.let { location ->
+                val resource = resources.getResource(location)
+                check(resource.exists()) {
+                    "${Ip2RegionProperties.PREFIX}.ipv6-location [$location] does not exist."
+                }
+                resource.inputStream.use { it.readBytes() }
+            }
+            return Ip2RegionAttributeProvider(
+                listOfNotNull(Ip2RegionAttributeProvider.loadDefaultIp2RegionDb(), ipv6)
+            )
+        }
     }
 
     private companion object {

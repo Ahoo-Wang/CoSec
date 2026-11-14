@@ -25,6 +25,7 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 class Ip2RegionAttributeProviderTest {
@@ -74,10 +75,25 @@ class Ip2RegionAttributeProviderTest {
             .assert().isEqualTo(mapOf(Ip2RegionAttributeProvider.CITY to "上海市"))
     }
 
+    /** A field the database does not know for an address it covers is absent: there is nothing more to know. */
     @Test
-    fun unknownFieldsAndNonAddressesAreAbsent() {
+    fun unknownFieldsAreAbsent() {
         fetch("10.0.0.1").keys.assert().doesNotContain(Ip2RegionAttributeProvider.COUNTRY)
-        fetch("localhost").assert().isEmpty()
-        fetch("2001:db8::1").assert().isEmpty()
+        fetch("::ffff:101.228.87.88")[Ip2RegionAttributeProvider.COUNTRY].assert().isEqualTo("中国")
+    }
+
+    /** Round 2 M5: what no database can tell is unavailable, never absent: no address, or one of an unloaded version. */
+    @Test
+    fun anAddressNoDatabaseCoversIsUnavailable() {
+        provider.versions.assert().containsExactly("IPv4")
+        for (remote in listOf("2001:db8::1", "localhost", "", "unknown")) {
+            assertThrownBy<IllegalStateException> { fetch(remote) }
+        }
+    }
+
+    @Test
+    fun oneDatabasePerVersion() {
+        val v4 = Ip2RegionAttributeProvider.loadDefaultIp2RegionDb()
+        assertThrownBy<IllegalArgumentException> { Ip2RegionAttributeProvider(listOf(v4, v4)) }
     }
 }

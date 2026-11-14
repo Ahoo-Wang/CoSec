@@ -59,6 +59,7 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 | `cosec.audit.kafka.enabled` | boolean | `true` | the Kafka audit listener (`cosec-kafka` and a `KafkaOperations` bean) |
 | `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`cosec-micrometer` and a `MeterRegistry` bean, Spring Boot's own auto-configured one included) |
 | `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`cosec-ip2region`) |
+| `cosec.ip2region.ipv6-location` | string | none | A Spring resource location (`file:`, `classpath:`) of the IPv6 `.xdb` database, loaded beside the bundled IPv4 one. Unset, an IPv6 client's region is unavailable. A location that does not exist fails startup. |
 | `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`cosec-openapi`) |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cosec-cocache`); see [Shadow windows](#shadow-windows) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | on a Spring Cloud Gateway host, forwarding the verified identity to the services behind it; see [Gateway identity](#gateway-identity) |

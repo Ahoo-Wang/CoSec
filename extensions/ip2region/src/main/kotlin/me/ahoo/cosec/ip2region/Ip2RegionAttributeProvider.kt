@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.ip2region
 
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
@@ -24,28 +25,41 @@ import java.io.ByteArrayInputStream
 
 /**
  * The region of the client address as external attributes (RFC 0006 §5.4.5): `ext.ip2region.country`, `.province`,
- * `.city` and `.isp`, from the in-memory ip2region database, so a fetch never suspends and does no I/O.
+ * `.city` and `.isp`, from in-memory ip2region databases, so a fetch never suspends and does no I/O.
  *
- * An address the database does not know a field for (`0`), or one that is not an address of its [version], has the
- * field absent. A failed search throws, which makes the attributes unavailable, never absent.
+ * [databases] are `.xdb` files, each for the IP version its header names, at most one per version: the bundled one is
+ * IPv4's; an IPv6 one is the application's to give (`cosec.ip2region.ipv6-location`).
+ *
+ * What the database cannot tell is unavailable, never absent (round 2 M5): an address of a version no database is
+ * loaded for, or no address at all, throws, so a statement that reads the attributes is decided as for any missing
+ * external attribute (a DENY on them is Indeterminate unless `onMissing: nomatch`), and a geo block cannot be stepped
+ * around over IPv6. A field the database does not know for an address it covers (`0`, as for a private address) is
+ * absent: there is nothing more to know.
  */
-class Ip2RegionAttributeProvider(
-    ip2regionDb: ByteArray = loadDefaultIp2RegionDb(),
-    private val version: Version = Version.IPv4,
-) : AttributeProvider {
-    private val searcher: Searcher =
-        Searcher.newWithBuffer(version, Searcher.loadContentFromInputStream(ByteArrayInputStream(ip2regionDb)))
+class Ip2RegionAttributeProvider(databases: List<ByteArray> = listOf(loadDefaultIp2RegionDb())) : AttributeProvider {
+    private val searchers: Map<Version, Searcher> = databases.map { bytes ->
+        val content = Searcher.loadContentFromInputStream(ByteArrayInputStream(bytes))
+        val version = Version.fromHeader(Searcher.loadHeaderFromBuffer(content))
+        version to Searcher.newWithBuffer(version, content)
+    }.also { loaded ->
+        val versions = loaded.map { it.first.name }
+        require(versions.size == versions.toSet().size) { "One ip2region database per IP version, not $versions." }
+    }.toMap()
 
     override val attributes: List<AttributeDeclaration> =
         FIELDS.keys.map { AttributeDeclaration(it, AttributeType.STRING) }
 
+    /** The IP versions a database is loaded for. */
+    val versions: Set<String> get() = searchers.keys.mapTo(LinkedHashSet()) { it.name }
+
     override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
         val address = IpAddress.parse(request.remoteIp)
-        if (address == null || address.v4 != (version == Version.IPv4)) {
-            return emptyMap()
-        }
+            ?: throw UnlocatableAddressException("[${Identifiers.printable(request.remoteIp)}] is no address")
+        val version = if (address.v4) Version.IPv4 else Version.IPv6
+        val searcher = searchers[version]
+            ?: throw UnlocatableAddressException("no ip2region database is loaded for ${version.name}")
         // country|region|province|city|isp, 0 where unknown.
-        val region = searcher.search(request.remoteIp).split('|')
+        val region = searcher.search(address.toString()).split('|')
         val values = HashMap<String, Any>(names.size)
         for (name in names) {
             val value = FIELDS[name]?.let(region::getOrNull)
@@ -56,7 +70,7 @@ class Ip2RegionAttributeProvider(
         return values
     }
 
-    override fun toString(): String = "Ip2RegionAttributeProvider($version)"
+    override fun toString(): String = "Ip2RegionAttributeProvider(${versions.joinToString()})"
 
     companion object {
         const val COUNTRY = "ext.ip2region.country"
@@ -75,3 +89,6 @@ class Ip2RegionAttributeProvider(
         private val FIELDS = linkedMapOf(COUNTRY to 0, PROVINCE to 2, CITY to 3, ISP to 4)
     }
 }
+
+/** The client address cannot be located: its attributes are unavailable, never absent. */
+internal class UnlocatableAddressException(reason: String) : IllegalStateException("Cannot locate the client: $reason.")

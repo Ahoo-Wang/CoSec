@@ -94,6 +94,18 @@
         "runtime:CheckAttributesTest"
       ],
       "pending": null
+    },
+    {
+      "id": "ATR-9",
+      "source": "RFC 0006 §5.4.5; round-2 review M5",
+      "statement": "The ip2region provider answers unavailable, never absent, for an address no database it loaded covers (an IPv6 address without an IPv6 database, or no address), so a DENY on its attributes is decided as on any missing external attribute; a field the database does not know for an address it covers is absent.",
+      "level": "build",
+      "guards": [
+        "ip2region:GeoBlockDecisionTest#a geo block is not stepped around over IPv6",
+        "ip2region:GeoBlockDecisionTest#onMissing nomatch lets an unlocatable address through",
+        "ip2region:Ip2RegionAttributeProviderTest#anAddressNoDatabaseCoversIsUnavailable"
+      ],
+      "pending": null
     }
   ]
 }
