@@ -1,0 +1,16 @@
+# Rule: OBL-6
+# Mutant: the local limiter bounds buckets only in total, so a flood of keys on one rule refuses the new buckets of every other rule
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.ratelimit.LocalRateLimiterBoundsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLimiter.kt
+@@ -113,7 +113,7 @@
+ 
+     /** A slot of the rule's bound and of the total, or neither. */
+     private fun reserve(rule: AtomicLong): Boolean {
+-        if (rule.incrementAndGet() > maximumBucketsPerRule) {
++        if (rule.incrementAndGet() > Long.MAX_VALUE - 1) {
+             rule.decrementAndGet()
+             return false
+         }

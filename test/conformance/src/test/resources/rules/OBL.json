@@ -44,6 +44,33 @@
         "cocache:ReactiveRedisRateLimiterTest#bucketsSpreadOverTheCluster"
       ],
       "pending": null
+    },
+    {
+      "id": "OBL-5",
+      "source": "R9 (2026-11-14): LocalRateLimiter F1, F2",
+      "statement": "The local rate limiter never resets a bucket's count while it can still change an answer: a bucket is removed only after it has been idle for the expiry and for two of its rule's windows, when both of its counters are stale, and never to make room for another bucket, of the same rule or another.",
+      "level": "build",
+      "guards": [
+        "runtime:LocalRateLimiterCountsTest#an idle pause shorter than the window keeps the count",
+        "runtime:LocalRateLimiterCountsTest#a flood of other buckets keeps a live count",
+        "runtime:LocalRateLimiterBoundsTest#a bucket is removed only once it can no longer change an answer",
+        "runtime:LocalRateLimiterBoundsTest#a bucket removed while held is not counted into"
+      ],
+      "pending": null
+    },
+    {
+      "id": "OBL-6",
+      "source": "R9 (2026-11-14): LocalRateLimiter bounds",
+      "statement": "The local rate limiter admits at most a bound of buckets in total and a lower bound per rule. A bucket it cannot admit cannot be counted: the call fails, and the rule's strictFailure decides (503, or the rule is skipped); it is never counted into a bucket the limiter does not keep. A rule that reaches its bound refuses only its own new buckets.",
+      "level": "build",
+      "guards": [
+        "runtime:RateLimitObligationTest#aFullLocalLimiterIsOneThatCannotCount",
+        "runtime:LocalRateLimiterBoundsTest#a flood on one rule leaves the other rules counting and admitting",
+        "runtime:LocalRateLimiterBoundsTest#a limiter full in total refuses new buckets of every rule",
+        "runtime:LocalRateLimiterBoundsTest#a request that loses the admission of its key counts into the winner's bucket",
+        "runtime:LocalRateLimiterBoundsTest#the counters equal what the limiter holds while sweeps run"
+      ],
+      "pending": null
     }
   ]
 }
