@@ -36,6 +36,9 @@ dependencies {
 
 val repositoryRoot = rootProject.layout.projectDirectory
 
+/** The line of a `git diff` that names the file a hunk changes. */
+val PATCHED_FILE = "+++ b/"
+
 /*
  * RFC 0011: the projects by name, `name=directory;…`, for the rule guards (`project:Class#test`). Computed here, so no
  * code assumes where a module sits.
@@ -48,6 +51,18 @@ tasks.named<Test>("test") {
     // DocumentationExamplesTest reads the samples of the wiki's scenario pages.
     systemProperty("cosec.repository.root", repositoryRoot.asFile.absolutePath)
     inputs.dir(repositoryRoot.dir("wiki/examples")).withPathSensitivity(PathSensitivity.RELATIVE)
+    // MutationCheckTest applies every mutant to the files it names, which live in other modules: they are inputs too,
+    // so a refactoring that strands a mutant runs the test again.
+    val mutants = layout.projectDirectory.dir("mutants")
+    inputs.dir(mutants).withPathSensitivity(PathSensitivity.RELATIVE)
+    inputs.files(
+        mutants.asFileTree.matching { include("*.patch") }.elements.map { patches ->
+            patches.flatMap { patch ->
+                patch.asFile.readLines().filter { it.startsWith(PATCHED_FILE) }
+                    .map { repositoryRoot.file(it.removePrefix(PATCHED_FILE)) }
+            }
+        }
+    ).withPathSensitivity(PathSensitivity.RELATIVE)
 }
 
 /*

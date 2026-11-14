@@ -3,10 +3,10 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfigurationTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
-index f257618f..37eac54f 100644
+index 19fb0505..acc2e49e 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
-@@ -64,20 +64,6 @@ class CoSecModuleCheckAutoConfiguration {
+@@ -82,20 +82,6 @@ internal class CoSecModuleCheckAutoConfiguration {
              )
      }
  
@@ -15,7 +15,7 @@ index f257618f..37eac54f 100644
 -    @ConditionalOnClass(name = [GATEWAY_GLOBAL_FILTER])
 -    class Gateway {
 -        @Bean
--        fun cosecGatewayModuleCheck(context: ApplicationContext): InitializingBean =
+-        fun cosecGatewayModuleCheck(context: ApplicationContext): StartupTask =
 -            requireModule(
 -                context,
 -                "me.ahoo.cosec.gateway.IdentityStripFilter",

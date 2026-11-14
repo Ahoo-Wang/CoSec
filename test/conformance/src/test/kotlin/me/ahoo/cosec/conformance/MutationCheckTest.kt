@@ -19,6 +19,7 @@ import org.junit.jupiter.api.assertThrows
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.Path
 
 class MutationCheckTest {
@@ -38,6 +39,34 @@ class MutationCheckTest {
         }
     }
 
+    /**
+     * A mutant that no longer applies guards nothing, and `mutationCheck` is not part of `check`: a refactoring that
+     * strands one would show only at the RC gate. So every patch must apply to the working tree as it is
+     * (`git apply --check`, which changes nothing). When one does not, rewrite it to break the same property where the
+     * code now lives; the header says what it was for.
+     */
+    @Test
+    fun `every mutant applies to the working tree`() {
+        val root = Path(requireNotNull(System.getProperty("cosec.repository.root")) { "cosec.repository.root" })
+        val stranded = Mutant.all(Path("mutants")).filter { mutant ->
+            val check = ProcessBuilder(
+                "git",
+                "apply",
+                "--check",
+                "--whitespace=nowarn",
+                mutant.patch.toAbsolutePath().toString(),
+            ).directory(root.toFile()).redirectErrorStream(true).start()
+            val output = check.inputStream.bufferedReader().readText()
+            val applies = check.waitFor(APPLY_TIMEOUT_SECONDS, TimeUnit.SECONDS) && check.exitValue() == 0
+            if (!applies) {
+                check.destroyForcibly()
+                println("${mutant.name}: $output")
+            }
+            !applies
+        }
+        stranded.map { it.name }.assert().describedAs("mutants that no longer apply").isEmpty()
+    }
+
     @Test
     fun `the header is read before the diff`() {
         val patch = Files.writeString(
@@ -53,3 +82,5 @@ class MutationCheckTest {
         assertThrows<IllegalArgumentException> { Mutant.read(missing) }.message.assert().contains("Mutant")
     }
 }
+
+private const val APPLY_TIMEOUT_SECONDS = 60L

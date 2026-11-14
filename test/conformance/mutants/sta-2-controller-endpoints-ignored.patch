@@ -3,12 +3,12 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecGatewayEndpointCheckAutoConfigurationTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
-index d09bce04..48490dba 100644
+index 3d3677e6..44700262 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecGatewayEndpointCheckAutoConfiguration.kt
-@@ -56,8 +56,8 @@ class CoSecGatewayEndpointCheckAutoConfiguration {
+@@ -60,8 +60,8 @@ internal class CoSecGatewayEndpointCheckAutoConfiguration {
              val endpoints = context.getBeanProvider(PathMappedEndpoints::class.java).ifAvailable
-                 ?: return@SmartInitializingSingleton
+                 ?: return@AfterSingletons
              // Every path-mapped endpoint is an exposable one; any other is checked by its path, never skipped.
 -            val exposed = endpoints.map {
 -                (it as? ExposableEndpoint<*>)?.endpointId?.toLowerCaseString() ?: it.rootPath.lowercase()

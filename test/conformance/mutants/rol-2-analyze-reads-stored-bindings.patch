@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RolesTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index 19799b1d..833988be 100644
+index 671c94b7..003980e6 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -438,7 +438,7 @@ class DefaultControlPlane(
+@@ -457,7 +457,7 @@ class DefaultControlPlane(
                  app -> application
                  else -> entry(key)
              } ?: continue
 -            for (binding in entry.effective.bindings) {
 +            for (binding in entry.document.bindings) {
-                 if (!applies(binding, query)) {
+                 if (!applies(binding, asked)) {
                      continue
                  }

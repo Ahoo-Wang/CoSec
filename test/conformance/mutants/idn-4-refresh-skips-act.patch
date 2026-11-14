@@ -3,11 +3,11 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-index f46b86d3..37d9e167 100644
+index efa7a555..f7d7fb7d 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-@@ -76,7 +76,7 @@ class JwtTokenVerifier(
-         if (decodedRefreshToken.subject != decodedAccessToken.id) {
+@@ -82,7 +82,7 @@ class JwtTokenVerifier(
+         ) {
              throw RefreshTokenMismatchException()
          }
 -        return Jwts.toVerifiedToken(decodedAccessToken)
@@ -16,16 +16,19 @@ index f46b86d3..37d9e167 100644
  
      @Suppress("TooGenericExceptionCaught")
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-index 81bd0e40..e98290f1 100644
+index 4c6f92d5..d0853784 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-@@ -49,8 +49,8 @@ internal object Jwts {
-      * says anything: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+@@ -66,11 +66,11 @@ internal object Jwts {
+      * Nor does a refresh token: its `sub` is the access token's id, and a principal of that name is nobody's (`IDN-13`).
       * A token with no `sub` or `jti` is invalid.
       */
 -    fun toVerifiedToken(decodedAccessToken: DecodedJWT): VerifiedToken {
--        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
 +    fun toVerifiedToken(decodedAccessToken: DecodedJWT, refusingDelegation: Boolean = true): VerifiedToken {
+         if (!decodedAccessToken.getClaim(TOKEN_USE_CLAIM).isMissing) {
+             throw TokenVerificationException("The token is not an access token.")
+         }
+-        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
 +        if (refusingDelegation && !decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
              throw DelegationUnsupportedException(
                  "The token delegates (it carries an `act` claim), which CoSec does not support."
