@@ -182,6 +182,10 @@ PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增�
 
 RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保留为薄契约模块）不变，内容按 §3 收窄。
 
+> **2026-11-14 修订（第二轮审查，#1339，`STA-3`）**：starter 的每个启动检查都是一个专门类型的 bean，延迟初始化不会推迟它：
+> `spring.main.lazy-initialization=true` 不会关掉任何检查。必须不经请求就运行的组件（驱逐策略监视、影子上报、监听器指标绑定）同样如此。
+> 结构测试保证自动配置里没有返回裸 `InitializingBean` 或 `SmartInitializingSingleton` 的 `@Bean` 方法。
+
 > **实现说明（2026-11-03，#1194，RC 修复批次 C）**：D2 的启动检查多了一个 `STA-2`，与 `STA-1` 并列。它由 `CoSecGatewayEndpointCheckAutoConfiguration` 实现，在启动时检查网关宿主：
 > - **检查条件：** 执法模式，且 CoSec 打开。
 > - **失败条件：** 应用端口上通过 HTTP 暴露了 `health` 以外的 Actuator 端点，除非 `cosec.gateway.unprotected-endpoints` 列出了它。`gateway` 端点在任何端口上都不能列入。
