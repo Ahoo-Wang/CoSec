@@ -25,6 +25,7 @@ import org.springframework.beans.factory.config.BeanDefinition
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
+import org.springframework.core.annotation.AnnotatedElementUtils
 import java.lang.reflect.Method
 
 /**
@@ -48,10 +49,13 @@ class StartupCheckTest {
     /** ... and the configurations nested in them. */
     private val configurations: List<Class<*>> by lazy { autoConfigurations.flatMap { nested(it) } }
 
+    /** A `@Bean` method, read as Spring reads it (a meta-annotation counts too). */
+    private fun isBean(method: Method): Boolean = AnnotatedElementUtils.hasAnnotation(method, Bean::class.java)
+
     private fun nested(type: Class<*>): List<Class<*>> = listOf(type) + type.declaredClasses.flatMap { nested(it) }
 
     private val beanMethods: List<Method> by lazy {
-        configurations.flatMap { it.declaredMethods.toList() }.filter { it.isAnnotationPresent(Bean::class.java) }
+        configurations.flatMap { it.declaredMethods.toList() }.filter(::isBean)
     }
 
     @Test
@@ -70,7 +74,7 @@ class StartupCheckTest {
     fun `every auto-configuration with a check imports the exclusion`() {
         val missing = autoConfigurations.filter { configuration ->
             val checks = nested(configuration).flatMap { it.declaredMethods.toList() }
-                .any { it.isAnnotationPresent(Bean::class.java) && StartupCheck::class.java.isAssignableFrom(it.returnType) }
+                .any { isBean(it) && StartupCheck::class.java.isAssignableFrom(it.returnType) }
             val imported = configuration.getAnnotation(Import::class.java)?.value.orEmpty()
                 .any { it == StartupCheckExclusion::class }
             checks && !imported
