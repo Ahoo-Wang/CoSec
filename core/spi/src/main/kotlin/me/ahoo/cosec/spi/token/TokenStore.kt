@@ -27,9 +27,11 @@ import java.time.Instant
  * A revoked token is rejected by `RevocableTokenVerifier` until its natural expiry,
  * so entries only need to outlive the refresh token bound to them.
  *
- * Implementations are consulted on every authenticated request, so lookups should
- * be cheap; distributed implementations are expected to trade a short propagation
- * window for locality (see `me.ahoo.cosec.cache.CoCacheTokenStore` in cosec-cocache).
+ * The pipeline does not read it: it asks a [RevocationReader], which never blocks. This store is read synchronously by
+ * `RevocableTokenVerifier`, the verifier of login and refresh, and written by [TokenRevoker]; an implementation usually
+ * backs a [RevocationReader] over the same data, so both paths see one revocation. Lookups should be cheap; distributed
+ * implementations are expected to trade a short propagation window for locality (see
+ * `me.ahoo.cosec.cache.CoCacheTokenStore` in cosec-cocache).
  *
  * @see NoOp
  * @see RevocableTokenVerifier
