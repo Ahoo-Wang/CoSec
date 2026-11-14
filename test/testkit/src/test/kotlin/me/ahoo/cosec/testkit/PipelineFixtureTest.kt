@@ -119,7 +119,11 @@ class PipelineFixtureTest {
             {"effect":"allow","action":"http:GET","resource":"http:path:/public"}]}],
             "bindings":[{"id":"finance","subject":"*","app":"*","space":"*","policy":"finance"}]}"""
         PipelineFixture.of(platform = finance).use { fixture ->
-            val alice = PipelineFixture.Principal("alice", tenant = "acme", attributes = HashMap(mapOf("department" to "ops")))
+            val alice = PipelineFixture.Principal(
+                "alice",
+                tenant = "acme",
+                attributes = HashMap(mapOf("department" to "ops"))
+            )
             val context = fixture.securityContext(fixture.request("GET", "/public", alice))
             val checker = AuthorizationChecker(fixture.pipeline)
             checker.check(context, "http:GET", "/finance/x").assert().isFalse()

@@ -31,6 +31,7 @@ class AuthenticatedPrincipalTest {
             MembershipSource.Provider.UNCAPPED,
             attributes = handedOver,
         )
+
         @Suppress("UNCHECKED_CAST")
         val cast = principal.attributes as MutableMap<String, Any>
         assertThrownBy<UnsupportedOperationException> { cast["department"] = "finance" }
