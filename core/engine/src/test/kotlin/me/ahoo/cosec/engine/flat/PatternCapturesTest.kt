@@ -182,4 +182,30 @@ class PatternCapturesTest {
         val obligation = (decisions.distinct().single() as Decision.Permit).obligations.single() as Obligation.RateLimit
         obligation.bucket.assert().isEqualTo(CompiledRateLimit.keyedBucket("a"))
     }
+
+    /**
+     * A pattern that fails to match (a path that does not decode) is recorded alike for a statement of several patterns
+     * and of one, also after the decision, where the trace evaluates only for itself.
+     */
+    @Test
+    fun `a failing pattern is recorded alike for one pattern and several, at every trace level`() {
+        fun allow(id: String, vararg patterns: String) = compiler.compile(
+            PolicyId(id),
+            null,
+            listOf(StatementSource("a", Effect.ALLOW, listOf("*"), patterns.map { ResourceSource("http:path:$it") }, vIsA)),
+        )
+        val several = allow("several", "/a/{v}", "/{v}/b")
+        val one = allow("one", "/a/{v}")
+        val deny = compiler.compile(PolicyId("deny"), null, listOf(StatementSource("d", Effect.DENY, listOf("*"))))
+        val bindings = listOf(anyone("b-deny", "deny"), anyone("b-several", "several"), anyone("b-one", "one"))
+        val view = SnapshotView(CompiledDocument.platform(listOf(deny, several, one), bindings), null, tenant())
+        val request = flatRequest(path = "/a/%zz")
+        val decisions = TraceLevel.entries.map { CoSecFlatEngine.evaluate(request, view, it).decision }
+        decisions.distinct().single().assert().isInstanceOf(Decision.Deny::class.java)
+        val trace = CoSecFlatEngine.evaluate(request, view, TraceLevel.EXHAUSTIVE).trace!!
+        fun outcome(policy: String) = trace.candidates.single { it.ref.policy == PolicyId(policy) }
+        outcome("several").outcome.assert().isEqualTo(outcome("one").outcome)
+        outcome("several").error.assert().isInstanceOf(IllegalArgumentException::class.java)
+        outcome("several").afterDecision.assert().isTrue()
+    }
 }

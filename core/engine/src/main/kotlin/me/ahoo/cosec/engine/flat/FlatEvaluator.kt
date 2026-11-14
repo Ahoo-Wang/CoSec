@@ -494,8 +494,12 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         for (pattern in statement.resources) {
             val captures = try {
                 if (globs) pattern.match(target, this) else pattern.match(target)
-            } catch (error: Exception) {
-                failure = failure ?: error
+            } catch (thrown: Throwable) {
+                // As [step] treats the failure of [resource]: the evaluation's rule, traced or not.
+                if (!catches(thrown)) {
+                    throw thrown
+                }
+                failure = failure ?: thrown
                 null
             } ?: continue
             if (!guarded) {
