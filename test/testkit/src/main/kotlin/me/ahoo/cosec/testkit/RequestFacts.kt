@@ -25,11 +25,9 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Attribute.Kind
 import me.ahoo.cosec.model.condition.ConditionInput
-import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.scope.Scope
-import java.net.URI
-import java.net.URISyntaxException
+import me.ahoo.cosec.runtime.http.uriHost
 
 /**
  * What the statements of a scenario read about its request: the attribute catalog of RFC 0005 §3.2, filled from the
@@ -89,8 +87,8 @@ private class FactsInput(private val facts: RequestFacts, private val captures: 
         Kind.HTTP_HEADER -> facts.headers[attribute.name]
         Kind.HTTP_ORIGIN -> facts.headers[ORIGIN]
         Kind.HTTP_REFERER -> facts.headers[REFERER]
-        Kind.HTTP_ORIGIN_HOST -> facts.headers[ORIGIN]?.let(::host)
-        Kind.HTTP_REFERER_HOST -> facts.headers[REFERER]?.let(::host)
+        Kind.HTTP_ORIGIN_HOST -> facts.headers[ORIGIN]?.let(::uriHost)
+        Kind.HTTP_REFERER_HOST -> facts.headers[REFERER]?.let(::uriHost)
         Kind.REQUEST_ATTRIBUTE -> facts.requestAttributes[attribute.name]
         else -> null
     }
@@ -119,12 +117,6 @@ private class FactsInput(private val facts: RequestFacts, private val captures: 
         if (attribute.kind == Kind.ENVIRONMENT_TIME) facts.time else ConditionInput.NO_TIME
 
     // As the runtime's HttpAttributes reads it: the URL's host folded to ASCII lower case, null when there is none.
-    private fun host(url: String): String? = try {
-        URI(url).host?.let(HttpNames::fold)
-    } catch (_: URISyntaxException) {
-        null
-    }
-
     private companion object {
         const val ORIGIN = "origin"
         const val REFERER = "referer"

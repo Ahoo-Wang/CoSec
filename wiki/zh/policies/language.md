@@ -282,7 +282,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `environment.blocked` | Bool | 黑名单是否拦截该请求。 |
 | `http.header.<name>` | String | 请求头 `<name>`；请求没有该头时缺失。见[请求头](#headers)。 |
 | `http.origin`、`http.referer` | String | `Origin` 和 `Referer` 请求头，读取方式与 `http.header.*` 相同。 |
-| `http.origin.host`、`http.referer.host` | String | `Origin` 和 `Referer` URL 中的主机，小写；值不是带主机的 URL 时缺失。 |
+| `http.origin.host`、`http.referer.host` | String | `Origin` 和 `Referer` URL 中的主机，小写，去掉末尾的点（`evil.com.` 就是 DNS 名字 `evil.com`，所以读作 `evil.com`，标签为 `com.evil`）；值不是带主机的 URL 时缺失。 |
 | `http.origin.host.labels`、`http.referer.host.labels` | Labels | 该主机的标签，倒序（`api.example.com` 为 `com.example.api`），小写；供 `prefix` 使用。 |
 | `request.attributes.<name>` | String | 宿主掌握的 HTTP 之外的请求信息。网关设置 `request.attributes.cosec.audit.routeId`，即请求经过的路由 id；还设置 `request.attributes.cosec.identity.forward`：在接收转发身份的路由上（`lb://` 路由，或元数据为 `cosec-identity: true` 的路由）为 `true`，在其他路由上为 `false`。WebFlux 和 WebMvc 不设置任何值。 |
 | `ext.<provider>.<name>` | 声明的类型 | [外部属性](#external-attributes-and-onmissing)。 |

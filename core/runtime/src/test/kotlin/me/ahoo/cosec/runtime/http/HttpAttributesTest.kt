@@ -59,6 +59,24 @@ class HttpAttributesTest {
     }
 
     /**
+     * Round 2 review L3: `evil.com.` is the DNS name `evil.com`, so its host is `evil.com`, and a DENY on the host or its
+     * labels cannot be stepped around with the root label's dot. Only one dot: `evil.com..` is no host name.
+     */
+    @Test
+    fun aHostReadsWithoutTheRootLabelsDot() {
+        fun host(origin: String) =
+            HttpAttributes(Headers.of(mapOf("Origin" to listOf(origin)))).string(Attribute.of(Kind.HTTP_ORIGIN_HOST))
+        host("https://API.Evil.com.").assert().isEqualTo("api.evil.com")
+        host("https://api.evil.com.:8443").assert().isEqualTo("api.evil.com")
+        host("https://api.evil.com").assert().isEqualTo("api.evil.com")
+        host("https://api.evil.com..").assert().isNotEqualTo("api.evil.com")
+        HttpAttributes(Headers.of(mapOf("Referer" to listOf("https://www.evil.com./a"))))
+            .string(Attribute.of(Kind.HTTP_REFERER_HOST)).assert().isEqualTo("www.evil.com")
+        uriHost("https://evil.com.").assert().isEqualTo("evil.com")
+        uriHost("not a uri").assert().isNull()
+    }
+
+    /**
      * `PIP-12` for the control plane's simulations (D2): a header the view's documents read, sent with different values,
      * is the request's ambiguous header, whichever statement reads it; identical repeats and unread headers are not.
      */

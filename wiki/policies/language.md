@@ -340,7 +340,7 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `environment.blocked` | Bool | Whether the blacklist blocks the request. |
 | `http.header.<name>` | String | The request header `<name>`; absent when the request has none. See [Headers](#headers). |
 | `http.origin`, `http.referer` | String | The `Origin` and `Referer` headers, read as `http.header.*` is. |
-| `http.origin.host`, `http.referer.host` | String | The host of the `Origin` and `Referer` URLs, in lower case; absent when the value is not a URL with a host. |
+| `http.origin.host`, `http.referer.host` | String | The host of the `Origin` and `Referer` URLs, in lower case and without a trailing dot (`evil.com.` is the DNS name `evil.com`, so it reads `evil.com`, and its labels are `com.evil`); absent when the value is not a URL with a host. |
 | `http.origin.host.labels`, `http.referer.host.labels` | Labels | That host's labels, reversed (`api.example.com` is `com.example.api`), in lower case; for `prefix`. |
 | `request.attributes.<name>` | String | What the host knows about the request besides HTTP. The gateway sets `request.attributes.cosec.audit.routeId`, the id of the route the request came through, and `request.attributes.cosec.identity.forward`: `true` on a route that receives the forwarded identity (a `lb://` route, or one whose metadata says `cosec-identity: true`), `false` on any other; WebFlux and WebMvc set none. |
 | `ext.<provider>.<name>` | declared | An [external attribute](#external-attributes-and-onmissing). |
