@@ -211,6 +211,31 @@ class ConditionTranslatorTest {
         changes("""{"eq":{"part":"request.path","value":"","ignoreCase":false}}""", false).assert().isEmpty()
     }
 
+    /**
+     * An ownership check against a template on a part only 7.x filled (review of #1342, point 2): 8.0's eq never holds
+     * on an absent value, not even against another absent one, so as enforced the ALLOW never holds, whatever the
+     * principal carries. Recorded as a narrowing, never wider; in the DENY direction it is rejected.
+     */
+    @Test
+    fun `a template on a part only 7x filled never holds as enforced, and is recorded`() {
+        Matchers7x.use {
+            for (template in listOf("#{principal.id}", "#{principal.attributes['owner']}", "#{tenant.tenantId}")) {
+                val json = """{"eq":{"part":"resource.owner","value":"$template"}}"""
+                val changes = ArrayList<SemanticChange>()
+                val translated = translate(json, false, changes = changes) as Translated.Ast
+                changes.map { it.change }.assert().containsExactly("NOT-IN-8.0")
+                val ast = Matchers7x.evaluator(translated) { it.enforced }
+                val bothEmpty = FIXED.first().copy(principalAttributes = emptyMap(), resourceAttributes = emptyMap())
+                for (request in List(REQUESTS) { Facts.random(Random(SEED + it)) } + FIXED + bothEmpty) {
+                    ast(request).assert().describedAs("$template on $request").isFalse()
+                }
+                val rejections = ArrayList<Rejection>()
+                translate(json, true, rejections).assert().isNull()
+                rejections.single().message.assert().contains("never holds")
+            }
+        }
+    }
+
     @Test
     fun `a template becomes an attribute reference that matches only the principal's own id`() {
         Matchers7x.use {
@@ -331,7 +356,8 @@ class ConditionTranslatorTest {
                 exact("""{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"alice"}}"""),
                 // Only 7.x set this one (addition C): an ALLOW narrows to nothing, a DENY is rejected.
                 directional("""{"eq":{"part":"request.attributes.owner","value":"alice"}}"""),
-                // 8.0 never sets resource attributes: holding on the empty value, the DENY translates, the ALLOW cannot.
+                // 8.0 never sets resource attributes: holding on the empty value, it would hold for every request, which
+                // is rejected in both directions (review of #1342, point 1).
                 directional("""{"eq":{"part":"resource.owner","value":""}}"""),
                 exact("""{"eq":{"part":"request.path.var.id","value":"owner-1"}}"""),
                 exact("""{"eq":{"part":"context.principal.id","value":"alice"}}"""),

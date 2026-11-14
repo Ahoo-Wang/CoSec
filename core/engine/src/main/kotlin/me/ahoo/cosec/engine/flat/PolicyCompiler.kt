@@ -193,15 +193,15 @@ class PolicyCompiler(
      */
     private fun deadHttpAction(pattern: ActionPattern): String? {
         val verb = pattern.verb
-        if (pattern.service != HTTP || verb == null) {
+        if (pattern.service != ResourcePattern.HTTP_TYPE || verb == null) {
             return null
         }
         if (verb == HEAD) {
-            return "$pattern matches no request: a HEAD request is decided as GET; write $HTTP:GET (DOC-8, PIP-18)"
+            return "$pattern matches no request: a HEAD request is decided as GET; write http:GET (DOC-8, PIP-18)"
         }
         if (verb.any { it in 'a'..'z' }) {
             return "$pattern matches no request: a method holds no lower-case letter, one that does is refused; " +
-                "write $HTTP:${verb.uppercase()} (DOC-8, PIP-18)"
+                "write ${pattern.service}:${verb.uppercase()} (DOC-8, PIP-18)"
         }
         return null
     }
@@ -346,5 +346,4 @@ class PolicyCompiler(
 }
 
 /** The namespace and method of `DOC-8`. */
-private const val HTTP = "http"
 private const val HEAD = "HEAD"

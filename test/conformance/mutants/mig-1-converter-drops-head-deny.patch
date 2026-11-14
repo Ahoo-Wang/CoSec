@@ -1,4 +1,4 @@
-# Rule: DOC-8
+# Rule: MIG-1
 # Mutant: the converter drops HEAD from a 7.x DENY on HEAD alone, so the DENY is dropped and HEAD requests are permitted
 # Tests: :migrate:test --tests me.ahoo.cosec.migrate.Round2ConversionTest
 

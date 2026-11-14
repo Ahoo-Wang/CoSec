@@ -51,6 +51,7 @@ internal class StatementTranslator(
         when (val translation = translation(node, location, name, direction)) {
             null -> null
             is Translation.Kept -> translation.statement
+            // [assembled] drops only an ALLOW, and a rate limit rule reads as a DENY.
             Translation.Dropped -> error("Only an ALLOW is dropped, and a rate limit rule reads as a DENY: $location")
         }
 
@@ -85,8 +86,12 @@ internal class StatementTranslator(
         return assembled(name, deny, action, resources ?: action.resources, condition, location)
     }
 
-    /** The statement of [action], [resources] and [condition]; null when the condition can never hold (rejected). */
-    private fun assembled(
+    /**
+     * The statement of [action], [resources] and [condition]; null when it is rejected: the condition can never hold, or
+     * a DENY (or a rate limit rule) is left with no action 8.0 can decide. Only an ALLOW is [Translation.Dropped],
+     * whatever left it with none, so a DENY is never dropped (`MIG-1`).
+     */
+    internal fun assembled(
         name: String,
         deny: Boolean,
         action: MatcherTranslator.Action,
@@ -103,7 +108,15 @@ internal class StatementTranslator(
             return null
         }
         if (action.actions.isEmpty()) {
-            return Translation.Dropped
+            if (!deny) {
+                return Translation.Dropped
+            }
+            reject(
+                RejectionKind.ACTION_NOT_TRANSLATED,
+                "$location.$ACTION",
+                "a DENY left with no action 8.0 can decide: dropping it would permit what 7.x denied",
+            )
+            return null
         }
         return Translation.Kept(
             StatementSource(

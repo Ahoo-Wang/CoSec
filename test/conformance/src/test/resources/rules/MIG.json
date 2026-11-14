@@ -1,0 +1,24 @@
+{
+  "rules": [
+    {
+      "id": "MIG-1",
+      "source": "RFC 0005 §7.1 (round 2 review of host and tools, addition C)",
+      "statement": "A conversion never lets through a request 7.x refused, and never refuses silently what it cannot say: against what enforcement fills, a converted DENY is never narrower and a converted ALLOW never wider than its 7.x statement, except for a HEAD request where GET is allowed, which the conversion reports (PIP-18); what cannot be translated in its direction is rejected. A DENY is never dropped. On a part only 7.x filled (request.attributes.* but the gateway's route id, and resource.*), always absent in 8.0, a condition is a constant: one that holds on the absent value is rejected in both directions, one that does not is rejected in a DENY or negated in one, and narrows an ALLOW, recorded (NOT-IN-8.0).",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "migrate:ConditionTranslatorTest#no row widens access against what enforcement fills",
+        "migrate:ConditionTranslatorTest#every row agrees with 7x on adversarial requests, never widening",
+        "migrate:ConditionTranslatorTest#a template on a part only 7x filled never holds as enforced, and is recorded",
+        "migrate:Round2ConversionTest#a DENY on HEAD without GET is refused",
+        "migrate:Round2ConversionTest#an ALLOW on HEAD alone is dropped and recorded, one with others loses HEAD",
+        "migrate:Round2ConversionTest#a DENY on method HEAD but not GET is refused, one that holds on GET is kept",
+        "migrate:Round2ConversionTest#a DENY on a request attribute only 7x set is refused",
+        "migrate:Round2ConversionTest#a condition that holds on the absent value of a part only 7x filled is refused in both directions",
+        "migrate:Round2ConversionTest#a negated condition on a part only 7x filled is refused in a DENY",
+        "migrate:Round2ConversionTest#an ALLOW against a template on a part only 7x filled is recorded as never holding",
+        "migrate:Round2ConversionTest#a DENY with no action is rejected, an ALLOW with none is dropped"
+      ]
+    }
+  ]
+}

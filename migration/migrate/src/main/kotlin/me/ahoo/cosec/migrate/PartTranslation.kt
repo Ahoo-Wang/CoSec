@@ -280,6 +280,7 @@ internal class PartTranslation(
         if (!oneField || !caseFoldable(country, folds)) {
             return null
         }
+        translator.readCountry()
         translator.note(
             "IP2REGION",
             location,
@@ -299,14 +300,6 @@ internal class PartTranslation(
                 value
             )?.let { attribute(it) }
         }
-        if (mapped.setBy7x != null && deny) {
-            return translator.rejected(
-                RejectionKind.CONDITION_NOT_TRANSLATED,
-                location,
-                "in the DENY direction, part [${mapped.part}] was set by ${mapped.setBy7x}; 8.0 sets no such " +
-                    "attribute, so this comparison never holds: rewrite it with an ext.* attribute of an AttributeProvider",
-            )
-        }
         if (right == null || ignoreCase || part == Parts.PRINCIPAL_ID) {
             return translator.rejected(
                 RejectionKind.CONDITION_NOT_TRANSLATED,
@@ -316,6 +309,10 @@ internal class PartTranslation(
             )
         }
         val base = Condition.Eq(mapped.attribute, ConditionTranslator.attr(right))
+        if (mapped.setBy7x != null) {
+            // 8.0's eq never holds on an absent value, not even against another absent one: a constant there.
+            return if (neverSet(mapped, holds = false)) null else Translated.Ast(base)
+        }
         if (!deny) {
             translator.note(
                 "D2",
@@ -392,55 +389,69 @@ internal class PartTranslation(
     /**
      * Whether a DENY on this predicate would stop matching requests 7.x denied, which is rejected; in the ALLOW
      * direction the same is a narrowing, recorded:
-     * - a part 7.x filled and 8.0 never does ([Parts.Mapped.setBy7x]): the attribute is always absent, so a predicate
-     *   that does not hold on the absent value never holds (round 2 addition C);
+     * - a part 7.x filled and 8.0 never does ([Parts.Mapped.setBy7x]): [neverSet];
      * - `request.method` holding HEAD but not GET: a HEAD request is decided as GET (`PIP-18`), and `action.verb` is GET.
-     * A predicate that holds on the absent value, or on GET, matches at least what 7.x matched, which a DENY may.
+     * A predicate that holds on GET matches at least what 7.x matched, which a DENY may.
      */
     private fun unmatched(mapped: Parts.Mapped, matches: (String) -> Boolean): Boolean {
-        if (allowOnEmpty(mapped, matches)) {
-            return true
+        if (mapped.setBy7x != null) {
+            return neverSet(mapped, matches(mapped.absentAs))
         }
-        val reason = neverSetReason(mapped, matches) ?: methodReason(mapped, matches) ?: return false
-        val refusedUnderNegation = mapped.part == Parts.METHOD && statementDeny && !deny
-        if (deny || refusedUnderNegation) {
-            val direction = if (deny) "in the DENY direction" else "under a negation in a DENY"
-            translator.rejected<Unit>(RejectionKind.CONDITION_NOT_TRANSLATED, location, "$direction, $reason")
-            return true
+        val reason = methodReason(mapped, matches) ?: return false
+        val direction = when {
+            deny -> "in the DENY direction"
+            statementDeny -> "under a negation in a DENY"
+            else -> {
+                translator.note(
+                    "NOT-IN-8.0",
+                    location,
+                    "in the ALLOW direction, $reason: the ALLOW matches fewer requests"
+                )
+                return false
+            }
         }
-        translator.note("NOT-IN-8.0", location, "in the ALLOW direction, $reason: the ALLOW matches fewer requests")
-        return false
-    }
-
-    /**
-     * Always absent in 8.0, where 7.x read "": an ALLOW that holds on "" would hold for every request, though 7.x's
-     * appender filled the part (found by the enforcement-only property test). Rejected.
-     */
-    private fun allowOnEmpty(mapped: Parts.Mapped, matches: (String) -> Boolean): Boolean {
-        if (deny || mapped.setBy7x == null || !matches(mapped.absentAs)) {
-            return false
-        }
-        translator.rejected<Unit>(
-            RejectionKind.CONDITION_NOT_TRANSLATED,
-            location,
-            "in the ALLOW direction, a condition that holds when part [${mapped.part}] is empty: it was set by " +
-                "${mapped.setBy7x}, 8.0 sets no such attribute, so it would hold for every request; rewrite it " +
-                "with an ext.* attribute of an AttributeProvider",
-        )
+        translator.rejected<Unit>(RejectionKind.CONDITION_NOT_TRANSLATED, location, "$direction, $reason")
         return true
     }
 
-    /** Why a condition on a part 8.0 never sets no longer holds; null when it is not one, or holds on the absent value. */
-    private fun neverSetReason(mapped: Parts.Mapped, matches: (String) -> Boolean): String? = when {
-        mapped.setBy7x == null || matches(mapped.absentAs) -> null
-        mapped.part == Parts.IP_REGION ->
-            "part [${mapped.part}] was the whole region 7.x's ip2region appender wrote; 8.0 has the region as " +
-                "${Parts.IP2REGION_ATTRIBUTES.joinToString()}, and only a country prefix (startsWith \"<country>|\") " +
-                "translates: rewrite this condition with them by hand"
-        else ->
-            "part [${mapped.part}] was set by ${mapped.setBy7x}; 8.0 sets no such attribute, so " +
-                "[${mapped.attribute}] is always absent there and this condition never holds: rewrite it with an " +
-                "ext.* attribute of an AttributeProvider"
+    /**
+     * A part 7.x filled and 8.0 never does ([Parts.Mapped.setBy7x]) is always absent in 8.0, so a predicate on it is a
+     * constant there: it [holds] for every request, or for none. One case translates: an ALLOW statement the predicate
+     * can no longer make hold, a narrowing, recorded (`NOT-IN-8.0`). Every other case is rejected (`MIG-1`):
+     * - holding for every request, in either direction: 7.x held it only when the part was empty, so in the ALLOW
+     *   direction it would widen access, and in the DENY direction deny every request in scope, an outage nobody chose;
+     * - holding for none, in the DENY direction: the DENY would stop matching what 7.x denied;
+     * - holding for none under a negation in a DENY: the DENY would hold for every request.
+     * Whether it was rejected.
+     */
+    private fun neverSet(mapped: Parts.Mapped, holds: Boolean): Boolean {
+        val setBy = "part [${mapped.part}] was set by ${mapped.setBy7x}, and 8.0 sets no such attribute"
+        val rewrite = if (mapped.part == Parts.IP_REGION) {
+            "8.0 has the region as ${Parts.IP2REGION_ATTRIBUTES.joinToString()}, and only a country prefix " +
+                "(startsWith \"<country>|\") translates: rewrite this condition with them by hand"
+        } else {
+            "rewrite it with an ext.* attribute of an AttributeProvider"
+        }
+        val reason = when {
+            holds ->
+                "a condition that holds when part [${mapped.part}] is empty: 7.x held it only when " +
+                    "${mapped.setBy7x} gave the part no value; 8.0 sets no such attribute, so it would hold " +
+                    "for every request"
+            deny -> "in the DENY direction, $setBy, so this condition never holds"
+            statementDeny ->
+                "under a negation in a DENY, $setBy, so this condition never holds and the DENY would " +
+                    "hold for every request"
+            else -> {
+                translator.note(
+                    "NOT-IN-8.0",
+                    location,
+                    "in the ALLOW direction, $setBy, so this condition never holds: the ALLOW matches fewer requests",
+                )
+                return false
+            }
+        }
+        translator.rejected<Unit>(RejectionKind.CONDITION_NOT_TRANSLATED, location, "$reason; $rewrite")
+        return true
     }
 
     /**

@@ -417,7 +417,8 @@ class ConverterTest {
                         condition = """{"authenticated":{}}""",
                         statements = listOf(
                             statement(condition = """{"bool":{"and":[{"inRole":{"value":"admin","negate":true}}]}}""", effect = "deny"),
-                            statement(condition = """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}"""),
+                            // The gateway's route id, which 8.0 sets as 7.x did: a part only 7.x filled is NOT-IN-8.0.
+                            statement(condition = """{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}"""),
                             statement(condition = """{"regular":{"part":"request.path","pattern":"^/a$"}}"""),
                             statement(condition = """{"spel":{"value":"true"}}"""),
                         ),

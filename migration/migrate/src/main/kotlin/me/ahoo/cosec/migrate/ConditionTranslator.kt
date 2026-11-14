@@ -74,8 +74,21 @@ internal class ConditionTranslator(
     private val reject: (RejectionKind, String, String) -> Unit,
     private val record: (SemanticChange) -> Unit,
 ) {
-    /** The translation of [node] at [location] read in the DENY direction when [deny]; null when it is rejected. */
     /**
+     * Whether a translated condition reads `ext.ip2region.country`, which only the country prefix of 7.x's region
+     * writes ([PartTranslation]): the platform document then declares it (RFC 0006 §5.4.5). Set where the attribute is
+     * written, so no walk over the translated conditions can miss it; a statement rejected later leaves the
+     * declaration in, which is harmless.
+     */
+    var readsCountry: Boolean = false
+        private set
+
+    fun readCountry() {
+        readsCountry = true
+    }
+
+    /**
+     * The translation of [node] at [location] read in the DENY direction when [deny]; null when it is rejected.
      * [statementDeny]: whether the statement (or rate limit rule) the condition belongs to refuses, whatever [deny] reads
      * after negations; a method HEAD is judged by it (`PIP-18`, [PartTranslation]).
      */

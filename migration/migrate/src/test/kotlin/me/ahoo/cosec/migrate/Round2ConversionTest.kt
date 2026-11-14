@@ -154,26 +154,81 @@ class Round2ConversionTest {
     }
 
     @Test
-    fun `what 8_0 sets, a DENY that holds on the absent value, and an ALLOW translate`() {
+    fun `what 8_0 sets translates, and an ALLOW that can no longer hold is recorded`() {
         convert(statement(effect = "deny", condition = on("request.attributes.cosec.audit.routeId", "admin")))
             .report.rejections.assert().isEmpty()
-        // Absent in 8.0, "" in 7.x: the DENY holds wherever 7.x's held, and more often; the ALLOW would hold always.
-        convert(statement(effect = "deny", condition = on("request.attributes.ipRegion", "")))
-            .report.rejections.assert().isEmpty()
-        rejected(convert(statement(condition = on("resource.owner", ""))), RejectionKind.CONDITION_NOT_TRANSLATED)
-            .single().message.assert().contains("would hold for every request")
         val allow = convert(statement(condition = on("request.attributes.ipRegion", "x")))
         allow.report.rejections.assert().isEmpty()
         allow.report.semanticChanges.filter { it.change == "NOT-IN-8.0" }.single().shape.assert()
             .contains("in the ALLOW direction")
-        // Under negate a DENY reads its inner condition in the ALLOW direction, where absence only narrows it.
-        convert(
-            statement(
-                effect = "deny",
-                condition = """{"eq":{"part":"request.attributes.ipRegion","value":"x","negate":true}}"""
+    }
+
+    /**
+     * Review of #1342, point 1: on a part only 7.x filled, a condition is a constant in 8.0. One that holds on the
+     * absent value would hold for every request, in either direction: a DENY on it would deny every request in scope.
+     */
+    @Test
+    fun `a condition that holds on the absent value of a part only 7x filled is refused in both directions`() {
+        for (effect in listOf("deny", "allow")) {
+            for (part in listOf("request.attributes.ipRegion", "resource.owner")) {
+                val conversion = convert(statement(effect = effect, condition = on(part, "")))
+                conversion.documents.assert().isEmpty()
+                rejected(conversion, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert()
+                    .contains(part).contains("would hold for every request")
+            }
+        }
+    }
+
+    /** Under a negation in a DENY, a condition that never holds on such a part makes the DENY hold for every request. */
+    @Test
+    fun `a negated condition on a part only 7x filled is refused in a DENY`() {
+        for (value in listOf("x", "#{principal.id}")) {
+            val conversion = convert(
+                statement(
+                    effect = "deny",
+                    condition = """{"eq":{"part":"resource.owner","value":"$value","negate":true}}"""
+                )
             )
+            conversion.documents.assert().isEmpty()
+            rejected(conversion, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert()
+                .contains("under a negation in a DENY").contains("hold for every request")
+        }
+    }
+
+    /** Review of #1342, point 2: the ownership check of 7.x, `eq resource.owner #{principal.id}`, is dead in 8.0. */
+    @Test
+    fun `an ALLOW against a template on a part only 7x filled is recorded as never holding`() {
+        val conversion = convert(statement(condition = on("resource.owner", "#{principal.id}")))
+        conversion.report.rejections.assert().isEmpty()
+        val changes = conversion.report.semanticChanges.filter { it.location.contains("condition") }
+        changes.map { it.change }.assert().containsExactly("NOT-IN-8.0")
+        changes.single().shape.assert().contains("resource.owner").contains("never holds")
+        val deny = convert(statement(effect = "deny", condition = on("resource.owner", "#{principal.id}")))
+        rejected(deny, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert().contains("never holds")
+    }
+
+    /**
+     * Review of #1342, point 3: a DENY left with no action is rejected by construction, whatever left it with none;
+     * only an ALLOW is dropped.
+     */
+    @Test
+    fun `a DENY with no action is rejected, an ALLOW with none is dropped`() {
+        val rejections = ArrayList<Rejection>()
+        val conditions = ConditionTranslator(
+            { kind, location, message -> rejections += Rejection(kind, location, message) },
+            {}
         )
-            .report.rejections.assert().isEmpty()
+        val translator = StatementTranslator(
+            MatcherTranslator { kind, location, message -> rejections += Rejection(kind, location, message) },
+            conditions,
+        ) { kind, location, message -> rejections += Rejection(kind, location, message) }
+        val none = MatcherTranslator.Action(emptyList(), emptyList())
+        translator.assembled("s", false, none, emptyList(), Translated.Always, "p").assert()
+            .isSameAs(StatementTranslator.Translation.Dropped)
+        rejections.assert().isEmpty()
+        translator.assembled("s", true, none, emptyList(), Translated.Always, "p").assert().isNull()
+        rejections.single().kind.assert().isEqualTo(RejectionKind.ACTION_NOT_TRANSLATED)
+        rejections.single().location.assert().isEqualTo("p.action")
     }
 
     private fun region(condition: String, effect: String = "deny") = convert(

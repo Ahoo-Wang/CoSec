@@ -38,7 +38,6 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
-import me.ahoo.cosec.model.condition.Operand
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.document.Catalog
@@ -748,7 +747,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     private fun documents(): Map<SnapshotKey, PolicyDocument> {
         val documents = LinkedHashMap<SnapshotKey, PolicyDocument>()
         // Declared by the platform document, so the documents compile by themselves (RFC 0006 §5.4.5).
-        val country = readsCountry()
+        val country = conditions.readsCountry
         if (country) {
             changes += SemanticChange(
                 "IP2REGION",
@@ -791,14 +790,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             }
         }
         return documents
-    }
-
-    /** Whether a converted condition, of a policy, a statement or a rate limit rule, reads the client's country. */
-    private fun readsCountry(): Boolean {
-        val conditions = policies.values.flatten().flatMap { policy ->
-            listOfNotNull(policy.condition) + policy.statements.mapNotNull { it.condition }
-        } + rateLimits.mapNotNull { it.statement.condition }
-        return conditions.any { ConditionReads.reads(it, Parts.IP2REGION_COUNTRY) }
     }
 
     /** Whether [policy] compiles in a document of [key]'s kind; its errors are rejected at [statements]' locations. */
@@ -880,29 +871,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         const val PERMISSIONS = "permissions"
         const val SPACED = "spaced"
     }
-}
-
-/** Which attributes a condition reads, as an operand or on either side of a comparison. */
-private object ConditionReads {
-    fun reads(condition: Condition, path: String): Boolean = when (condition) {
-        is Condition.And -> condition.conditions.any { reads(it, path) }
-        is Condition.Or -> condition.conditions.any { reads(it, path) }
-        is Condition.Not -> reads(condition.condition, path)
-        else -> path in attributesOf(condition)
-    }
-
-    /** The attribute paths a condition that holds no other compares. */
-    private fun attributesOf(condition: Condition): List<String?> = when (condition) {
-        is Condition.Eq -> listOf(condition.attribute, condition.value.path())
-        is Condition.In -> listOf(condition.attribute) + condition.values.map { it.path() }
-        is Condition.Contains -> listOf(condition.attribute, condition.value.path())
-        is Condition.Prefix -> listOf(condition.attribute, condition.value.path())
-        is Condition.Cidr -> listOf(condition.attribute)
-        is Condition.Exists -> listOf(condition.attribute)
-        else -> emptyList()
-    }
-
-    private fun Operand.path(): String? = (this as? Operand.Attr)?.path
 }
 
 /** A policy translated: its condition, the statements kept, and where each of them came from. */
