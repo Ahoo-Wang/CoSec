@@ -30,7 +30,7 @@ import tools.jackson.databind.node.ObjectNode
 
 /**
  * Binds the `problem` format descriptor (`DocumentFormats.problemSchema`, generated to `schema/problem.schema.json`)
- * to [ProblemType] and [ProblemEncoder], as `SchemaConformanceTest` in `cosec-core` does for the formats CoSec reads.
+ * to [ProblemType] and [ProblemEncoder], as `SchemaConformanceTest` in `cosec-document` does for the formats CoSec reads.
  */
 class ProblemSchemaTest {
     private val json = JsonMapper.builder().build()

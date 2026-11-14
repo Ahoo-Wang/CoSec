@@ -21,7 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * The document formats CoSec reads, one [SchemaFile] per generated file in `schema/` (RFC 0007 §10.4, Q19).
  *
  * A change to what a codec or the snapshot compiler accepts changes this descriptor in the same PR; run
- * `./gradlew :runtime:generateSchemas` and commit the files. `verifySchemas` (part of `check`) fails when they are
+ * `./gradlew :document:generateSchemas` and commit the files. `verifySchemas` (part of `check`) fails when they are
  * stale, and `SchemaConformanceTest` fails when the descriptor and the codecs disagree.
  *
  * [problemSchema] is the one format CoSec writes rather than reads: `cosec-runtime`'s `ProblemSchemaTest` binds it to the

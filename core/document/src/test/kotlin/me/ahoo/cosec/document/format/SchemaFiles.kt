@@ -46,7 +46,7 @@ fun main(args: Array<String>) {
     }
     if (verify && stale.isNotEmpty()) {
         System.err.println(
-            "Stale JSON schemas in $directory: $stale. Run ./gradlew :core:generateSchemas and commit the result."
+            "Stale JSON schemas in $directory: $stale. Run ./gradlew :document:generateSchemas and commit the result."
         )
         exitProcess(1)
     }
