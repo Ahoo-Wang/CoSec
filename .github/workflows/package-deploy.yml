@@ -93,4 +93,4 @@ jobs:
           set -euo pipefail
           cd migration/migrate/build/distributions
           sha256sum cosec-migrate-*.zip > "$(ls cosec-migrate-*.zip).sha256"
-          gh release upload "$TAG" cosec-migrate-*.zip cosec-migrate-*.zip.sha256 --repo "$GITHUB_REPOSITORY"
+          gh release upload "$TAG" cosec-migrate-*.zip cosec-migrate-*.zip.sha256 --clobber --repo "$GITHUB_REPOSITORY"
