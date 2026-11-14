@@ -117,7 +117,7 @@ data class RateLimitSpec(val permitsPerSecond: Double, val windowSeconds: Long =
     init {
         require(permitsPerSecond > 0) { "permitsPerSecond must be positive, not $permitsPerSecond." }
         require(windowSeconds in 1..MAX_WINDOW_SECONDS) {
-            "windowSeconds must be between 1 and $MAX_WINDOW_SECONDS (a year), not $windowSeconds."
+            "windowSeconds must be between 1 and $MAX_WINDOW_SECONDS (a day), not $windowSeconds."
         }
         // The limiters count in a window of windowSeconds * 1000 milliseconds and report the quota as a Long.
         require(fitsInLong(permitsPerSecond, windowSeconds)) {
@@ -126,8 +126,12 @@ data class RateLimitSpec(val permitsPerSecond: Double, val windowSeconds: Long =
     }
 
     companion object {
-        /** The longest window: a year of seconds (round 2 review L5), so its milliseconds never overflow. */
-        const val MAX_WINDOW_SECONDS: Long = 31_536_000L
+        /**
+         * The longest window: a day (round-2 review M3 of the backends). A counter key lives two windows in a Redis that
+         * must not evict, one key per bucket value, so a long window keyed by something a client chooses is memory the
+         * client controls; and its milliseconds never overflow. A bound can be raised after GA, never lowered.
+         */
+        const val MAX_WINDOW_SECONDS: Long = 86_400L
 
         /** Whether [permitsPerSecond] x [windowSeconds] is finite and at most [Long.MAX_VALUE]. For CoSec's own types. */
         @InternalCoSecApi

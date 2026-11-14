@@ -1,0 +1,49 @@
+{
+  "rules": [
+    "DOC-7"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A tenant rule keyed by a header the client sends, with a window a second longer than a day: each value the client sends would keep a counter key for two such windows in a Redis that must not evict, so the document does not decode.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "rateLimits": [
+          {
+            "id": "daily",
+            "action": "*",
+            "key": "http.header.x-client",
+            "permitsPerSecond": 0.01,
+            "windowSeconds": 86401
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "windowSeconds must be between 1 and 86400"
+  }
+}
