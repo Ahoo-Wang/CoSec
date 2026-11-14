@@ -3,12 +3,11 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.AuthorizationCheckerTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
-index 33b78a75..b2a9bdd8 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
-@@ -94,7 +94,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
-     /** As [decide], with the action and resource given as the engine reads them. */
-     @OptIn(InternalCoSecApi::class)
+@@ -98,7 +98,7 @@
+     /** As [decide], with the action and resource given as the engine reads them. CoSec's own: the control plane's. */
+     @InternalCoSecApi
      suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
 -        val decidable = Enforceable.resource(resource) ?: return Decision.Deny(null)
 +        val decidable = resource

@@ -3,12 +3,11 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CoSecParametersTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
-index bae1b159..9fbc9bd8 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
-@@ -33,7 +33,7 @@ class CoSecParameters internal constructor(val spaceId: String, val deviceId: St
- 
+@@ -36,7 +36,7 @@
          /** The parameters of [facts], or null when one of them is ambiguous. Header names match ignoring case. */
+         @ExperimentalCoSecApi
          fun read(facts: HttpFacts): CoSecParameters? {
 -            val spaceId = single(facts.headers.values(SPACE_ID)) ?: return null
 +            val spaceId = single(facts.headers.values(SPACE_ID) + QueryParameters.values(facts.rawQuery, setOf(SPACE_ID))?.get(SPACE_ID).orEmpty()) ?: return null
