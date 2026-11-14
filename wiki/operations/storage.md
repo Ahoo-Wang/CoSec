@@ -54,8 +54,8 @@ no `read-timeout` may shorten it.
 The rest of the cache policy stays the application's, through customizers and `cocache.*` properties
 ([Precedence](./configuration.md#precedence) lists every field CoSec locks): on every cache the local cache's size and
 `expireAfterAccess`, and but for the snapshot store `local-max-age`; on every cache but the revocation tables
-`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl` and
-`unknown-read`; on memberships `ttl` (never forever), `absent-ttl`, `lease-*`, `load-*` and `invalidate-failure`. None
+`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl`; on
+memberships `ttl` (never forever), `absent-ttl`, `lease-*`, `load-*` and `invalidate-failure`. None
 of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer `local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
 when the revocation's invalidation message is lost (`cosec.authentication.revocation.cache.local-max-age`, 30 seconds, is the
 default bound), and a longer membership `ttl` keeps a removed role applied that long.
