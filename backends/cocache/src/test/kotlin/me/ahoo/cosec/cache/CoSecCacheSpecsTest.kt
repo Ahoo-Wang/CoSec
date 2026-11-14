@@ -45,10 +45,11 @@ class CoSecCacheSpecsTest {
             CoSecCacheSpecs.STORE_OF_RECORD_CACHE_NAMES + CoSecCacheSpecs.SHADOW_CACHE_NAMES + setOf(
                 CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
                 CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME,
+                CoSecCacheSpecs.TOKEN_FAMILY_CACHE_NAME,
                 CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME,
             )
         )
-        names.size.assert().isEqualTo(17)
+        names.size.assert().isEqualTo(18)
         listOf("cosec", "a:b").forEach { keyPrefix ->
             val prefixes = names.associateWith { CoSecCacheSpecs.layout(keyPrefix, it).storagePath + ":" }
             prefixes.forEach { (name, prefix) ->

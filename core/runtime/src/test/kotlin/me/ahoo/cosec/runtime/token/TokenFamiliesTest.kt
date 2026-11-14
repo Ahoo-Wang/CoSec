@@ -113,6 +113,30 @@ class TokenFamiliesTest {
         assertThrows<TokenRevokedException> { runBlocking { families.rotate(token(other)) } }
     }
 
+    /** IDN-16: a reuse whose revocation loses a race reads the family again, and still revokes it. */
+    @Test
+    fun `reuse revokes the family even when its first write loses`() = runBlocking<Unit> {
+        val first = start()
+        val second = families.rotate(token(first)).session
+        clock.now = clock.now.plusSeconds(6)
+        var lost = false
+        val racing = TokenFamilies(
+            object : TokenFamilyStore by store {
+                override suspend fun replace(version: String, next: TokenFamily): Boolean {
+                    if (!lost) {
+                        lost = true
+                        return false
+                    }
+                    return store.replace(version, next)
+                }
+            },
+            clock = clock,
+        )
+        assertThrows<TokenRevokedException> { runBlocking { racing.rotate(token(first)) } }
+        lost.assert().isTrue()
+        family(second).revoked.assert().isTrue()
+    }
+
     /** IDN-17: a family ends at its absolute lifetime, however recently it was refreshed. */
     @Test
     fun `a family ends at its absolute lifetime`() = runBlocking<Unit> {

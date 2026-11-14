@@ -125,10 +125,12 @@ class TokenFamilies @JvmOverloads constructor(
                 session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true ->
                     throw RefreshSupersededException()
                 session.generation < family.generation -> {
-                    revoke(read)
-                    throw TokenRevokedException(
-                        "The token's pair was refreshed before and is presented again: its session is revoked."
-                    )
+                    if (revoke(read)) {
+                        throw TokenRevokedException(
+                            "The token's pair was refreshed before and is presented again: its session is revoked."
+                        )
+                    }
+                    // The family changed in between: read it again, and revoke what it is now.
                 }
                 else -> throw TokenVerificationException("The token is of a generation its session never issued.")
             }
