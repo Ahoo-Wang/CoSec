@@ -72,7 +72,10 @@ class CompiledStatement internal constructor(
     /**
      * Whether [condition] is tested against each matching resource pattern's captures in turn (`ALG-10`): it reads a
      * captured variable, and more than one pattern can capture it. Decided here, so every other statement matches its
-     * resource once, as before.
+     * resource once, as before. For those one corner differs from "one statement per pattern", on purpose: a pattern
+     * that fails to match (a path that does not decode) fails the statement only when no other pattern matches, so a
+     * statement another pattern matches misses on a false condition rather than failing. The pipeline answers such a
+     * path 400 before authorization, so only a host check reaches it.
      */
     internal val eachPattern: Boolean = captures && resources.size > 1
 

@@ -112,7 +112,7 @@
     {
       "id": "ALG-10",
       "source": "RFC 0005 §6.1; round 2 review M1",
-      "statement": "A statement with several resource patterns means exactly what one statement per pattern would mean. A condition that reads a captured variable is tested against each matching pattern's captures, in declared order: any one holding is a match; if none holds and testing one failed, the statement fails (a DENY makes the decision Indeterminate, an ALLOW counts as no match). The order of the patterns never changes the decision. A rate limit rule's bucket comes from the first pattern, in declared order, under whose captures its condition holds.",
+      "statement": "A statement with several resource patterns means exactly what one statement per pattern would mean. A condition that reads a captured variable is tested against each matching pattern's captures, in declared order: any one holding is a match; if none holds and testing one failed, the statement fails (a DENY makes the decision Indeterminate, an ALLOW counts as no match). The order of the patterns never changes the decision. A rate limit rule's bucket comes from the first pattern, in declared order, under whose captures its condition holds. A statement whose condition reads no captured variable matches its resource once, as before: a pattern that fails to match (a path that does not decode) fails it only when no other pattern matches, so when another matches and the condition is false it misses rather than fails. The pipeline answers such a path 400 before authorization (PIP-5), so only a host check reaches the difference; it is kept on purpose.",
       "level": "engine",
       "guards": [
         "engine:PatternCapturesTest#a deny holds under any matching pattern, whatever their order",
