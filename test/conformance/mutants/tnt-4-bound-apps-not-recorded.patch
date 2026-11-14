@@ -1,11 +1,11 @@
 # Rule: TNT-4
 # Mutant: the compiler records no app a tenant binds without roles, so the view never reads it
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.PolicyDocumentCompilerTest :conformance:test
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
 index d25bb840..e42e4ba4 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
 @@ -187,7 +187,7 @@ class PolicyDocumentCompiler @InternalCoSecApi constructor(
                      effective.bindings,
                      rateLimits,

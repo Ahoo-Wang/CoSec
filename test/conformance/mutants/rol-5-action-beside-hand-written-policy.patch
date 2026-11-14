@@ -1,11 +1,11 @@
 # Rule: ROL-5
 # Mutant: a permission may be defined by an action and a policy
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+# Tests: :document:test --tests me.ahoo.cosec.document.RoleExpansionTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
 index cf613126..d28fb645 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
 @@ -232,7 +232,7 @@ object RoleExpansion {
                  }
                  when {

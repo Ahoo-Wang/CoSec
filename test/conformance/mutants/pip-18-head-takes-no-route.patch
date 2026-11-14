@@ -2,16 +2,16 @@
 # Mutant: HEAD takes only a HEAD route: on a path GET maps, it falls to the http namespace and the action's DENY lapses
 # Tests: :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMap.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMap.kt
-index 99378818..6b2866c0 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMap.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMap.kt
-@@ -89,7 +89,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+index 197f5ae4..5953ce24 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMap.kt
+@@ -67,7 +67,7 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
       */
      fun resolve(method: String, path: String): RouteResolution {
          val resolved = resolveExactly(method, path)
--        if (resolved == RouteResolution.Unmapped && method == HttpMethods.HEAD) {
+-        if (resolved == RouteResolution.Unmapped && method == HEAD) {
 +        if (false) {
-             return resolveExactly(HttpMethods.GET, path)
+             return resolveExactly(GET, path)
          }
          return resolved

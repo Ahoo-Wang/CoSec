@@ -1,11 +1,11 @@
 # Rule: TNT-2
 # Mutant: a tenant document binds cosec:platform-admin, so its principals approve and move the boundary of their own document
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.PolicyDocumentCompilerTest :conformance:test
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
 index 04c026a1..a0757088 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/PolicyDocumentCompiler.kt
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
 @@ -269,7 +269,7 @@ class PolicyDocumentCompiler(
                      "[$it] is reserved: space ids beginning with [${ScopeResolver.RESERVED_SPACE_PREFIX}] are CoSec's"
                  )
