@@ -45,8 +45,8 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   runner as same-job head/base ratios (see `scripts/jmh-ab/README.md`). Use it as a first signal for routine changes.
   `gh workflow run jmh-v7-v8.yml` compares 7.x (`SimpleAuthorizationBenchmark`, `SecurityPipelineBenchmark`) with
   8.0 (`FlatAuthorizationBenchmark`, `PipelineBenchmark`) on one runner.
-- `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-runtime`,
-  `runtime/document/format/`): `./gradlew :runtime:generateSchemas` writes it, `verifySchemas` (part of `check`)
+- `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-document`,
+  `document/format/`): `./gradlew :document:generateSchemas` writes it, `verifySchemas` (part of `check`)
   fails when it is stale, and `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that
   changes a document format changes the descriptor.
 - Every published library module (the root build's `abiProjects`: `libraryProjects` without `cosec-migrate`, whose
@@ -80,16 +80,17 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   `k8s/` mention an API removed in 8.0), `pnpm build` (fails on dead links). Writing rules: [`wiki/AGENTS.md`](wiki/AGENTS.md).
 
 A change is done when `check` passes for every module it touches and for its dependents (e.g. a
-`cosec-runtime` change also runs `:spring-boot:check` and `:e2e:check`), and the docs below are updated.
+`cosec-runtime` change also runs `:spring-boot:check` and `:e2e:check`; a `cosec-document` change also runs `:runtime:check`,
+`:control:check` and `:conformance:check`), and the docs below are updated.
 
 ## Mental model
 
 Read [`wiki/architecture/overview.md`](wiki/architecture/overview.md) before touching the engine, the pipeline,
 the adapters, snapshots or the control plane. The parts that take several files to see:
 
-- **Layers.** `model ← engine ← runtime ← {edge, extensions, host}`, with `spi` (the ports) between `model` and
-  `runtime`, `backends` implementing `spi`, and `control` on top of `runtime`. Projects sit in group directories
-  (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `runtime`, `control`), `backends/`
+- **Layers.** `model ← engine ← document ← runtime ← {edge, extensions, host}`, with `spi` (the ports) between `model`
+  and `document`, `backends` implementing `spi`, and `control` on top of `runtime`. Projects sit in group directories
+  (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`), `backends/`
   (`cocache`, `kafka`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
   `conformance`, `architecture`, `e2e`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
@@ -98,11 +99,12 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (`SourceRulesTest`).
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
-  `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library and `spi` adds coroutines;
+  `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
   `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client; only `cosid` and the
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
   (Reactor only in edge and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
-  in `api/` and `core/`; backends reach into `runtime` and `control` only through the listed ports and `CoSecJson`;
+  in `api/` and `core/`; backends reach into `runtime` and `control` only through the listed ports, and into `document` only through the
+  mapper: a backend stores bytes and never reads what a document grants;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
   `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
@@ -132,22 +134,28 @@ the adapters, snapshots or the control plane. The parts that take several files 
     (`IdGenerator`). Model, api, annotations and kotlinx-coroutines-core only. A port whose signature needs a layer's types stays in that layer
     (`DecisionListener`, `RequestGate`, `CandidateStore`, the shadow report ports in `runtime`; `ControlStore`,
     `ChangeListener` in `control`).
-  - `cosec-runtime` (`core/runtime/`) is the coroutine `Pipeline` and what every host needs around the engine: the
-    policy documents and their codec and compiler (`runtime/document/`), the format descriptors that generate
-    `schema/` (`runtime/document/format/`), `SnapshotSource` (`runtime/snapshot/`), route maps, token verification,
-    API key and token authenticators, and `CoSecJson.mapper` (`runtime/json/`, `@InternalCoSecApi`), the one Jackson
-    mapper (`JacksonSignatureTest` keeps Jackson out of public signatures). Coroutines stay in `runtime/` and the
-    adapters: `RuntimeBoundaryTest` fails when `runtime/`, `engine/` or `model/` code references `reactor.*`,
-    when a data-plane SPI signature carries a Reactor type, when `runtime/` references Spring, the Servlet API,
-    `kotlinx.coroutines.reactor`, `runBlocking`, `GlobalScope` or `Dispatchers.IO`, or when it uses `runCatching`
-    (it swallows cancellation).
+  - `cosec-document` (`core/document/`, `me.ahoo.cosec.document`) holds the formats CoSec stores and exchanges: the
+    policy documents with their codec, compiler and `RoleExpansion` (`document/`), the format descriptors that generate
+    `schema/` (`document/format/`), route maps (`document/route/`), the `CoSec-Identity` codec (`document/identity/`),
+    and `CoSecJson.mapper` (`document/json/`, `@InternalCoSecApi`), the one Jackson mapper (`JacksonSignatureTest`
+    keeps Jackson out of public signatures). It depends on `engine`, `spi` and Jackson only (`DependencyRulesTest`),
+    and the root build leaves out the SLF4J default: whoever reads or writes a document does not bring the request
+    path. `PolicyDocumentCompiler` implements `spi.snapshot.SnapshotCompiler`, the port the snapshot source compiles
+    through. A format's descriptor and its codec live here together.
+  - `cosec-runtime` (`core/runtime/`) is the coroutine `Pipeline` and what every host needs around the engine:
+    `SnapshotSource` (`runtime/snapshot/`), token verification, API key and token authenticators, identity forwarding,
+    decision events, audit and shadow recording, over the documents of `cosec-document`. Coroutines stay in `runtime/`
+    and the adapters: `RuntimeBoundaryTest` fails when `runtime/`, `document/`, `engine/` or `model/` code references
+    `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` or `document/` references
+    Spring, the Servlet API, `kotlinx.coroutines.reactor`, `runBlocking`, `GlobalScope` or `Dispatchers.IO`, or when
+    it uses `runCatching` (it swallows cancellation).
   - `cosec-control` (`core/control/`) is the control plane: the only writer of policy documents. `ControlBoundaryTest`
     fails when one of its classes is outside `me.ahoo.cosec.control`, references Spring, `reactor.*`, the coroutine
     or Reactive Streams bridges or a Redis client, or calls `runBlocking`, `Dispatchers.IO` or `GlobalScope`.
   - Every other module adapts one technology: `cosec-webflux`, `cosec-webmvc`, `cosec-gateway` (HTTP bridges),
     `cosec-cocache` (Redis: snapshots, control store, shadow reports, tokens, memberships, API keys, rate limits),
     `cosec-login` (login and token issuing: `Authentication`, `TokenConverter`), `cosec-jwt` (on `cosec-login`), `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`,
-    `cosec-kafka` (decision listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps),
+    `cosec-kafka` (decision listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps; on `cosec-document` only),
     `cosec-cosid` (an `IdGenerator` over CosId 5). Only `cosec-cosid` and the starter, which wires it, may reference
     or bring CosId (`DependencyRules.COSID_OWNERS`).
     `cosec-migrate` (`migration/migrate/`) converts 7.x data, and holds the only copy of the 7.x model
@@ -210,7 +218,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 
 | Change | Also update |
 |---|---|
-| Document format: a field, condition operator, attribute or pattern syntax | the codec and compiler in `cosec-runtime` (`runtime/document/`), the format descriptor (`PolicyDocumentFormats`) and `generateSchemas`, `wiki/policies/language.md`, `skills/cosec-policy-author` |
+| Document format: a field, condition operator, attribute or pattern syntax | the codec and compiler in `cosec-document` (`document/`), the format descriptor (`PolicyDocumentFormats`) and `generateSchemas`, `wiki/policies/language.md`, `skills/cosec-policy-author` |
 | App catalogs, role bindings, space scoping | `wiki/policies/role-permissions.md` |
 | `cosec.*` property or default | `wiki/operations/configuration.md` |
 | Status codes, adapters, security-context access, request attributes | `wiki/integration/web.md` |
