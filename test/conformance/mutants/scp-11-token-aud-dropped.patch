@@ -1,0 +1,17 @@
+# Rule: SCP-11
+# Mutant: the token's aud is not read, so every token declares no app and a service with an app refuses them all
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+index 81bd0e40..c0b767b5 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+@@ -59,7 +59,7 @@ internal object Jwts {
+             id = required(decodedAccessToken.id, "id"),
+             principal = required(decodedAccessToken.subject, "subject"),
+             tenant = tenantOf(decodedAccessToken),
+-            app = appOf(decodedAccessToken),
++            app = null,
+             roles = strings(decodedAccessToken, MembershipClaims.ROLES_KEY),
+             policies = strings(decodedAccessToken, MembershipClaims.POLICIES_KEY),
+             attributes = attributesOf(decodedAccessToken),

@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.authn
 
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -40,10 +41,12 @@ class ApiKeyAuthenticatorTest {
         roles: Set<String>? = setOf("billing", "auditor@team-a"),
         expiresAt: Instant? = now.plusSeconds(60),
         enabled: Boolean = true,
-    ) = ApiKey(id, "svc-billing", "acme", roles, expiresAt, enabled)
+        app: String? = null,
+    ) = ApiKey(id, "svc-billing", "acme", app, roles, expiresAt, enabled)
 
     private val keys = mapOf(
         "valid" to key("billing"),
+        "for-order" to key("for-order", app = "order"),
         "uncapped" to key("uncapped", roles = null),
         "empty" to key("empty", roles = emptySet()),
         "disabled" to key("disabled", enabled = false),
@@ -80,6 +83,13 @@ class ApiKeyAuthenticatorTest {
     }
 
     /** `IDN-2`: an empty cap is a cap that leaves nothing, never no cap. */
+    /** RFC 0012 §3.5 (`SCP-11`): a key's app is its principal's, and a key declaring none declares none. */
+    @Test
+    fun theAppOfAKeyIsTheAppOfItsPrincipal() = runTest {
+        (authenticate("for-order") as AuthnResult.Authenticated).principal.app.assert().isEqualTo(AppId("order"))
+        (authenticate("valid") as AuthnResult.Authenticated).principal.app.assert().isNull()
+    }
+
     @Test
     fun anEmptyCapIsNotUncapped() = runTest {
         val principal = (authenticate("empty") as AuthnResult.Authenticated).principal
@@ -132,16 +142,16 @@ class ApiKeyAuthenticatorTest {
     @Test
     fun aKeyRecordWithAnIdHoldingAnUnpairedSurrogateCannotBeMade() {
         val records = listOf<() -> ApiKey>(
-            { ApiKey("key\uD800", "svc", "acme", null) },
-            { ApiKey("key", "svc\uDC00", "acme", null) },
-            { ApiKey("key", "svc", "beta\uD800", null) },
-            { ApiKey("key", "svc", "acme", setOf("billing@team\uD800")) },
+            { ApiKey("key\uD800", "svc", "acme", null, null) },
+            { ApiKey("key", "svc\uDC00", "acme", null, null) },
+            { ApiKey("key", "svc", "beta\uD800", null, null) },
+            { ApiKey("key", "svc", "acme", null, setOf("billing@team\uD800")) },
         )
         for (record in records) {
             val error = runCatching(record).exceptionOrNull()
             error.assert().isInstanceOf(IllegalArgumentException::class.java)
             error!!.message!!.assert().contains("unpaired UTF-16 surrogate").doesNotContain("?")
         }
-        ApiKey("key\uD83D\uDE00", "svc", "acme", setOf("billing")).id.assert().isEqualTo("key\uD83D\uDE00")
+        ApiKey("key\uD83D\uDE00", "svc", "acme", null, setOf("billing")).id.assert().isEqualTo("key\uD83D\uDE00")
     }
 }

@@ -3,10 +3,10 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.StarterWiringTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
-index f466044a..7b4ab415 100644
+index 87be7aee..a9c4f42f 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineAutoConfiguration.kt
-@@ -118,15 +118,6 @@ class CoSecPipelineAutoConfiguration {
+@@ -117,15 +117,6 @@ class CoSecPipelineAutoConfiguration {
              sinks.orderedStream().toList().filter { it !is DecisionListener }
                  .map { it to AuditListener.of(it, names.getValue(it)) }
          val ordered = all.sortedWith { a, b -> AnnotationAwareOrderComparator.INSTANCE.compare(a.first, b.first) }
@@ -21,4 +21,4 @@ index f466044a..7b4ab415 100644
 -        }
          return DecisionListeners(
              ordered.map { it.second },
-             requiredListenerProperties.timeout.toKotlinDuration(),
+             listenerProperties.requiredTimeout.toKotlinDuration(),

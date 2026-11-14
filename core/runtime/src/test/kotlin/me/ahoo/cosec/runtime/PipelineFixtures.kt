@@ -11,14 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -85,8 +89,11 @@ object PipelineFixtures {
         emptyList(),
     )
 
-    fun authenticated(memberships: Memberships? = claims()): AuthnResult =
-        AuthnResult.Authenticated(AuthenticatedPrincipal(PRINCIPAL, TENANT, memberships), "test")
+    fun authenticated(memberships: Memberships? = claims(), app: String? = null): AuthnResult =
+        AuthnResult.Authenticated(
+            AuthenticatedPrincipal(PRINCIPAL, TENANT, memberships, app = app?.let(::AppId)),
+            "test"
+        )
 
     fun authenticator(result: AuthnResult): Authenticator = Authenticator { result }
 

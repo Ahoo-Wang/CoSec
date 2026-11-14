@@ -1,0 +1,87 @@
+{
+  "rules": [
+    "ROL-1"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A system role is the binding `role:clerk@wms:read`: the decision names it, as it would name one written out.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "night",
+            "app": "wms",
+            "permissions": [
+              "edit"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:wms/read",
+      "statement": 0,
+      "name": "read",
+      "via": {
+        "binding": "role:clerk@wms:read",
+        "document": "app"
+      }
+    }
+  }
+}

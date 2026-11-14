@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * A path pattern of the `http` namespace (RFC 0005 §5.2), in pure Kotlin.
@@ -19,7 +23,7 @@ package me.ahoo.cosec.engine.pattern
  * It matches what Spring's `PathPattern` (the `spring-web` version `main` uses) matches and captures the same values,
  * on this subset: literal segments, `?` (one character), `*` within a segment, `*` as a segment, `{name}` (one segment,
  * captured), `**` and `{*name}` (any number of segments, at the start or the end of the pattern), and the options
- * [caseSensitive] and [decodeAndParseSegments]. `HttpPathPatternParityTest` in `cosec-core` compares the two.
+ * [caseSensitive] and [decodeAndParseSegments]. `HttpPathPatternParityTest` in `cosec-runtime` compares the two.
  *
  * These compile in Spring but not here, so a policy that uses them fails to convert instead of matching differently:
  * - `{name:regex}`: a regular expression has no static cost bound, and `java.util.regex` is not available here.
@@ -32,6 +36,7 @@ package me.ahoo.cosec.engine.pattern
  * Captured values are the segments' decoded values. They only ever reach conditions as values: a value never becomes
  * part of a pattern (RFC 0005 §2 J9), so a path template is a capture compared with `eq`.
  */
+@InternalCoSecApi
 class HttpPathPattern private constructor(
     val pattern: String,
     val caseSensitive: Boolean,
@@ -107,9 +112,9 @@ class HttpPathPattern private constructor(
     }
 
     /*
-     * Two copies of the walk: one without a table, as it was before there was one, which every pattern without a glob
-     * segment takes, and one with the evaluation's table. One walk taking the table as well cost
-     * FlatAuthorizationBenchmark 7 to 12 % on CI's x86 runners, whose patterns have no glob segment at all.
+     * Two copies of the walk: one without a table, which every pattern without a glob segment takes, and one with the
+     * evaluation's table. One walk taking the table as well cost FlatAuthorizationBenchmark 7 to 12 % on CI's x86
+     * runners, whose patterns have no glob segment at all.
      */
 
     private fun matchPath(path: HttpPath, captures: Array<String?>?): Boolean {
@@ -226,6 +231,7 @@ class HttpPathPattern private constructor(
 
     override fun toString(): String = pattern
 
+    @InternalCoSecApi
     companion object {
         private const val NO_MATCH = -1
 
@@ -276,6 +282,7 @@ class HttpPathPattern private constructor(
 }
 
 /** What a pattern captured, by variable index. Values are never `null`: a variable that matched nothing is empty. */
+@InternalCoSecApi
 class Captures internal constructor(private val names: Array<String>, private val values: Array<String>) {
     val size: Int get() = names.size
 
@@ -299,6 +306,7 @@ class Captures internal constructor(private val names: Array<String>, private va
 
     override fun toString(): String = toMap().toString()
 
+    @InternalCoSecApi
     companion object {
         val NONE: Captures = Captures(emptyArray(), emptyArray())
     }

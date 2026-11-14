@@ -1,0 +1,29 @@
+{
+  "service": "wms",
+  "routes": [
+    {
+      "method": "GET",
+      "path": "/warehouses",
+      "action": "wms:warehouse.read",
+      "resource": "warehouse"
+    },
+    {
+      "method": "GET",
+      "path": "/warehouses/{id}",
+      "action": "wms:warehouse.read",
+      "resource": "warehouse/{id}"
+    },
+    {
+      "method": "PUT",
+      "path": "/warehouses/{id}",
+      "action": "wms:warehouse.edit",
+      "resource": "warehouse/{id}"
+    },
+    {
+      "method": "POST",
+      "path": "/inbound/{id}/ship",
+      "action": "wms:inbound.ship",
+      "resource": "inbound/{id}"
+    }
+  ]
+}

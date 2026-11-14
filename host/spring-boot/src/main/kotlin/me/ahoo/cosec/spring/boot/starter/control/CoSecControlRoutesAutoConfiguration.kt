@@ -67,7 +67,7 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
 @AutoConfiguration(after = [CoSecControlAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
 @ConditionalOnBean(ControlHttp::class)
-class CoSecControlRoutesAutoConfiguration {
+internal class CoSecControlRoutesAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
     @ConditionalOnClass(name = ["me.ahoo.cosec.webflux.ServerWebExchanges"])
@@ -151,7 +151,7 @@ class CoSecControlRoutesAutoConfiguration {
      * On a Spring Cloud Gateway host the gateway's global filter runs on its routes only, so the control routes would
      * never pass the pipeline and every call would be 401. A [PipelineWebFilter] limited to the control base path
      * authorizes them as on a WebFlux host; the gateway's own routes keep the gateway filter, and actuator endpoints
-     * stay outside CoSec, as before.
+     * stay outside CoSec.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.REACTIVE)
@@ -235,7 +235,7 @@ class CoSecControlRoutesAutoConfiguration {
 }
 
 /** [delegate] for the requests under [basePath] only; every other request goes on untouched. */
-class ControlRoutesWebFilter(
+internal class ControlRoutesWebFilter(
     private val delegate: PipelineWebFilter,
     private val basePath: String
 ) : WebFilter, Ordered {

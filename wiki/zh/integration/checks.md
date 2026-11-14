@@ -25,7 +25,7 @@ suspend fun check(security: SecurityContext, action: String, resource: String): 
 ```
 
 - `action` 为 `service:verb`，与路由映射中的命名一致（`order:cancel`），未映射的路由则为 `http:<METHOD>`。不含 `:` 的字符串结果为 `false`。
-- `resource` 为类型化资源 `type/id`（`order/42`），或以 `/` 开头的路径（`/orders/42`），后者是一个 `http` 资源。
+- `resource` 为类型化资源 `type/id`（`order/42`），或以 `/` 开头的路径（`/orders/42`），后者是一个 `http` 资源。它按管道读取请求的方式读取：去掉路径参数；管道会[以 `400` 拒绝](./web.md#the-request-path)的路径为 `false`，超过请求路径长度上限的资源也是 `false`。因此即使路径来自客户端输入，检查也不会放行任何请求都无法获准的路径。
 
 以 `cosec.pipeline.mode=gateway` 运行在网关之后的服务没有检查器：它不持有可用于决策的策略（[网关之后的服务](./web.md#services-behind-the-gateway)）。在这样的服务中，依靠网关的决策，或者以 `enforce` 模式运行该服务。
 
@@ -64,7 +64,7 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 | 决策 | 何时 | `check` |
 |---|---|---|
 | `Permit(by)` | 有 ALLOW 匹配，且没有 DENY 匹配。`by` 是放行的语句：`policy`、`index`、`name`，以及 `via`，即策略生效的途径。`BindingRef.Bound(id, document)` 是一个绑定，位于 `PLATFORM`、`APP` 或 `TENANT` 文档中；`BindingRef.Attached(policy)` 是主体的成员关系附加的策略。 | `true` |
-| `Deny(by)` | 有 DENY 匹配（`by` 为该语句），租户的平台边界拒绝了放行（`StatementRef.Boundary`），或者没有任何匹配（`null`）。管道没有构建的 `SecurityContext`，或者不含 `:` 的动作，也是 `Deny(null)`。 | `false` |
+| `Deny(by)` | 有 DENY 匹配（`by` 为该语句），租户的平台边界拒绝了放行（`StatementRef.Boundary`），或者没有任何匹配（`null`）。管道没有构建的 `SecurityContext`、不含 `:` 的动作，或者管道会拒绝的资源，也是 `Deny(null)`。 | `false` |
 | `Indeterminate(cause)` | 无法作出决策：某个文档读不到，某个 DENY 求值出错，检查本身出错，或者只有 break-glass 会放行。检查本身出错时日志中会有一条警告，并且无论出错的是什么，都报告为 `SourceUnavailable(PLATFORM, error)`：请看 `error`，而不是文档种类。 | `false` |
 
 用它记录是什么允许了你的代码执行某个操作，例如“由应用文档中的角色绑定 `order-admins` 放行”。`Decision` 只留在你的进程中：永远不要把它或它的原因写进响应。Web 适配器也从不接触它，所有状态码正是因此出自同一处（[响应与状态码](./web.md#responses-and-status-codes)）。出于同样的原因，适配器模块不提供 `decide` 的 `Mono` 或阻塞形式：请在协程中调用它。`Permit` 携带的义务（即限流）并没有执行。
@@ -144,7 +144,7 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 | `tenant` | 必填。主体所在的租户。 |
 | `principal` | 主体 id；省略则为匿名主体。 |
 | `roles`、`policies` | 成员关系声明，写法与令牌中相同（`role`、`role@space`；[角色与空间](./authentication.md#roles-and-spaces)）。 |
-| `app`、`space` | 声明的应用和空间，相当于 `CoSec-App-Id` 和 `CoSec-Space-Id`；不适用宿主应用。 |
+| `app`、`space` | 模拟的凭证声明的应用（在该应用的宿主上）和它选择的空间（`CoSec-Space-Id`）。 |
 | `action` | 必填。`service:verb`。 |
 | `resource` | 必填。`type/id`，或以 `/` 开头的路径。 |
 | `remoteIp` | 客户端 IP。 |

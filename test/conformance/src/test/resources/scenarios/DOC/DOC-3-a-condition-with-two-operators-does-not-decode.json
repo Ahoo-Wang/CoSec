@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "A condition object holds two operators. 7.x read only the first and dropped the second; 8.0 does not decode the document.",
+  "description": "A condition object holds two operators: the document does not decode, rather than reading one and dropping the other.",
   "documents": {
     "platform": {
       "schema": 2,

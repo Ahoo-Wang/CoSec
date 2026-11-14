@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
 import com.auth0.jwt.algorithms.Algorithm
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
@@ -81,9 +84,9 @@ private val log = KotlinLogging.logger {}
     PipelineProperties::class,
     RuntimeAuthorizationProperties::class,
     RevocationProperties::class,
-    RequiredListenerProperties::class,
     ListenerProperties::class,
 )
+@InternalCoSecApi
 class CoSecPipelineAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
@@ -97,7 +100,7 @@ class CoSecPipelineAutoConfiguration {
 
     /**
      * Every [DecisionListener] bean, and each [AuditEventSink] bean that is not also one as a BEST_EFFORT [AuditListener]
-     * named after the bean (RFC 0006 §9.5.3), so a sink written for 7.x keeps receiving events. All in `@Order`.
+     * named after the bean (RFC 0006 §9.5.3), so a sink needs no listener of its own. All in `@Order`.
      * On shutdown, delivers what is queued for up to `cosec.observability.listener.drain-timeout`, then drops the rest.
      * `cosec.audit.kafka.delivery=required` asks for a REQUIRED Kafka record of every decision: startup fails when that
      * listener was not created, rather than deciding without it (STA-1).
@@ -108,7 +111,6 @@ class CoSecPipelineAutoConfiguration {
         listeners: ObjectProvider<DecisionListener>,
         sinks: ObjectProvider<AuditEventSink>,
         beans: ListableBeanFactory,
-        requiredListenerProperties: RequiredListenerProperties,
         listenerProperties: ListenerProperties,
         environment: Environment,
     ): DecisionListeners {
@@ -130,7 +132,7 @@ class CoSecPipelineAutoConfiguration {
         }
         return DecisionListeners(
             ordered.map { it.second },
-            requiredListenerProperties.timeout.toKotlinDuration(),
+            listenerProperties.requiredTimeout.toKotlinDuration(),
             queueCapacity = listenerProperties.queueCapacity,
             drainTimeout = listenerProperties.drainTimeout.toKotlinDuration(),
         )
@@ -167,8 +169,8 @@ class CoSecPipelineAutoConfiguration {
     }
 
     /**
-     * The route maps of `cosec.authorization.routes.location`, loaded at once (RFC 0005 §5.3): a missing or invalid one
-     * fails startup, naming its location.
+     * The route maps of `cosec.authorization.routes.location`, loaded at once (RFC 0005 §5.3): a missing, invalid or
+     * empty one fails startup, naming its location. Unset, no map is loaded ([RouteMaps.load]).
      */
     @Bean
     @ConditionalOnMissingBean
@@ -207,6 +209,7 @@ class CoSecPipelineAutoConfiguration {
                 attributeTimeout = authorizationProperties.attributes.timeout.toKotlinDuration(),
                 rateLimitTimeout = authorizationProperties.rateLimit.timeout.toKotlinDuration(),
                 allowQueryToken = pipelineProperties.allowQueryToken,
+                allowCookieToken = pipelineProperties.allowCookieToken,
                 apiKeyHeader = pipelineProperties.apiKeyHeader,
                 traceLevel = pipelineProperties.traceLevel,
             ),
@@ -230,6 +233,7 @@ class CoSecPipelineAutoConfiguration {
         matchIfMissing = true
     )
     @EnableConfigurationProperties(GatewayIdentityProperties::class)
+    @InternalCoSecApi
     class GatewayIdentity {
         @Bean
         @ConditionalOnMissingBean
@@ -242,6 +246,7 @@ class CoSecPipelineAutoConfiguration {
     @ConditionalOnMissingBean
     fun cosecAuthorizationChecker(pipeline: Pipeline): AuthorizationChecker = AuthorizationChecker(pipeline)
 
+    @InternalCoSecApi
     companion object {
         /** `KafkaAuditListener.NAME`, as a literal: `cosec-kafka` is optional. */
         private const val KAFKA_AUDIT_LISTENER = "kafka-audit"
@@ -294,17 +299,40 @@ internal object CoCacheRevocation {
         if (available && store is me.ahoo.cosec.cache.CoCacheTokenStore) store.reader else null
 }
 
-/** Loads the route maps of a comma-separated list of resource locations, all or nothing. */
+/**
+ * Loads the route maps of a comma-separated list of resource locations, all or nothing, and says what it loaded: which
+ * action a request has decides which statements apply to it, so a host's log must show where its routes came from.
+ */
 internal object RouteMaps {
-    fun load(locations: String, resourceLoader: ResourceLoader): RouteMap {
-        val sources = locations.split(',').map { it.trim() }.filter { it.isNotEmpty() }.map { location ->
+    private const val LOCATION_KEY = "${RuntimeAuthorizationProperties.PREFIX}.routes.location"
+    private const val DEFAULT_LOCATION = RuntimeAuthorizationProperties.Routes.DEFAULT_LOCATION
+
+    /** [locations] null is the property unset; empty is the host running without a route map on purpose. */
+    fun load(locations: String?, resourceLoader: ResourceLoader): RouteMap {
+        val defaultExists = resourceLoader.getResource(DEFAULT_LOCATION).exists()
+        check(locations != null || !defaultExists) {
+            "$DEFAULT_LOCATION exists but $LOCATION_KEY is not set, so it is not loaded: set it to $DEFAULT_LOCATION, " +
+                "or to empty to run without a route map."
+        }
+        val sources = locations.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.map { location ->
             val resource = resourceLoader.getResource(location)
             check(resource.exists()) {
-                "The route map [$location] (${RuntimeAuthorizationProperties.PREFIX}.routes.location) does not exist; " +
-                    "set the property empty to run without one."
+                "The route map [$location] ($LOCATION_KEY) does not exist; set the property empty to run without one."
             }
             location to resource.inputStream.use { it.readBytes() }
         }
-        return if (sources.isEmpty()) RouteMap.EMPTY else RouteMapCodec.load(sources)
+        if (sources.isEmpty()) {
+            if (defaultExists) {
+                log.warn { "$LOCATION_KEY is empty, so $DEFAULT_LOCATION, which exists, is not loaded." }
+            }
+            log.info { "No route map: requests are authorized as http:<METHOD> on http:path:<path>." }
+            return RouteMap.EMPTY
+        }
+        val documents = sources.map { (location, bytes) -> location to RouteMapCodec.decode(bytes, location) }
+        val routes = RouteMap.of(RouteMapCodec.located(documents))
+        documents.forEach { (location, document) ->
+            log.info { "Route map [$location]: service [${document.service}], ${document.routes.size} routes." }
+        }
+        return routes
     }
 }

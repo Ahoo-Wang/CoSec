@@ -13,49 +13,52 @@
 
 package me.ahoo.cosec.social
 
-import io.mockk.every
+import io.mockk.coEvery
 import io.mockk.mockk
+import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.social.justauth.JustAuthCredentials
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import reactor.kotlin.core.publisher.toMono
-import reactor.kotlin.test.test
+import org.junit.jupiter.api.assertThrows
 
 internal class SocialAuthenticationTest {
+    private val providers = SocialProviderManager()
+    private val authentication = SocialAuthentication(DirectSocialUserPrincipalConverter(null), providers)
 
     @Test
-    fun authorizeUrl() {
-        SocialProviderManager.register(
+    fun authorizeUrl() = runTest {
+        providers.register(
             "authorizeUrl",
             mockk {
-                every { authorizeUrl() } returns "authorizeUrl"
+                coEvery { authorizeUrl() } returns "authorizeUrl"
             }
         )
-        val authentication = SocialAuthentication()
         authentication.supportCredentials.assert().isEqualTo(SocialCredentials::class.java)
         authentication.authorizeUrl("authorizeUrl").assert().isEqualTo("authorizeUrl")
     }
 
     @Test
-    fun authenticate() {
-        SocialProviderManager.register(
+    fun authenticate() = runTest {
+        providers.register(
             "authenticate",
             mockk {
-                every { authorizeUrl() } returns "authenticate"
-                every { authenticate(any()) } returns SocialUser(
+                coEvery { authorizeUrl() } returns "authenticate"
+                coEvery { authenticate(any()) } returns SocialUser(
                     id = "id",
                     username = "username",
                     provider = "authenticate"
-                ).toMono()
+                )
             }
         )
-        val authentication = SocialAuthentication()
 
-        authentication.authenticate(JustAuthCredentials("authenticate"))
-            .test()
-            .consumeNextWith {
-                it.id.assert().isEqualTo("id@authenticate")
-            }
-            .verifyComplete()
+        authentication.authenticate(JustAuthCredentials("authenticate")).id.assert().isEqualTo("id@authenticate")
+    }
+
+    /** #1222: another manager's registration signs nobody in here. */
+    @Test
+    fun `a provider of another manager is unknown`() = runTest {
+        SocialProviderManager().register("elsewhere", mockk())
+
+        assertThrows<IllegalArgumentException> { authentication.authenticate(JustAuthCredentials("elsewhere")) }
     }
 }

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Attribute
@@ -24,6 +27,7 @@ import me.ahoo.cosec.model.decision.RateLimitSpec
  * A rate limit rule as a document writes it (RFC 0006 §8.1): the requests it limits, as one statement (its action,
  * resource and condition; its effect is irrelevant), the attribute that splits it into buckets, and its quota.
  */
+@InternalCoSecApi
 class RateLimitSource(
     val id: String,
     val statement: StatementSource,
@@ -35,10 +39,10 @@ class RateLimitSource(
 )
 
 /**
- * A compiled rate limit rule. [id] is the rule's id within the counters: a platform rule's own id, so its Redis
- * buckets are those of 7.x, and `app:<app>/<id>` or `tenant:<tenant>/<id>` for the rules of other documents, so no
- * document counts against another's buckets.
+ * A compiled rate limit rule. [id] is the rule's id within the counters, its document and its own id ([counterId]), so
+ * no document counts against another's buckets.
  */
+@InternalCoSecApi
 class CompiledRateLimit internal constructor(
     val id: String,
     internal val policy: CompiledPolicy,
@@ -53,25 +57,26 @@ class CompiledRateLimit internal constructor(
 
     override fun toString(): String = "CompiledRateLimit($id)"
 
+    @InternalCoSecApi
     companion object {
-        /** Rule ids as 7.x accepts them, which are Redis key segments. */
+        /** Rule ids are Redis key segments; without `:` or `/`, no rule can name another document's counter. */
         private val ID = Regex("[A-Za-z0-9_.-]+")
 
         /** The bucket of a rule without a key. */
         const val SHARED_BUCKET = "global"
 
         /** The prefix of a keyed bucket, so a key value literally named `global` is not the shared bucket. */
-        const val KEYED_BUCKET_PREFIX = "g:"
+        const val KEYED_BUCKET_PREFIX = "k:"
 
         /** The prefix of the bucket of a key value with an unpaired UTF-16 surrogate, escaped ([keyedBucket]). */
         const val ESCAPED_BUCKET_PREFIX = "e:"
 
         /**
-         * The bucket of the key value [value]: [KEYED_BUCKET_PREFIX] and the value, as 7.x names it. A value with an
-         * unpaired UTF-16 surrogate has no UTF-8 encoding, and a limiter writes its counters' keys as UTF-8: Spring's
-         * template would hold `?` in its place, and the value would count in another value's bucket (RC1-52). Its
-         * bucket is [ESCAPED_BUCKET_PREFIX] and the value with each `\` doubled and each unpaired surrogate as its
-         * `\uXXXX` escape: well formed, its own, and every other value keeps the bucket it had.
+         * The bucket of the key value [value]: [KEYED_BUCKET_PREFIX] and the value. A value with an unpaired UTF-16
+         * surrogate has no UTF-8 encoding, and a limiter writes its counters' keys as UTF-8: Spring's template would
+         * hold `?` in its place, and the value would count in another value's bucket (RC1-52). Its bucket is
+         * [ESCAPED_BUCKET_PREFIX] and the value with each `\` doubled and each unpaired surrogate as its `\uXXXX`
+         * escape: well formed, and its own.
          */
         fun keyedBucket(value: String): String {
             if (Identifiers.isWellFormed(value)) {
@@ -95,9 +100,9 @@ class CompiledRateLimit internal constructor(
         private const val ESCAPE_DIGITS = 4
         private const val ESCAPE_LENGTH = 6
 
-        /** The id of [id] within the counters, for a rule of the [kind] document of [owner]. */
+        /** The id of [id] within the counters, for a rule of the [kind] document of [owner]: `<document>/<id>`. */
         fun counterId(kind: DocumentKind, owner: String, id: String): String = when (kind) {
-            DocumentKind.PLATFORM -> id
+            DocumentKind.PLATFORM -> "platform/$id"
             DocumentKind.APP -> "app:$owner/$id"
             DocumentKind.TENANT -> "tenant:$owner/$id"
         }

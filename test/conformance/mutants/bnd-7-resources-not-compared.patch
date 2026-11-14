@@ -1,0 +1,17 @@
+# Rule: BND-7
+# Mutant: a tenant and a platform policy of one id resolve without comparing their resource patterns
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.SameContentTest :conformance:test
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledStatement.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledStatement.kt
+index 6f04ea99..c0c88c23 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledStatement.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledStatement.kt
+@@ -106,7 +106,7 @@ class CompiledStatement internal constructor(
+      */
+     internal fun sameContent(other: CompiledStatement): Boolean =
+         other.name == name && other.effect === effect && other.actions.contentEquals(actions) &&
+-            other.resources.contentEquals(resources) && other.condition == condition && other.onMissing === onMissing
++            other.resources.size == resources.size && other.condition == condition && other.onMissing === onMissing
+ 
+     override fun toString(): String = "$effect $name ${actionPatterns}${resourcePatterns}${condition ?: ""}"
+ }

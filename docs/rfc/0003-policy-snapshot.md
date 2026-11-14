@@ -15,6 +15,10 @@
 > `read-failure: degrade`，customizer 或属性仍可改为 `throw`，吊销检查随之 fail closed（503）；降级读不再缓存"未吊销"，Redis 恢复后吊销立即生效。
 > `SNP-3` 的淘汰检查经 CoCache 读 `INFO memory`（不再是 `CONFIG GET`），Redis 账号需要 `+info`。
 
+> **2026-11-08 修订（#1295）**：`cosec.unknown-properties` 已删除，未知的 `cosec.*` 键一律启动失败，旧前缀也不例外。
+
+> **2026-11-09 修订（#1304，`SNP-6`）**：周期轮询不等待超过 `storeReadTimeout` 的在途加载，加载结束时再确认文档。
+
 ## 0. 结论先行
 
 本阶段只做一件事：**授权读取的策略数据全部来自内存中一份不可变、带版本号的快照，评估途中不再有任何策略 I/O。**

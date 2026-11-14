@@ -1,0 +1,17 @@
+# Rule: PIP-15
+# Mutant: a check decides a resource as given, not as enforcement reads it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.AuthorizationCheckerTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+index 2eaf486b..4d7b91ca 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+@@ -93,7 +93,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
+     /** As [decide], with the action and resource given as the engine reads them. */
+     @OptIn(InternalCoSecApi::class)
+     suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
+-        val decidable = PathNormalizer.enforceable(resource) ?: return Decision.Deny(null)
++        val decidable = resource
+         return decided(security, action, decidable)
+     }
+ 

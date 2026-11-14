@@ -18,6 +18,7 @@ import com.tngtech.archunit.core.domain.JavaCodeUnit
 import com.tngtech.archunit.core.domain.JavaField
 import com.tngtech.archunit.core.domain.JavaMember
 import com.tngtech.archunit.core.domain.JavaModifier
+import java.lang.reflect.Executable
 import java.lang.reflect.Method
 import kotlin.reflect.KVisibility
 import kotlin.reflect.jvm.kotlinFunction
@@ -62,20 +63,32 @@ object PublicSignatures {
         }
     }
 
-    private fun isPublic(member: JavaMember): Boolean {
+    /** A member the JVM makes visible that Kotlin (or the marker) does not make public. */
+    private fun isInternalMember(member: JavaMember): Boolean {
         val modifiers = member.modifiers
-        if (JavaModifier.SYNTHETIC in modifiers || JavaModifier.BRIDGE in modifiers) return false
-        if (JavaModifier.PUBLIC !in modifiers && JavaModifier.PROTECTED !in modifiers) return false
-        if (member.isAnnotatedWith(INTERNAL_API)) return false
+        if (JavaModifier.SYNTHETIC in modifiers || JavaModifier.BRIDGE in modifiers) return true
+        if (JavaModifier.PUBLIC !in modifiers && JavaModifier.PROTECTED !in modifiers) return true
+        if (member.isAnnotatedWith(INTERNAL_API)) return true
         // Kotlin mangles the names of internal functions and accessors with the module name.
-        if ('$' in member.name) return false
-        val method = (member as? JavaCodeUnit)?.let { runCatching { it.reflect() }.getOrNull() } as? Method
-        val visibility = method?.kotlinFunction?.visibility
+        return '$' in member.name
+    }
+
+    private fun isPublic(member: JavaMember): Boolean {
+        if (isInternalMember(member)) return false
+        // A property's annotations live on its synthetic `getX$annotations` method, not on the getter.
+        val getter = member.name.removePrefix("set").let { if (it != member.name) "get$it" else member.name }
+        if (member.owner.methods.any { it.name == getter + "\$annotations" && it.isAnnotatedWith(INTERNAL_API) }) return false
+        val reflected = (member as? JavaCodeUnit)?.let { runCatching { it.reflect() }.getOrNull() }
+        val visibility = when (reflected) {
+            is Method -> reflected.kotlinFunction?.visibility
+            is java.lang.reflect.Constructor<*> -> runCatching { reflected.kotlinFunction?.visibility }.getOrNull()
+            else -> null
+        }
         return visibility == null || visibility == KVisibility.PUBLIC || visibility == KVisibility.PROTECTED
     }
 
     private fun signature(member: JavaMember): String = when (member) {
-        is JavaCodeUnit -> runCatching { (member.reflect() as? Method)?.toGenericString() }.getOrNull()
+        is JavaCodeUnit -> runCatching { (member.reflect() as Executable).toGenericString() }.getOrNull()
             ?: (member.fullName + member.rawReturnType.name)
         else -> member.fullName + (member as? JavaField)?.rawType?.name
     }

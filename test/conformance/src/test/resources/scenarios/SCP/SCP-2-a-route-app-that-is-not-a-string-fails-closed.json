@@ -59,8 +59,7 @@
     "method": "GET",
     "path": "/invoices",
     "headers": {
-      "Authorization": "token",
-      "CoSec-App-Id": "shop"
+      "Authorization": "token"
     }
   },
   "authentication": {
@@ -71,7 +70,8 @@
       "id": "alice",
       "roles": [
         "clerk"
-      ]
+      ],
+      "app": "shop"
     }
   },
   "expect": {

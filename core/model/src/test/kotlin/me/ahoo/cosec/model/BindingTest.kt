@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -117,5 +120,18 @@ class BindingTest {
         memberships.malformed.assert().isEmpty()
         Memberships(Memberships.Source.PROVIDER, emptyMap(), emptyList(), listOf("a@b@c")).malformed.assert()
             .containsExactly("a@b@c")
+    }
+
+    @Test
+    fun `a subject applies in the tenants the engine looks it up in`() {
+        val acme = TenantId("acme")
+        val globex = TenantId("globex")
+        SubjectRef.Anyone.appliesIn(acme).assert().isTrue()
+        SubjectRef.Principal(acme, PrincipalId("bob")).appliesIn(acme).assert().isTrue()
+        SubjectRef.Principal(globex, PrincipalId("bob")).appliesIn(acme).assert().isFalse()
+        SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("plato")).appliesIn(acme).assert().isFalse()
+        SubjectRef.Role(null, RoleId("editor")).appliesIn(acme).assert().isTrue()
+        SubjectRef.Role(acme, RoleId("editor")).appliesIn(acme).assert().isTrue()
+        SubjectRef.Role(globex, RoleId("editor")).appliesIn(acme).assert().isFalse()
     }
 }

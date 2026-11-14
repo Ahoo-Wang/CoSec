@@ -72,7 +72,7 @@
     {
       "id": "IDN-8",
       "source": "RFC 0006 §7.3 (RC1-5)",
-      "statement": "A gateway forwards none of the caller's credentials downstream unless cosec.gateway.identity.forward-authorization is on, and then only to a route that receives the identity (IDN-7): not the Authorization header, not the API key header under the name cosec.pipeline.api-key-header gives it, not the authorization query parameter, however its name is encoded or cased, and not the authorization cookie, however its name is cased or spaced, in any Cookie header: each is rewritten without it, the token's pair going with one ';' and the other pairs byte for byte, so no empty pair is made (a header whose leading $Version pair hides it behind a ',' goes whole), and one left with only empty pairs, of whitespace and ',', is not sent; the cookies the request handed on reports (to a later filter, or a forward: route's handler) agree, a header that went whole taking its cookies with it.",
+      "statement": "A gateway forwards none of the caller's credentials downstream unless cosec.gateway.identity.forward-authorization is on, and then only to a route that receives the identity (IDN-7): not the Authorization header, not the API key header under the name cosec.pipeline.api-key-header gives it, not the authorization query parameter, however its name is encoded or cased, and not the authorization cookie, however its name is cased or spaced, in any Cookie header: each is rewritten without it, the token's pair going with one ';' and the other pairs byte for byte, so no empty pair is made and only the whitespace at the head of the result goes, since a field value cannot start with it (a header whose leading $Version pair hides it behind a ',', or in which a kept $Version pair would come to the head, goes whole), and one left with only empty pairs, of whitespace and ',', is not sent; the cookies the request handed on reports (to a later filter, or a forward: route's handler) agree, a header that went whole taking its cookies with it.",
       "level": "pipeline",
       "pending": null,
       "properties": [
@@ -123,11 +123,53 @@
         "control:ControlHttpTest#a request holding an unpaired surrogate is a 400, wherever it holds it",
         "engine:RateLimitObligationTest#a key value with an unpaired surrogate counts in a well formed bucket of its own",
         "runtime:ApiKeyAuthenticatorTest#aKeyRecordWithAnIdHoldingAnUnpairedSurrogateCannotBeMade",
-        "runtime:RevocableTokenVerifierTest#verifyAndRefreshRefuseAnIdWithAnUnpairedSurrogate",
+        "spi:VerifiedTokenTest#verifyAndRefreshRefuseAnIdWithAnUnpairedSurrogate",
         "cocache:UnpairedSurrogateKeyTest#anAppIdWithAnUnpairedSurrogateNeverReadsAnotherAppsDocument",
         "cocache:UnpairedSurrogateKeyTest#aPrincipalWithAnUnpairedSurrogateIsNeitherRevokedNorReadAsAnotherPrincipal",
         "model:ScopeResolverTest#a declared app that cannot be an app id is rejected with or without a host app",
         "migrate:ConverterTest#an id with an unpaired surrogate is rejected, and nothing is converted"
+      ]
+    },
+    {
+      "id": "IDN-11",
+      "source": "RFC 0004 §4.5.1 (RC1-22, R5)",
+      "statement": "A token's tenant claim names a tenant or is absent. Absent, the principal is in the default tenant (0). An empty claim makes the token invalid (401 token-invalid) on every path that verifies one, the pipeline's and refresh's, whichever verifier read it: read as no tenant, it would put the principal in the default tenant with the token's roles. A claim that cannot name a tenant document (blank, `*`, holding `:` or a control character, longer than 128 characters: the rule of `SnapshotKey.Tenant`) makes the token invalid as well, and an API key record with such a tenant fails (503), so every credential applies one rule. CoSec's issuer refuses to sign a token with an empty tenant or one it would refuse.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:JwtTokenVerifierTest#anEmptyTenantIdIsInvalid",
+        "jwt:JwtTokenConverterTest#anEmptyTenantIsNotIssued",
+        "jwt:MembershipClaimsJwtTest#currentTokensWithoutTenantParseAsBefore",
+        "runtime:TokenAuthenticatorTest#aTokenClaimingAnEmptyTenantIsInvalid",
+        "spi:VerifiedTokenTest#verifyAndRefreshRefuseAnEmptyTenant",
+        "runtime:TokenAuthenticatorTest#aTokenWithoutTenantIsInTheDefaultTenant",
+        "runtime:MembershipClaimsTest#aBlankTenantIsRefusedByTheScope",
+        "spi:VerifiedTokenTest#aTenantThatCannotNameATenantIsRefused",
+        "spi:ApiKeyReaderTest#aKeyBelongsToATenantAndAPrincipal",
+        "jwt:JwtTokenVerifierTest#aTenantIdThatCannotBeATenantIsInvalid",
+        "jwt:JwtTokenConverterTest#aTenantThatCannotBeATenantIdIsNotIssued"
+      ]
+    },
+    {
+      "id": "IDN-12",
+      "source": "RFC 0001 D5; batch R7b (2026-11-08)",
+      "statement": "An id beginning with ( is CoSec's, as the tenants (0) and (platform) and the space (default): a token whose subject begins with ( is invalid, on every path that verifies one, and none is issued. Whether a principal is authenticated is stated by the pipeline, never read off its id.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "spi:VerifiedTokenTest#aSubjectBeginningWithAParenthesisIsRefused",
+        "jwt:JwtTokenVerifierTest#aReservedSubjectIsInvalid",
+        "jwt:JwtTokenConverterTest#aReservedSubjectIsNotIssued"
+      ]
+    },
+    {
+      "id": "IDN-13",
+      "source": "Batch RFC 0010 C4 (2026-11-08)",
+      "statement": "A refresh token (the claim cosec.token, which the converter writes as refresh) is invalid wherever an access token is expected, on every path that verifies one: signed and unexpired, it never authenticates as a principal, so a principal named after the access token's id cannot exist. A token without the claim is an access token, whoever issued it. Refreshing reads the refresh token where it belongs and is unaffected.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:JwtTokenVerifierTest#aRefreshTokenIsRefusedWhereAnAccessTokenIsExpected"
       ]
     }
   ]

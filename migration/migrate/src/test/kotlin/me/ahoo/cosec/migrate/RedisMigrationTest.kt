@@ -232,7 +232,8 @@ class RedisMigrationTest {
                 AuthenticatedPrincipal(
                     PrincipalId(token),
                     TenantId("acme"),
-                    Memberships(Memberships.Source.CLAIMS, spaces, emptyList())
+                    Memberships(Memberships.Source.CLAIMS, spaces, emptyList()),
+                    app = me.ahoo.cosec.model.AppId("order"),
                 ),
                 "test",
             )
@@ -242,7 +243,6 @@ class RedisMigrationTest {
     private fun request(method: String, path: String, token: String?, space: String? = null): HttpFacts {
         val headers = buildMap<String, List<String>> {
             token?.let { put("Authorization", listOf("Bearer $it")) }
-            put(CoSecParameters.APP_ID, listOf("order"))
             space?.let { put(CoSecParameters.SPACE_ID, listOf(it)) }
         }
         return HttpFacts(method, path, null, Headers.of(headers), Cookies.EMPTY, "10.0.0.1", HostScope(null))

@@ -12,58 +12,55 @@
  */
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.principal.TenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.Credentials
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
-import reactor.core.publisher.Mono
 
 /**
  * Switches a signed-in principal to another tenant (`wiki/integration/authentication.md`), to issue a token for it.
  *
- * Roles, policies and attributes are a tenant's: an administrator of one tenant is not one of another. So the principal
- * this answers has [previousPrincipal][SwitchTenantCredentials.principal]'s id, the target tenant, and only what
- * [switchTenant] answers for that tenant; nothing of the previous token reaches the new one (RC1-23).
+ * Roles, policies and attributes are a tenant's: an administrator of one tenant is not one of another. So the subject
+ * this answers has the [previous][SwitchTenantCredentials.context] principal's id, the target tenant, and only what
+ * [switchTenant] answers for that tenant; nothing else of the previous token reaches the new one (RC1-23) but its app,
+ * which the token was issued for and a user cannot change by switching tenant (`SCP-11`).
  *
  * @author ahoo wang
  */
-abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantCredentials, TenantPrincipal> {
+abstract class AbstractSwitchTenantAuthentication : Authentication<SwitchTenantCredentials> {
     override val supportCredentials: Class<SwitchTenantCredentials>
         get() = SwitchTenantCredentials::class.java
 
-    final override fun authenticate(credentials: SwitchTenantCredentials): Mono<out TenantPrincipal> {
+    final override suspend fun authenticate(credentials: SwitchTenantCredentials): TokenSubject {
         val target = credentials.targetTenantId
-        val previous = credentials.principal
-        return Mono.defer { switchTenant(target, previous) }.map { inTarget(previous, target, it) }
+        val previous = credentials.context
+        check(previous.principal.authenticated) { "An anonymous request has no tenant to switch from." }
+        return inTarget(previous, target, switchTenant(target, previous))
     }
 
     /**
-     * What [previousPrincipal]'s user holds in [targetTenantId], looked up for that tenant, never copied from
-     * [previousPrincipal]. An error, or empty, refuses the switch: check here that the user belongs to the tenant.
+     * What [previous]'s user holds in [targetTenantId], looked up for that tenant, never copied from
+     * [previous]. An exception refuses the switch: check here that the user belongs to the tenant.
      *
      * @param targetTenantId target tenant id
-     * @param previousPrincipal the principal of the token the user switches from
+     * @param previous the permitted request of the token the user switches from
      * @return the memberships of the new token
      */
-    protected abstract fun switchTenant(
+    protected abstract suspend fun switchTenant(
         targetTenantId: String,
-        previousPrincipal: CoSecPrincipal
-    ): Mono<TenantMembership>
+        previous: SecurityContext
+    ): TenantMembership
 
-    private fun inTarget(previous: CoSecPrincipal, target: String, membership: TenantMembership): TenantPrincipal {
-        val principal = SimplePrincipal(previous.id, membership.policies, membership.roles, membership.attributes)
-        val member = if (membership.fromProvider) {
-            MembershipMarkedPrincipal(principal, MembershipClaims.PROVIDER)
-        } else {
-            principal
-        }
-        return SimpleTenantPrincipal(member, SimpleTenant(target))
-    }
+    private fun inTarget(previous: SecurityContext, target: String, membership: TenantMembership): TokenSubject =
+        TokenSubject(
+            id = previous.principal.id,
+            app = previous.scope.appId.ifEmpty { null },
+            tenant = target,
+            roles = membership.roles,
+            policies = membership.policies,
+            attributes = membership.attributes,
+            membershipMarker = if (membership.fromProvider) MembershipClaims.PROVIDER else null,
+        )
 }
 
 /**
@@ -98,5 +95,7 @@ class TenantMembership private constructor(
  */
 interface SwitchTenantCredentials : Credentials {
     val targetTenantId: String
-    val principal: CoSecPrincipal
+
+    /** The context of the permitted request asking to switch: the token the user switches from. */
+    val context: SecurityContext
 }

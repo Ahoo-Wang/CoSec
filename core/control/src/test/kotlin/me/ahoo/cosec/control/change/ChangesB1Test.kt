@@ -250,19 +250,11 @@ class ChangesB1Test {
         grant(changes).assert().containsExactly("UNREADABLE")
         // An entry that names no app document: it may be one the analysis would miss, so no entry is trusted, and the
         // apps it does name are not even read.
-        for (odd in listOf("not:an app", "", "*")) {
+        for (odd in listOf("not:an app", "", "*", " ", "a\u0001b", "x".repeat(129))) {
             list(AppList(setOf("billing", odd), complete = true))
             read.clear()
             grant(changes).assert().describedAs(odd).containsExactly("UNREADABLE")
             read.assert().describedAs(odd).doesNotContain(SnapshotKey.App("billing"))
-        }
-        // R2-1 of #1194's review: an entry an earlier build listed, which the app id rule now refuses, names a document
-        // no key can read and no request reads. It is dropped, and the rest of the list is trusted: billing's DENY is read.
-        for (refused in listOf(" ", "a\u0001b", "x".repeat(129))) {
-            list(AppList(setOf("billing", refused), complete = true))
-            read.clear()
-            grant(changes).assert().describedAs(refused).containsExactly("DENY_OVERLAP")
-            read.assert().describedAs(refused).contains(SnapshotKey.App("billing"))
         }
         // It cannot be read.
         list(AppList(setOf("billing"), complete = true))
@@ -447,7 +439,7 @@ class ChangesB1Test {
                 target: SnapshotKey,
                 policy: PolicyId,
                 expected: SnapshotDigest?,
-                referrers: Set<SnapshotKey>
+                referrers: Map<SnapshotKey, Long>
             ): Boolean {
                 check(!written) { "Redis is down" }
                 return harness.memory.putReferrers(target, policy, expected, referrers)
@@ -495,10 +487,12 @@ class ChangesB1Test {
         val failure = try {
             changes.publish(ALICE_OP, change.id)
             null
-        } catch (e: IllegalStateException) {
+        } catch (e: ChangeRejectedException) {
             e
         }
-        failure?.message.assert().isEqualTo("Redis is down")
+        // The answer says what happened (#1263), with what stopped it.
+        failure!!.message!!.assert().contains("revision 1 is written")
+        failure.cause!!.message.assert().isEqualTo("Redis is down")
         harness.revisions.head(ACME)!!.revision.assert().isEqualTo(1L)
         // The detection compared the platform's head, which the publish was checked with.
         readAfter.assert().contains(SnapshotKey.Platform)
@@ -797,9 +791,11 @@ class ChangesB1Test {
         val change = changes.propose(ALICE_OP, ACME, 0, listOf(grant), "grant")
         changes.skipShadow(ALICE_OP, change.id, "test")
         changes.publish(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        // A copy under the list's lock: the listener may still be appending while this reads.
+        fun reviews() = synchronized(events) { events.filter { it.kind == ChangeEvent.Kind.REVIEW_NEEDED } }
         val detected = withTimeout(5_000) {
-            while (events.none { it.kind == ChangeEvent.Kind.REVIEW_NEEDED }) delay(10)
-            events.single { it.kind == ChangeEvent.Kind.REVIEW_NEEDED }
+            while (reviews().isEmpty()) delay(10)
+            reviews().single()
         }
         detected.moved.single().let {
             it.document.assert().isEqualTo("platform")

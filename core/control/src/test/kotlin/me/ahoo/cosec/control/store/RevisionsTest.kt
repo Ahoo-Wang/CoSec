@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.store
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.binding
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
@@ -311,6 +314,77 @@ class RevisionsTest {
             ).revision.assert().isEqualTo(3)
         }
 
+        /** A publish of [document] that indexes its references and then writes no head, as one that lost its slot does. */
+        private fun lost(
+            document: me.ahoo.cosec.runtime.document.PolicyDocument,
+            key: SnapshotKey = ACME
+        ) = runBlocking {
+            revisions.publish(key, revisions.head(key), document, publication("lost"), precondition = { false })
+                .assert().isInstanceOf(PublishOutcome.Conflicted::class.java)
+        }
+
+        @Test
+        fun `repairing removes what a lost publish indexed, which would block a removal for good`() = runBlocking<Unit> {
+            published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"), policy("other"))))
+            published(document = candidate(ACME))
+            lost(candidate(ACME, bindings = listOf(binding("a", "shared"))))
+            published(document = candidate(ACME))
+            revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactly(ACME)
+            publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("other"))))
+                .assert().isInstanceOf(PublishOutcome.Referenced::class.java)
+
+            revisions.pruneReferences(SnapshotKey.Platform).assert().isEqualTo(1)
+
+            revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
+            publish(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("other"))))
+                .assert().isInstanceOf(PublishOutcome.Published::class.java)
+            // Again, nothing is left to remove.
+            revisions.pruneReferences(SnapshotKey.Platform).assert().isEqualTo(0)
+        }
+
+        @Test
+        fun `repairing keeps what a head refers to, and what a publish still in flight indexed`() = runBlocking<Unit> {
+            published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"))))
+            published(document = candidate(ACME, bindings = listOf(binding("a", "shared"))))
+            val beta = SnapshotKey.Tenant("beta")
+            published(beta, candidate(beta))
+            // Indexed at revision 2 with the head at 1: it cannot be told from a publish about to write that head.
+            lost(candidate(beta, bindings = listOf(binding("b", "shared"))), beta)
+
+            revisions.pruneReferences(SnapshotKey.Platform).assert().isEqualTo(0)
+
+            revisions.referrers(SnapshotKey.Platform, shared).assert().containsExactlyInAnyOrder(ACME, beta)
+        }
+
+        @Test
+        fun `repairing leaves a reference a later revision indexed meanwhile`() = runBlocking<Unit> {
+            published(SnapshotKey.Platform, candidate(SnapshotKey.Platform, listOf(policy("shared"))))
+            published(document = candidate(ACME))
+            lost(candidate(ACME, bindings = listOf(binding("a", "shared"))))
+            published(document = candidate(ACME))
+            val racing = object : ControlStore by memory {
+                var raced = false
+
+                override suspend fun putReferrers(
+                    target: SnapshotKey,
+                    policy: PolicyId,
+                    expected: SnapshotDigest?,
+                    referrers: Map<SnapshotKey, Long>,
+                ): Boolean {
+                    if (!raced) {
+                        raced = true
+                        // Revision 3 brings the reference back and indexes it before its head write.
+                        memory.putReferrers(target, policy, expected, mapOf(ACME to 3L)).assert().isTrue()
+                    }
+                    return memory.putReferrers(target, policy, expected, referrers)
+                }
+            }
+
+            Revisions(racing, clock).pruneReferences(SnapshotKey.Platform).assert().isEqualTo(0)
+
+            memory.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEqualTo(mapOf(ACME to 3L))
+        }
+
         @Test
         fun `repairing adds what a head refers to`() = runBlocking<Unit> {
             published(document = candidate(ACME, bindings = listOf(binding("a", "shared"))))
@@ -318,7 +392,7 @@ class RevisionsTest {
                 SnapshotKey.Platform,
                 shared,
                 memory.referrers(SnapshotKey.Platform, shared)!!.digest,
-                emptySet()
+                emptyMap()
             )
             revisions.referrers(SnapshotKey.Platform, shared).assert().isEmpty()
             revisions.repairReferences(ACME).assert().isEqualTo(1)

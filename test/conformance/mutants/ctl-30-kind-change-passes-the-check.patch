@@ -1,0 +1,17 @@
+# Rule: CTL-30
+# Mutant: the checks let a referenced policy change between a policy and a boundary
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+index c5fec854..3caab37d 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+@@ -400,7 +400,7 @@ class ChangeChecks(
+         findings: MutableList<Finding>,
+     ) {
+         val kept = candidate.policies.associate { it.id to it.boundary }
+-        for (policy in base?.policies.orEmpty().filter { kept[it.id] != it.boundary }) {
++        for (policy in base?.policies.orEmpty().filter { it.id !in kept }) {
+             val referrers = context.referrers(SnapshotKey.Platform, policy.id).filterNotTo(HashSet()) {
+                 definesItself(context, it, policy.id)
+             }

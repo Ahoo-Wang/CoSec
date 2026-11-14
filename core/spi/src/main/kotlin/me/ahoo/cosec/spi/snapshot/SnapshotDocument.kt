@@ -16,6 +16,7 @@ package me.ahoo.cosec.spi.snapshot
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.time.Instant
+import java.util.HexFormat
 
 /**
  * A stored snapshot document (RFC 0003 §3.3): the header is decoded, the body stays raw bytes until it is compiled.
@@ -101,7 +102,7 @@ class SnapshotDigest(val algorithm: String, bytes: ByteArray) {
     override fun hashCode(): Int = 31 * algorithm.hashCode() + bytes.contentHashCode()
 
     /** `SHA-256:<64 lowercase hex digits>`. */
-    override fun toString(): String = algorithm + SEPARATOR + bytes.joinToString(separator = "") { "%02x".format(it) }
+    override fun toString(): String = algorithm + SEPARATOR + HEX.formatHex(bytes)
 
     companion object {
         const val SHA_256: String = "SHA-256"
@@ -111,7 +112,7 @@ class SnapshotDigest(val algorithm: String, bytes: ByteArray) {
         const val PATTERN: String = "^SHA-256:[0-9a-f]{64}$"
 
         private const val SEPARATOR = ':'
-        private const val HEX = 16
+        private val HEX: HexFormat = HexFormat.of()
         private val TEXT = Regex(PATTERN)
 
         /** Whether [text] is a digest in its text form. */
@@ -121,16 +122,7 @@ class SnapshotDigest(val algorithm: String, bytes: ByteArray) {
         fun parse(text: String): SnapshotDigest {
             require(isDigest(text)) { "[$text] is not a $SHA_256 digest." }
             val hex = text.substring(SHA_256.length + 1)
-            return SnapshotDigest(
-                SHA_256,
-                ByteArray(hex.length / 2) { hex.substring(2 * it, 2 * it + 2).toInt(HEX).toByte() }
-            )
+            return SnapshotDigest(SHA_256, HEX.parseHex(hex))
         }
     }
 }
-
-/**
- * The revisions of the two documents one evaluation read (RFC 0003 §3.4). [scoped] is 0 when the evaluation needed
- * no app document or the app has none. Phase 4 renames the pair to `(platform, tenant)`.
- */
-data class SnapshotVersion(val shared: Long, val scoped: Long)

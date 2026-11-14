@@ -1,0 +1,114 @@
+{
+  "rules": [
+    "ROL-10"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "Nothing refers to ship.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "night",
+            "app": "wms",
+            "permissions": [
+              "edit"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "app:wms",
+        "operations": [
+          {
+            "putCatalog": {
+              "groups": [
+                {
+                  "name": "ops",
+                  "permissions": [
+                    {
+                      "id": "read",
+                      "action": "wms:read"
+                    },
+                    {
+                      "id": "edit",
+                      "action": "wms:edit"
+                    },
+                    {
+                      "id": "label"
+                    }
+                  ]
+                },
+                {
+                  "name": "inbound",
+                  "spaced": true,
+                  "permissions": []
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "app:wms": 2
+    }
+  }
+}

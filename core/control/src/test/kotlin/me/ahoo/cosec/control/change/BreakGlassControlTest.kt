@@ -241,16 +241,21 @@ class BreakGlassControlTest {
         val expiresAt = inHours(2)
         val taken = BindingId("break-glass-rita-${expiresAt.toEpochMilli()}")
         val head = revisions.head(SnapshotKey.Platform)!!
-        val deny = Binding(taken, SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), BuiltinPolicies.BLACKLIST)
+        val ordinary = Binding(
+            taken,
+            SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("someone")),
+            BindingScope(Match.Any, Match.Any),
+            PolicyId("break-glass-requester"),
+        )
         revisions.publish(
             SnapshotKey.Platform,
             head,
-            StoreFixtures.candidate(SnapshotKey.Platform, head.document.policies, head.document.bindings + deny),
-            Publication("deny", ProvenanceKind.PUBLISH, plato.actor),
+            StoreFixtures.candidate(SnapshotKey.Platform, head.document.policies, head.document.bindings + ordinary),
+            Publication("taken", ProvenanceKind.PUBLISH, plato.actor),
         )
         refused { breakGlass.request(rita, PrincipalId("rita"), expiresAt, "incident") }.assert().isEqualTo(409)
-        revisions.head(SnapshotKey.Platform)!!.document.bindings.single { it.id == taken }.policy
-            .assert().isEqualTo(BuiltinPolicies.BLACKLIST)
+        revisions.head(SnapshotKey.Platform)!!.document.bindings.single { it.id == taken }.breakGlass
+            .assert().isFalse()
     }
 
     /**

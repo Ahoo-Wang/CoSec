@@ -1,4 +1,4 @@
-# Rule: SCP-2, SCP-7
+# Rule: SCP-2, SCP-10
 # Mutant: a route's cosec-app-id that cannot be an app id is dropped, so the client picks the app
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.RouteAppTest :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 

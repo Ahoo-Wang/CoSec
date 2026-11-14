@@ -1,0 +1,16 @@
+# Rule: IDN-12
+# Mutant: a token may name an id beginning with (, so it passes for CoSec's own id, the anonymous principal above all
+# Tests: :spi:test --tests me.ahoo.cosec.spi.token.VerifiedTokenTest :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+index 54623487..55bf0b43 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+@@ -72,7 +72,6 @@ class VerifiedToken(
+         when {
+             id.isEmpty() -> invalid("has no id")
+             principal.isEmpty() -> invalid("has no subject")
+-            Identifiers.isReserved(principal) -> invalid("names a subject reserved for CoSec")
+             tenant != null && tenant.isEmpty() -> invalid("names an empty tenant")
+             tenant != null && !SnapshotKey.Tenant.isValidTenantId(tenant) -> invalid(
+                 "names a tenant that cannot be a tenant id"

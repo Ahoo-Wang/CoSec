@@ -1,0 +1,16 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "bindings": [
+    {
+      "id": "owners-administer",
+      "subject": {
+        "role": "owner"
+      },
+      "app": "cosec-control",
+      "space": "",
+      "policy": "cosec:tenant-admin"
+    }
+  ]
+}

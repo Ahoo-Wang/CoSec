@@ -129,6 +129,32 @@
 >   - `UnnamedDocumentException` 的类型公开，构造器是 `@InternalCoSecApi`；`ControlStore.openChanges` 的实现必须继续列出这种变更。
 > - **规则：** 修订 `CTL-3`、`SCP-7`、`TNT-4`；见 [RFC 0008](0008-conformance-and-direct-build.md) §3.2 的说明。
 
+> **2026-11-08 修订（#1283，`CTL-27`）**：内置的 `cosec:tenant-admin` 增加本租户文档 `doc/tenant/{t}` 上的 `cosec:skip-shadow`。
+
+> **2026-11-08 修订（#1286）**：读取早期构建写下的“无名 app”记录不再容错，一律是格式错误并失败即拒绝；`SCP-7` 由 `SCP-10` 取代，拒绝的一半全部保留。 公开的 `409 change-unreadable` 和 `UnnamedDocumentException` 已删除；确认摘要只有一种形状，没有策略条件时也带 `policyCondition: null`。
+
+> **2026-11-08 修订（#1290）**：头写入是发布的提交点，之后的维护失败只记日志，不把已写入的修订报告为失败（`CTL-2`）。暂存时变更先离开 `CHECKED` 再占槽，一次条件写决定两个调用的胜负（`CTL-6`）。章节操作的字段按文档格式的读取器校验（`CTL-28`）。
+
+> **2026-11-08 修订**：传播查询只统计实例能评估的修订（#1293）。租户策略只有作为平台策略的精确副本才能用同一 id，副本存在期间平台策略冻结（#1298，#1224 选项 A）。
+
+> **2026-11-09 修订（#1301）**：`ControlStore.openChanges` 返回读到的变更，候选写入是条件写（`CTL-6`）；实例状态按实例分 key（§6.5）；一次变更只确认一次控制文档，结束时按修订号复核，文档变化则整批重做（`CTL-8`）。
+
+> **2026-11-09 决定（维护者“要审批”，已实现：#1312，`CTL-31`）**：§7.4.4 的“删除不授出权限”只适用于租户文档。平台或 App 层删除含 DENY 的策略或绑定，按 `NOT_ANALYZED` 走审批。
+
+> **2026-11-13 修订（第 2 轮按模块审查 `core/control` 的修复，#1312）**：下列各处以本段为准。
+>
+> - §5.8：被引用的策略在普通策略与边界策略之间改变种类，检查时与写头时都拒绝（`CTL-30`）。`repair-references` 现在双向修复：补上头引用而索引缺少的，
+>   并删除索引有而任何头都没有的（一次发布先写了索引、随后丢了头写入时留下的）。只有当引用方的头已不低于写入该引用的修订、且头里没有这条引用时才删除，
+>   所以仍在进行中的发布保留自己的引用，索引始终是真实引用的超集（`CTL-25`）。
+> - §7.4.2、§7.4.5：定义中的 Permit 只指策略求值，不含 RFC 0004 §4.6 的空间成员门（措辞更正，行为不变）。
+> - §7.4.4：平台与 App 文档删除 DENY 需要第二个人（`CTL-31`）。
+> - §7.2：一次变更使某个角色新派生出绑定时需要 `cosec:grant`，不论是 `putRole`，还是让 `"*"` 角色多出权限的 `putCatalog` 或 `putPolicy`（`ROL-9`）。
+>   变更写入的条目 id 不含 `/`（V2，422），权限策略的 `perm:<app>/<id>` 除外：带 `/` 的 id 会给 `cosec:write` 的资源多出路径段，逃出以 `*` 结尾的规则（`CTL-8`）。
+> - §7.6、§9.1：绑定不能指向平台的边界策略（`REFERENCES`，422），授出分析也不把边界当作策略读（`CTL-32`）。
+> - §8：申请、发布已批准的申请、撤销 break-glass 只需要 `cosec:breakglass`，它只在 `BREAK_GLASS` 变更上代替 `cosec:publish`；申请先授权、后读平台文档，
+>   被拒绝的申请不透露已有哪些绑定（`BRK-12`）。
+> - §9.5：回滚与提议一样携带 `confirmations`，恢复带 `onMissing: "nomatch"` 的 DENY 时需要重新确认：旧修订的确认属于另一个人、另一次变更。
+
 ## 0. 结论先行
 
 第 5 阶段结束时，数据面已经是"读快照 → 纯函数决策 → 义务与监听器"，但写入一侧还停在第 3 阶段：任何拿到 `SnapshotPublisher` 的代码都能改策略，
@@ -373,7 +399,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
        Conflict    → c 进入 CONFLICTED（不自动重做，§5.5）；第 2、3 步留下的记录与引用由回收任务清理（§5.7）
        结果未知     → getIfChanged(key, digest(d))：Unchanged 即已写入，否则按 Conflict 处理（与 RedisSnapshotPublisher 相同）
   5. revisions:<key> 追加 (修订号, digest(d))                 CAS 循环；失败只记告警，索引可以重建
-  6. 从反向索引中删除 b 有而 d 没有的引用
+  6. 从反向索引中删除 b 有而 d 没有的引用，除非更晚的修订又索引了它
   7. c → PUBLISHED（CAS）；ChangeEvent(PUBLISHED) 给全部监听器（BEST_EFFORT 语义）
 ```
 
@@ -429,7 +455,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 
 - 体积不作为删除条件：按体积删除会让最近几天的修订突然不可解释。每份文档的记录总字节数作为指标 `cosec.control.revisions.bytes` 暴露，超过
   `cosec.control.revisions.warn-bytes`（默认 256 MB）告警。M13 的问题由数量和时间约束，大文档的部署调小 `max-count`。
-- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除经 CoCache 的 `evict`。
+- 回收由控制面的一个定时任务执行（多个控制面实例时用暂存槽同样的 `putIfMatch` 占用一个租约 key，只有一个实例执行），删除用 CoCache 的 `delete`、`deleteIfMatch`。
 - 数据面的 `explain` 需要的是决策时的修订：审计保留期比 7 天长的部署要么调大 `min-age`，要么接受较早的决策只能在当前快照上解释（`explain` 返回 410，§10.2）。
 
 ### 5.8 跨文档引用：反向引用索引
@@ -463,6 +489,8 @@ refs:<被引用文档>:<policyId> = { 引用它的 docKey… }      // 例：ref
 ---
 
 > **实现说明（2026-10-27，#1087）**：`bootstrap` 写入的绑定 id 是 `platform-admin-<principal>`；`publish` 经 `ControlStore` 写修订（`kind = MIGRATE`），拒绝期限超过 `--break-glass-max-duration` 的 break-glass 绑定。
+
+> **实现说明（2026-11-08，#1268）**：反向索引的每个引用方带上最后索引它的修订，发布后只删除不高于自身修订的条目（`CTL-25`，#1207），所以并发发布同一引用方时“超集”仍然成立。索引条目写在更晚的修订旁边，`history` 不读头之上的条目。回收把从索引取出的内容记入 `RevisionIndex.reclaiming`，失败的删除会重试（#1226），租约用 `deleteIfMatch` 释放。候选只有在仍是该变更的窗口时才撤回，在一次原子操作里完成（`CTL-26`，#1227，§5.5、§6.4）；实例在候选撤回且最后一份报告写入后停止上报（#1210）。
 
 ## 6. 发布流程
 
@@ -526,12 +554,14 @@ flowchart LR
 - 对一个被采样的请求，若它的 `SnapshotView` 用到的某份文档 K 有候选，**且候选的基准摘要等于本实例已安装的 K 的摘要**，就用候选替换 K 组成候选视图，
   再调用一次 `Engine.evaluate`。基准不一致（本实例落后，或头已经变了）时不比较，计为 `BASE_MISMATCH`。
 - 采样只针对用到 K 的请求：租户文档的候选只在该租户的请求上评估；`Platform` 的候选在全部请求上评估。
+- 候选只为比较而编译，绝不改变本实例执行所用的编译输入：平台候选按它自己的限制与属性声明编译，其余候选按已安装的平台编译
+  （第 2 轮审查 `core/runtime` 的 H1，#1311，`SNP-10`；此前 starter 把执行用的编译入口交给了候选源，暂存的平台候选会让租户文档失败关闭）。
 
 **汇总**：每个实例按 `(change, 窗口)` 在内存中累计，每 10 秒经 `ShadowReportSink`（`runtime/` 的 SPI，默认 CoCache 实现）写一次自己的报告：
 
 | 字段 | 内容 |
 |---|---|
-| 计数 | `SAME`、`WIDENED`（基准不是 Permit、候选是）、`NARROWED`（基准 Permit、候选不是）、`BECAME_INDETERMINATE`、`CANDIDATE_INDETERMINATE`（RFC 0006 §9.5.4）、`CANDIDATE_ERROR`、`BY_CHANGED`（结果相同、决策语句不同）、`BASE_MISMATCH` |
+| 计数 | `SAME`、`WIDENED`（基准不是 Permit、候选是）、`NARROWED`（基准 Permit、候选不是）、`BECAME_INDETERMINATE`、`CANDIDATE_INDETERMINATE`（RFC 0006 §9.5.4）、`CANDIDATE_ERROR`、`BY_CHANGED`（结果相同、决策语句不同）、`BECAME_DENIED`（基准 Indeterminate、候选 Deny）、`OBLIGATIONS_CHANGED`（同一语句的 Permit、限流义务不同；后两项随 #1311 加入）、`BASE_MISMATCH` |
 | 样本 | 每类最多 20 条，字段与 `DecisionEvent` 相同的那部分（主体、作用域、动作、资源摘要、两边的 `by`），不含请求头、token 和外部属性的值（RFC 0006 §9.2） |
 | 实例 | 实例 id、看到的基准修订、首末时间 |
 
@@ -544,7 +574,7 @@ flowchart LR
 | 任一实例报告 `CANDIDATE_ERROR` | — | 立即关闭，`SHADOWED` 但**不能发布**：候选在某个实例上无法编译或评估，先修正（§6.3） |
 | 头在窗口期间变化 | — | `CONFLICTED`（§5.5） |
 
-**确认**：`publish` 带上 `ack = { window, counts }`，计数必须与报告当前的汇总一致（防止确认过期的数字）。`WIDENED`、`NARROWED`、`BECAME_INDETERMINATE`
+**确认**：`publish` 带上 `ack = { window, counts }`，计数必须与报告当前的汇总一致（防止确认过期的数字）。`WIDENED`、`NARROWED`、`BECAME_INDETERMINATE`、`BECAME_DENIED`、`OBLIGATIONS_CHANGED`
 任一不为零，或者 `insufficient`，都必须确认；全部为零且样本充足时可以不带 `ack`。确认记入修订记录的 `provenance.shadow` 和审计。
 
 **影子窗口对数据面的约束**：沿用 RFC 0006 的监听器规则——`BEST_EFFORT`、有界队列、采样、绝不影响决策（`ListenerIsolationTest` 扩展到候选来源的故障）。
@@ -694,6 +724,8 @@ sequenceDiagram
 > 动作、资源、环境、`scope.tenant/app/space` 不变）得到的请求 r[s := g]，在当前发布的快照下对 g 是 Permit。
 
 这就是 RFC 0001 §3.7"授权者本人在同一作用域内拥有的权限的子集"的精确含义：被授权者经 G 能做的每一件事，授权者本人在同一个资源、同一个作用域上也能做。
+这里的 Permit 只指策略求值，不含 RFC 0004 §4.6 的空间成员门：附加、主体绑定与 `Anyone` 绑定对 g 按 `(*, *)` 适用，g 在没有角色的 Space 里也算持有它们
+（RFC 0012 §7.3 的租户 Owner 写法依赖这一点）。被授权者仍受同一道门约束。
 下面的算法是这个定义的**可靠的**（不会误判为包含）但不完备的近似，判断不了就是 UNKNOWN。
 
 #### 7.4.3 算法
@@ -743,16 +775,19 @@ analyze(g, change) : List<(piece, YES | UNKNOWN(reason))>
 - **收窄的判定**（语法）：新语句 S' 相对旧语句 S 是收窄，当且仅当 `effect` 相同、S'.actions ⊑ S.actions、S'.resources ⊑ S.resources、`implies(S'.condition, S.condition) = YES`。
   一次修改不满足它，就按"新语句"处理（ALLOW 产生片段；DENY 是新增 DENY）。
 - **新增 DENY**：在有 `cosec:write` 的范围内一律允许（RFC 0001 §7.1）。
-- **删除或放宽 DENY**（§3 M6，Q9）：在有 `cosec:write` 的范围内允许，除非该条目带 `protected` 标志。理由：租户层只能在平台层允许的范围内放宽——删掉租户自己的
+- **删除或放宽 DENY**（§3 M6，Q9）：**租户文档**在有 `cosec:write` 的范围内允许，除非该条目带 `protected` 标志。理由：租户层只能在平台层允许的范围内放宽——删掉租户自己的
   DENY 之后，访问仍要经过某条 ALLOW（它在写入时已经过授出分析，或者由平台写入）、平台层的全部 DENY 与边界。真正需要"租户内的低级管理员不能删"的 DENY，
   由写它的人标为 `protected`，修改需要 `cosec:unprotect`。字面执行 §7.1（每次都审批）是备选。
+  **平台与 App 文档**（2026-11-09 决定，`CTL-31`）之上没有更高一层的 DENY 或边界，删掉一条就放宽了每个租户能做的事，所以需要第二个人：删除含 DENY 的策略、
+  删除所绑策略含 DENY（或读不到）的绑定，各记一条 `NOT_ANALYZED`；信任根可以单人完成，`four-eyes` 时信任根也要第二个人。按展开后的文档判断（RFC 0012 §6），
+  所以删除角色、或用 `putRole` 去掉这样的权限，按它不再派生的每条绑定计算。撤销 break-glass 绑定不在此列（§8，单人）。文档读不到是 503，不跳过审批。
 - **删除绑定、删除 ALLOW**：收窄，一律允许。撤销访问不应该比授予访问更难。
 
 #### 7.4.5 可靠性与性质测试
 
 **论证**（`implies` 与 `⊑` 可靠的前提下）：设算法对 G 给出 YES，取任意满足定义前提的 r。G 匹配 r，所以 C_G' 在 r 上为真；由 `implies(C_G', C_H') = YES`，C_H' 在 r 上为真。
 C_H' 只含与请求有关的属性，它们在 r[s := g] 上取值相同，而 C_H' 是 C_H 对 g 的代换，所以 C_H 在 r[s := g] 上为真。a ⊑ H.actions、ρ ⊑ H.resources，所以 H 的动作与资源匹配
-r[s := g]；r 的作用域在 σ' 中，`covers` 保证 H 对 g 在该作用域适用。于是 H 对 g 命中。g 的 DENY 中，`Anyone` 的那些对 r 与 r[s := g] 的取舍按各自的属性进行，不在定义的
+r[s := g]；r 的作用域在 σ' 中，`covers` 保证 H 在该作用域按策略求值适用于 g（不含成员门，见 §7.4.2）。于是 H 对 g 命中。g 的 DENY 中，`Anyone` 的那些对 r 与 r[s := g] 的取舍按各自的属性进行，不在定义的
 保证之内（这是 Q8 的有意取舍）；其余的与 G 不相交，不命中。边界对 g 与被授权者同样适用。所以 r[s := g] 对 g 是 Permit（除去 `Anyone` DENY 的情形）。
 
 | 性质 | 内容 | 位置 |
@@ -874,7 +909,7 @@ withinBoundary(p, req, view):
 |---|---|---|
 | `Tenant(T)` 的策略 | 能 | id 不与平台层重名（N2）；不用保留前缀；设为可附加或修改可附加策略的 ALLOW 要经授出分析（§7.4.1） |
 | `Tenant(T)` 的绑定，主体 `Principal(T, ·)`、`Role(T, ·)`、`Anyone` | 能 | 主体必须属于 T（RFC 0004 的编译检查）；授出分析 |
-| 绑定指向 `Platform` 的策略 | 能 | 被引用的策略存在且不是边界策略；进入反向索引 |
+| 绑定指向 `Platform` 的策略 | 能 | 被引用的策略存在且不是边界策略（`CTL-32`）；进入反向索引 |
 | 绑定指向 `App(a)` 的权限策略 | 能（N1，Q14） | 绑定的作用域 `app = Exactly(a)`；进入反向索引 |
 | `boundary` 字段 | 不能 | `cosec:boundary`，平台 |
 | `protected` 条目 | 不能，除非有 `cosec:unprotect` | — |

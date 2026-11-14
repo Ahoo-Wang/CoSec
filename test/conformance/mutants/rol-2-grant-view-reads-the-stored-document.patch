@@ -1,0 +1,17 @@
+# Rule: ROL-2, ROL-9
+# Mutant: the grant analysis reads the stored document: a role grants without being analyzed
+# Tests: :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantDocuments.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantDocuments.kt
+index 61ea3727..7423ec92 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantDocuments.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantDocuments.kt
+@@ -44,7 +44,7 @@ internal object GrantDocuments {
+         if (document == null) {
+             return GrantDocument.EMPTY
+         }
+-        val effective = RoleExpansion.effective(document)
++        val effective = document
+         return GrantDocument(
+             policies = effective.policies.filterNot { it.boundary }.map(::policy),
+             bindings = effective.bindings.filterNot { it.breakGlass },

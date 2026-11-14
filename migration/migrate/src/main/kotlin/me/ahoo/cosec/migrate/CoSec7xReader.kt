@@ -17,10 +17,10 @@ package me.ahoo.cosec.migrate
 
 import io.lettuce.core.api.sync.RedisCommands
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.context.request.SpaceIdCapable
-import me.ahoo.cosec.api.principal.SpacedRoleId
 import me.ahoo.cosec.migrate.v7.api.context.request.AppId
+import me.ahoo.cosec.migrate.v7.api.context.request.SpaceIdCapable
 import me.ahoo.cosec.migrate.v7.api.policy.PolicyId
+import me.ahoo.cosec.migrate.v7.api.principal.SpacedRoleId
 import me.ahoo.cosec.migrate.v7.cache.AppSpacedRoleId
 import me.ahoo.cosec.migrate.v7.cache.V7CacheSpecs
 

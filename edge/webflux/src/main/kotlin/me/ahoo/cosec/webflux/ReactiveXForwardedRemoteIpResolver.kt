@@ -11,13 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
+@InternalCoSecApi
 class ReactiveXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = 1) :
     XForwardedRemoteIpResolver<ServerWebExchange>(ReactiveRemoteIpResolver) {
+    @InternalCoSecApi
     companion object {
         val TRUST_ALL = ReactiveXForwardedRemoteIpResolver(Int.MAX_VALUE)
     }

@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.store
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
@@ -72,15 +75,19 @@ interface ControlStore : CandidateStore {
     /** Replaces the revision index of [key] if it is still at [expected]; `false` when it changed in between. */
     suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean
 
-    /** The documents that refer to [policy] of [target] (RFC 0007 §5.8), with the digest a [putReferrers] must name. */
-    suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>?
+    /**
+     * The documents that refer to [policy] of [target] (RFC 0007 §5.8), each with the revision of it that last indexed
+     * the reference, and the digest a [putReferrers] must name. A revision removes only what it or an earlier one
+     * indexed, so the late removal of one revision never takes back what a later one indexed again (#1207).
+     */
+    suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>?
 
     /** Replaces the referrers of [policy] of [target] if they are still at [expected]; `false` when they changed. */
     suspend fun putReferrers(
         target: SnapshotKey,
         policy: PolicyId,
         expected: SnapshotDigest?,
-        referrers: Set<SnapshotKey>,
+        referrers: Map<SnapshotKey, Long>,
     ): Boolean
 
     /** The change request [id], with the digest a [putChange] must name, or `null` when there is none. */
@@ -98,11 +105,25 @@ interface ControlStore : CandidateStore {
     /** Replaces the staging slot of [key] if it is still at [expected]; `false` when it changed in between. */
     suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean
 
+    /** The candidate of [key] with the digest a [putCandidate] must name, or `null` when there is none. */
+    suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>?
+
     /**
-     * Writes the candidate of [key] to the `candidate:` namespace the data plane's shadow listeners read (RFC 0007 §6.4),
-     * or removes it with `null`. Unconditional: the staging slot already makes its holder the only writer.
+     * Writes the candidate of [key] to the `candidate:` namespace the data plane's shadow listeners read (RFC 0007 §6.4)
+     * if it is still at [expected] (`null`: only if there is none); `false` when it changed in between. The staging slot
+     * does not make its holder the only writer: a change that held it when it read the candidate may be preempted
+     * before its write lands, and its late write must not replace the candidate of the change that took the slot (#1235).
+     * A write whose outcome is unknown is resolved by reading back, never by writing again.
      */
-    suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?)
+    suspend fun putCandidate(key: SnapshotKey, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean
+
+    /**
+     * Removes the candidate of [key] if it is still the one of [window], in one atomic step (#1227): a change withdraws
+     * its candidate once it is terminal, when another change may already hold the slot and have staged its own, which
+     * must stay. `true` when this removed it; `false` when the candidate is another window's or there is none. A
+     * removal whose outcome is unknown is resolved by reading back, never by removing unconditionally.
+     */
+    suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean
 
     /**
      * Every document this store has indexed revisions for, so reclamation can visit each (RFC 0007 §5.7). It may name
@@ -120,25 +141,28 @@ interface ControlStore : CandidateStore {
     suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean
 
     /**
-     * The change requests that may still be open, so shadow windows can be closed (RFC 0007 §6.4) and the revisions
-     * open changes rest on kept (§5.7). It may name more, never fewer: an id is added before its change is first written
-     * and removed once a write makes the change terminal. A removal that failed is made up here: ids whose change is
-     * terminal are dropped when this is read, and so are ids whose change has been missing for longer than a write can
-     * take (a first write that failed). Callers still read each change and go by its state.
-     *
-     * A change whose record no longer reads because it is of an app no document key can name (its [change] throws
-     * [UnnamedDocumentException], as [me.ahoo.cosec.control.change.ChangeRequestCodec] does) cannot be known to be
-     * terminal: it stays listed, and this must not fail for it. Callers skip it; an operator removes its record.
+     * The change requests that are not terminal, as the store holds them now, so that shadow windows can be closed
+     * (RFC 0007 §6.4) and the revisions open changes rest on kept (§5.7) from one read of each. Every change that is
+     * written and not terminal is among them. A change is listed before it is first written and unlisted once a write
+     * makes it terminal: one listed and not written yet (a first write in flight) is not among them, and a removal that
+     * failed is made up here: ids whose change is terminal are dropped when this is read, and so are ids whose change has
+     * been missing for longer than a write can take (a first write that failed). A listed change whose record does not
+     * decode fails this, as [change] does: it cannot be known to be terminal.
      */
-    suspend fun openChanges(): Set<ChangeId>
+    suspend fun openChanges(): List<ChangeRequest>
 
     /**
      * Takes the lease [name] for [holder] for [duration] if nobody holds it, so that one control-plane instance runs a
-     * periodic task (RFC 0007 §5.7). `false` when another holder has it.
+     * periodic task (RFC 0007 §5.7). `false` when another holder has it. [holder] taking a lease it already has renews it:
+     * it then holds it for the full [duration] from now, not for what was left of the earlier one.
      */
     suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean
 
-    /** Gives up the lease [name] if [holder] still has it, so the next taker need not wait for it to expire. */
+    /**
+     * Gives up the lease [name] if [holder] still has it, so the next taker need not wait for it to expire. The check and
+     * the removal are one atomic step: a lease that expired meanwhile and that another holder took stays theirs, or two
+     * instances would run the same task at once.
+     */
     suspend fun releaseLease(name: String, holder: String)
 }
 
@@ -187,12 +211,16 @@ data class PendingRecord(val digest: SnapshotDigest, val since: Instant)
  * - [pending] are records written before their head write; once the head moves they become entries, and those whose
  *   publish lost its race are orphans that reclamation removes;
  * - [floor] is the lowest revision whose record may still exist: below it, records were reclaimed on purpose, so a
- *   chain that ends there is complete, not broken.
+ *   chain that ends there is complete, not broken;
+ * - [reclaiming] are records reclamation has taken out of [entries] or [pending] and not yet seen deleted (#1226): it
+ *   writes them here in the same step, then deletes them, then drops the ones it deleted, so a deletion that fails is
+ *   tried again by the next pass, and no listed revision ever misses its record.
  */
 data class RevisionIndex(
     val entries: List<RevisionEntry> = emptyList(),
     val pending: List<PendingRecord> = emptyList(),
     val floor: Long = 1,
+    val reclaiming: List<SnapshotDigest> = emptyList(),
 ) {
     init {
         require(

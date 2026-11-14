@@ -114,6 +114,7 @@ class BreakGlassAndShadowTest {
                 breakGlass = true,
                 issuedAt = null,
                 apiKeyCredential = false,
+                app = null,
             ),
             "token"
         )

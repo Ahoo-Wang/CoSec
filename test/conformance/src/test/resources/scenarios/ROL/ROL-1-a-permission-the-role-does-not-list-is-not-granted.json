@@ -1,0 +1,79 @@
+{
+  "rules": [
+    "ROL-1"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The role lists read, not edit: nothing grants edit.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "clerk",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "night",
+            "app": "wms",
+            "permissions": [
+              "edit"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:edit"
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

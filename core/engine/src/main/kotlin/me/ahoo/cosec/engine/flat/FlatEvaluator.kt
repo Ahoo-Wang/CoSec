@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.engine.pattern.EvaluationScratch
 import me.ahoo.cosec.engine.pattern.HttpPath
@@ -34,6 +37,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.StatementRef
+import java.util.IdentityHashMap
 
 /**
  * One evaluation over bindings: the flat algorithm of RFC 0004 §6.1 over compiled statements (RFC 0005 §6).
@@ -58,7 +62,9 @@ import me.ahoo.cosec.model.decision.StatementRef
  * index, so none of those allocate. [FlatTracingEvaluator] overrides only [candidate], the step per candidate, so no
  * trace code sits in the untraced one (see `Evaluator` for why).
  */
-@Suppress("TooManyFunctions")
+// Large by design: the evaluator is its own visitor, condition input, index lookup and scratch source, so that an
+// evaluation allocates nothing for them; splitting it would add an object, or a call, per request.
+@Suppress("TooManyFunctions", "LargeClass")
 internal open class FlatEvaluator(protected val request: FlatRequest, protected val view: SnapshotView) :
     CandidateVisitor,
     ConditionInput,
@@ -85,11 +91,21 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private var missing: MutableSet<PolicyId>? = null
     private var ambiguous: MutableSet<PolicyId>? = null
 
-    // Policy conditions evaluated so far, by identity, and their results; allocated on the first condition.
+    // Policy conditions evaluated so far, by identity, and their results; allocated on the first condition. Up to
+    // SCAN_GUARDS they are found by scanning these arrays, which allocates nothing and costs less than hashing for the few
+    // a request usually reaches. A request that reaches more moves them all to [guardMap], so that finding one never
+    // costs more than a hash lookup however many it reaches: a scan would make P conditions cost P² steps (#1212).
+    // Never by value (CheckedCondition.equals compares canonical text): two conditions with the same text can decide
+    // differently, as an `exists` on one external path declared String by one document's catalog and Bool by another's,
+    // or a `time` with another zone table; and comparing texts that differ only late costs their length, up to megabytes
+    // for large `in` sets, on every lookup. Policies meant to share a condition share the instance instead.
     private var guards: Array<CheckedCondition?>? = null
     private var guardResults: IntArray? = null
     private var guardErrors: Array<Throwable?>? = null
     private var guardCount = 0
+
+    /** Each condition's result, a small `Int`, or its error: the same facts as the arrays, once there are too many. */
+    private var guardMap: IdentityHashMap<CheckedCondition, Any>? = null
 
     /** The error of the condition [guard] returned [GUARD_ERROR] for last. */
     private var guardError: Throwable? = null
@@ -143,14 +159,26 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             return decision
         }
         var obligations: ArrayList<Obligation>? = null
-        for (rules in arrayOf(view.platform.rateLimits, view.app?.rateLimits, view.tenant?.rateLimits)) {
-            for (rule in rules ?: continue) {
-                val obligation = obligation(rule) ?: continue
-                (obligations ?: ArrayList<Obligation>().also { obligations = it }) += obligation
+        obligating = true
+        try {
+            for (rules in arrayOf(view.platform.rateLimits, view.app?.rateLimits, view.tenant?.rateLimits)) {
+                for (rule in rules ?: continue) {
+                    val obligation = obligation(rule) ?: continue
+                    (obligations ?: ArrayList<Obligation>().also { obligations = it }) += obligation
+                }
             }
+        } finally {
+            obligating = false
         }
         return obligations?.let { Decision.Permit(decision.by, it) } ?: decision
     }
+
+    /**
+     * Set while [withObligations] decides a permit's obligations: they are part of the decision, so an evaluation that
+     * records a trace catches their errors as the untraced one does, although a statement has already matched (`ALG-8`).
+     */
+    protected var obligating: Boolean = false
+        private set
 
     private fun obligation(rule: CompiledRateLimit): Obligation? {
         val result = step(rule.policy, rule.statement)
@@ -177,7 +205,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private fun bucket(rule: CompiledRateLimit, key: Attribute): String? = try {
         // The statement captures only for its own condition: a key reading a variable matches with captures here.
         captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
-            rule.statement.resources.firstNotNullOfOrNull { it.match(target, this) }
+            keyCaptures(rule.statement)
         } else {
             null
         }
@@ -191,6 +219,37 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         null
     } finally {
         captures = null
+    }
+
+    /**
+     * The captures a rule's key reads: those of the first pattern, in declared order, that matches and under whose
+     * captures the rule's condition holds (`ALG-10`). The rule matched, so one does; a pattern whose condition fails is
+     * not one under which it holds.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun keyCaptures(statement: CompiledStatement): Captures? {
+        val condition = statement.condition
+        for (pattern in statement.resources) {
+            val captures = pattern.match(target, this) ?: continue
+            if (!statement.eachPattern || condition == null) {
+                return captures
+            }
+            this.captures = captures
+            val holds = try {
+                condition.evaluate(this)
+            } catch (thrown: Throwable) {
+                if (!catches(thrown)) {
+                    throw thrown
+                }
+                false
+            } finally {
+                this.captures = null
+            }
+            if (holds) {
+                return captures
+            }
+        }
+        return null
     }
 
     /**
@@ -378,6 +437,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         if (!statement.admits(this)) {
             return CONDITION_MISS
         }
+        if (statement.eachPattern) {
+            return stepEachPattern(policy, statement)
+        }
         var failure: Throwable? = null
         val captures = try {
             resource(statement)
@@ -414,6 +476,80 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         } finally {
             this.captures = null
         }
+    }
+
+    /**
+     * [step] for a statement whose condition reads captures of several patterns (`ALG-10`): it means what one statement
+     * per pattern would. The condition is tested against each matching pattern's captures in declared order, and any
+     * one holding is a match. Otherwise the first failure, of matching a pattern or of the condition, in declared
+     * order, is the statement's error; a policy condition that does not hold, or fails, decides before either, as it
+     * would for each of those statements.
+     */
+    @Suppress("ReturnCount", "TooGenericExceptionCaught")
+    private fun stepEachPattern(policy: CompiledPolicy, statement: CompiledStatement): Int {
+        val condition = statement.condition!!
+        val globs = statement.globUnits > 0
+        var failure: Throwable? = null
+        var guarded = false
+        for (pattern in statement.resources) {
+            val captures = try {
+                if (globs) pattern.match(target, this) else pattern.match(target)
+            } catch (thrown: Throwable) {
+                // As [step] treats the failure of [resource]: the evaluation's rule, traced or not.
+                if (!catches(thrown)) {
+                    throw thrown
+                }
+                failure = failure ?: thrown
+                null
+            } ?: continue
+            if (!guarded) {
+                val guard = guardOf(policy)
+                if (guard != MATCHED) {
+                    return guard
+                }
+                guarded = true
+            }
+            when (holdsUnder(condition, captures)) {
+                MATCHED -> return MATCHED
+                ERROR -> failure = failure ?: stepError
+            }
+        }
+        return eachPatternMissed(policy, failure, guarded)
+    }
+
+    /** [MATCHED] when [condition] holds under [captures], [CONDITION_MISS] when not, [ERROR] with [stepError] when it threw. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun holdsUnder(condition: CheckedCondition, captures: Captures): Int {
+        this.captures = captures
+        return try {
+            if (condition.evaluate(this)) MATCHED else CONDITION_MISS
+        } catch (thrown: Throwable) {
+            if (!catches(thrown)) {
+                throw thrown
+            }
+            stepError = thrown
+            ERROR
+        } finally {
+            this.captures = null
+        }
+    }
+
+    /**
+     * [stepEachPattern]'s result when no pattern held: a miss without [failure]; otherwise the failure, unless the policy
+     * condition, consulted if no pattern [guarded] it yet, rules the statement out, as in [step].
+     */
+    private fun eachPatternMissed(policy: CompiledPolicy, failure: Throwable?, guarded: Boolean): Int {
+        if (failure == null) {
+            return if (guarded) CONDITION_MISS else RESOURCE_MISS
+        }
+        if (!guarded) {
+            val guard = guardOf(policy)
+            if (guard != MATCHED) {
+                return guard
+            }
+        }
+        stepError = failure
+        return ERROR
     }
 
     /** [MATCHED] when [policy] has no condition or it holds, else [GUARD_MISS] or [GUARD_FAILED] with [stepError]. */
@@ -660,6 +796,12 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
                     return guardResults!![i]
                 }
             }
+        } else {
+            // Only once there are more conditions than SCAN_GUARDS: the arrays are gone.
+            val remembered = recalled(guard)
+            if (remembered != NOT_REMEMBERED) {
+                return remembered
+            }
         }
         var error: Throwable? = null
         val result = try {
@@ -676,13 +818,37 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         return result
     }
 
+    /** The result [guard] had in this evaluation, with [guardError] set, or [NOT_REMEMBERED]; for the map. */
+    private fun recalled(guard: CheckedCondition): Int =
+        when (val outcome = guardMap?.get(guard)) {
+            null -> NOT_REMEMBERED
+            is Throwable -> {
+                guardError = outcome
+                GUARD_ERROR
+            }
+
+            else -> {
+                guardError = null
+                outcome as Int
+            }
+        }
+
     private fun remember(guard: CheckedCondition, result: Int, error: Throwable?) {
         var guards = guards
         var results = guardResults
         if (guards == null || results == null) {
+            val map = guardMap
+            if (map != null) {
+                map[guard] = error ?: result
+                return
+            }
             guards = arrayOfNulls(INITIAL_GUARDS)
             results = IntArray(INITIAL_GUARDS)
         } else if (guardCount == guards.size) {
+            if (guardCount == SCAN_GUARDS) {
+                moveGuardsToMap(guard, error ?: result)
+                return
+            }
             guards = guards.copyOf(guardCount * 2)
             results = results.copyOf(guardCount * 2)
             guardErrors = guardErrors?.copyOf(guardCount * 2)
@@ -696,6 +862,19 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         guards[guardCount] = guard
         results[guardCount] = result
         guardCount++
+    }
+
+    /** Remembers the [SCAN_GUARDS] conditions of the arrays and [guard] in a map, and drops the arrays. */
+    private fun moveGuardsToMap(guard: CheckedCondition, outcome: Any) {
+        val map = IdentityHashMap<CheckedCondition, Any>(MAP_GUARDS)
+        for (i in 0 until guardCount) {
+            map[guards!![i]] = guardErrors?.get(i) ?: guardResults!![i]
+        }
+        map[guard] = outcome
+        guardMap = map
+        guards = null
+        guardResults = null
+        guardErrors = null
     }
 
     /** Whether an error thrown while evaluating is that statement's error rather than the evaluation's. */
@@ -766,6 +945,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         private const val GUARD_MISSED = 2
         private const val GUARD_ERROR = 3
         private const val INITIAL_GUARDS = 4
+        private const val SCAN_GUARDS = 32
+        private const val MAP_GUARDS = 128
+        private const val NOT_REMEMBERED = 0
         private const val INITIAL_LISTS = 8
 
         private const val WORD_BITS = 64

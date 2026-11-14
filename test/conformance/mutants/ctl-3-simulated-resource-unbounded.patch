@@ -3,18 +3,22 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index 0f98c085..b31ca5df 100644
+index 75e8f88a..7646be03 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -369,9 +369,9 @@ class DefaultControlPlane(
-      */
-     private fun enforceable(resource: Resource): Resource {
-         val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
--            PathNormalizer.normalize(resource.id)
-+            PathNormalizer.normalize(resource.id) ?: resource.id
-         } else {
--            resource.id.takeIf { PathNormalizer.withinBounds(it) }
-+            resource.id
-         }
-         id ?: throw ChangeRejectedException(
-             BAD_REQUEST,
+@@ -383,14 +383,7 @@ class DefaultControlPlane(
+     }
+ 
+     /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [PathNormalizer.enforceable]. */
+-    private fun enforceable(resource: Resource): Resource = PathNormalizer.enforceable(resource)
+-        ?: throw ChangeRejectedException(
+-            BAD_REQUEST,
+-            "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
+-                "an empty segment, an encoded separator, a backslash, a malformed escape or its length), and any " +
+-                "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
+-                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
+-        )
++    private fun enforceable(resource: Resource): Resource = resource
+ 
+     /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
+     private suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }

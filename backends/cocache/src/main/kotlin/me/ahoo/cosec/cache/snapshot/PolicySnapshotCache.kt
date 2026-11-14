@@ -95,6 +95,7 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
  * ([CoSecCacheSpecs.locks]) then keep them so: the application's `cocache.*` properties and customizers apply to it,
  * except for its storage layout, codec, lifetime, failed reads and local max age.
  */
+@InternalCoSecApi
 fun CoCacheFactory.createPolicySnapshotCache(spec: StoreSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {
     require(spec.name == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) { "Not the snapshot store: ${spec.name}." }
     val pinned = spec.toBuilder()

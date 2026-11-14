@@ -97,6 +97,15 @@ statements has matched on its action and resource. When it does not hold, none o
 DENYs included. When it throws, a DENY reached through it counts as a failed DENY (Indeterminate), an ALLOW as no
 match. A DENY that must always apply belongs in a policy without a condition.
 
+### Statements with several resource patterns
+
+A statement with several resource patterns means exactly what one statement per pattern would mean. When its
+condition reads a [path variable](../policies/language.md#path-variables) and the request matches more than one of
+its patterns, the condition is tested under each matching pattern's captures in written order: one holding is a
+match; when none holds and one of them failed, the statement failed (a DENY makes the decision Indeterminate, an
+ALLOW counts as no match). Writing the patterns in another order never changes the decision, and a DENY never
+misses a request that one of its patterns would have denied on its own.
+
 ## Deny first
 
 An ALLOW never wins over a matching DENY. Every candidate's DENY statements are evaluated before any ALLOW
@@ -289,7 +298,7 @@ A grant is only as trustworthy as the inputs it depends on.
 |---|---|---|
 | Principal id, attributes, roles and attached policies | The verified token's claims, or your `MembershipProvider`. An API key gives only its principal and tenant, and the attribute `apiKeyId`; its roles always come from the provider, narrowed to the key's cap | Whoever issues credentials, and whoever runs the membership source |
 | Tenant | The credential (`tenantId` claim, the API key's required tenant); `(0)` for a token without one. An anonymous request is always in `(0)` | Whoever issues credentials |
-| App | The host's app when there is one (a different `CoSec-App-Id` is rejected): on a gateway, the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`; otherwise `CoSec-App-Id` | Your configuration, or the client |
+| App | The credential's (a token's `aud`, an API key's `app`), which must be the host's app when it has one: on a gateway, the route's metadata `cosec-app-id`, else `cosec.authorization.scope.app-id`. An anonymous request's is the host's | Whoever issues credentials, and your configuration |
 | Space | `CoSec-Space-Id`, accepted only when the principal has a role in that space | The client, among the credential's spaces |
 | Device | `CoSec-Device-Id` | The client |
 | Method, path, query | The HTTP request; the route map turns method and path into an action and a resource | The client, within your route map |
@@ -306,10 +315,10 @@ How `ScopeResolver` checks the scope:
   request is rejected (`SPACE_NOT_MEMBER`), never moved to the default space. `*` is never a space. Without
   `CoSec-Space-Id`, the request is in the default space. An anonymous principal has no roles, so it can only be in
   the default space.
-- **App.** With a host app, the host's app applies, and a request that declares another one is rejected
+- **App.** A host with an app serves only credentials declaring that app; another one, or none, is rejected
   (`APP_MISMATCH`). The host app is, on a gateway, the route's metadata `cosec-app-id`, ahead of
-  `cosec.authorization.scope.app-id`; on any other host, that property. Without one, the declared app applies as
-  sent. A declared app that cannot be an app id (blank, `*`, containing `:` or a control character, or longer than 128
+  `cosec.authorization.scope.app-id`; on any other host, that property. Without one, the credential's app applies, and
+  a credential declaring none reads no app document. A client never declares an app. A credential's app that cannot be an app id (blank, `*`, containing `:` or a control character, or longer than 128
   characters: the rule of a tenant id) is rejected either way. The app is checked before the space.
 - Matching is exact: no trimming, no case folding.
 
@@ -328,6 +337,15 @@ apply. To keep the app id from widening access:
   ([Gateway](../integration/web.md#gateway)). Where a route has none and the gateway has no host app, keep the apps'
   route maps and resources disjoint, or add a platform DENY per app prefix, such as DENY `http:*` on
   `http:path:/orders/**` with the condition `{"not": {"eq": ["scope.app", "order"]}}`.
+
+**The route map decides which statements apply.** A request has one action. One that matches a route of the service's
+[route map](../integration/web.md#route-maps) is that route's `service:verb` on a typed resource; any other is
+`http:<METHOD>` on `http:path:<path>`. Statements on `http:` never match a mapped request, and statements on
+`service:verb` never match an unmapped one, and [rate limit rules](../policies/rate-limiting.md#rules) are matched the
+same way. So the map is an input to the decision, owned by the team that owns the service: adding a route moves its
+requests out of the `http` namespace, and with it out of the reach of any platform DENY or limit written on `http:`.
+A restriction that must hold for a path whether or not it is mapped is written twice, for the `http` form and for the
+action ([Authorizing business actions](../scenarios/route-maps.md)). There is no condition on the request path to say it once.
 
 **Client IP.** `max-trusted-index` is the number of proxies in front of the application; the default `1` assumes
 one. CoSec takes that entry counted from the right of `X-Forwarded-For`, which your proxy appended. On a host that
@@ -364,7 +382,7 @@ hold only if the gateway is the only one that can reach the service:
   whose metadata says `cosec-identity: true` ([Forwarding the identity](../integration/web.md#forwarding-the-identity)).
 - The header is not signed, and names no audience: **the trust boundary is the network between the gateway and the
   services**, not the header. Whoever can send a service a request can write one, and a service that receives one
-  could replay it to another. The service refuses one issued longer ago than `cosec.pipeline.gateway.max-age`
+  could replay it to another. The service refuses one issued longer ago than `cosec.pipeline.identity.max-age`
   (60 seconds) plus `cosec.authentication.revocation.skew`, or whose credential has expired, with `401`
   `token-expired`, so a header captured inside the network replays only for that long. One that cannot be read or
   arrives twice is `400`, never anonymous. A request without the header is anonymous. A signature or an audience would
@@ -472,6 +490,8 @@ Before production:
 - Register a REQUIRED decision listener before anyone needs break-glass.
 - Put DENYs that must always apply in policies without a condition, and never grant on a header the client
   writes.
+- Write a platform DENY or rate limit on a path for the `http` form and for every action a route map gives that path:
+  [a mapped route is not an `http` request](#trust-boundaries).
 - Give rate limit rules that protect against abuse `"strictFailure": true` if a Redis outage must not lift them.
 - Issue `(platform)` tokens only from a source users cannot influence.
 - Make every service in gateway mode reachable from the gateway only.

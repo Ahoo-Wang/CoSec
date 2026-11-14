@@ -15,6 +15,8 @@ package me.ahoo.cosec.spi.apikey
 
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.Identifiers
+import me.ahoo.cosec.model.scope.ScopeResolver
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.security.MessageDigest
 import java.security.SecureRandom
 import java.time.Instant
@@ -30,6 +32,8 @@ import java.util.HexFormat
  * Only the key's hash is ever stored (see [ApiKeys.hash]); the key itself is shown once, when it is created. A plain
  * class, not a data class, so that a field can be added later without breaking callers (RFC 0010 §1).
  *
+ * @param app the app the key belongs to (RFC 0012 §3.5, `SCP-11`), null when it declares none: no default either, since
+ *   a host with an app refuses a key that declares another or none
  * @param roles the cap, as `role` or `role@space`: null does not narrow, an empty set leaves no roles (`IDN-2`). No
  *   default: whoever creates a key says which, so that a key never ends up without a cap by omission.
  * @param expiresAt when the key stops working; null never expires
@@ -38,6 +42,7 @@ class ApiKey(
     val id: String,
     val principalId: String,
     val tenantId: String,
+    val app: String?,
     val roles: Set<String>?,
     val expiresAt: Instant? = null,
     val enabled: Boolean = true,
@@ -51,13 +56,20 @@ class ApiKey(
         require(wellFormed) { "API key [${Identifiers.printable(id)}] holds an id with an unpaired UTF-16 surrogate." }
         require(principalId.isNotEmpty()) { "API key [$id] has a principal." }
         require(tenantId.isNotEmpty()) { "API key [$id] belongs to a tenant." }
+        require(SnapshotKey.Tenant.isValidTenantId(tenantId)) {
+            "API key [${Identifiers.printable(id)}] belongs to a tenant that cannot be a tenant id: " +
+                "[${Identifiers.printable(tenantId)}]."
+        }
+        require(
+            app == null || ScopeResolver.isValidAppId(app)
+        ) { "API key [$id] declares an app that cannot be an app id." }
     }
 
     /** Whether the key works at [now]: enabled, and not past [expiresAt]. */
     fun usableAt(now: Instant): Boolean = enabled && (expiresAt == null || now.isBefore(expiresAt))
 
     override fun toString(): String =
-        "ApiKey(id=$id, principalId=$principalId, tenantId=$tenantId, roles=$roles, expiresAt=$expiresAt, enabled=$enabled)"
+        "ApiKey(id=$id, principalId=$principalId, tenantId=$tenantId, app=$app, roles=$roles, expiresAt=$expiresAt, enabled=$enabled)"
 
     companion object {
         /** Principal attribute naming the key a request authenticated with. */

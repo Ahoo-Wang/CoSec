@@ -1,0 +1,363 @@
+{
+  "rules": [
+    "DOC-6"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The bound holds for the platform document too: 65 rate limit rules do not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "r0",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r1",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r2",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r3",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r4",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r5",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r6",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r7",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r8",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r9",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r10",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r11",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r12",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r13",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r14",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r15",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r16",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r17",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r18",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r19",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r20",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r21",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r22",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r23",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r24",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r25",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r26",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r27",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r28",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r29",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r30",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r31",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r32",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r33",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r34",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r35",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r36",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r37",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r38",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r39",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r40",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r41",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r42",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r43",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r44",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r45",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r46",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r47",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r48",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r49",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r50",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r51",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r52",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r53",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r54",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r55",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r56",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r57",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r58",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r59",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r60",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r61",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r62",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r63",
+          "action": "*",
+          "permitsPerSecond": 1000
+        },
+        {
+          "id": "r64",
+          "action": "*",
+          "permitsPerSecond": 1000
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "holds 65 rate limit rules, more than 64"
+  }
+}

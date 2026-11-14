@@ -23,12 +23,13 @@
     },
     {
       "id": "RTE-3",
-      "source": "RFC 0005 §5.3",
-      "statement": "A malformed route map, or one with any malformed route, does not load: a route map loads whole or not at all.",
+      "source": "RFC 0005 §5.3; usability review U1",
+      "statement": "A malformed route map, one with any malformed route, or one with no routes does not load: a route map loads whole or not at all.",
       "level": "pipeline",
       "guards": [
         "runtime:RouteMapTest#a malformed route does not load",
-        "runtime:RouteMapTest#one bad file fails every file, a route map never loads in part"
+        "runtime:RouteMapTest#one bad file fails every file, a route map never loads in part",
+        "runtime:RouteMapTest#a route map with no routes does not load"
       ],
       "pending": null
     }

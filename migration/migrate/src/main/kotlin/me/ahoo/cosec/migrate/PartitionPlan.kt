@@ -11,15 +11,21 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.EntryDigest
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
+import java.nio.file.LinkOption
 import java.nio.file.Path
+import java.nio.file.StandardOpenOption
 import java.time.Instant
 
 /**
@@ -45,13 +51,40 @@ object PartitionPlan {
         }.toMap()
     }
 
-    /** Writes each tenant's plan to `tenant-<id>.json` in [directory], to be submitted with `apply` (merge). */
+    /** The file of a tenant's plan: `tenant-` and the tenant's file name in a converted directory (URL-encoded, bounded). */
+    fun fileOf(key: SnapshotKey): String = "tenant-" + ConvertedDirectory.fileName((key as SnapshotKey.Tenant).tenantId)
+
+    /**
+     * Writes each tenant's plan to [fileOf] in [directory], to be submitted with `apply` (merge), in the order of
+     * [plan]. Nothing is written when two plans would share a file, even on a file system that ignores case, or when a
+     * file exists already; a write that fails removes what this call wrote.
+     */
     fun write(plan: Map<SnapshotKey, PolicyDocument>, directory: Path): List<Path> {
-        Files.createDirectories(directory)
-        return plan.map { (key, document) ->
-            val file = directory.resolve("tenant-${(key as SnapshotKey.Tenant).tenantId}.json")
-            Files.write(file, PolicyDocumentCodec.encode(document))
-            file
+        val files = plan.keys.associateWith { directory.resolve(fileOf(it)) }
+        val folded = HashMap<String, SnapshotKey>()
+        files.forEach { (key, file) ->
+            val other = folded.putIfAbsent(file.fileName.toString().lowercase(), key)
+            require(
+                other == null
+            ) { "$other and $key would be planned in files that differ only in case: ${file.fileName}." }
         }
+        files.values.firstOrNull {
+            Files.exists(it, LinkOption.NOFOLLOW_LINKS)
+        }?.let { throw FileAlreadyExistsException(it.toString()) }
+        Files.createDirectories(directory)
+        val written = ArrayList<Path>()
+        var complete = false
+        try {
+            for ((key, file) in files) {
+                Files.write(file, PolicyDocumentCodec.encode(plan.getValue(key)), StandardOpenOption.CREATE_NEW)
+                written.add(file)
+            }
+            complete = true
+        } finally {
+            if (!complete) {
+                written.forEach(Files::deleteIfExists)
+            }
+        }
+        return written
     }
 }

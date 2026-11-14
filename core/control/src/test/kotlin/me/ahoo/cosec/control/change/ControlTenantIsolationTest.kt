@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.change
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -230,7 +231,8 @@ class ControlTenantIsolationTest {
                         AuthenticatedPrincipal(
                             PrincipalId(principal),
                             TenantId("acme"),
-                            MembershipClaims.parse(listOf("editor"), listOf("p0", "p1"))
+                            MembershipClaims.parse(listOf("editor"), listOf("p0", "p1")),
+                            app = PipelineControlAuthorizer.CONTROL_APP,
                         ),
                         "token"
                     )

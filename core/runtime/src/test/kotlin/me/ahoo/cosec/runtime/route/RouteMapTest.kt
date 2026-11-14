@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.route
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -135,6 +138,19 @@ class RouteMapTest {
         matches("/orders", "/orders/").assert().isFalse()
         matches("/a/{x}/b", "/a//b").assert().isFalse()
         matches("/orders/{id}", "/orders/1").assert().isTrue()
+    }
+
+    @Test
+    fun `a route map with no routes does not load`() {
+        assertThrows<RouteMapException> { load("""{"service":"order","routes":[]}""") }.message.assert()
+            .contains("routes-0.json $.routes").contains("no routes")
+    }
+
+    @Test
+    fun `a route map with no routes fails the files beside it`() {
+        assertThrows<RouteMapException> {
+            load(file(route("GET", "/orders/{id}", "order:read", "order/{id}")), """{"service":"pay","routes":[]}""")
+        }.message.assert().contains("routes-1.json")
     }
 
     @ParameterizedTest

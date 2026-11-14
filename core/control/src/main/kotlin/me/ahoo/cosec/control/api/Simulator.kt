@@ -38,7 +38,6 @@ import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -53,13 +52,13 @@ import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.atomic.AtomicLong
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * A request to decide without making it (RFC 0007 §10.3): who asks, with which memberships, in which scope, for which
  * action and resource, with which headers and request attributes. It describes the principal, so any principal of the
  * caller's reach can be simulated.
  */
+@InternalCoSecApi
 data class SimulatedRequest(
     val tenant: TenantId,
     val principal: String?,
@@ -84,10 +83,8 @@ data class SimulatedRequest(
     val breakGlass: Boolean = true,
 )
 
-/** The revisions of the documents to decide on (RFC 0006 §9.2's `snapshotVersion`): what an audit event records. */
-data class SnapshotVersion(val platform: Long, val app: Long?, val tenant: Long?)
-
 /** The documents a decision read, compiled, with their revisions: what [Simulator.evaluate] decides on. */
+@InternalCoSecApi
 class Documents(val platform: PolicyDocument?, val app: PolicyDocument?, val tenant: PolicyDocument?)
 
 /**
@@ -110,6 +107,7 @@ internal class HeldDocuments(val platform: Held?, val app: Held?, val tenant: He
  * is the data plane's `Engine.evaluate`, at full trace. A stored document is compiled once for its content, in a cache
  * `simulate`, `explain` and `analyze` share (RC1-41).
  */
+@InternalCoSecApi
 class Simulator(
     private val engine: FlatEngine = CoSecFlatEngine,
     /** The host's `AttributeProvider` catalog, which enforcement compiles against. */
@@ -123,21 +121,32 @@ class Simulator(
     /** Every compilation this simulator made, cached or not; for tests. */
     internal val compilations = AtomicLong()
 
-    /** The scope [request] resolves to, or the rejection that decides it, as the pipeline resolves a host request. */
-    fun scope(request: SimulatedRequest): ScopeResolution =
-        ScopeResolver.resolve(subject(request), DeclaredScope(request.app, request.space), HostScope(null))
+    /**
+     * The scope [request] resolves to, or the rejection that decides it, as the pipeline resolves a request. [request]'s
+     * app is the one its credential declares (RFC 0012 §3.5) on a host of that app, which is also where an anonymous
+     * request gets its app.
+     */
+    fun scope(request: SimulatedRequest): ScopeResolution {
+        val app = request.app.ifEmpty { null }
+        val host = HostScope(app?.takeIf(ScopeResolver::isValidAppId)?.let(::AppId))
+        return ScopeResolver.resolve(subject(request, app), request.space, host)
+    }
 
     /**
      * The tenant [request] is decided in, as [ScopeResolver] decides it, whatever its scope (RC1-40): the principal's,
-     * or [TenantId.DEFAULT] for a request without one. An empty declared scope always resolves, so this is the resolver's
-     * own answer, not a copy of its rule.
+     * or [TenantId.DEFAULT] for a request without one. With no app and no space it always resolves, so this is the
+     * resolver's own answer, not a copy of its rule.
      */
     internal fun tenantOf(request: SimulatedRequest): TenantId =
-        (ScopeResolver.resolve(subject(request), DeclaredScope("", ""), HostScope(null)) as ScopeResolution.Resolved)
-            .scope.tenant
+        (ScopeResolver.resolve(subject(request, null), "", HostScope(null)) as ScopeResolution.Resolved).scope.tenant
 
-    private fun subject(request: SimulatedRequest): ScopeSubject =
-        ScopeSubject(request.tenant, request.principal != null, MembershipClaims.parse(request.roles, request.policies))
+    private fun subject(request: SimulatedRequest, app: String?): ScopeSubject =
+        ScopeSubject(
+            request.tenant,
+            request.principal != null,
+            MembershipClaims.parse(request.roles, request.policies),
+            app
+        )
 
     fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): FlatEvaluation =
         decide(
@@ -158,19 +167,14 @@ class Simulator(
         val memberships = MembershipClaims.parse(request.roles, request.policies)
         val subject = Subject(
             id = request.principal ?: ANONYMOUS,
-            tenantId = scope.tenant.value,
             authenticated = request.principal != null,
-            roles = emptySet(),
-            policies = emptySet(),
             attributes = emptyMap(),
-            root = false,
             // As the credential would be (RFC 0009 §4.2): a key's cap drops principal bindings, a key gets no break-glass.
             principalBindings = request.principalBindings,
             breakGlass = request.breakGlass,
         )
         val authz = AuthzRequest(
             subject = subject,
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = request.action,
             resource = request.resource,
             environment = Environment(request.remoteIp, REQUEST_ID, "", false),
@@ -191,7 +195,7 @@ class Simulator(
     /** An evaluation, and the documents its view read with their revisions. */
     internal class Decided(val evaluation: FlatEvaluation, scope: Scope, version: ViewVersion) {
         /** The revisions the view read: an app's only when it took the app's document (its revision, 0 for none). */
-        val version = SnapshotVersion(version.platform, version.app, version.tenant ?: 0)
+        val version = ViewVersion(version.platform, version.app, version.tenant ?: 0)
 
         /** The documents the view read: the platform's, the tenant's, and the app's when it took it. */
         val read: List<SnapshotKey> = listOfNotNull(
@@ -230,7 +234,7 @@ class Simulator(
             }
             CompiledDocument.platform(emptyList(), emptyList())
         }
-        // The tenant's document decides whether the app's is read (RC1-17); its causes follow the app's, as before.
+        // The tenant's document decides whether the app's is read (RC1-17); its causes follow the app's.
         val tenantCauses = ArrayList<Cause>(0)
         val tenant = documentOf(documents.tenant, compiler, tenantCauses) {
             CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
@@ -304,6 +308,7 @@ class Simulator(
         Result.failure(e)
     }
 
+    @InternalCoSecApi
     companion object {
         private const val ANONYMOUS = "(0)"
         private const val REQUEST_ID = "simulated"
@@ -313,7 +318,28 @@ class Simulator(
     }
 }
 
+/**
+ * Whether [candidate] decides differently from [enforced]. Everything a decision says counts, but a failure counts by
+ * what it is, its type and message: each side compiles on its own, so the same failure is two exceptions (#1253).
+ */
+internal fun differs(enforced: Decision, candidate: Decision): Boolean = comparable(enforced) != comparable(candidate)
+
+private fun comparable(decision: Decision): Any = when (decision) {
+    is Decision.Indeterminate -> when (val cause = decision.cause) {
+        is Cause.MatcherFailed -> listOf(cause::class, cause.at, cause.guard, failure(cause.error))
+        is Cause.SourceUnavailable -> listOf(cause::class, cause.document, failure(cause.error))
+        is Cause.BoundaryUnavailable -> listOf(cause::class, cause.boundary, failure(cause.error))
+        is Cause.MembershipUnavailable -> listOf(cause::class, failure(cause.error))
+        else -> cause
+    }
+
+    else -> decision
+}
+
+private fun failure(error: Throwable): Pair<Class<*>, String?> = error.javaClass to error.message
+
 /** A statement as a decision reports it to a caller: by policy, index and the binding it applied through. */
+@InternalCoSecApi
 data class StatementView(
     val policy: String,
     val statement: Int,
@@ -327,11 +353,14 @@ data class StatementView(
  * caller may read the document that statement came through. An indeterminate decision names its cause's type, never
  * its message.
  */
+@InternalCoSecApi
 data class DecisionView(val decision: String, val by: StatementView?, val cause: String?, val redacted: Boolean)
 
 /** One trace entry, from a document the caller may read; [redacted] counts the entries left out. */
+@InternalCoSecApi
 data class TraceView(val entries: List<TraceEntryView>, val redacted: Int)
 
+@InternalCoSecApi
 data class TraceEntryView(val statement: StatementView, val effect: String, val outcome: String)
 
 /**

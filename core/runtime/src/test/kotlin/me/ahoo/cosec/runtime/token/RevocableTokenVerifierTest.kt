@@ -16,14 +16,11 @@ package me.ahoo.cosec.runtime.token
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -37,81 +34,58 @@ class RevocableTokenVerifierTest {
     }
     private val revocableTokenVerifier = RevocableTokenVerifier(tokenVerifier, tokenStore)
 
-    private val tokenPrincipal = SimpleTokenPrincipal("tokenId", SimplePrincipal.ANONYMOUS)
-    private val accessToken = SimpleAccessToken("accessToken")
+    private val tokenPrincipal = VerifiedToken("tokenId", "alice", null, null)
+    private val accessToken = "accessToken"
     private val compositeToken = SimpleCompositeToken("accessToken", "refreshToken")
 
     @Test
     fun verifyWhenNotRevoked() {
-        every { tokenVerifier.verify<TokenPrincipal>(accessToken) } returns tokenPrincipal
+        every { tokenVerifier.verify(accessToken) } returns tokenPrincipal
         every { tokenStore.isRevoked("tokenId") } returns false
 
-        val actual = revocableTokenVerifier.verify<TokenPrincipal>(accessToken)
+        val actual = revocableTokenVerifier.verify(accessToken)
 
         actual.assert().isSameAs(tokenPrincipal)
     }
 
     @Test
     fun verifyWhenRevoked() {
-        every { tokenVerifier.verify<TokenPrincipal>(accessToken) } returns tokenPrincipal
+        every { tokenVerifier.verify(accessToken) } returns tokenPrincipal
         every { tokenStore.isRevoked("tokenId") } returns true
 
         assertThrows<TokenRevokedException> {
-            revocableTokenVerifier.verify<TokenPrincipal>(accessToken)
+            revocableTokenVerifier.verify(accessToken)
         }
     }
 
     @Test
     fun verifyWhenDelegateThrows() {
-        every { tokenVerifier.verify<TokenPrincipal>(accessToken) } throws
+        every { tokenVerifier.verify(accessToken) } throws
             TokenVerificationException("Invalid token")
 
         assertThrows<TokenVerificationException> {
-            revocableTokenVerifier.verify<TokenPrincipal>(accessToken)
+            revocableTokenVerifier.verify(accessToken)
         }
         verify(exactly = 0) { tokenStore.isRevoked(any()) }
-    }
-
-    /** RC1-52, `IDN-10`: a token claiming an id with an unpaired surrogate is invalid, and the store is not asked. */
-    @Test
-    fun verifyAndRefreshRefuseAnIdWithAnUnpairedSurrogate() {
-        val principals = listOf(
-            SimpleTokenPrincipal("tokenId\uD800", SimplePrincipal.ANONYMOUS),
-            SimpleTokenPrincipal("tokenId", SimplePrincipal("alice\uDC00")),
-            SimpleTokenPrincipal(
-                "tokenId",
-                SimpleTenantPrincipal(SimplePrincipal("alice"), SimpleTenant("beta\uD800"))
-            ),
-            SimpleTokenPrincipal("tokenId", SimplePrincipal("alice", roles = setOf("r\uD800"))),
-            SimpleTokenPrincipal("tokenId", SimplePrincipal("alice", policies = setOf("p\uD800"))),
-        )
-        for (principal in principals) {
-            every { tokenVerifier.verify<TokenPrincipal>(accessToken) } returns principal
-            every { tokenVerifier.refresh<TokenPrincipal>(compositeToken) } returns principal
-            assertThrows<TokenVerificationException> { revocableTokenVerifier.verify<TokenPrincipal>(accessToken) }
-            assertThrows<TokenVerificationException> { revocableTokenVerifier.refresh<TokenPrincipal>(compositeToken) }
-        }
-        verify(exactly = 0) { tokenStore.isRevoked(any()) }
-        verify(exactly = 0) { tokenStore.subjectRevokedBefore(any(), any()) }
     }
 
     @Test
     fun refreshWhenNotRevoked() {
-        every { tokenVerifier.refresh<TokenPrincipal>(compositeToken) } returns tokenPrincipal
+        every { tokenVerifier.refresh(compositeToken) } returns tokenPrincipal
         every { tokenStore.isRevoked("tokenId") } returns false
 
-        val actual = revocableTokenVerifier.refresh<TokenPrincipal>(compositeToken)
+        val actual = revocableTokenVerifier.refresh(compositeToken)
 
         actual.assert().isSameAs(tokenPrincipal)
     }
 
     @Test
     fun refreshWhenRevoked() {
-        every { tokenVerifier.refresh<TokenPrincipal>(compositeToken) } returns tokenPrincipal
+        every { tokenVerifier.refresh(compositeToken) } returns tokenPrincipal
         every { tokenStore.isRevoked("tokenId") } returns true
 
         assertThrows<TokenRevokedException> {
-            revocableTokenVerifier.refresh<TokenPrincipal>(compositeToken)
+            revocableTokenVerifier.refresh(compositeToken)
         }
     }
 }

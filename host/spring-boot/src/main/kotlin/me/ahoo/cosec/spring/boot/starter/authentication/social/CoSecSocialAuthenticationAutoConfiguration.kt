@@ -10,8 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.authentication.social
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.social.DirectSocialUserPrincipalConverter
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialAuthenticationProvider
@@ -23,6 +26,7 @@ import me.ahoo.cosec.social.justauth.RedisAuthStateCache
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
+import me.ahoo.cosec.spring.boot.starter.pipeline.RuntimeAuthorizationProperties
 import me.zhyd.oauth.cache.AuthStateCache
 import me.zhyd.oauth.config.AuthConfig
 import me.zhyd.oauth.request.AuthDefaultRequest
@@ -48,9 +52,10 @@ import java.lang.reflect.Constructor
 @ConditionalOnClass(SocialUser::class)
 @EnableConfigurationProperties(
     SocialAuthenticationProperties::class,
+    RuntimeAuthorizationProperties::class,
     CoSecProperties::class,
 )
-class CoSecSocialAuthenticationAutoConfiguration(
+internal class CoSecSocialAuthenticationAutoConfiguration(
     private val socialAuthenticationProperties: SocialAuthenticationProperties
 ) {
     @Bean
@@ -67,6 +72,7 @@ class CoSecSocialAuthenticationAutoConfiguration(
     @Bean
     @ConditionalOnMissingBean
     fun socialProviderManager(authStateCache: AuthStateCache): SocialProviderManager {
+        val socialProviderManager = SocialProviderManager()
         for ((key, provider) in socialAuthenticationProperties.registration) {
             val authRequestClass: Class<out AuthDefaultRequest> = provider.type.targetClass
             val authRequestCtor: Constructor<out AuthDefaultRequest> = authRequestClass.getConstructor(
@@ -76,23 +82,24 @@ class CoSecSocialAuthenticationAutoConfiguration(
             val authConfig = provider.toJustAuthConfig()
             val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, authConfig, authStateCache)
             val authProvider: SocialAuthenticationProvider = JustAuthProvider(key, authRequest)
-            SocialProviderManager.register(authProvider)
+            socialProviderManager.register(authProvider)
         }
-        return SocialProviderManager
+        return socialProviderManager
     }
 
     @Bean
     @ConditionalOnMissingBean
-    fun socialUserPrincipalConverter(): SocialUserPrincipalConverter {
-        return DirectSocialUserPrincipalConverter
+    fun socialUserPrincipalConverter(authorization: RuntimeAuthorizationProperties): SocialUserPrincipalConverter {
+        return DirectSocialUserPrincipalConverter(authorization.scope.appId?.takeIf { it.isNotBlank() })
     }
 
     @Bean
     @ConditionalOnMissingBean
     fun socialAuthentication(
-        principalConverter: SocialUserPrincipalConverter
+        principalConverter: SocialUserPrincipalConverter,
+        socialProviderManager: SocialProviderManager,
     ): SocialAuthentication {
-        return SocialAuthentication(principalConverter)
+        return SocialAuthentication(principalConverter, socialProviderManager)
     }
 }
 

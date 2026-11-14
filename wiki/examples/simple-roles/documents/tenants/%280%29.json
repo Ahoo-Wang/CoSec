@@ -1,0 +1,25 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "bindings": [
+    {
+      "id": "editors-edit",
+      "subject": {
+        "role": "editor"
+      },
+      "app": "*",
+      "space": "*",
+      "policy": "editors"
+    },
+    {
+      "id": "admins-administer",
+      "subject": {
+        "role": "admin"
+      },
+      "app": "*",
+      "space": "*",
+      "policy": "admins"
+    }
+  ]
+}

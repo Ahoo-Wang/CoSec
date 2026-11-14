@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.ConditionLimits
@@ -36,6 +39,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * [SnapshotSource.recompile]); one that cannot be compiled again fails closed. Until the platform is
  * compiled the defaults apply; a host loads the platform first so that no instance document compiles against them.
  */
+@InternalCoSecApi
 class PlatformCompiler(
     private val providers: AttributeCatalog = AttributeCatalog.NONE,
     private val principalBindingLimit: Int = PolicyDocumentCompiler.DEFAULT_PRINCIPAL_BINDING_LIMIT,
@@ -59,18 +63,13 @@ class PlatformCompiler(
 
     /**
      * The bound source's entry point, and only its: compiling the platform makes its limits and attributes the live
-     * inputs of this instance. To check a candidate without that, compile it with `PolicyDocumentCompiler.forPlatform`.
+     * inputs of this instance. A staged candidate goes through [compileCandidate].
      */
     override fun compile(key: SnapshotKey, document: SnapshotDocument): CompiledDocument {
         if (key != SnapshotKey.Platform) {
             return inputs.compiler.compile(key, document)
         }
-        if (document.schema != PolicyDocumentCodec.SCHEMA) {
-            throw SnapshotFormatException(
-                "[$key] has schema ${document.schema}, not this version's document format ${PolicyDocumentCodec.SCHEMA}.",
-            )
-        }
-        val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", document.bodyBytes())
+        val platform = platformOf(document)
         val next = inputsOf(platform)
         // The platform itself compiles against its own limits and attributes: a platform that breaks them fails here.
         val compiled = next.compiler.compile(platform)
@@ -80,6 +79,30 @@ class PlatformCompiler(
             recompileDependents()
         }
         return compiled
+    }
+
+    /**
+     * [document], the candidate staged for [key], as it would compile once published (RFC 0007 §6.4): a platform
+     * candidate against its own limits and attributes, any other against those of the platform this instance enforces.
+     * Unlike [compile] it changes nothing, since a candidate is not published: whatever is staged, and however it ends,
+     * what this instance enforces compiles with the platform document it installed (`SNP-10`).
+     */
+    fun compileCandidate(key: SnapshotKey, document: SnapshotDocument): CompiledDocument {
+        if (key != SnapshotKey.Platform) {
+            return inputs.compiler.compile(key, document)
+        }
+        val platform = platformOf(document)
+        return inputsOf(platform).compiler.compile(platform)
+    }
+
+    private fun platformOf(document: SnapshotDocument): PolicyDocument {
+        if (document.schema != PolicyDocumentCodec.SCHEMA) {
+            throw SnapshotFormatException(
+                "[${SnapshotKey.Platform}] has schema ${document.schema}, not this version's document format " +
+                    "${PolicyDocumentCodec.SCHEMA}.",
+            )
+        }
+        return PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", document.bodyBytes())
     }
 
     /**

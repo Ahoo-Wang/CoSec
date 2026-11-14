@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
@@ -25,14 +28,12 @@ import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -119,20 +120,15 @@ open class GlobBoundBenchmark {
     private fun request(path: String): FlatRequest {
         val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
-        val resolution = ScopeResolver.resolve(subject, DeclaredScope("", ""), HostScope(null))
+        val resolution = ScopeResolver.resolve(subject, "", HostScope(null))
         val authz = AuthzRequest(
             subject = Subject(
                 "user",
-                "acme",
                 true,
-                emptySet(),
-                emptySet(),
                 emptyMap(),
-                root = false,
                 principalBindings = true,
                 breakGlass = true,
             ),
-            scope = Scope.declared("acme", "", ""),
             action = Action("http", "GET"),
             resource = Resource("http", path, emptyMap()),
             environment = Environment("127.0.0.1", "request", "device", blocked = false),

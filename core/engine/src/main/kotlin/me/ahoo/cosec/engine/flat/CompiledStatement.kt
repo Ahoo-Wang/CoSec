@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Action
@@ -21,6 +24,7 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IndexKeys
+import java.util.Collections
 
 /**
  * A statement ready to evaluate (RFC 0005 §6.1). Only [PolicyCompiler] builds one, so every statement in the engine
@@ -34,6 +38,7 @@ import me.ahoo.cosec.model.condition.IndexKeys
  * the statement fails unless that condition is false. The first three steps never call host code, so the candidate
  * index can skip a statement that fails one of them and the decision stays the same (I1, I2).
  */
+@InternalCoSecApi
 class CompiledStatement internal constructor(
     /** Its position in the policy. */
     val index: Int,
@@ -64,9 +69,21 @@ class CompiledStatement internal constructor(
         it.kind == Attribute.Kind.RESOURCE_VAR
     }
 
-    val actionPatterns: List<ActionPattern> get() = actions.asList()
+    /**
+     * Whether [condition] is tested against each matching resource pattern's captures in turn (`ALG-10`): it reads a
+     * captured variable, and more than one pattern can capture it. Decided here, so every other statement matches its
+     * resource once, as before. For those one corner differs from "one statement per pattern", on purpose: a pattern
+     * that fails to match (a path that does not decode) fails the statement only when no other pattern matches, so a
+     * statement another pattern matches misses on a false condition rather than failing. The pipeline answers such a
+     * path 400 before authorization, so only a host check reaches it.
+     */
+    internal val eachPattern: Boolean = captures && resources.size > 1
 
-    val resourcePatterns: List<ResourcePattern> get() = resources.asList()
+    /** Read-only, made once: the statement is shared by every evaluation (round 2 review L4). */
+    val actionPatterns: List<ActionPattern> = Collections.unmodifiableList(actions.toList())
+
+    /** Read-only, made once, as [actionPatterns]. */
+    val resourcePatterns: List<ResourcePattern> = Collections.unmodifiableList(resources.toList())
 
     internal fun keyAttribute(index: Int): Attribute = keyAttributes[index]
 
@@ -90,22 +107,12 @@ class CompiledStatement internal constructor(
     }
 
     /**
-     * What the statement means, as text: two statements with the same content decide every request alike. Patterns
-     * are compared as written with their options, conditions by their canonical form.
+     * Whether [other] means the same: its name, effect, action patterns, resource patterns with their options and
+     * condition (by its canonical form) and [onMissing], each compared as a value, in order.
      */
-    internal val content: String = buildString {
-        append(name.length).append(':').append(name).append('|').append(effect).append('|')
-        actions.joinTo(this, ",")
-        append('|')
-        resources.joinTo(this, ",") { resource ->
-            if (resource is ResourcePattern.Http) {
-                "$resource(${resource.path.caseSensitive},${resource.path.decodeAndParseSegments})"
-            } else {
-                resource.toString()
-            }
-        }
-        append('|').append(condition?.canonical ?: "").append('|').append(onMissing)
-    }
+    internal fun sameContent(other: CompiledStatement): Boolean =
+        other.name == name && other.effect === effect && other.actions.contentEquals(actions) &&
+            other.resources.contentEquals(resources) && other.condition == condition && other.onMissing === onMissing
 
     override fun toString(): String = "$effect $name ${actionPatterns}${resourcePatterns}${condition ?: ""}"
 }
@@ -115,6 +122,7 @@ class CompiledStatement internal constructor(
  * provider failed or timed out, or the attribute was not in the plan. Attributes that are merely absent are not missing
  * (RFC 0005 §3.4).
  */
+@InternalCoSecApi
 enum class OnMissing {
     /**
      * The default. A DENY errs: unless another DENY matches, the decision is `Indeterminate(AttributeUnavailable)`. An
@@ -169,6 +177,7 @@ internal object HeadersRead {
  * How [CompiledPolicy] indexes its statements (RFC 0005 §6.2). The decision never depends on them (I2); only how many
  * statements are looked at does.
  */
+@InternalCoSecApi
 class IndexOptions(
     /** A policy's statements of one effect are indexed from this many on; fewer are scanned in order. */
     val minStatements: Int = 8,
@@ -187,6 +196,7 @@ class IndexOptions(
         }
     }
 
+    @InternalCoSecApi
     companion object {
         /** RFC 0005 §4.1. */
         val DEFAULT_ATTRIBUTES: List<Attribute> = listOf(

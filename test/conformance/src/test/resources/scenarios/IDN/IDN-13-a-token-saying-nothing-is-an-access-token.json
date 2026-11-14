@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "IDN-13"
+  ],
+  "level": "pipeline",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "reads",
+            "subject": {
+              "principal": "at-1",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "polarity": "negative",
+  "description": "The same token without cosec.token is an access token, whoever issued it: at-1 is the principal the policy is bound to.",
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "r1",
+      "sub": "at-1",
+      "tenantId": "acme"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

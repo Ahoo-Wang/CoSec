@@ -17,19 +17,13 @@ package me.ahoo.cosec.runtime.authn
 
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
-import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -37,13 +31,13 @@ import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -54,17 +48,16 @@ class TokenAuthenticatorTest {
     private val issuedAt: Instant = Instant.parse("2026-10-01T00:00:00Z")
 
     /** Verifies the tokens it knows, rejects the rest as invalid. */
-    private class Verifier(private val tokens: Map<String, () -> TokenPrincipal>) : TokenVerifier {
+    private class Verifier(private val tokens: Map<String, () -> VerifiedToken>) : TokenVerifier {
         val seen = ArrayList<String>()
 
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
-            seen += accessToken.accessToken
-            val principal = tokens[accessToken.accessToken] ?: throw TokenVerificationException("unknown token")
-            return principal() as T
+        override fun verify(accessToken: String): VerifiedToken {
+            seen += accessToken
+            val token = tokens[accessToken] ?: throw TokenVerificationException("unknown token")
+            return token()
         }
 
-        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+        override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }
 
     private class Revocations(
@@ -77,14 +70,19 @@ class TokenAuthenticatorTest {
             subjects[tenant to principal]
     }
 
-    private fun token(principal: CoSecPrincipal = SimplePrincipal("alice"), issuedAt: Instant? = this.issuedAt) =
-        SimpleTokenPrincipal("jti-1", principal, issuedAt)
+    private val alice = VerifiedToken("jti-1", "alice", null, null)
 
-    private fun inTenant(tenant: String, principal: CoSecPrincipal = SimplePrincipal("alice")) =
-        SimpleTenantPrincipal(principal, SimpleTenant(tenant))
+    private fun VerifiedToken.with(tenant: String? = this.tenant, issuedAt: Instant? = this.issuedAt) =
+        VerifiedToken(id, principal, tenant, app, roles, policies, attributes, issuedAt, expiresAt, membershipMarker)
+
+    private fun token(claims: VerifiedToken = alice, issuedAt: Instant? = this.issuedAt) = claims.with(
+        issuedAt = issuedAt
+    )
+
+    private fun inTenant(tenant: String, claims: VerifiedToken = alice) = claims.with(tenant = tenant)
 
     private suspend fun authenticate(
-        principal: () -> TokenPrincipal,
+        principal: () -> VerifiedToken,
         revocations: RevocationReader = RevocationReader.NONE,
         token: String? = "t",
         skew: java.time.Duration = me.ahoo.cosec.spi.token.SubjectRevocation.DEFAULT_SKEW,
@@ -114,12 +112,16 @@ class TokenAuthenticatorTest {
 
     @Test
     fun aValidTokenAuthenticates() = runTest {
-        val principal = SimplePrincipal(
-            "alice",
-            policies = setOf("p1"),
-            roles = setOf("admin", "editor@team-a"),
-            attributes = mapOf("department" to "sales"),
-        )
+        val principal =
+            VerifiedToken(
+                "jti-1",
+                "alice",
+                null,
+                null,
+                roles = setOf("admin", "editor@team-a"),
+                policies = setOf("p1"),
+                attributes = mapOf("department" to "sales")
+            )
         val result = authenticate({ token(inTenant("acme", principal)) })
 
         (result as AuthnResult.Authenticated).method.assert().isEqualTo(TokenAuthenticator.METHOD)
@@ -130,6 +132,21 @@ class TokenAuthenticatorTest {
         val memberships = authenticated.memberships!!
         memberships.roles[SpaceId.DEFAULT]!!.toList().assert().containsExactly(RoleId("admin"))
         memberships.roles[SpaceId("team-a")]!!.toList().assert().containsExactly(RoleId("editor"))
+    }
+
+    /** RFC 0012 §3.5: the token's `aud` is the app of its principal; a token declaring none declares none. */
+    @Test
+    fun theAppOfATokenIsTheAppOfItsPrincipal() = runTest {
+        authenticate({
+            token(VerifiedToken("jti-1", "alice", null, "order"))
+        }).principal().app.assert().isEqualTo(AppId("order"))
+        authenticate({ token() }).principal().app.assert().isNull()
+    }
+
+    /** `IDN-11`: only a token with no tenant claim is in the default tenant, whichever verifier read the claim. */
+    @Test
+    fun aTokenClaimingAnEmptyTenantIsInvalid() = runTest {
+        authenticate({ token(inTenant("")) }).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
     }
 
     /**
@@ -145,14 +162,14 @@ class TokenAuthenticatorTest {
             override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
                 null.also { asked += principal.value }
         }
-        val tokens = listOf<() -> TokenPrincipal>(
-            { token(SimplePrincipal("alice\uD800")) },
+        val tokens = listOf<() -> VerifiedToken>(
+            { token(VerifiedToken("jti", "alice\uD800", null, null)) },
             { token(inTenant("beta\uD800")) },
             { token(inTenant("\uDC00beta")) },
-            { SimpleTokenPrincipal("jti\uD800", SimplePrincipal("alice"), issuedAt) },
-            { token(SimplePrincipal("alice", roles = setOf("admin\uDC00"))) },
-            { token(SimplePrincipal("alice", roles = setOf("admin@team\uD800"))) },
-            { token(SimplePrincipal("alice", policies = setOf("p\uD800"))) },
+            { VerifiedToken("jti\uD800", "alice", null, null, issuedAt = issuedAt) },
+            { token(VerifiedToken("jti-1", "alice", null, null, roles = setOf("admin\uDC00"))) },
+            { token(VerifiedToken("jti-1", "alice", null, null, roles = setOf("admin@team\uD800"))) },
+            { token(VerifiedToken("jti-1", "alice", null, null, policies = setOf("p\uD800"))) },
         )
         for (token in tokens) {
             authenticate(token, revocations).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
@@ -161,18 +178,20 @@ class TokenAuthenticatorTest {
 
         // A surrogate pair is one character like any other.
         val paired =
-            authenticate({ token(inTenant("beta\uD83D\uDE00", SimplePrincipal("alice\uD83D\uDE00"))) }, revocations)
+            authenticate({
+                token(inTenant("beta\uD83D\uDE00", VerifiedToken("jti-1", "alice\uD83D\uDE00", null, null)))
+            }, revocations)
         paired.principal().tenant.assert().isEqualTo(TenantId("beta\uD83D\uDE00"))
         asked.assert().containsExactly("jti-1", "alice\uD83D\uDE00")
     }
 
     /** Stands in for `cosec-jwt`'s `JwtTokenVerifier`, CoSec's own verifier, which this module cannot depend on. */
-    private class OwnVerifier(tokens: Map<String, () -> TokenPrincipal>) : CoSecTokenVerifier {
+    private class OwnVerifier(tokens: Map<String, () -> VerifiedToken>) : CoSecTokenVerifier {
         private val verifier = Verifier(tokens)
 
-        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T = verifier.verify(accessToken)
+        override fun verify(accessToken: String): VerifiedToken = verifier.verify(accessToken)
 
-        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = verifier.refresh(token)
+        override fun refresh(token: CompositeToken): VerifiedToken = verifier.refresh(token)
     }
 
     /**
@@ -224,9 +243,12 @@ class TokenAuthenticatorTest {
     /** RC1-25: a token cannot pass for an API key by carrying the attribute CoSec sets for one. */
     @Test
     fun aTokenWithAReservedAttributeIsInvalid() = runTest {
-        val forged = SimplePrincipal("alice", attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to "k1"))
+        val forged =
+            VerifiedToken("jti-1", "alice", null, null, attributes = mapOf(ApiKey.API_KEY_ID_ATTRIBUTE to "k1"))
         authenticate({ token(forged) }).reason().assert().isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)
-        authenticate({ token(SimplePrincipal("alice", attributes = mapOf("department" to "sales"))) })
+        authenticate(
+            { token(VerifiedToken("jti-1", "alice", null, null, attributes = mapOf("department" to "sales"))) }
+        )
             .principal().attributes.assert().containsEntry("department", "sales")
     }
 
@@ -237,7 +259,7 @@ class TokenAuthenticatorTest {
 
     @Test
     fun theProviderMarkerAsksTheProvider() = runTest {
-        val marked = MembershipMarkedPrincipal(SimplePrincipal("alice"), MembershipClaims.PROVIDER)
+        val marked = VerifiedToken("jti-1", "alice", null, null, membershipMarker = MembershipClaims.PROVIDER)
         authenticate(
             { token(marked) }
         ).principal().membershipSource.assert().isSameAs(MembershipSource.Provider.UNCAPPED)
@@ -246,13 +268,18 @@ class TokenAuthenticatorTest {
     /** `MEM-1`: the marker together with claims is unusable, never a choice between them. */
     @Test
     fun theMarkerWithClaimsIsUnusable() = runTest {
-        val marked = MembershipMarkedPrincipal(
-            SimplePrincipal("alice", roles = setOf("admin")),
-            MembershipClaims.PROVIDER
-        )
+        val marked =
+            VerifiedToken(
+                "jti-1",
+                "alice",
+                null,
+                null,
+                roles = setOf("admin"),
+                membershipMarker = MembershipClaims.PROVIDER
+            )
         val source = authenticate({ token(marked) }).principal().membershipSource
         (source as MembershipSource.Unusable).reason.assert().contains("also claims roles or policies")
-        authenticate({ token(MembershipMarkedPrincipal(SimplePrincipal("alice"), "other")) }).principal()
+        authenticate({ token(VerifiedToken("jti-1", "alice", null, null, membershipMarker = "other")) }).principal()
             .membershipSource.assert().isInstanceOf(MembershipSource.Unusable::class.java)
     }
 

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -28,7 +31,6 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -74,8 +76,8 @@ class DocumentSnapshotViewsTest {
             )
         return (
             ScopeResolver.resolve(
-                ScopeSubject(TenantId(tenant), true, memberships),
-                DeclaredScope(app, ""),
+                ScopeSubject(TenantId(tenant), true, memberships, app.ifEmpty { null }),
+                "",
                 HostScope(null)
             ) as ScopeResolution.Resolved
             ).scope
@@ -83,8 +85,7 @@ class DocumentSnapshotViewsTest {
 
     private fun decide(view: SnapshotView, scope: Scope, action: String = "order:read"): Decision {
         val authz = AuthzRequest(
-            Subject("alice", scope.tenant.value, true, emptySet(), emptySet(), emptyMap(), false, true, true),
-            me.ahoo.cosec.model.Scope.declared(scope.tenant.value, scope.app.value, ""),
+            Subject("alice", true, emptyMap(), true, true),
             Action(action.substringBefore(':'), action.substringAfter(':')),
             Resource("order", "1", emptyMap()),
             Environment("10.0.0.1", "r", "d", blocked = false),
@@ -155,6 +156,35 @@ class DocumentSnapshotViewsTest {
             view.tenant.assert().isNull()
             (view.unresolved.single() as Cause.SourceUnavailable).document.assert().isEqualTo(DocumentKind.TENANT)
             decide(view, broken).assert().isInstanceOf(Decision.Indeterminate::class.java)
+        }
+    }
+
+    /** #1216: the empty document of an absent tenant is the tenant's own, and gives way when one is published. */
+    @Test
+    fun `an absent tenant document is empty for its tenant until one is published`() {
+        publish(SnapshotKey.Platform, allowRead)
+        source().use { source ->
+            val views = DocumentSnapshotViews(source)
+            val scope = scope("acme")
+            val key = ViewKey.of(scope, blocked = false)
+            views.load(key).join()
+            repeat(3) {
+                val view = views.peek(key)!!
+                view.tenant!!.owner.assert().isEqualTo("acme")
+                view.tenant!!.kind.assert().isEqualTo(DocumentKind.TENANT)
+                view.unresolved.assert().isEmpty()
+                decide(view, scope).assert().isEqualTo(Decision.Deny(null))
+            }
+            // The same key goes from absent to present.
+            publish(
+                SnapshotKey.Tenant("acme"),
+                ""","bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"read"}]"""
+            )
+            source.reload(SnapshotKey.Tenant("acme")).join().revision.assert().isEqualTo(1)
+            decide(views.peek(key)!!, scope).assert().isInstanceOf(Decision.Permit::class.java)
+            // Another tenant is still on its empty document.
+            val other = scope("other")
+            decide(views.load(ViewKey.of(other, blocked = false)).join(), other).assert().isEqualTo(Decision.Deny(null))
         }
     }
 

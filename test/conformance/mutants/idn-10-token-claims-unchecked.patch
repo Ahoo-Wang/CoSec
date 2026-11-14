@@ -1,18 +1,16 @@
 # Rule: IDN-10
-# Mutant: a token may claim an id with an unpaired surrogate, whose keys are another id's
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest --tests me.ahoo.cosec.runtime.UnpairedSurrogatePipelineTest :conformance:test
+# Mutant: a verified token may claim an id with an unpaired surrogate, so a store is asked about another id's key
+# Tests: :spi:test --tests me.ahoo.cosec.spi.token.VerifiedTokenTest :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
-index a35d033d..c99075c4 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
-@@ -104,9 +104,6 @@ class TokenAuthenticator(
-             return INVALID
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+index 54623487..2bbc214b 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/VerifiedToken.kt
+@@ -78,7 +78,6 @@ class VerifiedToken(
+                 "names a tenant that cannot be a tenant id"
+             )
+             app != null && !ScopeResolver.isValidAppId(app) -> invalid("declares an app that cannot be an app id")
+-            !wellFormed() -> invalid("claims an id with an unpaired UTF-16 surrogate")
          }
-         // Before any store is asked about it: an id with an unpaired surrogate would read another's key (RC1-52).
--        if (!TokenClaims.areWellFormed(principal)) {
--            return INVALID
--        }
-         if (revocations.isRevoked(principal.tokenId)) {
-             return REVOKED
-         }
+     }
+ 

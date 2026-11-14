@@ -24,9 +24,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  * @author ahoo wang
  */
 @ConfigurationProperties(AuditProperties.PREFIX)
-data class AuditProperties(
+class AuditProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
 ) : EnabledCapable {
+
     companion object {
         const val PREFIX: String = "cosec.audit"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY

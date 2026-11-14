@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "RC1-6: on a route of billing, alice declares CoSec-App-Id: shop to step around billing's DENYs: the route's app is the host's, so another declared app is rejected.",
+  "description": "RC1-6: on a route of billing, alice presents a token for shop to step around billing's DENYs: the route's app is the host's, so a credential of another app is rejected.",
   "documents": {
     "platform": {
       "policies": [
@@ -59,8 +59,7 @@
     "method": "GET",
     "path": "/invoices",
     "headers": {
-      "Authorization": "token",
-      "CoSec-App-Id": "shop"
+      "Authorization": "token"
     }
   },
   "authentication": {
@@ -71,7 +70,8 @@
       "id": "alice",
       "roles": [
         "clerk"
-      ]
+      ],
+      "app": "shop"
     }
   },
   "expect": {

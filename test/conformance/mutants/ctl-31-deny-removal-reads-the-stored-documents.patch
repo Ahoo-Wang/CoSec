@@ -1,0 +1,18 @@
+# Rule: CTL-31
+# Mutant: the removed DENYs are read from the stored documents, so a role removal is not seen
+# Tests: :control:test --tests me.ahoo.cosec.control.change.DenyRemovalTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
+@@ -78,8 +78,8 @@
+         candidate: PolicyDocument,
+         policyOf: suspend (PolicyId) -> PolicyDefinition?,
+     ): List<String> {
+-        val before = RoleExpansion.effective(base)
+-        val after = RoleExpansion.effective(candidate)
++        val before = base
++        val after = candidate
+         val policies = after.policies.mapTo(HashSet()) { it.id }
+         val bindings = after.bindings.mapTo(HashSet()) { it.id }
+         val removed = ArrayList<String>()

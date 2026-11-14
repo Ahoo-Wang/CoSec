@@ -1,8 +1,3 @@
-public final class me/ahoo/cosec/opentelemetry/OpenTelemetryContextContributor : me/ahoo/cosec/runtime/event/BridgeContextContributor {
-	public static final field INSTANCE Lme/ahoo/cosec/opentelemetry/OpenTelemetryContextContributor;
-	public fun capture ()Lkotlin/coroutines/CoroutineContext;
-}
-
 public final class me/ahoo/cosec/opentelemetry/TracingListener : me/ahoo/cosec/runtime/event/DecisionListener {
 	public static final field Companion Lme/ahoo/cosec/opentelemetry/TracingListener$Companion;
 	public static final field NAME Ljava/lang/String;

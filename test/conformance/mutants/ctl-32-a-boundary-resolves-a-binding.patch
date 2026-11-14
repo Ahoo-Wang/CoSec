@@ -1,0 +1,17 @@
+# Rule: CTL-32
+# Mutant: the checks resolve a binding to a platform boundary as to any platform policy
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+index 164cd7dd..dc5b8739 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+@@ -299,7 +299,7 @@ class ChangeChecks(
+         val expansion = expansionOf(candidate) ?: return
+         val effective = expansion.document
+         val (boundaries, policies) = platform?.policies.orEmpty().partition { it.boundary }
+-        val defined = effective.policies.map { it.id.value }.toSet() + policies.map { it.id.value } + BUILTIN
++        val defined = effective.policies.map { it.id.value }.toSet() + (policies + boundaries).map { it.id.value } + BUILTIN
+         val boundaryIds = boundaries.mapTo(HashSet()) { it.id.value }
+         val apps = HashMap<String, Set<String>>()
+         for ((i, binding) in effective.bindings.withIndex()) {

@@ -1,0 +1,18 @@
+# Rule: IDN-11
+# Mutant: the issuer signs a token with an empty tenant, which every later request then refuses
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenConverterTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+index 71987459..276c0a34 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenConverter.kt
+@@ -119,9 +119,6 @@ class JwtTokenConverter(
+         require(!Identifiers.isReserved(subject.id)) {
+             "Principal [$printableId] begins with `${Identifiers.RESERVED_PREFIX}`, which is CoSec's: a token cannot carry it."
+         }
+-        require(subject.tenant?.isEmpty() != true) {
+-            "Principal [$printableId] has an empty tenant id: a token cannot carry it."
+-        }
+         require(subject.app?.let(ScopeResolver::isValidAppId) != false) {
+             "Principal [$printableId] names an app that cannot be an app id: a token cannot carry it."
+         }

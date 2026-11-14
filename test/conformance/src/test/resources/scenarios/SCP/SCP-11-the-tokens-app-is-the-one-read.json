@@ -1,0 +1,86 @@
+{
+  "rules": [
+    "SCP-11"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same request with a token for billing: billing's document applies, and its DENY refuses the clerk. It is the credential that says the app.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    },
+    "apps": {
+      "billing": {
+        "policies": [
+          {
+            "id": "perm:billing/no-reads",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "r:clerk",
+            "subject": {
+              "role": "clerk"
+            },
+            "app": "billing",
+            "space": "*",
+            "policy": "perm:billing/no-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/invoices",
+    "headers": {
+      "Authorization": "token"
+    }
+  },
+  "authentication": {
+    "result": "token",
+    "token": {
+      "jti": "t1",
+      "tenant": "acme",
+      "id": "alice",
+      "roles": [
+        "clerk"
+      ],
+      "app": "billing"
+    }
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://billing"
+    }
+  }
+}

@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.opentelemetry
 
 import io.opentelemetry.api.trace.Span
@@ -26,6 +28,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEngine
@@ -147,6 +150,14 @@ class TracingListenerTest {
         span.attributes.get(TracingListener.BINDING_ID).assert().isEqualTo("g:orders")
         span.attributes.get(TracingListener.RESULT).assert().isEqualTo("PERMIT")
         span.endEpochNanos.assert().isGreaterThanOrEqualTo(span.startEpochNanos)
+        // This module's tests load TracingListener from a directory, which has no manifest to read a version from.
+        span.instrumentationScopeInfo.version.assert().isEqualTo("unknown")
+    }
+
+    @Test
+    fun theInstrumentationVersionIsTheManifestsOrUnknown() {
+        TracingListener.instrumentationVersion("8.0.0").assert().isEqualTo("8.0.0")
+        TracingListener.instrumentationVersion(null).assert().isEqualTo("unknown")
     }
 
     @Test

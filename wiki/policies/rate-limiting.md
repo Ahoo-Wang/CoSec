@@ -61,7 +61,10 @@ Every document can hold rules in `rateLimits` ([fields](./language.md#rate-limit
 ```
 
 A rule matches a permitted request the way a DENY statement would: one of its action patterns, one of its resource
-patterns, and its condition. A window allows `permitsPerSecond × windowSeconds` requests, and at least one.
+patterns, and its condition. A window allows `permitsPerSecond × windowSeconds` requests, and at least one. A route in a
+service's [route map](../integration/web.md#route-maps) is not an `http` request, so a rule on `http:` and a path does
+not limit it: write the rule for the route's action too
+([Authorizing business actions](../scenarios/route-maps.md#a-request-has-one-action)).
 
 Which rules a request is held to:
 
@@ -71,30 +74,37 @@ Which rules a request is held to:
   ([Role permissions](./role-permissions.md#app-documents));
 - the tenant document's rules, for requests of that tenant.
 
-They run in that order, and in document order within a document. Each matching rule spends one permit. The first rule
-whose bucket is exhausted answers `429`; the rules after it spend nothing, and the rules before it keep what they
-spent. Rules add up: a tenant or app rule never replaces or relaxes a platform rule, even one with the same id, so a
-request passes only while every rule it matches has permits left.
+They run in that order, platform first, then app, then tenant, and in document order within a document. Each matching
+rule spends one permit. The first rule whose bucket is exhausted answers `429`; the rules after it spend nothing, and
+the rules before it keep what they spent. Because the platform's rules run first, a platform rule bounds a request
+before any app or tenant rule spends anything. Rules add up: a tenant or app rule never replaces or relaxes a platform
+rule, even one with the same id, so a request passes only while every rule it matches has permits left.
+
+Every rule a permitted request matches costs one call to the limiter, made one after another: with the Redis limiter,
+one round trip each. So a document holds at most 64 rules (`DOC-6`): a document with more does not compile, and the
+control plane answers a change that would make one with a `COMPILE` finding, `422`. Keep the rules a request matches
+few; one rule with a `key` replaces many rules that differ only in what they count.
 
 ## Keys
 
 `key` names the attribute whose value picks the bucket: a String or Ip attribute of the
 [catalog](./language.md#attributes), such as `environment.ip`, `subject.id`, `scope.tenant`,
 `subject.attributes.plan` or `resource.var.orderId`. A `resource.var.<name>` key must be captured by every resource
-pattern of the rule.
+pattern of the rule; when several match, the value is the first pattern's, in written order, under whose captures the
+rule's condition holds ([path variables](./language.md#path-variables)).
 
 | `key` | Buckets |
 |---|---|
 | absent | One bucket shared by every request the rule matches. |
 | present | One bucket per value. Requests where the value is absent share one bucket of their own. |
 
-A value is its bucket as it is, `g:<value>`, which every limiter writes as UTF-8. A value with an unpaired UTF-16
+A value is its bucket as it is, `k:<value>`, which every limiter writes as UTF-8. A value with an unpaired UTF-16
 surrogate (a JSON escape such as `"\uD800"` in a token attribute) has no UTF-8 encoding: its bucket is `e:<value>`
 with each unpaired surrogate as its `\uXXXX` escape and each `\` doubled, so it never counts in the bucket of the
 value with `?` in its place (`IDN-10`). A limiter of your own gets only buckets that are well-formed text.
 
-Rules of different documents never share buckets: a platform rule counts under its own id, an app rule under
-`app:<appId>/<id>` and a tenant rule under `tenant:<tenantId>/<id>`
+Rules of different documents never share buckets: a rule counts under its document and its id, `platform/<id>`,
+`app:<appId>/<id>` or `tenant:<tenantId>/<id>`
 ([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)).
 A rule id cannot contain `:` or `/`, so no rule can name another document's counter: a tenant cannot spend, or reset,
 the platform's quotas.
@@ -128,7 +138,7 @@ rule with the fewest permits left; a `429` carries those of the exhausted rule:
 | Header | Value |
 |---|---|
 | `RateLimit-Limit` | Permits per window of that rule, rounded up. |
-| `RateLimit-Remaining` | Permits left in its current window. |
+| `RateLimit-Remaining` | How many more requests its current window would allow right now, rounded up: a part of a permit left still admits one. |
 | `RateLimit-Reset` | Seconds until its current window ends, at least `1`. |
 | `Retry-After` | Only on `429`: the same as `RateLimit-Reset`. |
 
@@ -178,7 +188,8 @@ evaluate or check: `simulate`, `explain`, `analyze` and `changes`, under `cosec.
   and every `(platform)` principal spends the platform's. Permit the control paths in the pipeline only to principals
   bound to a control role, so that no other principal can hold off a tenant's administrators.
 - An exhausted bucket answers `429` before the control API does any work. The control API serves only these exact
-  paths: one with a trailing `/` or an empty segment (`//`) is a `404`, so the patterns cover every request it serves.
+  paths: one with a trailing `/` is a `404`, and the pipeline refuses one with an empty segment (`//`) with `400`, so
+  the patterns cover every request it serves.
 - Leave the break-glass routes (`/break-glass` and below) out of it: give them a rule of their own, or none, so that
   a spent bucket never holds off an emergency revoke. `changes/*` still covers three steps of break-glass: the
   `:publish` that makes an approved break-glass grant take effect, the `:publish` that recovers a stalled revoke, and
@@ -192,7 +203,8 @@ size.
 ## Publishing rules
 
 Rules are part of their documents, so they are checked and compiled with them: an invalid id, a duplicate id in one
-document, `permitsPerSecond` not above `0`, `windowSeconds` below `1`, a `key` that is not a String or Ip attribute,
+document, more than 64 rules in one document, `permitsPerSecond` not above `0`, `windowSeconds` below `1` or above a
+year (`31536000`), a quota `permitsPerSecond × windowSeconds` above 2⁶³, a `key` that is not a String or Ip attribute,
 or a variable a pattern does not capture fails the whole document ([Testing policies](./testing.md#validating-policies)).
 
 Change rules through the control plane like any other entry ([Changes](./testing.md#changes)):

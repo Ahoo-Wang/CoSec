@@ -79,7 +79,7 @@ import java.util.function.LongSupplier
  * evicted since) is cold-loaded with the conditional read, so an older local copy can never replace what this instance
  * already served.
  *
- * Failures keep 7.0's semantics (RFC 0003 §4.4): a read that fails while a document is installed keeps it (F6, bounded
+ * Failures are handled as follows (RFC 0003 §4.4): a read that fails while a document is installed keeps it (F6, bounded
  * by lag and [checkFresh]); a document that is present but cannot be decoded or compiled is installed as
  * [DocumentState.Failed] (F3, F5), a compilation that ends in a [VirtualMachineError] included (`SNP-8`); a cold read
  * that fails is answered as failed and not installed (F1).
@@ -99,9 +99,10 @@ import java.util.function.LongSupplier
  * [SnapshotOptions.coldLoadTimeout].
  *
  * Threads: compilation runs on the compile pool; the scheduler thread only keeps time (timeouts, periodic passes,
- * retries); eviction and log lines with stack traces run on a separate housekeeping thread, so a slow log appender
- * cannot delay a timeout.
+ * retries); eviction, lag reports and log lines with stack traces run on a separate housekeeping thread, so a slow log
+ * appender cannot delay a timeout (#1252).
  */
+@InternalCoSecApi
 class SnapshotSource<P : Any, A : Any> internal constructor(
     private val store: SnapshotDocumentStore,
     /** The document every request needs. */
@@ -156,6 +157,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     /** The last decoded revision read or installed per key, kept across eviction (see the class comment). */
     private val seen = ConcurrentHashMap<SnapshotKey, Seen>()
     private val lastLagReport = ConcurrentHashMap<SnapshotKey, Instant>()
+
+    /** Whether a lag report waits on the housekeeping thread: a stalled appender must not pile up one per tick. */
+    private val lagReportQueued = AtomicBoolean()
     private val pendingPrewarms: MutableSet<CompletableFuture<Void>> = ConcurrentHashMap.newKeySet()
     private val pendingRequests: MutableSet<Slot<*>.RequestView> = ConcurrentHashMap.newKeySet()
 
@@ -317,6 +321,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     /**
      * Reads and compiles [key] again on this instance only, whether or not it is installed, with a full read that
      * bypasses the digest check. When a load is in flight, the returned future is that of the load started after it.
+     * If [close] ends the load first, the future answers what is installed, as for a read that failed, or a failed entry.
      */
     fun reload(key: SnapshotKey): CompletableFuture<SnapshotEntry<*>> =
         if (key == sharedKey) {
@@ -345,23 +350,53 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     /** Revalidates every installed document with a conditional read, a few at a time. */
     fun revalidate(): CompletableFuture<Void> = reloadAll(installedSlots()) { it.load() }
 
+    /**
+     * Stops this source and answers everything waiting on it. Every step runs whatever the ones before it did, so a
+     * store's subscription that cannot close leaves no thread behind (#1251); the first failure is thrown once they all
+     * ran, with the others suppressed in it. A second call does nothing.
+     */
     override fun close() {
         if (closed) {
             return
         }
         closed = true
-        periodic.cancel(false)
-        subscription.close()
-        if (ownsScheduler) {
-            scheduler.shutdownNow()
+        var failure: Throwable? = null
+        for (step in closeSteps()) {
+            failure = attemptClosing(step, failure)
         }
-        pendingPrewarms.forEach { it.completeExceptionally(closedError()) }
-        pendingRequests.forEach { it.abort(closedError()) }
-        housekeeping.shutdown()
-        if (ownsCompileExecutor) {
-            (compileExecutor as ThreadPoolExecutor).shutdown()
-        }
-        awaitOwnedThreads()
+        failure?.let { throw it }
+    }
+
+    /**
+     * Requests are answered before the loads end, so a request fails as closed ([load]) rather than with what its load
+     * answers.
+     */
+    private fun closeSteps(): List<() -> Unit> = listOf(
+        { periodic.cancel(false) },
+        subscription::close,
+        { if (ownsScheduler) scheduler.shutdownNow() },
+        { pendingPrewarms.forEach { it.completeExceptionally(closedError()) } },
+        { pendingRequests.forEach { it.abort(closedError()) } },
+        ::endLoads,
+        housekeeping::shutdown,
+        { if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown() },
+        ::awaitOwnedThreads,
+    )
+
+    /** Runs [step]; what it throws becomes the failure, or is kept with the [failure] there already. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun attemptClosing(step: () -> Unit, failure: Throwable?): Throwable? = try {
+        step()
+        failure
+    } catch (error: Throwable) {
+        if (failure != null && failure !== error) failure.addSuppressed(error)
+        failure ?: error
+    }
+
+    /** With the scheduler gone nothing bounds a read the store does not answer, and everything waiting on it (#1266). */
+    private fun endLoads() {
+        shared.endLoad()
+        families.forEach { family -> family.slots.values.forEach { it.endLoad() } }
     }
 
     /**
@@ -399,15 +434,32 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             (!ownsCompileExecutor || (compileExecutor as ExecutorService).isTerminated)
 
     /**
-     * One periodic tick: report lag, then revalidate, unless a pass is in flight ([PeriodicPasses]). The future completes
-     * when a pass that started after this call has ended.
+     * One periodic tick: queue a lag report, then revalidate, unless a pass is in flight ([PeriodicPasses]). The future
+     * completes when a pass that started after this call has ended.
      */
     internal fun tick(): CompletableFuture<Void> {
-        reportLag()
+        queueLagReport()
         return passes.tick()
     }
 
-    /** Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval]. */
+    /** At most one report waits on the housekeeping thread; a tick that finds it there, or no room, leaves it to the next. */
+    private fun queueLagReport() {
+        if (!lagReportQueued.compareAndSet(false, true)) {
+            return
+        }
+        val queued = offTimer {
+            lagReportQueued.set(false)
+            reportLag()
+        }
+        if (!queued) {
+            lagReportQueued.set(false)
+        }
+    }
+
+    /**
+     * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval].
+     * Off the scheduler thread: a log appender or a meter may take its time here.
+     */
     internal fun reportLag() {
         val now = clock.instant()
         for (entry in entries()) {
@@ -433,12 +485,16 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     }
 
     private fun lagReportDue(key: SnapshotKey, now: Instant): Boolean {
-        val last = lastLagReport[key]
-        if (last != null && Duration.between(last, now) < options.lagLogInterval) {
-            return false
+        var due = false
+        lastLagReport.compute(key) { _, last ->
+            if (last != null && Duration.between(last, now) < options.lagLogInterval) {
+                last
+            } else {
+                due = true
+                now
+            }
         }
-        lastLagReport[key] = now
-        return true
+        return due
     }
 
     private fun closedError() = IllegalStateException("SnapshotSource is closed.")
@@ -454,8 +510,19 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         try {
             tick()
         } catch (error: Throwable) {
-            log.error(error) { "Snapshot revalidation pass failed." }
+            offTimer { log.error(error) { "Snapshot revalidation pass failed." } }
         }
+    }
+
+    /**
+     * Runs [task] on the housekeeping thread, for what the scheduler thread must not do itself. Never in place, unlike
+     * [offRequestThread], since nothing may hold up a timeout: false when the thread has no room, and [task] is dropped.
+     */
+    private fun offTimer(task: () -> Unit): Boolean = try {
+        housekeeping.execute(task)
+        true
+    } catch (_: RejectedExecutionException) {
+        false
     }
 
     /** Runs [task] on the housekeeping thread, off every request thread and off the timer; in place if it is gone. */
@@ -589,9 +656,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 stalled?.follow(started)
             }
             if (stalled != null) {
-                log.warn {
-                    "A snapshot revalidation pass finished no document for ${options.storeReadTimeout} and has no read " +
-                        "in flight: compilations hold it. Starting the next pass without it."
+                offTimer {
+                    log.warn {
+                        "A snapshot revalidation pass finished no document for ${options.storeReadTimeout} and has no " +
+                            "read in flight: compilations hold it. Starting the next pass without it."
+                    }
                 }
             }
             run(started)
@@ -697,6 +766,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         }
         val loads = keys.map { usableOf(it) }
         CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
+            if (closed) {
+                done.completeExceptionally(closedError())
+                return@whenComplete
+            }
             val answered = loads.filterNot { it.isCompletedExceptionally }.map { it.join() }
             val failed = answered.filter { it.state is DocumentState.Failed }
             if (failed.isEmpty() && answered.size == loads.size) {
@@ -704,7 +777,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 done.complete(null)
                 return@whenComplete
             }
-            log.warn { "Snapshot prewarm failed for ${failed.map { it.key }}; retrying in $backoff." }
+            offRequestThread { log.warn { "Snapshot prewarm failed for ${failed.map { it.key }}; retrying in $backoff." } }
             val nextBackoff = minOf(backoff.multipliedBy(2), options.prewarmMaxBackoff)
             try {
                 scheduler.schedule(
@@ -830,6 +903,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             val passRead: PassRead?,
         ) {
             val startedAt: Instant = clock.instant()
+
+            /** When this load started, in [nanoTime]: what a periodic pass measures its age by. */
+            val startedNanos: Long = nanoTime.asLong
 
             /** Whether the read may have been answered from a local copy rather than the store of record. */
             var fromLocalCopy = false
@@ -995,6 +1071,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         /**
          * Starts a load unless one is in flight, in which case it returns that one. Null when this slot was removed;
          * after [close], an already failed entry. A load that [pass] starts counts as a read of it until the read ends.
+         *
+         * A [pass] does not wait for a load that has been in flight longer than [SnapshotOptions.storeReadTimeout],
+         * whoever started it, and gets null as for a removed slot: the store's answer is in by then, so the load is held
+         * by a compilation, and confirms the document when it ends. Waiting would stop the pass behind it, and the
+         * documents after it would never be revalidated once as many compilations as there are lanes never end (`SNP-6`).
          */
         fun load(force: Boolean = false, pass: Pass? = null): CompletableFuture<SnapshotEntry<T>>? {
             val load: Load
@@ -1005,7 +1086,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 if (closed) {
                     return CompletableFuture.completedFuture(failedEntry(closedError(), clock.instant()))
                 }
-                inFlight?.let { return it.result }
+                inFlight?.let {
+                    if (pass != null && nanoTime.asLong - it.startedNanos > options.storeReadTimeout.toNanos()) {
+                        return null
+                    }
+                    return it.result
+                }
                 load = newLoad(force, CompletableFuture(), pass?.startRead())
                 inFlight = load
                 dirty = false
@@ -1032,6 +1118,20 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             return load(force)
         }
 
+        /**
+         * For [close], with [closed] already set, so no load starts after this looks. What is installed stays, as for a
+         * read that failed, and is what this load's waiters get, unless a [recompile] has outdated it.
+         */
+        fun endLoad() {
+            val load = synchronized(this) { inFlight } ?: return
+            val outdated = load.recompiles || load.epoch < compileEpoch.get()
+            finish(
+                load,
+                load.known.takeUnless { outdated } ?: failedEntry(closedError(), clock.instant()),
+                install = false
+            )
+        }
+
         /** A change notification: reload if this key is installed or loading, otherwise there is nothing to refresh. */
         fun onChanged() {
             synchronized(this) {
@@ -1054,7 +1154,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 val reading = readFor(load)
                 withTimeout(reading).whenComplete { read, error ->
                     load.passRead?.end()
-                    guarded(load) { onRead(load, read, error) }
+                    // Closing may have ended this load already; what the read found then has nowhere to go.
+                    if (!load.isFinished) {
+                        guarded(load) { onRead(load, read, error) }
+                    }
                 }
             }
         }
@@ -1298,7 +1401,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
          */
         private fun finish(load: Load, entry: SnapshotEntry<T>, install: Boolean) {
             if (!load.claim()) {
-                log.error { "Snapshot load of [$key] tried to finish twice; ignored." }
+                if (!closed) {
+                    log.error { "Snapshot load of [$key] tried to finish twice; ignored." }
+                }
                 return
             }
             // Whatever ended the load (a read that failed to start included), its read is over.

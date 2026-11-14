@@ -69,8 +69,8 @@
     },
     {
       "id": "SNP-6",
-      "source": "RFC 0003 §4.4 F9, F10; RC1-50; review L1 of #1200; #1215",
-      "statement": "The periodic revalidation cannot be turned off or left unbounded: `cosec.authorization.snapshot.revalidate-interval` is at least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than `fail-closed.max-lag`, or startup fails naming it. Installed documents are revalidated by periodic passes, each a conditional read of the store per document, never a local copy, and a reset of the change channel reloads them all. A pass starts every interval or, when the previous one is still in flight, as soon as it ends; a change whose invalidation was lost, or whose reload failed, is installed by the first pass that reaches its document after the change is readable. A pass that has finished no document for `storeReadTimeout` and has no read in flight is abandoned at the next tick; a pass with a read in flight never is.",
+      "source": "RFC 0003 §4.4 F9, F10; RC1-50; review L1 of #1200; #1215; review L4 of #1231",
+      "statement": "The periodic revalidation cannot be turned off or left unbounded: `cosec.authorization.snapshot.revalidate-interval` is at least 1 second, at most 5 minutes, less than `lag-warn` and, with fail-closed tenants, less than `fail-closed.max-lag`, or startup fails naming it. Installed documents are revalidated by periodic passes, each a conditional read of the store per document, never a local copy, and a reset of the change channel reloads them all. A pass starts every interval or, when the previous one is still in flight, as soon as it ends; a change whose invalidation was lost, or whose reload failed, is installed by the first pass that reaches its document after the change is readable. A pass that has finished no document for `storeReadTimeout` and has no read in flight is abandoned at the next tick; a pass with a read in flight never is. A pass does not wait for a load of a document that has been in flight longer than `storeReadTimeout`: the load confirms its document when it ends.",
       "level": "startup",
       "guards": [
         "spring-boot:CoSecPipelineAutoConfigurationTest#a revalidate-interval that turns off or unbinds the periodic pass fails startup",
@@ -81,7 +81,8 @@
         "runtime:SnapshotRevalidationTest#aPeriodicPassNeverOverlapsAnotherAndTheOneItOwesFollowsIt",
         "runtime:SnapshotRevalidationTest#aPassHeldOnlyByACompilationDoesNotHoldBackTheNext",
         "runtime:SnapshotRevalidationTest#aPassThatKeepsFinishingDocumentsIsNotAbandoned",
-        "runtime:SnapshotRevalidationTest#aPassWithAReadInFlightIsNeverAbandoned"
+        "runtime:SnapshotRevalidationTest#aPassWithAReadInFlightIsNeverAbandoned",
+        "runtime:SnapshotRevalidationTest#aPassDoesNotWaitForACompilationThatOutlivedTheStoreReadTimeout"
       ],
       "pending": null
     },
@@ -115,13 +116,25 @@
     {
       "id": "SNP-9",
       "source": "RFC 0003 §4.1; RC1-46; review M3 of #1200",
-      "statement": "Every key a deployment writes to Redis lives under its one `cosec.key-prefix`: snapshot documents, control-plane records, candidates, shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states. Two deployments on one Redis that differ in it share no key. An environment that sets one of the three prefixes it replaced fails startup whatever `cosec.unknown-properties` says, naming the families that move and that revocations and API keys must be copied first, so no revocation is left where nothing reads it.",
+      "statement": "Every key a deployment writes to Redis lives under its one `cosec.key-prefix`: snapshot documents, control-plane records, candidates, shadow reports, revocations, memberships, API keys, rate limit counters and OAuth states. Two deployments on one Redis that differ in it share no key. An environment that sets one of the three prefixes it replaced fails startup as a key CoSec does not read, and no property turns that check off, so no revocation is left where nothing reads it.",
       "level": "startup",
       "guards": [
         "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",
-        "spring-boot:RemovedKeyPrefixesTest#a removed prefix fails startup even when unknown properties only warn",
-        "spring-boot:RemovedKeyPrefixesTest#the message names the families that move under the new prefix",
-        "spring-boot:RemovedKeyPrefixesTest#every removed prefix counts, by any of its names"
+        "spring-boot:UnknownPropertiesTest#a key prefix cosec key-prefix replaced fails startup",
+        "spring-boot:UnknownPropertiesTest#a replaced key prefix in the environment fails startup",
+        "spring-boot:UnknownPropertiesTest#no property turns the check off"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-10",
+      "source": "RFC 0007 §3.1 N3, §6.4; round-2 review H1",
+      "statement": "A staged platform candidate is compiled for the shadow comparison only: what an instance enforces compiles with the limits and attributes of the platform document it installed, so staging a change, or withdrawing it, neither fails an enforced document closed nor brings one back. Only a published platform document changes them.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:PlatformCompilerCandidateTest#a staged platform candidate leaves the enforced documents as they were",
+        "runtime:PlatformCompilerCandidateTest#publishing the same change does reach them",
+        "spring-boot:ShadowReportingWiringTest#a staged platform candidate leaves what the instance compiles with as it was"
       ],
       "pending": null
     }

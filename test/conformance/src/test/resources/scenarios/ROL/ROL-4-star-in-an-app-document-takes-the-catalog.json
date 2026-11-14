@@ -1,0 +1,72 @@
+{
+  "rules": [
+    "ROL-4"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "A system role with star holds every permission the catalog defines.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "admin",
+            "permissions": "*"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "admin"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:edit"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:wms/edit",
+      "statement": 0,
+      "name": "edit",
+      "via": {
+        "binding": "role:admin@wms:edit",
+        "document": "app"
+      }
+    }
+  }
+}

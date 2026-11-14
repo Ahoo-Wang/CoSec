@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "RC1-4: a store whose app list is not complete, as one upgraded from 8.0.0-alpha.2 before cosec-migrate repair-references runs: the analysis cannot tell which app documents there are, so alice's grant in every app waits for approval, whatever billing says.",
+  "description": "RC1-4: a store whose app list is not complete: the analysis cannot tell which app documents there are, so alice's grant in every app waits for approval, whatever billing says.",
   "documents": {
     "apps": {
       "billing": {

@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.Operation
@@ -33,14 +34,15 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
+import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
-import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -55,12 +57,16 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -74,7 +80,7 @@ class ControlPlaneTest {
     private val clock = MutableClock()
     private val memory = InMemoryControlStore(clock)
 
-    /** Changes whose stored record no longer reads, as one of an app an earlier build named (R3-4 of #1194's review). */
+    /** Changes whose stored record does not decode, as one of an app no document key can name (SCP-10). */
     val unreadable = HashSet<ChangeId>()
 
     /** Documents whose stored head does not decode, as one a newer version wrote during a rolling upgrade (RC1-39). */
@@ -82,7 +88,7 @@ class ControlPlaneTest {
     private val store: ControlStore = object : ControlStore by memory {
         override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = if (id in unreadable) {
             // Wrapped, as a store's cache may wrap what its codec threw.
-            throw IllegalStateException("decoding", UnnamedDocumentException("app:a\\u0001b"))
+            throw IllegalStateException("decoding", SnapshotFormatException("A change request is malformed."))
         } else {
             memory.change(id)
         }
@@ -149,6 +155,7 @@ class ControlPlaneTest {
                     listOf(allow("orders", action = "order:*", resource = "order/**")),
                     listOf(
                         control("admins", SubjectRef.Role(tenant, RoleId("admin")), BuiltinPolicies.TENANT_ADMIN),
+                        control("viewers", SubjectRef.Role(tenant, RoleId("viewer")), BuiltinPolicies.TENANT_VIEWER),
                         Binding(
                             BindingId("ops"),
                             SubjectRef.Role(tenant, RoleId("ops")),
@@ -264,10 +271,10 @@ class ControlPlaneTest {
         changes.shadowed(change.id)
         plane.publish(alice, change.id)
         plane.explain(alice, bob("read")).decision.decision.assert().isEqualTo("Deny")
-        val then = plane.explain(alice, bob("read"), SnapshotVersion(1, null, 1))
+        val then = plane.explain(alice, bob("read"), ViewVersion(1, null, 1))
         then.decision.decision.assert().isEqualTo("Permit")
         then.version.tenant.assert().isEqualTo(1L)
-        refused { plane.explain(alice, bob("read"), SnapshotVersion(1, null, 7)) }.assert().isEqualTo(410)
+        refused { plane.explain(alice, bob("read"), ViewVersion(1, null, 7)) }.assert().isEqualTo(410)
         refused { plane.explain(mallory, bob("read")) }.assert().isEqualTo(403)
     }
 
@@ -287,7 +294,7 @@ class ControlPlaneTest {
         plane.analyze(alice, query.copy(app = "billing")).allows.assert().isEmpty()
     }
 
-    /** SCP-7, R1-6 of #1194's review: the control plane takes no app the data plane could never read. */
+    /** SCP-10, R1-6 of #1194's review: the control plane takes no app the data plane could never read. */
     @Test
     fun `analyze refuses an app that cannot be an app id`() = runBlocking<Unit> {
         val query = AccessQuery(ACME, "order", "team-a", Action("order", "delete"), Resource("order", "1", emptyMap()))
@@ -455,7 +462,7 @@ class ControlPlaneTest {
         compiled.assert().isEqualTo(2L)
         repeat(3) { plane.simulate(alice, bob("read")) }
         plane.explain(alice, bob("read"))
-        plane.explain(alice, bob("read"), SnapshotVersion(1, null, 1))
+        plane.explain(alice, bob("read"), ViewVersion(1, null, 1))
         plane.analyze(
             alice,
             AccessQuery(ACME, "order", "team-a", Action("order", "read"), Resource("order", "1", emptyMap()))
@@ -479,6 +486,76 @@ class ControlPlaneTest {
         simulator.compilations.get().assert().isEqualTo(compiled + 3)
         plane.simulate(alice, bob("read"))
         simulator.compilations.get().assert().isEqualTo(compiled + 3)
+    }
+
+    /** A policy reading an attribute only the platform declares: it stops compiling once the platform drops it. */
+    private fun geo(id: String = "geo", value: String = "NZ") =
+        allow(id, action = "order:none", condition = Condition.Eq("ext.geo.country", Literal.Str(value)))
+
+    private suspend fun platformDeclares(vararg attributes: Attribute) {
+        val head = revisions.head(SnapshotKey.Platform)!!
+        val document = PolicyDocument(
+            head.document.kind,
+            head.document.owner,
+            head.revision,
+            head.document.publishedAt,
+            head.document.policies,
+            head.document.bindings,
+            attributes = attributes.toList(),
+        )
+        revisions.publish(
+            SnapshotKey.Platform,
+            head,
+            document,
+            Publication("attrs", ProvenanceKind.BOOTSTRAP, plato.actor)
+        )
+            .assert().isInstanceOf(PublishOutcome.Published::class.java)
+    }
+
+    /** Acme's document with [geo] added, and a change on top of it; the platform then stops declaring the attribute. */
+    private suspend fun brokenByThePlatform(vararg operations: Operation): ChangeRequest {
+        platformDeclares(Attribute.external("ext.geo.country", AttributeType.STRING))
+        val added = plane.propose(alice, TENANT, 1, listOf(Operation.PutPolicy(geo())), "geo")
+        added.state.assert().isEqualTo(ChangeState.CHECKED)
+        plane.skipShadow(plato, added.id, "test")
+        plane.publish(plato, added.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        val change = plane.propose(alice, TENANT, 2, operations.toList(), "on top")
+        change.state.assert().isEqualTo(ChangeState.CHECKED)
+        platformDeclares()
+        return change
+    }
+
+    @Test
+    fun `the same compile failure on both sides does not differ - #1253`() = runBlocking<Unit> {
+        val change = brokenByThePlatform(Operation.PutPolicy(geo()))
+
+        val simulated = plane.simulate(plato, bob("read"), change.id)
+
+        simulated.enforced.decision.assert().isEqualTo("Indeterminate")
+        simulated.candidate.assert().isEqualTo(simulated.enforced)
+        simulated.differs.assert().isFalse()
+    }
+
+    @Test
+    fun `a candidate that fails another way differs from the enforced failure - #1253`() = runBlocking<Unit> {
+        val change = brokenByThePlatform(Operation.PutPolicy(geo("geo-too")))
+
+        val simulated = plane.simulate(plato, bob("read"), change.id)
+
+        simulated.enforced.decision.assert().isEqualTo("Indeterminate")
+        simulated.candidate!!.decision.assert().isEqualTo("Indeterminate")
+        simulated.differs.assert().isTrue()
+    }
+
+    @Test
+    fun `a candidate that repairs the failure differs - #1253`() = runBlocking<Unit> {
+        val change = brokenByThePlatform(Operation.RemovePolicy(PolicyId("geo")))
+
+        val simulated = plane.simulate(plato, bob("read"), change.id)
+
+        simulated.enforced.decision.assert().isEqualTo("Indeterminate")
+        simulated.candidate!!.decision.assert().isEqualTo("Permit")
+        simulated.differs.assert().isTrue()
     }
 
     companion object {

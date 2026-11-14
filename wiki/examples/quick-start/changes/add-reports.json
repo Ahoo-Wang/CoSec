@@ -1,0 +1,37 @@
+{
+  "document": "platform",
+  "base": 1,
+  "note": "Signed-in callers read reports",
+  "operations": [
+    {
+      "op": "putPolicy",
+      "policy": {
+        "id": "reports",
+        "statements": [
+          {
+            "name": "read-reports",
+            "effect": "allow",
+            "action": "http:GET",
+            "resource": "http:path:/reports/**",
+            "condition": {
+              "eq": [
+                "subject.authenticated",
+                true
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "op": "putBinding",
+      "binding": {
+        "id": "reports",
+        "subject": "*",
+        "app": "*",
+        "space": "*",
+        "policy": "reports"
+      }
+    }
+  ]
+}

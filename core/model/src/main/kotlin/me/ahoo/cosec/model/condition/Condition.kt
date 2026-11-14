@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * A condition as written (RFC 0005 §3.1), before it is checked: attribute paths and literals are as the document
@@ -30,23 +34,30 @@ package me.ahoo.cosec.model.condition
  * The operator set is fixed. There is no `true` or `false` condition: a statement without a condition always
  * applies, and one that never does is useless.
  */
+@InternalCoSecApi
 sealed interface Condition {
     /** `{"eq": [attribute, value], "ignoreCase": false}`. */
+    @InternalCoSecApi
     class Eq(val attribute: String, val value: Operand, val ignoreCase: Boolean = false) : Condition
 
     /** `{"in": [attribute, [values...]]}`: the attribute's value is one of [values]. */
+    @InternalCoSecApi
     class In(val attribute: String, val values: List<Literal>) : Condition
 
     /** `{"in": [value, attribute]}`: the set [attribute] contains [value]; an absent set is empty. */
+    @InternalCoSecApi
     class Contains(val value: Literal, val attribute: String) : Condition
 
     /** `{"prefix": [attribute, value], "ignoreCase": false}`. On a labels attribute, a prefix of whole labels. */
+    @InternalCoSecApi
     class Prefix(val attribute: String, val value: Literal, val ignoreCase: Boolean = false) : Condition
 
     /** `{"cidr": [attribute, [blocks...]]}`. */
+    @InternalCoSecApi
     class Cidr(val attribute: String, val blocks: List<Literal>) : Condition
 
-    /** `{"time": {...}}`: the configuration of the 7.x `time` condition, read against `environment.time`. */
+    /** `{"time": {...}}`: the configuration of the `time` condition, read against `environment.time`, not a clock. */
+    @InternalCoSecApi
     class Time(
         val notBefore: String? = null,
         val notAfter: String? = null,
@@ -57,20 +68,26 @@ sealed interface Condition {
     ) : Condition
 
     /** `{"exists": attribute}`. */
+    @InternalCoSecApi
     class Exists(val attribute: String) : Condition
 
     /** `{"and": [conditions...]}`: at least one, evaluated left to right, short-circuiting. */
+    @InternalCoSecApi
     class And(val conditions: List<Condition>) : Condition
 
     /** `{"or": [conditions...]}`: at least one, evaluated left to right, short-circuiting. */
+    @InternalCoSecApi
     class Or(val conditions: List<Condition>) : Condition
 
     /** `{"not": condition}`. */
+    @InternalCoSecApi
     class Not(val condition: Condition) : Condition
 }
 
 /** The right-hand side of `eq`: a literal, or `{"attr": path}`. */
+@InternalCoSecApi
 sealed interface Operand {
+    @InternalCoSecApi
     class Attr(val path: String) : Operand
 }
 

@@ -13,7 +13,10 @@
 
 package me.ahoo.cosec.model.condition
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+
 /** A CIDR block: [address] with all host bits cleared, and the [prefix] length. */
+@InternalCoSecApi
 class CidrBlock private constructor(val address: IpAddress, val prefix: Int) : Comparable<CidrBlock> {
     internal val startHigh: Long
     internal val startLow: Long
@@ -50,6 +53,7 @@ class CidrBlock private constructor(val address: IpAddress, val prefix: Int) : C
 
     override fun toString(): String = "$address/$prefix"
 
+    @InternalCoSecApi
     companion object {
         /** The host bits of a 64-bit half whose first [prefix] bits belong to the network. */
         private fun mask(prefix: Int): Long = when {
@@ -116,6 +120,7 @@ class CidrBlock private constructor(val address: IpAddress, val prefix: Int) : C
  * Compiled into sorted, disjoint ranges per family, so a lookup is a binary search
  * (RFC 0005 §3.3): O(log n), no allocation.
  */
+@InternalCoSecApi
 class IpRanges(blocks: Collection<CidrBlock>) {
     /** The blocks, sorted and without duplicates. */
     val blocks: List<CidrBlock> = blocks.toSortedSet().toList()

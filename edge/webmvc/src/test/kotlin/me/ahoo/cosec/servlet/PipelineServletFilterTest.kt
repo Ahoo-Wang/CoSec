@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.servlet
 
 import jakarta.servlet.http.HttpServletRequest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -84,7 +87,7 @@ class PipelineServletFilterTest {
             bound = SecurityContextHolder.requiredContext
             fromRequest = (req as MockHttpServletRequest).getSecurityContext()
         }
-        bound!!.scope!!.appId.assert().isEqualTo("order")
+        bound!!.scope.appId.assert().isEqualTo("order")
         fromRequest.assert().isSameAs(bound)
         SecurityContextHolder.context.assert().isNull()
         response.getHeader("CoSec-Request-Id").assert().isNotNull()

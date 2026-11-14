@@ -21,10 +21,6 @@ import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.cache.MembershipLoader
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
@@ -34,6 +30,7 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -49,7 +46,6 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -129,10 +125,9 @@ class ControlApprovalStarterTest {
 
     /** The operator of a control API request with [principal]'s token, its memberships from the provider or not. */
     private fun operator(context: ApplicationContext, principal: String, provider: Boolean): Operator {
-        val plain: CoSecPrincipal = SimplePrincipal(principal)
-        val marked = if (provider) MembershipMarkedPrincipal(plain, MembershipClaims.PROVIDER) else plain
+        val marker = if (provider) MembershipClaims.PROVIDER else null
         val token = context.getBean(TokenConverter::class.java)
-            .toToken(SimpleTenantPrincipal(marked, SimpleTenant(TenantId.PLATFORM.value)))
+            .toToken(TokenSubject(principal, "cosec-control", TenantId.PLATFORM.value, membershipMarker = marker))
             .accessToken
         val facts = HttpFacts(
             method = "POST",

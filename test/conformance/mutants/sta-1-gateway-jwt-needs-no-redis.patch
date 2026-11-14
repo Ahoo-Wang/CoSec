@@ -1,0 +1,16 @@
+# Rule: STA-1
+# Mutant: a service in gateway mode that turns JWT on starts without the Redis template and CoCache starter its token revocations need
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.CoSecModuleCheckAutoConfigurationTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+index a27e4f8b..f3038b3a 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
+@@ -200,6 +200,7 @@ internal class OnCoCacheUsed : AnyNestedCondition(ConfigurationCondition.Configu
+     @ConditionalOnEnforceMode
+     class Enforcing
+ 
++    @ConditionalOnEnforceMode
+     @ConditionalOnJwtEnabled
+     class Jwt
+ }

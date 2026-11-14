@@ -240,15 +240,15 @@ class MigrateMainTest {
             revisions.publish(acme, null, document(acme, listOf("own"), listOf("shared", "own")), publication)
             // As published before the upgrade: acme's own id is not in the index.
             val indexed = store.referrers(SnapshotKey.Platform, own)!!
-            store.putReferrers(SnapshotKey.Platform, own, indexed.digest, emptySet()).assert().isTrue()
+            store.putReferrers(SnapshotKey.Platform, own, indexed.digest, emptyMap()).assert().isTrue()
         }
         val args = "repair-references --to-redis $REDIS --key-prefix $keyPrefix"
         val (code, output) = run(args)
         code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
         output.assert().contains("Visited 2 document(s); added 1 reference(s).")
         controlStore(keyPrefix) { store ->
-            store.referrers(SnapshotKey.Platform, own)!!.value.assert().containsExactly(acme)
-            store.referrers(SnapshotKey.Platform, PolicyId("shared"))!!.value.assert().containsExactly(acme)
+            store.referrers(SnapshotKey.Platform, own)!!.value.assert().isEqualTo(mapOf(acme to 1L))
+            store.referrers(SnapshotKey.Platform, PolicyId("shared"))!!.value.assert().isEqualTo(mapOf(acme to 1L))
         }
         run(args).let { (again, out) ->
             again.assert().describedAs(out).isEqualTo(MigrateMain.OK)
@@ -271,6 +271,29 @@ class MigrateMainTest {
         val (failed, out) = run(args)
         failed.assert().describedAs(out).isEqualTo(MigrateMain.FAILED)
         out.assert().contains("FAILED tenant:broken").contains("Visited 3 document(s); added 0 reference(s).")
+    }
+
+    /** RFC 0007 §5.8: a reference a lost publish indexed, which no head has, no longer blocks a removal once repaired. */
+    @Test
+    fun `repair-references removes what no head refers to`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val acme = SnapshotKey.Tenant("acme")
+        val shared = PolicyId("shared")
+        val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+        controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            revisions.publish(SnapshotKey.Platform, null, document(SnapshotKey.Platform, listOf("shared")), publication)
+            revisions.publish(acme, null, document(acme, emptyList()), publication)
+            // A publish of revision 2 indexed the reference and lost its race; another revision 2 has no such binding.
+            store.putReferrers(SnapshotKey.Platform, shared, null, mapOf(acme to 2L)).assert().isTrue()
+            revisions.publish(acme, revisions.head(acme), document(acme, emptyList()), publication)
+        }
+        val (code, output) = run("repair-references --to-redis $REDIS --key-prefix $keyPrefix")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+        output.assert().contains("Removed 1 reference(s) no head refers to.")
+        controlStore(keyPrefix) { store ->
+            store.referrers(SnapshotKey.Platform, shared)?.value.orEmpty().assert().isEmpty()
+        }
     }
 
     /** RC1-4: the app list stays incomplete until `repair-references` lists every app document the store lists. */

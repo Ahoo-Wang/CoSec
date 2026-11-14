@@ -13,8 +13,8 @@
 
 package me.ahoo.cosec.migrate.v7.policy.condition.context
 
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.migrate.v7.api.configuration.Configuration
+import me.ahoo.cosec.migrate.v7.api.context.SecurityContext
 import me.ahoo.cosec.migrate.v7.api.context.request.Request
 import me.ahoo.cosec.migrate.v7.api.policy.ConditionMatcher
 import me.ahoo.cosec.migrate.v7.policy.condition.AbstractConditionMatcher

@@ -90,7 +90,13 @@ object ExportDirectory {
         val appId = appPermission?.get("id")?.takeIf { it.isString }?.asString()
             ?: entry.get("appId")?.takeIf { it.isString }?.asString()
         require(appId != null) { "$location has neither an appPermission with an id nor an appId." }
-        val grants = entry.get("grants")?.properties().orEmpty().map { (key, permissionIds) ->
+        // A grants value of another type is a malformed export, not an app without grants: every role would lose its
+        // permissions, silently (#1233). An absent one is an app without grants.
+        val container = entry.get("grants")
+        require(container == null || container.isObject) {
+            "$location.grants is not a JSON object of role to permission ids."
+        }
+        val grants = container?.properties().orEmpty().map { (key, permissionIds) ->
             val separator = key.indexOf('@')
             val (roleId, spaceId) = if (separator < 0) key to "" else key.substring(0, separator) to key.substring(separator + 1)
             Source7x.Grant(roleId, spaceId, "$location.grants.$key", writer.writeValueAsBytes(permissionIds))

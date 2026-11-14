@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -31,8 +33,8 @@ import java.net.URISyntaxException
  *   anyway (by a host check), it throws [AmbiguousHeaderException]: a DENY on it is indeterminate and an ALLOW on it
  *   does not match, rather than the first (or last) value deciding. Identical repeats are one value.
  * - `http.origin`, `http.referer`: the `Origin` and `Referer` headers, read the same way; `.host` is their URI's host
- *   in lower case (hosts are case-insensitive), absent when the value is not a URI or has no host. The `.labels`
- *   attributes are derived from these by the conditions.
+ *   ([uriHost]), absent when the value is not a URI or has no host. The `.labels` attributes are derived from these by
+ *   the conditions.
  * - `request.attributes.<name>`: what the adapter knows besides HTTP ([HttpFacts.requestAttributes]), such as the
  *   gateway's route id.
  *
@@ -61,8 +63,8 @@ class HttpAttributes(
         }
         Attribute.Kind.HTTP_ORIGIN -> header(ORIGIN)
         Attribute.Kind.HTTP_REFERER -> header(REFERER)
-        Attribute.Kind.HTTP_ORIGIN_HOST -> header(ORIGIN)?.let(::hostOf)
-        Attribute.Kind.HTTP_REFERER_HOST -> header(REFERER)?.let(::hostOf)
+        Attribute.Kind.HTTP_ORIGIN_HOST -> header(ORIGIN)?.let(::uriHost)
+        Attribute.Kind.HTTP_REFERER_HOST -> header(REFERER)?.let(::uriHost)
         Attribute.Kind.REQUEST_ATTRIBUTE -> requestAttributes[attribute.name]
         else -> null
     }
@@ -88,12 +90,6 @@ class HttpAttributes(
             throw AmbiguousHeaderException(name)
         }
         return values.firstOrNull()
-    }
-
-    private fun hostOf(value: String): String? = try {
-        URI(value).host?.let(HttpNames::fold)
-    } catch (_: URISyntaxException) {
-        null
     }
 
     internal companion object {
@@ -139,3 +135,19 @@ internal class CredentialHeaderException(val header: String) :
 /** Header [header] arrived more than once with different values: a condition on it cannot tell which one to read. */
 internal class AmbiguousHeaderException(val header: String) :
     IllegalArgumentException("Header [$header] arrived with different values; a condition on it cannot decide.")
+
+/**
+ * The host of the URI [value] as conditions read it (`http.origin.host`, `http.referer.host`): in ASCII lower case, since
+ * host names are case-insensitive, and without the root label's trailing dot, since `evil.com.` is the DNS name
+ * `evil.com` (round 2 review L3): otherwise a DENY on the host or its labels would not see it. Null when [value] is not
+ * a URI or has no host. The test kit reads hosts with it too.
+ */
+@InternalCoSecApi
+fun uriHost(value: String): String? {
+    val host = try {
+        URI(value).host
+    } catch (_: URISyntaxException) {
+        null
+    } ?: return null
+    return HttpNames.fold(if (host.length > 1 && host.endsWith('.')) host.substring(0, host.length - 1) else host)
+}

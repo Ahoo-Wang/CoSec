@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.conformance
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.grant.GrantFragment
 import me.ahoo.cosec.control.grant.GrantVerdict
 import me.ahoo.cosec.control.grant.ProtectedEntry
@@ -38,6 +39,7 @@ import tools.jackson.databind.node.JsonNodeFactory
  * { "status": 200, "proceed": true }                                   // pipeline
  * { "status": 200, "proceed": true, "identity": { "sub": "alice", ... } } // pipeline of a gateway: what it forwards
  * { "status": 200, "proceed": true, "credentials": ["authorization"] }  // through a gateway: credentials forwarded
+ * { "status": 200, "proceed": true, "check": "Deny" }                  // pipeline: a check of the permitted request
  * { "status": 400, "type": "invalid-request" }                         // pipeline, the problem's slug
  * { "outcome": "none" }                                                // pipeline, the caller cancelled
  * { "fragments": [ { "policy": "p", "statement": 0, "action": "a:b", "resource": "r", "verdict": "YES" } ],
@@ -179,6 +181,7 @@ object Expectations {
     private fun answered(outcome: Outcome.Answered): JsonNode = json.objectNode().put("status", outcome.status).apply {
         if (outcome.proceed) put("proceed", true)
         outcome.type?.let { put("type", it) }
+        outcome.check?.let { put("check", it) }
         if (outcome.identity.first) set("identity", outcome.identity.second ?: json.nullNode())
         if (outcome.credentials.isNotEmpty()) {
             set(

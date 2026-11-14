@@ -1,0 +1,17 @@
+# Rule: IDN-8
+# Mutant: the rewrite keeps the whitespace at its head, a field value Netty refuses to send, so a permitted request with the token cookie first is a 500
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CookieHeadersTest :gateway:test --tests me.ahoo.cosec.gateway.CookieTokenPropertyTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
+index d6599893..d7f75582 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
+@@ -51,7 +51,7 @@ internal object CookieHeaders {
+             return null
+         }
+         val kept = pairs.filterIndexed { i, _ -> !named[i] }
+-        val written = kept.joinToString(";").trimStart(' ', '\t')
++        val written = kept.joinToString(";")
+         return when {
+             !rfc2965 && written.startsWith(RFC2965_VERSION, ignoreCase = true) -> null
+             rfc2965 && kept.size == 1 -> "$written;"

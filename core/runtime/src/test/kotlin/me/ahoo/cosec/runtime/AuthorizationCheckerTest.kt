@@ -11,12 +11,17 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
+import io.mockk.mockk
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -38,8 +43,8 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
-import me.ahoo.cosec.runtime.context.SimpleSecurityContext
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
@@ -48,6 +53,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
@@ -102,6 +109,16 @@ class AuthorizationCheckerTest {
         views = views,
     )
     private val checker = AuthorizationChecker(pipeline)
+
+    /** A permitted request of a credential declaring [app]. */
+    private fun permitted(app: String?): RequestSecurity {
+        val pipeline = PipelineFixtures.pipeline(
+            authenticator = authenticator(authenticated(claims(), app = app)),
+            engine = CoSecFlatEngine,
+            views = views,
+        )
+        return runBlocking { pipeline.evaluate(facts("/orders/1")) }.security!!
+    }
 
     private fun permitted(): RequestSecurity {
         val outcome = runBlocking { pipeline.evaluate(facts("/orders/1")) }
@@ -207,20 +224,21 @@ class AuthorizationCheckerTest {
     fun theSecurityContextCarriesTheValidatedScope() {
         val context = permitted().securityContext
         context.principal.id.assert().isEqualTo(PipelineFixtures.PRINCIPAL.value)
-        context.tenant.tenantId.assert().isEqualTo(PipelineFixtures.TENANT.value)
-        context.scope!!.appId.assert().isEmpty()
-        context.scope!!.roles.assert().isEmpty()
+        context.tenantId.assert().isEqualTo(PipelineFixtures.TENANT.value)
+        context.scope.appId.assert().isEmpty()
+        context.scope.roles.assert().isEmpty()
     }
 
     @Test
     fun decidesInTheDefaultSpaceOfAnotherApp() = runBlocking<Unit> {
-        val security = permitted()
+        val security = permitted("cosec-control")
         val control = AppId("cosec-control")
         val read = Action("cosec", "read")
         val doc = Resource("doc", "tenant/a", emptyMap())
-        // Bound in the control app only: not in the request's own scope, but in the control app's default space.
-        checker.check(security, read, doc).assert().isFalse()
         checker.decide(security, control, read, doc).assert().isInstanceOf(Decision.Permit::class.java)
+        // RFC 0012 §3.5: a credential for another app, or for none, is not in the control app.
+        checker.decide(permitted("order"), control, read, doc).assert().isEqualTo(Decision.Deny(null))
+        checker.decide(permitted(null), control, read, doc).assert().isEqualTo(Decision.Deny(null))
         checker.decide(security, control, Action("cosec", "write"), doc).assert().isEqualTo(Decision.Deny(null))
         views.fail = true
         checker.decide(security, control, read, doc).assert().isInstanceOf(Decision.Indeterminate::class.java)
@@ -273,18 +291,49 @@ class AuthorizationCheckerTest {
     fun failsClosed() = runBlocking<Unit> {
         val security = permitted()
         // A context the pipeline did not make, and an action without a namespace.
-        checker.check(SimpleSecurityContext.anonymous(), "http:GET", "/orders/2").assert().isFalse()
+        val foreign = mockk<SecurityContext>()
+        checker.check(foreign, "http:GET", "/orders/2").assert().isFalse()
         checker.check(security.securityContext, "GET", "/orders/2").assert().isFalse()
-        checker.decide(
-            SimpleSecurityContext.anonymous(),
-            "http:GET",
-            "/orders/2"
-        ).assert().isEqualTo(Decision.Deny(null))
+        checker.decide(foreign, "http:GET", "/orders/2").assert().isEqualTo(Decision.Deny(null))
         checker.decide(security.securityContext, "GET", "/orders/2").assert().isEqualTo(Decision.Deny(null))
         // An unreadable snapshot is not a permit.
         views.fail = true
         checker.check(security.securityContext, "http:GET", "/orders/2").assert().isFalse()
         checker.decide(security.securityContext, "http:GET", "/orders/2").assert()
             .isInstanceOf(Decision.Indeterminate::class.java)
+    }
+
+    /** PIP-15: a check reads a path as enforcement does: what no request could be permitted for, no check permits. */
+    @ParameterizedTest
+    @ValueSource(
+        strings = ["/orders/../admin", "/orders/%2e%2e/admin", "/orders/..;x/admin", "/orders//1", "/orders/%zz"]
+    )
+    fun `a path enforcement refuses is never permitted`(path: String) {
+        val security = permitted()
+        runBlocking {
+            checker.decide(security.securityContext, "http:GET", path).assert().isEqualTo(Decision.Deny(null))
+            checker.decide(security, Action("http", "GET"), Resource("http", path, emptyMap()))
+                .assert().isEqualTo(Decision.Deny(null))
+        }
+    }
+
+    /** PIP-15: its path parameters go as a request's do. */
+    @Test
+    fun `a path is decided as enforcement normalizes it`() {
+        runBlocking {
+            checker.check(permitted().securityContext, "http:GET", "/orders;v=2/1").assert().isTrue()
+        }
+    }
+
+    /** PIP-15: what no request path can be is not decided, as its globs would cost more than any request's. */
+    @Test
+    fun `a resource longer than a request path can be is denied`() {
+        val segment = "a".repeat(PathNormalizer.MAX_SEGMENT_LENGTH)
+        val security = permitted().securityContext
+        runBlocking {
+            checker.check(security, "order:read", "order/$segment").assert().isTrue()
+            checker.decide(security, "order:read", "order/${segment}a").assert().isEqualTo(Decision.Deny(null))
+            checker.decide(security, "http:GET", "/orders/${segment}a").assert().isEqualTo(Decision.Deny(null))
+        }
     }
 }

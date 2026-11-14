@@ -15,8 +15,6 @@
 
 package me.ahoo.cosec.cache.control
 
-import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.AsyncStore
 import me.ahoo.cocache.api.CacheWriteException
@@ -35,20 +33,21 @@ import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cache.snapshot.RedisTarget
 import me.ahoo.cosec.cache.snapshot.SnapshotNode
 import me.ahoo.cosec.cache.snapshot.newKeyPrefix
+import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.store.AppList
+import me.ahoo.cosec.control.store.ControlMaintenance
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.Publication
-import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -56,6 +55,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -63,7 +63,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
@@ -71,6 +70,7 @@ import java.util.concurrent.CompletableFuture
 
 /** [CoCacheControlStore]'s conditional writes on real CoCache engines; Redis for what must reach Redis. */
 class CoCacheControlStoreTest {
+
     private val key = SnapshotKey.Tenant("acme")
 
     private fun document(revision: Long) = SnapshotDocument(
@@ -119,12 +119,11 @@ class CoCacheControlStoreTest {
     )
 
     /**
-     * R3-1 of #1194's review: an app document an earlier build published under an id the app id rule now refuses left
-     * itself in the back-reference set of a platform policy it binds. That member is skipped, with an escaped WARN, so
-     * a publish that binds the policy still writes the set, and the member is gone with it.
+     * SCP-10: a back-reference set naming an app no key can name is a format error of the whole set, so a publish that
+     * would write it fails, and the set stays as it was until an operator repairs it.
      */
     @Test
-    fun `a back-reference set naming an app no key can name still takes a new referrer`() = runBlocking<Unit> {
+    fun `a back-reference set naming an app no key can name is a format error`() = runBlocking<Unit> {
         val backend = InMemoryBackend()
         SnapshotNode(backend, newKeyPrefix()).use { node ->
             val store = store(node)
@@ -139,26 +138,69 @@ class CoCacheControlStoreTest {
                         CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
                         ReferenceKeyEncoder
                     )
-                ).put(ReferenceKey(SnapshotKey.Platform, shared), """["app:a\u0001b"]""".encodeToByteArray())
+                ).put(ReferenceKey(SnapshotKey.Platform, shared), """{"app:a\u0001b":1}""".encodeToByteArray())
             }
-            val logged = ListAppender<ILoggingEvent>().apply { start() }
-            val root = LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME) as ch.qos.logback.classic.Logger
-            root.addAppender(logged)
-            try {
-                val outcome = revisions.publish(
+            formatError { store.referrers(SnapshotKey.Platform, shared) }.message.assert().doesNotContain("\u0001")
+            formatError {
+                revisions.publish(
                     SnapshotKey.Tenant("acme"),
                     null,
                     document(DocumentKind.TENANT, "acme", BINDS_SHARED),
                     BOOTSTRAP,
                 )
-                outcome.assert().isInstanceOf(PublishOutcome.Published::class.java)
-            } finally {
-                root.detachAppender(logged)
             }
-            store.referrers(SnapshotKey.Platform, shared)!!.value.assert().containsExactly(SnapshotKey.Tenant("acme"))
-            val warning = logged.list.map { it.formattedMessage }.single { "back-reference set names" in it }
-            warning.assert().contains("app:a\\u0001b").doesNotContain("\u0001")
+            revisions.head(SnapshotKey.Tenant("acme")).assert().isNull()
         }
+    }
+
+    /**
+     * The upgrade note's path: `repair-references` reads a set before it writes it, so the array form 8.0.0-alpha.3 wrote
+     * stops it until the set is deleted; it then writes the set again from the head, with the referrer's revision.
+     */
+    @Test
+    fun `repair stops at a set in the array form, and rebuilds it with revisions once it is deleted`() = runBlocking<Unit> {
+        val backend = InMemoryBackend()
+        val keyPrefix = newKeyPrefix()
+        val acme = SnapshotKey.Tenant("acme")
+        val reference = ReferenceKey(SnapshotKey.Platform, PolicyId("shared"))
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val revisions = Revisions(store(node), Clock.systemUTC())
+            revisions.publish(SnapshotKey.Platform, null, document(DocumentKind.PLATFORM, "", SHARED), BOOTSTRAP)
+            revisions.publish(acme, null, document(DocumentKind.TENANT, "acme", BINDS_SHARED), BOOTSTRAP)
+        }
+        CacheRuntime.builder().backend(backend).build().use { raw ->
+            raw.create(
+                rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
+            )
+                .put(reference, """["tenant:acme"]""".encodeToByteArray())
+        }
+        SnapshotNode(backend, keyPrefix).use { node ->
+            formatError { Revisions(store(node), Clock.systemUTC()).repairReferences(acme) }
+        }
+        CacheRuntime.builder().backend(backend).build().use { raw ->
+            raw.create(
+                rawStore("RawReferences", keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
+            )
+                .delete(reference)
+        }
+        SnapshotNode(backend, keyPrefix).use { node ->
+            val store = store(node)
+            Revisions(store, Clock.systemUTC()).repairReferences(acme).assert().isEqualTo(1)
+            store.referrers(SnapshotKey.Platform, reference.policy)!!.value.assert().isEqualTo(mapOf(acme to 1L))
+        }
+    }
+
+    /** The format error [block] fails with, however CoCache wraps what the codec threw. */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun formatError(block: suspend () -> Unit): SnapshotFormatException {
+        val error = try {
+            block()
+            null
+        } catch (e: Exception) {
+            e
+        }
+        return generateSequence<Throwable>(checkNotNull(error) { "It did not fail." }) { it.cause }
+            .filterIsInstance<SnapshotFormatException>().first()
     }
 
     private fun document(kind: DocumentKind, owner: String, body: String) = PolicyDocumentCodec.decode(
@@ -168,11 +210,11 @@ class CoCacheControlStoreTest {
     )
 
     /**
-     * R2-1 of #1194's review: a stored open change of an app no document key can name (an earlier build wrote it) does
-     * not read, so it is not known to be terminal: the listing keeps it, without failing, and each caller skips it.
+     * SCP-10: a stored open change of an app no document key can name does not decode, so it is not known to be
+     * terminal: the listing fails, however CoCache wraps what the codec threw.
      */
     @Test
-    fun `an open change of an app no key can name stays listed and does not fail the listing`() = runBlocking<Unit> {
+    fun `an open change of an app no key can name fails the listing`() = runBlocking<Unit> {
         val backend = InMemoryBackend()
         SnapshotNode(backend, newKeyPrefix()).use { node ->
             val store = store(node)
@@ -190,16 +232,8 @@ class CoCacheControlStoreTest {
                     )
                 ).put(ChangeId("c1"), written.encodeToByteArray())
             }
-            store.openChanges().assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
-            // However CoCache wraps what the codec threw.
-            @Suppress("TooGenericExceptionCaught")
-            val error = try {
-                store.change(ChangeId("c1"))
-                null
-            } catch (e: Exception) {
-                e
-            }
-            UnnamedDocumentException.of(error!!)!!.key.assert().isEqualTo("app:a\\u0001b")
+            formatError { store.openChanges() }
+            formatError { store.change(ChangeId("c1")) }
         }
     }
 
@@ -215,16 +249,74 @@ class CoCacheControlStoreTest {
             val open = change("c1", ChangeState.DRAFT)
             store.putChange(null, open).assert().isTrue()
             store.putChange(null, change("c2", ChangeState.DRAFT)).assert().isTrue()
-            store.openChanges().assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
+            store.openChanges().map { it.id }.assert().containsExactlyInAnyOrder(ChangeId("c1"), ChangeId("c2"))
             val digest = store.change(ChangeId("c1"))!!.digest
             store.putChange(digest, open.copy(state = ChangeState.ABANDONED)).assert().isTrue()
-            store.openChanges().assert().containsExactly(ChangeId("c2"))
+            store.openChanges().map { it.id }.assert().containsExactly(ChangeId("c2"))
 
             // A removal lost after the terminal write: the id is dropped the next time the list is read.
             val listed = lists.get("open-changes")!!
             lists.put("open-changes", listed + ("c1" to Instant.EPOCH))
-            store.openChanges().assert().containsExactly(ChangeId("c2"))
+            store.openChanges().map { it.id }.assert().containsExactly(ChangeId("c2"))
             lists.get("open-changes")!!.keys.assert().containsExactly("c2")
+        }
+    }
+
+    /**
+     * #1219: a pass of the control plane's maintenance reads each open change once. Before, the store read each of them
+     * to drop the terminal ones and the pass read them again, so every pass cost twice the open changes.
+     */
+    @Test
+    fun `a maintenance pass reads each open change once - #1219`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val reads = java.util.concurrent.ConcurrentHashMap<ChangeId, Int>()
+            val real = node.runtime.create(ControlCacheSpecs.changeRequest(node.keyPrefix))
+            val counting = object : Store<ChangeId, ChangeRequest> by real {
+                override fun async(): AsyncStore<ChangeId, ChangeRequest> =
+                    object : AsyncStore<ChangeId, ChangeRequest> by real.async() {
+                        override fun getIfChanged(key: ChangeId, digest: Digest?) =
+                            real.async().getIfChanged(key, digest).also { reads.merge(key, 1, Int::plus) }
+                    }
+            }
+            val clock = MutableClock(Instant.parse("2026-11-01T00:00:00Z"))
+            val store = store(node, clock = clock, changes = counting)
+            repeat(OPEN_CHANGES) { store.putChange(null, change("c$it", ChangeState.CHECKED)) }
+            val revisions = Revisions(store, clock)
+            val changes = Changes(
+                store,
+                revisions,
+                { ChangeId("unused") },
+                { _, _, _ -> ControlDecision.PERMIT },
+                clock
+            )
+            val maintenance = ControlMaintenance(store, revisions, changes, Duration.ofMinutes(1))
+            reads.clear()
+
+            maintenance.closeShadowWindows().assert().isEmpty()
+
+            reads.keys.assert().hasSize(OPEN_CHANGES)
+            reads.values.assert().allMatch { it == 1 }
+        }
+    }
+
+    /** #1235: a candidate is written over the candidate that was read, never over another one. */
+    @Test
+    fun `a candidate is written over the candidate read - #1235`() = runBlocking<Unit> {
+        SnapshotNode(InMemoryBackend(), newKeyPrefix()).use { node ->
+            val store = store(node)
+            val body = """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()
+            fun candidate(window: String) =
+                StoredCandidate(window, 4, SnapshotDocument(2, 5, Instant.parse("2026-11-01T00:00:00Z"), body))
+            store.stagedCandidate(key).assert().isNull()
+            store.putCandidate(key, null, candidate("c1@1")).assert().isTrue()
+            // Another stage that read nothing: its write finds the first one there.
+            store.putCandidate(key, null, candidate("c2@2")).assert().isFalse()
+            val staged = store.stagedCandidate(key)!!
+            staged.value.window.assert().isEqualTo("c1@1")
+            store.putCandidate(key, staged.digest, candidate("c2@2")).assert().isTrue()
+            // A stage that read the first candidate and was slow: the digest it names is not the candidate's any more.
+            store.putCandidate(key, staged.digest, candidate("c3@3")).assert().isFalse()
+            store.candidate(key)!!.window.assert().isEqualTo("c2@2")
         }
     }
 
@@ -292,10 +384,12 @@ class CoCacheControlStoreTest {
                 }
                 val lists = reading.runtime.create(ControlCacheSpecs.list(reading.keyPrefix))
                 val reader = store(reading, lists = lists, clock = clock)
-                // c1 is listed and missing: it may be being written, so it is not dropped yet.
-                reader.openChanges().assert().containsExactly(ChangeId("c1"))
+                // c1 is listed and missing: it may be being written, so it is not dropped yet (and there is no change).
+                reader.openChanges().assert().isEmpty()
+                lists.get("open-changes")!!.keys.assert().containsExactly("c1")
                 clock.now = clock.now.plus(Duration.ofMinutes(59))
-                reader.openChanges().assert().containsExactly(ChangeId("c1"))
+                reader.openChanges().assert().isEmpty()
+                lists.get("open-changes")!!.keys.assert().containsExactly("c1")
                 clock.now = clock.now.plus(Duration.ofMinutes(2))
                 reader.openChanges().assert().isEmpty()
                 lists.get("open-changes")!!.assert().isEmpty()
@@ -442,10 +536,14 @@ class CoCacheControlStoreTest {
             store.putIndex(key, stored.digest, index).assert().isFalse()
 
             val shared = PolicyId("cosec:shared")
-            store.putReferrers(SnapshotKey.Platform, shared, null, setOf(key)).assert().isTrue()
+            store.putReferrers(SnapshotKey.Platform, shared, null, mapOf(key to 3L)).assert().isTrue()
             val referrers = store.referrers(SnapshotKey.Platform, shared)!!
-            referrers.value.assert().containsExactly(key)
-            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, emptySet()).assert().isTrue()
+            referrers.value.assert().isEqualTo(mapOf(key to 3L))
+            // Another revision is another value: a removal read before it no longer matches.
+            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, mapOf(key to 4L)).assert().isTrue()
+            store.putReferrers(SnapshotKey.Platform, shared, referrers.digest, emptyMap()).assert().isFalse()
+            val raised = store.referrers(SnapshotKey.Platform, shared)!!
+            store.putReferrers(SnapshotKey.Platform, shared, raised.digest, emptyMap()).assert().isTrue()
             store.referrers(SnapshotKey.Platform, shared)!!.value.assert().isEmpty()
 
             store.acquireLease("reclaim", "me", Duration.ofMinutes(1)).assert().isTrue()
@@ -470,6 +568,36 @@ class CoCacheControlStoreTest {
         backend.close()
     }
 
+    /** #1207: each referrer with the revision of it that last indexed the reference. */
+    @Test
+    fun `the referrers codec reads back what it writes and rejects anything else`() {
+        val referrers = mapOf(
+            SnapshotKey.Tenant("b") to 1L,
+            SnapshotKey.Platform to 0L,
+            SnapshotKey.App("order") to 12L
+        )
+        ReferrersCodec.decode(ReferrersCodec.encode(referrers)).assert().isEqualTo(referrers)
+        ReferrersCodec.encode(referrers).decodeToString().assert()
+            .isEqualTo("""{"app:order":12,"platform":0,"tenant:b":1}""")
+        listOf(
+            "1",
+            "\"tenant:b\"",
+            // The array of keys 8.0.0-alpha.3 wrote.
+            """["tenant:b"]""",
+            """["policies"]""",
+            """["tenant:a:b"]""",
+            "[1]",
+            // An app no key can name (SCP-10).
+            """{"app:a\u0001b":1}""",
+            """{"policies":1}""",
+            """{"tenant:b":-1}""",
+            """{"tenant:b":"1"}""",
+            """{"tenant:b":1.5}""",
+        ).forEach { text ->
+            assertThrownBy<SnapshotFormatException> { ReferrersCodec.decode(text.encodeToByteArray()) }
+        }
+    }
+
     @Test
     fun `the codecs read back what they write and reject anything else`() {
         val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
@@ -479,9 +607,13 @@ class CoCacheControlStoreTest {
             floor = 2,
         )
         RevisionIndexCodec.decode(RevisionIndexCodec.encode(index)).assert().isEqualTo(index)
-        val keys = setOf(SnapshotKey.Tenant("b"), SnapshotKey.Platform, SnapshotKey.App("order"))
-        SnapshotKeySetCodec.decode(SnapshotKeySetCodec.encode(keys)).assert().isEqualTo(keys)
-        SnapshotKeySetCodec.encode(keys).decodeToString().assert().isEqualTo("""["app:order","platform","tenant:b"]""")
+        // #1226: records left to delete are written only when there are some, so an index without is as before.
+        RevisionIndexCodec.encode(index).decodeToString().assert().doesNotContain("reclaiming")
+        val reclaiming = index.copy(reclaiming = listOf(digest))
+        RevisionIndexCodec.decode(RevisionIndexCodec.encode(reclaiming)).assert().isEqualTo(reclaiming)
+        RevisionIndexCodec.encode(
+            reclaiming
+        ).decodeToString().assert().endsWith(""""floor":2,"reclaiming":["$digest"]}""")
         listOf(
             "",
             "[]",
@@ -497,11 +629,10 @@ class CoCacheControlStoreTest {
                 64
             )}","publishedAt":"2026-11-01T00:00:00Z"}],"pending":[],"floor":1}""",
             """{"entries":[],"pending":[],"floor":1,"x":1}""",
+            """{"entries":[],"pending":[],"floor":1,"reclaiming":"x"}""",
+            """{"entries":[],"pending":[],"floor":1,"reclaiming":["zz"]}""",
         ).forEach { text ->
             assertThrownBy<SnapshotFormatException> { RevisionIndexCodec.decode(text.encodeToByteArray()) }
-        }
-        listOf("{}", """["policies"]""", """["tenant:a:b"]""", "[1]").forEach { text ->
-            assertThrownBy<SnapshotFormatException> { SnapshotKeySetCodec.decode(text.encodeToByteArray()) }
         }
         RevisionRecordKeyEncoder.encode(RevisionRecordKey(SnapshotKey.Tenant("acme"), digest))
             .assert().isEqualTo("tenant:acme:SHA-256:000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
@@ -511,6 +642,8 @@ class CoCacheControlStoreTest {
     }
 
     private companion object {
+        const val OPEN_CHANGES = 25
+
         /** A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would. */
         fun <K : Any> rawStore(name: String, keyPrefix: String, cacheName: String, keyEncoder: KeyEncoder<K>) =
             CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->

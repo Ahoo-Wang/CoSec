@@ -18,9 +18,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 
 @ConfigurationProperties(MetricsProperties.PREFIX)
-data class MetricsProperties(
+class MetricsProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
 ) : EnabledCapable {
+
     companion object {
         const val PREFIX: String = "cosec.metrics"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY

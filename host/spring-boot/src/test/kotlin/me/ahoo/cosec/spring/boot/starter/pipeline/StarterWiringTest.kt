@@ -27,10 +27,6 @@ import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
 import me.ahoo.cosec.cache.CoCacheMembershipProvider
 import me.ahoo.cosec.cache.MembershipCache
 import me.ahoo.cosec.cache.MembershipLoader
@@ -46,6 +42,7 @@ import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -71,7 +68,6 @@ import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.spi.audit.AuditEventSink
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -99,7 +95,10 @@ import org.springframework.test.util.ReflectionTestUtils
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
 /** What the starter registers from the application's own beans: the blacklist, audit sinks, memberships, listeners. */
@@ -133,10 +132,9 @@ class StarterWiringTest {
 
     /** [principal]'s token; with [provider], one that asks the membership provider (RFC 0004 §4.5.2). */
     private fun token(context: ApplicationContext, principal: String, provider: Boolean = false): String {
-        val plain: CoSecPrincipal = SimplePrincipal(principal)
-        val marked = if (provider) MembershipMarkedPrincipal(plain, MembershipClaims.PROVIDER) else plain
+        val marker = if (provider) MembershipClaims.PROVIDER else null
         return context.getBean(TokenConverter::class.java)
-            .toToken(SimpleTenantPrincipal(marked, SimpleTenant(TENANT)))
+            .toToken(TokenSubject(principal, "cosec-control", TENANT, membershipMarker = marker))
             .accessToken
     }
 
@@ -264,6 +262,28 @@ class StarterWiringTest {
             context.startupFailure.assert().isNull()
             context.getBean(KafkaAuditListener::class.java).delivery.assert().isEqualTo(Delivery.REQUIRED)
         }
+    }
+
+    /** #1250: the Kafka audit's own wait at shutdown is the listeners' drain timeout, not a fixed one. */
+    @Test
+    fun `the Kafka audit waits at shutdown for the listeners' drain timeout`() {
+        val asked = CountDownLatch(1)
+        val kafka = mockk<KafkaOperations<String, String>> {
+            every { send(any<String>(), any<String>(), any<String>()) } answers {
+                asked.countDown()
+                CompletableFuture()
+            }
+        }
+        pipelineRunner.withBean(KafkaOperations::class.java, { kafka })
+            .withPropertyValues("cosec.observability.listener.drain-timeout=100ms")
+            .run { context ->
+                status(context, token(context, "bob")).assert().isEqualTo(200)
+                asked.await(5, TimeUnit.SECONDS).assert().isTrue()
+                val startedAt = System.nanoTime()
+                context.getBean(KafkaAuditListener::class.java).destroy()
+                // The default bound is 5 seconds.
+                (System.nanoTime() - startedAt).nanoseconds.assert().isLessThan(3.seconds)
+            }
     }
 
     /** STA-1: a REQUIRED audit that was not created fails startup instead of deciding without it. */

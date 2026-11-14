@@ -26,7 +26,7 @@ import java.util.TreeMap
 internal object JsonSchemaWriter {
     const val DRAFT_07 = "http://json-schema.org/draft-07/schema#"
 
-    /** Every file says so: a schema cannot express all the compiler checks ([FormatPatterns.NOT_EXPRESSED]). */
+    /** Every file says so: a schema cannot express all the compiler checks ([FormatPatterns]). */
     const val NOT_SUFFICIENT = "Passing this schema is necessary, not sufficient: the compiler also checks what JSON " +
         "Schema cannot express, such as unique ids, time zones and expression syntax, so compile or load the document too."
 
@@ -53,11 +53,7 @@ internal object JsonSchemaWriter {
         when (type) {
             is StringType -> stringSchema(type, schema)
             is BooleanType -> schema["type"] = "boolean"
-            is IntegerType -> {
-                schema["type"] = "integer"
-                type.minimum?.let { schema["minimum"] = it }
-                type.const?.let { schema["const"] = it }
-            }
+            is IntegerType -> integerSchema(type, schema)
 
             is NumberType -> {
                 schema["type"] = "number"
@@ -78,6 +74,13 @@ internal object JsonSchemaWriter {
         }
         type.description?.let { schema["description"] = it }
         return schema
+    }
+
+    private fun integerSchema(type: IntegerType, schema: TreeMap<String, Any>) {
+        schema["type"] = "integer"
+        type.minimum?.let { schema["minimum"] = it }
+        type.maximum?.let { schema["maximum"] = it }
+        type.const?.let { schema["const"] = it }
     }
 
     private fun stringSchema(type: StringType, schema: TreeMap<String, Any>) {
@@ -102,6 +105,7 @@ internal object JsonSchemaWriter {
         type as ArrayType
         schema["items"] = schemaOf(type.items, file)
         type.minItems?.let { schema["minItems"] = it }
+        type.maxItems?.let { schema["maxItems"] = it }
         if (type.uniqueItems) {
             schema["uniqueItems"] = true
         }

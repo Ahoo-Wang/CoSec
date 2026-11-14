@@ -15,7 +15,7 @@ dependencies {
     api(project(":login"))
     implementation("tools.jackson.core:jackson-databind")
     api("com.auth0:java-jwt")
-    testImplementation("io.projectreactor:reactor-test")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     // MembershipClaimsJwtTest resolves parsed tokens through the pipeline's MembershipResolver.
     testImplementation(project(":runtime"))
 }

@@ -13,10 +13,16 @@
 
 package me.ahoo.cosec.spring.boot.starter.authentication
 
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.login.token.TokenSubject
+import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.boot.test.context.assertj.AssertableApplicationContext
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
@@ -48,5 +54,39 @@ internal class CoSecAuthenticationAutoConfigurationTest {
                     .doesNotHaveBean(AuthenticationProvider::class.java)
                     .doesNotHaveBean(CompositeAuthentication::class.java)
             }
+    }
+
+    /** #1222: a context answers with its own beans, whatever another context in the JVM registers or closes. */
+    @Test
+    fun `a context authenticates with its own beans only`() {
+        contextAuthenticatingAs("first").run { first ->
+            first.authenticated().assert().isEqualTo("first")
+            contextAuthenticatingAs("second").run { second ->
+                second.authenticated().assert().isEqualTo("second")
+                first.authenticated().assert().isEqualTo("first")
+            }
+            first.authenticated().assert().isEqualTo("first")
+        }
+        contextRunner
+            .withUserConfiguration(CoSecAuthenticationAutoConfiguration::class.java)
+            .run { empty ->
+                assertThrows<IllegalArgumentException> { empty.authenticated() }
+            }
+    }
+
+    private fun contextAuthenticatingAs(principal: String) = contextRunner
+        .withUserConfiguration(CoSecAuthenticationAutoConfiguration::class.java)
+        .withBean(ContextAuthentication::class.java, { ContextAuthentication(principal) })
+
+    private fun AssertableApplicationContext.authenticated(): String =
+        runBlocking { getBean(CompositeAuthentication::class.java).authenticate(ContextCredentials).id }
+
+    private object ContextCredentials : Credentials
+
+    private class ContextAuthentication(private val principal: String) : Authentication<ContextCredentials> {
+        override val supportCredentials = ContextCredentials::class.java
+
+        override suspend fun authenticate(credentials: ContextCredentials): TokenSubject =
+            TokenSubject(principal, null)
     }
 }

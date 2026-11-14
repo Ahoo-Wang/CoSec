@@ -57,6 +57,7 @@ private val log = KotlinLogging.logger {}
  * Whether a request is sampled is decided before its event is made ([sample]); only then does the event carry the
  * [ReplayHandle] that keeps its view reachable.
  */
+@InternalCoSecApi
 class ShadowListener(
     override val name: String,
     /** The share of the requests evaluated again, from 0 to 1. */
@@ -87,7 +88,7 @@ class ShadowListener(
         for ((key, installed) in documents(replay.view)) {
             when (val candidate = candidates.candidate(key)) {
                 null -> Unit
-                is Candidate.Failed -> recorder.record(candidate.window, ShadowOutcome.CANDIDATE_ERROR, null, null)
+                is Candidate.Failed -> recorder.record(key, candidate.window, ShadowOutcome.CANDIDATE_ERROR, null, null)
                 is Candidate.Ready -> compare(replay, enforced, key, installed, candidate)
             }
         }
@@ -102,37 +103,54 @@ class ShadowListener(
         candidate: Candidate.Ready
     ) {
         if (installed == null || installed != candidate.baseRevision) {
-            recorder.record(candidate.window, ShadowOutcome.BASE_MISMATCH, installed, null)
+            recorder.record(key, candidate.window, ShadowOutcome.BASE_MISMATCH, installed, null)
             return
         }
         val decided = try {
             val view = candidateView(replay, key, candidate.document)
             if (view == null) {
                 log.debug { "The candidate of window ${candidate.window} needs an app document no view source gives." }
-                recorder.record(candidate.window, ShadowOutcome.CANDIDATE_ERROR, installed, null)
+                recorder.record(key, candidate.window, ShadowOutcome.CANDIDATE_ERROR, installed, null)
                 return
             }
             engine.evaluate(replay.request, view, TraceLevel.OFF).decision
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            log.debug(e) { "The candidate of window ${candidate.window} failed to evaluate." }
-            recorder.record(
-                candidate.window,
-                ShadowOutcome.CANDIDATE_ERROR,
-                installed,
-                sample(replay.request, enforced, null)
-            )
+            failedToEvaluate(replay, enforced, key, installed, candidate, e)
+            return
+        } catch (e: StackOverflowError) {
+            // As a compilation that overflows (RC1-43): an instance that cannot evaluate the candidate blocks its window.
+            failedToEvaluate(replay, enforced, key, installed, candidate, e)
             return
         }
         val outcome = outcome(enforced, decided)
         recorder.record(
+            key,
             candidate.window,
             outcome,
             installed,
             sample(replay.request, enforced, decided).takeIf {
                 outcome != ShadowOutcome.SAME
             }
+        )
+    }
+
+    private fun failedToEvaluate(
+        replay: ReplayHandle,
+        enforced: Decision,
+        key: SnapshotKey,
+        installed: Long?,
+        candidate: Candidate.Ready,
+        error: Throwable,
+    ) {
+        log.debug(error) { "The candidate of window ${candidate.window} failed to evaluate." }
+        recorder.record(
+            key,
+            candidate.window,
+            ShadowOutcome.CANDIDATE_ERROR,
+            installed,
+            sample(replay.request, enforced, null)
         )
     }
 
@@ -209,7 +227,15 @@ class ShadowListener(
 
         candidate is Decision.Permit && enforced !is Decision.Permit -> ShadowOutcome.WIDENED
         enforced is Decision.Permit && candidate !is Decision.Permit -> ShadowOutcome.NARROWED
+        enforced is Decision.Indeterminate && candidate is Decision.Deny -> ShadowOutcome.BECAME_DENIED
+        else -> sameResult(enforced, candidate)
+    }
+
+    /** What differs, if anything, between two decisions that come to the same result but are not equal. */
+    private fun sameResult(enforced: Decision, candidate: Decision): ShadowOutcome = when {
         enforced::class == candidate::class && by(enforced) != by(candidate) -> ShadowOutcome.BY_CHANGED
+        enforced is Decision.Permit && candidate is Decision.Permit && enforced.obligations != candidate.obligations ->
+            ShadowOutcome.OBLIGATIONS_CHANGED
         else -> ShadowOutcome.SAME
     }
 

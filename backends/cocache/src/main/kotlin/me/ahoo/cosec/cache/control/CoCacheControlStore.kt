@@ -15,9 +15,13 @@
 
 package me.ahoo.cosec.cache.control
 
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
 import me.ahoo.cocache.api.CacheWriteException
 import me.ahoo.cocache.api.Codec
+import me.ahoo.cocache.api.ConditionalDelete
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
@@ -28,6 +32,7 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.createLocked
 import me.ahoo.cosec.cache.shadow.ShadowCacheSpecs
+import me.ahoo.cosec.cache.shadow.StoredCandidateCodec
 import me.ahoo.cosec.cache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
 import me.ahoo.cosec.cache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
@@ -41,7 +46,6 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.StoredDocument
-import me.ahoo.cosec.control.store.UnnamedDocumentException
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
@@ -57,10 +61,10 @@ import java.time.Instant
  * reads ([PolicySnapshotCache], one key per document); the records, indexes, back-references and leases are the
  * `Store`s of [ControlCacheSpecs]. Digests are CoCache's, SHA-256 with its algorithm.
  *
- * Writes are `putIfMatch`, one Lua script each (CoCache 6.7), as 7.x's snapshot publisher
- * wrote: the head only over the digest it was read at, a record only where there is none. A write whose reply is lost
- * is resolved by reading the digest back, never by writing again: `putIfMatch` is not idempotent. Nothing waits for
- * replicas (RFC 0007 Q27): a write lost in a failover shows up as a broken chain or a revision regression.
+ * Writes are `putIfMatch`, one Lua script each: the head only over the digest it was read at, a record only where
+ * there is none. A write whose reply is lost is resolved by reading the digest back, never by writing again:
+ * `putIfMatch` is not idempotent. Nothing waits for replicas (RFC 0007 Q27): a write lost in a failover shows up as
+ * a broken chain or a revision regression.
  *
  * Every read is a conditional read without a digest, so it answers from Redis, not from a local copy, and a failed
  * read throws (a `Store`'s conditional read always does). Nothing here blocks the caller: it awaits CoCache's async view.
@@ -69,7 +73,7 @@ class CoCacheControlStore internal constructor(
     private val heads: Store<SnapshotKey, SnapshotDocument>,
     private val records: Store<RevisionRecordKey, SnapshotDocument>,
     private val indexes: Store<SnapshotKey, RevisionIndex>,
-    private val references: Store<ReferenceKey, Set<SnapshotKey>>,
+    private val references: Store<ReferenceKey, Map<SnapshotKey, Long>>,
     private val leases: Store<String, String>,
     private val changes: Store<ChangeId, ChangeRequest>,
     private val stages: Store<SnapshotKey, StageSlot>,
@@ -146,21 +150,24 @@ class CoCacheControlStore internal constructor(
     override suspend fun putApps(expected: SnapshotDigest?, apps: AppList): Boolean =
         put(appLists, APP_LIST, expected, apps, digest(AppListCodec, apps)) is Put.Written
 
-    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
+    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
         read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
 
-    /** An emptied set is written as empty, never deleted: a delete cannot be conditional, and could drop a new referrer. */
+    /**
+     * Emptied referrers are written as empty, not deleted: the next writer always has a digest to name, and absent means
+     * never written.
+     */
     override suspend fun putReferrers(
         target: SnapshotKey,
         policy: PolicyId,
         expected: SnapshotDigest?,
-        referrers: Set<SnapshotKey>,
+        referrers: Map<SnapshotKey, Long>,
     ): Boolean = put(
         references,
         ReferenceKey(target, policy),
         expected,
         referrers,
-        digest(SnapshotKeySetCodec, referrers)
+        digest(ReferrersCodec, referrers)
     ) is Put.Written
 
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
@@ -184,28 +191,26 @@ class CoCacheControlStore internal constructor(
     }
 
     /**
-     * The listed changes that are not terminal. A terminal one is dropped; so is one missing for longer than
-     * [missingGrace], whose first write failed. One missing for less may be being written right now: it stays. So does
-     * one of an app no document key can name ([UnnamedDocumentException]): it cannot be read, so it is not known to be
-     * terminal, and each caller skips it when it reads it.
+     * The listed changes that are not terminal, each read once, a few at a time (#1219). A terminal one is dropped; so is
+     * one missing for longer than [missingGrace], whose first write failed. One missing for less may be being written
+     * right now: it stays listed and is not among the changes. One that does not decode fails this: it is not known
+     * to be terminal.
      */
-    @Suppress("TooGenericExceptionCaught")
-    override suspend fun openChanges(): Set<ChangeId> {
+    override suspend fun openChanges(): List<ChangeRequest> {
         val listed = read(lists, OPEN_CHANGES)?.first.orEmpty()
         val expired = clock.instant().minus(missingGrace)
-        val closed = listed.filterTo(HashMap()) { (id, listedAt) ->
-            val change = try {
-                read(changes, ChangeId(id))?.first
-            } catch (e: Exception) {
-                UnnamedDocumentException.of(e) ?: throw e
-                return@filterTo false
+        val found = listed.entries.chunked(READ_BATCH).flatMap { batch ->
+            coroutineScope {
+                batch.map { (id, listedAt) -> async { Triple(id, listedAt, read(changes, ChangeId(id))?.first) } }
+                    .awaitAll()
             }
-            change?.state?.terminal ?: listedAt.isBefore(expired)
-        }.keys
+        }
+        val closed = found.filter { (_, listedAt, change) -> change?.state?.terminal ?: listedAt.isBefore(expired) }
+            .mapTo(HashSet()) { it.first }
         if (closed.isNotEmpty()) {
             updateList(OPEN_CHANGES) { it - closed }
         }
-        return (listed.keys - closed).mapTo(LinkedHashSet(), ::ChangeId)
+        return found.mapNotNull { it.third }.filterNot { it.state.terminal }
     }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
@@ -216,27 +221,88 @@ class CoCacheControlStore internal constructor(
 
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? = read(candidates, key)?.first
 
-    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?) {
-        if (candidate == null) {
-            candidates.async().delete(key).await()
-        } else {
-            candidates.async().put(key, candidate).await()
-        }
-    }
+    override suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>? =
+        read(candidates, key)?.let { (value, digest) -> Versioned(value, digest) }
 
+    override suspend fun putCandidate(key: SnapshotKey, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean =
+        put(candidates, key, expected, candidate, digest(StoredCandidateCodec, candidate)) is Put.Written
+
+    /** `deleteIfMatch` over the digest of the candidate of [window] as read, so another window's is never removed. */
+    override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean =
+        deleteIf(candidates, key) { it.window == window }
+
+    /**
+     * Writes the lease where there is none (`putIfMatch` over nothing). [holder] taking its own lease again renews it for
+     * the full [duration], as `InMemoryControlStore` does: a `true` that left the old expiry would let a task that
+     * believes it holds the lease for [duration] lose it within moments. The renewal is `putIfMatch` over the lease as
+     * read, so one that expired and was taken by another holder in between is not overwritten: it is read again.
+     */
     override suspend fun acquireLease(name: String, holder: String, duration: Duration): Boolean {
-        val result = leases.async().putIfMatch(name, null, holder, duration).await()
-        if (result is ConditionalPut.Written) {
-            return true
+        val async = leases.async()
+        repeat(MAX_LIST_ATTEMPTS) {
+            if (async.putIfMatch(name, null, holder, duration).await() is ConditionalPut.Written) {
+                return true
+            }
+            val (current, digest) = read(leases, name) ?: return@repeat
+            if (current != holder) {
+                return false
+            }
+            if (async.putIfMatch(name, cocacheDigest(digest), holder, duration).await() is ConditionalPut.Written) {
+                return true
+            }
         }
-        return (read(leases, name)?.first) == holder
+        throw IllegalStateException(
+            "The lease [$name] kept changing while it was taken; gave up after $MAX_LIST_ATTEMPTS attempts."
+        )
     }
 
-    /** Read, then removed if still [holder]'s: while it holds the lease no one else can take it, so nothing is lost. */
+    /**
+     * `deleteIfMatch` over the digest of [holder]'s lease as read: one that expired after the read and another instance
+     * took has another value, and stays. [holder] taking it again in between is the one case it removes after the read,
+     * and that lease is its own.
+     */
     override suspend fun releaseLease(name: String, holder: String) {
-        if (read(leases, name)?.first == holder) {
-            leases.async().delete(name).await()
+        deleteIf(leases, name) { it == holder }
+    }
+
+    /**
+     * Removes [key] if its value, read now, is [wanted], and only while it still is (`deleteIfMatch`). A conflict is
+     * read again: the value that replaced it may be wanted too. A removal whose outcome is unknown is read back: gone, or
+     * another value, means it is not this caller's to remove any more.
+     */
+    private suspend fun <K : Any, V : Any> deleteIf(store: Store<K, V>, key: K, wanted: (V) -> Boolean): Boolean {
+        repeat(MAX_LIST_ATTEMPTS) {
+            val (value, digest) = read(store, key) ?: return false
+            if (!wanted(value)) {
+                return false
+            }
+            val deleted = try {
+                store.async().deleteIfMatch(key, cocacheDigest(digest)).await()
+            } catch (error: CacheWriteException) {
+                return removedAfter(store, key, digest, error)
+            }
+            if (deleted == ConditionalDelete.Deleted) {
+                return true
+            }
         }
+        throw IllegalStateException(
+            "[$key] kept changing while it was removed; gave up after $MAX_LIST_ATTEMPTS attempts."
+        )
+    }
+
+    /**
+     * Whether a `deleteIfMatch` of [key] over [digest] that failed with [error] removed it: read back when its outcome
+     * is unknown. Still [digest] means it did not, and the failure is the answer.
+     */
+    private suspend fun <K : Any, V : Any> removedAfter(
+        store: Store<K, V>,
+        key: K,
+        digest: SnapshotDigest,
+        error: CacheWriteException,
+    ): Boolean {
+        val after = if (error.outcomeUnknown) read(store, key) else throw error
+        if (after?.second == digest) throw error
+        return after == null
     }
 
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */
@@ -318,6 +384,9 @@ class CoCacheControlStore internal constructor(
         private const val OPEN_CHANGES = "open-changes"
         private const val APP_LIST = "all"
         private const val MAX_LIST_ATTEMPTS = 16
+
+        /** How many changes [openChanges] reads at once. */
+        private const val READ_BATCH = 32
 
         /** As `cosec.control.revisions.orphan-age`'s default. */
         val DEFAULT_MISSING_GRACE: Duration = Duration.ofHours(1)

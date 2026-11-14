@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter
 
 import jakarta.servlet.http.HttpServletRequest
 import kotlinx.coroutines.awaitCancellation
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.TraceLevel
@@ -25,6 +28,7 @@ import me.ahoo.cosec.engine.flat.FlatEvaluation
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
@@ -102,7 +106,7 @@ import kotlin.time.Duration.Companion.seconds
  * problem body, every problem type of §6.1 included. Their decision events agree on the request id, the trace, the
  * subject and the scope, and the response body names the same trace.
  *
- * Only the 8.0 pipeline runs here (RFC 0008 §4.1). `too-many-requests` joins with RFC 0006 PR-5.
+ * Only the 8.0 pipeline runs here (RFC 0008 §4.1).
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class WebAdapterParityTest {
@@ -200,7 +204,7 @@ class WebAdapterParityTest {
 
     /** Has permits for every rule but `limited`, whose bucket is exhausted: the 429 path (RFC 0006 §8.3). */
     private val rateLimiter = RateLimiter { ruleId, _, _ ->
-        val allowed = ruleId != "limited"
+        val allowed = ruleId != "platform/limited"
         RateLimitResult(allowed, 10, if (allowed) 9 else 0, java.time.Duration.ofSeconds(3))
     }
     private val app = compile(
@@ -249,7 +253,7 @@ class WebAdapterParityTest {
                     )
                 }
                 AuthnResult.Authenticated(
-                    AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships),
+                    AuthenticatedPrincipal(PrincipalId(who), TenantId(tenant), memberships, app = AppId("order")),
                     "token"
                 )
             }
@@ -312,7 +316,9 @@ class WebAdapterParityTest {
         scenario: Scenario,
         filter: (MockServerWebExchange, (ServerWebExchange) -> Mono<Void>) -> Mono<Void>,
     ): Written {
-        val request = MockServerHttpRequest.method(HttpMethod.valueOf(scenario.method), URI.create(scenario.path))
+        // Absolute, as Reactor Netty builds it from the request target: `//public` alone would be read as an authority.
+        val uri = URI.create("http://localhost${scenario.path}")
+        val request = MockServerHttpRequest.method(HttpMethod.valueOf(scenario.method), uri)
             .remoteAddress(InetSocketAddress("127.0.0.1", 50000))
         scenario.headers.forEach { (name, value) -> request.header(name, value) }
         val exchange = MockServerWebExchange.from(request)
@@ -340,7 +346,7 @@ class WebAdapterParityTest {
             headers = headers,
             bytes = bytes.toList(),
             proceeded = called,
-            principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },
+            principal = proceeded?.let { "${it.principal.id}@${it.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
             identity = identity,
         )
@@ -369,7 +375,7 @@ class WebAdapterParityTest {
             ) { it.lowercase() to response.getHeaders(it).toList() },
             bytes = response.contentAsByteArray.toList(),
             proceeded = chain.request != null,
-            principal = proceeded?.let { "${it.principal.id}@${it.tenant.tenantId}" },
+            principal = proceeded?.let { "${it.principal.id}@${it.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
             identity = identity,
         )
@@ -380,8 +386,7 @@ class WebAdapterParityTest {
     /** One scenario per problem type of §6.1 and per cause of a 503, and the permits. */
     @Suppress("LongMethod")
     fun scenarios(): List<Scenario> {
-        val app = mapOf("CoSec-App-Id" to "order")
-        fun token(value: String) = app + ("Authorization" to "Bearer $value")
+        fun token(value: String) = mapOf("Authorization" to "Bearer $value")
         return listOf(
             Scenario("a global ALLOW permits an anonymous request", path = "/public/page", status = 200, type = null),
             Scenario(
@@ -399,17 +404,28 @@ class WebAdapterParityTest {
                 type = null
             ),
             Scenario("an ambiguous path is 400", path = "/public/%2e%2e/admin", status = 400, type = "invalid-request"),
+            // PIP-14: each form a backend that merges slashes or decodes separators reads as another path.
+            Scenario("an empty segment is 400", path = "//public/page", status = 400, type = "invalid-request"),
+            Scenario(
+                "what removing a path parameter leaves empty is 400",
+                path = "/;x/public/page",
+                status = 400,
+                type = "invalid-request"
+            ),
+            Scenario("an encoded separator is 400", path = "/public%2Fpage", status = 400, type = "invalid-request"),
+            Scenario("an encoded backslash is 400", path = "/public%5Cpage", status = 400, type = "invalid-request"),
+            Scenario("a trailing separator is decided", path = "/public/page/", status = 200, type = null),
             Scenario(
                 "an ambiguous CoSec parameter is 400",
-                path = "/public/page?CoSec-App-Id=other",
-                headers = app,
+                path = "/public/page",
+                headers = mapOf("CoSec-Space-Id" to "a", "cosec-space-id" to "b"),
                 status = 400,
                 type = "invalid-request"
             ),
             Scenario(
                 "an anonymous deny is 401",
                 path = "/orders/1",
-                headers = app,
+                headers = emptyMap(),
                 status = 401,
                 type = "unauthorized"
             ),

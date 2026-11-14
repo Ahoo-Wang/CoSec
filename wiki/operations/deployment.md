@@ -149,7 +149,8 @@ excludes it (`management.endpoint.health.group.<group>.exclude=cosecSnapshotEvic
 On shutdown, the decision listeners stop taking events and deliver what is queued to the `BEST_EFFORT` listeners (the
 audit log, Kafka, metrics) for up to
 [`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners) (5 seconds), then drop the
-rest. Keep the pod's termination grace period long enough for Spring's own graceful shutdown plus that timeout.
+rest. The Kafka audit listener then gets up to the same timeout for the sends it still holds. Keep the pod's termination
+grace period long enough for Spring's own graceful shutdown plus twice that timeout.
 
 ## Kubernetes
 

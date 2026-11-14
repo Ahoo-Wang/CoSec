@@ -1,17 +1,17 @@
 # Rule: CTL-3
-# Mutant: a simulated http path is held to the length bounds only, not normalized as a request path is
-# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
+# Mutant: an http path is held to the length bounds only, not normalized as a request path is (the reading simulate and checks share)
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :runtime:test --tests me.ahoo.cosec.runtime.http.PathNormalizerTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index 0f98c085..b071c477 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -369,7 +369,7 @@ class DefaultControlPlane(
-      */
-     private fun enforceable(resource: Resource): Resource {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+index 90132c2d..aa02e0e1 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+@@ -83,7 +83,7 @@ object PathNormalizer {
+     @InternalCoSecApi
+     fun enforceable(resource: Resource): Resource? {
          val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
--            PathNormalizer.normalize(resource.id)
-+            resource.id.takeIf { PathNormalizer.withinBounds(it) }
+-            normalize(resource.id)
++            resource.id.takeIf(::withinBounds)
          } else {
-             resource.id.takeIf { PathNormalizer.withinBounds(it) }
+             resource.id.takeIf(::withinBounds)
          }

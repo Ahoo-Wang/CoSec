@@ -13,10 +13,7 @@
 
 package me.ahoo.cosec.jwt
 
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
@@ -65,7 +62,7 @@ class SubjectRevocationJwtTest {
 
     private fun issue(id: String = "alice") =
         converter.toToken(
-            SimpleTenantPrincipal(SimplePrincipal(id, roles = setOf("admin")), SimpleTenant(tenant.value))
+            TokenSubject(id, null, tenant = tenant.value, roles = setOf("admin"))
         )
 
     private fun issuedAt(token: SimpleCompositeToken): Instant = Jwts.decode(token.accessToken).issuedAtAsInstant
@@ -74,13 +71,13 @@ class SubjectRevocationJwtTest {
     fun revokesAccessAndRefreshTokensIssuedBefore() {
         val token = issue() as SimpleCompositeToken
         val bobToken = issue("bob")
-        verifier.verify<TokenPrincipal>(token).id.assert().isEqualTo("alice")
+        verifier.verify(token.accessToken).principal.assert().isEqualTo("alice")
 
         revoker.revokeSubject(tenant, PrincipalId("alice"), issuedAt(token).plusMillis(1))
 
-        assertThrows<TokenRevokedException> { verifier.verify<TokenPrincipal>(token) }
-        assertThrows<TokenRevokedException> { verifier.refresh<TokenPrincipal>(token) }
-        assertDoesNotThrow { verifier.verify<TokenPrincipal>(bobToken) }
+        assertThrows<TokenRevokedException> { verifier.verify(token.accessToken) }
+        assertThrows<TokenRevokedException> { verifier.refresh(token) }
+        assertDoesNotThrow { verifier.verify(bobToken.accessToken) }
     }
 
     @Test
@@ -89,16 +86,16 @@ class SubjectRevocationJwtTest {
 
         revoker.revokeSubject(tenant, PrincipalId("alice"), issuedAt(token))
 
-        assertDoesNotThrow { verifier.verify<TokenPrincipal>(token) }
-        assertDoesNotThrow { verifier.refresh<TokenPrincipal>(token) }
+        assertDoesNotThrow { verifier.verify(token.accessToken) }
+        assertDoesNotThrow { verifier.refresh(token) }
     }
 
     @Test
     fun revokingOneTokenStillWorks() {
         val token = issue()
 
-        revoker.revoke(token)
+        revoker.revoke(token.accessToken)
 
-        assertThrows<TokenRevokedException> { verifier.verify<TokenPrincipal>(token) }
+        assertThrows<TokenRevokedException> { verifier.verify(token.accessToken) }
     }
 }

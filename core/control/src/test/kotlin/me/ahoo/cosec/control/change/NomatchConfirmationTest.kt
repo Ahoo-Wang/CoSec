@@ -27,9 +27,11 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import tools.jackson.databind.node.JsonNodeFactory
 
 /**
  * RFC 0007 §9.5 (N6): a DENY that lapses while its attributes cannot be fetched is published only with a confirmation
@@ -118,6 +120,33 @@ class NomatchConfirmationTest {
     }
 
     /** Review K4: the policy condition guards the statement as much as its own, so the confirmation covers it too. */
+    /** RFC 0007 §5.6, §9.5: a rollback is a change like any other, so it can carry the confirmation it needs. */
+    @Test
+    fun `a rollback restores a lapsing deny with a confirmation of its content, and not without one`() = runBlocking<Unit> {
+        publish(
+            SnapshotKey.Platform,
+            listOf(Operation.SetAttributes(listOf(Attribute.external("ext.geo.inFence", AttributeType.BOOL))))
+        )
+        val confirmation = Confirmation(PolicyId("fence"), 0, StatementDigest.of(lapsing().statements.single()))
+        publish(
+            ACME,
+            listOf(Operation.PutPolicy(lapsing())),
+            listOf(confirmation)
+        ).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        publish(ACME, listOf(Operation.RemovePolicy(PolicyId("fence")))).state.assert().isEqualTo(ChangeState.PUBLISHED)
+
+        val unconfirmed = changes.rollback(operatorFor(ACME), ACME, 1, "restore")
+        unconfirmed.state.assert().isEqualTo(ChangeState.DRAFT)
+        unconfirmed.errors.map { it.check to it.status }.assert().contains("V5" to 428)
+        changes.abandon(operatorFor(ACME), unconfirmed.id)
+
+        val confirmed = changes.rollback(operatorFor(ACME), ACME, 1, "restore", listOf(confirmation))
+        confirmed.errors.assert().describedAs("${confirmed.findings}").isEmpty()
+        confirmed.state.assert().isEqualTo(ChangeState.CHECKED)
+        confirmed.kind.assert().isEqualTo(me.ahoo.cosec.runtime.document.ProvenanceKind.ROLLBACK)
+        confirmed.confirmations.assert().containsExactly(confirmation)
+    }
+
     @Test
     fun `a confirmation does not survive a change of its policy's condition`() = runBlocking<Unit> {
         publish(
@@ -135,6 +164,21 @@ class NomatchConfirmationTest {
         newDigest.assert().isNotEqualTo(digest)
         publish(ACME, listOf(Operation.PutPolicy(guarded)), listOf(Confirmation(PolicyId("fence"), 0, newDigest)))
             .state.assert().isEqualTo(ChangeState.PUBLISHED)
+    }
+
+    /** One shape, `{statement, policyCondition}`, whether or not the policy has a condition. */
+    @Test
+    fun `the digest has one shape, and a changed condition is another digest`() {
+        val statement = lapsing().statements.single()
+        val bare = PolicyDefinition(PolicyId("statement"), false, null, listOf(StatementDigest.unconfirmed(statement)))
+        val content = JsonNodeFactory.instance.objectNode()
+        content.set("statement", PolicyDocumentCodec.policyTree(bare).get("statements").get(0))
+        content.putNull("policyCondition")
+        StatementDigest.of(statement).assert().isEqualTo(EntryDigest.sha256(content))
+        val guarded = Condition.Eq("subject.authenticated", Literal.Bool(true))
+        val otherwise = Condition.Eq("subject.authenticated", Literal.Bool(false))
+        StatementDigest.of(statement, guarded).assert().isNotEqualTo(StatementDigest.of(statement))
+        StatementDigest.of(statement, guarded).assert().isNotEqualTo(StatementDigest.of(statement, otherwise))
     }
 
     @Test

@@ -25,11 +25,11 @@ import java.time.Instant
  * `cosec.pipeline.api-key-header`. A key's memberships come from its principal's `MembershipProvider`, so one is
  * required (RFC 0009 §4.2, `IDN-6`).
  *
- * Unknown fields fail binding rather than being dropped: a key configured with 8.0's predecessors' `policies` or
- * `attributes`, which keys no longer carry, stops startup instead of silently losing or keeping access.
+ * Unknown fields fail binding rather than being dropped: a key configured with `policies` or `attributes`, which keys
+ * do not carry, stops startup instead of being ignored with more or less access than its author meant.
  */
 @ConfigurationProperties(ApiKeyProperties.PREFIX, ignoreUnknownFields = false)
-data class ApiKeyProperties(
+class ApiKeyProperties(
     @DefaultValue("false") override var enabled: Boolean = false,
     /**
      * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cosec-cocache`), under
@@ -41,6 +41,7 @@ data class ApiKeyProperties(
      */
     var keys: List<Key> = emptyList(),
 ) : EnabledCapable {
+
     companion object {
         const val PREFIX: String = "cosec.api-key"
         const val ENABLED_KEY: String = PREFIX + ENABLED_SUFFIX_KEY
@@ -52,13 +53,15 @@ data class ApiKeyProperties(
         REDIS,
     }
 
-    data class Key(
+    class Key(
         var id: String = "",
         /** SHA-256 of the key, hex-encoded. Never configure the key itself. */
         var hash: String = "",
         var principalId: String = "",
         /** The principal's tenant: required. */
         var tenantId: String = "",
+        /** The app the key belongs to (RFC 0012 §3.5); left out, it declares none, which a host with an app refuses. */
+        var app: String? = null,
         /**
          * The cap, as `role` or `role@space`: the key's memberships are its principal's, narrowed to these; empty, it
          * has no roles. Set it, or [uncapped]: never both, never neither.
@@ -72,6 +75,7 @@ data class ApiKeyProperties(
         var expiresAt: Instant? = null,
         @DefaultValue("true") var enabled: Boolean = true,
     ) {
+
         fun toApiKey(): ApiKey {
             require(id.isNotBlank()) { "An API key needs an id." }
             require(HASH.matches(hash)) { "API key [$id] needs the SHA-256 hex of the key as hash." }
@@ -81,7 +85,7 @@ data class ApiKeyProperties(
                 "API key [$id] needs exactly one of roles (its cap; [] for no roles) and uncapped: true, " +
                     "not ${if (uncapped) "both" else "neither"}."
             }
-            return ApiKey(id, principalId, tenantId, roles, expiresAt, enabled)
+            return ApiKey(id, principalId, tenantId, app?.takeIf { it.isNotBlank() }, roles, expiresAt, enabled)
         }
 
         private companion object {

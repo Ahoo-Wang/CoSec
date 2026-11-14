@@ -11,11 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
-import me.ahoo.cosec.spi.snapshot.SnapshotVersion
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -49,7 +51,7 @@ class SnapshotSourceTest {
             val loaded = source.load("app-a").join()
             loaded.policiesCompiled.entries.assert().containsExactly("p1")
             loaded.appCompiled.entries.assert().containsExactly("a1")
-            loaded.version.assert().isEqualTo(SnapshotVersion(1, 1))
+            loaded.revisions().assert().isEqualTo(1L to 1L)
 
             val peeked = source.peek("app-a")!!
             peeked.policiesEntry.assert().isSameAs(loaded.policiesEntry)
@@ -66,7 +68,7 @@ class SnapshotSourceTest {
             val first = source.peek()!!
             first.assert().isSameAs(source.peek())
             first.app.assert().isNull()
-            first.version.assert().isEqualTo(SnapshotVersion(1, 0))
+            first.revisions().assert().isEqualTo(1L to 0L)
             source.load().join().assert().isSameAs(first)
         }
     }
@@ -76,7 +78,7 @@ class SnapshotSourceTest {
         testSource(store).use { source ->
             val snapshot = source.load("app-b").join()
             snapshot.app.assert().isEqualTo(DocumentState.Absent)
-            snapshot.version.assert().isEqualTo(SnapshotVersion(1, 0))
+            snapshot.revisions().assert().isEqualTo(1L to 0L)
             source.peek("app-b")!!.app.assert().isEqualTo(DocumentState.Absent)
         }
     }
@@ -106,7 +108,7 @@ class SnapshotSourceTest {
             store.put(SnapshotKey.Platform, document(2))
             store.put(APP_A, document(2, "a2"))
             val snapshot = source.peek("app-a")!!
-            snapshot.version.assert().isEqualTo(SnapshotVersion(2, 2))
+            snapshot.revisions().assert().isEqualTo(2L to 2L)
             snapshot.appCompiled.entries.assert().containsExactly("a2")
             store.conditionalReads.get().assert().isEqualTo(conditionalReads + 2)
         }
@@ -334,3 +336,6 @@ class SnapshotSourceTest {
         }
     }
 }
+
+/** The revisions of the two documents [this] holds: the shared one's and the app's, 0 for none. */
+internal fun Snapshot<*, *>.revisions(): Pair<Long, Long> = policiesEntry.revision to (appEntry?.revision ?: 0L)

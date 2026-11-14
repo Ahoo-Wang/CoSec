@@ -38,7 +38,6 @@ import kotlin.random.Random
 class ReactiveRedisRateLimiterTest {
     private val factory = connectionFactory("localhost", 6379)
     private val prefix = "cosec:test:rate:${UUID.randomUUID()}"
-    private val clock = 1_700_000_000_250L
 
     @AfterEach
     fun close() {
@@ -47,18 +46,18 @@ class ReactiveRedisRateLimiterTest {
 
     @Test
     fun countsUnderTheBucketsHashTag() = runBlocking<Unit> {
-        val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix) { clock }
-        val limit = RateLimitSpec(2.0)
+        val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(factory), prefix) { FIXED_NOW }
+        val limit = quotaOf(2)
         limiter.tryAcquire("rule", "global", limit).remaining.assert().isEqualTo(1)
         // `<keyPrefix>:{<ruleId>:<bucket>}:<windowIndex>`: what is counted there is spent.
-        val key = "$prefix:{rule:global}:${clock / RateLimiter.window(limit).windowMillis}"
+        val key = "$prefix:{rule:global}:${FIXED_NOW / RateLimiter.window(limit).windowMillis}"
         val redis = StringRedisTemplate(factory)
         redis.opsForValue().get(key).assert().isEqualTo("1")
         redis.opsForValue().increment(key)
         val exhausted = limiter.tryAcquire("rule", "global", limit)
         exhausted.allowed.assert().isFalse()
         exhausted.remaining.assert().isZero()
-        limiter.tryAcquire("rule", "g:other", limit).allowed.assert().isTrue()
+        limiter.tryAcquire("rule", "k:other", limit).allowed.assert().isTrue()
     }
 
     @Test
@@ -76,7 +75,8 @@ class ReactiveRedisRateLimiterTest {
     fun aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold() {
         val random = Random(1229)
         val prefixes = listOf("cosec:rate-limiter", "{cosec}:rate-limiter", "a{b:rate-limiter", "a}b{c}:rl", "x{", "")
-        val rules = listOf("rule", "a.b_c-d", "app:shop/quota", "tenant:acme/eu/quota", "tenant:}x/quota", "")
+        val rules =
+            listOf("platform/rule", "platform/a.b_c-d", "app:shop/quota", "tenant:acme/eu/quota", "tenant:}x/quota", "")
         fun text(length: Int) = (0 until length).map { BUCKET_CHARACTERS.random(random) }.joinToString("")
 
         // A random prefix, unless it is one the limiter refuses: its first `{` immediately followed by `}`.
@@ -132,14 +132,14 @@ class ReactiveRedisRateLimiterTest {
             start()
         }
         try {
-            val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(cluster), prefix) { clock }
-            val limit = RateLimitSpec(2.0)
+            val limiter = ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(cluster), prefix) { FIXED_NOW }
+            val limit = quotaOf(2)
             runBlocking {
-                for (rule in listOf("rule", "app:shop/quota", "tenant:acme/quota")) {
+                for (rule in listOf("platform/rule", "app:shop/quota", "tenant:acme/quota")) {
                     (0 until 16).forEach { bucket ->
-                        limiter.tryAcquire(rule, "g:b$bucket", limit).remaining.assert().isEqualTo(1)
-                        limiter.tryAcquire(rule, "g:b$bucket", limit).remaining.assert().isZero()
-                        limiter.tryAcquire(rule, "g:b$bucket", limit).allowed.assert().isFalse()
+                        limiter.tryAcquire(rule, "k:b$bucket", limit).remaining.assert().isEqualTo(1)
+                        limiter.tryAcquire(rule, "k:b$bucket", limit).remaining.assert().isZero()
+                        limiter.tryAcquire(rule, "k:b$bucket", limit).allowed.assert().isFalse()
                     }
                 }
             }
@@ -151,6 +151,19 @@ class ReactiveRedisRateLimiterTest {
     companion object {
         /** Braces, separators, a non-ASCII letter and both halves of a surrogate pair, alone or together. */
         private const val BUCKET_CHARACTERS = "ab{}:/ \u00e9\ud83d\ude00"
+
+        /** A power of two, so that `permits / seconds * seconds` is exactly the permits. */
+        private const val WINDOW_SECONDS = 4_096L
+
+        /** The clock of a test that counts: any instant, the same for every call, so that they share one window. */
+        const val FIXED_NOW = 1_700_000_000_250L
+
+        /**
+         * [permits] for one window that outlives any test. A short one would not: the script's TTL on a counter is real
+         * time, two windows whatever the limiter's clock says, so a runner that stalls for two seconds would lose the
+         * counter even at [FIXED_NOW], and the permits would be back.
+         */
+        fun quotaOf(permits: Int): RateLimitSpec = RateLimitSpec(permits.toDouble() / WINDOW_SECONDS, WINDOW_SECONDS)
 
         fun connectionFactory(host: String, port: Int): LettuceConnectionFactory =
             LettuceConnectionFactory(RedisStandaloneConfiguration(host, port)).apply {

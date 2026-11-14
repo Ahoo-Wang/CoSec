@@ -13,14 +13,10 @@
 
 package me.ahoo.cosec.spi.membership
 
-import me.ahoo.cosec.api.findInDelegationChain
-import me.ahoo.cosec.api.principal.SpacedRoleId
-import me.ahoo.cosec.api.tenant.TenantCapable
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
-import me.ahoo.cosec.model.TenantId
 import java.util.Collections
 
 /**
@@ -28,8 +24,8 @@ import java.util.Collections
  *
  * They are a signed cache of the principal's memberships, carried in the token so that the pipeline does not have to ask
  * a [MembershipProvider] on every request. The `roles` and `policies` claims are read as they are: `role` is a role
- * in the default space, `role@space` a role in `space`, and an entry [parseRole] rejects (empty role or space,
- * more than one `@`) applies nowhere and is kept in [Memberships.malformed]. Strings are taken exactly, with no
+ * in the default space, `role@space` a role in `space`, and an entry with an empty role or space,
+ * or more than one `@`, applies nowhere and is kept in [Memberships.malformed]. Strings are taken exactly, with no
  * trimming or case folding. `role@*` is malformed too, because `*` means
  * any space in snapshot documents and is not a space id. `policies` become [Memberships.attachments], in claim
  * order.
@@ -38,31 +34,29 @@ import java.util.Collections
  * [MembershipProvider], through the pipeline's `MembershipResolver` (`cosec-runtime`).
  */
 object MembershipClaims {
+    /** The claim holding the tenant of the token's principal (`IDN-11`). */
+    const val TENANT_KEY = "tenantId"
+
+    /** The claim holding the roles: `role`, or `role@space`. */
+    const val ROLES_KEY = "roles"
+
+    /** The claim holding the attached policies. */
+    const val POLICIES_KEY = "policies"
+
+    /** The claim holding the attributes of the token's principal. */
+    const val ATTRIBUTES_KEY = "attributes"
+
     /** The claim that says where the memberships are. Absent: in the `roles` and `policies` claims. */
     const val MARKER_KEY = "cosec.membership"
 
     /** The only value of [MARKER_KEY]: ask the [MembershipProvider]. */
     const val PROVIDER = "provider"
 
+    /** Between the role and the space of `role@space`. */
+    const val SPACE_SEPARATOR = '@'
+
     /** Means "any" in snapshot documents (RFC 0004 §4.2), so never a space id. */
     private const val ANY = "*"
-
-    private const val SEPARATOR = SpacedRoleId.SPACE_ID_SEPARATOR[0]
-
-    /**
-     * [role] (`role` or `role@space`) as its role and space, or `null` when it is malformed: an empty role or space,
-     * or more than one `@`.
-     */
-    private fun parseRole(role: String): SpacedRoleId? {
-        val separator = role.indexOf(SEPARATOR)
-        if (separator < 0) {
-            return role.takeIf { it.isNotEmpty() }?.let { SpacedRoleId(it) }
-        }
-        if (separator == 0 || separator == role.length - 1 || role.indexOf(SEPARATOR, separator + 1) >= 0) {
-            return null
-        }
-        return SpacedRoleId(role.substring(0, separator), role.substring(separator + 1))
-    }
 
     /**
      * The memberships the [roles] and [policies] claims state. Both keep their order; a role claimed twice counts
@@ -73,12 +67,15 @@ object MembershipClaims {
         val spaces = LinkedHashMap<SpaceId, MutableSet<RoleId>>()
         val malformed = ArrayList<String>()
         for (role in roles) {
-            val spaced = parseRole(role)
-            if (spaced == null || spaced.spaceId == ANY) {
+            val separator = role.indexOf(SPACE_SEPARATOR)
+            val roleId = if (separator < 0) role else role.substring(0, separator)
+            val spaceId = if (separator < 0) "" else role.substring(separator + 1)
+            val wellFormed = roleId.isNotEmpty() && SPACE_SEPARATOR !in spaceId && (separator < 0 || spaceId.isNotEmpty())
+            if (!wellFormed || spaceId == ANY) {
                 malformed.add(role)
                 continue
             }
-            spaces.getOrPut(SpaceId(spaced.spaceId)) { LinkedHashSet() }.add(RoleId(spaced.roleId))
+            spaces.getOrPut(SpaceId(spaceId)) { LinkedHashSet() }.add(RoleId(roleId))
         }
         val readOnlySpaces = LinkedHashMap<SpaceId, Set<RoleId>>(spaces.size)
         spaces.forEach { (space, spaceRoles) -> readOnlySpaces[space] = Collections.unmodifiableSet(spaceRoles) }
@@ -89,22 +86,4 @@ object MembershipClaims {
             malformed = if (malformed.isEmpty()) emptyList() else Collections.unmodifiableList(malformed),
         )
     }
-
-    /**
-     * The tenant of [principal], looking through [me.ahoo.cosec.api.Delegated] wrappers: [TenantId.DEFAULT] when its
-     * token has no tenant claim, or an empty one, as in 7.x. A blank claim such as `" "` is kept as it is, not mapped
-     * to [TenantId.DEFAULT], which would move the principal into another tenant; `ScopeSubject` refuses it, so such a
-     * request fails closed.
-     */
-    fun tenantOf(principal: Any): TenantId {
-        val tenantId = principal.findInDelegationChain<TenantCapable>()?.tenant?.tenantId
-        return if (tenantId.isNullOrEmpty()) TenantId.DEFAULT else TenantId(tenantId)
-    }
-
-    /**
-     * The value of [MARKER_KEY] the principal's token carried, looking through [me.ahoo.cosec.api.Delegated] wrappers
-     * such as the token principals; `null` when the token had no marker.
-     */
-    fun markerOf(principal: Any): String? =
-        principal.findInDelegationChain<MembershipMarkerCapable>()?.membershipMarker
 }

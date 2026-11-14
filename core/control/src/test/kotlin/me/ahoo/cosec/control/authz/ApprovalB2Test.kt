@@ -262,6 +262,7 @@ class ApprovalB2Test {
                 breakGlass = false,
                 issuedAt = issuedAt,
                 apiKeyCredential = false,
+                app = PipelineControlAuthorizer.CONTROL_APP,
             )
         )
 
@@ -387,6 +388,7 @@ class ApprovalB2Test {
                 TenantId.PLATFORM,
                 Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
                 credential = Identity.Credential(Identity.Method.API_KEY, "key-1", null),
+                app = PipelineControlAuthorizer.CONTROL_APP,
             )
         )
         refused { changes.approve(key, change.id, change.candidate!!) }.assert().isEqualTo(403)
@@ -413,6 +415,7 @@ class ApprovalB2Test {
                 breakGlass = false,
                 issuedAt = null,
                 apiKeyCredential = true,
+                app = PipelineControlAuthorizer.CONTROL_APP,
             )
         )
         val byName = engine.operator(
@@ -421,6 +424,7 @@ class ApprovalB2Test {
                 TenantId.PLATFORM,
                 Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
                 credential = Identity.Credential(Identity.Method.API_KEY, "key-1", null),
+                app = PipelineControlAuthorizer.CONTROL_APP,
             )
         )
         for (key in listOf(byProvenance, byName)) {
@@ -469,6 +473,7 @@ class ApprovalB2Test {
                 PrincipalId("pia"),
                 TenantId.PLATFORM,
                 Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()),
+                app = PipelineControlAuthorizer.CONTROL_APP,
             )
         )
         val unnamed = awaiting("viewers-unnamed")

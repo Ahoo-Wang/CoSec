@@ -11,8 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
@@ -31,6 +35,29 @@ class CompiledDocumentTest {
 
     private fun rejects(message: String, compile: () -> Any) {
         assertThrownBy<IllegalArgumentException> { compile() }.hasMessageContaining(message)
+    }
+
+    /** #1216: a view builds one for every tenant or app with nothing published, per request, so it shares its empties. */
+    @Test
+    fun `a document with nothing in it has nothing to find`() {
+        for (document in listOf(tenant(), CompiledDocument.app(AppId("app"), emptyList(), emptyList()))) {
+            document.anyone.assert().isEmpty()
+            document.role("admin").assert().isNull()
+            document.principal("acme", "alice").assert().isNull()
+            document.breakGlass("(platform)", "plato").assert().isNull()
+            document.policy("p").assert().isNull()
+            document.repeats.assert().isZero()
+            document.readsExternal.assert().isFalse()
+            document.headersRead.assert().isEmpty()
+            document.rateLimits.assert().isEmpty()
+            document.needsApp("app").assert().isFalse()
+            document.isBreakGlass(bound("g", document.kind)).assert().isFalse()
+        }
+        // Only the empty path is shared: a document with a binding or a policy keeps its own.
+        val withBinding = tenant(p, bindings = listOf(anyone("g", "p")))
+        withBinding.anyone.assert().hasSize(1)
+        withBinding.policy("p").assert().isSameAs(p)
+        tenant(p).policy("p").assert().isSameAs(p)
     }
 
     @Test
@@ -177,6 +204,46 @@ class CompiledDocumentTest {
         CompiledDocument.platform(listOf(globs("a", rest - 1)), emptyList(), listOf(rule), listOf(boundary), "boundary")
         rejects("more than $max") {
             CompiledDocument.platform(listOf(globs("a", rest)), emptyList(), listOf(rule), listOf(boundary), "boundary")
+        }
+    }
+
+    /**
+     * `DOC-6`: every rule a permit matches costs the pipeline one limiter call, so a document holds at most
+     * [CompiledDocument.MAX_RATE_LIMIT_RULES] of them, whatever its kind.
+     */
+    @Test
+    fun `a document holds at most its rate limit rules`() {
+        val compiler = PolicyCompiler()
+        fun rules(kind: DocumentKind, owner: String, count: Int) = (0 until count).map {
+            compiler.rateLimit(
+                kind,
+                owner,
+                RateLimitSource("r$it", StatementSource("r$it", Effect.DENY, listOf("*")), null, RateLimitSpec(1.0))
+            )
+        }
+        val max = CompiledDocument.MAX_RATE_LIMIT_RULES
+        max.assert().isEqualTo(64)
+        CompiledDocument.platform(
+            emptyList(),
+            emptyList(),
+            rules(DocumentKind.PLATFORM, "", max)
+        ).rateLimits.assert().hasSize(max)
+        CompiledDocument.app(AppId("app"), emptyList(), emptyList(), rules(DocumentKind.APP, "app", max))
+        CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList(), rules(DocumentKind.TENANT, "acme", max))
+        val message = "holds ${max + 1} rate limit rules, more than $max"
+        rejects(
+            message
+        ) { CompiledDocument.platform(emptyList(), emptyList(), rules(DocumentKind.PLATFORM, "", max + 1)) }
+        rejects(message) {
+            CompiledDocument.app(AppId("app"), emptyList(), emptyList(), rules(DocumentKind.APP, "app", max + 1))
+        }
+        rejects(message) {
+            CompiledDocument.tenant(
+                TenantId("acme"),
+                emptyList(),
+                emptyList(),
+                rules(DocumentKind.TENANT, "acme", max + 1)
+            )
         }
     }
 

@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * How the engine reads `subject.attributes.<name>` (RFC 0005 §3.2): the value's `toString()`, whatever its type, so
@@ -21,6 +25,7 @@ package me.ahoo.cosec.engine.flat
  * an analysis that reads them any other way can count a statement as held that the engine never applies to the
  * grantor.
  */
+@InternalCoSecApi
 object SubjectAttributes {
     /** `subject.attributes.<name>` of [attributes], or `null` when the subject has no such attribute. */
     fun string(attributes: Map<String, Any>, name: String): String? = attributes[name]?.toString()

@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.identity
 
 import io.github.oshai.kotlinlogging.KotlinLogging
@@ -18,6 +20,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
 import me.ahoo.cosec.model.Memberships
@@ -27,8 +30,6 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.model.scope.DeclaredScope
-import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
@@ -50,7 +51,6 @@ import me.ahoo.cosec.spi.identity.IdentityFormatException
 import java.time.Clock
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 private val log = KotlinLogging.logger {}
 
@@ -68,9 +68,9 @@ private val log = KotlinLogging.logger {}
  */
 @OptIn(InternalCoSecApi::class)
 class IdentityGate(
-    /** `cosec.pipeline.gateway.max-size`. */
+    /** `cosec.pipeline.identity.max-size`. */
     private val maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES,
-    /** `cosec.pipeline.gateway.max-age`. */
+    /** `cosec.pipeline.identity.max-age`. */
     private val maxAge: Duration = DEFAULT_MAX_AGE,
     /** `cosec.authentication.revocation.skew`: how far the gateway's clock may be ahead of this service's. */
     private val skew: Duration = DEFAULT_SKEW,
@@ -147,9 +147,9 @@ class IdentityGate(
     private fun anonymous(requestId: String, facts: HttpFacts): RequestSecurity {
         val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val subject = ScopeSubject(TenantId.DEFAULT, false, memberships)
-        val resolution = ScopeResolver.resolve(subject, DeclaredScope("", ""), facts.host)
+        val resolution = ScopeResolver.resolve(subject, "", facts.host)
         val scope = (resolution as ScopeResolution.Resolved).scope
-        return RequestSecurity(requestId, null, scope, memberships, request(ANONYMOUS, scope, requestId, facts))
+        return RequestSecurity(requestId, null, scope, memberships, request(ANONYMOUS, requestId, facts))
     }
 
     /** The principal the gateway verified, in the scope it decided in; null when that scope does not resolve here. */
@@ -167,33 +167,30 @@ class IdentityGate(
             breakGlass = identity.credential.method == Identity.Method.JWT,
             issuedAt = null,
             apiKeyCredential = false,
+            app = identity.app.takeIf(ScopeResolver::isValidAppId)?.let(::AppId),
         )
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(tenant, true, memberships),
-            DeclaredScope(identity.app, identity.space),
+            // The forwarded identity is the credential here, and its app the one the credential declared (`SCP-11`).
+            ScopeSubject(tenant, true, memberships, identity.app.ifEmpty { null }),
+            identity.space,
             facts.host,
         )
         val scope = (resolution as? ScopeResolution.Resolved)?.scope ?: return null
         // The gateway's credential decides here too: a capped one is granted nothing by name, an API key no break-glass.
         val subject = Subject(
             identity.subject,
-            identity.tenant,
             true,
-            emptySet(),
-            emptySet(),
             identity.claims,
-            false,
             principal.principalBindings,
             principal.breakGlass,
         )
-        val request = request(subject, scope, requestId, facts)
+        val request = request(subject, requestId, facts)
         return RequestSecurity(requestId, principal, scope, memberships, request, identity = identity)
     }
 
-    private fun request(subject: Subject, scope: Scope, requestId: String, facts: HttpFacts) =
+    private fun request(subject: Subject, requestId: String, facts: HttpFacts) =
         AuthzRequest(
             subject = subject,
-            scope = DeclaredRequestScope.declared(scope.tenant.value, scope.app.value, scope.space.value),
             action = Action("http", facts.method),
             resource = Resource("http", facts.rawPath, emptyMap()),
             environment = Environment(facts.remoteAddress, requestId, "", false),
@@ -205,12 +202,8 @@ class IdentityGate(
 
         private val ANONYMOUS = Subject(
             CoSecPrincipal.ANONYMOUS_ID,
-            TenantId.DEFAULT.value,
             false,
-            emptySet(),
-            emptySet(),
             emptyMap(),
-            false,
             false,
             false,
         )

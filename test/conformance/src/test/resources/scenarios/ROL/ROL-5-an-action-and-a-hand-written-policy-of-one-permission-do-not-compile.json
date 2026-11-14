@@ -1,0 +1,69 @@
+{
+  "rules": [
+    "ROL-5"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A permission has one definition: removing the policy must not silently fall back to the short form.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "policies": [
+          {
+            "id": "perm:wms/read",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "wms:read"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "clerk"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "has an action and a hand-written policy"
+  }
+}

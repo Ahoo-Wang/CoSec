@@ -102,7 +102,7 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
-class CoSecControlAutoConfiguration {
+internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecControlStore(
@@ -368,7 +368,7 @@ class CoSecControlAutoConfiguration {
 private const val KAFKA_CHANGE_LISTENER = "kafka-change-audit"
 
 /** The control plane's own snapshot source, held apart from the data plane's (see the bean's comment). */
-class ControlSnapshot(
+internal class ControlSnapshot(
     val source: SnapshotSource<CompiledDocument, CompiledDocument>,
     /** The clock [source] dates its entries with; confirmation compares against it. */
     val clock: Clock = Clock.systemUTC(),
@@ -381,26 +381,34 @@ class ControlSnapshot(
  * completes normally, so the future alone does not say the store answered: every entry must have been confirmed at or
  * after this confirmation started, and must not be failed, or the check is indeterminate. A cold key may first be
  * answered from a local copy, dated up to the store's local-copy age before its read; it gets one more forced read,
- * which goes to the store of record.
+ * which goes to the store of record. It answers the revision of each key as the source holds it now (`0` for none).
  */
 internal class SourceConfirmation(
     private val source: SnapshotSource<*, *>,
     private val clock: Clock,
 ) : DocumentConfirmation {
-    override suspend fun confirm(keys: Set<SnapshotKey>) {
+    override suspend fun confirm(keys: Set<SnapshotKey>): Map<SnapshotKey, Any> {
         val start = clock.instant()
+        val confirmed = HashMap<SnapshotKey, SnapshotEntry<*>>()
         val stale = keys.map { it to source.reload(it) }
-            .mapNotNull { (key, reloading) -> key.takeUnless { reloading.await().isConfirmedSince(start) } }
-        if (stale.isEmpty()) {
-            return
-        }
-        val retryStart = clock.instant()
-        stale.map { source.reload(it) }.forEach {
-            val entry = it.await()
-            check(entry.isConfirmedSince(retryStart)) {
-                "Snapshot document [${entry.key}] could not be confirmed current: $entry."
+            .mapNotNull { (key, reloading) ->
+                val entry = reloading.await()
+                confirmed[key] = entry
+                key.takeUnless { entry.isConfirmedSince(start) }
+            }
+        if (stale.isNotEmpty()) {
+            val retryStart = clock.instant()
+            stale.map { it to source.reload(it) }.forEach { (key, reloading) ->
+                val entry = reloading.await()
+                check(entry.isConfirmedSince(retryStart)) {
+                    "Snapshot document [${entry.key}] could not be confirmed current: $entry."
+                }
+                confirmed[key] = entry
             }
         }
+        // A forced reload makes a new entry even for a document that did not change, so an entry is not its own version:
+        // the control plane moves a document only to a higher revision, and the revision is what a batch compares.
+        return confirmed.mapValues { (_, entry) -> entry.revision }
     }
 
     private fun SnapshotEntry<*>.isConfirmedSince(start: Instant): Boolean =

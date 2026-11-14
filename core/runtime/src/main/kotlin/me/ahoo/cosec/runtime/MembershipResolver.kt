@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
@@ -47,6 +50,7 @@ import kotlin.time.Duration.Companion.milliseconds
  * The provider is called through [resumeOffIo], so an answer that completes on a client library's thread does not
  * continue the request there (RFC 0006 §7.2). An external cancellation propagates.
  */
+@InternalCoSecApi
 class MembershipResolver(
     private val provider: MembershipProvider?,
     /** `cosec.authorization.membership.timeout` (RFC 0004 §4.5.2, RFC 0006 Q25). */
@@ -146,6 +150,7 @@ class MembershipResolver(
     private fun failure(principal: PrincipalId, error: Throwable) =
         MembershipUnavailableException("The membership provider failed for principal [${principal.value}].", error)
 
+    @InternalCoSecApi
     companion object {
         val DEFAULT_TIMEOUT: Duration = 500.milliseconds
 

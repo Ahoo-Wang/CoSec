@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "ROL-7"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The hand-written binding would be the derived one.",
+  "documents": {
+    "platform": {},
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "a",
+            "app": "wms",
+            "permissions": [
+              "read"
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "role:a@wms:read",
+            "subject": {
+              "role": "a"
+            },
+            "app": "wms",
+            "space": "*",
+            "policy": "perm:wms/read"
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "x"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "also written by hand"
+  }
+}

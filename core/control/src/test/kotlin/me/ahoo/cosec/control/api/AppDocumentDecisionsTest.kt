@@ -34,6 +34,7 @@ import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -166,12 +167,12 @@ class AppDocumentDecisionsTest {
             listOf(StatementSource("", Effect.DENY, listOf("order:read"), listOf(ResourceSource("order/**")))),
         )
         publish(SnapshotKey.App("order"), listOf(denying), emptyList())
-        val audited = plane.explain(plato, bob(), SnapshotVersion(1, 1, 1))
+        val audited = plane.explain(plato, bob(), ViewVersion(1, 1, 1))
         audited.decision.decision.assert().isEqualTo("Permit")
         audited.decision.by!!.policy.assert().isEqualTo("perm:order/read")
-        audited.version.assert().isEqualTo(SnapshotVersion(1, 1, 1))
+        audited.version.assert().isEqualTo(ViewVersion(1, 1, 1))
         val now = plane.explain(plato, bob())
-        now.version.assert().isEqualTo(SnapshotVersion(1, 2, 1))
+        now.version.assert().isEqualTo(ViewVersion(1, 2, 1))
         now.decision.decision.assert().isEqualTo("Deny")
     }
 
@@ -184,14 +185,14 @@ class AppDocumentDecisionsTest {
     fun `explain decides the app document by the tenant revision it explains`(subject: String) = runBlocking<Unit> {
         bootstrap(listOf(grant(subject)))
         publish(TENANT, emptyList(), emptyList())
-        val audited = plane.explain(plato, bob(), SnapshotVersion(1, 1, 1))
+        val audited = plane.explain(plato, bob(), ViewVersion(1, 1, 1))
         audited.decision.decision.assert().isEqualTo("Permit")
         audited.decision.by!!.policy.assert().isEqualTo("perm:order/read")
-        audited.version.assert().isEqualTo(SnapshotVersion(1, 1, 1))
+        audited.version.assert().isEqualTo(ViewVersion(1, 1, 1))
         val now = plane.explain(plato, bob())
         now.decision.decision.assert().isEqualTo("Deny")
         now.decision.cause.assert().isNull()
-        now.version.assert().isEqualTo(SnapshotVersion(1, null, 2))
+        now.version.assert().isEqualTo(ViewVersion(1, null, 2))
     }
 
     /**
@@ -222,7 +223,7 @@ class AppDocumentDecisionsTest {
         publish(TENANT, listOf(broken), listOf(grant("anyone")))
         val explained = plane.explain(plato, bob())
         explained.decision.decision.assert().isEqualTo("Indeterminate")
-        explained.version.assert().isEqualTo(SnapshotVersion(1, null, 2))
+        explained.version.assert().isEqualTo(ViewVersion(1, null, 2))
         val appChange = changes.propose(
             plato,
             SnapshotKey.App("order"),

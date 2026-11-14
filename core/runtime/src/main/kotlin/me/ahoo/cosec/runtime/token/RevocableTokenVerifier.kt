@@ -13,17 +13,16 @@
 
 package me.ahoo.cosec.runtime.token
 
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Duration
 
 /**
@@ -31,8 +30,7 @@ import java.time.Duration
  *
  * Both [verify] and the renewal path ([refresh]) consult the [TokenStore] after the delegate succeeds, so a logged-out token
  * can neither authenticate nor be refreshed back to life. The same holds for the
- * tokens of a principal revoked with [TokenRevoker.revokeSubject]. A token whose subject, tenant, `jti`, `roles` or
- * `policies` hold an unpaired UTF-16 surrogate is invalid, before the store is asked (RC1-52, `IDN-10`).
+ * tokens of a principal revoked with [TokenRevoker.revokeSubject].
  *
  * @param delegate the actual verification implementation
  * @param tokenStore the revocation store
@@ -44,58 +42,41 @@ class RevocableTokenVerifier(
     private val delegate: TokenVerifier,
     private val tokenStore: TokenStore,
     private val skew: Duration = SubjectRevocation.DEFAULT_SKEW,
-) : TokenVerifier by delegate {
+) : TokenVerifier {
     init {
         require(!skew.isNegative) { "The revocation skew must not be negative, not $skew." }
     }
 
     /**
-     * @param T the expected principal type
      * @param accessToken the access token to verify
-     * @return the verified token principal
-     * @throws TokenVerificationException if the delegate rejects the token, or it claims an id with an unpaired surrogate
+     * @return what the token says
+     * @throws TokenVerificationException if the delegate rejects the token
      * @throws TokenRevokedException if the token has been revoked
      */
-    override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
-        val tokenPrincipal = delegate.verify<TokenPrincipal>(accessToken)
-        checkNotRevoked(tokenPrincipal)
-        @Suppress("UNCHECKED_CAST")
-        return tokenPrincipal as T
-    }
+    override fun verify(accessToken: String): VerifiedToken = delegate.verify(accessToken).also(::checkNotRevoked)
 
     /**
-     * @param T the expected principal type
      * @param token the composite token containing the refresh token
-     * @return the token principal carried by the old access token
-     * @throws TokenVerificationException if the delegate rejects the refresh token
-     * or its binding to the access token, or the token claims an id with an unpaired surrogate
+     * @return what the old access token says
+     * @throws TokenVerificationException if the delegate rejects the refresh token or its binding to the access token
      * @throws TokenRevokedException if the old access token's id has been revoked
      */
-    override fun <T : TokenPrincipal> refresh(token: CompositeToken): T {
-        val tokenPrincipal = delegate.refresh<TokenPrincipal>(token)
-        checkNotRevoked(tokenPrincipal)
-        @Suppress("UNCHECKED_CAST")
-        return tokenPrincipal as T
-    }
+    override fun refresh(token: CompositeToken): VerifiedToken = delegate.refresh(token).also(::checkNotRevoked)
 
-    private fun checkNotRevoked(tokenPrincipal: TokenPrincipal) {
-        // Before the store is asked: an id with an unpaired surrogate would read another's key (RC1-52, `IDN-10`).
-        if (!TokenClaims.areWellFormed(tokenPrincipal)) {
-            throw TokenVerificationException("The token claims an id with an unpaired UTF-16 surrogate.")
+    private fun checkNotRevoked(token: VerifiedToken) {
+        if (tokenStore.isRevoked(token.id)) {
+            throw TokenRevokedException("Token [${token.id}] has been revoked.")
         }
-        if (tokenStore.isRevoked(tokenPrincipal.tokenId)) {
-            throw TokenRevokedException("Token [${tokenPrincipal.tokenId}] has been revoked.")
-        }
-        checkSubjectNotRevoked(tokenPrincipal)
+        checkSubjectNotRevoked(token)
     }
 
     /** RFC 0004 §4.5.3, by the rule both token paths read ([SubjectRevocation]). */
-    private fun checkSubjectNotRevoked(tokenPrincipal: TokenPrincipal) {
-        val tenant = MembershipClaims.tenantOf(tokenPrincipal)
-        val revokedBefore = tokenStore.subjectRevokedBefore(tenant, PrincipalId(tokenPrincipal.id))
-        if (SubjectRevocation.revokes(revokedBefore, tokenPrincipal, skew)) {
+    private fun checkSubjectNotRevoked(token: VerifiedToken) {
+        val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
+        val revokedBefore = tokenStore.subjectRevokedBefore(tenant, PrincipalId(token.principal))
+        if (SubjectRevocation.revokes(revokedBefore, token.issuedAt, skew)) {
             throw TokenRevokedException(
-                "The tokens of principal [${tokenPrincipal.id}] issued before [$revokedBefore] have been revoked."
+                "The tokens of principal [${token.principal}] issued before [$revokedBefore] have been revoked."
             )
         }
     }

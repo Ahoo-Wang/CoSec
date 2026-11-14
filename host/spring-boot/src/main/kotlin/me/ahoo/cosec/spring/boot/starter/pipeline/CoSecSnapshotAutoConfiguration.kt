@@ -45,7 +45,9 @@ import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.shadow.ShadowReporter
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
+import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
+import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
@@ -71,6 +73,7 @@ import org.springframework.core.env.Environment
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import java.time.Clock
 import java.time.Duration
+import java.time.Instant
 import java.util.UUID
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
@@ -86,11 +89,13 @@ import java.util.concurrent.TimeUnit
 @ConditionalOnCoSecEnabled
 @ConditionalOnEnforceMode
 @EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
+@InternalCoSecApi
 class CoSecSnapshotAutoConfiguration {
     /** Redis as the store of record (RFC 0003 §4.1). */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.cache.snapshot.PolicySnapshotCache"])
     @ConditionalOnBean(CoCacheFactory::class)
+    @InternalCoSecApi
     class Redis {
         /**
          * The snapshot store, created through CoCache's factory like every CoSec cache: the `cocache.*` properties and
@@ -121,7 +126,7 @@ class CoSecSnapshotAutoConfiguration {
          * cannot read, whatever this check's mode, unless `cocache.redis.assume-maxmemory-policy` names one.
          *
          * Both read the backend of the runtime the snapshot store is created on ([CoCacheFactory.runtime]), as CoCache's
-         * does since 8.0.0-alpha.6 (#874): an application's own `CacheRuntime` need not expose its backend as a bean,
+         * does: an application's own `CacheRuntime` need not expose its backend as a bean,
          * and a `CoherenceBackend` bean beside it may not be the Redis that holds the snapshot.
          */
         @Bean
@@ -158,6 +163,7 @@ class CoSecSnapshotAutoConfiguration {
          */
         @Configuration(proxyBeanMethods = false)
         @ConditionalOnClass(name = ["org.springframework.boot.health.contributor.HealthIndicator"])
+        @InternalCoSecApi
         class EvictionHealth {
             @Bean
             @ConditionalOnMissingBean(name = ["cosecSnapshotEvictionHealthIndicator"])
@@ -177,6 +183,7 @@ class CoSecSnapshotAutoConfiguration {
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = [ReplicaReads.LETTUCE_CONNECTION_FACTORY])
+    @InternalCoSecApi
     class RedisReads {
         @Bean
         fun cosecReplicaReadCheck(
@@ -210,6 +217,7 @@ class CoSecSnapshotAutoConfiguration {
         name = ["enabled"],
         matchIfMissing = true
     )
+    @InternalCoSecApi
     class Shadow {
         @Bean
         @ConditionalOnMissingBean
@@ -229,7 +237,7 @@ class CoSecSnapshotAutoConfiguration {
             cosec: CoSecProperties,
         ): CandidateSource {
             val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, cosec.keyPrefix)
-            return CachingCandidateSource(store, compiler::compile)
+            return CachingCandidateSource(store, compiler::compileCandidate)
         }
 
         @Bean
@@ -257,6 +265,11 @@ class CoSecSnapshotAutoConfiguration {
         ): CoCacheShadowReports =
             CoCacheShadowReports.create(factory, cosec.keyPrefix)
 
+        /**
+         * Reports every `report-interval`. A window is forgotten once its candidate is no longer staged and its last
+         * report is written (#1210), as read from the store of record [candidates] reads from; with an application's own
+         * [CandidateSource] that is not a [CachingCandidateSource], from the only [CandidateStore], else never.
+         */
         @Bean(destroyMethod = "close")
         @ConditionalOnMissingBean
         fun cosecShadowReporting(
@@ -264,17 +277,33 @@ class CoSecSnapshotAutoConfiguration {
             sink: CoCacheShadowReports,
             source: SnapshotSource<CompiledDocument, CompiledDocument>,
             properties: RuntimeAuthorizationProperties,
+            candidates: CandidateSource,
+            stores: ObjectProvider<CandidateStore>,
         ): ShadowReporting {
             val clock = Clock.systemUTC()
-            val installed = {
-                val now = clock.instant()
-                source.entries().filter { it.revision > 0 }.associate { it.key to InstalledDocument(it.revision, it.lagAt(now)) }
-            }
-            return ShadowReporting(ShadowReporter(recorder, sink, installed, clock, properties.shadow.reportInterval))
+            val installed = { installedDocuments(source.entries(), clock.instant()) }
+            val store = (candidates as? CachingCandidateSource)?.store ?: stores.ifUnique
+            return ShadowReporting(
+                ShadowReporter(recorder, sink, installed, clock, properties.shadow.reportInterval, candidates = store)
+            )
         }
 
+        @InternalCoSecApi
         companion object {
             const val SHADOW_LISTENER = "shadow"
+
+            /**
+             * What an instance's heartbeat reports as installed (RFC 0007 §6.5, Q29): the documents it can evaluate. One it
+             * read but could not compile has a revision, yet only fails the requests that reach it; counting it would show
+             * a rollout as complete on an instance that cannot use it. That instance still reports, so it stays among the
+             * ones the propagation query counts, without the document.
+             */
+            internal fun installedDocuments(
+                entries: List<SnapshotEntry<*>>,
+                now: Instant,
+            ): Map<SnapshotKey, InstalledDocument> = entries
+                .filter { it.revision > 0 && it.state is DocumentState.Present }
+                .associate { it.key to InstalledDocument(it.revision, it.lagAt(now)) }
         }
     }
 
@@ -321,6 +350,7 @@ class CoSecSnapshotAutoConfiguration {
     /** `cosecSnapshot` in the health endpoint, when the host has actuator. */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["org.springframework.boot.health.contributor.HealthIndicator"])
+    @InternalCoSecApi
     class Health {
         @Bean
         @ConditionalOnMissingBean(name = ["cosecSnapshotHealthIndicator"])
@@ -338,7 +368,8 @@ class CoSecSnapshotAutoConfiguration {
 }
 
 /** Runs [reporter] every interval from the start of the context until it closes. */
-class ShadowReporting(reporter: ShadowReporter) : AutoCloseable {
+@InternalCoSecApi
+class ShadowReporting(val reporter: ShadowReporter) : AutoCloseable {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + CoroutineName("cosec-shadow-reporter"))
 
     init {
@@ -396,7 +427,7 @@ internal object EvictionPolicyCheck {
         /** CoCache's in-memory backend: nothing is evicted behind its back. */
         data object NotRedis : Reading
 
-        /** The policies by node, as `RedisBackend.maxmemoryPolicies` reads them from `INFO memory` (CoCache 6.10). */
+        /** The policies by node, as `RedisBackend.maxmemoryPolicies` reads them from `INFO memory`. */
         data class Policies(val policies: Map<String, String>) : Reading
 
         data class Unreadable(val reason: String) : Reading
@@ -502,13 +533,16 @@ internal object ReplicaReads {
  * on every read. One that cannot be read is down under [mode] `fail`; under `warn` the operator accepted that at startup,
  * so it is up, as `unknown`, logged once at WARN.
  */
+@InternalCoSecApi
 class EvictionPolicyMonitor internal constructor(
     private val read: () -> EvictionPolicyCheck.Reading,
     private val interval: Duration,
     private val mode: RuntimeAuthorizationProperties.EvictionCheck = RuntimeAuthorizationProperties.EvictionCheck.FAIL,
 ) : AutoCloseable {
     /** Whether Redis may evict the snapshot ([down]), and what the health indicator's `eviction` detail says, if anything. */
+    @InternalCoSecApi
     class Status internal constructor(val down: Boolean, val detail: String?) {
+        @InternalCoSecApi
         companion object {
             val OK: Status = Status(false, null)
             val UNKNOWN: Status = Status(false, "unknown")

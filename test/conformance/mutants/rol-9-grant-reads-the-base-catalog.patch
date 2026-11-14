@@ -1,0 +1,17 @@
+# Rule: ROL-9
+# Mutant: what cosec:grant is asked for is derived from the base's catalog, so a catalog put with a star role asks for none
+# Tests: :control:test --tests me.ahoo.cosec.control.change.RolesTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+index 1e4b23bc..d5f9b0c7 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+@@ -190,7 +190,7 @@ class ChangeAuthority(
+         val candidate = Operations.apply(key, base, operations).candidate ?: return emptyList()
+         val (kind, owner) = Revisions.ownerOf(key)
+         val catalogBefore = RoleExpansion.definedInCatalog(base)
+-        val catalogAfter = RoleExpansion.definedInCatalog(candidate)
++        val catalogAfter = RoleExpansion.definedInCatalog(base)
+         val before = base?.roles.orEmpty().associateBy { it.id }
+         return candidate.roles.mapNotNull { role ->
+             val held = before[role.id]?.let { RoleExpansion.bindings(kind, owner, it, catalogBefore) }.orEmpty()

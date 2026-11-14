@@ -1,0 +1,17 @@
+# Rule: CTL-32
+# Mutant: the grant analysis reads a platform boundary as a policy a binding reaches
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantDocuments.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantDocuments.kt
+index 61ea3727..0fdac8a2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantDocuments.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantDocuments.kt
+@@ -46,7 +46,7 @@ internal object GrantDocuments {
+         }
+         val effective = RoleExpansion.effective(document)
+         return GrantDocument(
+-            policies = effective.policies.filterNot { it.boundary }.map(::policy),
++            policies = effective.policies.map(::policy),
+             bindings = effective.bindings.filterNot { it.breakGlass },
+         )
+     }

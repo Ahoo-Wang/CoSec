@@ -13,8 +13,9 @@ decision.
 ## Extension points
 
 With the starter you extend CoSec by declaring a Spring bean. Some extension points collect every bean of their type;
-the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, pass your
-implementation to the class that uses it, usually through `PipelineComponents`.
+the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, assemble a
+`Pipeline` from `PipelineComponents`, with the documents from `SuspendingSnapshotSource.of(store)`, and pass your
+implementation to the class that uses it.
 
 | Extension point | Module, package | Implement it to | The starter takes |
 |---|---|---|---|
@@ -24,10 +25,13 @@ implementation to the class that uses it, usually through `PipelineComponents`.
 | `MembershipProvider` | `cosec-spi`, `spi.membership` | Supply the roles and attached policies of principals whose credential does not carry them: tokens with the provider marker, and every API key. Say whether a principal is known and active. | one bean; required with API keys |
 | `MembershipLoader` | `cosec-cocache`, `cache` | Load the memberships that `CoCacheMembershipProvider` caches in Redis for every instance. | one bean, wrapped in `CoCacheMembershipProvider` when there is no `MembershipProvider` |
 | `AttributeProvider` | `cosec-spi`, `spi.attribute` | Give conditions external attributes (`ext.<provider>.<name>`). | every bean |
-| `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive 7.x-style audit events. | every bean, as a `BEST_EFFORT` listener |
+| `AuditEventSink` | `cosec-spi`, `spi.audit` | Receive the flat audit record of each decision. | every bean, as a `BEST_EFFORT` listener |
 | `RateLimiter` | `cosec-spi`, `spi.ratelimit` | Count rate limit permits somewhere other than Redis or memory. | one bean, replacing the built-in one |
 | `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
 | `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |
+| `Authentication` | `cosec-login`, `login` | Check another kind of login credential and say what its token holds. Throw to refuse. | every bean, by the credential type it supports |
+| `TokenConverter` | `cosec-login`, `login.token` | Issue tokens in another format. | one bean, replacing `JwtTokenConverter` |
+| `SocialUserPrincipalConverter` | `cosec-social`, `social` | Turn a provider's user into your principal. | one bean, replacing `DirectSocialUserPrincipalConverter` |
 | `BlacklistSource` | `cosec-runtime`, `runtime.attribute` | Say which principals, addresses and devices are blocked. | one bean, wrapped in `BlacklistAttributeProvider` |
 | `DecisionListener` | `cosec-runtime`, `runtime.event` | Observe every decision: audit, alerting, analytics. | every bean |
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
@@ -60,7 +64,7 @@ Every public declaration of a published module is in one of four levels. The mar
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
 | `@CoSecSpi` | An interface applications implement, not only call: the extension points above, and the capabilities a principal declares (`ExpiresAtCapable`, `IssuedAtCapable`, `MembershipMarkerCapable`). Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
-| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: every public declaration of `cosec-testkit`, and the control plane's access and grant analysis (`AccessQuery`, `AccessEntry`, `AccessReport`, `ControlPlane.analyze`; `GrantAnalyzer`, `GrantAnalysis`, `GrantVerdict`, `GrantFragment`, `Grantee`, `ProtectedEntry`, `Shortfall`, `UnknownReason`). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
+| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit`, that is `PolicyTestKit`, `PipelineFixture`, `EngineOutcome` and their exceptions. | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
 | `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
 
 The build keeps these promises. Every published library module stores its public ABI in a dump file,
@@ -85,16 +89,35 @@ breaking change and its title carries `!`
 The one exception is a line of an `@ExperimentalCoSecApi` declaration: removing or changing it is not a breaking change
 and needs no `!`, and the pull request description says which experimental declarations it changes.
 
+### Sets that grow
+
+Exhaustive matching over a closed set stops compiling when a minor release adds a member, and an already compiled
+binary throws `NoWhenBranchMatchedException` on the new value. So every extension treats these as open: a `when` over
+one has an `else`, and a listener or store never relies on the set being complete.
+
+| Set | Grows by |
+|---|---|
+| `AuthnResult.RejectReason` | a new reason, such as a new token check |
+| `Attribute.Kind` | a new catalog attribute |
+| `ProblemType` | a new problem, such as `413` or `415` |
+| `Obligation` | a new kind of obligation |
+| `Cause` | a new reason a decision is Indeterminate, such as a new port that can fail; a `DecisionListener` reads it from a decision event |
+| `ChangeEvent.Kind` | a new kind of change event |
+
+A set not listed here does not gain a member after 8.0 GA. A public `data class` is only ever a value that cannot
+grow, a record with a fixed shape (`PublicApiStabilityTest` reads the reviewed list); a record that can grow is a plain
+class, so a new field is a new constructor.
+
 ## Rules every extension follows
 
-The pipeline calls every SPI on the request path, often on a Netty event loop. Every SPI here follows the same
-contract:
+The pipeline calls every SPI on the request path, often on a Netty event loop. The login contracts run on your login
+endpoint, on the same threads. Every SPI here follows the same contract:
 
 - **Never block the calling thread.** The SPIs are `suspend` functions (the snapshot store returns
   `CompletableFuture`s). A suspending client is fine. An implementation over a blocking client (JDBC, a blocking HTTP
-  client) moves the call to its own bounded executor with `runInterruptible(myDispatcher) { ... }`. Do not use
-  `Dispatchers.IO` inside CoSec modules (`RuntimeBoundaryTest` forbids it there); in your own code, prefer a bounded
-  executor sized for the dependency.
+  client) moves the call to its own bounded executor with `runInterruptible(myDispatcher) { ... }`, sized for that
+  dependency: `Dispatchers.IO.limitedParallelism(n)` or an executor of your own, as `JustAuthProvider` does. A bare
+  `Dispatchers.IO` is shared with everything else in the process, and `RuntimeBoundaryTest` forbids it in `cosec-runtime`.
 - **Stop when cancelled.** Timeouts are cooperative: at an SPI's timeout, or at `cosec.pipeline.timeout`, the pipeline
   cancels the call and waits for it to return before it answers `503`. `withContext(myDispatcher)` cannot stop a
   blocking call, so a JDBC query that hangs for 30 seconds holds the request for 30 seconds, not for its 300 ms
@@ -125,7 +148,7 @@ contract:
 | `Rejected(reason)` | The credential is invalid, expired or revoked. | The request is evaluated as anonymous; a deny answers `401` with that reason. |
 | `Unavailable(cause)` | A dependency failed. | `503`. A thrown exception is treated the same way. |
 
-An `AuthenticatedPrincipal` names its id, tenant, membership source (the token's claims, or the
+An `AuthenticatedPrincipal` names its id, tenant, app (the app its credential declares, [Apps](../integration/authentication.md#apps); left out, none), membership source (the token's claims, or the
 [membership provider](#memberships)), attributes and `credential`. Conditions read the attributes as
 `subject.attributes.<name>`. `credential` (`Identity.Credential`: method `JWT` or `API_KEY`, the credential's id and
 its expiry, never its value) is what a gateway forwards with the identity: on a gateway, a principal without one is
@@ -148,7 +171,8 @@ it, and one without an id does not count. A principal you construct has no `issu
 tokens (`subjectRevokedBefore`) takes its approvals back.
 
 An authenticator sees only what the pipeline reads as credentials: the token (the `Authorization` header, else the query
-parameter when `cosec.pipeline.allow-query-token` is on, else the cookie) and the API key header
+parameter when `cosec.pipeline.allow-query-token` is on, else the cookie when `cosec.pipeline.allow-cookie-token` is on)
+and the API key header
 (`cosec.pipeline.api-key-header`).
 
 The starter's default is a `CompositeAuthenticator`: a request with an API key is judged by the API key authenticator
@@ -172,6 +196,12 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
     }
 }
 ```
+
+A `TokenVerifier` of your own returns a `VerifiedToken` (`me.ahoo.cosec.spi.token`), an immutable value built from the
+claims it verified: `id`, `principal`, `tenant`, `app` (the token's `aud`), `roles`, `policies`, `attributes`, its times and
+membership marker. Its constructor throws `TokenVerificationException` for claims that no token may carry (an id
+beginning with `(`, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
+verifier read them.
 
 Give `TokenAuthenticator` the plain verifier (`JwtTokenVerifier`), never a `RevocableTokenVerifier` or another wrapper:
 revocation is checked through the suspending `RevocationReader`, and only the plain verifier's tokens may use
@@ -246,7 +276,7 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
         if (!request.subject.authenticated) {
             return emptyMap() // absent: a comparison with it is false
         }
-        val department = directory.departmentOf(request.subject.tenantId, request.subject.id) // suspends, throws on failure
+        val department = directory.departmentOf(request.tenant.value, request.subject.id) // suspends, throws on failure
         return if (department == null) emptyMap() else mapOf("ext.directory.department" to department)
     }
 }
@@ -272,7 +302,7 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
   memberships. Use stage A only for attributes that decide what is loaded, as the blacklist does. An
   `AuthorizationChecker` check asks for what its own action and resource can read, in both stages: a stage-A provider
   is asked again then, still without the scope.
-- **What a provider sees.** `AttributeRequest` holds the subject, the resolved scope (null in stage A), the action,
+- **What a provider sees.** `AttributeRequest` holds the tenant, the subject, the resolved scope (null in stage A), the action,
   the resource, the client address, the request id and the device id, never another attribute's value.
 
 **The blacklist** is a stage-A provider: `BlacklistAttributeProvider(source)` declares `ext.blacklist.principal`,
@@ -308,7 +338,7 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 | `delivery` | Delivered | A failure |
 |---|---|---|
 | `BEST_EFFORT` (default) | Queued without suspending into the listener's own bounded queue, handled off the request path. A full queue drops the event. | Logged and counted; the response is unchanged. |
-| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within `cosec.audit.required.timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
+| `REQUIRED` | Before the response, together with the other REQUIRED listeners, within `cosec.observability.listener.required-timeout`. | Turns a permit into `503`; any other outcome keeps its status. |
 
 - A permit through a break-glass binding needs at least one REQUIRED listener, or it is a `503`.
 - A REQUIRED listener should be idempotent by `event.id`: a write that timed out may still have succeeded.
@@ -430,13 +460,26 @@ With `cosec-control`, the control plane keeps revisions, change requests, stagin
 store answers what the maintenance passes visit:
 
 - `documents()`: every document it has indexed revisions for. It may name more than exist, never fewer.
-- `openChanges()`: the change requests that may still be open. It may name more, never fewer; callers read each
-  change and go by its state. A change whose record no longer reads because it is of an app the app id rule refuses
-  (an earlier build wrote it) makes `change(id)` throw `UnnamedDocumentException`, as `ChangeRequestCodec` does when
-  it decodes one: it cannot be known to be terminal, so it stays listed, and `openChanges()` must not fail for it.
-  Maintenance skips it; an operator removes its record.
+- `openChanges()`: the change requests that are not terminal, as the store holds them now, each read once (#1219):
+  maintenance goes by this read and reads a change again only to expire it. Every written change that is not terminal
+  is among them; one listed and not written yet (a first write in flight) is not. A listed change whose record does
+  not decode fails `openChanges()` as it fails `change(id)`: it cannot be known to be terminal, so maintenance stops
+  until an operator removes its record.
 - `acquireLease(name, holder, duration)` and `releaseLease(name, holder)`: one instance at a time per task. A release
-  removes the lease only while `holder` still has it.
+  removes the lease only while `holder` still has it, checked and removed in one atomic step (CoCache's
+  `deleteIfMatch`): a lease that expired and another instance took meanwhile stays theirs.
+- `withdrawCandidate(key, window)`: removes a document's candidate only while it is still the one of `window`, in one
+  atomic step (`CTL-26`). A change withdraws its candidate once it is terminal, when another may already have staged
+  its own.
+- `stagedCandidate(key)` and `putCandidate(key, expected, candidate)`: the candidate with the digest a write must name,
+  and a write that lands only over the candidate that was read (`null`: only if there is none), `false` when it
+  changed. A stage reads, checks it still holds the document's staging slot, and writes over what it read; a change
+  preempted meanwhile finds its late write refused, and so never replaces the candidate of the change that took the
+  slot (`CTL-6`). A write whose outcome is unknown is resolved by reading back, never by writing again.
+- `referrers` and `putReferrers`: each referring document with the revision of it that last indexed the reference, so
+  that a revision's late removal never takes back what a later revision indexed again (`CTL-25`).
+- `RevisionIndex.reclaiming`: the records reclamation took out of the index and has not yet seen deleted; a store
+  keeps it with the index, as it keeps the rest of it.
 
 Like the data plane's stores, a read that fails throws: it never answers "absent".
 
@@ -456,12 +499,12 @@ service's terms. Mapped requests get the route's action; every other request kee
 }
 ```
 
-- The starter loads the route maps listed in `cosec.authorization.routes.location` (default
-  `classpath:cosec-routes.json`, comma-separated) at startup. A missing or invalid map, or two routes one request could
-  match, fails startup. That includes the default location: a WebFlux or WebMvc service without a route map sets the
-  property empty. A gateway host loads none.
-- With `cosec-openapi` and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both documents from
-  the service's OpenAPI description: `routes` is the route map to ship as `cosec-routes.json`, `app` is the app document
+- The starter loads the route maps listed in `cosec.authorization.routes.location` (comma-separated) at startup. A
+  missing or invalid map, a map with no routes, or two routes one request could match, fails startup. Unset, the
+  service loads none, unless `classpath:cosec-routes.json` exists: startup then fails until the property names it or is
+  set empty. A gateway host loads none.
+- With `cosec-openapi`, springdoc and Spring Boot Actuator, the `cosecServiceGenerator` endpoint generates both
+  documents from the OpenAPI document springdoc scans: `routes` is the route map to ship as `cosec-routes.json`, `app` is the app document
   (catalog and permission policies) to publish through the control plane.
 
 The file is read strictly: an unknown or missing field fails it

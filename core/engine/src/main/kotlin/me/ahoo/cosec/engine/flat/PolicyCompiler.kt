@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.InvalidPatternException
 import me.ahoo.cosec.engine.pattern.ResourcePattern
@@ -27,6 +30,7 @@ import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.DocumentKind
 
 /** A statement as a document writes it (RFC 0005 §5.1), before it is compiled. */
+@InternalCoSecApi
 class StatementSource(
     val name: String,
     val effect: Effect,
@@ -45,6 +49,7 @@ class StatementSource(
 )
 
 /** The control plane's record of a confirmed `nomatch` DENY (RFC 0007 §9.5): by whom, in which change. */
+@InternalCoSecApi
 data class OnMissingConfirmation(val tenant: String, val principal: String, val change: String) {
     init {
         require(tenant.isNotEmpty() && principal.isNotEmpty() && change.isNotEmpty()) {
@@ -54,6 +59,7 @@ data class OnMissingConfirmation(val tenant: String, val principal: String, val 
 }
 
 /** A resource pattern and the options of `http:path:` patterns (RFC 0005 §5.2). */
+@InternalCoSecApi
 class ResourceSource(
     val pattern: String,
     val caseSensitive: Boolean = true,
@@ -61,9 +67,11 @@ class ResourceSource(
 )
 
 /** A reason a policy does not compile, at a JSON [path] relative to the policy, e.g. `$.statements[1].action[0]`. */
+@InternalCoSecApi
 data class CompileError(val path: String, val message: String)
 
 /** The policy [policyId] does not compile. It is never installed (RFC 0003 F4), so it never decides anything. */
+@InternalCoSecApi
 class CompileException(val policyId: String, val errors: List<CompileError>) :
     IllegalArgumentException(
         "Policy [$policyId] does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" }
@@ -77,6 +85,7 @@ class CompileException(val policyId: String, val errors: List<CompileError>) :
  * of its resource patterns captures `<name>`, and a policy condition never: a variable a pattern does not capture
  * would read as absent, which turns a DENY written against it into a miss (RFC 0001 P6).
  */
+@InternalCoSecApi
 class PolicyCompiler(
     private val checker: ConditionChecker = ConditionChecker(),
     private val options: IndexOptions = IndexOptions.DEFAULT,

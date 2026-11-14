@@ -155,7 +155,7 @@ project(":e2e") {
 subprojects {
     pluginManager.withPlugin("java") {
         val declared = provider {
-            listOf("api", "implementation", "compileOnly", "runtimeOnly").flatMap { name ->
+            listOf("api", "implementation", "compileOnly", "compileOnlyApi", "runtimeOnly").flatMap { name ->
                 configurations.findByName(name)?.dependencies.orEmpty().map { dependency ->
                     when (dependency) {
                         is ProjectDependency -> "declared $name project ${dependency.path.removePrefix(":")}"
@@ -164,8 +164,25 @@ subprojects {
                 }
             }
         }
-        val resolved = listOf("compileClasspath", "runtimeClasspath").map { name ->
-            configurations.named(name).flatMap { it.incoming.artifacts.resolvedArtifacts }.map { artifacts ->
+        // What an application that compiles against the project, reading its Gradle API variant (usage java-api), gets
+        // from it: the project and what its `api` dependencies name. Not the implementation classpath the project's
+        // own tests see, which hides a dependency a public signature needs and the API variant does not export.
+        val apiConsumer = configurations.create("architectureApiConsumer") {
+            isCanBeConsumed = false
+            isCanBeResolved = true
+            attributes {
+                attribute(Usage.USAGE_ATTRIBUTE, objects.named(Usage.JAVA_API))
+                attribute(Category.CATEGORY_ATTRIBUTE, objects.named(Category.LIBRARY))
+                attribute(LibraryElements.LIBRARY_ELEMENTS_ATTRIBUTE, objects.named(LibraryElements.JAR))
+            }
+        }
+        dependencies.add(apiConsumer.name, dependencies.project(mapOf("path" to path)))
+        val resolved = listOf(
+            "compileClasspath" to "compileClasspath",
+            "runtimeClasspath" to "runtimeClasspath",
+            apiConsumer.name to "apiElements",
+        ).map { (configuration, name) ->
+            configurations.named(configuration).flatMap { it.incoming.artifacts.resolvedArtifacts }.map { artifacts ->
                 artifacts.map { artifact ->
                     when (val id = artifact.id.componentIdentifier) {
                         is ProjectComponentIdentifier -> "resolved $name project ${id.projectPath.removePrefix(":")}"
@@ -233,10 +250,10 @@ registeredProperties
             outputs.upToDateWhen { false }
             maxHeapSize = "2g"
             // TRACE logging over a million cases would write gigabytes.
-            val parityLogback = "${rootProject.rootDir}/config/logback-parity.xml"
+            val propertyStressLogback = "${rootProject.rootDir}/config/logback-property-stress.xml"
             doFirst {
                 jvmArgs = jvmArgs.orEmpty().filterNot { it.startsWith("-Dlogback.configurationFile=") } +
-                    "-Dlogback.configurationFile=$parityLogback"
+                    "-Dlogback.configurationFile=$propertyStressLogback"
             }
         }
         propertyStress.configure { dependsOn(stress) }
@@ -420,6 +437,8 @@ fun Project.coverageReport() {
 /** The JMH conventions (AGENTS.md "Feedback loop"): `-PjmhIncludes`, `-PjmhFork`, `-PjmhJavaVersion`, ... */
 fun Project.jmhBenchmarks() {
     apply<me.champeau.jmh.JMHPlugin>()
+    // A contract change must not leave benchmarks that no longer compile: `check` is the only gate that runs everywhere.
+    tasks.named("check") { dependsOn("compileJmhKotlin") }
     configure<me.champeau.jmh.JmhParameters> {
         val delimiter = ','
         val jmhIncludesKey = "jmhIncludes"

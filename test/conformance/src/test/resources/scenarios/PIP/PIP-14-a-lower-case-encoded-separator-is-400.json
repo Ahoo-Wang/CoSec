@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "PIP-14"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "Percent-escapes are case-insensitive, so the check is.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/*"
+            }
+          ]
+        },
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        },
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/admin%2fx"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}

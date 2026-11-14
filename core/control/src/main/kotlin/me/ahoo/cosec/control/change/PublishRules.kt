@@ -11,14 +11,19 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
+import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.document.ShadowWindow
 
@@ -27,6 +32,20 @@ internal object PublishRules {
     private const val CONFLICT = 409
     private const val UNPROCESSABLE = 422
     private const val PRECONDITION_REQUIRED = 428
+
+    /**
+     * The action that stages and publishes [change] on its document: `cosec:publish`, or for a break-glass request or
+     * revoke `cosec:breakglass`, which is all RFC 0007 §8 asks of the person doing either in an emergency.
+     */
+    fun publishing(change: ChangeRequest): Action =
+        if (change.kind == ProvenanceKind.BREAK_GLASS) ControlActions.BREAKGLASS else ControlActions.PUBLISH
+
+    /** That [change] is in one of [allowed]: a 409 otherwise. */
+    fun requireState(change: ChangeRequest, allowed: Set<ChangeState>) {
+        if (change.state !in allowed) {
+            throw ChangeRejectedException(CONFLICT, "change ${change.id.value} is ${change.state}, not one of $allowed")
+        }
+    }
 
     /** Whether [head] is [change], published over its base: the head's provenance names the change and that base. */
     fun publishedBy(change: ChangeRequest, head: Head?): Boolean {

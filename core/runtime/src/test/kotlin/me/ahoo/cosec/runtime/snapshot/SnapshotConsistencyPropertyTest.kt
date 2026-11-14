@@ -35,7 +35,6 @@ import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -55,7 +54,6 @@ import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.model.Scope as DeclaredRequestScope
 
 /**
  * P7 (RFC 0003 §8.4, `SNP-1`): every evaluation reads one revision of each document. Every statement of a document is
@@ -97,14 +95,13 @@ class SnapshotConsistencyPropertyTest {
 
     private val scope: Scope = run {
         val subject = ScopeSubject(TENANT, true, MEMBERSHIPS)
-        val resolution = ScopeResolver.resolve(subject, DeclaredScope("", ""), HostScope(null))
+        val resolution = ScopeResolver.resolve(subject, "", HostScope(null))
         (resolution as ScopeResolution.Resolved).scope
     }
 
     private val request = FlatRequest(
         AuthzRequest(
-            subject = Subject("user", TENANT.value, true, emptySet(), emptySet(), emptyMap(), false, true, true),
-            scope = DeclaredRequestScope.declared(TENANT.value, "", ""),
+            subject = Subject("user", true, emptyMap(), true, true),
             action = Action("http", "GET"),
             resource = Resource("http", "/x", emptyMap()),
             environment = Environment("127.0.0.1", "request", "", false),

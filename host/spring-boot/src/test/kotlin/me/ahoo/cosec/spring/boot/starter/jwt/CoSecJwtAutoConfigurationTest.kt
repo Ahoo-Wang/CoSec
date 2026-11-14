@@ -15,9 +15,9 @@ package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
-import me.ahoo.cosec.api.principal.SimplePrincipal
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.token.DefaultTokenRevoker
@@ -55,7 +55,7 @@ class CoSecJwtAutoConfigurationTest {
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(TokenCompositeAuthentication::class.java)
                     .hasSingleBean(TokenVerifier::class.java)
-                val token = context.getBean(TokenConverter::class.java).toToken(SimplePrincipal("alice"))
+                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice", null))
                 JWT.decode(token.accessToken).id.assert().isEqualTo("app-token-id")
             }
     }
@@ -76,7 +76,7 @@ class CoSecJwtAutoConfigurationTest {
                     .hasSingleBean(TokenConverter::class.java)
                     .hasSingleBean(TokenVerifier::class.java)
                 // Without an IdGenerator bean (no cosec-cosid, none of the application's): RandomIdGenerator's UUIDs.
-                val token = context.getBean(TokenConverter::class.java).toToken(SimplePrincipal("alice"))
+                val token = context.getBean(TokenConverter::class.java).toToken(TokenSubject("alice", null))
                 UUID.fromString(JWT.decode(token.accessToken).id).version().assert().isEqualTo(4)
             }
     }

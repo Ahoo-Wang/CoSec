@@ -1,0 +1,45 @@
+{
+  "rules": [
+    "ROL-3"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The tenant's role lists a permission the app no longer has: the request is indeterminate, never permitted.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {}
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "night",
+            "app": "wms",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "night"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "Indeterminate",
+    "cause": {
+      "type": "MissingPolicies",
+      "policies": [
+        "perm:wms/read"
+      ]
+    }
+  }
+}

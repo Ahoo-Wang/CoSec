@@ -11,16 +11,21 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -31,16 +36,27 @@ import org.junit.jupiter.api.Test
  */
 class RouteAppTest {
     private val engine = PipelineFixtures.StubEngine(PipelineFixtures.PERMIT)
+    private var credentialApp: String? = "billing"
     private val pipeline = PipelineFixtures.pipeline(
-        PipelineFixtures.authenticator(PipelineFixtures.authenticated()),
+        Authenticator {
+            AuthnResult.Authenticated(
+                AuthenticatedPrincipal(
+                    PipelineFixtures.PRINCIPAL,
+                    PipelineFixtures.TENANT,
+                    PipelineFixtures.claims(),
+                    app = credentialApp?.let(::AppId),
+                ),
+                "test",
+            )
+        },
         engine,
     )
 
-    private fun facts(routeApp: Any?, declared: String? = null, host: String? = "shop") = HttpFacts(
+    private fun facts(routeApp: Any?, host: String? = "shop") = HttpFacts(
         method = "GET",
         rawPath = "/orders",
         rawQuery = null,
-        headers = Headers.of(declared?.let { mapOf(CoSecParameters.APP_ID to listOf(it)) }.orEmpty()),
+        headers = Headers.EMPTY,
         cookies = Cookies.EMPTY,
         remoteAddress = "10.0.0.1",
         host = HostScope(host?.let(::AppId)),
@@ -54,15 +70,16 @@ class RouteAppTest {
     fun `the route's app is the host app, ahead of the configured one`() {
         evaluate(facts("billing")).proceed.assert().isTrue()
         engine.requests.last().scope.app.value.assert().isEqualTo("billing")
-        evaluate(facts("billing", declared = "billing")).proceed.assert().isTrue()
-        // Another declared app is rejected, as against a configured host app.
-        val other = evaluate(facts("billing", declared = "shop"))
+        // A credential of another app is rejected, as against a configured host app.
+        credentialApp = "shop"
+        val other = evaluate(facts("billing"))
         other.status.assert().isEqualTo(403)
         other.problem!!.type.assert().isEqualTo(ProblemType.SCOPE_REJECTED)
-        // Without a route app the configured one applies, and without either the client's.
+        // Without a route app the configured one applies, and without either the credential's.
         evaluate(facts(null)).proceed.assert().isTrue()
         engine.requests.last().scope.app.value.assert().isEqualTo("shop")
-        evaluate(facts(null, declared = "order", host = null)).proceed.assert().isTrue()
+        credentialApp = "order"
+        evaluate(facts(null, host = null)).proceed.assert().isTrue()
         engine.requests.last().scope.app.value.assert().isEqualTo("order")
     }
 

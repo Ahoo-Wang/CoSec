@@ -23,7 +23,7 @@ import me.ahoo.cosec.model.TenantId
  *
  * Key is [key] of a principal; value is the revocation's `issuedBefore` in epoch milliseconds: the principal's tokens
  * issued before it are revoked. Entries are written with their own lifetime, which outlives the refresh tokens they
- * revoke. Configured like [RevokedTokenCache], whose local tier settings (`cosec.authorization.cache.token.*`) it
+ * revoke. Configured like [RevokedTokenCache], whose local tier settings (`cosec.authentication.revocation.cache.*`) it
  * shares; see [CoSecCacheSpecs.revokedSubject] for the declaration.
  *
  * @see CoCacheTokenStore

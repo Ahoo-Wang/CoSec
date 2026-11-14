@@ -1,0 +1,16 @@
+{
+  "description": "An anonymous caller holds no role: the default tenant's role bindings do not reach it.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/articles/1"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

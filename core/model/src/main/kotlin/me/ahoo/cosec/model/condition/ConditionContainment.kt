@@ -11,9 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model.condition
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+
 /** The answer of [ConditionContainment.implies]. Callers treat [UNKNOWN] as "not contained". */
+@InternalCoSecApi
 enum class Containment {
     /** Every request that satisfies the first condition satisfies the second. */
     YES,
@@ -45,6 +50,7 @@ enum class Containment {
  * check compares the grantee's request with the grantor's) must first substitute every attribute that differs between
  * the two, such as `subject.*`, `scope.roles` and `resource.var.*`: rule 1 proves `x` implies `x` for any atom.
  */
+@InternalCoSecApi
 object ConditionContainment {
     fun implies(c1: CheckedCondition, c2: CheckedCondition): Containment {
         val proof = Proof()

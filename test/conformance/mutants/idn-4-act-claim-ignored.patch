@@ -3,26 +3,26 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-index a5d68592..aba554a9 100644
+index 81bd0e40..d761b0f7 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-@@ -25,7 +25,6 @@ import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
- import me.ahoo.cosec.runtime.token.SimpleTokenTenantPrincipal
+@@ -16,7 +16,6 @@ import com.auth0.jwt.JWT
+ import com.auth0.jwt.RegisteredClaims
+ import com.auth0.jwt.interfaces.DecodedJWT
  import me.ahoo.cosec.spi.membership.MembershipClaims
- import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 -import me.ahoo.cosec.spi.token.DelegationUnsupportedException
  import me.ahoo.cosec.spi.token.TokenVerificationException
+ import me.ahoo.cosec.spi.token.VerifiedToken
  
- /**
-@@ -57,11 +56,6 @@ internal object Jwts {
-      * never becomes one: read as its `sub`, it would give the actor everything the subject may do (RFC 0009 §6, `IDN-4`).
+@@ -50,11 +49,6 @@ internal object Jwts {
+      * A token with no `sub` or `jti` is invalid.
       */
-     fun <T : TokenPrincipal> toPrincipal(decodedAccessToken: DecodedJWT): T {
+     fun toVerifiedToken(decodedAccessToken: DecodedJWT): VerifiedToken {
 -        if (!decodedAccessToken.getClaim(ACTOR_CLAIM).isMissing) {
 -            throw DelegationUnsupportedException(
 -                "The token delegates (it carries an `act` claim), which CoSec does not support."
 -            )
 -        }
-         val accessTokenId = decodedAccessToken.id
-         val principalId = decodedAccessToken.subject
-         val policies = strings(decodedAccessToken, PolicyCapable.POLICY_KEY)
+         return VerifiedToken(
+             id = required(decodedAccessToken.id, "id"),
+             principal = required(decodedAccessToken.subject, "subject"),

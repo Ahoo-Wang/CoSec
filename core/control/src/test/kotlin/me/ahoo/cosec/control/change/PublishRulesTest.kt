@@ -136,6 +136,9 @@ class PublishRulesTest {
         }
             .assert().isNull()
         refusal { PublishRules.acknowledged(closed(mapOf("SAME" to 4L)), null) }.assert().isNull()
+        // A candidate that denies where enforcement could not decide, or that changes a permit's rate limits, changed something.
+        refusal { PublishRules.acknowledged(closed(mapOf("BECAME_DENIED" to 1L)), null) }.assert().isEqualTo(428)
+        refusal { PublishRules.acknowledged(closed(mapOf("OBLIGATIONS_CHANGED" to 1L)), null) }.assert().isEqualTo(428)
     }
 
     @Test

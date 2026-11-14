@@ -17,21 +17,55 @@ import com.alibaba.fastjson.JSONObject
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.slot
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.runInterruptible
+import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.social.SocialAuthenticationException
+import me.ahoo.cosec.social.SocialUser
 import me.ahoo.test.asserts.assert
+import me.zhyd.oauth.enums.AuthResponseStatus
 import me.zhyd.oauth.enums.AuthUserGender
+import me.zhyd.oauth.model.AuthCallback
 import me.zhyd.oauth.model.AuthResponse
 import me.zhyd.oauth.model.AuthToken
 import me.zhyd.oauth.model.AuthUser
 import me.zhyd.oauth.request.AuthRequest
 import org.junit.jupiter.api.Test
-import reactor.kotlin.test.test
+import org.junit.jupiter.api.assertThrows
 import java.util.Base64
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 
 internal class JustAuthProviderTest {
+    /** A real blocking [AuthRequest] for the tests of threads and cancellation, which a mock's own locks would disturb. */
+    private class BlockingAuthRequest(private val blockingCall: () -> Unit) : AuthRequest {
+        override fun getAccessToken(authCallback: AuthCallback): AuthToken = AuthToken()
+
+        override fun getUserInfo(authToken: AuthToken): AuthUser = AuthUser.builder().uuid("u1").build()
+
+        override fun authorize(state: String): String {
+            blockingCall()
+            return "authorizeUrl"
+        }
+
+        override fun login(authCallback: AuthCallback): AuthResponse<AuthUser> {
+            blockingCall()
+            return AuthResponse.builder<AuthUser>()
+                .code(AuthResponseStatus.SUCCESS.code)
+                .data(getUserInfo(AuthToken()))
+                .build()
+        }
+    }
 
     @Test
-    fun authorizeUrl() {
+    fun authorizeUrl() = runTest {
         val authRequest = mockk<AuthRequest> {
             every { authorize(any()) } returns "authorizeUrl"
         }
@@ -42,7 +76,7 @@ internal class JustAuthProviderTest {
 
     /** The state guards the callback against CSRF: 128 secure random bits each time, never an application id. */
     @Test
-    fun `every state is 128 fresh random bits`() {
+    fun `every state is 128 fresh random bits`() = runTest {
         val states = mutableListOf<String>()
         val state = slot<String>()
         val authRequest = mockk<AuthRequest> {
@@ -58,8 +92,89 @@ internal class JustAuthProviderTest {
         states.filterNot { Regex("[A-Za-z0-9_-]{22}").matches(it) }.assert().isEmpty()
     }
 
+    /** RC1-14: JustAuth blocks, and the caller may be an event loop. */
     @Test
-    fun authenticateFail() {
+    fun `both blocking calls run off the caller's thread`(): Unit = runBlocking {
+        val threads = CopyOnWriteArrayList<Thread>()
+        val authClient = JustAuthProvider("clientId", BlockingAuthRequest { threads += Thread.currentThread() })
+
+        authClient.authorizeUrl().assert().isEqualTo("authorizeUrl")
+        authClient.authenticate(JustAuthCredentials("clientId")).id.assert().isEqualTo("u1")
+
+        threads.assert().hasSize(2).doesNotContain(Thread.currentThread())
+    }
+
+    @Test
+    fun `logins never run on more threads than the provider's bound`(): Unit = runBlocking {
+        val running = AtomicInteger()
+        val peak = AtomicInteger()
+        val authClient = JustAuthProvider(
+            "clientId",
+            BlockingAuthRequest {
+                peak.accumulateAndGet(running.incrementAndGet(), ::maxOf)
+                Thread.sleep(20)
+                running.decrementAndGet()
+            },
+            parallelism = 2,
+        )
+
+        List(8) { async(Dispatchers.Default) { authClient.authenticate(JustAuthCredentials("clientId")) } }.awaitAll()
+
+        peak.get().assert().isBetween(1, 2)
+    }
+
+    /** Runs a login that blocks in [whileBlocked], cancels it there, and expects no user, whatever the call does then. */
+    private fun assertCancelledLoginAnswersNoUser(whileBlocked: () -> Unit) = runBlocking {
+        val started = CountDownLatch(1)
+        val authClient = JustAuthProvider(
+            "clientId",
+            BlockingAuthRequest {
+                started.countDown()
+                whileBlocked()
+            },
+        )
+        val user = AtomicBoolean()
+        val login = launch(Dispatchers.Default) {
+            authClient.authenticate(JustAuthCredentials("clientId")).also { _: SocialUser -> user.set(true) }
+        }
+        runInterruptible(Dispatchers.IO) { started.await() }
+
+        login.cancelAndJoin()
+
+        login.isCancelled.assert().isTrue()
+        user.get().assert().isFalse()
+    }
+
+    /** Cancellation reaches the blocking call, so a caller that has gone stops holding one of the provider's threads. */
+    @Test
+    fun `a cancelled login is interrupted and answers no user`() {
+        val interrupted = AtomicBoolean()
+        assertCancelledLoginAnswersNoUser {
+            try {
+                Thread.sleep(60_000)
+            } catch (e: InterruptedException) {
+                interrupted.set(true)
+                throw e
+            }
+        }
+        interrupted.get().assert().isTrue()
+    }
+
+    /** JustAuth catches what its HTTP client throws, so a late success must not reach a caller that has gone. */
+    @Test
+    fun `a login that ignores the interrupt answers no user`() {
+        assertCancelledLoginAnswersNoUser {
+            @Suppress("SwallowedException")
+            try {
+                Thread.sleep(60_000)
+            } catch (_: InterruptedException) {
+                Unit
+            }
+        }
+    }
+
+    @Test
+    fun authenticateFail() = runTest {
         val oAuthCredentials = JustAuthCredentials("clientId")
         val authRequest = mockk<AuthRequest> {
             every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
@@ -70,14 +185,28 @@ internal class JustAuthProviderTest {
         }
         val authClient = JustAuthProvider("clientId", authRequest)
 
-        authClient.authenticate(oAuthCredentials)
-            .test()
-            .expectError(SocialAuthenticationException::class.java)
-            .verify()
+        assertThrows<SocialAuthenticationException> { authClient.authenticate(oAuthCredentials) }
+            .message.assert().isEqualTo("msg")
     }
 
     @Test
-    fun authenticateSuccess() {
+    fun authenticateFailWithoutMessage() = runTest {
+        val oAuthCredentials = JustAuthCredentials("clientId")
+        val authRequest = mockk<AuthRequest> {
+            every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
+                every { ok() } returns false
+                every { msg } returns null
+                every { code } returns -1
+            }
+        }
+
+        assertThrows<SocialAuthenticationException> {
+            JustAuthProvider("clientId", authRequest).authenticate(oAuthCredentials)
+        }.message.assert().isEqualTo("-1")
+    }
+
+    @Test
+    fun authenticateSuccess() = runTest {
         val oAuthCredentials = JustAuthCredentials("clientId")
         val authUser = AuthUser()
         authUser.uuid = "uuid"
@@ -92,12 +221,37 @@ internal class JustAuthProviderTest {
             }
         }
         val authClient = JustAuthProvider("clientId", authRequest)
-        authClient.authenticate(oAuthCredentials)
-            .test()
-            .consumeNextWith {
-                it.id.assert().isEqualTo("uuid")
-                it.username.assert().isEqualTo("username")
+        val user = authClient.authenticate(oAuthCredentials)
+        user.id.assert().isEqualTo("uuid")
+        user.username.assert().isEqualTo("username")
+    }
+
+    /** A success response whose user has none of the optional profile fields still logs in (#1249). */
+    @Test
+    fun authenticateSuccessWithoutOptionalFields() = runTest {
+        val oAuthCredentials = JustAuthCredentials("clientId")
+        val authRequest = mockk<AuthRequest> {
+            every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
+                every { ok() } returns true
+                every { data } returns AuthUser.builder().uuid("u1").build()
             }
-            .verifyComplete()
+        }
+        val user = JustAuthProvider("figma", authRequest).authenticate(oAuthCredentials)
+        user.id.assert().isEqualTo("u1")
+        user.provider.assert().isEqualTo("figma")
+    }
+
+    @Test
+    fun authenticateSuccessWithoutUser() = runTest {
+        val oAuthCredentials = JustAuthCredentials("clientId")
+        val authRequest = mockk<AuthRequest> {
+            every { login(oAuthCredentials) } returns mockk<AuthResponse<AuthUser>> {
+                every { ok() } returns true
+                every { data } returns null
+            }
+        }
+        assertThrows<SocialAuthenticationException> {
+            JustAuthProvider("clientId", authRequest).authenticate(oAuthCredentials)
+        }
     }
 }

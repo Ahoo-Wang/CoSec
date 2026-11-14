@@ -22,8 +22,6 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
-import io.swagger.v3.core.util.Json
-import io.swagger.v3.oas.models.OpenAPI
 import jakarta.servlet.ServletInputStream
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.api.spi.CoherenceBackend
@@ -57,7 +55,6 @@ import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spring.boot.starter.actuate.CoSecServiceGeneratorEndpoint
 import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.control.CoSecControlRoutesAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.control.ControlProperties
@@ -68,7 +65,6 @@ import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
@@ -119,12 +115,12 @@ class CoSecPipelineAutoConfigurationTest {
         .withBean(TokenStore::class.java, { TokenStore.NoOp })
         .withBean(RevocationReader::class.java, { RevocationReader.NONE })
 
-    private fun facts(token: String? = null) = HttpFacts(
+    private fun facts(token: String? = null, cookie: String? = null) = HttpFacts(
         method = "GET",
         rawPath = "/orders/1",
         rawQuery = null,
         headers = Headers.of(token?.let { mapOf("Authorization" to listOf(it)) }.orEmpty()),
-        cookies = Cookies.of(emptyMap()),
+        cookies = Cookies.of(cookie?.let { mapOf("authorization" to listOf(it)) }.orEmpty()),
         remoteAddress = "10.0.0.1",
         host = HostScope(null),
     )
@@ -200,6 +196,26 @@ class CoSecPipelineAutoConfigurationTest {
                 authenticator.authenticate(Credentials("t", null))
             }.assert().isInstanceOf(AuthnResult.Rejected::class.java)
         }
+    }
+
+    /** `PIP-13`: a cookie reaches a host on a cross-site request too, so it is a credential only on request. */
+    @Test
+    fun `the authorization cookie is a credential only with allow-cookie-token`() {
+        val seen = java.util.concurrent.CopyOnWriteArrayList<String?>()
+        val recording = runner.withBean(
+            Authenticator::class.java,
+            {
+                Authenticator {
+                    seen += it.token
+                    AuthnResult.Anonymous
+                }
+            },
+        )
+        recording.run { context -> runBlocking { context.getBean(Pipeline::class.java).evaluate(facts(cookie = "c")) } }
+        recording.withPropertyValues("cosec.pipeline.allow-cookie-token=true").run { context ->
+            runBlocking { context.getBean(Pipeline::class.java).evaluate(facts(cookie = "c")) }
+        }
+        seen.assert().containsExactly(null, "c")
     }
 
     @Test
@@ -425,21 +441,6 @@ class CoSecPipelineAutoConfigurationTest {
         verify(exactly = 2) { pipeline.filter(any(), any()) }
         verify(exactly = 2) { chain.filter(any()) }
         filter.order.assert().isEqualTo(1)
-    }
-
-    @Test
-    fun `the service generator endpoint writes the route map and the app document`() {
-        val openAPI = Json.mapper().readValue(
-            """{"openapi":"3.0.1","info":{"title":"order","version":"1"},"paths":{"/orders/{id}":{"get":{"operationId":"getOrder"}}}}""",
-            OpenAPI::class.java,
-        )
-        val provider = mockk<ObjectProvider<OpenAPI>> { io.mockk.every { getIfAvailable() } returns openAPI }
-        val endpoint = CoSecServiceGeneratorEndpoint(provider)
-        endpoint.generate(CoSecServiceGeneratorEndpoint.ROUTES)!!.get("routes").size().assert().isEqualTo(1)
-        endpoint.generate(CoSecServiceGeneratorEndpoint.APP)!!.has("policies").assert().isTrue()
-        endpoint.generate("other").assert().isNull()
-        val none = mockk<ObjectProvider<OpenAPI>> { io.mockk.every { getIfAvailable() } returns null }
-        CoSecServiceGeneratorEndpoint(none).generate(CoSecServiceGeneratorEndpoint.ROUTES).assert().isNull()
     }
 
     @Test

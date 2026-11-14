@@ -50,12 +50,12 @@ flowchart BT
 箭头指向模块所依赖的模块；虚线指向应用添加后由 starter 装配的模块。图背后的规则：
 
 - **`cosec-model` 和 `cosec-engine`**（目录 `core/model/` 与 `core/engine/`）是纯粹的内核：模型中有各类 id、绑定、成员关系、条件 AST、作用域和决策；引擎中有动作与资源模式、策略编译器和扁平引擎。它们只依赖 Kotlin 标准库。`EnginePurityTest`（ArchUnit）在出现对 Reactor、Spring、日志、I/O、线程或时钟的任何引用时失败；`DependencyRulesTest` 在解析出任何其他依赖时失败。`ScopeConstructionTest` 检查只有 `ScopeResolver` 能构造已解析的 `Scope`。
-- **`cosec-api`**（目录 `api/api/`）容纳应用编译时依赖的契约：`CoSecPrincipal`、`Tenant`、令牌、`SecurityContext`、`AuditEvent`，以及它们的简单实现（`SimplePrincipal`、`SimpleTenant`）。它只依赖 Kotlin 标准库。修改它就是破坏性变更。
+- **`cosec-api`**（目录 `api/api/`）容纳应用编译时依赖的契约：`CoSecPrincipal`、`CompositeToken`、`SecurityContext` 和 `AuditEvent`。它只依赖 Kotlin 标准库。修改它就是破坏性变更。
 - **`cosec-annotations`**（目录 `api/annotations/`）容纳稳定性标记（[稳定性等级](./extending.md#stability-levels)）。`@InternalCoSecApi` 是一个错误级别的 opt-in 标记：带有它的声明之所以公开，只是为了让 CoSec 自己的模块能访问，不作兼容性承诺。应用不 opt in；opt-in 出现在 CoSec 自己的 Kotlin 源码之外时，`SourceRulesTest` 失败。`@ExperimentalCoSecApi`（警告级别的 opt-in）标记次版本仍可能改变的公共 API，`@CoSecSpi` 标记应用要实现的接口。
 - **`cosec-spi`**（目录 `core/spi/`）在 `me.ahoo.cosec.spi.*` 下容纳请求或存储会调用的端口，以及它们的值类型和内存实现：快照存储（`SnapshotDocumentStore`）、成员关系、令牌校验与吊销（`TokenVerifier`、`RevocationReader`、`TokenStore`、`TokenRevoker`）、API key、限流器、属性提供者、认证器、转发的身份、审计 sink 和 id 生成器（`IdGenerator`，及其默认实现 `RandomIdGenerator`）。它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，第三方只需依赖它就能实现一个端口。签名需要某一层类型的端口留在那一层：`DecisionListener`、`RequestGate` 和影子窗口端口在 `cosec-runtime`；`ControlStore` 和 `ChangeListener` 在 `cosec-control`（[扩展 CoSec](./extending.md)）。
 - **`cosec-runtime`**（目录 `core/runtime/`）是数据面：协程 `Pipeline`、`StatusMapping`、`AuthorizationChecker`，快照文档及其编解码器、编译器和格式描述符（由它们生成 `schema/*.schema.json`），`SnapshotSource`，路由映射，令牌校验，内置认证器，以及写日志的审计 sink。它唯一的 Jackson mapper `CoSecJson` 是内部 API（`@InternalCoSecApi`），`api/` 与 `core/` 的公共签名中不出现 Jackson 类型（`JacksonSignatureTest`）。协程只留在本模块和适配器中，Reactor 只出现在适配器的桥接处：当 `runtime/`、`engine/` 或 `model/` 中的代码引用 `reactor.*`，当数据面 SPI 的签名带有 Reactor 类型，当 `runtime/` 引用 Spring、Servlet API 或协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时，`RuntimeBoundaryTest`（ArchUnit）失败。
 - **`cosec-control`**（目录 `core/control/`）是控制面：修订、变更请求、影子窗口、审批、break-glass、模拟与分析。它是一个由宿主装配的库。`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类，当其中任何一个位于 `me.ahoo.cosec.control` 之外、引用 Spring、`reactor.*`、协程或 Reactive Streams 桥接、Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。
-- **其余每个库模块只适配一种技术**：一种 Web 栈（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`），通过 CoCache 使用 Redis（`cosec-cocache`：快照存储、控制面存储、吊销、限流器、影子报告），Kafka（`cosec-kafka`），登录与签发令牌（`cosec-login`，保留 7.x 基于 Reactor 的登录契约），JWT（`cosec-jwt`），OAuth（`cosec-social`），OpenAPI，CosId 5 的 id（`cosec-cosid`），或决策的观察者（`cosec-opentelemetry`、`cosec-micrometer`、`cosec-ip2region`）。适配器从不做决策，只做翻译。
+- **其余每个库模块只适配一种技术**：一种 Web 栈（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`），通过 CoCache 使用 Redis（`cosec-cocache`：快照存储、控制面存储、吊销、限流器、影子报告），Kafka（`cosec-kafka`），登录与签发令牌（`cosec-login`），JWT（`cosec-jwt`），OAuth（`cosec-social`），OpenAPI，CosId 5 的 id（`cosec-cosid`），或决策的观察者（`cosec-opentelemetry`、`cosec-micrometer`、`cosec-ip2region`）。适配器从不做决策，只做翻译。
 - **`cosec-spring-boot`**（目录 `host/spring-boot/`）负责装配。它引入 `cosec-runtime`、`cosec-login` 和 `cosec-jwt`；其他每个模块在 [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts) 中都是 `compileOnly`，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用添加了该模块才会生效。已开启的功能所需的模块会在启动时检查（STA-1，[`CoSecModuleCheckAutoConfiguration`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt)）：否则漏加的适配器会让 Web 宿主没有过滤器，所以启动失败并给出制品名。各模块及其所需依赖列在[简介](../guide/introduction.md#modules)中。
 - **`cosec-testkit`**（目录 `test/testkit/`）用 JUnit 5 针对应用自己的文档运行场景。它依赖 `cosec-runtime` 和 `junit-jupiter-api`（都属于它的 API）。它持有场景格式的引擎层，`conformance` 也运行这一层，所以一致性套件和应用的测试以同一种方式求值场景。
 - **`cosec-migrate`** 把 7.x 的数据转换为 8.0 文档并发布；应用不依赖它。**`cosec-gateway-server`** 是由 starter 构建的、开箱即用的网关，从不发布。**`conformance`**、**`architecture`** 和 **`e2e`** 是仅用于测试的模块，同样从不发布。
@@ -63,8 +63,9 @@ flowchart BT
 `architecture`（目录 `test/architecture/`）持有扫描多个模块的结构规则（RFC 0011 §5）：
 
 - `DependencyRulesTest` 读取每个项目声明的和解析出的 main 依赖（由根构建的 `architectureFacts` 任务写出），当声明的依赖指向外层（经评审的例外，例如 `cosec-kafka` 为实现 `DecisionListener` 依赖 `cosec-runtime`，连同理由列在 `DependencyRules` 中），当 `cosec-annotations`、`cosec-api`、`cosec-model` 或 `cosec-engine` 解析出 Kotlin 标准库以外的依赖（`cosec-spi` 另加协程），当 `cosec-runtime`、`cosec-control` 解析出 Reactor、Spring、Servlet API 或 Redis 客户端，或当 `cosec-cosid` 和 starter 以外的项目声明或解析出 CosId、或其他构建脚本提到 CosId（包括导入 CosId 的 BOM）时失败：CoSec 自己生成 id（`IdGenerator`），因此应用可以使用任意版本的 CosId。
-- `SourceRulesTest` 扫描编译出的类：Reactor 只出现在 edge、extensions 和 host（以及 `cosec-cocache`，挂起端口要等待它的响应式 Redis 客户端）；`api/` 与 `core/` 中没有 Spring、Servlet API 或 Redis 客户端；backends 与 extensions 只使用自己那部分 Spring 技术；backends 只通过列出的端口和 `CoSecJson` 进入 `cosec-runtime` 与 `cosec-control`；只有 `cosec-cosid` 和 starter 的源码提到 CosId 的包；一个包只属于一个模块；只有 CoSec 自己的源码 opt in 内部 API。
+- `SourceRulesTest` 扫描编译出的类：Reactor 只出现在 edge 和 host（以及 `cosec-cocache`，挂起端口要等待它的响应式 Redis 客户端）；`api/` 与 `core/` 中没有 Spring、Servlet API 或 Redis 客户端；backends 与 extensions 只使用自己那部分 Spring 技术；backends 只通过列出的端口和 `CoSecJson` 进入 `cosec-runtime` 与 `cosec-control`；只有 `cosec-cosid` 和 starter 的源码提到 CosId 的包；一个包只属于一个模块；只有 CoSec 自己的源码 opt in 内部 API。
 - `JacksonSignatureTest`（`api/` 与 `core/` 的公共签名中没有 Jackson 类型；`cosec-cocache` 在内部以响应式方式读取 Redis，但其公共签名中没有 Reactor 类型），上面的纯净性与边界测试，单一决策路径与令牌规则，项目清单（`ProjectListTest`）和版本目录。
+- `ApiVariantTest`：应用编译依赖某个库模块时拿到的 Gradle API 变体（usage `java-api`）必须带上公共类所继承或实现的类型所在的 CoSec 模块，以及公共签名中出现的 Jackson。模块自己的测试看到的是实现类路径，发现不了这一点。
 - `SpiMarkerTest`：`cosec-spi` 中应用能够实现的每个公共接口，以及[扩展 CoSec](./extending.md#extension-points) 列出的每个扩展点，都带有 `@CoSecSpi`，且这个标记不出现在其他地方。
 
 公共 API 本身由构建守住，而不是靠评审（RFC 0011 D4）：除命令行工具 `cosec-migrate` 外，每个发布的库模块把自己的 ABI 存在模块目录下的转储 `api/<project>.api` 里，它的 `check` 运行 Kotlin Gradle 插件的 `checkKotlinAbi`，公共签名变了而转储没变时失败。`@InternalCoSecApi` 声明不进转储。从 8.0 GA 起，删除或修改转储中的一行即破坏性变更。
@@ -109,7 +110,7 @@ sequenceDiagram
 - **路由。** 无法规范化的路径或有歧义的 `CoSec-*` 参数得到 `400`（第 2 步）。[路由映射](./extending.md#route-maps)把匹配到的请求变成作用于类型化资源的 `service:verb` 动作；其他请求则是作用于 `http:path:<path>` 的 `http:<METHOD>`。
 - **认证。** `Authenticator` 把令牌或 API key 变成主体（第 3 步）。被拒绝的凭证按匿名主体求值；认证器失败或超时得到 `503`。
 - **成员关系与 A 阶段。** A 阶段属性（决定要加载什么的属性，例如黑名单）与成员关系一起获取（第 4、5 步）。成员关系来自令牌的声明；对 API key，以及带有 provider 标记的令牌，来自 `MembershipProvider`，并按 key 的上限收窄。提供者不认识或认为已停用的主体，其凭证被拒绝，请求按匿名决策。成员关系来源失败、超时或返回错误类型的成员关系时得到 `503`，绝不当作“没有角色”。
-- **作用域。** `ScopeResolver` 把声明的应用和空间变成经过检查的作用域（第 6 步）：租户是主体的租户（匿名时为默认租户）；绑定了应用（`cosec.authorization.scope.app-id`，或在网关上路由的 `cosec-app-id`）的服务使用该应用，并拒绝声明了其他应用的请求；默认空间以外的空间要求主体在其中有角色。作用域被拒绝即为拒绝（见[信任边界](../guide/security-model.md#trust-boundaries)）。
+- **作用域。** `ScopeResolver` 把凭证的应用和选择的空间变成经过检查的作用域（第 6 步）：租户是主体的租户（匿名时为默认租户）；应用是凭证声明的应用，绑定了应用的服务（`cosec.authorization.scope.app-id`，网关上是路由的 `cosec-app-id`）拒绝声明其他应用或未声明应用的凭证；默认空间之外的空间需要在其中有角色。作用域被拒绝即拒绝请求（[信任边界](../guide/security-model.md#trust-boundaries)）。
 - **快照视图。** 快照源从内存中给出视图（平台文档、应用文档、租户文档），缺什么就加载什么（第 7 步）。被黑名单拦截的请求只加载平台文档。
 - **B 阶段。** 有属性提供者声明 B 阶段属性时，引擎的 `plan` 列出本请求可能读取的外部属性，只获取这些属性，每个提供者并行、各有超时（第 8、9 步）。计划包含候选语句及其策略条件的、限流规则的、以及约束请求所在租户的边界的属性（`ATR-8`）。一个提供者失败，只会让它自己的属性不可用。检查（`AuthorizationChecker`）为它自己的动作与资源做计划，并获取计划中的每个属性，A 阶段与 B 阶段的提供者都一样。
 - **决策。** 引擎给出 `Permit`（附带义务）、`Deny` 或 `Indeterminate`（第 10 步）。
@@ -156,6 +157,8 @@ sequenceDiagram
 
 策略以**快照文档**的形式到达引擎，每个键一个文档：平台文档、每个应用一个文档、每个租户一个文档。它们以 JSON（schema 2）存储，每个修订编译一次，以不可变的编译结果保存在内存中。视图只是对其中三个文档的引用，所以一次求值总是看到每个文档的同一个修订（`SNP-1`，由 `SnapshotConsistencyPropertyTest` 守护）。
 
+文档可以用简写形式写角色和权限（[角色权限](../policies/role-permissions.md#roles)）。存储时保持简写，由 [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt) 展开成普通的策略和绑定：编译、授出分析、引用索引和差异都读取展开结果，所以决定不依赖简写形式（`ROL-1`、`ROL-2`）。
+
 [`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt) 持有它们：
 
 - **热路径。** `peek` 是内存中的同步查找，没有 future、没有 I/O，可以在事件循环上调用。只有未命中才会走 `load`。
@@ -197,8 +200,8 @@ sequenceDiagram
 
 - **修订。** 每次发布先写入一条不可变的修订记录，然后用一次条件写入移动文档的 head，只有 head 仍是该变更的基线时才会成功。两个并发发布不可能都成功，读取方看到的要么是旧 head，要么是新 head，绝不会是混合。历史、diff 和回滚都读取修订链。
 - **变更。** 变更请求是一个基线修订加上条目级操作，用数据面的编译器检查并编译。head 移动后变更变为 `CONFLICTED`，直到 rebase。每个文档只有一个暂存槽位。
-- **授权。** 每个控制面操作都以操作者身份重新授权，动作为作用于文档资源的 `cosec:*`，所用的快照在每次检查前都会从存储确认是最新的。授权分析无法证明受限的授予属于越权，需要另一个人审批。
-- **影子窗口。** 实例对请求采样（`cosec.authorization.shadow.sample-rate`），同时在暂存的候选上求值，并报告结果的差异（`SAME`、`WIDENED`、`NARROWED` 等）。无法编译或求值候选的实例会阻塞窗口，被阻塞的变更永远不会发布。文档按平台的属性声明和主机的 `AttributeProvider` 编译，所以控制面主机和每个实例必须注册相同的提供者：只有控制面主机能编译的候选会阻塞它的窗口。只要有任何变化或证据不足，发布时操作者就必须确认这些数字。
+- **授权。** 每个控制面操作都以操作者身份重新授权，动作为作用于文档资源的 `cosec:*`，所用的快照会从存储确认是最新的。同一个变更的所有决定共用一次对所读文档的确认，结束时再确认一次：期间有文档变动，就重新做这些决定，所以一千条绑定的变更只读几次，而不是两千多次（`CTL-8`）。授权分析无法证明受限的授予属于越权，需要另一个人审批。
+- **影子窗口。** 实例对请求采样（`cosec.authorization.shadow.sample-rate`），同时在暂存的候选上求值，并报告结果的差异（`SAME`、`WIDENED`、`NARROWED` 等）。候选只为这次比较而编译：暂存的平台文档的限制和属性声明不会影响实例执行的内容（`SNP-10`）。无法编译或求值候选的实例会阻塞窗口，被阻塞的变更永远不会发布。文档按平台的属性声明和主机的 `AttributeProvider` 编译，所以控制面主机和每个实例必须注册相同的提供者：只有控制面主机能编译的候选会阻塞它的窗口。只要有任何变化或证据不足，发布时操作者就必须确认这些数字。
 - **break-glass** 绑定只能通过控制面创建，需要第二位审批人、过期时间和一个 REQUIRED 变更监听器。
 - **维护。** 每个控制面实例定期回收旧的修订记录并关闭影子窗口（`ControlMaintenanceScheduler`）。`ControlStore` 列出这些任务要访问的内容（`documents()`、`openChanges()`），租约（`acquireLease`、`releaseLease`）让同一时间只有一个实例做每项工作（[修订、历史与回滚](../operations/storage.md#revisions-history-and-rollback)）。
 

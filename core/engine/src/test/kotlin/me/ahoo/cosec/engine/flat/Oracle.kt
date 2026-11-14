@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.GuardBehavior
 import me.ahoo.cosec.engine.RuleBehavior
 import me.ahoo.cosec.model.Binding
@@ -90,6 +93,9 @@ object Oracle {
                 }
                 val policy = if (id == BuiltinPolicies.ROOT.value) {
                     BuiltinPolicies.root
+                } else if (kind == DocumentKind.TENANT) {
+                    // Both layers with the same content: the platform's copy decides (BND-7).
+                    case.platform.find(id) ?: document.find(id)
                 } else {
                     document.find(id) ?: case.platform.find(id)
                 }
@@ -108,7 +114,7 @@ object Oracle {
                 differs(inTenant, inPlatform) -> ambiguous += id.value
                 inTenant == null && inPlatform == null -> missing += id.value
                 else -> {
-                    val policy = checkNotNull(inTenant ?: inPlatform)
+                    val policy = checkNotNull(inPlatform ?: inTenant)
                     if (policy.attachable) candidates += Candidate(policy, BindingRef.Attached(id)) else missing += id.value
                 }
             }

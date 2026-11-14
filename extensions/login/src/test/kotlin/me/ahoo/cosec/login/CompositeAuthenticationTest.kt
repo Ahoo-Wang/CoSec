@@ -13,17 +13,18 @@
 
 package me.ahoo.cosec.login
 
+import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
+import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import reactor.kotlin.core.publisher.toMono
-import reactor.kotlin.test.test
+import org.junit.jupiter.api.assertThrows
 
 class CompositeAuthenticationTest {
-    private val compositeAuthentication = CompositeAuthentication(DefaultAuthenticationProvider)
+    private val authenticationProvider = DefaultAuthenticationProvider()
+    private val compositeAuthentication = CompositeAuthentication(authenticationProvider)
 
     @Test
     fun getSupportCredentials() {
@@ -31,19 +32,19 @@ class CompositeAuthenticationTest {
     }
 
     @Test
-    fun authenticate() {
+    fun authenticate() = runTest {
         val credentials = mockk<Credentials>()
-        val authentication = mockk<Authentication<Credentials, CoSecPrincipal>> {
+        val authentication = mockk<Authentication<Credentials>> {
             every { supportCredentials } returns credentials.javaClass
-            every { authenticate(any()) } returns SimplePrincipal.ANONYMOUS.toMono()
+            coEvery { authenticate(any()) } returns TokenSubject("alice", null)
         }
-        DefaultAuthenticationProvider.register(credentials.javaClass, authentication)
+        authenticationProvider.register(credentials.javaClass, authentication)
 
-        compositeAuthentication.authenticate(credentials)
-            .test()
-            .consumeNextWith {
-                it.assert().isEqualTo(SimplePrincipal.ANONYMOUS)
-            }
-            .verifyComplete()
+        compositeAuthentication.authenticate(credentials).assert().isEqualTo(TokenSubject("alice", null))
+    }
+
+    @Test
+    fun `credentials no authentication supports are refused`() = runTest {
+        assertThrows<IllegalArgumentException> { compositeAuthentication.authenticate(mockk<Credentials>()) }
     }
 }

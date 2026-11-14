@@ -43,7 +43,7 @@ import kotlin.random.Random
  * 3. every JSON document in the repository's resources and documentation gets the same verdict from both.
  *
  * The schema is stricter than today's codecs in the ways [LENIENCIES] lists. It is not as strict as the compilers:
- * passing it is necessary, not sufficient. What no schema keyword expresses is in [FormatPatterns.NOT_EXPRESSED];
+ * passing it is necessary, not sufficient. What no schema keyword expresses is listed on [FormatPatterns];
  * generated strings come from the descriptors' examples, so this test cannot find a valid-looking value the compiler
  * rejects. Counter-examples cover the value rules the schema does express; `PolicyDocumentValuesTest` compiles the 8.0
  * ones.
@@ -194,12 +194,15 @@ class SchemaConformanceTest {
                 // A platform document without its own fields (limits, attributes) is also a valid tenant document,
                 // whose principals need not name their tenant: the schema cannot tell the kinds apart.
                 mutation.kind == MutationKind.DROP_REQUIRED && "$mutation".endsWith("#platformBinding.tenant)") &&
-                !mutation.document.has("limits") && !mutation.document.has("attributes")
+                !mutation.document.has("limits") && !mutation.document.has("attributes") ||
+                // A tenant role without its app is a system role, when the document is otherwise an app document's.
+                mutation.kind == MutationKind.DROP_REQUIRED && "$mutation".endsWith("#tenantRole.app)") &&
+                codecError(file, mutation.document) == null
             )
 
     /**
      * Makes ids unique where a codec rejects duplicates, and has an app document's principals name their tenant, which
-     * the shared binding schema cannot require of one kind of document only ([FormatPatterns.NOT_EXPRESSED]).
+     * the shared binding schema cannot require of one kind of document only ([FormatPatterns]).
      */
     private fun selfConsistent(file: SchemaFile, document: JsonNode): JsonNode {
         if (file.name == DocumentFormats.SNAPSHOT_DOCUMENT && document.has("catalog")) {

@@ -1,0 +1,22 @@
+{
+  "description": "The same role in globex is nobody: acme's document binds it.",
+  "credential": {
+    "tenant": "globex",
+    "id": "bob",
+    "app": "cosec-control",
+    "roles": [
+      "owner"
+    ]
+  },
+  "request": {
+    "hostApp": "cosec-control",
+    "action": "cosec:read",
+    "resource": {
+      "type": "doc",
+      "id": "tenant/globex"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

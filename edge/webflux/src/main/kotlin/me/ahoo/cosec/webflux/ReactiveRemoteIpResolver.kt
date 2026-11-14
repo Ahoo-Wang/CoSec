@@ -11,11 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
+@InternalCoSecApi
 object ReactiveRemoteIpResolver : RemoteIpResolver<ServerWebExchange> {
     /**
      * Uses [java.net.InetSocketAddress.getHostString] rather than `getHostName`, which may trigger a

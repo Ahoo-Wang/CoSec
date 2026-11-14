@@ -63,11 +63,11 @@ cosec:
     secret: ${COSEC_JWT_SECRET} # blank fails startup while JWT is enabled
   authorization:
     scope:
-      app-id: order-service     # the app this host serves; omit when requests declare it (CoSec-App-Id)
+      app-id: order-service     # the app this host serves: only credentials declaring it are served
     remote-ip:
       max-trusted-index: 1      # trusted X-Forwarded-For hops; 0 ignores the header
     routes:
-      location: classpath:cosec-routes.json   # the default; set it empty to run without a route map
+      location: classpath:cosec-routes.json   # names the route map; unset, the host loads none
 ```
 
 Startup fails, on purpose, when:
@@ -75,8 +75,9 @@ Startup fails, on purpose, when:
 - **JWT is on without revocation storage.** Revocation is always on. With `cosec-cocache` the Redis token store
   supplies it; without it, register a `TokenStore` and a `RevocationReader` bean yourself, or set
   `cosec.jwt.enabled=false`.
-- **The route map location does not exist.** The default `classpath:cosec-routes.json` must exist on WebFlux and
-  WebMvc hosts unless `cosec.authorization.routes.location` is set empty. A gateway host loads no route map.
+- **A route map is left out or empty.** `classpath:cosec-routes.json` exists while
+  `cosec.authorization.routes.location` is unset (name it, or set the property empty to run without one); a location
+  that does not exist; a map with no routes. A gateway host loads no route map.
 - **Redis may evict the snapshot.** With `cosec-cocache`, every Redis node must have `maxmemory-policy noeviction`. A
   different policy, or one that cannot be read (`INFO` denied to the Redis user, a wrapped CoCache backend),
   fails startup. Only when the operator has set `noeviction` and CoCache cannot read it, set
@@ -100,7 +101,8 @@ auto-configurations listed in `META-INF/spring/org.springframework.boot.autoconf
 
 ## Route maps
 
-On WebFlux and WebMvc hosts, `cosec-routes.json` gives requests their `service:verb` action and typed resource:
+On WebFlux and WebMvc hosts, a route map named by `cosec.authorization.routes.location` gives requests their
+`service:verb` action and typed resource:
 
 ```json
 { "service": "order",
@@ -109,10 +111,14 @@ On WebFlux and WebMvc hosts, `cosec-routes.json` gives requests their `service:v
     { "method": "POST", "path": "/orders/{orderId}/cancel", "action": "order:cancel", "resource": "order/{orderId}" } ] }
 ```
 
-It loads all or nothing: overlapping routes for one method, a malformed route, or a resource variable the path does not
-capture fails startup. Requests no route matches stay `http:<METHOD>` on `http:path:<path>`. With `cosec-openapi`,
-`GET /actuator/cosecServiceGenerator/routes` generates the route map and `/app` the app document. Policies on `http:*`
-never cover mapped requests: tell the policy author which namespace each endpoint is in.
+It loads all or nothing: overlapping routes for one method, a malformed route, a map with no routes, or a resource
+variable the path does not capture fails startup. Requests no route matches stay `http:<METHOD>` on `http:path:<path>`. With `cosec-openapi` and springdoc,
+`GET /actuator/cosecServiceGenerator/routes` generates the route map and `/app` the app document (short-form
+permissions: catalog entries with `action`). A request is mapped or not, never both: `http:*` statements, DENYs and
+rate limit rules never cover a mapped request, and `service:verb` ones never cover an unmapped one. Tell the policy
+author which namespace each endpoint is in. A service that needs no business names, such as a small one or one
+behind a gateway (which loads no route map), leaves the property unset and writes `http` statements; that is "simple mode"
+(https://cosec.ahoo.me/scenarios/simple-mode). More: https://cosec.ahoo.me/scenarios/route-maps.
 
 ## Publishing the first documents
 
@@ -125,7 +131,10 @@ in-memory store without it. **Until a platform document exists, every request is
   hand-written files write `{"accepted": true, "outputSha256": {"platform.json": "<sha256>"}}`). Migrating 7.x data:
   `cosec-migrate convert`, then `publish`; see https://cosec.ahoo.me/operations/upgrading.
 - Later changes go through the control plane (below). `cosec-migrate bootstrap` writes only the platform tenant's
-  document; it does not create the platform document.
+  document; it does not create the platform document. **The first platform document must let authenticated callers
+  reach `/cosec/control/v1/**`** (`http:GET`, `http:POST`, `http:DELETE` on `http:path:/cosec/control/v1/**`, condition
+  `subject.authenticated`): the control plane authorizes again per step, but a document that does not open the path can
+  no longer be changed, and `publish` never overwrites. https://cosec.ahoo.me/guide/quick-start has a document that does.
 - While no platform document is installed, the instance also reports itself not ready (Spring readiness
   `REFUSING_TRAFFIC`; liveness unaffected). With actuator, add the `cosecSnapshot` indicator to the readiness group
   (`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`); it is `DOWN` until the platform
@@ -192,8 +201,8 @@ cosec:
   is wired in this mode.
 - **Only the gateway may reach it** (NetworkPolicy, private network or mTLS): it believes any `CoSec-Identity`, and
   logs a WARN at startup saying so. Never expose such a service directly.
-- Answers: no header is anonymous; unreadable, repeated or oversize (`cosec.pipeline.gateway.max-size`, 8KB) is 400;
-  older than `cosec.pipeline.gateway.max-age` (60s) plus `cosec.authentication.revocation.skew`, or past the
+- Answers: no header is anonymous; unreadable, repeated or oversize (`cosec.pipeline.identity.max-size`, 8KB) is 400;
+  older than `cosec.pipeline.identity.max-age` (60s) plus `cosec.authentication.revocation.skew`, or past the
   credential's expiry, is 401 `token-expired`; unknown version, no expiry or an identity from the future is 401
   `token-invalid`; a scope that does not resolve here (for example a different `scope.app-id`) is 400.
 - Startup fails for an unknown `cosec.pipeline.mode`, and for `mode=gateway` on a Spring Cloud Gateway host.
@@ -203,8 +212,11 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
 
 ## Tokens, memberships and API keys
 
-- Tokens are read from the `Authorization` header, then the `authorization` cookie; the query parameter only with
-  `cosec.pipeline.allow-query-token=true`. Issue them with the `TokenConverter` bean.
+- Tokens are read from the `Authorization` header; the query parameter only with
+  `cosec.pipeline.allow-query-token=true`, the `authorization` cookie only with `cosec.pipeline.allow-cookie-token=true`
+  (a browser sends a cookie on a cross-site request too, so that application defends against CSRF itself). Issue them
+  with the `TokenConverter` bean, or from a login endpoint with `TokenCompositeAuthentication.authenticateAsToken`
+  (suspend), which runs your `Authentication` bean for the credentials: `authenticate` is `suspend` and throws to refuse.
 - A token's `roles` claim (`role` in the default space, `role@space` elsewhere) and `policies` claim (attached policy
   ids, which must be `attachable`) are the principal's memberships. A token with the claim `cosec.membership:
   "provider"` and no roles or policies takes them from a `MembershipProvider` bean instead; a `JwtTokenConverter` bean
@@ -222,8 +234,9 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   starter wires `CoCacheMembershipProvider`. A key whose principal the provider does not know or knows as deactivated is
   `token-invalid`. A user's key is a personal access token; a workload principal's key is a service account's.
   Keys stored before 8.0 are converted with `cosec-migrate api-keys`.
-- Clients send `CoSec-App-Id` (unless the host sets `scope.app-id`, or a gateway route `cosec-app-id`) and
-  `CoSec-Space-Id` for a non-default space, each once; a space needs a role there, or the request is denied (403
+- A token or an API key declares its app (the token's `aud`, set from `TokenSubject.app`; the key's `app`): a host with
+  `scope.app-id` (or a gateway route's `cosec-app-id`) refuses a credential declaring another or none. Clients never send an
+  app. They send `CoSec-Space-Id` for a non-default space, once (the query string is not read); a space needs a role there, or the request is denied (403
   `scope-rejected`; 401 for an anonymous caller). Details:
   https://cosec.ahoo.me/integration/authentication.
 
@@ -260,6 +273,21 @@ policies. Bind the first administrator with `cosec-migrate bootstrap --to-redis 
 (a `(platform)`-tenant principal), or with a principal binding of the platform document to `cosec:platform-admin`
 in app `cosec-control`. On WebFlux, raise `spring.codec.max-in-memory-size` for large documents; on WebMvc the limit is
 `cosec.control.http.max-body-size` (16MB). Workflow: https://cosec.ahoo.me/policies/testing.
+
+The control plane's token is issued for tenant `(platform)` (an administrator) or the tenant's own, and for the app
+`cosec.control.app-id`: `TokenSubject(id = "alice", app = "cosec-control", tenant = "(platform)")`. A change is
+`POST /changes` (document, base revision, operations), then `:skip-shadow` with a `reason` (the trust root, and a
+tenant's administrator on its own document) or `:shadow`, then `:publish`. A console that edits roles sends one `putRole`
+per save; a service that mirrors an identity system's roles sends `putRole`, `removeRole` and `putCatalog` the same way
+and never writes Redis (https://cosec.ahoo.me/scenarios/roles, https://cosec.ahoo.me/scenarios/external-source).
+
+## Scenarios
+
+Worked examples with documents and settings that run: https://cosec.ahoo.me/scenarios/simple-mode (one tenant, no apps),
+`/scenarios/app` (an app without spaces), `/scenarios/spaces` (per-app and shared spaces), `/scenarios/service-account`
+(an API key limited to one space), `/scenarios/tenant-owner` (an owner by attachment), `/scenarios/gateway` (which
+action names the gateway and the service use). Tokens are issued for one app (`TokenSubject.app`): the service's
+`cosec.authorization.scope.app-id` must be the token's. The model: https://cosec.ahoo.me/guide/model.
 
 ## Optional behavior
 

@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Effect
@@ -21,7 +24,6 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
@@ -30,7 +32,6 @@ import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.condition.Literal
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -181,14 +182,13 @@ class IndexGenerator(private val random: Random) {
             emptyList(),
         )
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(TenantId(tenant), authenticated = true, memberships),
-            DeclaredScope(apps.pick(), space),
+            ScopeSubject(TenantId(tenant), authenticated = true, memberships, apps.pick().ifEmpty { null }),
+            space,
             HostScope(null),
         )
         val scope = (resolution as ScopeResolution.Resolved).scope
         val authz = AuthzRequest(
-            Subject("alice", tenant, true, emptySet(), emptySet(), emptyMap(), false, true, true),
-            Scope.declared(tenant, scope.app.value, space),
+            Subject("alice", true, emptyMap(), true, true),
             action,
             resource,
             Environment("127.0.0.1", "request", "device", blocked = false),

@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "ROL-7"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "Any other text is a role id, colons included.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        },
+        "roles": [
+          {
+            "id": "wms:clerk",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "wms:clerk"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:wms/read",
+      "statement": 0,
+      "name": "read",
+      "via": {
+        "binding": "role:wms:clerk@wms:read",
+        "document": "app"
+      }
+    }
+  }
+}

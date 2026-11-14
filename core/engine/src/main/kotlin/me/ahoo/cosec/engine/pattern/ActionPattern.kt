@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Action
 
 /**
@@ -21,6 +24,7 @@ import me.ahoo.cosec.model.Action
  *
  * Service and verb compare exactly, case included: `http:get` is not `http:GET`.
  */
+@InternalCoSecApi
 class ActionPattern private constructor(
     /** `null` for `*`. */
     val service: String?,
@@ -40,6 +44,7 @@ class ActionPattern private constructor(
         else -> "$service$SEPARATOR$verb"
     }
 
+    @InternalCoSecApi
     companion object {
         private const val SEPARATOR = ':'
         private const val ANY_TEXT = "*"

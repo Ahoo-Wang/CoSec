@@ -46,9 +46,18 @@ class StagingSlotsTest {
     @Volatile
     private var refuseStages = false
     private val store = object : ControlStore by memory {
-        override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?) {
+        override suspend fun putCandidate(
+            key: SnapshotKey,
+            expected: SnapshotDigest?,
+            candidate: StoredCandidate
+        ): Boolean {
             failing?.let { throw it }
-            memory.putCandidate(key, candidate)
+            return memory.putCandidate(key, expected, candidate)
+        }
+
+        override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean {
+            failing?.let { throw it }
+            return memory.withdrawCandidate(key, window)
         }
 
         override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean =

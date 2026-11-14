@@ -14,8 +14,8 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 | 文档 | 键 | 每个……一份 | 包含 |
 |---|---|---|---|
 | 平台文档 | `platform` | 部署 | 所有租户共享的策略、面向任何人（`*`）和指定主体的绑定、break-glass 绑定、限流规则，以及只有平台能设置的 `limits`、`attributes`、`boundaries`。 |
-| 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、角色绑定、限流规则。 |
-| 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、限流规则。 |
+| 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、系统[角色](#roles)、角色绑定、限流规则。 |
+| 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、自定义[角色](#roles)、限流规则。 |
 
 键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色，或租户文档把该应用的某个权限策略绑定给任何人或某个主体时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
 
@@ -68,6 +68,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 |---|---|---|---|
 | `policies`、`bindings`、`rateLimits` | 是 | 是 | 是 |
 | `catalog` | | 是 | |
+| `roles` | | 是 | 是 |
 | `limits`、`attributes` | 是 | | |
 | `boundaries` | 是 | | |
 | `boundary` | | | 是 |
@@ -90,7 +91,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 
 - `perm:<appId>/<permission>` 是应用的权限策略。只有该应用的文档能定义它，且它不能被附加（[角色权限](./role-permissions.md)）。
 - `cosec:blacklist`、`cosec:root`、`cosec:platform-admin`、`cosec:tenant-admin` 和 `cosec:tenant-viewer` 是内置策略，任何文档都不能定义它们。控制面还会拒绝以 `cosec:`、`g:` 或 `r:` 开头的新 id，这些前缀保留给内置策略和 `cosec-migrate`。
-- 租户策略不能复用平台策略的 id。控制面会拒绝；在数据面，绑定或附加策略指向这样的 id 时，除非有 DENY 匹配或两个策略内容相同，请求为 Indeterminate（`503`）。
+- 租户策略不能复用平台策略的 id。控制面会拒绝；在数据面，绑定或附加策略指向这样的 id 时，除非有 DENY 匹配或两个策略内容相同，请求为 Indeterminate（`503`）；内容相同时求值的是平台的那条策略。
 
 ## 语句 {#statements}
 
@@ -138,7 +139,7 @@ DENY 不能写裸资源类型，例如 `order`：它只覆盖 id 为空的那个
 }
 ```
 
-`path` 是 [HTTP 路径模式](#http-paths)。`resource` 是类型化资源，其片段是字面量或 `path` 中的变量。路由映射要么整体加载，要么不加载：有格式错误的路由，或同一方法下两条可能匹配同一请求的路由，都会让启动失败。包含 `/`（解码后的 `%2F`）的捕获值会改变资源 id 的片段，因此这样的请求会以 `400` 被拒绝。网关不加载路由映射：它的请求留在 `http` 命名空间。`cosecServiceGenerator/routes` 可以从服务的 OpenAPI 文档生成路由映射（[角色权限](./role-permissions.md#generating-a-catalog-from-openapi)）。
+`path` 是 [HTTP 路径模式](#http-paths)。`resource` 是类型化资源，其片段是字面量或 `path` 中的变量。路由映射要么整体加载，要么不加载：没有路由的映射、有格式错误的路由，或同一方法下两条可能匹配同一请求的路由，都会让启动失败。包含 `/`（解码后的 `%2F`）的捕获值会改变资源 id 的片段，因此这样的请求会以 `400` 被拒绝。网关不加载路由映射：它的请求留在 `http` 命名空间。`cosecServiceGenerator/routes` 可以从服务的 OpenAPI 文档生成路由映射（[角色权限](./role-permissions.md#generating-a-catalog-from-openapi)）。
 
 ## 资源 {#resources}
 
@@ -167,7 +168,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 ### HTTP 路径 {#http-paths}
 
-`http:path:<pattern>` 匹配类型为 `http`、id 为请求路径（经管道规范化，见 [Web 集成](../integration/web.md)）的资源。在以下子集上，它与 Spring 的 `PathPattern` 匹配结果一致：
+`http:path:<pattern>` 匹配类型为 `http`、id 为请求路径（经管道规范化，见 [Web 集成](../integration/web.md)）的资源。模式不会遇到路径结尾之前的空段、编码后的 `/` 或 `\`，管道会以 `400` 拒绝它们。末尾的 `/` 是路径的一部分：`/admin` 不匹配 `/admin/`，`/admin/**` 匹配。在以下子集上，它与 Spring 的 `PathPattern` 匹配结果一致：
 
 | 元素 | 匹配 |
 |---|---|
@@ -221,6 +222,8 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 ```
 
 - 语句的每个资源模式都必须捕获它读取的变量，否则语句无法编译：某个模式没有捕获的变量会读作缺失，针对它写的 DENY 会悄悄失效。策略条件不能读取任何变量。
+- 有多个资源模式的语句，含义与每个模式各写一条语句完全相同。路径同时匹配其中多个模式时，按书写顺序依次用每个匹配模式的捕获值判断条件，任一成立即命中。都不成立且其中某次判断失败时，语句失败：DENY 使决策为 Indeterminate，ALLOW 视为未命中。所以模式的书写顺序永远不改变决策。例如 `"resource": ["http:path:/files/{*p}", "http:path:/{*p}"]` 加 `{ "prefix": ["resource.var.p", "/files/secret"] }`，`GET /files/secret/x` 经第二个模式命中，尽管第一个模式捕获的是 `/secret/x`。
+- `key` 读取变量的限流规则，取书写顺序中第一个使规则条件成立的模式的捕获值。
 - 变量名是 Java 标识符，另外允许包含 `-`；同一模式中一个名字只能捕获一次。
 - 捕获的值是该片段解码后的值（`{*name}` 为路径余下部分）。值只会被比较，永远不会成为模式的一部分，所以 id 为 `**` 的主体无法扩大任何范围。
 
@@ -271,7 +274,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `scope.roles` | Set | 主体在请求空间中的角色。 |
 | `action.service`、`action.verb` | String | 动作的两部分。 |
 | `resource.type`、`resource.id` | String | 资源的两部分。 |
-| `resource.attributes.<name>` | String | 代码在检查时传入的资源属性。请求管道不设置任何值。 |
+| `resource.attributes.<name>` | String | 资源的属性。请求管道和文档中列出的检查都不设置；对象级规则把事实写进资源 id（[对象级规则](../integration/checks.md#object-level-rules)）。 |
 | `resource.var.<name>` | String | [路径变量](#path-variables)。 |
 | `environment.ip` | Ip | 客户端地址（[Web 集成](../integration/web.md)）。 |
 | `environment.time` | Instant | 请求时间；只有 `time` 读取它。 |
@@ -279,7 +282,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `environment.blocked` | Bool | 黑名单是否拦截该请求。 |
 | `http.header.<name>` | String | 请求头 `<name>`；请求没有该头时缺失。见[请求头](#headers)。 |
 | `http.origin`、`http.referer` | String | `Origin` 和 `Referer` 请求头，读取方式与 `http.header.*` 相同。 |
-| `http.origin.host`、`http.referer.host` | String | `Origin` 和 `Referer` URL 中的主机，小写；值不是带主机的 URL 时缺失。 |
+| `http.origin.host`、`http.referer.host` | String | `Origin` 和 `Referer` URL 中的主机，小写，去掉末尾的点（`evil.com.` 就是 DNS 名字 `evil.com`，所以读作 `evil.com`，标签为 `com.evil`）；值不是带主机的 URL 时缺失。 |
 | `http.origin.host.labels`、`http.referer.host.labels` | Labels | 该主机的标签，倒序（`api.example.com` 为 `com.example.api`），小写；供 `prefix` 使用。 |
 | `request.attributes.<name>` | String | 宿主掌握的 HTTP 之外的请求信息。网关设置 `request.attributes.cosec.audit.routeId`，即请求经过的路由 id；还设置 `request.attributes.cosec.identity.forward`：在接收转发身份的路由上（`lb://` 路由，或元数据为 `cosec-identity: true` 的路由）为 `true`，在其他路由上为 `false`。WebFlux 和 WebMvc 不设置任何值。 |
 | `ext.<provider>.<name>` | 声明的类型 | [外部属性](#external-attributes-and-onmissing)。 |
@@ -327,7 +330,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `notBefore` | ISO 日期时间；在它之前条件为假。不带偏移量时按 `zone` 解读。 |
 | `notAfter` | ISO 日期时间；从它开始条件为假。必须晚于 `notBefore`。 |
 | `zone` | 时区 id：`UTC`（默认）、偏移量如 `+08:00` 或 `UTC+8`，或地区如 `Asia/Shanghai`。 |
-| `daysOfWeek` | 非空数组，元素为 `MON` … `SUN`。 |
+| `daysOfWeek` | 非空数组，元素为 `MON` … `SUN`，拼写必须完全一致：其他大小写或名称无法编译。 |
 | `from`、`to` | 一天中的时间，`HH:mm`、`HH:mm:ss` 或 `HH:mm:ss.fff`；要么都写要么都不写，且不能相等。窗口为 `[from, to)`。`from` 晚于 `to` 时窗口跨越午夜，凌晨部分属于窗口开始的那一天。 |
 
 `notBefore`、`notAfter`、`daysOfWeek` 或 `from`/`to` 至少写一个。
@@ -401,23 +404,39 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 ## 目录 {#catalogs}
 
-应用文档的 `catalog` 列出应用提供的权限，供控制台和生成器使用。它不参与求值。
+应用文档的 `catalog` 列出应用提供的权限，供控制台和生成器使用。写了 `action` 的条目同时定义这个权限：策略 `perm:<appId>/<id>`，一条 ALLOW 语句。其他条目不参与求值。
 
 | 字段 | 类型 | 含义 |
 |---|---|---|
 | `groups` | 数组，必填 | 权限分组。 |
 | `groups[].name` | 字符串，必填 | |
 | `groups[].description` | 字符串 | |
-| `groups[].spaced` | 布尔，默认 `false` | 该组权限是否打算按空间授予；仅作提示。 |
+| `groups[].spaced` | 布尔，默认 `false` | 用 `action` 写的权限在哪里生效：持有它的角色生效的任何空间；不写时只在默认空间，靠条件 `{ "eq": ["scope.space", ""] }`。 |
 | `groups[].permissions` | 数组，必填 | |
 | `groups[].permissions[].id` | 字符串，必填 | 权限 id；其策略为 `perm:<appId>/<id>`。 |
 | `groups[].permissions[].name`、`.description` | 字符串 | |
+| `groups[].permissions[].action` | 动作模式或非空数组 | 定义这个权限。写了 `action` 的条目和同 id 的策略不能同时存在；id 不能重复。 |
+| `groups[].permissions[].resource` | 同语句的 `resource`；需要 `action` | 不写表示任何资源。 |
 
-没有任何检查确保目录条目有对应的策略，反之亦然。见[角色权限](./role-permissions.md)。
+没有任何检查确保没有 `action` 的条目有对应的策略，反之亦然；这样的条目只用于显示，角色不能列出它。见[角色权限](./role-permissions.md#short-form-permissions)。
+
+## 角色 {#roles}
+
+应用文档（系统角色）和租户文档（自定义角色）可以有 `roles`：谁得到哪些权限，只写一次。概念和示例见[角色权限](./role-permissions.md#roles)。
+
+| 字段 | 文档 | 类型 | 含义 |
+|---|---|---|---|
+| `id` | 两种 | 字符串，必填 | 文档内唯一；不是 `*`，不含 `@`。 |
+| `app` | 租户 | 字符串，必填 | 角色所属的应用；合法的应用 id。 |
+| `space` | 租户 | 字符串 | 不写：任何空间。否则只在那个空间，`""` 是默认空间；不能是保留 id。 |
+| `name`、`description` | 两种 | 字符串 | 用于显示。 |
+| `permissions` | 两种 | id 数组，应用文档也可以写 `"*"` | 角色的权限，可以为空。 |
+
+角色为每个权限派生一条绑定 `role:<roleId>@<app>:<permission>`，策略是 `perm:<app>/<permission>`，主体是该角色（应用文档里不限租户，租户文档里是本租户），`app` 是角色的应用，`space` 是角色的空间或 `*`，排在手写绑定之后。与手写绑定相撞无法编译；`role:` 保留给这些绑定，变更不能写入。一份文档最多派生 50,000 条。
 
 ## 限流规则 {#rate-limit-rules}
 
-`rateLimits` 是有序的规则数组。被允许的请求在它匹配的每条规则上消耗一个许可（[限流](./rate-limiting.md)）。
+`rateLimits` 是有序的规则数组，至多 64 条（`DOC-6`）：超过的文档无法编译。被允许的请求在它匹配的每条规则上消耗一个许可，每条都是一次限流器调用（[限流](./rate-limiting.md)）。
 
 | 字段 | 类型 | 默认值 | 含义 |
 |---|---|---|---|
@@ -426,9 +445,9 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `resource` | 资源模式或其非空数组 | 任意资源 | |
 | `condition` | 条件 | 恒为真 | |
 | `onMissing` | `"indeterminate"` 或 `"nomatch"` | `"indeterminate"` | 无法获取的外部属性：`indeterminate` 交给 `strictFailure` 决定；`nomatch` 跳过该规则。`nomatch` 只在平台文档中能编译：与 [DENY](#external-attributes-and-onmissing) 不同，限流规则没有确认流程。 |
-| `key` | 属性路径 | 一个共享桶 | String 或 Ip 属性，其值决定桶。`resource.var.<name>` 必须被每个资源模式捕获。 |
-| `permitsPerSecond` | 数字 | 必填 | 大于 `0`。 |
-| `windowSeconds` | 整数 | `1` | 至少为 `1`。 |
+| `key` | 属性路径 | 一个共享桶 | String 或 Ip 属性，其值决定桶。`resource.var.<name>` 必须被每个资源模式捕获；有多个模式时，取第一个使规则条件成立的模式的值（[路径变量](#path-variables)）。 |
+| `permitsPerSecond` | 数字 | 必填 | 大于 `0`；`permitsPerSecond × windowSeconds` 至多 2⁶³。 |
+| `windowSeconds` | 整数 | `1` | 从 `1` 到 `31536000`（一年）。 |
 | `strictFailure` | 布尔 | `false` | 限流器无法计数时是否拒绝请求（`503`）。 |
 
 规则按 DENY 语句的方式匹配：动作、资源和条件，使用它自己的路径变量；裸资源类型无法编译。

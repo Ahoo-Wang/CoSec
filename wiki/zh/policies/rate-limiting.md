@@ -55,7 +55,7 @@ flowchart LR
 }
 ```
 
-规则按 DENY 语句的方式匹配被允许的请求：某个动作模式、某个资源模式，以及它的条件。一个窗口允许 `permitsPerSecond × windowSeconds` 个请求，且至少一个。
+规则按 DENY 语句的方式匹配被允许的请求：某个动作模式、某个资源模式，以及它的条件。一个窗口允许 `permitsPerSecond × windowSeconds` 个请求，且至少一个。服务[路由映射](../integration/web.md#route-maps)里的路由不是 `http` 请求，所以写在 `http:` 和路径上的规则不会限制它：也要为该路由的动作写一条规则（[按业务动作授权](../scenarios/route-maps.md#a-request-has-one-action)）。
 
 请求受哪些规则约束：
 
@@ -63,20 +63,22 @@ flowchart LR
 - 应用文档的规则，当请求读取了该文档时：请求有应用，且主体在请求空间中拥有角色，或租户的文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体（[角色权限](./role-permissions.md#app-documents)）；
 - 租户文档的规则，对该租户的请求。
 
-它们按这个顺序运行，同一文档内按文档中的顺序。每条匹配的规则消耗一个许可。第一条桶已耗尽的规则返回 `429`；它之后的规则不消耗，之前的规则保留已消耗的许可。规则是叠加的：租户或应用规则永远不会替换或放宽平台规则，即使 id 相同；只有请求匹配的每条规则都还有许可时，请求才能通过。
+它们按这个顺序运行：先平台，再应用，最后租户；同一文档内按文档中的顺序。每条匹配的规则消耗一个许可。第一条桶已耗尽的规则返回 `429`；它之后的规则不消耗，之前的规则保留已消耗的许可。平台规则最先运行，所以平台规则在任何应用或租户规则消耗许可之前就限制住请求。规则是叠加的：租户或应用规则永远不会替换或放宽平台规则，即使 id 相同；只有请求匹配的每条规则都还有许可时，请求才能通过。
+
+被放行的请求每匹配一条规则，就要调用一次限流器，逐条依次调用；使用 Redis 限流器时，每条一次往返。所以一份文档至多 64 条规则（`DOC-6`）：超过的文档无法编译，控制面对会产生这种文档的变更给出 `COMPILE` 发现，返回 `422`。请让一个请求匹配的规则保持少量；一条带 `key` 的规则可以代替许多只在计数对象上不同的规则。
 
 ## 键 {#keys}
 
-`key` 指定用哪个属性的值来选择桶：[属性目录](./language.md#attributes)中的 String 或 Ip 属性，例如 `environment.ip`、`subject.id`、`scope.tenant`、`subject.attributes.plan` 或 `resource.var.orderId`。`resource.var.<name>` 键必须被规则的每个资源模式捕获。
+`key` 指定用哪个属性的值来选择桶：[属性目录](./language.md#attributes)中的 String 或 Ip 属性，例如 `environment.ip`、`subject.id`、`scope.tenant`、`subject.attributes.plan` 或 `resource.var.orderId`。`resource.var.<name>` 键必须被规则的每个资源模式捕获；匹配多个模式时，取书写顺序中第一个使规则条件成立的模式的值（[路径变量](./language.md#path-variables)）。
 
 | `key` | 桶 |
 |---|---|
 | 未写 | 规则匹配的所有请求共享一个桶。 |
 | 已写 | 每个值一个桶。该值缺失的请求共享它们自己的一个桶。 |
 
-值原样就是它的桶 `g:<value>`，每个限流器都把它写成 UTF-8。带落单 UTF-16 代理项的值（例如令牌属性中的 JSON 转义 `"\uD800"`）没有 UTF-8 编码：它的桶是 `e:<value>`，其中每个落单的代理项写成 `\uXXXX` 转义、每个 `\` 加倍，所以它从不计入把它换成 `?` 的那个值的桶（`IDN-10`）。你自己的限流器只会拿到格式良好的文本作为桶。
+值原样就是它的桶 `k:<value>`，每个限流器都把它写成 UTF-8。带落单 UTF-16 代理项的值（例如令牌属性中的 JSON 转义 `"\uD800"`）没有 UTF-8 编码：它的桶是 `e:<value>`，其中每个落单的代理项写成 `\uXXXX` 转义、每个 `\` 加倍，所以它从不计入把它换成 `?` 的那个值的桶（`IDN-10`）。你自己的限流器只会拿到格式良好的文本作为桶。
 
-不同文档的规则永远不共享桶：平台规则按自己的 id 计数，应用规则按 `app:<appId>/<id>`，租户规则按 `tenant:<tenantId>/<id>`（[`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)）。规则 id 不能包含 `:` 或 `/`，所以任何规则都无法指向其他文档的计数器：租户无法消耗或重置平台的配额。
+不同文档的规则永远不共享桶：规则按它的文档和 id 计数，即 `platform/<id>`、`app:<appId>/<id>` 或 `tenant:<tenantId>/<id>`（[`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)）。规则 id 不能包含 `:` 或 `/`，所以任何规则都无法指向其他文档的计数器：租户无法消耗或重置平台的配额。
 
 读取 `subject.id` 的键让所有匿名调用方共享一个桶；请用另一条按 `environment.ip` 计数的规则约束他们。键或条件读取了无法获取的[外部属性](./language.md#external-attributes-and-onmissing)时，规则没有桶：若写了 `onMissing: "nomatch"`（仅平台规则）则跳过，否则按[限流器失败](#failure-behavior)的方式由 `strictFailure` 决定。
 
@@ -98,7 +100,7 @@ flowchart LR
 | 响应头 | 值 |
 |---|---|
 | `RateLimit-Limit` | 该规则每个窗口的许可数，向上取整。 |
-| `RateLimit-Remaining` | 当前窗口剩余的许可数。 |
+| `RateLimit-Remaining` | 当前窗口此刻还会放行的请求数，向上取整：不足一个的剩余许可仍能放行一个请求。 |
 | `RateLimit-Reset` | 距当前窗口结束的秒数，至少为 `1`。 |
 | `Retry-After` | 仅在 `429` 上：与 `RateLimit-Reset` 相同。 |
 
@@ -142,8 +144,8 @@ flowchart LR
 - 桶是调用者的租户，在管道放行请求之后、控制面授权之前计数：管道放进这些路径的该租户的每个主体都会消耗它，不论是不是
   管理员；每个 `(platform)` 主体都消耗平台的桶。在管道中只把控制路径放行给绑定了控制角色的主体，这样其他主体无法挡住一个
   租户的管理员。
-- 桶耗尽时，在控制 API 做任何工作之前就答 `429`。控制 API 只服务这些确切的路径：末尾带 `/` 或含空段（`//`）的路径是
-  `404`，因此这些模式覆盖它服务的每个请求。
+- 桶耗尽时，在控制 API 做任何工作之前就答 `429`。控制 API 只服务这些确切的路径：末尾带 `/` 的路径是 `404`，含空段（`//`）的路径被管道以 `400`
+  拒绝，因此这些模式覆盖它服务的每个请求。
 - 不要把 break-glass 的路由（`/break-glass` 及其下）放进这条规则：给它们单独一条规则，或者不限，这样耗尽的桶永远不会挡住
   紧急撤销。`changes/*` 仍覆盖 break-glass 的三个步骤：让已审批的 break-glass 授予生效的 `:publish`、恢复卡住的撤销的
   `:publish`，以及 break-glass 变更的 `:abandon`。给平台的桶留出余量，或者用
@@ -154,7 +156,7 @@ flowchart LR
 
 ## 发布规则 {#publishing-rules}
 
-规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1`、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
+规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、一份文档超过 64 条规则、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1` 或超过一年（`31536000`）、配额 `permitsPerSecond × windowSeconds` 超过 2⁶³、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
 
 像其他条目一样通过控制面修改规则（[变更](./testing.md#changes)）：
 

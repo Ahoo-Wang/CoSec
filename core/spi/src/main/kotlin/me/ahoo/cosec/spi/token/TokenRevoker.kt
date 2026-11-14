@@ -14,8 +14,6 @@
 package me.ahoo.cosec.spi.token
 
 import me.ahoo.cosec.annotations.CoSecSpi
-import me.ahoo.cosec.api.token.AccessToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Clock
@@ -26,8 +24,7 @@ import java.time.Instant
  * Revokes tokens for logout.
  *
  * The application exposes its own logout endpoint and calls [revoke] with the
- * token to invalidate. Passing a [me.ahoo.cosec.api.token.CompositeToken]
- * (a subtype of [AccessToken]) requires no separate overload.
+ * access token to invalidate.
  *
  * @see DefaultTokenRevoker
  * @see TokenStore
@@ -40,13 +37,13 @@ interface TokenRevoker {
      * to it can be used any more.
      *
      * @param accessToken the access token to revoke
-     * @return the principal of the revoked token
+     * @return what the revoked token said
      * @throws TokenVerificationException if the token is invalid (including
      * already expired -- revoke before the access token expires to also kill
      * the bound refresh token) or already revoked
      */
     @Throws(TokenVerificationException::class)
-    fun revoke(accessToken: AccessToken): TokenPrincipal
+    fun revoke(accessToken: String): VerifiedToken
 
     /**
      * Revokes every token of [principal] in [tenant] issued before [issuedBefore], access and refresh tokens alike:
@@ -79,10 +76,10 @@ class DefaultTokenRevoker @JvmOverloads constructor(
     private val clock: Clock = Clock.systemUTC()
 ) : TokenRevoker {
 
-    override fun revoke(accessToken: AccessToken): TokenPrincipal {
-        val tokenPrincipal = tokenVerifier.verify<TokenPrincipal>(accessToken)
-        tokenStore.revoke(tokenPrincipal.tokenId, revocationTtl)
-        return tokenPrincipal
+    override fun revoke(accessToken: String): VerifiedToken {
+        val token = tokenVerifier.verify(accessToken)
+        tokenStore.revoke(token.id, revocationTtl)
+        return token
     }
 
     /**

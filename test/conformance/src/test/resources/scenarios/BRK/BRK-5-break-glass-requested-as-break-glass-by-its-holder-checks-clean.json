@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "control",
-  "description": "The same binding requested as BREAK_GLASS by plato, who holds cosec:breakglass, checks clean and waits for a second person; walt's ordinary change of an ordinary binding is checked as before.",
+  "description": "The same binding requested as BREAK_GLASS by plato, who holds cosec:breakglass, checks clean and waits for a second person; walt's ordinary change of an ordinary binding is checked as an ordinary change.",
   "documents": {
     "platform": {
       "policies": [

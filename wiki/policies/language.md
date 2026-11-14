@@ -19,8 +19,8 @@ fails closed: `503` unless a DENY matches ([fail closed](../guide/security-model
 | Document | Key | One per | Holds |
 |---|---|---|---|
 | Platform | `platform` | deployment | Policies shared by every tenant, bindings for anyone (`*`) and for named principals, break-glass bindings, rate limit rules, and what only the platform sets: `limits`, `attributes`, `boundaries`. |
-| App | `app:<appId>` | app | The app's [catalog](#catalogs), its permission policies `perm:<appId>/<permission>`, role bindings, rate limit rules. |
-| Tenant | `tenant:<tenantId>` | tenant | The tenant's own policies, its bindings (anyone, its principals, its roles), its `boundary`, rate limit rules. |
+| App | `app:<appId>` | app | The app's [catalog](#catalogs), its permission policies `perm:<appId>/<permission>`, system [roles](#roles), role bindings, rate limit rules. |
+| Tenant | `tenant:<tenantId>` | tenant | The tenant's own policies, its bindings (anyone, its principals, its roles), custom [roles](#roles), its `boundary`, rate limit rules. |
 
 The key is how the [control plane](./testing.md) names a document. Every request reads the platform document and the
 document of its tenant (anonymous requests: tenant `(0)`). It reads the app document of its app only when the principal
@@ -79,6 +79,7 @@ control plane writes its own `revision`, `publishedAt` and `provenance` when it 
 |---|---|---|---|
 | `policies`, `bindings`, `rateLimits` | yes | yes | yes |
 | `catalog` | | yes | |
+| `roles` | | yes | yes |
 | `limits`, `attributes` | yes | | |
 | `boundaries` | yes | | |
 | `boundary` | | | yes |
@@ -107,7 +108,7 @@ Policy ids:
   `g:` or `r:`, which are reserved for built-in policies and `cosec-migrate`.
 - A tenant policy must not reuse the id of a platform policy. The control plane refuses it. On the data plane, a
   binding or attachment that names such an id makes the request Indeterminate (`503`) unless a DENY matches or both
-  policies have the same content.
+  policies have the same content; then the platform's policy is the one evaluated.
 
 ## Statements
 
@@ -163,8 +164,8 @@ A route map (`cosec-routes.json`, loaded from `cosec.authorization.routes.locati
 ```
 
 `path` is an [HTTP path pattern](#http-paths). `resource` is a typed resource whose segments are literals or variables
-of `path`. A route map loads whole or not at all: a malformed route, or two routes of one method that the same request
-could match, fails startup. A captured value that holds `/` (a decoded `%2F`) would change the resource id's segments,
+of `path`. A route map loads whole or not at all: a map with no routes, a malformed route, or two routes of one method that the
+same request could match, fails startup. A captured value that holds `/` (a decoded `%2F`) would change the resource id's segments,
 so such a request is refused with `400`. A gateway loads no route map: its requests stay in the `http` namespace.
 `cosecServiceGenerator/routes` generates a route map from the service's OpenAPI document
 ([Role permissions](./role-permissions.md#generating-a-catalog-from-openapi)).
@@ -198,7 +199,9 @@ contain `:`; no literal may contain `*`, `?`, `{`, `}`, whitespace or control ch
 ### HTTP paths
 
 `http:path:<pattern>` matches a resource of type `http` whose id is the request path, as the pipeline normalized it
-([Web integration](../integration/web.md)). It matches what Spring's `PathPattern` matches, on this subset:
+([Web integration](../integration/web.md)). A pattern never meets an empty segment before the end of a path, an
+encoded `/` or a `\`, which the pipeline refuses with `400`. A trailing `/` is part of the path: `/admin` does not match
+`/admin/`, and `/admin/**` does. It matches what Spring's `PathPattern` matches, on this subset:
 
 | Element | Matches |
 |---|---|
@@ -269,6 +272,15 @@ pattern captured it can read it, as `resource.var.<name>`, in its own condition 
 - Every resource pattern of the statement must capture the variable it reads, or the statement does not compile: a
   variable some pattern does not capture would read as absent, and a DENY written against it would silently miss.
   A policy condition cannot read any variable.
+- A statement with several resource patterns means exactly what one statement per pattern would mean. When a path
+  matches more than one of them, the condition is tested against each matching pattern's captures, in the order the
+  patterns are written, and the statement matches if it holds under any one. If it holds under none and testing one
+  of them failed, the statement fails: a DENY makes the decision Indeterminate, an ALLOW counts as no match. So the
+  order of the patterns never changes the decision. With `"resource": ["http:path:/files/{*p}", "http:path:/{*p}"]`
+  and `{ "prefix": ["resource.var.p", "/files/secret"] }`, `GET /files/secret/x` matches through the second pattern,
+  although the first captures `/secret/x`.
+- A rate limit rule whose `key` reads a variable takes the value from the first pattern, in written order, under
+  whose captures the rule's condition holds.
 - A name is a Java identifier that may also contain `-`, and is captured once per pattern.
 - A captured value is the segment's decoded value (`{*name}`: the rest of the path). A value is only ever compared:
   it never becomes part of a pattern, so a principal id of `**` cannot widen anything.
@@ -322,7 +334,7 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `scope.roles` | Set | The principal's roles in the request's space. |
 | `action.service`, `action.verb` | String | The two parts of the action. |
 | `resource.type`, `resource.id` | String | The two parts of the resource. |
-| `resource.attributes.<name>` | String | Attributes of a resource that code passes to a check. The request pipeline sets none. |
+| `resource.attributes.<name>` | String | Attributes of the resource. Neither the request pipeline nor the documented checks set any: an object-level rule puts its facts in the resource id ([Object-level rules](../integration/checks.md#object-level-rules)). |
 | `resource.var.<name>` | String | A [path variable](#path-variables). |
 | `environment.ip` | Ip | The client address ([Web integration](../integration/web.md)). |
 | `environment.time` | Instant | The request time; only `time` reads it. |
@@ -330,7 +342,7 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `environment.blocked` | Bool | Whether the blacklist blocks the request. |
 | `http.header.<name>` | String | The request header `<name>`; absent when the request has none. See [Headers](#headers). |
 | `http.origin`, `http.referer` | String | The `Origin` and `Referer` headers, read as `http.header.*` is. |
-| `http.origin.host`, `http.referer.host` | String | The host of the `Origin` and `Referer` URLs, in lower case; absent when the value is not a URL with a host. |
+| `http.origin.host`, `http.referer.host` | String | The host of the `Origin` and `Referer` URLs, in lower case and without a trailing dot (`evil.com.` is the DNS name `evil.com`, so it reads `evil.com`, and its labels are `com.evil`); absent when the value is not a URL with a host. |
 | `http.origin.host.labels`, `http.referer.host.labels` | Labels | That host's labels, reversed (`api.example.com` is `com.example.api`), in lower case; for `prefix`. |
 | `request.attributes.<name>` | String | What the host knows about the request besides HTTP. The gateway sets `request.attributes.cosec.audit.routeId`, the id of the route the request came through, and `request.attributes.cosec.identity.forward`: `true` on a route that receives the forwarded identity (a `lb://` route, or one whose metadata says `cosec-identity: true`), `false` on any other; WebFlux and WebMvc set none. |
 | `ext.<provider>.<name>` | declared | An [external attribute](#external-attributes-and-onmissing). |
@@ -391,7 +403,7 @@ An attribute is absent when the request has no value for it, such as `subject.id
 | `notBefore` | ISO date-time; the condition is false before it. Without an offset, read in `zone`. |
 | `notAfter` | ISO date-time; false from it on. Must be after `notBefore`. |
 | `zone` | Time zone id: `UTC` (the default), an offset such as `+08:00` or `UTC+8`, or a region such as `Asia/Shanghai`. |
-| `daysOfWeek` | Non-empty array of `MON` … `SUN`. |
+| `daysOfWeek` | Non-empty array of `MON` … `SUN`, spelled exactly so: any other case or name does not compile. |
 | `from`, `to` | Time of day `HH:mm`, `HH:mm:ss` or `HH:mm:ss.fff`; both or neither, and not equal. The window is `[from, to)`. When `from` is after `to` it crosses midnight, and its early-morning part belongs to the day it started on. |
 
 At least one of `notBefore`, `notAfter`, `daysOfWeek` or `from`/`to` is required.
@@ -484,25 +496,47 @@ matches. Anonymous principals have no attachments.
 
 ## Catalogs
 
-An app document's `catalog` lists the permissions the app offers, for consoles and generators. It takes no part in
-evaluation.
+An app document's `catalog` lists the permissions the app offers, for consoles and generators. An entry that writes
+`action` also defines its permission: the policy `perm:<appId>/<id>`, one ALLOW statement. No other entry takes part
+in evaluation.
 
 | Field | Type | Meaning |
 |---|---|---|
 | `groups` | array, required | Groups of permissions. |
 | `groups[].name` | string, required | |
 | `groups[].description` | string | |
-| `groups[].spaced` | boolean, default `false` | Whether the group's permissions are meant to be granted per space; informational. |
+| `groups[].spaced` | boolean, default `false` | Where a permission written with `action` applies: in any space a role holding it applies in; without it, only in the default space, by the condition `{ "eq": ["scope.space", ""] }`. |
 | `groups[].permissions` | array, required | |
 | `groups[].permissions[].id` | string, required | The permission id; its policy is `perm:<appId>/<id>`. |
 | `groups[].permissions[].name`, `.description` | string | |
+| `groups[].permissions[].action` | action pattern or non-empty array | Defines the permission. An entry with `action` and a policy of its id do not compile; the id must not be repeated. |
+| `groups[].permissions[].resource` | as a statement's `resource`; needs `action` | Absent: any resource. |
 
-Nothing checks that a catalog entry has a policy, or the reverse. See [Role permissions](./role-permissions.md).
+Nothing checks that an entry without `action` has a policy, or the reverse; such an entry is only for display and no
+role can list it. See [Role permissions](./role-permissions.md#short-form-permissions).
+
+## Roles
+
+An app document (system roles) and a tenant document (custom roles) may hold `roles`: who gets which permissions,
+written once. [Role permissions](./role-permissions.md#roles) has the concept and its examples.
+
+| Field | Documents | Type | Meaning |
+|---|---|---|---|
+| `id` | both | string, required | Unique in the document; not `*`, without `@`. |
+| `app` | tenant | string, required | The app the role belongs to; a valid app id. |
+| `space` | tenant | string | Absent: any space. Otherwise only that space, `""` being the default space; not reserved. |
+| `name`, `description` | both | string | For display. |
+| `permissions` | both | array of ids, or `"*"` in an app document | The permissions of the role; possibly none. |
+
+A role derives one binding per permission, `role:<roleId>@<app>:<permission>`, of policy `perm:<app>/<permission>`,
+subject the role (of any tenant in an app document, of its tenant in a tenant document), `app` the role's app and
+`space` the role's space or `*`, after the hand-written bindings. A collision with a hand-written binding does not
+compile, and `role:` is reserved to these bindings: a change may not put one. A document derives at most 50,000.
 
 ## Rate limit rules
 
-`rateLimits` is an ordered array of rules. A permitted request spends one permit of every rule it matches
-([Rate limiting](./rate-limiting.md)).
+`rateLimits` is an ordered array of at most 64 rules (`DOC-6`): a document with more does not compile. A permitted
+request spends one permit of every rule it matches, each a call to the limiter ([Rate limiting](./rate-limiting.md)).
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
@@ -511,9 +545,9 @@ Nothing checks that a catalog entry has a policy, or the reverse. See [Role perm
 | `resource` | resource pattern or non-empty array | any resource | |
 | `condition` | condition | always | |
 | `onMissing` | `"indeterminate"` or `"nomatch"` | `"indeterminate"` | For an external attribute that cannot be fetched: `indeterminate` leaves it to `strictFailure`; `nomatch` skips the rule. `nomatch` compiles only in the platform document: rate limit rules have no confirmation, unlike a [DENY](#external-attributes-and-onmissing). |
-| `key` | attribute path | one shared bucket | A String or Ip attribute whose value names the bucket. `resource.var.<name>` must be captured by every resource pattern. |
-| `permitsPerSecond` | number | required | Greater than `0`. |
-| `windowSeconds` | integer | `1` | At least `1`. |
+| `key` | attribute path | one shared bucket | A String or Ip attribute whose value names the bucket. `resource.var.<name>` must be captured by every resource pattern; with several, the first pattern under whose captures the rule's condition holds gives the value ([path variables](#path-variables)). |
+| `permitsPerSecond` | number | required | Greater than `0`; `permitsPerSecond × windowSeconds` is at most 2⁶³. |
+| `windowSeconds` | integer | `1` | From `1` to `31536000` (a year). |
 | `strictFailure` | boolean | `false` | Whether a limiter that cannot count refuses the request (`503`). |
 
 A rule matches as a DENY statement does: action, resource and condition, with its own path variables; a bare

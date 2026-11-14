@@ -130,8 +130,8 @@ management:
 ## 关闭 {#shutdown}
 
 关闭时，决策监听器停止接收事件，把队列中的事件投递给 `BEST_EFFORT` 监听器（审计日志、Kafka、指标），最多
-[`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners)（5 秒），然后丢弃剩下的。让 pod 的
-终止宽限期足够容纳 Spring 自身的优雅关闭加上这段时间。
+[`cosec.observability.listener.drain-timeout`](./observability.md#decision-listeners)（5 秒），然后丢弃剩下的。随后 Kafka
+审计监听器最多再用同样长的时间等待它手中的发送。让 pod 的终止宽限期足够容纳 Spring 自身的优雅关闭加上两倍这段时间。
 
 ## Kubernetes {#kubernetes}
 

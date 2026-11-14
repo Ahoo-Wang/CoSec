@@ -24,8 +24,8 @@ import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.createCoSecCache
+import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
@@ -46,11 +46,11 @@ import org.springframework.context.annotation.Bean
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.RevokedTokenCache"])
 @ConditionalOnBean(CoCacheFactory::class)
 @EnableConfigurationProperties(
-    CacheProperties::class,
+    RevocationProperties::class,
     CoSecProperties::class,
 )
-class CoSecTokenRevocationCacheAutoConfiguration(
-    private val cacheProperties: CacheProperties,
+internal class CoSecTokenRevocationCacheAutoConfiguration(
+    private val revocationProperties: RevocationProperties,
     private val cosecProperties: CoSecProperties,
 ) {
 
@@ -69,7 +69,7 @@ class CoSecTokenRevocationCacheAutoConfiguration(
     }
 
     /**
-     * The local tier comes from `cosec.authorization.cache.token.*`; "not revoked" lookups are cached locally for
+     * The local tier comes from `cosec.authentication.revocation.cache.*`; "not revoked" lookups are cached locally for
      * [RevokedTokenCache.MISSING_TTL_SECONDS].
      */
     @Bean(REVOKED_TOKEN_CACHE_BEAN_NAME)
@@ -78,7 +78,7 @@ class CoSecTokenRevocationCacheAutoConfiguration(
         val spec = CoSecCacheSpecs.revokedToken(
             cosecProperties.keyPrefix
         )
-        return factory.createCoSecCache(RevokedTokenCache::class.java, cacheProperties.token.applyTo(spec))
+        return factory.createCoSecCache(RevokedTokenCache::class.java, revocationProperties.cache.applyTo(spec))
     }
 
     /**
@@ -90,6 +90,6 @@ class CoSecTokenRevocationCacheAutoConfiguration(
         val spec = CoSecCacheSpecs.revokedSubject(
             cosecProperties.keyPrefix
         )
-        return factory.createCoSecCache(RevokedSubjectCache::class.java, cacheProperties.token.applyTo(spec))
+        return factory.createCoSecCache(RevokedSubjectCache::class.java, revocationProperties.cache.applyTo(spec))
     }
 }

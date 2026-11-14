@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Effect
@@ -30,7 +33,6 @@ import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -72,23 +74,18 @@ class RequestAttributesTest {
         )
         val tenant = if (authenticated) TenantId("acme") else TenantId.DEFAULT
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(tenant, authenticated, memberships),
-            DeclaredScope(app, ""),
+            ScopeSubject(tenant, authenticated, memberships, app.ifEmpty { null }),
+            "",
             HostScope(null)
         )
         val authz = AuthzRequest(
             Subject(
                 "alice",
-                tenant.value,
                 authenticated,
-                emptySet(),
-                emptySet(),
                 mapOf("level" to 3),
-                root = false,
                 principalBindings = true,
                 breakGlass = true,
             ),
-            me.ahoo.cosec.model.Scope.declared(tenant.value, app, ""),
             Action("http", "GET"),
             Resource("http", path, mapOf("owner" to "alice")),
             Environment(remoteIp, "req", deviceId, blocked = false),

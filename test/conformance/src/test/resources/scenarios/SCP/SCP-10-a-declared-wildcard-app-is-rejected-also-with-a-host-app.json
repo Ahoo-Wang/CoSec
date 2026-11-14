@@ -1,0 +1,42 @@
+{
+  "rules": [
+    "SCP-10"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The credential declares * to a host configured for order-service.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "request": {
+    "hostApp": "order-service"
+  },
+  "expect": {
+    "decision": "Rejected",
+    "reason": "APP_MISMATCH"
+  },
+  "credential": {
+    "app": "*"
+  }
+}

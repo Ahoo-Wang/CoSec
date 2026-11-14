@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.document
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -44,5 +47,19 @@ class JavaZonesTest {
         for (id in listOf("", "*", "a:b", "a\u0007b", " ")) {
             assertThrownBy<IllegalArgumentException> { SnapshotKey.Tenant(id) }
         }
+    }
+
+    /**
+     * A document names its zone, so the ids that reach the resolver are any text an author writes: only the zones the
+     * JVM knows are kept, never an unknown id, which would grow the cache with every new one (round 2 review).
+     */
+    @Test
+    fun `unknown zone ids are not kept`() {
+        JavaZones.resolve("Asia/Shanghai")
+        val before = JavaZones.cachedZones()
+        repeat(1_000) { JavaZones.resolve("Nowhere/Zone-$it").assert().isNull() }
+        JavaZones.RESOLVER.resolve("Nowhere/Else").assert().isNull()
+        JavaZones.cachedZones().assert().isEqualTo(before)
+        JavaZones.resolve("Asia/Shanghai").assert().isSameAs(JavaZones.resolve("Asia/Shanghai"))
     }
 }

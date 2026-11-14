@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -27,13 +30,14 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.Scope
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -59,7 +63,8 @@ import org.openjdk.jmh.annotations.State
  *
  * Scenarios, as in 7.0: `global`, a global ALLOW matches; `role`, a permission near the end of the app's list, through
  * the `*` grant; `none`, nothing matches; `role-heavy`, 12 roles granting 30 permissions each plus a `*` grant over 120
- * permissions, nothing matches.
+ * permissions, nothing matches; `short-form`, `role` with the `scope.space` condition a permission written with `action`
+ * in a group that is not `spaced` carries (RFC 0012 §4.2): what that condition costs a permit.
  *
  * `boundary` (RFC 0007 §14.1): `none`, no platform boundary; `1` or `8`, a default boundary of that many ALLOWs whose
  * last one admits every path, so permits stay permits after all of them are tried. `none` must keep the throughput and
@@ -67,7 +72,7 @@ import org.openjdk.jmh.annotations.State
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 open class FlatAuthorizationBenchmark {
-    @Param("global", "role", "none", "role-heavy")
+    @Param("global", "role", "none", "role-heavy", "short-form")
     lateinit var scenario: String
 
     @Param("none", "1", "8")
@@ -79,7 +84,6 @@ open class FlatAuthorizationBenchmark {
     private lateinit var subject: ScopeSubject
     private lateinit var memberships: Memberships
     private lateinit var authz: AuthzRequest
-    private val declared = DeclaredScope("app", "")
     private val host = HostScope(null)
     private val compiler = PolicyCompiler()
 
@@ -129,7 +133,7 @@ open class FlatAuthorizationBenchmark {
         val byId = permissions.associateBy { it.name }
         val granted = grants.values.flatten().filter { it != "*" }.distinct()
         val policies = granted.map { id -> compiler.compile(PolicyId("perm:app/$id"), null, listOf(byId.getValue(id))) } +
-            compiler.compile(PolicyId("perm:app/*"), null, permissions)
+            compiler.compile(PolicyId("perm:app/*"), if (scenario == "short-form") DEFAULT_SPACE_ONLY else null, permissions)
         val bindings = grants.flatMap { (role, ids) ->
             ids.map { id ->
                 Binding(
@@ -149,26 +153,21 @@ open class FlatAuthorizationBenchmark {
             mapOf(SpaceId.DEFAULT to roles.mapTo(LinkedHashSet(), ::RoleId)),
             listOf(PolicyId("principal-a"), PolicyId("principal-b")),
         )
-        subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
+        subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships, "app")
         val path = when (scenario) {
             "global" -> "/public/resource3/page"
-            "role" -> "/orders/op49/detail"
+            "role", "short-form" -> "/orders/op49/detail"
             "none", "role-heavy" -> "/unknown/path"
             else -> error("Unknown scenario $scenario")
         }
         authz = AuthzRequest(
             subject = Subject(
                 "user",
-                "acme",
                 true,
-                emptySet(),
-                emptySet(),
                 emptyMap(),
-                root = false,
                 principalBindings = true,
                 breakGlass = true,
             ),
-            scope = Scope.declared("acme", "app", ""),
             action = Action("http", "GET"),
             resource = Resource("http", path, emptyMap()),
             environment = Environment("127.0.0.1", "request", "device", blocked = false),
@@ -176,11 +175,11 @@ open class FlatAuthorizationBenchmark {
         val decision = authorize()
         val expected = when (scenario) {
             "global" -> decision is Decision.Permit && decision.by?.policy?.value == "global-public"
-            "role" -> decision is Decision.Permit && decision.by?.policy?.value == "perm:app/*"
+            "role", "short-form" -> decision is Decision.Permit && decision.by?.policy?.value == "perm:app/*"
             else -> decision == Decision.Deny(null)
         }
         check(expected) { "Scenario $scenario decided $decision" }
-        val resolved = (ScopeResolver.resolve(subject, declared, host) as ScopeResolution.Resolved).scope
+        val resolved = (ScopeResolver.resolve(subject, "", host) as ScopeResolution.Resolved).scope
         val traced = CoSecFlatEngine.evaluate(
             FlatRequest(authz, resolved, memberships, 0),
             SnapshotView(platform, app, tenant),
@@ -191,8 +190,12 @@ open class FlatAuthorizationBenchmark {
 
     @Benchmark
     fun authorize(): Decision {
-        val scope = (ScopeResolver.resolve(subject, declared, host) as ScopeResolution.Resolved).scope
+        val scope = (ScopeResolver.resolve(subject, "", host) as ScopeResolution.Resolved).scope
         val request = FlatRequest(authz, scope, memberships, 0)
         return CoSecFlatEngine.evaluate(request, SnapshotView(platform, app, tenant)).decision
+    }
+
+    private companion object {
+        val DEFAULT_SPACE_ONLY = Condition.Eq(Attribute.Kind.SCOPE_SPACE.path, Literal.Str(""))
     }
 }

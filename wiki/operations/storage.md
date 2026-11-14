@@ -56,7 +56,7 @@ The rest of the cache policy stays the application's, through customizers and `c
 `read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl` and
 `unknown-read`; on memberships `ttl` (never forever), `absent-ttl`, `lease-*`, `load-*` and `invalidate-failure`. None
 of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer `local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
-when the revocation's invalidation message is lost (`cosec.authorization.cache.token.local-max-age`, 30 seconds, is the
+when the revocation's invalidation message is lost (`cosec.authentication.revocation.cache.local-max-age`, 30 seconds, is the
 default bound), and a longer membership `ttl` keeps a removed role applied that long.
 
 ### Redis keys
@@ -69,17 +69,18 @@ contain `:`, so a key names one document only.
 |---|---|---|
 | `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces |
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest (`SHA-256:` and 64 hex digits, as CoCache computes it) |
-| `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document |
-| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`; for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses |
-| `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done |
+| `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document, and the records reclamation took out of it and has not yet seen deleted |
+| `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`, each with the revision of it that last indexed the reference: a revision removes only what it or an earlier one indexed (`CTL-25`); for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses, and removes what a publish indexed before a head write it lost |
+| `<s>:control:lease:<name>` | the control plane | a lease (`reclaim:<doc>`, `shadow-windows`); it expires with each write, and its holder deletes it when done, only while it still holds it (`CTL-26`); a holder that takes its own lease again holds it for the full duration from then on |
 | `<s>:control:list:documents`, `<s>:control:list:open-changes` | the control plane, `cosec-migrate` | the documents that have revisions, and the change requests that may still be open, so the maintenance passes and `repair-references` can visit each |
 | `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
-| `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open |
-| `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; expires 8 days after its last write |
+| `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open; the change it belongs to removes it, only while it is still its own (`CTL-26`) |
+| `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; the instance stops writing it once the window's candidate is withdrawn; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
-| `<s>:shadow:status:instances` | every data-plane instance | each instance's installed revisions and their lag; expires 2 minutes after its last write, and entries older than a minute are ignored |
+| `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's installed revisions and their lag; a heartbeat writes this one value, whatever the size of the cluster; expires 2 minutes after its last write, and a status older than a minute is ignored |
+| `<s>:shadow:instances:all` | every data-plane instance | the instances that have a status, each with when it listed itself; an instance lists itself when it starts and again every hour, and whoever writes the list drops entries older than 3 hours; expires as the reports |
 | `<s>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
@@ -155,9 +156,9 @@ the documents and the candidates, and write only shadow reports and statuses. A 
 - Control-plane credentials: every key under `<s>:`.
 - To keep one instance from writing another instance's report, give each instance its own user, limited to its own
   report keys (`<s>:shadow:report:*:<instance>`), and set its
-  [`cosec.authorization.shadow.instance-id`](./configuration.md#shadow-windows). Every instance still writes
-  `<s>:shadow:reporters:*` and `<s>:shadow:status:*`, which CoCache writes through Lua scripts, so an ACL cannot make
-  them add-only.
+  [`cosec.authorization.shadow.instance-id`](./configuration.md#shadow-windows), and to its own status key
+  (`<s>:shadow:status:<instance>`). Every instance still writes `<s>:shadow:reporters:*` and `<s>:shadow:instances:*`,
+  which CoCache writes through Lua scripts, so an ACL cannot make them add-only.
 
 A window's numbers are the sum of one report per instance, each that instance's latest. The control plane keeps a
 window open (the step answers `503`) rather than count anything doubtful: a report under one instance's key that names
@@ -171,7 +172,7 @@ An example for instance `pod-a` with the default prefix (Redis 7 ACL syntax; `%R
 the keys and takes every command away; the second grants the commands and channels it needs:
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:pod-a ~cosec:shadow:instances:*
 ACL SETUSER cosec-pod-a <the commands and channels CoCache lists> +info
 ```
 
@@ -214,7 +215,9 @@ sequenceDiagram
   documents at a time, and one pass runs at a time: when Redis is so slow that a pass outlasts the interval, the next
   starts as soon as it ends, rather than add four more reads each interval. A pass that has confirmed no document for
   30 seconds and has no read in flight is held up only by compilations: the next tick abandons it and starts a new
-  pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned.
+  pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned. A pass does
+  not wait for a document whose compilation has been running for more than those 30 seconds, whoever started it: the
+  compilation confirms the document when it ends, and the pass goes on to the documents behind it.
 - **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
   random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
 - **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every
@@ -282,7 +285,7 @@ new app ids at a high rate keeps up to that rate × 30 seconds of loads, and the
 during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
 
 **Apps without a document share 256 places.** The ids an instance remembers as having no document, at most 256 per
-family (`SNP-7`), are shared by every tenant. A client that declares many random `CoSec-App-Id`s pushes out the real apps
+family (`SNP-7`), are shared by every tenant. Credentials issued for many apps that have no app document push out the real apps
 that have no app document, so a request in one of them reads Redis again, without compiling anything, until it is
 remembered again. That fails closed, but for a tenant in `fail-closed.tenants` such an app's entry loaded from the
 local copy counts as `local-max-age` old: with `fail-closed.max-lag` below `local-max-age`, its requests answer `503`
@@ -418,7 +421,7 @@ it, the shadow window and the change it came from. The control API reads them (`
 | `GET /documents/<doc>/revisions/<n>` | revision `<n>`; `410` when it is not kept |
 | `GET /documents/<doc>/diff?from=&to=` | what changed between two revisions |
 | `GET /documents/<doc>/revisions/<n>/propagation` | how many of the instances that reported a status in the last minute have installed revision `<n>` or later (needs instances with [shadow windows](./configuration.md#shadow-windows) on) |
-| `POST /documents/<doc>:rollback` with `{"revision": <n>, "note": "..."}` | a change (`201`) that makes the document what it was at revision `<n>` |
+| `POST /documents/<doc>:rollback` with `{"revision": <n>, "note": "..."}`, and `confirmations` when it brings back a `nomatch` DENY | a change (`201`) that makes the document what it was at revision `<n>` |
 
 A rollback is a change like any other: it is checked, shadowed and approved as its content requires, and publishing
 it makes a new revision, so the history only grows and records who rolled back. A rollback that would bring a
@@ -431,6 +434,9 @@ Every control-plane instance runs two maintenance passes while it runs, each fir
   older than `min-age` (7 days), and the records of publishes that never became the head once older than `orphan-age`
   (1 hour). It never removes the head, nor a revision an open change rests on; when an open change cannot be read, it
   reclaims nothing that pass. A lease per document (`reclaim:<doc>`) lets one instance at a time do each document.
+  The revision index no longer lists a record before it is deleted, and keeps it among those left to delete until
+  the deletion succeeds: a deletion that fails is tried again by the next pass. A history repair running at the same
+  time leaves out what falls below the index's floor, so what was reclaimed does not come back.
 - **Closing shadow windows**, every [`cosec.control.shadow.check-interval`](./configuration.md#control-plane)
   (1 minute), under the `shadow-windows` lease, so a window closes at most one interval late.
 

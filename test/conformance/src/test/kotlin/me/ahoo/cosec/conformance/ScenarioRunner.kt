@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.conformance
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.grant.GrantAnalysis
 import me.ahoo.cosec.model.condition.Containment
 import me.ahoo.cosec.model.condition.IndexKeys
@@ -48,6 +49,8 @@ sealed interface Outcome {
         val identity: Pair<Boolean, JsonNode?> = false to null,
         /** Through a gateway: the caller's credentials its backend receives, sorted (RC1-5). */
         val credentials: List<String> = emptyList(),
+        /** The kind of decision a check of the permitted request answered (`"check"`); null without one. */
+        val check: String? = null,
     ) : Outcome
 
     /** The caller went away and the pipeline made no outcome at all (RFC 0006 §7.4). */

@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.authentication.social
 
-import me.ahoo.cosec.api.principal.CoSecPrincipal
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialCredentials
@@ -64,7 +64,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                     .hasSingleBean(SocialAuthentication::class.java)
                     .getBean(AuthenticationProvider::class.java)
                     .extracting {
-                        it!!.getRequired<SocialCredentials, CoSecPrincipal, SocialAuthentication>(
+                        it!!.getRequired<SocialCredentials, SocialAuthentication>(
                             SocialCredentials::class.java,
                         )
                     }
@@ -97,7 +97,8 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             )
             .run { context: AssertableApplicationContext ->
                 assertThat(context).hasNotFailed()
-                val url = context.getBean(SocialProviderManager::class.java).getRequired("github").authorizeUrl()
+                val providers = context.getBean(SocialProviderManager::class.java)
+                val url = runBlocking { providers.getRequired("github").authorizeUrl() }
                 val state = UriComponentsBuilder.fromUriString(url).build().queryParams.getFirst("state")!!
                 state.assert().isNotEqualTo("predictable")
                 state.assert().matches("[A-Za-z0-9_-]{22}")
@@ -140,5 +141,33 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                     .doesNotHaveBean(SocialAuthenticationProperties::class.java)
                     .doesNotHaveBean(CoSecSocialAuthenticationAutoConfiguration::class.java)
             }
+    }
+
+    /** #1222: a registration is its context's, like the authentications it serves. */
+    @Test
+    fun `a context keeps its own social providers`() {
+        val social = contextRunner
+            .withBean(AuthStateCache::class.java, { AuthDefaultStateCache.INSTANCE })
+            .withUserConfiguration(
+                CoSecAuthenticationAutoConfiguration::class.java,
+                CoSecSocialAuthenticationAutoConfiguration::class.java,
+            )
+        val github = social.withPropertyValues(
+            "${SocialAuthenticationProperties.PREFIX}.registration.github.type=github",
+            "${SocialAuthenticationProperties.PREFIX}.registration.github.client-id=client-id",
+            "${SocialAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
+            "${SocialAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://example.com/callback",
+        )
+        github.run { first ->
+            val own = first.getBean(SocialProviderManager::class.java).getRequired("github")
+            github.run { second ->
+                second.getBean(SocialProviderManager::class.java).getRequired("github").assert().isNotSameAs(own)
+                first.getBean(SocialProviderManager::class.java).getRequired("github").assert().isSameAs(own)
+            }
+            first.getBean(SocialProviderManager::class.java).getRequired("github").assert().isSameAs(own)
+        }
+        social.run { empty ->
+            empty.getBean(SocialProviderManager::class.java)["github"].assert().isNull()
+        }
     }
 }

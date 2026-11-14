@@ -1,0 +1,22 @@
+{
+  "description": "The attachment grants wms:* with no role and no binding for bob.",
+  "credential": {
+    "tenant": "acme",
+    "id": "bob",
+    "app": "wms",
+    "policies": [
+      "tenant-owner"
+    ]
+  },
+  "request": {
+    "hostApp": "wms",
+    "action": "wms:warehouse.edit",
+    "resource": {
+      "type": "warehouse",
+      "id": "7"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

@@ -3,13 +3,13 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index b2a61126..1b57dee8 100644
+index 540c5026..68eb2aaa 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -477,7 +477,6 @@ class Changes(
+@@ -502,7 +502,6 @@ class Changes(
          val breakGlass = current.kind == ProvenanceKind.BREAK_GLASS
          if (breakGlass) {
-             requireState(current, OPEN)
+             PublishRules.requireState(current, OPEN)
 -            requireAudit(true)
              audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
          }

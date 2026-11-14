@@ -11,7 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.model
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The identifiers of the unified model (RFC 0004 §4.1). They appear on API boundaries only: compiled structures keep
@@ -20,7 +24,7 @@ package me.ahoo.cosec.model
 @JvmInline
 value class TenantId(val value: String) {
     companion object {
-        /** Same as `Tenant.PLATFORM_TENANT_ID`. */
+        /** The platform tenant. */
         val PLATFORM = TenantId("(platform)")
 
         /** Same as `CoSec.DEFAULT`: the tenant of anonymous principals. */
@@ -47,7 +51,7 @@ value class SpaceId(val value: String) {
     }
 
     companion object {
-        /** Same as `SpaceIdCapable.DEFAULT`. */
+        /** The default space: the empty id. */
         val DEFAULT = SpaceId("")
     }
 }
@@ -64,12 +68,21 @@ value class BindingId(val value: String)
 /**
  * The text rule every kind of id follows, wherever it enters CoSec (RC1-52, `IDN-10`): no unpaired UTF-16 surrogate.
  *
- * UTF-8 has no encoding for one. CoCache 6 and Spring's string template, which write Redis keys, put `?` in its place, so
- * the tenant `beta\uD800` and the tenant `beta?` would name the same Redis key, and one would read the other's
+ * UTF-8 has no encoding for one. The clients that write Redis keys from a string (a template, a key encoder) put `?` in
+ * its place, so the tenant `beta\uD800` and the tenant `beta?` would name the same Redis key, and one would read the other's
  * documents, memberships and revocations. An id with one is refused where it enters (a token, an API key, a provider's
  * answer, a control request), so no two ids ever share a stored key.
  */
 object Identifiers {
+    /**
+     * Ids beginning with it are CoSec's: the tenants `(0)` and `(platform)`, the anonymous principal `(0)`, the space
+     * `(default)`. A principal id with it is refused in a token (`IDN-12`), a space id in a request (`SCP-9`).
+     */
+    const val RESERVED_PREFIX = "("
+
+    /** Whether [id] is reserved for CoSec ([RESERVED_PREFIX]). */
+    fun isReserved(id: String): Boolean = id.startsWith(RESERVED_PREFIX)
+
     /** Whether [text] holds no unpaired UTF-16 surrogate: every high surrogate is followed by a low one, and only so. */
     fun isWellFormed(text: CharSequence): Boolean {
         var index = 0

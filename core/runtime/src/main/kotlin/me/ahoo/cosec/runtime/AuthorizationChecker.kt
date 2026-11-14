@@ -16,6 +16,7 @@ package me.ahoo.cosec.runtime
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -24,6 +25,7 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
@@ -57,9 +59,10 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         decide(security, action, resource) is Decision.Permit
 
     /**
-     * The decision that [check] answers for the same arguments. A context the pipeline did not make, or an action
-     * without `:`, is an implicit deny (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check
-     * writes no audit. The obligations of a permit, rate limits, did not run.
+     * The decision that [check] answers for the same arguments. A context the pipeline did not make, an action
+     * without `:`, or a resource enforcement would not decide ([PathNormalizer.enforceable], `PIP-15`) is an implicit deny
+     * (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check writes no audit. The obligations
+     * of a permit, rate limits, did not run.
      *
      * An error thrown by the check is `Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, error))`. That cause
      * stands for any failure of the check, not only a platform document that could not be read: [Cause] has no case for
@@ -88,8 +91,14 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         decide(security, action, resource) is Decision.Permit
 
     /** As [decide], with the action and resource given as the engine reads them. */
+    @OptIn(InternalCoSecApi::class)
+    suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
+        val decidable = PathNormalizer.enforceable(resource) ?: return Decision.Deny(null)
+        return decided(security, action, decidable)
+    }
+
     @Suppress("TooGenericExceptionCaught")
-    suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
+    private suspend fun decided(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
         pipeline.check(security, action, resource)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
@@ -107,10 +116,16 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * tenant: how the control plane checks its own actions, in `(cosec.control.app-id, default space)` (RFC 0007 §7.2).
      * Three-valued, so that the caller can tell a deny from an outage; it fails closed like [check]. An anonymous
      * request is denied.
+     *
+     * [resource] is not put through [PathNormalizer.enforceable], nor is it in [decideAs]: these check the control
+     * plane's own actions on resources the server builds from ids it has validated (a document, a change), never a path
+     * a client sent, and their bounds are those of the ids, not of a request path. The control plane decides a resource
+     * a client names (simulate, explain) through [PathNormalizer.enforceable] before it gets here.
      */
+    @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
         val scoped = security.inApp(app) ?: return Decision.Deny(null)
-        return decide(scoped, action, resource)
+        return decided(scoped, action, resource)
     }
 
     /**
@@ -135,6 +150,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * gained since, a `suspended` role say, still applies. A principal of claimed memberships stands until its token
      * expires.
      */
+    @InternalCoSecApi
     suspend fun decideAs(
         security: RequestSecurity,
         principal: AuthenticatedPrincipal,
@@ -164,6 +180,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         return decideOn(security, principal, now, app, action, resource)
     }
 
+    @OptIn(InternalCoSecApi::class)
     private suspend fun decideOn(
         security: RequestSecurity,
         principal: AuthenticatedPrincipal,
@@ -172,8 +189,8 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         action: Action,
         resource: Resource,
     ): Decision {
-        val recorded = security.asPrincipal(principal, memberships) ?: return Decision.Deny(null)
-        return decide(recorded, app, action, resource)
+        val recorded = security.asPrincipal(principal, memberships, app) ?: return Decision.Deny(null)
+        return decided(recorded, action, resource)
     }
 
     private companion object {

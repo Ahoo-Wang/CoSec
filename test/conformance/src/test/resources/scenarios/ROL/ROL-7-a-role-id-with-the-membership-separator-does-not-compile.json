@@ -1,0 +1,35 @@
+{
+  "rules": [
+    "ROL-7"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "`@` separates a membership's role and space, so a role id cannot hold it.",
+  "documents": {
+    "platform": {},
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "a@b",
+            "app": "wms",
+            "permissions": []
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "x"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:read"
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "has no [@]"
+  }
+}

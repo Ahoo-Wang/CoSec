@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "engine",
-  "description": "The host is order-service and the client declares billing.",
+  "description": "The host is order-service and the credential declares billing.",
   "documents": {
     "apps": {
       "order-service": {
@@ -60,11 +60,11 @@
   "credential": {
     "roles": [
       "editor"
-    ]
+    ],
+    "app": "billing"
   },
   "request": {
-    "hostApp": "order-service",
-    "app": "billing"
+    "hostApp": "order-service"
   },
   "expect": {
     "decision": "Rejected",

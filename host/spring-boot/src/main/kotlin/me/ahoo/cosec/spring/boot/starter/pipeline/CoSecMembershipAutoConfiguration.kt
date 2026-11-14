@@ -25,7 +25,6 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.COCACHE_AUTO_CONFIGURATION
-import me.ahoo.cosec.spring.boot.starter.authorization.cache.CacheProperties
 import me.ahoo.cosec.spring.boot.starter.authorization.cache.createCoSecCache
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -47,7 +46,8 @@ import kotlin.time.toKotlinDuration
 @ConditionalOnEnforceMode
 @ConditionalOnClass(name = ["me.ahoo.cosec.cache.CoCacheMembershipProvider"])
 @ConditionalOnBean(CoCacheFactory::class, MembershipLoader::class)
-@EnableConfigurationProperties(CacheProperties::class, RuntimeAuthorizationProperties::class, CoSecProperties::class)
+@EnableConfigurationProperties(RuntimeAuthorizationProperties::class, CoSecProperties::class)
+@InternalCoSecApi
 class CoSecMembershipAutoConfiguration {
     @Bean(CoSecCacheSpecs.MEMBERSHIP_CACHE_NAME)
     @ConditionalOnMissingBean

@@ -11,9 +11,12 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.cache.snapshot
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.cache.limiter.ReactiveRedisRateLimiterTest
 import me.ahoo.cosec.model.decision.RateLimitSpec
@@ -132,7 +135,7 @@ class SnapshotStoreBlockHoundTest {
                     SnapshotOptions(),
                 ).use { source ->
                     val loading = onNonBlockingThread { source.load("app") }
-                    loading.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).version.scoped.assert().isEqualTo(1L)
+                    loading.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).appEntry!!.revision.assert().isEqualTo(1L)
                     onNonBlockingThread { source.peek("app") }.assert().isNotNull()
                 }
             }

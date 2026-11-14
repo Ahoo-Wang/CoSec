@@ -1,0 +1,16 @@
+# Rule: CTL-31
+# Mutant: a platform or app change that only removes a DENY needs no second person
+# Tests: :control:test --tests me.ahoo.cosec.control.change.DenyRemovalTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
+@@ -472,7 +472,7 @@
+         if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding && it !is Operation.RemoveRole }) {
+             escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
+         }
+-        escalations += removedDenies(key, base, candidate, documents)
++        // mutant
+         if (key is SnapshotKey.App) {
+             escalations += referringBindings(key, base, candidate, documents)
+         }

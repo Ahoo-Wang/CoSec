@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.migrate
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.migrate.Fixtures7x.app
 import me.ahoo.cosec.migrate.Fixtures7x.appPermission
 import me.ahoo.cosec.migrate.Fixtures7x.permission
@@ -217,7 +220,7 @@ class ConverterTest {
     }
 
     /**
-     * SCP-7, R1-6 of #1194's review: a 7.x app id that no 8.0 request could declare names no app document. It is
+     * SCP-10, R1-6 of #1194's review: a 7.x app id that no 8.0 request could declare names no app document. It is
      * rejected with the other invalid ids, never a crash of the whole run.
      */
     @Test

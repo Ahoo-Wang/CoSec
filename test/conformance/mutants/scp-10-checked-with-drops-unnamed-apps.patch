@@ -1,0 +1,17 @@
+# Rule: SCP-10
+# Mutant: a head a change was checked with, of an app no key can name, is dropped from checkedWith, so the record reads instead of being a format error
+# Tests: :control:test --tests me.ahoo.cosec.control.change.UnnamedAppIdsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
+index 40bc7e78..3b6c9264 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt
+@@ -355,7 +355,7 @@ object ChangeRequestCodec {
+                 )
+             },
+             candidate = node.get("candidate")?.text(),
+-            checkedWith = node.need("checkedWith").properties()
++            checkedWith = node.need("checkedWith").properties().filterNot { (name, _) -> name.startsWith("app:") && !SnapshotKey.App.isValidAppId(name.removePrefix("app:")) }
+                 .associate { (name, value) -> documentKey(name) to (if (value.isNull) null else digest(value.text())) },
+             createdAt = Instant.parse(node.need("createdAt").text()),
+             updatedAt = Instant.parse(node.need("updatedAt").text()),

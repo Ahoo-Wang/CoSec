@@ -13,10 +13,10 @@
 
 package me.ahoo.cosec.migrate.v7.authorization
 
-import me.ahoo.cosec.api.context.request.SpaceId
-import me.ahoo.cosec.api.context.request.SpaceIdCapable
-import me.ahoo.cosec.api.principal.RoleId
-import me.ahoo.cosec.api.principal.SpacedRoleId
+import me.ahoo.cosec.migrate.v7.api.context.request.SpaceId
+import me.ahoo.cosec.migrate.v7.api.context.request.SpaceIdCapable
+import me.ahoo.cosec.migrate.v7.api.principal.RoleId
+import me.ahoo.cosec.migrate.v7.api.principal.SpacedRoleId
 
 /**
  * Which of a principal's roles apply in a space.

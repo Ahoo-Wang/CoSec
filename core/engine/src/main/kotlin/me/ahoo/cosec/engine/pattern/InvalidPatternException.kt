@@ -11,11 +11,16 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.pattern
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * An action, resource or path pattern that does not compile. Patterns fail closed: there is no fallback that matches
  * everything, or nothing, in place of a pattern that does not parse.
  */
+@InternalCoSecApi
 class InvalidPatternException(val pattern: String, val index: Int, reason: String) :
     IllegalArgumentException("Invalid pattern [$pattern] at $index: $reason")

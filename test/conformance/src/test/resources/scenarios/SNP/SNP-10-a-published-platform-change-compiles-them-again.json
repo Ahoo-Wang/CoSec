@@ -1,0 +1,106 @@
+{
+  "rules": [
+    "SNP-10"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same change published does reach the tenant's document, which no longer compiles and fails closed.",
+  "documents": {
+    "platform": {
+      "attributes": [
+        {
+          "path": "ext.geo.inFence",
+          "type": "bool"
+        }
+      ],
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    },
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "fence",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "http:POST",
+                "condition": {
+                  "eq": [
+                    "ext.geo.inFence",
+                    true
+                  ]
+                }
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "fence",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "fence"
+          }
+        ]
+      }
+    }
+  },
+  "snapshot": {
+    "platformChange": {
+      "published": {
+        "policies": [
+          {
+            "id": "open",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "open",
+            "subject": "*",
+            "app": "*",
+            "space": "*",
+            "policy": "open"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders"
+  },
+  "authentication": {
+    "result": "authenticated",
+    "tenant": "acme"
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

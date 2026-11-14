@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Effect
@@ -216,5 +219,25 @@ class PolicyCompilerTest {
         IndexOptions(
             attributes = listOf(Attribute.of(Attribute.Kind.RESOURCE_ATTRIBUTE, "owner"))
         ).attributes.assert().hasSize(1)
+    }
+
+    /** Round 2 review L4: a compiled statement is shared by every evaluation, so its pattern lists cannot be written. */
+    @Test
+    fun `a statement's pattern lists cannot be written through`() {
+        val statement = compiler.statement(
+            PolicyId("p"),
+            0,
+            StatementSource("d", Effect.DENY, listOf("order:delete"), listOf(ResourceSource("order/**"))),
+        )
+        assertThrownBy<UnsupportedOperationException> {
+            @Suppress("UNCHECKED_CAST")
+            (statement.actionPatterns as MutableList<ActionPattern>)[0] = ActionPattern.ANY
+        }
+        assertThrownBy<UnsupportedOperationException> {
+            @Suppress("UNCHECKED_CAST")
+            (statement.resourcePatterns as MutableList<ResourcePattern>)[0] = ResourcePattern.AnyResource
+        }
+        statement.actionPatterns.single().toString().assert().isEqualTo("order:delete")
+        (statement.actionPatterns === statement.actionPatterns).assert().isTrue()
     }
 }

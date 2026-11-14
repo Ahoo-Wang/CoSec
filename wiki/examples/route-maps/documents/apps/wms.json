@@ -1,0 +1,32 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "catalog": {
+    "groups": [
+      {
+        "name": "Warehouse",
+        "permissions": [
+          {
+            "id": "warehouse.read",
+            "name": "Read warehouses",
+            "action": "wms:warehouse.read"
+          },
+          {
+            "id": "warehouse.purge",
+            "name": "Purge warehouses",
+            "action": "wms:warehouse.purge",
+            "resource": "warehouse/{id}"
+          }
+        ]
+      }
+    ]
+  },
+  "roles": [
+    {
+      "id": "admin",
+      "name": "Administrator",
+      "permissions": "*"
+    }
+  ]
+}

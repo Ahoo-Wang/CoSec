@@ -24,14 +24,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
-import me.ahoo.cosec.api.tenant.Tenant
-import me.ahoo.cosec.api.token.AccessToken
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
@@ -50,6 +43,7 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
@@ -74,6 +68,8 @@ import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.route.RouteMap
 import me.ahoo.cosec.runtime.route.RouteMapCodec
 import me.ahoo.cosec.runtime.route.RouteMapException
+import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
@@ -81,7 +77,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.runtime.token.SimpleTokenPrincipal
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
 import me.ahoo.cosec.spi.apikey.ApiKeys
@@ -96,7 +91,6 @@ import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.membership.MembershipMarkedPrincipal
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
@@ -107,6 +101,7 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.cosec.testkit.CompiledSnapshot
 import me.ahoo.cosec.testkit.DocumentException
 import me.ahoo.cosec.testkit.DocumentSnapshotCompiler
@@ -147,7 +142,7 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
 /**
  * The `pipeline` runner (RFC 0008 §3.3): an HTTP request → [Pipeline] → its outcome, with the scenario's documents
  * compiled as the `engine` runner compiles them and test doubles for every SPI the pipeline calls. The adapters
- * (RFC 0006 PR-7) and listeners (PR-6) are not part of it yet.
+ * and listeners are not part of it: the adapter and listener tests cover them.
  *
  * The pipeline gives the engine an `http` action and resource (`http:<METHOD>` on the path) and the request's host
  * attributes (`http.*` from the headers, `request.attributes.*` from `requestAttributes`), through the pipeline's own
@@ -162,7 +157,7 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                         "membership": "provider" },
  *                       // "token": the real TokenAuthenticator over a verifier that accepts the request's
  *                       // Authorization header as this token (absent: anonymous) and the scenario's revocations
- *                       "token": { "jti": "t1", "tenant": "acme", "id": "alice", "roles": [...], "policies": [...],
+ *                       "token": { "jti": "t1", "tenant": "acme", "app": "shop", "id": "alice", "roles": [...], "policies": [...],
  *                                  "membership": "provider", "issuedAt": "2026-10-01T00:00:00Z" | null,
  *                                  "verification": "valid" | "expired" | "invalid" },
  *                       // "token" stands for a token of a TokenVerifier other than CoSec's own: it gets no break-glass
@@ -184,10 +179,17 @@ import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
  *                       | { "failClosed": { "tenants": ["acme"], "maxLagSeconds": 300 }, "lagSeconds": 301 },
  *                       // the host's DocumentSnapshotViews over a SnapshotSource that loaded the documents
  *                       // lagSeconds before the request
+ *                       | { "platformChange": { "staged": {...} } | { "published": {...} } },
+ *                       // the same source, after that platform document was staged and compiled as the shadow
+ *                       // comparison compiles a candidate, or published, and the installed documents loaded again
+ * // A check of the permitted request (AuthorizationChecker): the outcome's "check" is the decision's kind
+ * "check":              { "action": "http:GET", "resource": "/orders/1" },
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
  *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000,
  *                         // the API key header, which the documents are compiled against too (CND-5)
- *                         "apiKeyHeader": "X-API-Key" },
+ *                         "apiKeyHeader": "X-API-Key",
+ *                         // PIP-13: whether the authorization cookie is read as a token (default false)
+ *                         "allowCookieToken": true },
  * // External attributes (RFC 0006 §5.4): providers that declare them, which the documents are compiled against
  * "attributeProviders": [{ "stage": "B", "declares": { "ext.geo.inFence": "bool" | "string" | "stringSet" | "ip" },
  *                          "values": { "ext.geo.inFence": true } | "fails": "message" | "hangs": true }],
@@ -211,7 +213,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway",
+            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check",
         )
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
@@ -284,7 +286,19 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             val apiKeyHeader = node.get("options")?.get("apiKeyHeader")?.text() ?: DEFAULT_API_KEY_HEADER
             return throughGateway(pipeline, http, facts.host, it, apiKeyHeader)
         }
-        return answered(runBlocking { pipeline.evaluate(facts) }, node.has("identity"))
+        return runBlocking {
+            val outcome = pipeline.evaluate(facts)
+            answered(outcome, node.has("identity"), node.get("check")?.let { checked(pipeline, outcome, it) })
+        }
+    }
+
+    /** The kind of decision of `"check"`, for the request [outcome] permitted; null when it did not. */
+    private suspend fun checked(pipeline: Pipeline, outcome: PipelineOutcome, check: JsonNode): String? {
+        check.only("action", "resource")
+        val security = outcome.security ?: return null
+        val decision = AuthorizationChecker(pipeline)
+            .decide(security.securityContext, check.required("action").text(), check.required("resource").text())
+        return decision.javaClass.simpleName
     }
 
     /** The scenario's route map, loaded as a host loads it; none without one. */
@@ -446,17 +460,18 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
 
     /** The outcome; with [gateway], a gateway's pipeline that forwards identities, also what it forwards. */
-    private fun answered(outcome: PipelineOutcome, gateway: Boolean): Outcome =
+    private fun answered(outcome: PipelineOutcome, gateway: Boolean, check: String? = null): Outcome =
         Outcome.Answered(
             outcome.status,
             outcome.proceed,
             outcome.problem?.type?.slug,
             if (gateway) forwarded(outcome) else false to null,
+            check = check,
         )
 
     private fun authenticator(node: JsonNode, revocations: JsonNode?, reached: () -> Unit): Authenticator {
         node.only(
-            "result", "reason", "tenant", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
+            "result", "reason", "tenant", "app", "id", "roles", "policies", "membership", "token", "jwt", "apiKeys", "apiKeysFail",
         )
         return when (val result = resultOf(node)) {
             "token" -> TokenAuthenticator(ScenarioTokenVerifier(node.required("token")), revocations(revocations))
@@ -506,7 +521,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
                 node.get("policies")?.strings().orEmpty().toSet(),
             )
         }
-        val principal = AuthenticatedPrincipal(PrincipalId(node.id()), TenantId(node.tenant()), memberships)
+        val principal = AuthenticatedPrincipal(
+            PrincipalId(node.id()),
+            TenantId(node.tenant()),
+            memberships,
+            app = node.get("app")?.text()?.let(::AppId),
+        )
         return AuthnResult.Authenticated(principal, "scenario")
     }
 
@@ -514,11 +534,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     private fun apiKeys(node: JsonNode): ApiKeyReader {
         node.get("apiKeysFail")?.let { fails -> return ApiKeyReader { throw IllegalStateException(fails.text()) } }
         val keys = node.get("apiKeys")?.values().orEmpty().associate { key ->
-            key.only("key", "id", "principalId", "tenantId", "roles", "enabled", "expiresAt")
+            key.only("key", "id", "principalId", "tenantId", "app", "roles", "enabled", "expiresAt")
             ApiKeys.hash(key.required("key").text()) to ApiKey(
                 id = key.get("id")?.text() ?: "key",
                 principalId = key.required("principalId").text(),
                 tenantId = key.required("tenantId").text(),
+                app = key.get("app")?.text(),
                 // Absent: no cap. A key carries no policies (RFC 0009 §4.1).
                 roles = key.get("roles")?.strings()?.toSet(),
                 enabled = key.get("enabled")?.bool() ?: true,
@@ -556,31 +577,31 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     /** Takes whatever token the request presents as the scenario's token, as a verified JWT would read. */
     private class ScenarioTokenVerifier(private val node: JsonNode) : TokenVerifier {
         init {
-            node.only("jti", "tenant", "id", "roles", "policies", "membership", "issuedAt", "expiresAt", "verification")
+            node.only("jti", "tenant", "app", "id", "roles", "policies", "membership", "issuedAt", "expiresAt", "verification")
         }
 
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : TokenPrincipal> verify(accessToken: AccessToken): T {
+        override fun verify(accessToken: String): VerifiedToken {
             when (val verification = node.get("verification")?.text() ?: "valid") {
                 "valid" -> Unit
                 "expired" -> throw TokenExpiredException("The scenario's token has expired.")
                 "invalid" -> throw TokenVerificationException("The scenario's token is invalid.")
                 else -> throw ScenarioFormatException("Unknown token verification $verification")
             }
-            var principal: CoSecPrincipal = SimplePrincipal(
-                node.get("id")?.text() ?: "alice",
-                node.get("policies")?.strings().orEmpty().toSet(),
-                node.get("roles")?.strings().orEmpty().toSet(),
+            return VerifiedToken(
+                id = node.get("jti")?.text() ?: "t1",
+                principal = node.get("id")?.text() ?: "alice",
+                tenant = node.get("tenant")?.text(),
+                app = node.get("app")?.text(),
+                roles = node.get("roles")?.strings().orEmpty().toSet(),
+                policies = node.get("policies")?.strings().orEmpty().toSet(),
+                issuedAt = node.get("issuedAt")?.textOrNull()?.let(Instant::parse),
+                // A token expires: an hour after the scenario's now unless it says otherwise.
+                expiresAt = node.get("expiresAt")?.textOrNull()?.let(Instant::parse) ?: Instant.parse(NOW).plusSeconds(3600),
+                membershipMarker = node.get("membership")?.text(),
             )
-            node.get("tenant")?.text()?.let { principal = SimpleTenantPrincipal(principal, SimpleTenant(it)) }
-            node.get("membership")?.text()?.let { principal = MembershipMarkedPrincipal(principal, it) }
-            val issuedAt = node.get("issuedAt")?.textOrNull()?.let(Instant::parse)
-            // A token expires: an hour after the scenario's now unless it says otherwise.
-            val expiresAt = node.get("expiresAt")?.textOrNull()?.let(Instant::parse) ?: Instant.parse(NOW).plusSeconds(3600)
-            return SimpleTokenPrincipal(node.get("jti")?.text() ?: "t1", principal, issuedAt, expiresAt) as T
         }
 
-        override fun <T : TokenPrincipal> refresh(token: CompositeToken): T = throw UnsupportedOperationException()
+        override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
     }
 
     /**
@@ -602,19 +623,32 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val token: String
 
         init {
-            node.only("jti", "sub", "tenantId", "claims")
+            node.only("jti", "sub", "tenantId", "aud", "claims")
             val builder = JWT.create()
                 .withJWTId(node.get("jti")?.text() ?: "t1")
                 .withSubject(node.get("sub")?.text() ?: "alice")
                 .withExpiresAt(Instant.now().plusSeconds(3600))
-            node.get("tenantId")?.let { builder.withClaim(Tenant.TENANT_ID_KEY, it.text()) }
+            node.get("tenantId")?.let { builder.withClaim(MembershipClaims.TENANT_KEY, it.text()) }
+            node.get("aud")?.let { aud ->
+                if (aud.isArray) {
+                    builder.withAudience(
+                        *aud.strings().toTypedArray()
+                    )
+                } else {
+                    builder.withAudience(aud.text())
+                }
+            }
             node.get("claims")?.fields().orEmpty().forEach { (name, value) ->
                 @Suppress("UNCHECKED_CAST")
                 when (val claim = CoSecJson.mapper.treeToValue(value, Any::class.java)) {
                     null -> builder.withNullClaim(name)
                     is String -> builder.withClaim(name, claim)
                     is Map<*, *> -> builder.withClaim(name, claim as Map<String, Any?>)
-                    else -> throw ScenarioFormatException("Claim $name must be a string, an object or null.")
+                    is List<*> -> builder.withClaim(name, claim)
+                    is Int -> builder.withClaim(name, claim)
+                    else -> throw ScenarioFormatException(
+                        "Claim $name must be a string, an object, an array, an int or null."
+                    )
                 }
             }
             token = builder.sign(ALGORITHM)
@@ -684,39 +718,75 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node: JsonNode?,
         attributes: AttributeProviders,
         reach: () -> Unit,
-    ): SnapshotViews = node?.takeIf { it.has("failClosed") }?.let { freshness(documents, it, attributes) }
-        ?: views(snapshot, documents, node, reach)
+    ): SnapshotViews = when {
+        node?.has("failClosed") == true -> freshness(documents, node, attributes)
+        node?.has("platformChange") == true -> platformChange(documents, node, attributes)
+        else -> views(snapshot, documents, node, reach)
+    }
+
+    /** [body] as a stored document of [revision]. */
+    private fun stored(body: JsonNode, revision: Long): SnapshotDocument {
+        val text = (body.deepCopy() as ObjectNode)
+            .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", revision).put("publishedAt", NOW)
+        return SnapshotDocument(
+            SnapshotDocument.DOCUMENT_SCHEMA,
+            revision,
+            Instant.parse(NOW),
+            text.toString().encodeToByteArray()
+        )
+    }
+
+    /** Puts the scenario's documents in [store]; the keys of the app and tenant ones. */
+    private fun install(store: InMemorySnapshotDocumentStore, documents: JsonNode): List<SnapshotKey> {
+        val keys = ArrayList<SnapshotKey>()
+        documents.get("platform")?.let { store.put(SnapshotKey.Platform, stored(it, 1)) }
+        for ((id, body) in documents.get("tenants")?.fields().orEmpty()) {
+            val key = SnapshotKey.Tenant(id)
+            keys += key
+            store.put(key, stored(body, 1))
+        }
+        for ((id, body) in documents.get("apps")?.fields().orEmpty()) {
+            val key = SnapshotKey.App(id)
+            keys += key
+            store.put(key, stored(body, 1))
+        }
+        return keys
+    }
+
+    /**
+     * `SNP-10`: the documents installed, then a change of the platform document, staged or published. Each installed
+     * document is loaded again afterwards, so that whatever the change set off has ended before the request.
+     */
+    private fun platformChange(documents: JsonNode, node: JsonNode, attributes: AttributeProviders): SnapshotViews {
+        node.only("platformChange")
+        val change = node.required("platformChange")
+        change.only("staged", "published")
+        val store = InMemorySnapshotDocumentStore()
+        val keys = install(store, documents)
+        val compiler = PlatformCompiler(attributes.catalog)
+        val options = SnapshotOptions(revalidateInterval = SnapshotOptions().lagWarn.minusSeconds(1))
+        val source = DocumentSnapshots.source(store, compiler, options).also(compiler::bind)
+        source.load().join()
+        source.loadAll(keys).join()
+        change.get("staged")?.let { body ->
+            val staged = StoredCandidate("window", 1, stored(body, 2))
+            val candidates = CachingCandidateSource({ staged }, compiler::compileCandidate)
+            runBlocking { candidates.candidate(SnapshotKey.Platform) }
+        }
+        change.get("published")?.let { body ->
+            store.put(SnapshotKey.Platform, stored(body, 2))
+            source.reload(SnapshotKey.Platform).join()
+        }
+        keys.forEach { source.reload(it).join() }
+        return DocumentSnapshotViews(source, platformRequired = true)
+    }
 
     private fun freshness(documents: JsonNode, node: JsonNode, attributes: AttributeProviders): SnapshotViews {
         node.only("failClosed", "lagSeconds")
         val failClosed = node.required("failClosed")
         failClosed.only("tenants", "maxLagSeconds")
         val store = InMemorySnapshotDocumentStore()
-        fun put(key: SnapshotKey, body: JsonNode) {
-            val stored = (body.deepCopy() as ObjectNode)
-                .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", 1).put("publishedAt", NOW)
-            store.put(
-                key,
-                SnapshotDocument(
-                    SnapshotDocument.DOCUMENT_SCHEMA,
-                    1,
-                    Instant.parse(NOW),
-                    stored.toString().encodeToByteArray()
-                )
-            )
-        }
-        val keys = ArrayList<SnapshotKey>()
-        documents.get("platform")?.let { put(SnapshotKey.Platform, it) }
-        for ((id, body) in documents.get("tenants")?.fields().orEmpty()) {
-            val key = SnapshotKey.Tenant(id)
-            keys += key
-            put(key, body)
-        }
-        for ((id, body) in documents.get("apps")?.fields().orEmpty()) {
-            val key = SnapshotKey.App(id)
-            keys += key
-            put(key, body)
-        }
+        val keys = install(store, documents)
         val clock = MovingClock(Instant.parse(NOW))
         val maxLag = java.time.Duration.ofSeconds(failClosed.required("maxLagSeconds").asLong())
         // The periodic pass cannot be turned off (SNP-6): the longest the bounds allow, so it never runs within a
@@ -804,6 +874,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "attributeTimeoutMillis",
             "requiredTimeoutMillis",
             "apiKeyHeader",
+            "allowCookieToken",
         )
         val defaults = PipelineOptions()
         fun millis(field: String) = node.get(field)?.let { it.asLong().milliseconds }
@@ -813,6 +884,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             membershipTimeout = millis("membershipTimeoutMillis") ?: defaults.membershipTimeout,
             attributeTimeout = millis("attributeTimeoutMillis") ?: defaults.attributeTimeout,
             apiKeyHeader = node.get("apiKeyHeader")?.text() ?: defaults.apiKeyHeader,
+            allowCookieToken = node.get("allowCookieToken")?.bool() ?: defaults.allowCookieToken,
         )
     }
 

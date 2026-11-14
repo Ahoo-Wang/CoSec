@@ -69,8 +69,8 @@ The rules behind the picture:
   and the flat engine in the engine. They depend on the Kotlin standard library only. `EnginePurityTest` (ArchUnit)
   fails on any reference to Reactor, Spring, logging, I/O, threads or clocks, and `DependencyRulesTest` fails on any
   other resolved dependency. `ScopeConstructionTest` checks that only `ScopeResolver` constructs a resolved `Scope`.
-- **`cosec-api`** (directory `api/api/`) holds the contracts applications compile against: `CoSecPrincipal`, `Tenant`,
-  tokens, `SecurityContext`, `AuditEvent`, and their simple implementations (`SimplePrincipal`, `SimpleTenant`). It
+- **`cosec-api`** (directory `api/api/`) holds the contracts applications compile against: `CoSecPrincipal`, `CompositeToken`,
+  `SecurityContext` and `AuditEvent`. It
   depends on the Kotlin standard library alone. Changing it is a breaking change.
 - **`cosec-annotations`** (directory `api/annotations/`) holds the stability markers
   ([Stability levels](./extending.md#stability-levels)). `@InternalCoSecApi` is an opt-in marker at error level: a
@@ -104,8 +104,7 @@ The rules behind the picture:
   `Dispatchers.IO` or `GlobalScope`.
 - **Every other library module adapts exactly one technology**: a web stack (`cosec-webflux`, `cosec-webmvc`,
   `cosec-gateway`), Redis through CoCache (`cosec-cocache`: snapshot store, control store, revocation, rate limiter,
-  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`, which keeps the 7.x Reactor login
-  contracts), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
+  shadow reports), Kafka (`cosec-kafka`), login and token issuing (`cosec-login`), JWT (`cosec-jwt`), OAuth (`cosec-social`), OpenAPI, CosId 5 ids (`cosec-cosid`), or an observer of
   decisions (`cosec-opentelemetry`, `cosec-micrometer`, `cosec-ip2region`). An adapter never decides; it translates.
 - **`cosec-spring-boot`** (directory `host/spring-boot/`) wires everything. It brings `cosec-runtime`, `cosec-login`
   and `cosec-jwt`; every other module is `compileOnly` in
@@ -132,7 +131,7 @@ The rules behind the picture:
   a Redis client, or when a project other than `cosec-cosid` and the starter declares or resolves CosId, or another
   build script names it (a BOM importing CosId included): CoSec makes its own ids (`IdGenerator`), so that an application
   can use any CosId version.
-- `SourceRulesTest` scans the compiled classes: Reactor only in the edge, the extensions and the host (and
+- `SourceRulesTest` scans the compiled classes: Reactor only in the edge and the host (and
   `cosec-cocache`, whose reactive Redis client the suspending ports await); no Spring, Servlet API or Redis client in
   `api/` and `core/`; the backends and extensions use only their own Spring technology; the backends reach into
   `cosec-runtime` and `cosec-control` only through the listed ports and `CoSecJson`; only `cosec-cosid`'s and the starter's
@@ -140,6 +139,9 @@ The rules behind the picture:
 - `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
   `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
   (`ProjectListTest`) and the version catalog.
+- `ApiVariantTest`: a library module's Gradle API variant (usage `java-api`, what an application compiles against)
+  carries the CoSec module whose type a public class extends or implements, and Jackson where a public signature names
+  it. The module's own tests see its implementation classpath and cannot tell.
 - `SpiMarkerTest`: every public interface of `cosec-spi` that an application can implement, and every extension point
   [Extending](./extending.md#extension-points) lists, carries `@CoSecSpi`, and the marker is on nothing else.
 
@@ -207,10 +209,10 @@ sequenceDiagram
   principal the provider does not know or knows as deactivated refuses the credential, and the request is decided as
   anonymous. A membership source that fails, times out or answers the wrong kind of memberships is a `503`, never "no
   roles".
-- **Scope.** `ScopeResolver` turns the declared app and space into a checked scope (step 6): the tenant is the
-  principal's (the default tenant when anonymous); a service bound to an app (`cosec.authorization.scope.app-id`, or
-  on a gateway a route's `cosec-app-id`) uses that app and rejects a request that declares another; a space other than
-  the default needs a role in it. A rejected
+- **Scope.** `ScopeResolver` turns the credential's app and the selected space into a checked scope (step 6): the
+  tenant is the principal's (the default tenant when anonymous); the app is the one the credential declares, and a
+  service bound to an app (`cosec.authorization.scope.app-id`, or on a gateway a route's `cosec-app-id`) rejects a
+  credential declaring another or none; a space other than the default needs a role in it. A rejected
   scope is a deny ([trust boundaries](../guide/security-model.md#trust-boundaries)).
 - **Snapshot view.** The snapshot source answers the view (platform, app and tenant documents) from memory, or loads
   what is missing (step 7). A blocked request loads only the platform document.
@@ -302,6 +304,11 @@ tenant. They are stored as JSON (schema 2), compiled once per revision, and held
 documents. A view is a reference to three of them, so an evaluation always sees one revision of each document
 (`SNP-1`, guarded by `SnapshotConsistencyPropertyTest`).
 
+A document may write roles and permissions in short form ([Role permissions](../policies/role-permissions.md#roles)).
+It is stored that way, and [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt)
+writes it out as plain policies and bindings: the compiler, the grant analysis, the reference index and the diff all read
+that, so nothing about a decision depends on the short form (`ROL-1`, `ROL-2`).
+
 [`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt)
 holds them:
 
@@ -370,10 +377,14 @@ What makes it safe:
 - **Changes.** A change request is a base revision plus entry-level operations, checked and compiled with the data
   plane's compiler. A moved head makes it `CONFLICTED` until it is rebased. Each document has one staging slot.
 - **Authorization.** Every control-plane action is authorized again as the operator, with `cosec:*` actions on document
-  resources, against a snapshot that is confirmed current from the store before each check. A grant the analysis cannot
-  prove contained is an escalation and needs an approval by another person.
+  resources, against a snapshot that is confirmed current from the store. The decisions of one change share one
+  confirmation of the documents they read, and the documents are confirmed again at the end: if one moved meanwhile,
+  the decisions are taken again, so a change of a thousand bindings reads them a handful of times, not two thousand
+  (`CTL-8`). A grant the analysis cannot prove contained is an escalation and needs an approval by another person.
 - **Shadow windows.** Instances sample requests (`cosec.authorization.shadow.sample-rate`), evaluate them on the staged
-  candidate as well, and report how the outcomes differ (`SAME`, `WIDENED`, `NARROWED`, ...). An instance that cannot
+  candidate as well, and report how the outcomes differ (`SAME`, `WIDENED`, `NARROWED`, ...). A candidate is compiled
+  for that comparison only: a staged platform document's limits and attributes never reach what an instance enforces
+  (`SNP-10`). An instance that cannot
   compile or evaluate the candidate blocks the window, and a blocked change never publishes. Documents compile against
   the platform's attribute declarations and the host's `AttributeProvider`s, so the control host and every instance
   must register the same providers: a candidate only the control host can compile blocks its window. Publishing requires the

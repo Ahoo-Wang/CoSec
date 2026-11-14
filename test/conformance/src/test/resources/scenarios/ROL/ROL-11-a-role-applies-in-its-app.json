@@ -1,0 +1,103 @@
+{
+  "rules": [
+    "ROL-11"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "In wms, its permission applies.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "edit",
+                  "action": "wms:edit"
+                },
+                {
+                  "id": "label"
+                }
+              ]
+            },
+            {
+              "name": "inbound",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "ship",
+                  "action": "wms:ship"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "pos": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "g",
+              "spaced": true,
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "night",
+            "app": "wms",
+            "permissions": [
+              "ship"
+            ]
+          },
+          {
+            "id": "keeper",
+            "app": "wms",
+            "space": "wh-01",
+            "permissions": [
+              "ship"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "credential": {
+    "roles": [
+      "night"
+    ],
+    "app": "wms"
+  },
+  "request": {
+    "action": "wms:ship"
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "perm:wms/ship",
+      "statement": 0,
+      "name": "ship",
+      "via": {
+        "binding": "role:night@wms:ship",
+        "document": "tenant"
+      }
+    }
+  }
+}

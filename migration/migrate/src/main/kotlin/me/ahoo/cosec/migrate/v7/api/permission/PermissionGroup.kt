@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.migrate.v7.api.permission
 
-import me.ahoo.cosec.api.Named
+import me.ahoo.cosec.migrate.v7.api.Named
 
 /**
  * Group of related permissions.

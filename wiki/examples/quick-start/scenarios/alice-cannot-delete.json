@@ -1,0 +1,17 @@
+{
+  "description": "The DENY wins over members.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:DELETE",
+    "resource": {
+      "type": "http",
+      "id": "/orders/1"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

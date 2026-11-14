@@ -11,12 +11,16 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.control.store
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.runtime.shadow.ShadowCodec
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -36,7 +40,7 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
     private val heads = HashMap<SnapshotKey, SnapshotDocument>()
     private val records = HashMap<Pair<SnapshotKey, SnapshotDigest>, SnapshotDocument>()
     private val indexes = HashMap<SnapshotKey, RevisionIndex>()
-    private val references = HashMap<Pair<SnapshotKey, PolicyId>, Set<SnapshotKey>>()
+    private val references = HashMap<Pair<SnapshotKey, PolicyId>, Map<SnapshotKey, Long>>()
     private val leases = HashMap<String, Pair<String, Instant>>()
     private val changes = HashMap<ChangeId, Pair<ChangeRequest, Long>>()
     private val stages = HashMap<SnapshotKey, Pair<StageSlot, Long>>()
@@ -103,20 +107,20 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         synchronized(lock) { apps = null }
     }
 
-    override suspend fun openChanges(): Set<ChangeId> = synchronized(lock) {
-        changes.filterValues { (change, _) -> !change.state.terminal }.keys.toSet()
+    override suspend fun openChanges(): List<ChangeRequest> = synchronized(lock) {
+        changes.values.map { (change, _) -> change }.filterNot { it.state.terminal }
     }
 
-    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Set<SnapshotKey>>? =
-        synchronized(lock) { references[target to policy]?.let { Versioned(it, setDigest(it)) } }
+    override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
+        synchronized(lock) { references[target to policy]?.let { Versioned(it, referrersDigest(it)) } }
 
     override suspend fun putReferrers(
         target: SnapshotKey,
         policy: PolicyId,
         expected: SnapshotDigest?,
-        referrers: Set<SnapshotKey>,
+        referrers: Map<SnapshotKey, Long>,
     ): Boolean = synchronized(lock) {
-        val current = references[target to policy]?.let(::setDigest)
+        val current = references[target to policy]?.let(::referrersDigest)
         if (current != expected) {
             return false
         }
@@ -137,10 +141,20 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
 
     override suspend fun candidate(key: SnapshotKey): StoredCandidate? = synchronized(lock) { candidates[key] }
 
-    override suspend fun putCandidate(key: SnapshotKey, candidate: StoredCandidate?) {
+    override suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>? =
+        synchronized(lock) { candidates[key]?.let { Versioned(it, candidateDigest(it)) } }
+
+    override suspend fun putCandidate(key: SnapshotKey, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean =
         synchronized(lock) {
-            if (candidate == null) candidates.remove(key) else candidates[key] = candidate
+            if (candidates[key]?.let(::candidateDigest) != expected) {
+                return false
+            }
+            candidates[key] = candidate
+            true
         }
+
+    override suspend fun withdrawCandidate(key: SnapshotKey, window: String): Boolean = synchronized(lock) {
+        candidates[key]?.window == window && candidates.remove(key) != null
     }
 
     override suspend fun stage(key: SnapshotKey): Versioned<StageSlot>? =
@@ -191,8 +205,10 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
         return digest("$entries|${apps.complete}".encodeToByteArray())
     }
 
-    private fun setDigest(set: Set<SnapshotKey>): SnapshotDigest =
-        digest(set.map { it.toString() }.sorted().joinToString("\n").encodeToByteArray())
+    private fun candidateDigest(candidate: StoredCandidate): SnapshotDigest = digest(ShadowCodec.encode(candidate))
+
+    private fun referrersDigest(referrers: Map<SnapshotKey, Long>): SnapshotDigest =
+        digest(referrers.map { (key, revision) -> "$key=$revision" }.sorted().joinToString("\n").encodeToByteArray())
 
     private fun digest(bytes: ByteArray): SnapshotDigest =
         SnapshotDigest(SnapshotDigest.SHA_256, MessageDigest.getInstance(SnapshotDigest.SHA_256).digest(bytes))

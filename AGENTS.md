@@ -1,7 +1,7 @@
 # AGENTS.md
 
 CoSec is a multi-tenant authorization framework: Kotlin 2.x on Java 21, Spring Boot 4, Kotlin coroutines (Project
-Reactor only at the edges, in the extensions and in `cosec-login`'s API), built with Gradle (Kotlin DSL). This file is
+Reactor only at the edges and in the host), built with Gradle (Kotlin DSL). This file is
 for agents and contributors **changing** CoSec. To **use** CoSec, see `skills/` and https://cosec.ahoo.me.
 Branching, reviews and releases: `CONTRIBUTING.md`.
 `main` is the 8.0 line; `7.x` and `release/6.1.x` take only backported security (and, on `7.x`, critical) fixes, which
@@ -69,6 +69,10 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   parallel builds.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
 - Codecov requires ≥ 80 % coverage on changed lines.
+- The samples of the wiki's `scenarios/` pages are files under `wiki/examples/<scenario>/`, included by both languages.
+  `:conformance:test` (`DocumentationExamplesTest`) compiles their documents, runs their scenarios, decodes their change
+  bodies and loads their route maps, and `SchemaConformanceTest` checks the documents against `schema/`: change a
+  sample and its page together, and write a claim about a decision as a scenario file.
 - Docs (`wiki/`, VitePress, en + zh), run from `wiki/`: `pnpm install`, then `pnpm check:mermaid`
   (needs Chrome), `pnpm check:docs` (also fails when `wiki/`, `skills/`, the READMEs, `llms.txt`, `SECURITY.md` or
   `k8s/` mention an API removed in 8.0), `pnpm build` (fails on dead links). Writing rules: [`wiki/AGENTS.md`](wiki/AGENTS.md).
@@ -95,12 +99,14 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library and `spi` adds coroutines;
   `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client; only `cosid` and the
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
-  (Reactor only in edge, extensions and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
+  (Reactor only in edge and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
   in `api/` and `core/`; backends reach into `runtime` and `control` only through the listed ports and `CoSecJson`;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
   `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
-  extension point `wiki/architecture/extending.md` lists, and on nothing else), `EnginePurityTest`,
+  extension point `wiki/architecture/extending.md` lists, and on nothing else), `ApiVariantTest` (a library's Gradle API
+  variant, usage `java-api`, carries the CoSec module whose type a public class extends or implements, and Jackson
+  where a public signature names it: a consumer cannot compile against the class otherwise), `EnginePurityTest`,
   `RuntimeBoundaryTest`, `ControlBoundaryTest`, the project list in `ProjectListTest` and the catalog. The root
   build writes each project's dependency facts for them with `architectureFacts`. Adding a project means adding it
   there, in `settings.gradle.kts`, the labeler and the bug report template; CI picks it up from `settings.gradle.kts`
@@ -111,11 +117,11 @@ the adapters, snapshots or the control plane. The parts that take several files 
     (`@RequiresOptIn(level = ERROR)`): public only so CoSec's modules can call each other; no compatibility promise,
     left out of the ABI dumps, and applications never opt in. `@ExperimentalCoSecApi` (`level = WARNING`, in the
     dumps): may change in a minor release. `@CoSecSpi`: a plain marker for the interfaces applications implement.
-    `cosec-api` (`api/api/`) is the thin contract module left over from 7.x (principal, tenant, token,
-    `SecurityContext`, audit events, `SimplePrincipal`, `SimpleTenant`).
-  - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library only:
-    `EnginePurityTest` and `DependencyRulesTest` fail otherwise, and the root build leaves out the SLF4J
-    default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
+    `cosec-api` (`api/api/`) is the thin contract module left over from 7.x (principal, token,
+    `SecurityContext`, audit events).
+  - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library and
+    the `cosec-annotations` markers only: `EnginePurityTest` and `DependencyRulesTest` fail otherwise, and the root
+    build leaves out the SLF4J default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
     engine holds the compiler, the indexes and the flat evaluator (`engine/flat/`).
   - `cosec-spi` (`core/spi/`, `me.ahoo.cosec.spi.*`) holds the ports whose signatures need only the model and the
     contracts, with their values and in-memory implementations: `snapshot` (`SnapshotDocumentStore`, `SnapshotRead`,
@@ -138,8 +144,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
     or Reactive Streams bridges or a Redis client, or calls `runBlocking`, `Dispatchers.IO` or `GlobalScope`.
   - Every other module adapts one technology: `cosec-webflux`, `cosec-webmvc`, `cosec-gateway` (HTTP bridges),
     `cosec-cocache` (Redis: snapshots, control store, shadow reports, tokens, memberships, API keys, rate limits),
-    `cosec-login` (login and token issuing: `Authentication`, `TokenConverter`; the one module that keeps Reactor in
-    its API), `cosec-jwt` (on `cosec-login`), `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`,
+    `cosec-login` (login and token issuing: `Authentication`, `TokenConverter`), `cosec-jwt` (on `cosec-login`), `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`,
     `cosec-kafka` (decision listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps),
     `cosec-cosid` (an `IdGenerator` over CosId 5). Only `cosec-cosid` and the starter, which wires it, may reference
     or bring CosId (`DependencyRules.COSID_OWNERS`).
@@ -168,7 +173,9 @@ the adapters, snapshots or the control plane. The parts that take several files 
   platform boundary (`FlatEvaluator`). The order never changes the decision, only which statement is reported.
   Rate limits are obligations: they run only after a permit, and an exhausted rule makes the outcome 429.
 - **Policies are data.** Policies, bindings, catalogs and rate limits live in three kinds of snapshot documents
-  (platform, app, tenant; `schema: 2`), compiled into indexes. Conditions are an AST checked at compile time; there
+  (platform, app, tenant; `schema: 2`), compiled into indexes. Roles and short-form permissions (`action` on a catalog
+  entry, RFC 0012) stay in short form in the stored document: `RoleExpansion.effective` alone writes them out, as a
+  document with bindings and policies, and everything that reads what a document grants reads that. Conditions are an AST checked at compile time; there
   are no matcher plugins. External attributes (`ext.*`) come from `AttributeProvider`s the platform document declares.
 - **Snapshots.** Redis is the store of record for the documents (`cosec-cocache`, CoCache 8 `Store`s). `SnapshotSource` keeps
   compiled documents in memory: one load per key at a time, installs in load order, conditional revalidation, bounded
@@ -215,6 +222,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Tokens, login, revocation | `wiki/integration/authentication.md` |
 | Architecture, invariants, performance numbers | `wiki/architecture/overview.md` |
 | A new place a document reads an attribute (a condition operand, a rate limit `key`, anything later) | resolve it through `ConditionChecker.attribute`, which refuses credential headers (CND-5) for every reference; never `Attribute.parse` directly |
+| A new reader of what a document grants (its policies or bindings, the data plane or the control plane) | read it through `RoleExpansion.effective`, or a role grants through a path nothing analyzed (RFC 0012 §6) |
 | Extension points (SPIs; ports live in `cosec-spi` unless their signature needs a layer's types) | `@CoSecSpi` on the interface, `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | A public signature (a line of a module's `api/<project>.api`) | the dump (`updateKotlinAbi`); after GA, `!` in the PR title when a line is removed or changed |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
@@ -231,7 +239,7 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 
 - Every source file starts with the header in `config/detekt/license.template`; detekt fails otherwise.
 - Kotlin with `-Xjsr305=strict`. Data-plane SPIs are `suspend` functions; `Mono<T>` appears only at the WebFlux and
-  Gateway bridges, in their convenience extensions and in `cosec-login`'s 7.x login contracts.
+  Gateway bridges and in their convenience extensions.
 - Comments explain *why*, only where it isn't obvious.
 - Tests: JUnit 5, MockK, FluentAssert (`me.ahoo.test.asserts.assert`), Reactor Test. For caching and
   concurrency, use real implementations (CoCache's in-memory backend, real Redis) rather than mocks; mocks hide the

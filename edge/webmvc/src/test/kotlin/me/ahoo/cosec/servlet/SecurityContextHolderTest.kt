@@ -13,19 +13,24 @@
 
 package me.ahoo.cosec.servlet
 
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.runtime.context.SimpleSecurityContext
+import io.mockk.every
+import io.mockk.mockk
+import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 internal class SecurityContextHolderTest {
+    private val anonymous = mockk<CoSecPrincipal>()
 
     @Test
     fun test() {
         SecurityContextHolder.context.assert().isNull()
-        SecurityContextHolder.setContext(SimpleSecurityContext.anonymous())
-        SecurityContextHolder.context!!.principal.assert().isEqualTo(SimpleTenantPrincipal.ANONYMOUS)
+        SecurityContextHolder.setContext(
+            mockk<SecurityContext> { every { principal } returns anonymous }
+        )
+        SecurityContextHolder.context!!.principal.assert().isEqualTo(anonymous)
         SecurityContextHolder.remove()
         assertThrownBy<IllegalArgumentException> {
             SecurityContextHolder.requiredContext

@@ -14,12 +14,13 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.pattern.ResourcePattern
+import me.ahoo.cosec.model.Resource
 import java.io.ByteArrayOutputStream
 
 /**
- * The path every request is authorized on (RFC 0006 §5.3.1): the rules of `RequestPaths` in `cosec-core`, without
- * Spring's `UriUtils`, plus the last three below, which only reject more; `RequestPaths` goes with the 7.x pipeline at the
- * switch (RFC 0008 §4.4). Every rejection is 400 `invalid-request`.
+ * The path every request is authorized on (RFC 0006 §5.3.1), by the rules below and without Spring's `UriUtils`.
+ * Every rejection is 400 `invalid-request`.
  *
  * - `;` path parameters are removed from every segment: Spring's routing and servlet containers ignore them, so
  *   `/admin;x` reaches `/admin` and `/public/..;/admin` resolves to `/admin`.
@@ -27,8 +28,13 @@ import java.io.ByteArrayOutputStream
  *   segments, so an encoded `..` would otherwise be authorized under a public wildcard and resolved by the container.
  * - A malformed percent-escape is rejected.
  * - A decoded segment is also a dot segment when its part before `;` is, as `..%3Bx` decodes to `..;x`.
- * - A `\` (also `%5C`) separates segments for this check, as some containers treat it as `/`; so `..\` is a traversal
- *   too.
+ * - An empty segment before the end of the path (`//`, or what removing a path parameter leaves, as in `/;x/a`), an
+ *   encoded separator (`%2F`, in either case) and a `\` (also `%5C`, in either case) are rejected (`PIP-14`). A pattern
+ *   reads each of them as part of a segment, or as a segment of its own, so a DENY on the segments under `/admin` does
+ *   not match `//admin/1`, `/admin%2F1` or `/admin\1`, which a backend that merges slashes, decodes separators or reads
+ *   `\` as `/` (as some containers and every browser do) serves as `/admin/1`. A trailing `/` is kept: it is one more
+ *   thing a pattern says or does not, and no merging turns it into another path. A double-encoded separator (`%252F`,
+ *   `%255C`) decodes to text and is kept, as `%252e` is.
  * - A path longer than [MAX_PATH_LENGTH] characters, or with a segment longer than [MAX_SEGMENT_LENGTH] after removing
  *   path parameters, is rejected (both counted encoded, which bounds the decoded length). Wildcard matching in the
  *   engine costs about the square of a segment's length: an 8 KB segment takes hundreds of milliseconds per statement,
@@ -46,13 +52,15 @@ object PathNormalizer {
     /** The longest segment accepted, in characters as received: room for an id, a slug or a file name. */
     const val MAX_SEGMENT_LENGTH = 256
 
+    private const val ENCODED_SEPARATOR = "%2F"
+
     /** The path to authorize, still encoded; null when [rawPath] cannot be interpreted without ambiguity. */
     fun normalize(rawPath: String): String? {
         if (rawPath.length > MAX_PATH_LENGTH) {
             return null
         }
         val path = withoutPathParameters(rawPath)
-        return if (hasLongSegment(path) || isTraversal(path)) null else path
+        return if (hasLongSegment(path) || isAmbiguous(path)) null else path
     }
 
     /**
@@ -63,6 +71,28 @@ object PathNormalizer {
      */
     @InternalCoSecApi
     fun withinBounds(text: String): Boolean = text.length <= MAX_PATH_LENGTH && !hasLongSegment(text)
+
+    /**
+     * [resource] as enforcement reads it, or null when enforcement would refuse it: the one judgement behind what a check
+     * by host code decides (`AuthorizationChecker`, `PIP-15`) and what the control plane simulates or explains (`CTL-3`),
+     * so that neither decides what no request could be decided on. An `http` path goes through [normalize], since the
+     * engine does not resolve a dot segment and a wildcard under `/public` would match `/public/../admin`; a typed id,
+     * which no request carries as written, is held to [withinBounds], since its globs would otherwise cost more than any
+     * request's.
+     */
+    @InternalCoSecApi
+    fun enforceable(resource: Resource): Resource? {
+        val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
+            normalize(resource.id)
+        } else {
+            resource.id.takeIf(::withinBounds)
+        }
+        return when (id) {
+            null -> null
+            resource.id -> resource
+            else -> Resource(resource.type, id, resource.attributes)
+        }
+    }
 
     private fun hasLongSegment(path: String): Boolean {
         if (path.length <= MAX_SEGMENT_LENGTH) {
@@ -86,16 +116,42 @@ object PathNormalizer {
         return path.split('/').joinToString("/") { it.substringBefore(';') }
     }
 
-    private fun isTraversal(path: String): Boolean {
-        if ('%' !in path && '.' !in path && '\\' !in path) {
+    private fun isAmbiguous(path: String): Boolean {
+        if (isPlain(path)) {
             return false
+        }
+        if (path.contains(ENCODED_SEPARATOR, ignoreCase = true)) {
+            return true
         }
         // fail-closed: a malformed percent-escape is never a traversal-free path.
         val decoded = PercentDecoder.decode(path, plusIsSpace = false) ?: return true
-        // An encoded `;` (`..%3Bx`) is a dot segment to whatever decodes before it strips path parameters.
-        return decoded.split('/', '\\').any { segment ->
-            segment.substringBefore(';').let { it == "." || it == ".." }
+        if ('\\' in decoded) {
+            return true
         }
+        val segments = decoded.split('/')
+        for (index in segments.indices) {
+            // An encoded `;` (`..%3Bx`) is a dot segment to whatever decodes before it strips path parameters.
+            val segment = segments[index].substringBefore(';')
+            // The first is what comes before the leading separator, the last what comes after a trailing one.
+            if (isDotSegment(segment) || (segment.isEmpty() && index in 1 until segments.lastIndex)) {
+                return true
+            }
+        }
+        return false
+    }
+
+    private fun isDotSegment(segment: String): Boolean = segment == "." || segment == ".."
+
+    /** Whether [path] has nothing [isAmbiguous] looks at: what most requests' paths are, in one pass with no allocation. */
+    private fun isPlain(path: String): Boolean {
+        for (index in path.indices) {
+            when (path[index]) {
+                '%', '.', '\\' -> return false
+                '/' -> if (index > 0 && path[index - 1] == '/') return false
+                else -> Unit
+            }
+        }
+        return true
     }
 }
 

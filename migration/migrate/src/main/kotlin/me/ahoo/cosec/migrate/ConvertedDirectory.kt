@@ -37,7 +37,9 @@ import kotlin.io.path.name
  * The output directory of `convert` and the input of `publish` (RFC 0004 §8.2):
  *
  * - `platform.json`, `apps/<appId>.json`, `tenants/<tenantId>.json`: the documents, as stored in Redis (ids in file
- *   names are URL-encoded, so no id can name a path outside the directory);
+ *   names are URL-encoded, so no id can name a path outside the directory; an id whose encoded name would be longer
+ *   than [MAX_FILE_NAME] gets a bounded name, a prefix of the encoded id, `~` and the SHA-256 of the id, and
+ *   `report.json` records which id each such file holds in `documentIds`);
  * - `provenance.json`: where each policy statement and binding came from in 7.x;
  * - `report.json`: rejections, warnings, semantic changes, counts and the SHA-256 of the input and of each file.
  *
@@ -51,35 +53,79 @@ object ConvertedDirectory {
     const val REPORT_FILE = "report.json"
 
     private const val JSON = ".json"
+    private const val BOUNDED_SEPARATOR = "~"
+
+    /** The longest file name a document gets. */
+    const val MAX_FILE_NAME = 200
 
     private val factory = JsonNodeFactory.instance
     private val pretty = CoSecJson.mapper.writerWithDefaultPrettyPrinter()
 
-    /** Writes [conversion] into [directory], which must not exist or be empty: `convert` never overwrites. */
+    /**
+     * Writes [conversion] into [directory], which must not exist or be empty: `convert` never overwrites. Every file name
+     * is settled before the first file is written, and a write that fails removes what this call wrote, so a failed run
+     * leaves the directory as it found it and can be run again.
+     */
     fun write(conversion: Conversion, directory: Path) {
         require(!Files.exists(directory) || (directory.isDirectory() && directory.listDirectoryEntries().isEmpty())) {
             "$directory is not empty: convert writes into a new directory."
         }
+        val files = conversion.documents.keys.associateWith { fileOf(it) }
+        val folded = HashMap<String, SnapshotKey>()
+        files.forEach { (key, file) ->
+            val other = folded.putIfAbsent(file.lowercase(), key)
+            require(other == null) { "$other and $key would be written to files that differ only in case: $file." }
+        }
+        val created = ArrayList<Path>()
+        var complete = false
+        try {
+            createDirectories(directory, created)
+            val outputs = sortedMapOf<String, String>()
+            val documentIds = sortedMapOf<String, String>()
+            for ((key, document) in conversion.documents) {
+                val file = files.getValue(key)
+                val path = directory.resolve(file)
+                createDirectories(path.parent, created)
+                val bytes = PolicyDocumentCodec.encode(document)
+                Files.write(path, bytes, StandardOpenOption.CREATE_NEW)
+                created.add(path)
+                outputs[file] = sha256(bytes)
+                if (isBounded(file)) documentIds[file] = ownerOf(key)
+            }
+            if (conversion.report.accepted) {
+                val bytes = pretty.writeValueAsBytes(provenance(conversion.provenance))
+                val path = directory.resolve(PROVENANCE_FILE)
+                Files.write(path, bytes, StandardOpenOption.CREATE_NEW)
+                created.add(path)
+                outputs[PROVENANCE_FILE] = sha256(bytes)
+            }
+            val report = directory.resolve(REPORT_FILE)
+            Files.write(
+                report,
+                pretty.writeValueAsBytes(report(conversion.report, outputs, documentIds)),
+                StandardOpenOption.CREATE_NEW
+            )
+            created.add(report)
+            complete = true
+        } finally {
+            if (!complete) {
+                // Only what this call created: the directory was new or empty when it started.
+                created.asReversed().forEach(Files::deleteIfExists)
+            }
+        }
+    }
+
+    /** Creates [directory] and the parents that are missing, recording each one created in [created]. */
+    private fun createDirectories(directory: Path, created: MutableList<Path>) {
+        val missing = generateSequence(directory) { it.parent }.takeWhile { !Files.exists(it) }.toList()
         Files.createDirectories(directory)
-        val outputs = sortedMapOf<String, String>()
-        for ((key, document) in conversion.documents) {
-            val file = fileOf(key)
-            val path = directory.resolve(file)
-            Files.createDirectories(path.parent)
-            val bytes = PolicyDocumentCodec.encode(document)
-            Files.write(path, bytes, StandardOpenOption.CREATE_NEW)
-            outputs[file] = sha256(bytes)
-        }
-        if (conversion.report.accepted) {
-            val bytes = pretty.writeValueAsBytes(provenance(conversion.provenance))
-            Files.write(directory.resolve(PROVENANCE_FILE), bytes, StandardOpenOption.CREATE_NEW)
-            outputs[PROVENANCE_FILE] = sha256(bytes)
-        }
-        Files.write(
-            directory.resolve(REPORT_FILE),
-            pretty.writeValueAsBytes(report(conversion.report, outputs)),
-            StandardOpenOption.CREATE_NEW,
-        )
+        created.addAll(missing.asReversed())
+    }
+
+    private fun ownerOf(key: SnapshotKey): String = when (key) {
+        is SnapshotKey.App -> key.appId
+        is SnapshotKey.Tenant -> key.tenantId
+        else -> ""
     }
 
     /**
@@ -103,13 +149,18 @@ object ConvertedDirectory {
             "The documents in $directory are not the ones convert wrote: missing ${recorded.keys - present}, " +
                 "unexpected ${present - recorded.keys}."
         }
+        val recordedIds = report.get("documentIds")?.properties()?.associate { it.key to it.value.asString() }.orEmpty()
         val documents = LinkedHashMap<SnapshotKey, PolicyDocument>()
         for ((file, sha) in recorded.toSortedMap(compareBy<String> { it != PLATFORM_FILE }.thenBy { it })) {
             val bytes = Files.readAllBytes(directory.resolve(file))
             require(
                 sha256(bytes) == sha
             ) { "$file changed since convert: its SHA-256 is not the one $REPORT_FILE records." }
-            val (key, kind, owner) = keyOf(file)
+            val (key, kind, owner) = keyOf(file, recordedIds)
+            // The name must be the one convert gives this id: a bounded name carries the SHA-256 of the id it holds.
+            require(
+                fileOf(key) == file
+            ) { "$file is not the file name of $key: $REPORT_FILE does not describe this directory." }
             documents[key] = PolicyDocumentCodec.decode(kind, owner, bytes)
         }
         return documents
@@ -133,11 +184,16 @@ object ConvertedDirectory {
         return files
     }
 
-    private fun keyOf(file: String): Triple<SnapshotKey, DocumentKind, String> {
+    private fun keyOf(file: String, recordedIds: Map<String, String>): Triple<SnapshotKey, DocumentKind, String> {
         if (file == PLATFORM_FILE) {
             return Triple(SnapshotKey.Platform, DocumentKind.PLATFORM, "")
         }
-        val owner = URLDecoder.decode(file.substringAfter('/').removeSuffix(JSON), Charsets.UTF_8)
+        val name = file.substringAfter('/').removeSuffix(JSON)
+        val owner = if (isBounded(file)) {
+            requireNotNull(recordedIds[file]) { "$REPORT_FILE does not record the id $file holds." }
+        } else {
+            URLDecoder.decode(name, Charsets.UTF_8)
+        }
         return if (file.startsWith("$APPS_DIRECTORY/")) {
             Triple(SnapshotKey.App(owner), DocumentKind.APP, owner)
         } else {
@@ -145,18 +201,44 @@ object ConvertedDirectory {
         }
     }
 
+    /** The file of [key]'s document, relative to the directory. */
     fun fileOf(key: SnapshotKey): String = when (key) {
-        is SnapshotKey.App -> "$APPS_DIRECTORY/${encode(key.appId)}$JSON"
-        is SnapshotKey.Tenant -> "$TENANTS_DIRECTORY/${encode(key.tenantId)}$JSON"
+        is SnapshotKey.App -> "$APPS_DIRECTORY/${fileName(key.appId)}"
+        is SnapshotKey.Tenant -> "$TENANTS_DIRECTORY/${fileName(key.tenantId)}"
         else -> PLATFORM_FILE
     }
 
-    private fun encode(id: String): String = URLEncoder.encode(id, Charsets.UTF_8)
+    /**
+     * The name of the file that holds the document of [id]: the URL-encoded id and `.json`. An id whose encoded name is
+     * longer than [MAX_FILE_NAME] (a legal id of 30 Chinese characters is 275 bytes encoded, more than file systems
+     * take, #1256) is cut at a `%XX` boundary and followed by `~`, which the encoding never produces, and the SHA-256
+     * of the whole id, so two ids never share a name and the name can be checked against the id it is said to hold.
+     */
+    fun fileName(id: String): String {
+        val encoded = URLEncoder.encode(id, Charsets.UTF_8)
+        if (encoded.length + JSON.length <= MAX_FILE_NAME) {
+            return encoded + JSON
+        }
+        val hash = sha256(id.encodeToByteArray())
+        var end = MAX_FILE_NAME - JSON.length - BOUNDED_SEPARATOR.length - hash.length
+        if (encoded[end - 1] == '%') {
+            end -= 1
+        } else if (encoded[end - 2] == '%') {
+            end -= 2
+        }
+        return encoded.substring(0, end) + BOUNDED_SEPARATOR + hash + JSON
+    }
+
+    private fun isBounded(file: String): Boolean = BOUNDED_SEPARATOR in file
 
     private fun sha256(bytes: ByteArray): String =
         MessageDigest.getInstance("SHA-256").digest(bytes).joinToString("") { "%02x".format(it) }
 
-    fun report(report: ConversionReport, outputs: Map<String, String> = emptyMap()): ObjectNode {
+    fun report(
+        report: ConversionReport,
+        outputs: Map<String, String> = emptyMap(),
+        documentIds: Map<String, String> = emptyMap(),
+    ): ObjectNode {
         val root = factory.objectNode()
         root.put("accepted", report.accepted)
         root.put("inputSha256", report.inputSha256)
@@ -176,6 +258,7 @@ object ConvertedDirectory {
             }
         }
         root.putObject("outputSha256").also { node -> outputs.forEach { (file, sha) -> node.put(file, sha) } }
+        root.putObject("documentIds").also { node -> documentIds.forEach { (file, id) -> node.put(file, id) } }
         return root
     }
 

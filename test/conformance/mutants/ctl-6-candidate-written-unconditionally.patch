@@ -1,0 +1,18 @@
+# Rule: CTL-6
+# Mutant: a stage writes its candidate over whatever is there, so the late write of a preempted stage replaces the preempting change's
+# Tests: :control:test --tests me.ahoo.cosec.control.change.StageReservationTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
+index 53d9a746..a614fd59 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
+@@ -143,9 +143,6 @@ class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : Contr
+ 
+     override suspend fun putCandidate(key: SnapshotKey, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean =
+         synchronized(lock) {
+-            if (candidates[key]?.let(::candidateDigest) != expected) {
+-                return false
+-            }
+             candidates[key] = candidate
+             true
+         }

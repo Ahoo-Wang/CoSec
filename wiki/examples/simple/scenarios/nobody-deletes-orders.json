@@ -1,0 +1,20 @@
+{
+  "description": "A DENY wins, even for the administrator.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "root",
+    "roles": [
+      "admin"
+    ]
+  },
+  "request": {
+    "action": "http:DELETE",
+    "resource": {
+      "type": "http",
+      "id": "/orders/1"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

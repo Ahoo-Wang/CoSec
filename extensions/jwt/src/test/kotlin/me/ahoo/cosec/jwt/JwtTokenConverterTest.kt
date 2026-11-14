@@ -12,11 +12,9 @@
  */
 package me.ahoo.cosec.jwt
 
-import me.ahoo.cosec.api.principal.SimplePrincipal
-import me.ahoo.cosec.api.principal.SimpleTenantPrincipal
-import me.ahoo.cosec.api.tenant.SimpleTenant
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.api.token.TokenPrincipal
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -28,51 +26,87 @@ internal class JwtTokenConverterTest {
     var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private val jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
 
+    /** RFC 0012 §3.5. */
     @Test
-    fun anonymousToToken() {
-        val token: CompositeToken = jwtTokenConverter.toToken(SimpleTenantPrincipal.ANONYMOUS)
-        token.assert().isNotNull()
+    fun theAppIsIssuedAsTheAudience() {
+        val token = jwtTokenConverter.toToken(TokenSubject("alice", "order"))
+        jwtTokenVerifier.verify(token.accessToken).app.assert().isEqualTo("order")
+        Jwts.decode(token.accessToken).audience.assert().containsExactly("order")
+        jwtTokenConverter.toToken(
+            TokenSubject("alice", null)
+        ).accessToken.let { Jwts.decode(it).audience }.assert().isNull()
+        for (app in listOf("", "*", "a:b", "a\nb")) {
+            assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(TokenSubject("alice", app)) }
+        }
+    }
+
+    @Test
+    fun aReservedSubjectIsNotIssued() {
+        for (id in listOf(CoSecPrincipal.ANONYMOUS_ID, "(platform)", "(")) {
+            assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(TokenSubject(id, null)) }
+        }
     }
 
     @Test
     fun toToken() {
         val principal =
-            SimplePrincipal(
+            TokenSubject(
                 "id",
-                setOf("policyId"),
-                setOf("roleId"),
-                mapOf(
+                null,
+                roles = setOf("roleId"),
+                policies = setOf("policyId"),
+                attributes = mapOf(
                     "attr_string" to "attr_string_value",
                     "attr_int" to 1,
                     "attr_boolean" to true,
                     "attr_double" to 1.0,
                     "attr_long" to 1L,
                     "attr_list" to listOf("a", "b", "c"),
-                ),
+                )
             )
         val token: CompositeToken = jwtTokenConverter.toToken(principal)
-        val verified = jwtTokenVerifier.verify<TokenPrincipal>(token)
-        verified.id.assert().isEqualTo(principal.id)
+        val verified = jwtTokenVerifier.verify(token.accessToken)
+        verified.principal.assert().isEqualTo(principal.id)
         verified.policies.assert().isEqualTo(principal.policies)
         verified.roles.assert().isEqualTo(principal.roles)
-        verified.authenticated.assert().isEqualTo(true)
-        verified.anonymous.assert().isEqualTo(false)
         verified.attributes["attr_string"].assert().isEqualTo("attr_string_value")
         verified.attributes["attr_int"].assert().isEqualTo(1)
         verified.attributes["attr_boolean"].assert().isEqualTo(true)
         verified.attributes["attr_double"].assert().isEqualTo(1.0)
         verified.attributes["attr_long"].assert().isEqualTo(1)
         verified.attributes["attr_list"].assert().isEqualTo(listOf("a", "b", "c"))
-        val token2 = jwtTokenConverter.toToken(verified)
-        val verified2 = jwtTokenVerifier.verify<TokenPrincipal>(token2)
-        verified2.id.assert().isEqualTo(principal.id)
+        val token2 = jwtTokenConverter.toToken(TokenSubject.of(verified))
+        val verified2 = jwtTokenVerifier.verify(token2.accessToken)
+        verified2.principal.assert().isEqualTo(principal.id)
     }
 
     /** RC1-25: a token never carries an attribute CoSec sets for another credential, such as `apiKeyId`. */
     @Test
     fun aReservedAttributeIsNotIssued() {
-        val principal = SimplePrincipal("id", attributes = mapOf("apiKeyId" to "k1"))
+        val principal = TokenSubject("id", null, attributes = mapOf("apiKeyId" to "k1"))
         assertThrownBy<IllegalArgumentException> { jwtTokenConverter.toToken(principal) }
+    }
+
+    /** `IDN-11`: a token with an empty tenant would be refused when it is presented. */
+    @Test
+    fun anEmptyTenantIsNotIssued() {
+        val principal = TokenSubject("alice", null, tenant = "")
+        val error = runCatching { jwtTokenConverter.toToken(principal) }.exceptionOrNull()
+        error.assert().isInstanceOf(IllegalArgumentException::class.java)
+        error!!.message!!.assert().contains("empty tenant")
+    }
+
+    /** A tenant a verified token would refuse is not issued either (IDN-11). */
+    @Test
+    fun aTenantThatCannotBeATenantIdIsNotIssued() {
+        for (tenant in listOf(" ", "*", "a:b", "a\nb", "x".repeat(129))) {
+            val error = runCatching {
+                jwtTokenConverter.toToken(
+                    TokenSubject("alice", null, tenant = tenant)
+                )
+            }.exceptionOrNull()
+            error.assert().isInstanceOf(IllegalArgumentException::class.java)
+        }
     }
 
     /**
@@ -82,39 +116,37 @@ internal class JwtTokenConverterTest {
     @Test
     fun anIdWithAnUnpairedSurrogateIsNotIssued() {
         val principals = listOf(
-            SimplePrincipal("alice\uD800"),
-            SimpleTenantPrincipal(SimplePrincipal("alice"), SimpleTenant("beta\uDC00")),
-            SimplePrincipal("alice", roles = setOf("admin\uD800")),
-            SimplePrincipal("alice", policies = setOf("p\uD800")),
-            SimplePrincipal("alice", attributes = mapOf("org" to "x\uD800")),
-            SimplePrincipal("alice", attributes = mapOf("org\uD800" to "x")),
-            SimplePrincipal("alice", attributes = mapOf("orgs" to listOf("x", mapOf("y" to "\uDC00")))),
-            SimplePrincipal("alice", attributes = mapOf("orgs" to arrayOf("x", "\uD800"))),
+            TokenSubject("alice\uD800", null),
+            TokenSubject("alice", null, tenant = "beta\uDC00"),
+            TokenSubject("alice", null, roles = setOf("admin\uD800")),
+            TokenSubject("alice", null, policies = setOf("p\uD800")),
+            TokenSubject("alice", null, attributes = mapOf("org" to "x\uD800")),
+            TokenSubject("alice", null, attributes = mapOf("org\uD800" to "x")),
+            TokenSubject("alice", null, attributes = mapOf("orgs" to listOf("x", mapOf("y" to "\uDC00")))),
+            TokenSubject("alice", null, attributes = mapOf("orgs" to arrayOf("x", "\uD800"))),
         )
         for (principal in principals) {
             val error = runCatching { jwtTokenConverter.toToken(principal) }.exceptionOrNull()
             error.assert().isInstanceOf(IllegalArgumentException::class.java)
             error!!.message!!.assert().contains("unpaired UTF-16 surrogate").doesNotContain("?")
         }
-        val paired = jwtTokenConverter.toToken(SimplePrincipal("alice\uD83D\uDE00", attributes = mapOf("level" to 3)))
-        jwtTokenVerifier.verify<TokenPrincipal>(paired).id.assert().isEqualTo("alice\uD83D\uDE00")
+        val paired = jwtTokenConverter.toToken(
+            TokenSubject("alice\uD83D\uDE00", null, attributes = mapOf("level" to 3))
+        )
+        jwtTokenVerifier.verify(paired.accessToken).principal.assert().isEqualTo("alice\uD83D\uDE00")
     }
 
     @Test
     fun toTokenIfMissing() {
-        val principal = SimplePrincipal(
-            "id"
-        )
+        val principal = TokenSubject("id", null)
         val token: CompositeToken = jwtTokenConverter.toToken(principal)
-        val verified = jwtTokenVerifier.verify<TokenPrincipal>(token)
-        verified.id.assert().isEqualTo(principal.id)
+        val verified = jwtTokenVerifier.verify(token.accessToken)
+        verified.principal.assert().isEqualTo(principal.id)
         verified.policies.assert().isEqualTo(principal.policies)
         verified.roles.assert().isEqualTo(principal.roles)
-        verified.authenticated.assert().isEqualTo(true)
-        verified.anonymous.assert().isEqualTo(false)
         verified.attributes.assert().isEmpty()
-        val token2 = jwtTokenConverter.toToken(verified)
-        val verified2 = jwtTokenVerifier.verify<TokenPrincipal>(token2)
-        verified2.id.assert().isEqualTo(principal.id)
+        val token2 = jwtTokenConverter.toToken(TokenSubject.of(verified))
+        val verified2 = jwtTokenVerifier.verify(token2.accessToken)
+        verified2.principal.assert().isEqualTo(principal.id)
     }
 }

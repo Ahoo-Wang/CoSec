@@ -1,0 +1,16 @@
+# Rule: IDN-8
+# Mutant: a kept $Version pair comes to the head of a header that did not start with one, so Netty reads the whole header as RFC 2965 and drops its $-named cookies
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.CookieHeadersTest :gateway:test --tests me.ahoo.cosec.gateway.CookieTokenPropertyTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
+index d6599893..246e592b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CookieHeaders.kt
+@@ -53,7 +53,6 @@ internal object CookieHeaders {
+         val kept = pairs.filterIndexed { i, _ -> !named[i] }
+         val written = kept.joinToString(";").trimStart(' ', '\t')
+         return when {
+-            !rfc2965 && written.startsWith(RFC2965_VERSION, ignoreCase = true) -> null
+             rfc2965 && kept.size == 1 -> "$written;"
+             else -> written
+         }

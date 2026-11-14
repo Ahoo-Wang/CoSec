@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.engine.flat
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
@@ -50,8 +53,8 @@ internal interface CandidateVisitor {
  *    role in document (grant) order;
  * 5. break-glass bindings of the principal, by binding id, last.
  *
- * The order never changes the decision, only which statement is reported when several match; without errors it is the
- * statement 7.x reports, as the 7.x layers are in this order. Break-glass comes last (review A2 of #1070): it bypasses a
+ * The order never changes the decision, only which statement is reported when several match: the first in this
+ * order. Break-glass comes last (review A2 of #1070): it bypasses a
  * *missing* ALLOW (RFC 0004 §4.8), so it reports a permit only when nothing else permits, and a request another binding
  * permits is never a use of break-glass, which would need a REQUIRED audit (RFC 0006 §9.4.3). Visits allocate nothing: the arrays are the index's own.
  * An anonymous principal has no principal bindings, break-glass bindings or attachments. One without
@@ -124,7 +127,8 @@ internal object CandidateOrder {
     /**
      * An id both the tenant and the platform define resolves only when both have the same content, `attachable`
      * included; otherwise it is ambiguous: preferring the tenant's would let it replace a platform DENY, preferring the
-     * platform's would let it override the tenant's (RFC 0007 N2, Q15).
+     * platform's would let it override the tenant's (RFC 0007 N2, Q15). When it resolves, the platform's copy is the one
+     * evaluated, so that the comparison of contents never decides which rules apply.
      */
     private fun attachments(
         request: FlatRequest,
@@ -146,7 +150,8 @@ internal object CandidateOrder {
                 visitor.ambiguous(id)
                 continue
             }
-            val policy = (own ?: shared)?.takeIf { it.attachable }
+            // The same content in both layers: the platform's copy decides, so the comparison never chooses the rules.
+            val policy = (shared ?: own)?.takeIf { it.attachable }
             if (policy == null) {
                 visitor.missing(id)
             } else if (visitor.candidate(policy, policy.attached)) {
@@ -206,19 +211,42 @@ internal object CandidateOrder {
                 visitor.expired(entry.via)
                 continue
             }
-            if (entry.checksPlatform && platform.policy(entry.policyId)?.sameContent(entry.local!!) == false) {
-                visitor.ambiguous(entry.policyId)
-                continue
-            }
-            val policy = entry.local ?: platform.policy(entry.policyId)
-                ?: app?.takeIf { it.owner == entry.app }?.policy(entry.policyId)
-            if (policy == null) {
-                visitor.missing(entry.policyId)
-            } else if (candidate(visitor, policy, entry)) {
+            val policy = resolve(entry, platform, app, visitor) ?: continue
+            if (candidate(visitor, policy, entry)) {
                 return true
             }
         }
         return false
+    }
+
+    /**
+     * The policy [entry] names, or null when the id is ambiguous or missing, as [visitor] is told. A tenant's own copy
+     * of a platform policy resolves to the platform's: the comparison of contents decides whether the id resolves,
+     * never which rules apply.
+     */
+    private fun resolve(
+        entry: BoundEntry,
+        platform: CompiledDocument,
+        app: CompiledDocument?,
+        visitor: CandidateVisitor,
+    ): CompiledPolicy? {
+        val local = entry.local
+        if (local != null) {
+            val shared = if (entry.checksPlatform) platform.policy(entry.policyId) else null
+            if (shared == null) {
+                return local
+            }
+            if (shared.sameContent(local)) {
+                return shared
+            }
+            visitor.ambiguous(entry.policyId)
+            return null
+        }
+        val policy = platform.policy(entry.policyId) ?: app?.takeIf { it.owner == entry.app }?.policy(entry.policyId)
+        if (policy == null) {
+            visitor.missing(entry.policyId)
+        }
+        return policy
     }
 
     /**

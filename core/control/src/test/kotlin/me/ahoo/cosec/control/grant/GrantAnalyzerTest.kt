@@ -11,11 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.grant.GrantFixtures.ACME
 import me.ahoo.cosec.control.grant.GrantFixtures.TENANT_ADMIN
 import me.ahoo.cosec.control.grant.GrantFixtures.allow
@@ -258,7 +259,7 @@ class GrantAnalyzerTest {
             bindings = published.bindings + bind("ops2", role("ops2"), "cosec:tenant-admin", app = "cosec-control", space = ""),
         )
         val verdicts = verdicts(grantor(roles = mapOf("" to listOf("admin"))), snapshot(platform, published), candidate)
-        verdicts.size.assert().isEqualTo(16)
+        verdicts.size.assert().isEqualTo(17)
         verdicts.assertContained()
     }
 
@@ -886,7 +887,7 @@ class GrantAnalyzerTest {
         }
 
         @Test
-        fun `a variable read through overlapping resources of the grantor is not comparable`() {
+        fun `a variable read through overlapping resources of the grantor is read under the one that contains the grant`() {
             val own = eqAttr("resource.var.owner", "subject.id")
             fun held(vararg resources: String) = GrantDocument(
                 policies = listOf(policy("own", allow(listOf("doc:read"), resources.toList(), own))),
@@ -894,11 +895,11 @@ class GrantAnalyzerTest {
             )
             val grant = allow("doc:read", "doc/{o}/y", eq("resource.var.o", "gina"))
             grantWith(grant, held("doc/{owner}/**", "file/{owner}")).assertContained()
-            // doc/x/y matches both of the grantor's resources, which capture different values there.
-            grantWith(
-                grant,
-                held("doc/{owner}/**", "doc/x/{owner}")
-            ).assertUnknown(UnknownReason.NOT_COVERED, Shortfall.CONDITION)
+            // The grant's resource overlaps both of the grantor's (doc/x/y matches both, which capture different values
+            // there). A statement holds under any of its matching resources' captures (ALG-10), so doc/{owner}/**,
+            // which contains the grant's resource, is enough, in either order.
+            grantWith(grant, held("doc/{owner}/**", "doc/x/{owner}")).assertContained()
+            grantWith(grant, held("doc/x/{owner}", "doc/{owner}/**")).assertContained()
         }
 
         @Test

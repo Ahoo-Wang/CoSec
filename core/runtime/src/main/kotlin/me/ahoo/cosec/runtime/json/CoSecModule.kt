@@ -14,7 +14,6 @@
 package me.ahoo.cosec.runtime.json
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.policy.PolicyType
 import me.ahoo.cosec.model.scope.Scope
 import tools.jackson.core.JsonParser
 import tools.jackson.databind.DeserializationContext
@@ -22,16 +21,14 @@ import tools.jackson.databind.deser.std.StdDeserializer
 import tools.jackson.databind.module.SimpleModule
 
 /**
- * Jackson module for CoSec types, found by [CoSecJson] through `META-INF/services`: [PolicyType] as audit
- * events write it (lower case), and the refusal to read a resolved [Scope].
+ * Jackson module for CoSec types, found by [CoSecJson] through `META-INF/services`: the refusal to read a resolved
+ * [Scope].
  *
  * @see CoSecJson
  */
 @InternalCoSecApi
 class CoSecModule : SimpleModule() {
     init {
-        addSerializer(PolicyType::class.java, JsonPolicyTypeSerializer)
-        addDeserializer(PolicyType::class.java, JsonPolicyTypeDeserializer)
         // Only ScopeResolver builds a resolved scope (SCP-5); Jackson would otherwise call its constructor by reflection.
         addDeserializer(Scope::class.java, RefusingScopeDeserializer)
     }

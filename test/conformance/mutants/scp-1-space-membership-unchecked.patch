@@ -3,15 +3,15 @@
 # Tests: :model:test --tests me.ahoo.cosec.model.scope.* :conformance:test
 
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-index c7d26446..a78824f7 100644
+index 4530d4e8..c2fd0c28 100644
 --- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
 +++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-@@ -92,7 +92,7 @@ object ScopeResolver {
-         val appSource = if (hostApp != null) Scope.AppSource.HOST else Scope.AppSource.DECLARED
-         val space = SpaceId(declared.space)
-         val roles = if (subject.authenticated) subject.memberships.roles[space].orEmpty() else emptySet()
--        if (space != SpaceId.DEFAULT && roles.isEmpty()) {
-+        if (space != SpaceId.DEFAULT && roles.isEmpty() && false) {
+@@ -135,7 +135,7 @@ object ScopeResolver {
+         val app = hostApp ?: credentialApp?.takeIf { subject.authenticated }?.let(::AppId) ?: NO_APP
+         val selected = SpaceId(space)
+         val roles = if (subject.authenticated) subject.memberships.roles[selected].orEmpty() else emptySet()
+-        if (selected != SpaceId.DEFAULT && roles.isEmpty()) {
++        if (selected != SpaceId.DEFAULT && roles.isEmpty() && false) {
              return SPACE_NOT_MEMBER
          }
          val tenant = if (subject.authenticated) subject.tenant else TenantId.DEFAULT

@@ -67,11 +67,10 @@
     ],
     "attributes": {
       "team": "blue"
-    }
-  },
-  "request": {
+    },
     "app": "order-service"
   },
+  "request": {},
   "expect": {
     "decision": "Permit",
     "by": {

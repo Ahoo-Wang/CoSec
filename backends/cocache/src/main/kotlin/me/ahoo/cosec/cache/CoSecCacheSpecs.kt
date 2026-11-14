@@ -107,6 +107,9 @@ object CoSecCacheSpecs {
     const val SHADOW_REPORT_CACHE_NAME = "ShadowReportCache"
     const val INSTANCE_STATUS_CACHE_NAME = "InstanceStatusCache"
 
+    /** Which instances have a status to read: a short list, changed when an instance joins or leaves (#1214). */
+    const val INSTANCE_INDEX_CACHE_NAME = "InstanceIndexCache"
+
     /** The instances that reported on each shadow window (RFC 0007 §6.4, round-2 review R1). */
     const val SHADOW_REPORTER_CACHE_NAME = "ShadowReporterCache"
 
@@ -142,6 +145,7 @@ object CoSecCacheSpecs {
         SHADOW_REPORT_CACHE_NAME,
         SHADOW_REPORTER_CACHE_NAME,
         INSTANCE_STATUS_CACHE_NAME,
+        INSTANCE_INDEX_CACHE_NAME,
     )
 
     private val PATHS: Map<String, String> = mapOf(
@@ -162,6 +166,7 @@ object CoSecCacheSpecs {
         SHADOW_REPORT_CACHE_NAME to "shadow:report",
         SHADOW_REPORTER_CACHE_NAME to "shadow:reporters",
         INSTANCE_STATUS_CACHE_NAME to "shadow:status",
+        INSTANCE_INDEX_CACHE_NAME to "shadow:instances",
     )
 
     /**
@@ -330,7 +335,8 @@ object CoSecCacheSpecs {
      * What both revocation tables declare, before `cocache.*` properties and customizers:
      *
      * - they are `Store`s, written with an explicit lifetime each ([CoCacheTokenStore]); content the table cannot read
-     *   fails the read, so a 6.x revocation is never reclaimed (deleting it would accept the token again);
+     *   fails the read, so a revocation the table cannot read is never reclaimed (deleting it would accept the token
+     *   again);
      * - "not revoked" is kept locally for [RevokedTokenCache.MISSING_TTL_SECONDS];
      * - a failed Redis read reads as "not revoked" (`unknownRead = ABSENT`), the documented exception to failing closed:
      *   tokens are still signature-verified and expire on their own, and failing closed would reject every

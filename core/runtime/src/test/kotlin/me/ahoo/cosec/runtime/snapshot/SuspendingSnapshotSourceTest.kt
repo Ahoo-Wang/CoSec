@@ -11,16 +11,18 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.runtime.snapshot
 
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.model.scope.DeclaredScope
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -41,8 +43,8 @@ class SuspendingSnapshotSourceTest {
             emptyList(),
         )
         val resolution = ScopeResolver.resolve(
-            ScopeSubject(tenant, true, memberships),
-            DeclaredScope(app, ""),
+            ScopeSubject(tenant, true, memberships, app.ifEmpty { null }),
+            "",
             HostScope(null)
         )
         return (resolution as ScopeResolution.Resolved).scope

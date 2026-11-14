@@ -10,8 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.social.justauth
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.zhyd.oauth.cache.AuthStateCache
 import org.springframework.data.redis.core.StringRedisTemplate
 import java.time.Duration
@@ -22,6 +25,7 @@ import java.util.concurrent.TimeUnit
  *
  * @author ahoo wang
  */
+@InternalCoSecApi
 class RedisAuthStateCache(
     private val redisTemplate: StringRedisTemplate,
     private val keyPrefix: String = DEFAULT_KEY_PREFIX
@@ -48,6 +52,7 @@ class RedisAuthStateCache(
         return redisTemplate.hasKey(withPredix(key))
     }
 
+    @InternalCoSecApi
     companion object {
         private val DEFAULT_TIME_OUT = Duration.ofMinutes(3).toMillis()
         private const val DEFAULT_KEY_PREFIX = "cosec:oauth:state:"

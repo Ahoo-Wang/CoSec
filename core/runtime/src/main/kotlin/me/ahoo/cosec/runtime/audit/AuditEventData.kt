@@ -13,37 +13,50 @@
 
 package me.ahoo.cosec.runtime.audit
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditAuthorization
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditDevice
+import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditEvent
-import me.ahoo.cosec.api.audit.AuditPermission
-import me.ahoo.cosec.api.audit.AuditPolicy
 import me.ahoo.cosec.api.audit.AuditPrincipal
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.api.audit.AuditRole
 import me.ahoo.cosec.api.audit.AuditSnapshotVersion
 import me.ahoo.cosec.api.audit.AuditSource
-import me.ahoo.cosec.api.audit.AuditSourceType
 import me.ahoo.cosec.api.audit.AuditStatement
 import me.ahoo.cosec.api.audit.AuditTrace
-import me.ahoo.cosec.api.policy.PolicyType
+import me.ahoo.cosec.api.audit.AuditVia
 import java.time.Instant
 
-data class AuditPrincipalData(
+@InternalCoSecApi
+class AuditPrincipalData(
     override val id: String,
     override val authenticated: Boolean,
     override val roles: Set<String>,
-    override val policies: Set<String>,
-) : AuditPrincipal
+) : AuditPrincipal {
 
-data class AuditDeviceData(
+    /** These values with some replaced: for CoSec's own use. */
+    @InternalCoSecApi
+    @Suppress("LongParameterList")
+    fun copy(
+        id: String = this.id,
+        authenticated: Boolean = this.authenticated,
+        roles: Set<String> = this.roles,
+    ): AuditPrincipalData = AuditPrincipalData(
+        id = id,
+        authenticated = authenticated,
+        roles = roles,
+    )
+}
+
+@InternalCoSecApi
+class AuditDeviceData(
     override val id: String?,
-    override val userAgent: String?,
 ) : AuditDevice
 
-data class AuditRequestData(
+@InternalCoSecApi
+class AuditRequestData(
     override val id: String?,
     override val appId: String?,
     override val spaceId: String?,
@@ -54,34 +67,22 @@ data class AuditRequestData(
     override val device: AuditDeviceData,
 ) : AuditRequest
 
-data class AuditStatementData(
+@InternalCoSecApi
+class AuditStatementData(
     override val index: Int,
     override val name: String,
 ) : AuditStatement
 
-data class AuditPolicyData(
-    override val id: String,
-    override val type: PolicyType,
-    override val statement: AuditStatementData,
-) : AuditPolicy
-
-data class AuditPermissionData(
-    override val id: String,
-    override val name: String,
-) : AuditPermission
-
-data class AuditRoleData(
-    override val id: String,
-    override val permission: AuditPermissionData,
-) : AuditRole
-
-data class AuditSourceData(
-    override val type: AuditSourceType,
-    override val policy: AuditPolicyData? = null,
-    override val role: AuditRoleData? = null,
+@InternalCoSecApi
+class AuditSourceData(
+    override val via: AuditVia,
+    override val document: AuditDocument? = null,
+    override val policy: String? = null,
+    override val statement: AuditStatementData? = null,
 ) : AuditSource
 
-data class AuditAuthorizationData(
+@InternalCoSecApi
+class AuditAuthorizationData(
     override val decision: AuditDecision,
     override val reasonCode: AuditReasonCode,
     override val reason: String,
@@ -89,18 +90,21 @@ data class AuditAuthorizationData(
     override val source: AuditSourceData,
 ) : AuditAuthorization
 
-data class AuditTraceData(
+@InternalCoSecApi
+class AuditTraceData(
     override val traceId: String,
     override val spanId: String,
 ) : AuditTrace
 
-data class AuditSnapshotVersionData(
+@InternalCoSecApi
+class AuditSnapshotVersionData(
     override val platform: Long,
     override val app: Long?,
     override val tenant: Long?,
 ) : AuditSnapshotVersion
 
-data class AuditEventData(
+@InternalCoSecApi
+class AuditEventData(
     override val eventId: String,
     override val timestamp: Instant,
     override val tenantId: String,
@@ -112,4 +116,34 @@ data class AuditEventData(
     override val binding: String? = null,
     override val breakGlass: Boolean = false,
     override val kind: String = "DECIDED",
-) : AuditEvent
+) : AuditEvent {
+
+    /** These values with some replaced: for CoSec's own use. */
+    @InternalCoSecApi
+    @Suppress("LongParameterList")
+    fun copy(
+        eventId: String = this.eventId,
+        timestamp: Instant = this.timestamp,
+        tenantId: String = this.tenantId,
+        principal: AuditPrincipalData = this.principal,
+        request: AuditRequestData = this.request,
+        authorization: AuditAuthorizationData = this.authorization,
+        trace: AuditTraceData? = this.trace,
+        snapshotVersion: AuditSnapshotVersionData? = this.snapshotVersion,
+        binding: String? = this.binding,
+        breakGlass: Boolean = this.breakGlass,
+        kind: String = this.kind,
+    ): AuditEventData = AuditEventData(
+        eventId = eventId,
+        timestamp = timestamp,
+        tenantId = tenantId,
+        principal = principal,
+        request = request,
+        authorization = authorization,
+        trace = trace,
+        snapshotVersion = snapshotVersion,
+        binding = binding,
+        breakGlass = breakGlass,
+        kind = kind,
+    )
+}
