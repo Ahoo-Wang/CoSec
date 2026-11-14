@@ -182,6 +182,22 @@ class PipelineTest {
         engine.requests.assert().isEmpty()
     }
 
+    /** `PIP-18`: a lower-case method is refused before authentication; HEAD reaches the engine as GET. */
+    @Test
+    fun aLowerCaseMethodIsInvalidAndHeadIsDecidedAsGet() = runTest {
+        var authenticated = false
+        val engine = StubEngine(PERMIT)
+        val authenticator = Authenticator {
+            authenticated = true
+            AuthnResult.Anonymous
+        }
+        pipeline(authenticator, engine).evaluate(facts(method = "delete")).assertProblem(ProblemType.INVALID_REQUEST)
+        authenticated.assert().isFalse()
+        engine.requests.assert().isEmpty()
+        pipeline(authenticator, engine).evaluate(facts(method = "HEAD")).proceed.assert().isTrue()
+        engine.requests.single().request.action.verb.assert().isEqualTo("GET")
+    }
+
     /** `SCP-4`. */
     @Test
     fun conflictingCoSecParameterIsInvalidRequest() = runTest {

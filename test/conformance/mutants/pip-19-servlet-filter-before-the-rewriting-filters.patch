@@ -1,0 +1,17 @@
+# Rule: PIP-19
+# Mutant: the servlet filter runs ahead of Spring Boot's hidden-method filter again: a POST with _method=DELETE is authorized as a POST and executed as a DELETE
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.realserver.RewritingFilterOrderTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineWebAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineWebAutoConfiguration.kt
+index 3a64d135..c50d149f 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineWebAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecPipelineWebAutoConfiguration.kt
+@@ -127,7 +127,7 @@ internal class CoSecPipelineWebAutoConfiguration {
+          * everything that acts on the request: `OrderedFormContentFilter` (-9900), `OrderedRequestContextFilter` (-105),
+          * Spring Security (-100), the application's filters. The request-id and tracing filters stay ahead of it.
+          */
+-        const val SERVLET_FILTER_ORDER = HIDDEN_HTTP_METHOD_FILTER_ORDER + 1
++        const val SERVLET_FILTER_ORDER = Int.MIN_VALUE + 100
+ 
+         /** How this host reads the client address: decided once per context, or startup fails ([ClientIpReadings]). */
+         fun clientIpOf(context: ApplicationContext, properties: RuntimeAuthorizationProperties): ClientIpReading =

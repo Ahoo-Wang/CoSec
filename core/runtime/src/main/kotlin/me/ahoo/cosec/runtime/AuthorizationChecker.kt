@@ -60,7 +60,8 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
 
     /**
      * The decision that [check] answers for the same arguments. A context the pipeline did not make, an action
-     * without `:`, or a resource enforcement would not decide ([PathNormalizer.enforceable], `PIP-15`) is an implicit deny
+     * without `:`, or an action or resource enforcement would not decide ([PathNormalizer.enforceable], `PIP-15`,
+     * `PIP-18`: an `http` verb with a lower-case letter; `http:HEAD` is decided as `http:GET`) is an implicit deny
      * (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check writes no audit. The obligations
      * of a permit, rate limits, did not run.
      *
@@ -94,7 +95,8 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
     @OptIn(InternalCoSecApi::class)
     suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
         val decidable = PathNormalizer.enforceable(resource) ?: return Decision.Deny(null)
-        return decided(security, action, decidable)
+        val decidedAs = PathNormalizer.enforceable(action) ?: return Decision.Deny(null)
+        return decided(security, decidedAs, decidable)
     }
 
     @Suppress("TooGenericExceptionCaught")

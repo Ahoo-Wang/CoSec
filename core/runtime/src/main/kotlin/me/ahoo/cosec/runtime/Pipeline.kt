@@ -56,6 +56,7 @@ import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.CookieHeaders
 import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.http.HttpMethods
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
@@ -299,8 +300,14 @@ class Pipeline(components: PipelineComponents) : RequestGate {
             ?: return StatusMapping.invalidRequest(requestId, "path", traceId)
         val parameters = CoSecParameters.read(facts)
             ?: return StatusMapping.invalidRequest(requestId, "CoSec-* parameter", traceId)
+        // PIP-18: a method holding a lower-case letter is no method any client sends on purpose, and backends that fold
+        // case (Django, Werkzeug) would serve `delete` as DELETE past a DENY on `http:DELETE`: refused, as an ambiguous
+        // path is. HEAD is GET without the content, and servers run the GET handler for it: decided as GET.
+        if (HttpMethods.hasLowerCase(facts.method)) {
+            return StatusMapping.invalidRequest(requestId, "method", traceId)
+        }
         val (action, resource) = when (val route = routes.resolve(facts.method, path)) {
-            RouteResolution.Unmapped -> Action(HTTP, facts.method) to Resource(HTTP, path, emptyMap())
+            RouteResolution.Unmapped -> Action(HTTP, HttpMethods.decidedAs(facts.method)) to Resource(HTTP, path, emptyMap())
             is RouteResolution.Mapped -> route.action to route.resource
             // A capture that would change the resource id's segments: refused, never read as another resource.
             is RouteResolution.Invalid -> return StatusMapping.invalidRequest(requestId, "path", traceId)

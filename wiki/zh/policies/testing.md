@@ -83,7 +83,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `principal` | 主体 id；匿名请求时省略，执法在租户 `(0)` 上决策它。 |
 | `roles`、`policies` | 成员关系，按令牌声明的写法：`role` 或 `role@space`，以及附加策略的 id。 |
 | `app`、`space` | 声明的作用域；空间按数据面的方式与角色核对。 |
-| `action` | 必填，`service:verb`（未映射的 HTTP 请求为 `http:GET`）。 |
+| `action` | 必填，`service:verb`（未映射的 HTTP 请求为 `http:GET`）。`http` 动作按请求方法的方式读取：`http:HEAD` 按 `http:GET` 判定和分析，含小写字母的动词是 `400`（`PIP-18`）。 |
 | `resource` | 必填：`type/id`，或以 `/` 开头的 `http` 资源路径。`http` 路径与请求路径经同一个规范化：执法拒绝的路径（点号段、格式错误的转义、超过 2,048 个字符或每个 `/` 段 256 个）是 `400`，路径参数（`;v=2`）被去掉。类型化 id 受同样的长度限制。 |
 | `remoteIp`、`time` | 客户端地址，以及 ISO 时刻（默认：当前）。 |
 | `principalBindings`、`breakGlass` | 凭证能用到什么，默认都为 `true`（CoSec 自己的令牌）。模拟 API key 时把 `breakGlass` 设为 `false`；带角色上限的 key 还要把 `principalBindings` 设为 `false`：此时附加的策略和主体绑定不授予任何东西，它们的 DENY 照样生效。只接受布尔值。 |
