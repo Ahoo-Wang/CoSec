@@ -2,11 +2,10 @@
 # Mutant: explain decides whether the app document was read by the head tenant, as simulate does, not by the tenant revision it explains
 # Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index d9db8190..c1696006 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -325,7 +325,7 @@ class DefaultControlPlane(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
+@@ -219,7 +219,7 @@
              revision?.takeIf { it > 0 }?.let { retainedHeld(key, it) }
          }
          val tenantDocument = documentAt(tenant)

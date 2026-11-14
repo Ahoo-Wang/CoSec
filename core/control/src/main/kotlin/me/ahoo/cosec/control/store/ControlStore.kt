@@ -16,6 +16,7 @@
 package me.ahoo.cosec.control.store
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
@@ -43,6 +44,7 @@ import java.time.Instant
  * what a document's `provenance.parent` points to (RFC 0007 §5.3).
  */
 @CoSecSpi
+@ExperimentalCoSecApi
 interface ControlStore : CandidateStore {
     /** The digest this store computes for [document]: the same for the head and for its revision record. */
     fun digestOf(document: SnapshotDocument): SnapshotDigest
@@ -167,14 +169,17 @@ interface ControlStore : CandidateStore {
 }
 
 /** A stored document and the store's digest of it. */
+@ExperimentalCoSecApi
 class StoredDocument(val document: SnapshotDocument, val digest: SnapshotDigest) {
     override fun toString(): String = "StoredDocument(revision=${document.revision}, digest=$digest)"
 }
 
 /** A value with the digest it is stored under, for a conditional replace. */
+@ExperimentalCoSecApi
 class Versioned<T>(val value: T, val digest: SnapshotDigest)
 
 /** The outcome of [ControlStore.putHead]. */
+@ExperimentalCoSecApi
 sealed interface HeadWrite {
     class Written(val digest: SnapshotDigest) : HeadWrite
 
@@ -191,6 +196,7 @@ sealed interface HeadWrite {
  * complete one incomplete again when [ControlStore.documents] lists an app document with a head it misses. The grant
  * analysis trusts only a complete list whose every entry reads as an app id.
  */
+@ExperimentalCoSecApi
 data class AppList(val entries: Set<String>, val complete: Boolean) {
     companion object {
         val EMPTY: AppList = AppList(emptySet(), complete = false)
@@ -198,9 +204,11 @@ data class AppList(val entries: Set<String>, val complete: Boolean) {
 }
 
 /** One published revision of a document. */
+@ExperimentalCoSecApi
 data class RevisionEntry(val revision: Long, val digest: SnapshotDigest, val publishedAt: Instant)
 
 /** A revision record written for a publish whose head write has not been confirmed (RFC 0007 §5.4 step 2). */
+@ExperimentalCoSecApi
 data class PendingRecord(val digest: SnapshotDigest, val since: Instant)
 
 /**
@@ -216,6 +224,7 @@ data class PendingRecord(val digest: SnapshotDigest, val since: Instant)
  *   writes them here in the same step, then deletes them, then drops the ones it deleted, so a deletion that fails is
  *   tried again by the next pass, and no listed revision ever misses its record.
  */
+@ExperimentalCoSecApi
 data class RevisionIndex(
     val entries: List<RevisionEntry> = emptyList(),
     val pending: List<PendingRecord> = emptyList(),

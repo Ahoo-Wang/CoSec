@@ -1,6 +1,3 @@
-public final class me/ahoo/cosec/control/api/ControlHttp$Companion {
-}
-
 public final class me/ahoo/cosec/control/audit/ChangeEvent {
 	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/audit/RevisionRef;Lme/ahoo/cosec/control/audit/RevisionRef;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/control/change/ShadowSummary;Ljava/lang/String;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/time/Instant;Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/audit/RevisionRef;Lme/ahoo/cosec/control/audit/RevisionRef;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/control/change/ShadowSummary;Ljava/lang/String;Ljava/util/List;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -142,12 +139,6 @@ public final class me/ahoo/cosec/control/change/Base$Companion {
 	public final fun getNONE ()Lme/ahoo/cosec/control/change/Base;
 }
 
-public abstract interface class me/ahoo/cosec/control/change/ChangeChecks$Context {
-	public abstract fun apps (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public abstract fun head (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public abstract fun referrers-23YAg4Q (Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
 public final class me/ahoo/cosec/control/change/ChangeRequest {
 	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;Lme/ahoo/cosec/control/change/CheckedApps;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;Lme/ahoo/cosec/spi/snapshot/SnapshotKey;Lme/ahoo/cosec/control/change/Base;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/ProvenanceKind;Lme/ahoo/cosec/control/change/ChangeState;Ljava/util/List;Ljava/lang/String;Ljava/util/Map;Ljava/time/Instant;Ljava/time/Instant;Ljava/lang/String;Ljava/lang/Long;Ljava/util/List;Lme/ahoo/cosec/control/change/Approval;Lme/ahoo/cosec/control/change/ShadowState;Ljava/util/List;Lme/ahoo/cosec/control/change/CheckedApps;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -243,12 +234,6 @@ public final class me/ahoo/cosec/control/change/Confirmation {
 	public static final field DENY_NOMATCH Ljava/lang/String;
 	public synthetic fun <init> (Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public synthetic fun <init> (Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1-uumxgvY ()Ljava/lang/String;
-	public final fun component2 ()I
-	public final fun component3 ()Ljava/lang/String;
-	public final fun component4 ()Ljava/lang/String;
-	public final fun copy-VOG78Ow (Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/control/change/Confirmation;
-	public static synthetic fun copy-VOG78Ow$default (Lme/ahoo/cosec/control/change/Confirmation;Ljava/lang/String;ILjava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/control/change/Confirmation;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDigest ()Ljava/lang/String;
 	public final fun getKind ()Ljava/lang/String;
@@ -267,11 +252,6 @@ public final class me/ahoo/cosec/control/change/Escalation {
 	public static final field TENANT_BINDING Ljava/lang/String;
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun component3 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/control/change/Escalation;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/change/Escalation;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/control/change/Escalation;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDetail ()Ljava/lang/String;
 	public final fun getInformational ()Z

@@ -20,6 +20,7 @@ import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeys
 import org.springframework.data.redis.core.StringRedisTemplate
 
+@InternalCoSecApi
 const val DEFAULT_API_KEY_KEY_PREFIX = "cosec:api-key"
 
 /**
@@ -30,7 +31,7 @@ const val DEFAULT_API_KEY_KEY_PREFIX = "cosec:api-key"
  * [RedisApiKeyReader], over the reactive template, which never blocks; the starter wires that one when
  * `cosec.api-key.store=redis`. A Redis failure propagates and fails closed.
  */
-class RedisApiKeyStore(
+class RedisApiKeyStore @InternalCoSecApi constructor(
     private val stringRedisTemplate: StringRedisTemplate,
     keyPrefix: String = DEFAULT_API_KEY_KEY_PREFIX
 ) {

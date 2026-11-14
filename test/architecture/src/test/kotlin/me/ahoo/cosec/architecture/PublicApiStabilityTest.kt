@@ -60,8 +60,6 @@ class PublicApiStabilityTest {
         val REVIEWED_VALUES: Map<String, String> = run {
             val decision = "A case of a sealed decision result: a new fact is a new case, not a new field (RFC 0010 Q6)."
             val value = "An id-like value that is complete: it has nothing more to say."
-            val storeRecord = "A record of the control store or its change events: an application reads it or stores it " +
-                "whole (ChangeRequestCodec), and only cosec-control constructs or copies it, so a new field breaks no caller."
             listOf(
                 "model.decision.RateLimitSpec" to "A rate limit rule read from a document, complete as RFC 0006 §8 states it.",
                 "model.decision.Obligation\$RateLimit" to decision,
@@ -84,12 +82,16 @@ class PublicApiStabilityTest {
                 "spi.snapshot.SnapshotKey\$Tenant" to value,
                 "runtime.token.SimpleCompositeToken" to "An access token and a refresh token: the pair is the whole of a composite token.",
             ) + listOf(
-                "audit.MovedHead", "audit.RevisionRef", "change.Approval", "change.Base", "change.ChangeRequest",
-                "change.CheckedApps", "change.Confirmation", "change.Escalation", "change.Finding", "change.ShadowState",
-                "change.ShadowSummary", "change.StageSlot", "store.AppList", "store.PendingRecord", "store.RevisionEntry",
-                "store.RevisionIndex",
-            ).map { "control.$it" to storeRecord } + listOf(
-                "runtime.document.Actor" to "Who acted on a control-plane change, as its record names them: an id and a tenant.",
+                // The control store's records are experimental with the store (R9, D3); these stay stable because a
+                // ChangeEvent carries them.
+                "audit.MovedHead" to "A head a published change found moved: the document, the digest it was checked " +
+                    "with and the one it has. What else a check finds is a new field of the event, not of this value.",
+                "audit.RevisionRef" to "A revision and its digest: the whole of a reference to one.",
+                "change.ShadowSummary" to "A closed shadow window's counts by outcome, when it closed, and its two " +
+                    "verdicts: a new outcome is a new key of the counts, not a new field.",
+            ).map { (name, reason) -> "control.$name" to reason } + listOf(
+                "runtime.document.Actor" to "Who acted on a control-plane change: an id and a tenant. Delegation is a value " +
+                    "of its own beside it (RFC 0009 §7), not a field.",
             )
         }.associate { (name, reason) -> "me.ahoo.cosec.$name" to reason }
     }
