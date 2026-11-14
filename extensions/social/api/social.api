@@ -4,9 +4,16 @@ public final class me/ahoo/cosec/social/DirectSocialUserPrincipalConverter : me/
 }
 
 public final class me/ahoo/cosec/social/InMemorySocialStateStore : me/ahoo/cosec/social/SocialStateStore {
+	public static final field Companion Lme/ahoo/cosec/social/InMemorySocialStateStore$Companion;
+	public static final field SWEEP_FLOOR I
 	public fun <init> ()V
-	public fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;)V
-	public fun take (Ljava/lang/String;)Ljava/lang/String;
+	public fun <init> (I)V
+	public synthetic fun <init> (IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun take (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/social/InMemorySocialStateStore$Companion {
 }
 
 public final class me/ahoo/cosec/social/SocialAuthentication : me/ahoo/cosec/login/Authentication {
@@ -59,8 +66,8 @@ public final class me/ahoo/cosec/social/SocialProviderManager {
 }
 
 public abstract interface class me/ahoo/cosec/social/SocialStateStore {
-	public abstract fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;)V
-	public abstract fun take (Ljava/lang/String;)Ljava/lang/String;
+	public abstract fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun take (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/social/SocialUser {
@@ -114,8 +121,9 @@ public final class me/ahoo/cosec/social/justauth/JustAuthProvider : me/ahoo/cose
 }
 
 public final class me/ahoo/cosec/social/justauth/RedisSocialStateStore : me/ahoo/cosec/social/SocialStateStore {
-	public fun <init> (Lorg/springframework/data/redis/core/StringRedisTemplate;Ljava/lang/String;)V
-	public fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;)V
-	public fun take (Ljava/lang/String;)Ljava/lang/String;
+	public fun <init> (Lorg/springframework/data/redis/core/StringRedisTemplate;Ljava/lang/String;I)V
+	public synthetic fun <init> (Lorg/springframework/data/redis/core/StringRedisTemplate;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun put (Ljava/lang/String;Ljava/lang/String;Ljava/time/Duration;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun take (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

@@ -28,6 +28,7 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.social.InMemorySocialStateStore
 import me.ahoo.cosec.social.SocialAuthenticationException
+import me.ahoo.cosec.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.test.asserts.assert
 import me.zhyd.oauth.enums.AuthResponseStatus
@@ -52,7 +53,10 @@ internal class JustAuthProviderTest {
     private val states = InMemorySocialStateStore()
 
     /** The callback of a sign-in started for this browser: a state [states] holds, and the browser's binding. */
-    private fun issued(provider: String, binding: String = "binding-${System.nanoTime()}"): JustAuthCredentials {
+    private suspend fun issued(
+        provider: String,
+        binding: String = "binding-${System.nanoTime()}"
+    ): JustAuthCredentials {
         val state = Base64.getUrlEncoder().withoutPadding().encodeToString(
             ByteArray(16).also(SecureRandom()::nextBytes)
         )
@@ -180,6 +184,34 @@ internal class JustAuthProviderTest {
         authClient.authenticate(issued("clientId")).id.assert().isEqualTo("u1")
 
         threads.assert().hasSize(2).doesNotContain(Thread.currentThread())
+    }
+
+    /** The state store suspends: the provider calls it on the caller's dispatcher, outside its blocking section. */
+    @Test
+    fun `the state store is called outside the blocking section`(): Unit = runBlocking {
+        val calls = CopyOnWriteArrayList<Thread>()
+        var issuedState = ""
+        val recording = object : SocialStateStore {
+            override suspend fun put(state: String, bindingHash: String, lifetime: Duration) {
+                calls += Thread.currentThread()
+                issuedState = state
+                states.put(state, bindingHash, lifetime)
+            }
+
+            override suspend fun take(state: String): String? {
+                calls += Thread.currentThread()
+                return states.take(state)
+            }
+        }
+        val blockingCalls = CopyOnWriteArrayList<Thread>()
+        val provider =
+            JustAuthProvider("github", BlockingAuthRequest { blockingCalls += Thread.currentThread() }, recording)
+
+        val started = provider.authorize()
+        provider.authenticate(callback(issuedState, started.binding)).id.assert().isEqualTo("u1")
+
+        calls.assert().hasSize(2).containsOnly(Thread.currentThread())
+        blockingCalls.assert().hasSize(2).doesNotContain(Thread.currentThread())
     }
 
     @Test

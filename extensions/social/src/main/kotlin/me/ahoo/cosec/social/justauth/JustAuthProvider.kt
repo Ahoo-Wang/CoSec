@@ -40,9 +40,10 @@ import java.util.Base64
  * most once, and the browser's binding hashes to the one recorded, compared in constant time. JustAuth's own check of
  * the state then still runs.
  *
- * JustAuth blocks: the authorize step writes the state, and a login calls the provider over blocking HTTP. Both run on
- * this provider's own dispatcher, of at most [parallelism] threads, so they never hold an event loop and a provider that
- * hangs delays only its own logins.
+ * JustAuth blocks: the authorize step writes JustAuth's own state cache, and a login calls the provider over blocking HTTP.
+ * Both run on this provider's own dispatcher, of at most [parallelism] threads, so they never hold an event loop and a
+ * provider that hangs delays only its own logins. [SocialStateStore] suspends, so it is called outside that section: the
+ * callback's state is taken first, and only then does the login block.
  *
  * @author ahoo wang
  */
@@ -72,28 +73,27 @@ class JustAuthProvider(
             encoder.encodeToString(MessageDigest.getInstance("SHA-256").digest(binding.toByteArray(Charsets.UTF_8)))
     }
 
-    override suspend fun authorize(): SocialAuthorization = runInterruptible(blocking) {
+    override suspend fun authorize(): SocialAuthorization {
         val state = fresh()
         val binding = fresh()
         states.put(state, hash(binding), lifetime)
-        SocialAuthorization(authRequest.authorize(state), binding)
+        return SocialAuthorization(runInterruptible(blocking) { authRequest.authorize(state) }, binding)
     }
 
     override suspend fun authenticate(credentials: SocialCredentials): SocialUser {
         require(credentials is JustAuthCredentials)
-        return runInterruptible(blocking) {
-            checkState(credentials)
-            login(credentials)
-        }.toSocialUser(name)
+        // Taken before the blocking section: the login runs only for a state that holds.
+        checkState(credentials)
+        return runInterruptible(blocking) { login(credentials) }.toSocialUser(name)
     }
 
     /** The callback's state is one [authorize] issued to the browser that sends [SocialCredentials.binding]. */
-    private fun checkState(credentials: JustAuthCredentials) {
+    private suspend fun checkState(credentials: JustAuthCredentials) {
         refusal(credentials)?.let { throw SocialAuthenticationException(it) }
     }
 
     /** Why the callback is refused, or null when its state holds. */
-    private fun refusal(credentials: JustAuthCredentials): String? {
+    private suspend fun refusal(credentials: JustAuthCredentials): String? {
         val state = credentials.state.orEmpty()
         if (!STATE.matches(state)) {
             return "The [$name] callback carries no state CoSec issued."
