@@ -133,10 +133,6 @@ internal class CoSecPipelineWebAutoConfiguration {
         fun clientIpOf(context: ApplicationContext, properties: RuntimeAuthorizationProperties): ClientIpReading =
             ClientIpReadings.of(context.environment, context, properties)
 
-        /** How this host reads the client address: decided once per context, or startup fails ([ClientIpReadings]). */
-        fun clientIpOf(context: ApplicationContext, properties: RuntimeAuthorizationProperties): ClientIpReading =
-            ClientIpReadings.of(context.environment, context, properties)
-
         fun hostOf(properties: RuntimeAuthorizationProperties): HostScope =
             HostScope(properties.scope.appId?.takeIf { it.isNotBlank() }?.let(::AppId))
     }
