@@ -396,10 +396,11 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec.audit.kafka.delivery=required needs cosec-kafka` | `cosec-kafka` with `spring-boot-starter-kafka`, or set [`delivery`](./configuration.md#audit) to `best-effort` |
 | `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | The module is there but the listener is not: a `KafkaOperations` bean (`spring-boot-starter-kafka` and its `spring.kafka.*` settings), `cosec.audit.enabled=true` and `cosec.audit.kafka.enabled=true` |
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`, with `cosid-spring-boot-starter` 5.x and its `cosid.*` generators, or remove the key to keep CoSec's own ids |
+| `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | A `CosIdRuntime` (`cosid-spring-boot-starter` and its `cosid.*` settings), or remove the key: with an `IdGenerator` bean of your own, that bean gives CoSec its ids |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
-check, as it needs `cosec-gateway` instead.
+check, as it needs `cosec-gateway` instead. Every check runs with `spring.main.lazy-initialization=true` too (`STA-3`).
 
 ### Startup fails on an exposed actuator endpoint
 

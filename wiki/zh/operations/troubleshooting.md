@@ -321,9 +321,10 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec.audit.kafka.delivery=required needs cosec-kafka` | `cosec-kafka` 和 `spring-boot-starter-kafka`，或把 [`delivery`](./configuration.md#audit) 设为 `best-effort` |
 | `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | 模块已在，但监听器没有创建：需要 `KafkaOperations` Bean（`spring-boot-starter-kafka` 及其 `spring.kafka.*` 配置）、`cosec.audit.enabled=true` 和 `cosec.audit.kafka.enabled=true` |
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`，以及 `cosid-spring-boot-starter` 5.x 和它的 `cosid.*` 生成器；或者删除这个键，继续使用 CoSec 自己的 id |
+| `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | 一个 `CosIdRuntime`（`cosid-spring-boot-starter` 及其 `cosid.*` 配置），或者删除这个键：应用自己有 `IdGenerator` bean 时，CoSec 的 id 来自那个 bean |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
-Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。
+Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。设置 `spring.main.lazy-initialization=true` 时每项检查同样运行（`STA-3`）。
 
 ### 暴露了 actuator 端点导致启动失败 {#startup-fails-on-an-exposed-actuator-endpoint}
 

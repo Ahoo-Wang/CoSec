@@ -25,6 +25,11 @@ property. The message lists every unknown key and links
 [the table of removed and renamed keys](./upgrading.md#removed-and-renamed-properties). No property turns this check
 off: a key prefix a release replaced, had it been ignored, would leave token revocations where nothing reads them.
 
+This check, and every other startup check of the starter (missing modules, exposed actuator endpoints on a gateway,
+Redis's eviction policy, replica reads, API keys without a `MembershipProvider`), runs with
+`spring.main.lazy-initialization=true` as well (`STA-3`): no bean asks for a check, and a lazily initialized
+application would otherwise skip them all.
+
 Keys are compared as Spring's binder compares them, so every spelling it documents for a known key is known:
 `local-max-age`, `localMaxAge` or `local_max_age` in a properties file, and `COSEC_AUTHORIZATION_SNAPSHOT_LOCALMAXAGE`
 as an environment variable (upper case, dots as underscores, dashes dropped). A variable that is not that spelling of a
@@ -225,7 +230,7 @@ application does not start (`IDN-6`, [API keys](../integration/authentication.md
 | Field | Type | Default | Meaning |
 |---|---|---|---|
 | `id` | string | none | **Required.** The key's id; ids must be unique. |
-| `hash` | string | none | **Required.** SHA-256 of the key, 64 lowercase hex characters. Never configure the key itself. |
+| `hash` | string | none | **Required.** SHA-256 of the key, 64 lowercase hex characters. Never configure the key itself. Two entries with one hash fail startup: they are one key. |
 | `principal-id` | string | none | **Required.** The principal the key authenticates as. |
 | `tenant-id` | string | none | **Required.** Tenant of the principal. |
 | `app` | string | none | The app the key belongs to ([Apps](../integration/authentication.md#apps)). Left out, it declares none, and a host with an app refuses it. |
@@ -308,7 +313,7 @@ credential is ever revoked.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.cosid.generator` | string | `default` | The CosId generator whose ids CoSec takes, with its codec: request, decision event, token and change ids. A generator whose ids are not 1 to 64 characters of `A-Z a-z 0-9 . _ -` fails startup. Set without `cosec-cosid`, startup fails and names it ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-missing-module)). |
+| `cosec.cosid.generator` | string | `default` | The CosId generator whose ids CoSec takes, with its codec: request, decision event, token and change ids. A generator whose ids are not 1 to 64 characters of `A-Z a-z 0-9 . _ -` fails startup. Set without `cosec-cosid`, startup fails and names it ([Troubleshooting](./troubleshooting.md#startup-fails-on-a-missing-module)); set where CoSec's ids would not come from it (no `CosIdRuntime` bean, or an `IdGenerator` bean of the application's own), startup fails too. |
 
 ## Social login
 
@@ -333,7 +338,7 @@ cosec:
 `pkce`, `auth-server-id`, `ignore-check-redirect-uri`, `tenant-id`, `kid`, `team-id`, `login-type` (default
 `CorpApp`), `lang` (default `zh`), `ding-talk-org-type`, `ding-talk-corp-id`, `ding-talk-exclusive-login` and
 `ding-talk-exclusive-corp-id`. Booleans default to `false`, the others to none; `ignore-check-state: true` fails
-startup, since the state is what keeps a forged callback out. Social login keeps its OAuth states in Redis through a
+startup, since the state is what keeps a forged callback out, and so does any other field, such as a misspelt `pcke`. Social login keeps its OAuth states in Redis through a
 `StringRedisTemplate`.
 
 ## CoCache properties that affect CoSec
