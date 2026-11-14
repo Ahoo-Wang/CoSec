@@ -223,7 +223,12 @@ val securityContext = httpServletRequest.getSecurityContext()
 val securityContext = SecurityContextHolder.requiredContext
 ```
 
-持有者是一个 thread-local，过滤器为请求所在的线程绑定它，并在请求完成时清除。`suspend` 处理器不是阻塞代码：Spring 在 `Dispatchers.Unconfined` 上运行它，所以挂起之后，由哪个线程恢复它，它就在哪个线程上继续。如果那个线程正在服务另一个请求（共享的 `Mutex`、`Channel` 或延迟值，单飞的缓存加载），那里的持有者给出的是**那个请求的主体**。classpath 上有 Micrometer 的 `io.micrometer:context-propagation` 并设置了 `spring.reactor.context-propagation=auto` 时，Spring 会连同它的其他 thread-local 一起恢复持有者，结果又是正确的；否则不是。异步处理器（`Callable`、`DeferredResult`）和你自己启动的线程根本看不到持有者。在这些情况下，都请使用参数或请求。
+持有者是一个 thread-local，过滤器为请求所在的线程绑定它，并在请求完成时清除。`suspend` 处理器不是阻塞代码：Spring 在 `Dispatchers.Unconfined` 上运行它，所以挂起之后，由哪个线程恢复它，它就在哪个线程上继续，而那个线程可能正在服务另一个请求（共享的 `Mutex`、`Channel` 或延迟值，单飞的缓存加载）。因此持有者是：
+
+- **被恢复的**：classpath 上有 Micrometer 的 `io.micrometer:context-propagation` 并设置了 `spring.reactor.context-propagation=auto` 时，Spring 每次恢复都会连同它的其他 thread-local 一起恢复持有者；
+- **未绑定的**：其他情况下，处理器运行之前就解绑（`PIP-22`）：读取它会立即失败，不论在挂起之前还是之后，消息会指出应使用参数。还剩一种情况：在一个处理器是阻塞的请求的线程上恢复的 `suspend` 处理器，会在那里看到**那个请求的**上下文，所以只在这样的恢复之后、从不在挂起之前读取持有者的代码，会读到另一个请求的主体。
+
+启动日志中以 `SecurityContextHolder in suspend handlers` 开头的一行说明宿主属于哪一种。异步处理器（`Callable`、`DeferredResult`）和你自己启动的线程看不到持有者，消息相同。在这些情况下，都请使用参数或请求。
 
 这个上下文正是 `AuthorizationChecker` 接受的上下文，用于询问同一主体能否做别的事（[代码中的权限检查](./checks.md)）。
 

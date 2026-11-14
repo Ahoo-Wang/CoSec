@@ -24,6 +24,10 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "spring-boot:SuspendingHandlerContextTest#without context propagation the holder fails loudly in a suspend handler",
+            "spring-boot:SuspendingHandlerContextTest#a blocking handler reads the holder",
+            "webmvc:SuspendingHandlerHolderInterceptorTest#aSuspendHandlerFindsTheHolderUnbound",
+            "webmvc:SuspendingHandlerHolderInterceptorTest#underAutomaticContextPropagationASuspendHandlerKeepsTheHolder",
             "spring-boot:SuspendingHandlerContextTest#the SecurityContext parameter is the handler's own request's",
             "spring-boot:SuspendingHandlerContextTest#with automatic context propagation the holder is the handler's own request's",
             "webmvc:SecurityContextArgumentResolverTest#aContextParameterIsTheRequestsWhateverTheThreadHolds",

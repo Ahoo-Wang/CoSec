@@ -46,8 +46,9 @@ import java.util.concurrent.TimeUnit
  * Round 2 M4: a `suspend` handler on Spring MVC, as Spring Boot configures it, resumed on the thread of another
  * request: alice's handler waits for what bob's handler completes. Spring runs `suspend` handlers on
  * `Dispatchers.Unconfined`, so alice's handler goes on on bob's thread, inside bob's filter. The `SecurityContext`
- * parameter ([me.ahoo.cosec.servlet.SecurityContextArgumentResolver]) is read from alice's request; the thread-bound
- * holder answers as the thread's context propagation leaves it.
+ * parameter ([me.ahoo.cosec.servlet.SecurityContextArgumentResolver]) is read from alice's request. The holder is
+ * unbound in a `suspend` handler unless Spring restores it ([me.ahoo.cosec.servlet.SuspendingHandlerHolderInterceptor]),
+ * so it fails loudly, before and after the suspension, instead of naming bob.
  */
 class SuspendingHandlerContextTest {
     @RestController
@@ -55,17 +56,30 @@ class SuspendingHandlerContextTest {
         val entered = CountDownLatch(1)
         val gate = CompletableDeferred<Unit>()
 
+        private fun holder(): String = runCatching { SecurityContextHolder.requiredContext.principal.id }
+            .getOrElse { if (it.message.orEmpty().startsWith(UNBOUND)) "unbound" else throw it }
+
+        /** Alice's: reads the holder before it suspends and after it is resumed. */
         @GetMapping("/orders/a")
         suspend fun first(context: SecurityContext): String {
+            val before = holder()
             entered.countDown()
             gate.await()
-            return "parameter=${context.principal.id} holder=${SecurityContextHolder.context?.principal?.id}"
+            return "parameter=${context.principal.id} before=$before after=${holder()}"
         }
 
+        /** Bob's, suspending: resumes alice's handler on its own thread. */
         @GetMapping("/orders/b")
         suspend fun second(): String {
             gate.complete(Unit)
             return "done"
+        }
+
+        /** Bob's, blocking: resumes alice's handler on a thread whose holder is bob's. */
+        @GetMapping("/orders/c")
+        fun blocking(): String {
+            gate.complete(Unit)
+            return holder()
         }
     }
 
@@ -97,10 +111,10 @@ class SuspendingHandlerContextTest {
     }
 
     /**
-     * What alice's handler read after bob's request resumed it; with [automatic], under Reactor's automatic context
-     * propagation, which is what Spring Boot's `spring.reactor.context-propagation=auto` turns on.
+     * What alice's handler read after bob's request to [resumer] resumed it, and what that request answered; with
+     * [automatic], under Reactor's automatic context propagation, which `spring.reactor.context-propagation=auto` turns on.
      */
-    private fun resumed(automatic: Boolean = false): String {
+    private fun resumed(resumer: String = "/orders/b", automatic: Boolean = false): Pair<String, String> {
         if (automatic) {
             Hooks.enableAutomaticContextPropagation()
         }
@@ -112,8 +126,8 @@ class SuspendingHandlerContextTest {
             val waiting = context.getBean(Waiting::class.java)
             val alice = CompletableFuture.supplyAsync { get(port, "/orders/a", "alice") }
             waiting.entered.await(TIMEOUT_MILLIS.toLong(), TimeUnit.MILLISECONDS).assert().isTrue()
-            get(port, "/orders/b", "bob").assert().isEqualTo("done")
-            return alice.get(TIMEOUT_MILLIS.toLong(), TimeUnit.MILLISECONDS)
+            val bob = get(port, resumer, "bob")
+            return alice.get(TIMEOUT_MILLIS.toLong(), TimeUnit.MILLISECONDS) to bob
         } finally {
             context.close()
             Hooks.disableAutomaticContextPropagation()
@@ -123,25 +137,40 @@ class SuspendingHandlerContextTest {
     /** The parameter is the request's whatever thread the handler resumes on: the way to read it in a handler. */
     @Test
     fun `the SecurityContext parameter is the handler's own request's`() {
-        resumed().assert().startsWith("parameter=alice ")
+        resumed().first.assert().startsWith("parameter=alice ")
+    }
+
+    /** Without propagation the holder is unbound in a suspend handler: it fails before and after the suspension. */
+    @Test
+    fun `without context propagation the holder fails loudly in a suspend handler`() {
+        resumed().first.assert().isEqualTo("parameter=alice before=unbound after=unbound")
+    }
+
+    /** With Spring's automatic context propagation, the holder stays bound and is restored on resumption. */
+    @Test
+    fun `with automatic context propagation the holder is the handler's own request's`() {
+        resumed(automatic = true).first.assert().isEqualTo("parameter=alice before=alice after=alice")
+    }
+
+    /** A blocking handler keeps the holder, as before. */
+    @Test
+    fun `a blocking handler reads the holder`() {
+        resumed("/orders/c").second.assert().isEqualTo("bob")
     }
 
     /**
-     * By default Spring restores no thread-local when a `suspend` handler resumes: the holder answers bob's context in
-     * alice's handler. Asserted as it is, so a change in Spring's default shows here; the docs say to read the parameter.
+     * The one case left, documented in the holder's KDoc and `web.md`: resumed on the thread of a blocking handler's
+     * request, a suspend handler finds that request's context there. It already failed before the suspension.
      */
     @Test
-    fun `by default the holder in a resumed suspend handler is the thread's request's`() {
-        resumed().assert().isEqualTo("parameter=alice holder=bob")
-    }
-
-    /** With Spring's automatic context propagation, the holder is restored for the handler too. */
-    @Test
-    fun `with automatic context propagation the holder is the handler's own request's`() {
-        resumed(automatic = true).assert().isEqualTo("parameter=alice holder=alice")
+    fun `resumed by a blocking handler's request the holder is that request's`() {
+        resumed("/orders/c").first.assert().isEqualTo("parameter=alice before=unbound after=bob")
     }
 
     private companion object {
         const val TIMEOUT_MILLIS = 10_000
+
+        /** How the holder's message starts: it names what to read instead. */
+        const val UNBOUND = "No SecurityContext is bound to this thread"
     }
 }

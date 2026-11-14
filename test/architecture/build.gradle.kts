@@ -26,6 +26,9 @@ dependencies {
     // The Jackson rule reads Kotlin visibility, which the bytecode does not carry for internal members.
     testImplementation("org.jetbrains.kotlin:kotlin-reflect")
     analyzed.forEach { testImplementation(project(":$it")) }
+    // What an analyzed module compiles against but leaves optional, so that its classes load: cosec-webmvc's
+    // SecurityContextThreadLocalAccessor implements context-propagation's ThreadLocalAccessor.
+    testImplementation("io.micrometer:context-propagation")
 }
 
 val projectDirectories = rootProject.subprojects.joinToString(";") { "${it.name}=${it.projectDir.absolutePath}" }

@@ -308,11 +308,19 @@ val securityContext = SecurityContextHolder.requiredContext
 
 The holder is a thread-local, which the filter binds for the request's thread and clears when the request completes.
 A `suspend` handler is not blocking code: Spring runs it on `Dispatchers.Unconfined`, so after a suspension it goes on
-on whatever thread resumed it. When that thread serves another request (a shared `Mutex`, `Channel` or deferred value,
-a single-flight cache load), the holder there names **that request's principal**. With Micrometer's
-`io.micrometer:context-propagation` on the classpath and `spring.reactor.context-propagation=auto`, Spring restores
-the holder with its other thread-locals and it is right again; without them it is not. An async handler (`Callable`,
-`DeferredResult`) and a thread of your own see no holder at all. In all of these, use the parameter or the request.
+on whatever thread resumed it, which may serve another request (a shared `Mutex`, `Channel` or deferred value, a
+single-flight cache load). So the holder is:
+
+- **restored**, with Micrometer's `io.micrometer:context-propagation` on the classpath and
+  `spring.reactor.context-propagation=auto`: Spring restores it with its other thread-locals on every resumption;
+- **unbound** otherwise, before the handler runs (`PIP-22`): reading it fails at once, before or after any suspension,
+  and the message names the parameter. One case is left: a `suspend` handler resumed on the thread of a request whose
+  handler is blocking finds **that request's** context there, so code that reads the holder only after such a
+  resumption, and never before a suspension, reads another request's principal.
+
+The startup log says which a host has, in a line that starts `SecurityContextHolder in suspend handlers`. An async
+handler (`Callable`, `DeferredResult`) and a thread of your own find no holder, with the same message. In all of these,
+use the parameter or the request.
 
 The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else
 ([Checks in code](./checks.md)).

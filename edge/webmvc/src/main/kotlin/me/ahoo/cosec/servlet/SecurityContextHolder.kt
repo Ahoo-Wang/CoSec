@@ -16,10 +16,18 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 
 /**
- * Thread-local holder for security context.
+ * The security context of the request the current thread serves, for blocking code on that thread: the servlet filter
+ * binds it and clears it when the request completes.
  *
- * This object provides a convenient way to access the current
- * security context from anywhere in the application.
+ * In a handler, take `SecurityContext` as a parameter instead ([SecurityContextArgumentResolver]): it is read from the
+ * request. The holder is a thread-local, and a thread is not always its request's:
+ * - an async dispatch, and a thread the application started, find it empty;
+ * - a `suspend` handler goes on, after a suspension, on whatever thread resumed it. Unless Spring restores the holder
+ *   there (Micrometer's context propagation with Reactor's automatic propagation, [SecurityContextThreadLocalAccessor]),
+ *   it is unbound before such a handler runs ([SuspendingHandlerHolderInterceptor]), so reading it fails at once,
+ *   before or after any suspension. One case is left: a `suspend` handler resumed on the thread of a request whose
+ *   handler is blocking finds that request's context there, so code that reads the holder only after such a
+ *   resumption, never before a suspension, reads another request's principal.
  *
  * @see SecurityContext
  */
@@ -58,7 +66,15 @@ object SecurityContextHolder {
      */
     @JvmStatic
     val requiredContext: SecurityContext
-        get() = requireNotNull(context) { "SecurityContext is null." }
+        get() = requireNotNull(context) { UNBOUND }
+
+    /** Why the holder is empty, and what to read instead. */
+    internal const val UNBOUND =
+        "No SecurityContext is bound to this thread: it is bound only on the request thread of blocking code. In a " +
+            "handler, take SecurityContext as a handler parameter; elsewhere read it from the request " +
+            "(ServletRequests.getSecurityContext). In a suspend handler the holder works only with context " +
+            "propagation (io.micrometer:context-propagation and spring.reactor.context-propagation=auto); an async " +
+            "dispatch and a thread the application started never have it."
 
     /**
      * Removes the security context from the current thread. Only the adapter does, when the request completes.

@@ -254,6 +254,19 @@
         "webmvc:SecurityContextArgumentResolverTest#aContextParameterIsTheRequestsWhateverTheThreadHolds"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-22",
+      "source": "RFC 0006 §7.3; round-2 review M4 (coordinator's decision)",
+      "statement": "On Spring MVC, SecurityContextHolder is unbound before a suspending handler runs unless Spring restores it on every resumption (Micrometer's context propagation with Reactor's automatic propagation), so reading it there fails, naming the SecurityContext parameter, instead of answering another request's context. A blocking handler keeps it. Left, and documented: a suspending handler resumed on the thread of a blocking handler's request finds that request's context.",
+      "level": "build",
+      "guards": [
+        "spring-boot:SuspendingHandlerContextTest#without context propagation the holder fails loudly in a suspend handler",
+        "spring-boot:SuspendingHandlerContextTest#a blocking handler reads the holder",
+        "webmvc:SuspendingHandlerHolderInterceptorTest#aSuspendHandlerFindsTheHolderUnbound",
+        "webmvc:SuspendingHandlerHolderInterceptorTest#underAutomaticContextPropagationASuspendHandlerKeepsTheHolder"
+      ],
+      "pending": null
     }
   ]
 }
