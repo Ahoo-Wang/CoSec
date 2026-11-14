@@ -16,6 +16,10 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A document holds at most 64 rate limit rules** (`DOC-6`). Every rule a permitted request matches costs one call
+  to the limiter, so a document with more no longer compiles: a stored one is installed as failed (its requests are
+  `503`), and the control plane refuses a change that would make one with `422`. To migrate: merge rules that differ
+  only in what they count into one rule with a `key`.
 - **A statement with several resource patterns means one statement per pattern** (`ALG-10`). When its condition reads
   a path variable and a request matches more than one of its patterns, the condition is now tested under each matching
   pattern's captures and the statement matches if any holds; before, only the first matching pattern's captures were

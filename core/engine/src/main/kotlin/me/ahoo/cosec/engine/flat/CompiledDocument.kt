@@ -103,6 +103,9 @@ class CompiledDocument private constructor(
     internal val repeats: Int
 
     init {
+        require(rateLimits.size <= MAX_RATE_LIMIT_RULES) {
+            "The $kind document holds ${rateLimits.size} rate limit rules, more than $MAX_RATE_LIMIT_RULES"
+        }
         checkGlobBudget(policies, boundaries, rateLimits)
         require(boundary == null || kind != DocumentKind.APP) { "An app document names no boundary." }
         require(!(kind == DocumentKind.TENANT && boundary != null && owner == TenantId.PLATFORM.value)) {
@@ -347,6 +350,14 @@ class CompiledDocument private constructor(
 
         /** The most statements a boundary policy may hold (RFC 0007 §7.6). */
         const val MAX_BOUNDARY_STATEMENTS: Int = 64
+
+        /**
+         * The most rate limit rules one document may hold (`DOC-6`, round 2 review M2). Every rule a permit matches is
+         * an obligation, and the pipeline acquires each with a call to the limiter, one after the other: without a
+         * bound, a document's author decides how many limiter calls every permitted request makes. Fixed, like the
+         * other bounds: raising it later breaks no document, lowering it would.
+         */
+        const val MAX_RATE_LIMIT_RULES: Int = 64
 
         /**
          * The most glob units one document's path patterns hold in all (RC1-8, `DOC-4`): the tokens of every segment

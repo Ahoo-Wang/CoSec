@@ -533,8 +533,8 @@ compile, and `role:` is reserved to these bindings: a change may not put one. A 
 
 ## Rate limit rules
 
-`rateLimits` is an ordered array of rules. A permitted request spends one permit of every rule it matches
-([Rate limiting](./rate-limiting.md)).
+`rateLimits` is an ordered array of at most 64 rules (`DOC-6`): a document with more does not compile. A permitted
+request spends one permit of every rule it matches, each a call to the limiter ([Rate limiting](./rate-limiting.md)).
 
 | Field | Type | Default | Meaning |
 |---|---|---|---|
