@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.document.format
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.pattern.ResourcePattern
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.BINDING
 import me.ahoo.cosec.runtime.document.format.DocumentFormats.CATALOG
@@ -501,7 +502,7 @@ internal object PolicyDocumentFormats {
                         "an absent value: the empty bucket.",
                 ),
                 Field("permitsPerSecond", NumberType(exclusiveMinimum = 0), required = true),
-                Field("windowSeconds", IntegerType(minimum = 1), default = 1),
+                Field("windowSeconds", IntegerType(minimum = 1, maximum = RateLimitSpec.MAX_WINDOW_SECONDS), default = 1),
                 Field(
                     "strictFailure",
                     BooleanType(),

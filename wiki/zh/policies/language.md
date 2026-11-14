@@ -446,8 +446,8 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `condition` | 条件 | 恒为真 | |
 | `onMissing` | `"indeterminate"` 或 `"nomatch"` | `"indeterminate"` | 无法获取的外部属性：`indeterminate` 交给 `strictFailure` 决定；`nomatch` 跳过该规则。`nomatch` 只在平台文档中能编译：与 [DENY](#external-attributes-and-onmissing) 不同，限流规则没有确认流程。 |
 | `key` | 属性路径 | 一个共享桶 | String 或 Ip 属性，其值决定桶。`resource.var.<name>` 必须被每个资源模式捕获；有多个模式时，取第一个使规则条件成立的模式的值（[路径变量](#path-variables)）。 |
-| `permitsPerSecond` | 数字 | 必填 | 大于 `0`。 |
-| `windowSeconds` | 整数 | `1` | 至少为 `1`。 |
+| `permitsPerSecond` | 数字 | 必填 | 大于 `0`；`permitsPerSecond × windowSeconds` 至多 2⁶³。 |
+| `windowSeconds` | 整数 | `1` | 从 `1` 到 `31536000`（一年）。 |
 | `strictFailure` | 布尔 | `false` | 限流器无法计数时是否拒绝请求（`503`）。 |
 
 规则按 DENY 语句的方式匹配：动作、资源和条件，使用它自己的路径变量；裸资源类型无法编译。

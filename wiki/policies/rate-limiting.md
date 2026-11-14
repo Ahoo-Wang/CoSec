@@ -202,7 +202,8 @@ size.
 ## Publishing rules
 
 Rules are part of their documents, so they are checked and compiled with them: an invalid id, a duplicate id in one
-document, `permitsPerSecond` not above `0`, `windowSeconds` below `1`, a `key` that is not a String or Ip attribute,
+document, more than 64 rules in one document, `permitsPerSecond` not above `0`, `windowSeconds` below `1` or above a
+year (`31536000`), a quota `permitsPerSecond × windowSeconds` above 2⁶³, a `key` that is not a String or Ip attribute,
 or a variable a pattern does not capture fails the whole document ([Testing policies](./testing.md#validating-policies)).
 
 Change rules through the control plane like any other entry ([Changes](./testing.md#changes)):

@@ -110,6 +110,23 @@ sealed interface Obligation {
 data class RateLimitSpec(val permitsPerSecond: Double, val windowSeconds: Long = 1) {
     init {
         require(permitsPerSecond > 0) { "permitsPerSecond must be positive, not $permitsPerSecond." }
-        require(windowSeconds >= 1) { "windowSeconds must be at least 1, not $windowSeconds." }
+        require(windowSeconds in 1..MAX_WINDOW_SECONDS) {
+            "windowSeconds must be between 1 and $MAX_WINDOW_SECONDS (a year), not $windowSeconds."
+        }
+        // The limiters count in a window of windowSeconds * 1000 milliseconds and report the quota as a Long.
+        require(fitsInLong(permitsPerSecond, windowSeconds)) {
+            "permitsPerSecond x windowSeconds must be a finite number within a Long, not $permitsPerSecond x $windowSeconds."
+        }
+    }
+
+    companion object {
+        /** The longest window: a year of seconds (round 2 review L5), so its milliseconds never overflow. */
+        const val MAX_WINDOW_SECONDS: Long = 31_536_000L
+
+        /** Whether [permitsPerSecond] x [windowSeconds] is finite and at most [Long.MAX_VALUE]. */
+        fun fitsInLong(permitsPerSecond: Double, windowSeconds: Long): Boolean {
+            val perWindow = permitsPerSecond * windowSeconds
+            return perWindow.isFinite() && perWindow <= Long.MAX_VALUE.toDouble()
+        }
     }
 }

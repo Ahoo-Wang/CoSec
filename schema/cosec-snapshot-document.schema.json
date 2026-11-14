@@ -950,6 +950,7 @@
         },
         "windowSeconds": {
           "default": 1,
+          "maximum": 31536000,
           "minimum": 1,
           "type": "integer"
         }

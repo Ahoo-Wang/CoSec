@@ -530,6 +530,8 @@ public final class me/ahoo/cosec/model/decision/Obligation$RateLimit : me/ahoo/c
 }
 
 public final class me/ahoo/cosec/model/decision/RateLimitSpec {
+	public static final field Companion Lme/ahoo/cosec/model/decision/RateLimitSpec$Companion;
+	public static final field MAX_WINDOW_SECONDS J
 	public fun <init> (DJ)V
 	public synthetic fun <init> (DJILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()D
@@ -541,6 +543,10 @@ public final class me/ahoo/cosec/model/decision/RateLimitSpec {
 	public final fun getWindowSeconds ()J
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/model/decision/RateLimitSpec$Companion {
+	public final fun fitsInLong (DJ)Z
 }
 
 public abstract interface class me/ahoo/cosec/model/decision/StatementRef {

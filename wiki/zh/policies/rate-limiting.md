@@ -156,7 +156,7 @@ flowchart LR
 
 ## 发布规则 {#publishing-rules}
 
-规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1`、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
+规则是所属文档的一部分，因此随文档一起检查和编译：无效的 id、同一文档内重复的 id、一份文档超过 64 条规则、`permitsPerSecond` 不大于 `0`、`windowSeconds` 小于 `1` 或超过一年（`31536000`）、配额 `permitsPerSecond × windowSeconds` 超过 2⁶³、不是 String 或 Ip 属性的 `key`，或模式没有捕获的变量，都会让整个文档失败（[测试策略](./testing.md#validating-policies)）。
 
 像其他条目一样通过控制面修改规则（[变更](./testing.md#changes)）：
 

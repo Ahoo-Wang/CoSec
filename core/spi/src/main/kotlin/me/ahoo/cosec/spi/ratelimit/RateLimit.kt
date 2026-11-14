@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.ratelimit
 
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import java.time.Duration
 import kotlin.math.ceil
 
@@ -25,7 +26,13 @@ data class RateLimit(
 ) {
     init {
         require(permitsPerSecond > 0) { "permitsPerSecond must be positive, but was [$permitsPerSecond]." }
-        require(windowSeconds >= 1) { "windowSeconds must be >= 1, but was [$windowSeconds]." }
+        require(windowSeconds in 1..RateLimitSpec.MAX_WINDOW_SECONDS) {
+            "windowSeconds must be between 1 and ${RateLimitSpec.MAX_WINDOW_SECONDS}, but was [$windowSeconds]."
+        }
+        // windowMillis and the Long quota of resultOf hold it (round 2 review L5).
+        require(RateLimitSpec.fitsInLong(permitsPerSecond, windowSeconds)) {
+            "permitsPerSecond x windowSeconds must be finite and within a Long, but was [$permitsPerSecond x $windowSeconds]."
+        }
     }
 
     val limitPerWindow: Double
