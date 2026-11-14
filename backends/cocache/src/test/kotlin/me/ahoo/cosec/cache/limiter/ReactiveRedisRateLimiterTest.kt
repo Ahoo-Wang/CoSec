@@ -100,9 +100,10 @@ class ReactiveRedisRateLimiterTest {
         val window = redisNow() / RateLimiter.window(limit).windowMillis
         val hash = redis.opsForHash<String, String>()
 
-        hash.putAll("$prefix:rule:before", mapOf("w" to "${window - 1}", "c" to "7", "p" to "0"))
-        limiter.tryAcquire("rule", "before", limit)
-        hash.entries("$prefix:rule:before").assert().containsEntry("p", "7")
+        // One in the window before weighs less than one: the request is admitted, and the count moves along.
+        hash.putAll("$prefix:rule:before", mapOf("w" to "${window - 1}", "c" to "1", "p" to "0"))
+        limiter.tryAcquire("rule", "before", limit).allowed.assert().isTrue()
+        hash.entries("$prefix:rule:before").assert().containsEntry("p", "1").containsEntry("c", "1")
 
         hash.putAll("$prefix:rule:old", mapOf("w" to "${window - 2}", "c" to "7", "p" to "7"))
         limiter.tryAcquire("rule", "old", limit).remaining.assert().isEqualTo(1)
