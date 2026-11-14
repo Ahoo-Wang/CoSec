@@ -164,6 +164,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   write `true` or `false`.
 - **`API key [<id>] needs a tenant-id`**, or a binding error on `cosec.api-key.keys[n].policies`/`.attributes`: keys
   carry only a tenant, a principal and a role cap (`roles`) now; grant roles to the principal through the provider.
+- **`Extended TCP keepalive options could not be applied. Native transports (io_uring or epoll) ...`** (macOS only):
+  Lettuce chose its kqueue transport, which cannot apply the keepalive options it is asked for. Run with
+  `-Dio.lettuce.core.kqueue=false` (NIO); Linux and the gateway image are unaffected. Never suggest dropping the
+  keepalive options. https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-macos-with-extended-tcp-keepalive-options
 - **Shadow instance id**: `cosec.authorization.shadow.instance-id` may hold only letters, digits, `.`, `_`, `-`.
 - **`Decision listener <name> is registered twice`** / **`External attribute <path> is declared twice`**: two beans
   share a listener name or an attribute path.

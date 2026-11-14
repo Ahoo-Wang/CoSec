@@ -73,7 +73,7 @@ CoSec 依据**文档**做决策：一份作用于所有租户的平台文档，�
 
 ## 发布平台文档 {#publish-the-platform-document}
 
-在 CoSec 源码目录中构建 `cosec-migrate`：
+从你所用 CoSec 版本的 [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases) 下载 `cosec-migrate-<version>.zip` 并解压（[升级](../operations/upgrading.md#migrating-the-data)），或在 CoSec 源码目录中构建：
 
 ```bash
 ./gradlew :migrate:installDist
