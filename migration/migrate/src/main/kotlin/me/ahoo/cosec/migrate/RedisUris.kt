@@ -20,16 +20,26 @@ package me.ahoo.cosec.migrate
  */
 internal object RedisUris {
     private const val SCHEME_END = "://"
+    private const val SCHEMES = "rediss?|redis-sentinel|redis-socket"
 
-    /** The scheme of a Redis URI in free text and its user info, up to the last `@` before a space or a comma. */
-    private val USER_INFO = Regex("""\b(rediss?|redis-sentinel|redis-socket)://[^\s,]*@""", RegexOption.IGNORE_CASE)
+    /** A comma that starts another seed node: one followed by a Redis scheme. A comma in a password is not one. */
+    private val SEED_SEPARATOR = Regex(""",(?=\s*(?:$SCHEMES)://)""", RegexOption.IGNORE_CASE)
+
+    /**
+     * A Redis URI in free text and its user info: from the scheme to the last `@` before a space or before the
+     * `,<scheme>://` of another seed node, so that a password holding `,`, `/`, `?` or `@` is matched whole.
+     */
+    private val USER_INFO = Regex(
+        """\b($SCHEMES)://(?:(?!\s|,(?:$SCHEMES)://).)*@""",
+        RegexOption.IGNORE_CASE,
+    )
 
     /**
      * [uri], a URI or the comma-separated seed nodes of a cluster, with each one's user info left out: everything from
-     * `://` to its last `@`, so that a password holding a character a URI should not (`/`, `?`, a space) is left out
-     * too. Scheme, hosts, ports, database and query stay.
+     * `://` to its last `@`, so that a password holding a character a URI should not (`,`, `/`, `?`, `@`, a space) is
+     * left out too. Scheme, hosts, ports, database and query stay.
      */
-    fun withoutUserInfo(uri: String): String = uri.split(',').joinToString(",") { seed ->
+    fun withoutUserInfo(uri: String): String = uri.split(SEED_SEPARATOR).joinToString(",") { seed ->
         val scheme = seed.indexOf(SCHEME_END)
         val at = seed.lastIndexOf('@')
         if (scheme >= 0 && at > scheme) seed.substring(0, scheme + SCHEME_END.length) + seed.substring(at + 1) else seed
