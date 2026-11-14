@@ -56,11 +56,10 @@ class SourceRulesTest {
         private val NOT_IN_CORE = listOf("jakarta.servlet.", "io.lettuce.", "redis.clients.", "org.springframework.")
 
         /**
-         * What `cocache` may use of `runtime` and `control` (#1140): package of the using class to the classes or
-         * packages it may reach. The mapper is in `cosec-document`, outside both (RFC 0013 §3).
+         * What `cocache` may use of `control` (#1140): package of the using class to the classes or packages it may
+         * reach. Nothing of `runtime` (RFC 0013 §3): the shadow ports are `cosec-spi`'s, the formats `cosec-document`'s.
          */
         val BACKEND_REACH: Map<String, List<String>> = mapOf(
-            "me.ahoo.cosec.cocache.shadow" to listOf("me.ahoo.cosec.runtime.shadow."),
             // The ControlStore port's package, and the change values its signatures carry, with their codec.
             "me.ahoo.cosec.cocache.control" to listOf(
                 "me.ahoo.cosec.control.store.",
@@ -69,7 +68,6 @@ class SourceRulesTest {
                 "me.ahoo.cosec.control.change.ChangeRequestCodec",
                 "me.ahoo.cosec.control.change.ChangeState",
                 "me.ahoo.cosec.control.change.StageSlot",
-                "me.ahoo.cosec.runtime.shadow.StoredCandidate",
             ),
         )
 
@@ -131,7 +129,7 @@ class SourceRulesTest {
     }
 
     @Test
-    fun `backends reach into runtime and control only through the listed ports`() {
+    fun `backends never reach into runtime, and into control only through the listed ports`() {
         violations { project, target ->
             Projects.groupOf(project) == "backends" &&
                 (target.startsWith("me.ahoo.cosec.runtime.") || target.startsWith("me.ahoo.cosec.control."))

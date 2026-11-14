@@ -45,10 +45,11 @@ class DependencyRulesTest {
             .filter { it[0] == kind && it[2] == "module" && (configuration == null || it[1] == configuration) }
             .map { it[3] }
 
-    private fun resolvedProjects(project: String): List<String> = Projects.facts[project].orEmpty()
-        .map { it.split(' ') }
-        .filter { it[0] == "resolved" && it[2] == "project" }
-        .map { it[3] }
+    private fun resolvedProjects(project: String, configuration: String? = null): List<String> =
+        Projects.facts[project].orEmpty()
+            .map { it.split(' ') }
+            .filter { it[0] == "resolved" && it[2] == "project" && (configuration == null || it[1] == configuration) }
+            .map { it[3] }
 
     @Test
     fun `every project with sources has its facts`() {
@@ -83,6 +84,18 @@ class DependencyRulesTest {
         DependencyRules.EXCEPTIONS.filterNot { it.to in declaredProjects(it.from) }
             .map { "${it.from} -> ${it.to}" }
             .assert().isEmpty()
+    }
+
+    @Test
+    fun `no backend depends on runtime`() {
+        val backends = ProjectListTest.GROUPS.getValue(DependencyRules.BACKENDS)
+        backends.assert().describedAs("no backends: the rule would check nothing").isNotEmpty()
+        val violations = backends.flatMap { project ->
+            declaredProjects(project).filter { it == DependencyRules.RUNTIME }.map { "$project declares it" } +
+                resolvedProjects(project, "runtimeClasspath").filter { it == DependencyRules.RUNTIME }
+                    .map { "$project resolves it at run time" }
+        }
+        violations.assert().isEmpty()
     }
 
     @Test
