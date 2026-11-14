@@ -17,7 +17,9 @@
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a CacheRuntime fails startup naming the CoCache starter",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache is still needed where it is used",
-        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a service in gateway mode does not need Redis for an unused cosec-cocache"
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a service in gateway mode does not need Redis for an unused cosec-cocache",
+        "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named without a CosId runtime fails startup",
+        "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named beside the application's own IdGenerator fails startup"
       ]
     },
     {
@@ -32,6 +34,40 @@
         "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#endpoints on a separate management port start",
         "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#a listed endpoint starts, but gateway is never accepted",
         "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#health alone starts"
+      ]
+    },
+    {
+      "id": "STA-3",
+      "source": "RFC 0011 D2 (round 2 review of host and tools, M1)",
+      "statement": "The starter's startup checks run whatever spring.main.lazy-initialization says: every module check (STA-1), the actuator endpoint check (STA-2), the eviction policy check and monitor (SNP-3), the replica read check (RC1-47), the API key membership check (IDN-6), the pipeline mode check, the unknown property check and the control plane's own-authorization check fail startup under lazy initialization as they do without it, and the components that keep watching once the host runs (the eviction policy monitor, shadow reporting, control-plane maintenance, the listeners' metrics) start at startup. A check is a StartupCheck bean, which lazy initialization never defers; no auto-configuration of the starter declares a check any other way. A configuration none of them refuses starts under lazy initialization.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring MVC host without cosec-webmvc fails startup lazily too",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a WebFlux host without cosec-webflux fails startup lazily too",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a Spring Cloud Gateway host without cosec-gateway fails startup lazily too",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#Redis API keys without cosec-cocache fail startup lazily too",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a CosId generator for CoSec's ids without cosec-cosid fails startup lazily too",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a required Kafka audit without cosec-kafka fails startup lazily too",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a Redis template fails startup lazily too",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache without a CacheRuntime fails startup lazily too",
+        "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named with a CosId runtime starts, and one that does nothing fails lazily too",
+        "spring-boot:UnknownPropertiesTest#an unknown key fails startup lazily too",
+        "spring-boot:UnknownPropertiesTest#an unknown key fails a lazily initialized application",
+        "spring-boot:IdentityGuardAutoConfigurationTest#gateway mode on a gateway host, or an unknown mode, fails startup lazily too",
+        "spring-boot:CoSecGatewayEndpointCheckAutoConfigurationTest#the gateway endpoint on the application port fails startup lazily too",
+        "spring-boot:SnapshotEvictionHealthIndicatorTest#an eviction policy that cannot be read fails startup, lazily too",
+        "spring-boot:SnapshotEvictionHealthIndicatorTest#the monitor runs from startup under lazy initialization",
+        "spring-boot:ReplicaReadsTest#replica reads fail startup lazily too",
+        "spring-boot:CoSecApiKeyAutoConfigurationTest#apiKeysNeedAMembershipProviderLazilyToo",
+        "spring-boot:StarterWiringTest#a primary second control-plane authorization bean fails startup, lazily too",
+        "spring-boot:ShadowReportingWiringTest#the reporting runs from startup under lazy initialization",
+        "spring-boot:StarterWiringTest#control-plane maintenance starts under lazy initialization",
+        "spring-boot:MetricsRegistryOrderTest#the listeners' counters are bound under lazy initialization",
+        "spring-boot:StartupCheckTest#no bean method returns a check that lazy initialization would defer",
+        "spring-boot:StartupCheckTest#the checks are found and are startup checks",
+        "spring-boot:StartupCheckTest#the exclusion keeps startup checks, and only them, eager",
+        "spring-boot:StartupCheckTest#every auto-configuration with a check imports the exclusion"
       ]
     }
   ]

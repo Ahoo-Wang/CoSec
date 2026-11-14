@@ -30,6 +30,7 @@ import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spring.boot.starter.lazily
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecSnapshotAutoConfiguration
 import me.ahoo.test.asserts.assert
@@ -124,6 +125,49 @@ internal class CoSecApiKeyAutoConfigurationTest {
                 assertThat(context).hasFailed()
                 context.startupFailure!!.stackTraceToString().assert()
                     .contains("needs a MembershipProvider bean").contains("CoCacheMembershipProvider").contains("IDN-6")
+            }
+    }
+
+    /** `STA-3`: the IDN-6 check runs under lazy initialization too, where nothing asks for the API key beans. */
+    @Test
+    fun apiKeysNeedAMembershipProviderLazilyToo() {
+        ApplicationContextRunner()
+            .withPropertyValues("cosec.authorization.routes.location=", "cosec.api-key.enabled=true")
+            .withConfiguration(
+                AutoConfigurations.of(
+                    CoSecApiKeyAutoConfiguration::class.java,
+                    CoSecSnapshotAutoConfiguration::class.java,
+                    CoSecPipelineAutoConfiguration::class.java,
+                )
+            )
+            .lazily()
+            .run { context ->
+                assertThat(context).hasFailed()
+                context.startupFailure!!.stackTraceToString().assert().contains("needs a MembershipProvider bean")
+            }
+    }
+
+    /** Round 2 L5: one secret is one key; configured twice, it would authenticate as whichever entry came last. */
+    @Test
+    fun aKeyConfiguredTwiceFailsStartup() {
+        val hash = ApiKeys.hash(key)
+        contextRunner
+            .withPropertyValues(
+                "cosec.api-key.enabled=true",
+                "cosec.api-key.keys[0].id=billing",
+                "cosec.api-key.keys[0].hash=$hash",
+                "cosec.api-key.keys[0].principal-id=svc-billing",
+                "cosec.api-key.keys[0].tenant-id=acme",
+                "cosec.api-key.keys[0].roles=reader",
+                "cosec.api-key.keys[1].id=admin",
+                "cosec.api-key.keys[1].hash=$hash",
+                "cosec.api-key.keys[1].principal-id=svc-admin",
+                "cosec.api-key.keys[1].tenant-id=acme",
+                "cosec.api-key.keys[1].uncapped=true",
+            )
+            .run { context ->
+                context.startupFailure!!.stackTraceToString().assert()
+                    .contains("API keys [billing, admin] have the same hash")
             }
     }
 

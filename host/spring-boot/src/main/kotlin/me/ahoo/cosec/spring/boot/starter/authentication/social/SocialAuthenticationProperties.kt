@@ -21,11 +21,10 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 
 /**
- * Social Authentication Properties .
- *
- * @author ahoo wang
+ * `cosec.authentication.login.social.*`. An unknown field of a registration fails startup (round 2 L4): a misspelt
+ * `pkce` or `scopes` would otherwise leave the provider configured otherwise than its author meant, without a word.
  */
-@ConfigurationProperties(prefix = SocialAuthenticationProperties.PREFIX)
+@ConfigurationProperties(prefix = SocialAuthenticationProperties.PREFIX, ignoreUnknownFields = false)
 class SocialAuthenticationProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     val registration: Map<String, Provider> = emptyMap()

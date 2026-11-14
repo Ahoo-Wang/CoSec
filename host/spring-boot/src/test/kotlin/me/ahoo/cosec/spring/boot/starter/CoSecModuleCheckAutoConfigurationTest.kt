@@ -252,4 +252,78 @@ class CoSecModuleCheckAutoConfigurationTest {
         starts(noRedis.withPropertyValues("cosec.enabled=false"))
         starts(plain)
     }
+
+    // STA-3: each check above fails startup under lazy initialization too, where no bean asks for it.
+
+    @Test
+    fun `a Spring MVC host without cosec-webmvc fails startup lazily too`() {
+        failsNaming(
+            servlet.withClassLoader(FilteredClassLoader("me.ahoo.cosec.servlet.PipelineServletFilter")).lazily(),
+            "cosec-webmvc"
+        )
+    }
+
+    @Test
+    fun `a WebFlux host without cosec-webflux fails startup lazily too`() {
+        failsNaming(
+            reactive.withClassLoader(
+                FilteredClassLoader(GATEWAY_GLOBAL_FILTER, "me.ahoo.cosec.webflux.PipelineWebFilter")
+            ).lazily(),
+            "cosec-webflux",
+        )
+    }
+
+    @Test
+    fun `a Spring Cloud Gateway host without cosec-gateway fails startup lazily too`() {
+        failsNaming(
+            reactive.withClassLoader(FilteredClassLoader("me.ahoo.cosec.gateway.IdentityStripFilter")).lazily(),
+            "cosec-gateway"
+        )
+    }
+
+    @Test
+    fun `Redis API keys without cosec-cocache fail startup lazily too`() {
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cache.RedisApiKeyStore"))
+                .withPropertyValues("cosec.api-key.enabled=true", "cosec.api-key.store=redis").lazily(),
+            "cosec-cocache",
+        )
+    }
+
+    @Test
+    fun `a CosId generator for CoSec's ids without cosec-cosid fails startup lazily too`() {
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cosid.CosIdIdGenerator"))
+                .withPropertyValues("cosec.cosid.generator=order").lazily(),
+            "cosec-cosid",
+        )
+    }
+
+    @Test
+    fun `a required Kafka audit without cosec-kafka fails startup lazily too`() {
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.kafka.KafkaAuditListener"))
+                .withPropertyValues("cosec.audit.kafka.delivery=required").lazily(),
+            "cosec-kafka",
+        )
+    }
+
+    @Test
+    fun `cosec-cocache without a Redis template fails startup lazily too`() {
+        ApplicationContextRunner().withConfiguration(config).lazily().run { context ->
+            generateSequence(
+                context.startupFailure
+            ) { it.cause }.any { "spring-boot-data-redis" in it.message.orEmpty() }
+                .assert().describedAs(context.startupFailure.toString()).isTrue()
+        }
+    }
+
+    @Test
+    fun `cosec-cocache without a CacheRuntime fails startup lazily too`() {
+        failsNamingTheStarter(
+            ApplicationContextRunner().withConfiguration(
+                config
+            ).withBean(ReactiveStringRedisTemplate::class.java, redis).lazily()
+        )
+    }
 }

@@ -1,0 +1,17 @@
+# Rule: STA-3
+# Mutant: the eviction policy monitor is no longer a startup check, so under lazy initialization it reads nothing until a health probe creates it
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.pipeline.SnapshotEvictionHealthIndicatorTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+index fda07fe0..dcfb3d09 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/pipeline/CoSecSnapshotAutoConfiguration.kt
+@@ -547,7 +547,7 @@ class EvictionPolicyMonitor internal constructor(
+     private val read: () -> EvictionPolicyCheck.Reading,
+     private val interval: Duration,
+     private val mode: RuntimeAuthorizationProperties.EvictionCheck = RuntimeAuthorizationProperties.EvictionCheck.FAIL,
+-) : AutoCloseable, StartupCheck {
++) : AutoCloseable {
+     /** Whether Redis may evict the snapshot ([down]), and what the health indicator's `eviction` detail says, if anything. */
+     @InternalCoSecApi
+     class Status internal constructor(val down: Boolean, val detail: String?) {

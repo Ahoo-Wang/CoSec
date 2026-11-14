@@ -13,6 +13,11 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
 
+- **starter 的启动检查在延迟初始化下也会运行**（`STA-3`）。设置 `spring.main.lazy-initialization=true` 时，此前没有任何检查运行：缺少 `cosec-webmvc` 的 Spring MVC 宿主在完全没有授权的情况下启动，`gateway` 模式的 Spring Cloud Gateway 宿主不经检查地转发每个请求，Redis 的逐出策略、从副本读取、暴露的 actuator 端点、没有 `MembershipProvider` 的 API key 和未知的 `cosec.*` 属性都不受检查。现在它们与不使用延迟初始化时一样使启动失败。只因检查被跳过才能启动的配置不再能启动：按消息修正。
+- **社交登录注册中的未知字段使启动失败**（第 2 轮 L4）。此前 `cosec.authentication.login.social.registration.<name>` 下拼错的字段（`pcke`、`scope`）被忽略，提供者的配置与作者的本意不同；现在消息会指出这个键。请改名或删除。
+- **不起作用的 `cosec.cosid.generator` 使启动失败**（第 2 轮 L7）。此前在没有 `CosIdRuntime` bean、或者应用自己有 `IdGenerator` bean 时设置它，它会被忽略，CoSec 仍使用随机 id。请配置 CosId，或删除该属性。
+- **两个哈希相同的内存 API key 使启动失败**（第 2 轮 L5）。此前该 key 以 `cosec.api-key.keys` 中最后一项认证；每个 key 只保留一项。
+- **控制面的授权 bean 不可替换，无论是否 `@Primary`**（第 2 轮 L6）。此前标记 `@Primary`、或按注入点参数名命名的第二个 `ControlAuthorizer`、`ChangeAuthority`、`Changes`、`ControlPlane` 或 `ControlHttp` bean 会取代 CoSec 的 bean 被注入；现在它与普通的第二个 bean 一样使启动失败。
 - **测试工具按执行的方式读取请求**（第 2 轮 M2，`PIP-15`）。此前 `PolicyTestKit` 按原样判定 `http:HEAD`、含小写字母的方法和带点段的路径，所以会确认一条 `http:HEAD` 上的 DENY，而管道把 HEAD 按 GET 判定，从不应用它。现在它把 HEAD 按 GET 判定、规范化路径，并在管道回答 `400` 时给出 `{"decision": "InvalidRequest"}`：请改写这样的场景，并把 `http:HEAD` 上的语句改写为 `http:GET` 上的。`expect` 必须写出 `decision`（此前空的 `expect` 无论决策如何都会通过）；文件名被缩短的目录需要 `cosec-migrate convert` 在旁边写下的 `report.json`。实验性的 `evaluate(JsonNode)` 和 `check(String, JsonNode)` 已删除：以文本传入场景，用 `check(name, json)`。
 - **生成的路由映射位于 `servers` 路径之下，资源包含路径的每个变量**（第 2 轮 L4）。`cosecServiceGenerator` 端点丢掉了服务器路径（`/api/v1`），生成的路由匹配不到任何请求，所有请求都落在 `http` 命名空间；`/users/{id}/avatar/{size}` 的资源是 `user/{size}`，所有用户共用一个资源。现在路由以服务器路径开头（不含上下文路径），资源是 `user/{id}/{size}`：重新生成路由映射，并改写策略中按生成结果写的资源。多个服务器路径不同，或路径含服务器变量时，生成失败。
 - **ip2region：无法定位的是取不到**（第 2 轮 M5）。只有随附的 IPv4 数据库时，IPv6 客户端没有国家，写成 `country in [...]` 的地域封锁 DENY 会放行它；现在它是取不到，这条 DENY 使请求返回 `503`（或者用 `onMissing: nomatch` 放行）。用 `cosec.ip2region.ipv6-location` 加载 IPv6 数据库。`Ip2RegionAttributeProvider` 改为接收数据库列表，每个数据库的版本取自其文件头，不再接收单个数据库和版本。
