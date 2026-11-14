@@ -13,6 +13,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
 
+- **Spring MVC 过滤器的顺序改为 `-9999`**，紧跟在 Spring Boot 的隐藏方法过滤器（`-10000`）之后，而不再是 `HIGHEST_PRECEDENCE + 100`。打开 `spring.mvc.hiddenmethod.filter.enabled` 时，带 `_method=DELETE` 的 `POST` 此前按 POST 授权、按 DELETE 执行；WebFlux 一直授权的是 DELETE。必须排在 CoSec 之前的过滤器（例如 CORS 过滤器）需要低于 `-9999` 的顺序。
 - **HEAD 按 GET 判定，含小写字母的方法是 `400`**（`PIP-18`）。服务器用 GET 的处理器处理 HEAD，所以 `http:GET` 上的 DENY 拦不住它：现在 HEAD 使用路由映射的 HEAD 路由，没有时使用 GET 的路由，未映射时是 `http:GET`；`http:HEAD` 上的语句只有在路由映射映射了 HEAD 时才会匹配。`delete` 这样的方法此前按 `http:delete` 判定，`http:DELETE` 上的 DENY 不会命中，而会折叠大小写的后端把它当作 DELETE 处理：它现在是 `400 invalid-request`。
 - **客户端地址只读取一次**（`PIP-16`）。服务器自己解析转发头时（`server.forward-headers-strategy=native`，Spring Boot 在 Kubernetes 以及它识别出的其他云平台上也会自行开启），CoSec 不再第二次读取 `X-Forwarded-For`：在 Tomcat 上采用 `RemoteIpValve` 解析出的地址，在 Reactor Netty 和 Jetty 上读取该请求头而绝不使用服务器转发来的地址。此前在 Tomcat 上，两次读取叠加会取到客户端写的条目。现在以下情形启动失败：`framework`；`native` 下的 Tomcat 显式设置了 `cosec.authorization.remote-ip.max-trusted-index`；`native` 下的 Reactor Netty 或 Jetty 设置了 `max-trusted-index: 0`；CoSec 无法判断的服务器上的 `native`。迁移方法：按消息修改（[故障排查](./troubleshooting.md#startup-fails-on-the-client-address)）。`XForwardedRemoteIpResolver` 现在是内部 API。
 - **多行 `X-Forwarded-For` 视为一个列表，读不出的客户端地址是“取不到”**（`PIP-17`）。此前带两行该请求头的请求使用连接的对端，客户端可借此绕开针对它自己地址的封禁；现在按顺序读取这些行。带端口、方括号或 zone 的可信条目按其中的地址读取。不是地址的条目（`unknown`）此前使 `environment.ip` 缺失，DENY 视为不匹配；现在它是取不到：这样的 DENY 返回 `503`，黑名单也回答取不到。

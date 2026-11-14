@@ -18,8 +18,13 @@ request to the same `Pipeline`, so they answer every request byte for byte alike
 | Stack | Module | Filter the starter registers | Order |
 |---|---|---|---|
 | Spring WebFlux | `cosec-webflux` | `PipelineWebFilter` (`WebFilter`) | `1000` |
-| Spring MVC | `cosec-webmvc` | `PipelineServletFilter` (servlet `Filter`, every URL) | `HIGHEST_PRECEDENCE + 100` |
+| Spring MVC | `cosec-webmvc` | `PipelineServletFilter` (servlet `Filter`, every URL) | `-9999` |
 | Spring Cloud Gateway | `cosec-gateway` | `PipelineGatewayFilter` (`GlobalFilter`) | `HIGHEST_PRECEDENCE + 10` |
+
+On both web stacks CoSec runs after Spring Boot's filters that rewrite the request, so it authorizes what is executed:
+the hidden-method filter (`spring.mvc.hiddenmethod.filter.enabled`, `-10000`), which turns a `POST` with `_method=DELETE`
+into a DELETE, runs first, and the DELETE is what CoSec decides. A filter of your own that rewrites the method or the
+path must run before CoSec too: one after it changes the request CoSec has already authorized.
 
 Every adapter needs its module, `cosec-cocache` (the snapshot documents and token revocation live in Redis), a
 JWT secret and a route map; a service that only reads the identity its gateway forwards needs none of them
@@ -353,7 +358,7 @@ preflights itself:
 fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
 ```
 
-With Spring MVC, register a CORS filter with an order before `HIGHEST_PRECEDENCE + 100`.
+With Spring MVC, register a CORS filter with an order before `-9999`.
 
 ## Gateway
 

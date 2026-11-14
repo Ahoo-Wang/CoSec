@@ -14,8 +14,10 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 | 技术栈 | 模块 | starter 注册的过滤器 | 顺序 |
 |---|---|---|---|
 | Spring WebFlux | `cosec-webflux` | `PipelineWebFilter`（`WebFilter`） | `1000` |
-| Spring MVC | `cosec-webmvc` | `PipelineServletFilter`（Servlet `Filter`，所有 URL） | `HIGHEST_PRECEDENCE + 100` |
+| Spring MVC | `cosec-webmvc` | `PipelineServletFilter`（Servlet `Filter`，所有 URL） | `-9999` |
 | Spring Cloud Gateway | `cosec-gateway` | `PipelineGatewayFilter`（`GlobalFilter`） | `HIGHEST_PRECEDENCE + 10` |
+
+在两种 Web 栈上，CoSec 都在 Spring Boot 改写请求的过滤器之后运行，因此授权的就是将被执行的请求：隐藏方法过滤器（`spring.mvc.hiddenmethod.filter.enabled`，`-10000`）把带 `_method=DELETE` 的 `POST` 变成 DELETE，它先运行，CoSec 判定的就是这个 DELETE。你自己改写方法或路径的过滤器也必须排在 CoSec 之前：排在它之后，就改变了 CoSec 已经授权过的请求。
 
 每个适配器都需要它的模块、`cosec-cocache`（快照文档和令牌吊销都存放在 Redis 中）、JWT 密钥和路由映射；只读取网关转发的身份的服务一样都不需要（[网关之后的服务](#services-behind-the-gateway)）。依赖写法见[快速开始](../guide/quick-start.md#add-the-dependency)；下面只说明不同之处。
 
@@ -264,7 +266,7 @@ CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追�
 fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
 ```
 
-使用 Spring MVC 时，注册一个顺序早于 `HIGHEST_PRECEDENCE + 100` 的 CORS 过滤器。
+使用 Spring MVC 时，注册一个顺序早于 `-9999` 的 CORS 过滤器。
 
 ## 网关 {#gateway}
 

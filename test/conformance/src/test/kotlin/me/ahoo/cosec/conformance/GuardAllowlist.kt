@@ -55,6 +55,8 @@ object GuardAllowlist {
             "social:RedisAuthStateCacheTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on Spring MVC",
+            "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on WebFlux",
             "spring-boot:ClientIpReadingsTest#without a strategy CoSec reads the peer and X-Forwarded-For",
             "spring-boot:ClientIpReadingsTest#on Tomcat with the native strategy CoSec takes the valve's address",
             "spring-boot:ClientIpReadingsTest#on Tomcat with the native strategy an explicit max-trusted-index fails startup",

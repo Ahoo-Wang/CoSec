@@ -218,6 +218,17 @@
       "statement": "A method holding an ASCII lower-case letter is 400 `invalid-request`, before authentication. HEAD is decided as GET: a route map's HEAD route wins, without one HEAD takes GET's route, and unmapped it is `http:GET`; `http:HEAD` matches nothing unless a route map maps it.",
       "level": "pipeline",
       "pending": null
+    },
+    {
+      "id": "PIP-19",
+      "source": "RFC 0006 §7.3; round-2 review M1",
+      "statement": "On both web stacks the adapter runs after Spring Boot's filters that rewrite the request (the hidden-method filter), and before everything that acts on it, so CoSec authorizes the request that is executed.",
+      "level": "startup",
+      "guards": [
+        "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on Spring MVC",
+        "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on WebFlux"
+      ],
+      "pending": null
     }
   ]
 }
