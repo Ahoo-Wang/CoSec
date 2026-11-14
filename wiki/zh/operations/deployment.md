@@ -210,8 +210,10 @@ management:
 - **ZGC 在启动时提交整个堆**，以共享内存的形式立即计入容器。容不下堆的限制会让 pod 在几秒内失败，而不是在承载流量几小时后。
 - **堆需要空闲空间。** ZGC 在网关分配内存的同时回收；堆中大部分是存活数据时，请求线程要等它。编译后的文档在堆上：按你的文档和
   流量确定堆的大小，再把限制设为堆，加上直接内存，加上约 250 MiB，再加四分之一。
-- **镜像自己的默认值放不进小集群。** 它的启动脚本设置 `-Xms2048M -Xmx2048M -XX:MaxDirectMemorySize=512M`，加上原生部分约
-  2.8 GiB。`JAVA_OPTS` 在命令行上排在它们之后，所以其中的大小生效；`JAVA_TOOL_OPTIONS` 改不了它们，因为 JVM 最先读取它。
+- **镜像自己的默认值放不进小集群。** 它的启动脚本设置 `-Xms2048M -Xmx2048M -XX:MaxMetaspaceSize=256M
+  -XX:MaxDirectMemorySize=512M -Xss1m -XX:+UseZGC`，加上原生部分约 2.8 GiB，并把 GC 日志写到 `logs/`，把 `OutOfMemoryError`
+  时的堆转储写到 `data/`。直接内存是上限，不是预留：Netty 的池化缓冲区（HTTP 服务端与 Redis 客户端）按流量需要占用它，所以网关实际用多少取决于负载和 CPU
+  数。要看实际用量，通过 Pod 内本地的 JMX agent 读 `java.nio:type=BufferPool,name=direct` MBean。`JAVA_OPTS` 在命令行上排在默认值之后，所以其中的大小生效；`JAVA_TOOL_OPTIONS` 改不了它们，因为 JVM 最先读取它。
   固定的 `-Xmx` 也会覆盖 `-XX:MaxRAMPercentage`，所以要给出明确的大小。base 在 `JVM_MEMORY_OPTS` 中设置它们，production
   overlay 替换这个变量；修改时同时修改内存请求和限制。
 - **CPU。** JVM 按 CPU 限制确定 GC、JIT 和 Netty 的线程数，自动伸缩器按 CPU 请求计算。
