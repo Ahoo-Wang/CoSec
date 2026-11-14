@@ -37,7 +37,6 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.core.Ordered
 
 /**
  * The web adapters over the [RequestGate]: the [Pipeline], or a service behind a gateway's `IdentityGate` (RFC 0006 §7.3): they translate the pipeline's outcome and never decide. A
@@ -69,7 +68,7 @@ internal class CoSecPipelineWebAutoConfiguration {
                     },
                     hostOf(properties),
                 )
-            ).apply { order = Ordered.HIGHEST_PRECEDENCE + FILTER_ORDER_OFFSET }
+            ).apply { order = SERVLET_FILTER_ORDER }
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -117,8 +116,18 @@ internal class CoSecPipelineWebAutoConfiguration {
     }
 
     companion object {
-        /** Ahead of application filters, behind the host's request-id and tracing filters. */
-        const val FILTER_ORDER_OFFSET = 100
+        /** `OrderedHiddenHttpMethodFilter.DEFAULT_ORDER` of `spring-boot-servlet`, which the starter does not depend on. */
+        private const val HIDDEN_HTTP_METHOD_FILTER_ORDER = -10000
+
+        /**
+         * The servlet filter's order (round 2 M1): right after Spring Boot's filters that rewrite the request, so CoSec
+         * authorizes what is executed, as on WebFlux, where the reactive hidden-method filter (-10000) runs before
+         * `PipelineWebFilter` (1000). Boot's `OrderedHiddenHttpMethodFilter` (`spring.mvc.hiddenmethod.filter.enabled`)
+         * is at -10000 and turns a POST into the DELETE, PUT or PATCH its `_method` names; behind it, and before
+         * everything that acts on the request: `OrderedFormContentFilter` (-9900), `OrderedRequestContextFilter` (-105),
+         * Spring Security (-100), the application's filters. The request-id and tracing filters stay ahead of it.
+         */
+        const val SERVLET_FILTER_ORDER = HIDDEN_HTTP_METHOD_FILTER_ORDER + 1
 
         /** How this host reads the client address: decided once per context, or startup fails ([ClientIpReadings]). */
         fun clientIpOf(context: ApplicationContext, properties: RuntimeAuthorizationProperties): ClientIpReading =

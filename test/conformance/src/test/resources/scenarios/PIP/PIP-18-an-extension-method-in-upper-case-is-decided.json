@@ -1,0 +1,75 @@
+{
+  "rules": [
+    "PIP-18"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A method of upper-case letters CoSec does not know is decided as written: the ALLOW on http:* permits.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
+        },
+        {
+          "id": "no-delete",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:DELETE",
+              "resource": "http:path:/orders/**"
+            }
+          ]
+        },
+        {
+          "id": "no-read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": "http:path:/salaries/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "g:no-delete",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-delete"
+        },
+        {
+          "id": "g:no-read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-read"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "PROPFIND",
+    "path": "/files/1"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

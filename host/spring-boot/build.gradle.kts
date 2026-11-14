@@ -80,4 +80,5 @@ dependencies {
     testImplementation(libs.spring.boot.tomcat)
     testImplementation(libs.spring.boot.jetty)
     testImplementation(libs.spring.boot.reactor.netty)
+    testImplementation(libs.spring.boot.webmvc)
 }

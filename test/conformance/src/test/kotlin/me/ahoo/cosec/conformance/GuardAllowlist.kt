@@ -24,6 +24,9 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "runtime:ApplicationPathsTest#aContextPathWrittenOtherwiseIsRemovedSegmentBySegment",
+            "runtime:ApplicationPathsTest#aUriThatDoesNotAgreeWithTheContextPathIsUnreadable",
+            "spring-boot:RealServerContextPathTest#the context path is not decided on, however it is written",
             "runtime:PolicyDocumentCodecTest#the wildcard is only ever Any",
             "architecture:OneDecisionPathTest#onlyStatusMappingConstructsOutcomes",
             "architecture:OneDecisionPathTest#adaptersNeverSeeDecisions",
@@ -55,6 +58,8 @@ object GuardAllowlist {
             "social:RedisAuthStateCacheTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on Spring MVC",
+            "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on WebFlux",
             "spring-boot:ClientIpReadingsTest#without a strategy CoSec reads the peer and X-Forwarded-For",
             "spring-boot:ClientIpReadingsTest#on Tomcat with the native strategy CoSec takes the valve's address",
             "spring-boot:ClientIpReadingsTest#on Tomcat with the native strategy an explicit max-trusted-index fails startup",

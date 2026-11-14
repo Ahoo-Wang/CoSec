@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "PIP-18"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A HEAD route of its own wins over GET's: order:exists on order/7, which no DENY names.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "no-read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:read",
+              "resource": "order/7"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-read"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/orders/{orderId}",
+        "action": "order:read",
+        "resource": "order/{orderId}"
+      },
+      {
+        "method": "HEAD",
+        "path": "/orders/{orderId}",
+        "action": "order:exists",
+        "resource": "order/{orderId}"
+      }
+    ]
+  },
+  "http": {
+    "method": "HEAD",
+    "path": "/orders/7"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

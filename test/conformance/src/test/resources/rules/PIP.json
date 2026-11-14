@@ -176,12 +176,13 @@
     {
       "id": "PIP-15",
       "source": "RFC 0006 §7.6; round-2 review M2",
-      "statement": "A check by host code (`AuthorizationChecker`) never permits what enforcement would refuse to decide: an `http` path is normalized as a request's path is, one enforcement answers 400 for is a deny, and any other resource is held to a request path's length bounds.",
+      "statement": "A check by host code (`AuthorizationChecker`) never permits what enforcement would refuse to decide: an `http` path is normalized as a request's path is, one enforcement answers 400 for is a deny, and any other resource is held to a request path's length bounds. An `http` action is read as a request's method is (`PIP-18`): a verb with a lower-case letter is a deny, and `http:HEAD` is decided as `http:GET`.",
       "level": "pipeline",
       "guards": [
         "runtime:AuthorizationCheckerTest#a path enforcement refuses is never permitted",
         "runtime:AuthorizationCheckerTest#a path is decided as enforcement normalizes it",
-        "runtime:AuthorizationCheckerTest#a resource longer than a request path can be is denied"
+        "runtime:AuthorizationCheckerTest#a resource longer than a request path can be is denied",
+        "runtime:AuthorizationCheckerTest#a check reads an http method as enforcement does"
       ],
       "pending": null
     },
@@ -210,6 +211,36 @@
       "source": "RFC 0006 §5.3.1; round-2 review L3",
       "statement": "A client address the host reported that is not an address (`unknown`, an obfuscated identifier) is unavailable, never absent: a statement that reads `environment.ip` errs as on a missing external attribute (a DENY is Indeterminate unless `onMissing: nomatch`), and the blacklist cannot be read for it. A trusted `X-Forwarded-For` entry or a peer written with a port, brackets or a zone is read as its address, and several `X-Forwarded-For` lines are one list, in order.",
       "level": "pipeline",
+      "pending": null
+    },
+    {
+      "id": "PIP-18",
+      "source": "RFC 0006 §5.3.1; round-2 review M2",
+      "statement": "A method holding an ASCII lower-case letter is 400 `invalid-request`, before authentication. HEAD is decided as GET: a route map's HEAD route wins, without one HEAD takes GET's route, and unmapped it is `http:GET`; `http:HEAD` matches nothing unless a route map maps it.",
+      "level": "pipeline",
+      "pending": null
+    },
+    {
+      "id": "PIP-19",
+      "source": "RFC 0006 §7.3; round-2 review M1",
+      "statement": "On both web stacks the adapter runs after Spring Boot's filters that rewrite the request (the hidden-method filter), and before everything that acts on it, so CoSec authorizes the request that is executed.",
+      "level": "startup",
+      "guards": [
+        "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on Spring MVC",
+        "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on WebFlux"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-20",
+      "source": "RFC 0006 §5.3.1; round-2 review M3",
+      "statement": "The path an adapter hands the pipeline is the request URI without the context path, removed segment by segment: the URI's leading segments, without path parameters and decoded once, must be the context path's, taken the same way, whichever way the server writes the context path; otherwise the request is 400 `invalid-request`. No adapter derives the path otherwise.",
+      "level": "build",
+      "guards": [
+        "runtime:ApplicationPathsTest#aContextPathWrittenOtherwiseIsRemovedSegmentBySegment",
+        "runtime:ApplicationPathsTest#aUriThatDoesNotAgreeWithTheContextPathIsUnreadable",
+        "spring-boot:RealServerContextPathTest#the context path is not decided on, however it is written"
+      ],
       "pending": null
     }
   ]

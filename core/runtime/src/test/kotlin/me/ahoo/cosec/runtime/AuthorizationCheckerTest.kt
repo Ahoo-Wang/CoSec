@@ -71,11 +71,15 @@ class AuthorizationCheckerTest {
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
                     """{"id":"order","statements":[{"effect":"allow","action":"order:read","resource":"order/{id}"}]},""" +
+                    """{"id":"open","statements":[{"effect":"allow","action":"http:*","resource":"http:path:/salaries/**"}]},""" +
+                    """{"id":"no-read","statements":[{"effect":"deny","action":"http:GET","resource":"http:path:/salaries/**"}]},""" +
                     """{"id":"control","statements":[{"effect":"allow","action":"cosec:read","resource":"doc/**"}]},""" +
                     """{"id":"rank","statements":[{"effect":"allow","action":"cosec:approve","resource":"doc/**",""" +
                     """"condition":{"eq":["subject.attributes.level","3"]}}]}],""" +
                     """"bindings":[{"id":"g:read","subject":"*","app":"*","space":"*","policy":"read"},""" +
                     """{"id":"g:order","subject":"*","app":"*","space":"*","policy":"order"},""" +
+                    """{"id":"g:open","subject":"*","app":"*","space":"*","policy":"open"},""" +
+                    """{"id":"g:no-read","subject":"*","app":"*","space":"*","policy":"no-read"},""" +
                     """{"id":"g:control","subject":"*","app":"cosec-control","space":"","policy":"control"},""" +
                     """{"id":"g:rank","subject":"*","app":"cosec-control","space":"","policy":"rank"}]}"""
                 ).encodeToByteArray(),
@@ -334,6 +338,26 @@ class AuthorizationCheckerTest {
             checker.check(security, "order:read", "order/$segment").assert().isTrue()
             checker.decide(security, "order:read", "order/${segment}a").assert().isEqualTo(Decision.Deny(null))
             checker.decide(security, "http:GET", "/orders/${segment}a").assert().isEqualTo(Decision.Deny(null))
+        }
+    }
+
+    /** PIP-18, PIP-15: a check reads the method as enforcement does: HEAD as GET, a lower-case one not at all. */
+    @Test
+    fun `a check reads an http method as enforcement does`() {
+        val security = permitted()
+        runBlocking {
+            checker.check(security.securityContext, "http:POST", "/salaries/7").assert().isTrue()
+            checker.check(security.securityContext, "http:GET", "/salaries/7").assert().isFalse()
+            checker.check(security.securityContext, "http:HEAD", "/salaries/7").assert().isFalse()
+            checker.decide(
+                security.securityContext,
+                "http:delete",
+                "/salaries/7"
+            ).assert().isEqualTo(Decision.Deny(null))
+            checker.decide(security, Action("http", "HEAD"), Resource("http", "/salaries/7", emptyMap()))
+                .assert().isInstanceOf(Decision.Deny::class.java)
+            // Not an http action: as written.
+            checker.check(security.securityContext, "order:read", "order/1").assert().isTrue()
         }
     }
 }

@@ -142,9 +142,11 @@ may be empty or contain `:`, `*`, whitespace or control characters.
 Where a request's action comes from:
 
 - An HTTP request whose route is in the service's [route map](#route-maps) has that route's `service:verb` action and
-  typed resource.
+  typed resource. A HEAD request takes a HEAD route, and without one GET's.
 - Any other HTTP request has the action `http:<METHOD>` (the method as received, such as `http:GET`) on the resource
-  of type `http` whose id is its path. Statements on `service:verb` never match it, and statements on `http:*` never
+  of type `http` whose id is its path. HEAD is decided as `http:GET`: it is GET without the content, and servers run the
+  GET handler for it, so `http:HEAD` matches nothing unless a route map maps it. A method holding a lower-case letter
+  is `400` before anything is decided (`PIP-18`). Statements on `service:verb` never match it, and statements on `http:*` never
   match a mapped request.
 - A check in code names the action and resource itself ([Checks in code](../integration/checks.md)).
 

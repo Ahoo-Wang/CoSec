@@ -1,0 +1,17 @@
+# Rule: PIP-18
+# Mutant: a method with a lower-case letter is decided as written: delete passes a DENY on http:DELETE
+# Tests: :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpMethods.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpMethods.kt
+index e83013ac..8a6efaa5 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpMethods.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpMethods.kt
+@@ -25,7 +25,7 @@ internal object HttpMethods {
+      */
+     fun hasLowerCase(method: String): Boolean {
+         for (char in method) {
+-            if (char in 'a'..'z') return true
++            if (char in 'a'..'z') return false
+         }
+         return false
+     }

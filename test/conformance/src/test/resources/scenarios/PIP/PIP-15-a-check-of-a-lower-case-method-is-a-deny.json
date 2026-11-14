@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "PIP-15",
+    "PIP-18"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A check of http:delete is what no request is decided as (a lower-case method is 400): a deny, though the ALLOW on http:* names it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/salaries/{*rest}"
+            }
+          ]
+        },
+        {
+          "id": "no-read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:GET",
+              "resource": "http:path:/salaries/{*rest}"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "no-read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-read"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "POST",
+    "path": "/salaries/7"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "check": {
+    "action": "http:delete",
+    "resource": "/salaries/7"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "check": "Deny"
+  }
+}

@@ -98,7 +98,7 @@ decision:
 
 | | Request through the adapter | `AuthorizationChecker` |
 |---|---|---|
-| Action and resource | from the route map | the ones you pass |
+| Action and resource | from the route map | the ones you pass, read as a request's: an `http` path normalized, `http:HEAD` as `http:GET`, an `http` verb with a lower-case letter, or a path enforcement refuses, a deny (`PIP-15`, `PIP-18`) |
 | Snapshot documents | read for the request | read again for the check |
 | External attributes | stage A for every request, stage B as the plan names | fetched again for the check's action and resource: each one it can read, from the provider that declares it (a stage-A provider without the scope, as stage A asks) |
 | Decision listeners (audit, metrics, traces) | yes | none |

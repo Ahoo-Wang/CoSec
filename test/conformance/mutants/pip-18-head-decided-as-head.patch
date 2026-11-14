@@ -1,0 +1,15 @@
+# Rule: PIP-18
+# Mutant: an unmapped HEAD is http:HEAD: a DENY on http:GET does not stop the GET handler serving it
+# Tests: :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpMethods.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpMethods.kt
+index e83013ac..17b3f2b1 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpMethods.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/HttpMethods.kt
+@@ -31,5 +31,5 @@ internal object HttpMethods {
+     }
+ 
+     /** The method [method] is decided as: GET for HEAD, which servers serve with the GET handler, else [method]. */
+-    fun decidedAs(method: String): String = if (method == HEAD) GET else method
++    fun decidedAs(method: String): String = method
+ }

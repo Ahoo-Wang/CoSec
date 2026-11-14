@@ -25,6 +25,7 @@ import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.runtime.http.HttpMethods
 
 /** A route map that does not load: malformed, or with routes that could answer one request two ways. */
 class RouteMapException(message: String, cause: Throwable? = null) : CoSecException(message, cause)
@@ -82,8 +83,19 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
 
     val size: Int get() = routes.values.sumOf { it.size }
 
-    /** The route of a request with [method] on [path], already normalized (`PathNormalizer`). */
+    /**
+     * The route of a request with [method] on [path], already normalized (`PathNormalizer`). A HEAD request takes a HEAD
+     * route, and without one GET's (`PIP-18`): servers serve HEAD with the GET handler, so it needs what GET needs.
+     */
     fun resolve(method: String, path: String): RouteResolution {
+        val resolved = resolveExactly(method, path)
+        if (resolved == RouteResolution.Unmapped && method == HttpMethods.HEAD) {
+            return resolveExactly(HttpMethods.GET, path)
+        }
+        return resolved
+    }
+
+    private fun resolveExactly(method: String, path: String): RouteResolution {
         val candidates = routes[method] ?: return RouteResolution.Unmapped
         val parsed = try {
             HttpPath.parse(path, true)

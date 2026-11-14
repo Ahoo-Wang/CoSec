@@ -14,14 +14,16 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 | 技术栈 | 模块 | starter 注册的过滤器 | 顺序 |
 |---|---|---|---|
 | Spring WebFlux | `cosec-webflux` | `PipelineWebFilter`（`WebFilter`） | `1000` |
-| Spring MVC | `cosec-webmvc` | `PipelineServletFilter`（Servlet `Filter`，所有 URL） | `HIGHEST_PRECEDENCE + 100` |
+| Spring MVC | `cosec-webmvc` | `PipelineServletFilter`（Servlet `Filter`，所有 URL） | `-9999` |
 | Spring Cloud Gateway | `cosec-gateway` | `PipelineGatewayFilter`（`GlobalFilter`） | `HIGHEST_PRECEDENCE + 10` |
+
+在两种 Web 栈上，CoSec 都在 Spring Boot 改写请求的过滤器之后运行，因此授权的就是将被执行的请求：隐藏方法过滤器（`spring.mvc.hiddenmethod.filter.enabled`，`-10000`）把带 `_method=DELETE` 的 `POST` 变成 DELETE，它先运行，CoSec 判定的就是这个 DELETE。你自己改写方法或路径的过滤器也必须排在 CoSec 之前：排在它之后，就改变了 CoSec 已经授权过的请求。在 Spring Cloud Gateway 上不存在这个问题：网关自己关闭了响应式隐藏方法过滤器（`spring.webflux.hiddenmethod.filter.enabled=false`，优先于其他所有属性来源），所以它从不改写所转发请求的方法。
 
 每个适配器都需要它的模块、`cosec-cocache`（快照文档和令牌吊销都存放在 Redis 中）、JWT 密钥和路由映射；只读取网关转发的身份的服务一样都不需要（[网关之后的服务](#services-behind-the-gateway)）。依赖写法见[快速开始](../guide/quick-start.md#add-the-dependency)；下面只说明不同之处。
 
 **Spring WebFlux。** 过滤器在事件循环上启动管道，不切换线程。真正挂起之后（例如一次 Redis 读取），请求在 `Dispatchers.Default` 上继续，绝不会留在客户端库的 I/O 线程上。
 
-**Spring MVC。** Servlet 过滤器阻塞它的请求线程直到得出结果，这是常规的 Servlet 模型。
+**Spring MVC。** Servlet 过滤器阻塞它的请求线程直到得出结果，这是常规的 Servlet 模型。它授权 `REQUEST` 分派，也就是客户端请求产生的那一次。容器对这个请求的其他分派不会再次授权：处理器发起的 `forward:` 或 include（目标按 CoSec 已放行的请求运行）、恢复它的 `ASYNC` 分派，以及渲染错误页的 `ERROR` 分派。这些分派都不会到达客户端自选的处理器，但转发到其他路径的处理器，等于自己决定了目标可以运行。
 
 **Spring Cloud Gateway。** 类路径上有网关的 `GlobalFilter` 时，starter 注册 `PipelineGatewayFilter`，不注册 `PipelineWebFilter`。差异见[网关](#gateway)。
 
@@ -74,7 +76,7 @@ CoSec 授权的路径是应用内的请求路径：
 
 | 适配器 | 路径 |
 |---|---|
-| Spring MVC | 去掉 Servlet context path（`server.servlet.context-path`）后的请求 URI。它保留 `DispatcherServlet` 的映射前缀：设置 `spring.mvc.servlet.path=/api` 时，`/api/admin/users` 按 `/api/admin/users` 授权。 |
+| Spring MVC | 去掉 Servlet context path（`server.servlet.context-path`）后的请求 URI。它保留 `DispatcherServlet` 的映射前缀：设置 `spring.mvc.servlet.path=/api` 时，`/api/admin/users` 按 `/api/admin/users` 授权。context path 按段去掉，不论客户端怎么写它（context path 为 `/app` 时，`/%61pp/orders` 是 `/orders`）；不以它开头的 URI 是 `400`（`PIP-20`）。 |
 | WebFlux、Gateway | 应用内的路径，不含 `spring.webflux.base-path`。 |
 
 在其他一切之前，`PathNormalizer` 会检查它。在所有适配器上，路径：
@@ -116,7 +118,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | 状态码 | problem 类型 | 何时出现 |
 |---|---|---|
 | `200`（继续处理） | 无，由处理器回应 | 决策为 Permit，且每条限流义务都还有许可。 |
-| `400` | `invalid-request` | 路径无法无歧义地读取（[请求路径](#the-request-path)）、某个 `CoSec-*` 参数的值相互冲突（[应用与空间](#app-and-space)），路由捕获了不能作为资源 id 段的值（[路由映射](#route-maps)），或某个请求头以不同的值发送而请求所依据的文档读取它，无论读取它的语句效果是什么（[请求头](../policies/language.md#headers)、`PIP-12`）。引擎根本看不到这个请求。在网关之后：无法读取的 `CoSec-Identity`（[网关之后的服务](#services-behind-the-gateway)）。 |
+| `400` | `invalid-request` | 路径无法无歧义地读取（[请求路径](#the-request-path)）、方法含小写字母（`PIP-18`）、某个 `CoSec-*` 参数的值相互冲突（[应用与空间](#app-and-space)），路由捕获了不能作为资源 id 段的值（[路由映射](#route-maps)），或某个请求头以不同的值发送而请求所依据的文档读取它，无论读取它的语句效果是什么（[请求头](../policies/language.md#headers)、`PIP-12`）。引擎根本看不到这个请求。在网关之后：无法读取的 `CoSec-Identity`（[网关之后的服务](#services-behind-the-gateway)）。 |
 | `401` | `unauthorized` | Deny，且调用方是匿名的：没有凭证。包括作用域被拒绝，例如声明了 `CoSec-Space-Id` 的匿名请求。 |
 | `401` | `token-invalid` | Deny，且凭证因无效被拒绝：令牌校验不通过，或 API key 未知、已停用或已过期。在网关之后：版本未知、来自未来或没有凭证有效期的 `CoSec-Identity`。 |
 | `401` | `token-expired` | Deny，且令牌已过期。在网关之后：`CoSec-Identity` 或其凭证过旧。 |
@@ -264,7 +266,15 @@ CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追�
 fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
 ```
 
-使用 Spring MVC 时，注册一个顺序早于 `HIGHEST_PRECEDENCE + 100` 的 CORS 过滤器。
+使用 Spring MVC 时，注册一个顺序早于 `-9999` 的 CORS 过滤器。
+
+CORS 在哪里处理，决定了浏览器能看到拒绝的哪些内容，因此除非你把三种栈配置得一样，它们会有差别：
+
+| 栈 | 默认的 CORS 处理 | 预检请求 | 被拒绝请求的 CORS 头 |
+|---|---|---|---|
+| Spring MVC | 在 `DispatcherServlet` 中，位于 CoSec 之后 | 由 CoSec 判定：`http:OPTIONS`，匿名时为 `401` | 没有：浏览器读不到问题体。顺序早于 `-9999` 的 CORS 过滤器会回应预检并加上这些头 |
+| WebFlux | 取决于你放在哪里；`OrderedCorsWebFilter` 在 CoSec 之前运行 | 由 CORS 过滤器回应，从不判定 | 由 CORS 过滤器加上 |
+| 网关 | `spring.cloud.gateway.server.webflux.globalcors`，在匹配路由时、网关过滤器之前处理 | 由网关回应，从不判定 | 在 CoSec 回应之前加上 |
 
 ## 网关 {#gateway}
 

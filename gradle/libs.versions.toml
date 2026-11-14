@@ -60,6 +60,7 @@ json-schema-validator = { module = "com.networknt:json-schema-validator", versio
 spring-boot-tomcat = { module = "org.springframework.boot:spring-boot-tomcat" }
 spring-boot-jetty = { module = "org.springframework.boot:spring-boot-jetty" }
 spring-boot-reactor-netty = { module = "org.springframework.boot:spring-boot-reactor-netty" }
+spring-boot-webmvc = { module = "org.springframework.boot:spring-boot-webmvc" }
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

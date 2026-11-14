@@ -15,6 +15,7 @@ package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ResourcePattern
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import java.io.ByteArrayOutputStream
 
@@ -92,6 +93,20 @@ object PathNormalizer {
             resource.id -> resource
             else -> Resource(resource.type, id, resource.attributes)
         }
+    }
+
+    /**
+     * [action] as enforcement reads a request's method (`PIP-18`), or null when enforcement would refuse it: the
+     * judgement next to [enforceable] of a resource, for a check (`PIP-15`) and the control plane (`CTL-3`). An `http`
+     * action whose verb holds a lower-case letter is refused, as a request with that method is (400); `http:HEAD` is
+     * `http:GET`, as a HEAD request is decided. Any other action, `service:verb` included, as it is.
+     */
+    @InternalCoSecApi
+    fun enforceable(action: Action): Action? = when {
+        action.namespace != ResourcePattern.HTTP_TYPE -> action
+        HttpMethods.hasLowerCase(action.verb) -> null
+        action.verb == HttpMethods.HEAD -> Action(action.namespace, HttpMethods.decidedAs(action.verb))
+        else -> action
     }
 
     private fun hasLongSegment(path: String): Boolean {

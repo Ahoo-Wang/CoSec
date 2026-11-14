@@ -18,8 +18,16 @@ request to the same `Pipeline`, so they answer every request byte for byte alike
 | Stack | Module | Filter the starter registers | Order |
 |---|---|---|---|
 | Spring WebFlux | `cosec-webflux` | `PipelineWebFilter` (`WebFilter`) | `1000` |
-| Spring MVC | `cosec-webmvc` | `PipelineServletFilter` (servlet `Filter`, every URL) | `HIGHEST_PRECEDENCE + 100` |
+| Spring MVC | `cosec-webmvc` | `PipelineServletFilter` (servlet `Filter`, every URL) | `-9999` |
 | Spring Cloud Gateway | `cosec-gateway` | `PipelineGatewayFilter` (`GlobalFilter`) | `HIGHEST_PRECEDENCE + 10` |
+
+On both web stacks CoSec runs after Spring Boot's filters that rewrite the request, so it authorizes what is executed:
+the hidden-method filter (`spring.mvc.hiddenmethod.filter.enabled`, `-10000`), which turns a `POST` with `_method=DELETE`
+into a DELETE, runs first, and the DELETE is what CoSec decides. A filter of your own that rewrites the method or the
+path must run before CoSec too: one after it changes the request CoSec has already authorized. On Spring Cloud Gateway
+the question does not arise: the gateway turns the reactive hidden-method filter off itself
+(`spring.webflux.hiddenmethod.filter.enabled=false`, ahead of every other property source), so it never rewrites the
+method it forwards.
 
 Every adapter needs its module, `cosec-cocache` (the snapshot documents and token revocation live in Redis), a
 JWT secret and a route map; a service that only reads the identity its gateway forwards needs none of them
@@ -32,7 +40,10 @@ suspension (a Redis read, say) the request continues on `Dispatchers.Default`, n
 thread.
 
 **Spring MVC.** The servlet filter blocks its request thread until the outcome is known, which is the normal
-servlet model.
+servlet model. It authorizes the `REQUEST` dispatch, the one a client's request makes. The container's other dispatches
+of that request are not authorized again: a `forward:` or include your handler makes (its target runs as the request
+CoSec permitted), an `ASYNC` dispatch that resumes it, and the `ERROR` dispatch that renders an error page. None of them
+reaches a handler the client chose, but a handler that forwards to another path decides that the target may run.
 
 **Spring Cloud Gateway.** When the gateway's `GlobalFilter` is on the classpath, the starter registers
 `PipelineGatewayFilter` and no `PipelineWebFilter`. See [Gateway](#gateway) for what differs.
@@ -97,7 +108,7 @@ The path CoSec authorizes is the request path within the application:
 
 | Adapter | Path |
 |---|---|
-| Spring MVC | The request URI without the servlet context path (`server.servlet.context-path`). It keeps the `DispatcherServlet` mapping prefix: with `spring.mvc.servlet.path=/api`, `/api/admin/users` is authorized as `/api/admin/users`. |
+| Spring MVC | The request URI without the servlet context path (`server.servlet.context-path`). It keeps the `DispatcherServlet` mapping prefix: with `spring.mvc.servlet.path=/api`, `/api/admin/users` is authorized as `/api/admin/users`. The context path is removed segment by segment, however the client wrote it (`/%61pp/orders` with the context path `/app` is `/orders`); a URI that does not start with it is `400` (`PIP-20`). |
 | WebFlux, Gateway | The path within the application, without `spring.webflux.base-path`. |
 
 Before anything else, `PathNormalizer` checks it. On every adapter the path is:
@@ -162,7 +173,7 @@ proceeds to your handler only on a Permit.
 | Status | Problem type | When |
 |---|---|---|
 | `200` (proceeds) | none, your handler answers | The decision is Permit and every rate limit obligation had a permit left. |
-| `400` | `invalid-request` | The path cannot be read without ambiguity ([The request path](#the-request-path)), a `CoSec-*` parameter has conflicting values ([App and space](#app-and-space)), a route captured a value that cannot be a resource id segment ([Route maps](#route-maps)), or a header was sent with different values and a document the request is decided on reads it, whatever the effect of the statement that reads it ([Headers](../policies/language.md#headers), `PIP-12`). The engine never sees the request. Behind a gateway: a `CoSec-Identity` that cannot be read ([Services behind the gateway](#services-behind-the-gateway)). |
+| `400` | `invalid-request` | The path cannot be read without ambiguity ([The request path](#the-request-path)), the method holds a lower-case letter (`PIP-18`), a `CoSec-*` parameter has conflicting values ([App and space](#app-and-space)), a route captured a value that cannot be a resource id segment ([Route maps](#route-maps)), or a header was sent with different values and a document the request is decided on reads it, whatever the effect of the statement that reads it ([Headers](../policies/language.md#headers), `PIP-12`). The engine never sees the request. Behind a gateway: a `CoSec-Identity` that cannot be read ([Services behind the gateway](#services-behind-the-gateway)). |
 | `401` | `unauthorized` | Deny, and the caller is anonymous: no credential. Includes a rejected scope, such as an anonymous request that declares `CoSec-Space-Id`. |
 | `401` | `token-invalid` | Deny, and the credential was rejected as invalid: a token that does not verify, or an unknown, disabled or expired API key. Behind a gateway: a `CoSec-Identity` of an unknown version, from the future, or without a credential expiry. |
 | `401` | `token-expired` | Deny, and the token had expired. Behind a gateway: a `CoSec-Identity`, or its credential, that is too old. |
@@ -353,7 +364,16 @@ preflights itself:
 fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
 ```
 
-With Spring MVC, register a CORS filter with an order before `HIGHEST_PRECEDENCE + 100`.
+With Spring MVC, register a CORS filter with an order before `-9999`.
+
+Where CORS is handled decides what a browser sees of a refusal, so the three stacks differ unless you configure them
+alike:
+
+| Stack | CORS by default | A preflight | A refused request's CORS headers |
+|---|---|---|---|
+| Spring MVC | In `DispatcherServlet`, after CoSec | Decided by CoSec: `http:OPTIONS`, `401` for an anonymous one | None: the browser cannot read the problem. A CORS filter before `-9999` answers preflights and adds them |
+| WebFlux | Where you put it; `OrderedCorsWebFilter` runs before CoSec | Answered by the CORS filter, never decided | Added by the CORS filter |
+| Gateway | `spring.cloud.gateway.server.webflux.globalcors`, when the route is matched, before the gateway filter | Answered by the gateway, never decided | Added before CoSec answers |
 
 ## Gateway
 
