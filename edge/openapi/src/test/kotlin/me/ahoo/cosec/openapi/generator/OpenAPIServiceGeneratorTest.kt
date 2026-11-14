@@ -83,11 +83,18 @@ class OpenAPIServiceGeneratorTest {
             ).isEqualTo(actionAndId.first)
             resolved.resource.type.assert().isEqualTo("order")
             resolved.resource.id.assert().describedAs("$method $path").isEqualTo(actionAndId.second)
-            // Every method the operation does not declare stays in the http namespace.
-            for (other in listOf("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS") - api.paths.getValue(path).readOperationsMap().keys.map {
-                it.name
-            }.toSet()) {
-                routes.resolve(other, concrete).assert().describedAs("$other $path").isEqualTo(RouteResolution.Unmapped)
+            // Every method the operation does not declare stays in the http namespace, but HEAD, which takes GET's route
+            // (PIP-18).
+            val declared = api.paths.getValue(path).readOperationsMap().keys.map { it.name }.toSet()
+            for (other in listOf("GET", "POST", "PUT", "DELETE", "PATCH", "HEAD", "OPTIONS") - declared) {
+                val resolution = routes.resolve(other, concrete)
+                if (other == "HEAD" && "GET" in declared) {
+                    (resolution as RouteResolution.Mapped).route.method.assert().describedAs(
+                        "HEAD $path"
+                    ).isEqualTo("GET")
+                } else {
+                    resolution.assert().describedAs("$other $path").isEqualTo(RouteResolution.Unmapped)
+                }
             }
         }
         routes.resolve("GET", "/elsewhere").assert().isEqualTo(RouteResolution.Unmapped)

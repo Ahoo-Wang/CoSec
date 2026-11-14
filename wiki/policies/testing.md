@@ -117,7 +117,7 @@ change's candidate too:
 | `principal` | The principal id; leave it out for an anonymous request, which enforcement decides on tenant `(0)`. |
 | `roles`, `policies` | The memberships, as token claims write them: `role` or `role@space`, and attached policy ids. |
 | `app`, `space` | The declared scope; the space is checked against the roles as on the data plane. |
-| `action` | Required, `service:verb` (`http:GET` for an unmapped HTTP request). |
+| `action` | Required, `service:verb` (`http:GET` for an unmapped HTTP request). An `http` action is read as a request's method: `http:HEAD` is decided and analyzed as `http:GET`, and a verb with a lower-case letter is `400` (`PIP-18`). |
 | `resource` | Required: `type/id`, or a path starting with `/` for an `http` resource. An `http` path is normalized as a request's path is: one enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per `/` segment) is `400`, and path parameters (`;v=2`) are removed. A typed id is held to the same lengths. |
 | `remoteIp`, `time` | The client address, and an ISO instant (default: now). |
 | `principalBindings`, `breakGlass` | What the credential may use, both `true` by default (CoSec's own token). For an API key, set `breakGlass` to `false`; for a key with a role cap, set `principalBindings` to `false` too: then the attachments and principal bindings grant nothing, and their DENYs still apply. Only a boolean is accepted. |

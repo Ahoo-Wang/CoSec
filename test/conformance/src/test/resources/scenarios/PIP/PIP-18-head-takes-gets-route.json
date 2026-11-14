@@ -1,0 +1,85 @@
+{
+  "rules": [
+    "PIP-18"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "Without a HEAD route, HEAD takes GET's: it is order:read on order/7, which the DENY denies, never the http namespace that the http:* ALLOW opens.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "no-read",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:read",
+              "resource": "order/7"
+            }
+          ]
+        },
+        {
+          "id": "http",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        },
+        {
+          "id": "g:no-read",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-read"
+        },
+        {
+          "id": "g:http",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "http"
+        }
+      ]
+    }
+  },
+  "routes": {
+    "service": "order",
+    "routes": [
+      {
+        "method": "GET",
+        "path": "/orders/{orderId}",
+        "action": "order:read",
+        "resource": "order/{orderId}"
+      }
+    ]
+  },
+  "http": {
+    "method": "HEAD",
+    "path": "/orders/7"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

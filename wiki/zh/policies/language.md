@@ -121,8 +121,8 @@ DENY 不能写裸资源类型，例如 `order`：它只覆盖 id 为空的那个
 
 请求的动作从哪里来：
 
-- 路由在服务[路由映射](#route-maps)中的 HTTP 请求，动作和类型化资源取自该路由的 `service:verb`。
-- 其他 HTTP 请求的动作是 `http:<METHOD>`（按收到的方法，例如 `http:GET`），资源类型为 `http`、id 为请求路径。针对 `service:verb` 的语句永远不会匹配它，针对 `http:*` 的语句也永远不会匹配已映射的请求。
+- 路由在服务[路由映射](#route-maps)中的 HTTP 请求，动作和类型化资源取自该路由的 `service:verb`。HEAD 请求使用 HEAD 路由，没有时使用 GET 的路由。
+- 其他 HTTP 请求的动作是 `http:<METHOD>`（按收到的方法，例如 `http:GET`），资源类型为 `http`、id 为请求路径。HEAD 按 `http:GET` 判定：它就是不带内容的 GET，服务器也用 GET 的处理器处理它，所以除非路由映射映射了它，`http:HEAD` 不匹配任何请求。含小写字母的方法在任何判定之前就是 `400`（`PIP-18`）。针对 `service:verb` 的语句永远不会匹配它，针对 `http:*` 的语句也永远不会匹配已映射的请求。
 - 代码中的检查自己指定动作和资源（[代码中的检查](../integration/checks.md)）。
 
 ### 路由映射 {#route-maps}

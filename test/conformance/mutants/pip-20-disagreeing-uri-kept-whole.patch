@@ -1,0 +1,17 @@
+# Rule: PIP-20
+# Mutant: a URI that does not agree with the context path is decided whole instead of refused
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.ApplicationPathsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ApplicationPaths.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ApplicationPaths.kt
+index 85040f6f..ecffcb3f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ApplicationPaths.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ApplicationPaths.kt
+@@ -51,7 +51,7 @@ object ApplicationPaths {
+         for (index in context.indices) {
+             val segment = valueOf(uri[index]) ?: return UNREADABLE
+             if (segment != valueOf(context[index])) {
+-                return UNREADABLE
++                return requestUri
+             }
+         }
+         val rest = uri.subList(context.size, uri.size)

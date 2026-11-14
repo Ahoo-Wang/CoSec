@@ -75,7 +75,7 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 
 | | 经过适配器的请求 | `AuthorizationChecker` |
 |---|---|---|
-| 动作和资源 | 来自路由映射 | 你传入的值 |
+| 动作和资源 | 来自路由映射 | 你传入的值，按请求的方式读取：`http` 路径经规范化，`http:HEAD` 按 `http:GET`，含小写字母的 `http` 动词或执法拒绝的路径为拒绝（`PIP-15`、`PIP-18`） |
 | 快照文档 | 为请求读取 | 为检查重新读取 |
 | 外部属性 | 每个请求获取 A 阶段属性，按计划获取 B 阶段属性 | 为检查的动作和资源重新获取：它可能读取的每个属性，都向声明它的提供者获取（A 阶段提供者与 A 阶段一样不带作用域） |
 | 决策监听器（审计、指标、追踪） | 有 | 无 |
