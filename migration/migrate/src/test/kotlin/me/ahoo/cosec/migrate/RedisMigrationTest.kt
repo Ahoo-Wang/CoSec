@@ -361,6 +361,35 @@ class RedisMigrationTest {
         }
     }
 
+    /**
+     * 8.0.0-alpha's CoCache 6 to 8 upgrade (`cosec-migrate cocache8`, removed at GA) wrote `<prefix>:meta:cocache8`
+     * after it exported the documents and before it deleted them. One left is a run that stopped half-way: `publish`
+     * refuses, writing nothing, and says how to finish it, rather than publish over the documents it deleted.
+     */
+    @Test
+    fun `publish refuses while an interrupted alpha upgrade's marker is there`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+        val marker = "$keyPrefix:meta:cocache8".encodeToByteArray()
+        redis.sync().set(marker, """{"out":"/srv/cocache8","documents":["platform"]}""".encodeToByteArray())
+        val publish = arrayOf("publish", "--to-redis", REDIS, "--key-prefix", keyPrefix, "--in", out.toString())
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val store = me.ahoo.cosec.cocache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
+
+        val (refused, output) = run(*publish)
+
+        refused.assert().isEqualTo(MigrateMain.FAILED)
+        output.assert().contains("$keyPrefix:meta:cocache8").contains("/srv/cocache8").contains("8.0.0-alpha.4")
+            .contains("Nothing was written.")
+        runBlocking { store.head(SnapshotKey.Platform) }.assert().isNull()
+
+        redis.sync().del(marker)
+        run(*publish).first.assert().isEqualTo(MigrateMain.OK)
+        runBlocking { store.head(SnapshotKey.Platform) }.assert().isNotNull()
+    }
+
     @Test
     fun `resume refuses a document in Redis that is not the converted one`() {
         write7x()
