@@ -50,6 +50,9 @@ object GuardAllowlist {
             "cocache:ReactiveRedisRateLimiterTest#aBucketIsOneKeyThatEveryCountGivesAnExpiry",
             "cocache:ReactiveRedisRateLimiterTest#theWindowIsRedissNotTheCallers",
             "cocache:ReactiveRedisRateLimiterTest#bucketsSpreadOverTheCluster",
+            "social:JustAuthProviderTest#a state is used once",
+            "social:JustAuthProviderTest#another browser's state is refused",
+            "social:RedisAuthStateCacheTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
             "spring-boot:ClientIpReadingsTest#without a strategy CoSec reads the peer and X-Forwarded-For",

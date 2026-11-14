@@ -15,9 +15,11 @@ package me.ahoo.cosec.spring.boot.starter.authentication.social
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.login.AuthenticationProvider
+import me.ahoo.cosec.social.InMemorySocialStateStore
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialCredentials
 import me.ahoo.cosec.social.SocialProviderManager
+import me.ahoo.cosec.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spring.boot.starter.authentication.CoSecAuthenticationAutoConfiguration
@@ -59,6 +61,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
                     .hasSingleBean(CoSecSocialAuthenticationAutoConfiguration::class.java)
                     .hasSingleBean(AuthenticationProvider::class.java)
                     .hasSingleBean(AuthStateCache::class.java)
+                    .hasSingleBean(SocialStateStore::class.java)
                     .hasSingleBean(SocialProviderManager::class.java)
                     .hasSingleBean(SocialUserPrincipalConverter::class.java)
                     .hasSingleBean(SocialAuthentication::class.java)
@@ -91,6 +94,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             )
             .withBean(IdGenerator::class.java, { IdGenerator { "predictable" } })
             .withBean(AuthStateCache::class.java, { AuthDefaultStateCache.INSTANCE })
+            .withBean(SocialStateStore::class.java, { InMemorySocialStateStore() })
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,
@@ -98,7 +102,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
             .run { context: AssertableApplicationContext ->
                 assertThat(context).hasNotFailed()
                 val providers = context.getBean(SocialProviderManager::class.java)
-                val url = runBlocking { providers.getRequired("github").authorizeUrl() }
+                val url = runBlocking { providers.getRequired("github").authorize() }.url
                 val state = UriComponentsBuilder.fromUriString(url).build().queryParams.getFirst("state")!!
                 state.assert().isNotEqualTo("predictable")
                 state.assert().matches("[A-Za-z0-9_-]{22}")
@@ -148,6 +152,7 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
     fun `a context keeps its own social providers`() {
         val social = contextRunner
             .withBean(AuthStateCache::class.java, { AuthDefaultStateCache.INSTANCE })
+            .withBean(SocialStateStore::class.java, { InMemorySocialStateStore() })
             .withUserConfiguration(
                 CoSecAuthenticationAutoConfiguration::class.java,
                 CoSecSocialAuthenticationAutoConfiguration::class.java,
@@ -169,5 +174,28 @@ internal class CoSecSocialAuthenticationProviderAuthenticationAutoConfigurationT
         social.run { empty ->
             empty.getBean(SocialProviderManager::class.java)["github"].assert().isNull()
         }
+    }
+
+    /** Round-2 review M4: the state is what keeps a forged callback out, so no registration may turn its check off. */
+    @Test
+    fun `a registration that ignores the state fails startup`() {
+        contextRunner
+            .withPropertyValues(
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.type=github",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.client-id=client-id",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.client-secret=client-secret",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.redirect-uri=https://example.com/callback",
+                "${SocialAuthenticationProperties.PREFIX}.registration.github.ignore-check-state=true",
+            )
+            .withUserConfiguration(
+                DataRedisAutoConfiguration::class.java,
+                CoSecAuthenticationAutoConfiguration::class.java,
+                CoSecSocialAuthenticationAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                assertThat(context).hasFailed()
+                generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                    .any { "ignore-check-state" in it }.assert().isTrue()
+            }
     }
 }

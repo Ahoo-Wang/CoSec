@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.social.justauth
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
@@ -24,6 +25,8 @@ import org.junit.jupiter.api.Test
 import org.springframework.data.redis.connection.RedisStandaloneConfiguration
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
 import org.springframework.data.redis.core.StringRedisTemplate
+import org.springframework.data.redis.core.ValueOperations
+import java.util.concurrent.CopyOnWriteArrayList
 
 internal class RedisAuthStateCacheTest {
     lateinit var stringRedisTemplate: StringRedisTemplate
@@ -56,5 +59,39 @@ internal class RedisAuthStateCacheTest {
         redisAuthStateCache.cache(key, value, 100)
         Thread.sleep(150)
         redisAuthStateCache.containsKey(key).assert().isEqualTo(false)
+    }
+
+    /** M4: JustAuth may read a state that is not there; that is an empty value, never an exception. */
+    @Test
+    fun aMissingStateIsEmpty() {
+        redisAuthStateCache.get(RandomIdGenerator.generate()).assert().isEmpty()
+    }
+
+    /** M4: a state CoSec issued is taken once, by GETDEL, whichever instance receives its callback. */
+    @Test
+    fun aStateIsTakenOnce(): Unit = runBlocking {
+        val store = RedisSocialStateStore(stringRedisTemplate, "cosec:test:oauth:binding:")
+        val state = RandomIdGenerator.generate()
+        store.put(state, "hash", java.time.Duration.ofMinutes(1))
+        store.take(state).assert().isEqualTo("hash")
+        store.take(state).assert().isNull()
+        store.take(RandomIdGenerator.generate()).assert().isNull()
+    }
+
+    /** The template blocks, so the store calls it on a dispatcher of its own, never on the caller's thread. */
+    @Test
+    fun theRedisCallsRunOffTheCallersThread(): Unit = runBlocking {
+        val threads = CopyOnWriteArrayList<Thread>()
+        val recording = object : StringRedisTemplate(lettuceConnectionFactory) {
+            override fun opsForValue(): ValueOperations<String, String> {
+                threads += Thread.currentThread()
+                return super.opsForValue()
+            }
+        }
+        val store = RedisSocialStateStore(recording, "cosec:test:oauth:binding:")
+        val state = RandomIdGenerator.generate()
+        store.put(state, "hash", java.time.Duration.ofMinutes(1))
+        store.take(state).assert().isEqualTo("hash")
+        threads.assert().hasSize(2).doesNotContain(Thread.currentThread())
     }
 }

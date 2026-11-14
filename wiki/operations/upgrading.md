@@ -76,6 +76,14 @@ and have to be provisioned again.
 - **Shadow windows count two more outcomes**: `BECAME_DENIED` and `OBLIGATIONS_CHANGED` were counted as `SAME`, and a
   publish must now acknowledge them. Finish or abandon open windows before a rolling upgrade: an instance of the
   previous version cannot read a report that holds them.
+- **A social login's state is single use and bound to the browser that started it** (round-2 review M4). JustAuth only
+  checked that a state existed: one state signed in any browser that opened a callback holding it, as often as it was
+  opened within 3 minutes, which allowed login CSRF. `SocialAuthentication.authorizeUrl(provider)` becomes
+  `authorize(provider)`, which answers a `SocialAuthorization` (`url`, `binding`); `SocialAuthenticationProvider` does
+  the same. Set `authorization.setCookie(path)` on the browser before redirecting it, and pass the cookie's value to
+  `JustAuthCredentials(provider, binding)`, which takes it as a second argument; `SocialCredentials` has a `binding`. The
+  state is taken from Redis on the callback (`<s>:oauth:binding:<state>`, Redis 6.2 or later for `GETDEL`).
+  `JustAuthProvider` takes a `SocialStateStore`. `ignore-check-state: true` on a registration fails startup.
 - **Tokens and API keys declare their app** (batch R7b, RFC 0012 §3.5, `SCP-11`). A token's `aud` and an API key's `app`
   name the app the credential belongs to, and `ScopeResolver` compares them with the host's: a host with an app
   (`cosec.authorization.scope.app-id`, or a route's `cosec-app-id`) refuses a credential declaring another app, or none,

@@ -19,10 +19,12 @@ import me.ahoo.cosec.social.DirectSocialUserPrincipalConverter
 import me.ahoo.cosec.social.SocialAuthentication
 import me.ahoo.cosec.social.SocialAuthenticationProvider
 import me.ahoo.cosec.social.SocialProviderManager
+import me.ahoo.cosec.social.SocialStateStore
 import me.ahoo.cosec.social.SocialUser
 import me.ahoo.cosec.social.SocialUserPrincipalConverter
 import me.ahoo.cosec.social.justauth.JustAuthProvider
 import me.ahoo.cosec.social.justauth.RedisAuthStateCache
+import me.ahoo.cosec.social.justauth.RedisSocialStateStore
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
@@ -65,15 +67,26 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
         return RedisAuthStateCache(stringRedisTemplate, cosec.keysOf(OAUTH_STATE) + ":")
     }
 
+    /** The states CoSec issued, single use and bound to a browser, under the deployment's prefix (round-2 review M4). */
+    @Bean
+    @ConditionalOnMissingBean
+    fun socialStateStore(stringRedisTemplate: StringRedisTemplate, cosec: CoSecProperties): SocialStateStore =
+        RedisSocialStateStore(stringRedisTemplate, cosec.keysOf(OAUTH_BINDING) + ":")
+
     /**
      * The OAuth `state` is JustAuthProvider's own secure random one, never the application's `IdGenerator`: those ids
-     * need not be unpredictable, and the state must be.
+     * need not be unpredictable, and the state must be. A registration that turns JustAuth's state check off fails
+     * startup: the state is what keeps a forged callback out.
      */
     @Bean
     @ConditionalOnMissingBean
-    fun socialProviderManager(authStateCache: AuthStateCache): SocialProviderManager {
+    fun socialProviderManager(authStateCache: AuthStateCache, states: SocialStateStore): SocialProviderManager {
         val socialProviderManager = SocialProviderManager()
         for ((key, provider) in socialAuthenticationProperties.registration) {
+            require(!provider.ignoreCheckState) {
+                "Property [${SocialAuthenticationProperties.PREFIX}.registration.$key.ignore-check-state] is true: the " +
+                    "OAuth state is what keeps a forged callback out, so it is always checked. Remove the property."
+            }
             val authRequestClass: Class<out AuthDefaultRequest> = provider.type.targetClass
             val authRequestCtor: Constructor<out AuthDefaultRequest> = authRequestClass.getConstructor(
                 AuthConfig::class.java,
@@ -81,7 +94,7 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
             )
             val authConfig = provider.toJustAuthConfig()
             val authRequest: AuthRequest = BeanUtils.instantiateClass(authRequestCtor, authConfig, authStateCache)
-            val authProvider: SocialAuthenticationProvider = JustAuthProvider(key, authRequest)
+            val authProvider: SocialAuthenticationProvider = JustAuthProvider(key, authRequest, states)
             socialProviderManager.register(authProvider)
         }
         return socialProviderManager
@@ -104,3 +117,4 @@ internal class CoSecSocialAuthenticationAutoConfiguration(
 }
 
 private const val OAUTH_STATE = "oauth:state"
+private const val OAUTH_BINDING = "oauth:binding"
