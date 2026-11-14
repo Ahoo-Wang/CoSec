@@ -15,6 +15,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 - **三个包名与其模块名对齐。** `me.ahoo.cosec.cache`（`cosec-cocache`）现在是 `me.ahoo.cosec.cocache`，`me.ahoo.cosec.servlet`（`cosec-webmvc`）是 `me.ahoo.cosec.webmvc`，`me.ahoo.cosec.spring.boot.starter`（`cosec-spring-boot`）是 `me.ahoo.cosec.spring.boot`。子包在新根之下保持原名；没有类名、artifact id、`cosec.*` 属性、bean 名或 Redis key 改变。在应用中需要修改：import；`spring.autoconfigure.exclude` 与 `@ConditionalOnClass(name = ...)` 字符串中的自动配置类名（`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` 现在是 `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`）；以及日志配置中的 logger 名（`logging.level.me.ahoo.cosec.cache` 现在是 `logging.level.me.ahoo.cosec.cocache`）。
 - **任何请求都不可能有的 `http` 动作不能编译**（`DOC-8`）。`http:HEAD`（自 `PIP-18` 起按 `http:GET` 判定）或动词含小写字母（`http:get`）的语句或限流规则不匹配任何请求，这样的 DENY 什么也拒绝不了。现在这样的文档被拒绝：已存储的会被装载为失败，其请求失败即拒绝（`503`），控制面也拒绝会产生这种文档的变更。升级之前，请在控制面列出的文档中查找它们（`"http:HEAD"`，或冒号后含小写字母的 `"http:` 动作），改为 `http:GET` 或大写的方法后重新发布。
+- **`cosec-migrate cocache8` 已删除。** 它把 8.0.0-alpha.2 的数据从 CoCache 6 迁移到 CoCache 8（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）：仍保存这种数据的部署，请在升级之前用 8.0.0-alpha.4 的 `cosec-migrate` 迁移。`<p>:meta:cocache8` 存在时，`publish` 拒绝执行，不写入任何内容：这个标记由一次在删除文档之后中断的升级留下，那些文档在它的导出目录里，不在 Redis 中。请用 8.0.0-alpha.4 的 `cosec-migrate` 完成那次升级（`publish --resume`，`--in` 指向消息给出的导出目录），或者确认标记列出的每份文档都已发布，再删除这个 key。
 - **`cosec-migrate api-keys --app` 可用了**（第 2 轮 M3）。自 #1302 起这一步无法运行：#1302 把 `--app` 加进了代码和本页，却没有加进该命令接受的选项，命令因此把 `--app` 当作它不接受的选项而拒绝。对配置了应用的服务必须接受的 key，请带上 `--app <id>` 重新运行。
 - **starter 的启动检查在延迟初始化下也会运行**（`STA-3`）。设置 `spring.main.lazy-initialization=true` 时，此前没有任何检查运行：缺少 `cosec-webmvc` 的 Spring MVC 宿主在完全没有授权的情况下启动，`gateway` 模式的 Spring Cloud Gateway 宿主不经检查地转发每个请求，Redis 的逐出策略、从副本读取、暴露的 actuator 端点、没有 `MembershipProvider` 的 API key 和未知的 `cosec.*` 属性都不受检查。现在它们与不使用延迟初始化时一样使启动失败。只因检查被跳过才能启动的配置不再能启动：按消息修正。
 - **社交登录注册中的未知字段使启动失败**（第 2 轮 L4）。此前 `cosec.authentication.login.social.registration.<name>` 下拼错的字段（`pcke`、`scope`）被忽略，提供者的配置与作者的本意不同；现在消息会指出这个键。请改名或删除。
@@ -150,7 +151,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 ## 从 8.0.0-alpha.2 升级 {#from-8-0-0-alpha-2}
 
-8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档的内容无需迁移，不过 8.0.0 经 CoCache 8 保存数据，而 CoCache 8 读不了 alpha.2 经 CoCache 6 写入的内容：请在所有实例停止后用 `cosec-migrate cocache8` 迁移（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）。从 **身份转发** 开始的那些变更涉及网关与租户隔离的边缘（RC1-5、RC1-6、RC1-15 至 RC1-18、RC1-48、RC1-49），改变网关转发什么、转发给哪些路由：升级网关之前请先阅读。
+8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档的内容无需迁移，不过 8.0.0 经 CoCache 8 保存数据，而 CoCache 8 读不了 alpha.2 经 CoCache 6 写入的内容：请在所有实例停止后用 8.0.0-alpha.4 的 `cosec-migrate cocache8` 迁移，它是最后一个带有这条命令的版本（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）。从 **身份转发** 开始的那些变更涉及网关与租户隔离的边缘（RC1-5、RC1-6、RC1-15 至 RC1-18、RC1-48、RC1-49），改变网关转发什么、转发给哪些路由：升级网关之前请先阅读。
 
 - **任意类型的 token 属性**（RC1-2、`GRT-5`）。分析按引擎的方式读取 `subject.attributes.*`，布尔值和数字读作它们的文本。token 中写着 `"suspended": true` 时，条件为未被 `suspended` 的 ALLOW 不再算作作者持有。代码中，`Operator.attributes` 与 `Grantor.attributes` 是 `Map<String, Any>`，即 token 声明原样，alpha.2 只保留了字符串。
 - **会到期的绑定**（RC1-3、`GRT-3`）。作者经带 `expiresAt` 的绑定持有的权限，只包含自身绑定不晚于它到期的授出；没有 `expiresAt` 的授出、到期更晚的授出、把策略设为可附加，都是升级，短缺为 `EXPIRY`。
@@ -229,6 +230,9 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 或主体是 `503` 而不是 `401`，控制面 API 回答 `500`。没有任何读取会把这样的值当作不存在，所以被吊销的令牌绝不会重新被接受，
 吊销表也不会。
 
+8.0.0 的 `cosec-migrate` 不再有迁移这些数据的命令：请在升级到 8.0.0 之前，用 8.0.0-alpha.4 的 `cosec-migrate` 按下面的
+步骤迁移（[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)）。
+
 | 数据 | Key | 迁移之前，在 8.0.0 上 | `cosec-migrate cocache8` |
 |---|---|---|---|
 | 快照文档 | `<p>:snapshot:*` | 读取它的每个请求都是 `503` | 作为每份文档的第 1 个修订重新发布（来源 `MIGRATE`，没有父修订：父修订的 SHA-1 摘要不是 CoCache 8 认识的摘要） |
@@ -251,7 +255,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
    （覆盖 CoCache 6 的值，所以任何时刻都不缺吊销），然后删除其他 CoCache 6 的值，发布文档，最后删除标记。如果它在删除之后
    中断，不要再运行 `cocache8` 来完成：它看不到自己已删除的文档，标记还在时它会拒绝执行。用它打印的命令完成：
    `cosec-migrate publish --to-redis <uri> --key-prefix <p> [--cluster] --in ./cocache8 --resume`，每份文档都重新发布后，
-   这条命令会删除标记。
+   这条命令会删除标记：这里用的是 alpha.4 的 `publish`，8.0.0 的 `publish` 在标记存在时会拒绝执行。
 6. 启动 8.0.0 实例。每份文档的修订号从 1 重新开始；迁移之前的历史不会保留，如果需要，在第 5 步之前保存一份
    `<p>:control:revision:*`。
 
@@ -523,7 +527,7 @@ spec:
               drop: [ALL]
 ```
 
-`kubectl -n cosec logs job/cosec-repair-references` 显示工具的输出；命令失败时（退出码 `1` 或 `2`）Job 也失败。`--key-prefix` 设为你的实例的 [`cosec.key-prefix`](./configuration.md#key-prefix)。运行 `bootstrap` 时把 `args` 改为 `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`。Redis Cluster 则给支持的命令加上 `--cluster`，并在 Secret 里写以逗号分隔的种子节点。
+`kubectl -n cosec logs job/cosec-repair-references` 显示工具的输出；命令失败时（退出码 `1` 或 `2`）Job 也失败。工具输出的内容不含它收到的 Redis URI 中的凭据，因此日志里没有密码：它打印的下一步命令（例如 `publish ... --resume`）需要再次使用 `$(REDIS_URI)`。`--key-prefix` 设为你的实例的 [`cosec.key-prefix`](./configuration.md#key-prefix)。运行 `bootstrap` 时把 `args` 改为 `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`。Redis Cluster 则给支持的命令加上 `--cluster`，并在 Secret 里写以逗号分隔的种子节点。
 
 `convert`、`publish`、`partition plan` 与 `api-keys` 读写目录：在主容器的 `/data` 挂载一个 PersistentVolumeClaim，路径写成 `--out /data/converted` 与 `--in /data/converted`。把 `convert` 作为一个 Job 运行，从卷上读 `report.json`（再起一个挂载它的 Pod，或用 `kubectl cp`），转换被接受之后才把 `publish` 作为另一个 Job 运行：`publish` 只接受 `report.json` 列出的、SHA-256 与之一致的文件。
 

@@ -30,6 +30,12 @@ and have to be provisioned again.
   closed (`503`), and the control plane refuses a change that makes one. Find them before upgrading, in the documents
   the control plane lists (`"http:HEAD"`, or an `"http:` action with a lower-case letter after the colon), and publish
   them again with `http:GET`, or the method in upper case.
+- **`cosec-migrate cocache8` is removed.** It moved 8.0.0-alpha.2's data from CoCache 6 to CoCache 8
+  ([Data written through CoCache 6](#data-written-through-cocache-6)): a deployment that still holds such data moves it
+  with the `cosec-migrate` of 8.0.0-alpha.4 before upgrading. While `<p>:meta:cocache8` is there, `publish` refuses and
+  writes nothing: the marker is left by an upgrade that stopped after it deleted the documents, which are in its export,
+  not in Redis. Finish that upgrade with the 8.0.0-alpha.4 `cosec-migrate` (`publish --resume`, with `--in` on the export
+  the message names), or check that every document the marker lists is published, then delete the key.
 - **`cosec-migrate api-keys --app` works** (round 2 M3). The step could not be run since #1302, which added `--app` to
   the code and this page but not to the options the command takes: it refused `--app` as an option it does not take.
   Rerun it with `--app <id>` for keys a service with an app must accept.
@@ -438,7 +444,7 @@ sets, its approved changes and a document that spells a day of the week another 
 8.0.0-alpha.2 is a preview with no compatibility promise. These changes since then, from the
 [RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md), make the grant
 analysis read the author's rights as enforcement does, so some changes that published alone now wait for approval
-([Testing policies](../policies/testing.md#approval)). Nothing to migrate in the documents' content, but 8.0.0 stores its data through CoCache 8, which does not read what alpha.2 wrote through CoCache 6: move it with `cosec-migrate cocache8`, every instance stopped ([Data written through CoCache 6](#data-written-through-cocache-6)). Those at the gateway and
+([Testing policies](../policies/testing.md#approval)). Nothing to migrate in the documents' content, but 8.0.0 stores its data through CoCache 8, which does not read what alpha.2 wrote through CoCache 6: move it with `cosec-migrate cocache8` of 8.0.0-alpha.4, the last tool that has it, every instance stopped ([Data written through CoCache 6](#data-written-through-cocache-6)). Those at the gateway and
 the edge of tenant isolation (RC1-5, RC1-6, RC1-15 to RC1-18, RC1-48, RC1-49), from **Identity forwarding** on, change
 what a gateway forwards and to which routes: read them before upgrading a gateway.
 
@@ -727,6 +733,9 @@ that needs such a document is `503` (`SourceUnavailable`), a token or principal 
 `401`, and the control API answers `500`. Nothing reads such a value as absent, so a revoked token is never accepted
 again.
 
+8.0.0's `cosec-migrate` no longer has the command that moves it: follow the steps below with the `cosec-migrate` of
+8.0.0-alpha.4, before upgrading to 8.0.0 ([From 8.0.0-alpha.4](#from-8-0-0-alpha-4)).
+
 | Data | Keys | On 8.0.0, before the move | `cosec-migrate cocache8` |
 |---|---|---|---|
 | Snapshot documents | `<p>:snapshot:*` | `503` for every request that reads one | Published again as revision 1 of each document (provenance `MIGRATE`, no parent: the parent's SHA-1 digest is none CoCache 8 knows) |
@@ -754,7 +763,8 @@ again.
    do not run `cocache8` again to finish: it cannot see the documents it deleted, and it refuses while the marker is
    there. Finish with the command it prints,
    `cosec-migrate publish --to-redis <uri> --key-prefix <p> [--cluster] --in ./cocache8 --resume`, which removes the
-   marker once every document is published again.
+   marker once every document is published again: alpha.4's `publish`, since 8.0.0's refuses while the marker is
+   there.
 6. Start the 8.0.0 instances. Each document's revision starts again at 1; the history before the move is not carried
    over, so keep a copy of `<p>:control:revision:*` before step 5 if you need it.
 
@@ -1140,7 +1150,8 @@ spec:
 ```
 
 `kubectl -n cosec logs job/cosec-repair-references` shows what the tool printed, and the Job fails (exit code `1` or `2`)
-when the command does. Set `--key-prefix` to [`cosec.key-prefix`](./configuration.md#key-prefix) of your instances.
+when the command does. What it prints leaves out the credentials of the Redis URIs it was given, so the log holds no
+password: a command it prints to run next, such as `publish ... --resume`, takes `$(REDIS_URI)` again. Set `--key-prefix` to [`cosec.key-prefix`](./configuration.md#key-prefix) of your instances.
 For `bootstrap` change `args` to `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`. For a Redis
 Cluster add `--cluster` to the commands that take it and write the seed nodes, comma-separated, in the Secret.
 

@@ -230,8 +230,13 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   is Unicode text. Logs write such a surrogate as `\uD800`, never `?`: `beta\uD800` is not the tenant `beta?`.
 - **Every request is 503 after upgrading from 8.0.0-alpha** (revoked tokens `503` instead of `401`, the control API
   `500`) and the log says `holds content this cache cannot read (format[1], this node writes format[2]`: the data
-  alpha wrote through CoCache 6. Stop every instance and run `cosec-migrate cocache8` (dry run first). Never delete
-  those keys by hand: a deleted revocation accepts its token again.
+  alpha wrote through CoCache 6. Stop every instance and move it with the `cosec-migrate` of 8.0.0-alpha.4 (dry run
+  first): 8.0.0's no longer has the command. Never delete those keys by hand: a deleted revocation accepts its token
+  again.
+- **`cosec-migrate publish` refuses** with `Refused: [<p>:meta:cocache8] marks a CoCache 6 to 8 upgrade`: an
+  8.0.0-alpha upgrade stopped after it deleted the documents, which are in its export. Finish it with the 8.0.0-alpha.4
+  `cosec-migrate` (`publish --resume`, `--in` on the export the message names), or check every document the marker
+  lists is published and delete the key.
 - **Every request with one API key is 503** and the log says `API key format [null] is not 2.` (`null`: the record has
   no `format`, as a key written by 7.x): convert
   the keys with `cosec-migrate api-keys` (dry run first; grant the report's memberships and role bindings, then run
