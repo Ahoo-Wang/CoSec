@@ -20,6 +20,7 @@ import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
+import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
@@ -44,9 +45,9 @@ class LocalRateLimiterBoundsTest {
     ) =
         LocalRateLimiter(
             maximumBuckets = maximum,
+            maximumBucketsPerRule = perRule,
             expireAfterAccess = expiry,
-            clock = { now.get() },
-            maximumBucketsPerRule = perRule
+            clock = { now.get() }
         )
 
     private fun LocalRateLimiter.acquire(rule: String, bucket: String, limit: RateLimitSpec = perMinute) =
@@ -87,6 +88,7 @@ class LocalRateLimiterBoundsTest {
     @Test
     fun `the counters equal what the limiter holds while sweeps run`() {
         val limiter = limiter(maximum = 400, perRule = 200, expiry = Duration.ofMillis(10))
+        limiter.sweepChunk = SMALL_CHUNK
         val clockRuns = AtomicBoolean(true)
         val ticker = Thread {
             while (clockRuns.get()) {
@@ -158,12 +160,77 @@ class LocalRateLimiterBoundsTest {
         limiter.held().first.assert().describedAs("busy and new").isEqualTo(2)
     }
 
+    /** A sweep cycle spans requests on different threads, a chunk each, and removes every bucket removable at its start. */
+    @Test
+    fun `a cycle spread over requests on several threads removes every removable bucket`() {
+        val limiter = limiter(maximum = 10_000, expiry = Duration.ofSeconds(10))
+        limiter.sweepChunk = SMALL_CHUNK
+        repeat(STALE) { limiter.acquire("r", "stale-$it") }
+        now.set(STALE_AFTER)
+        val pool = Executors.newFixedThreadPool(4)
+        try {
+            var request = 0
+            while (limiter.sweepCycles.get() < 2) {
+                val probe = "probe-${request++}"
+                pool.submit { limiter.acquire("p", probe) }.get(TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            }
+            request.assert().describedAs("requests the cycle took").isGreaterThan(STALE / SMALL_CHUNK)
+            val (_, _, byRule) = limiter.held()
+            byRule.assert().containsEntry("r", 0L).containsEntry("p", request.toLong())
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
+    /**
+     * A full limiter starts no sweep before its interval is up, however many requests it refuses, and frees the slots of
+     * removable buckets once a cycle is due.
+     */
+    @Test
+    fun `a full limiter sweeps only when a cycle is due`() {
+        val limiter = limiter(maximum = 10, perRule = 10, expiry = Duration.ofSeconds(10))
+        repeat(10) { limiter.acquire("r", "k-$it") }
+        val visits = limiter.sweepVisits.get()
+        repeat(1_000) {
+            assertThrownBy<LocalRateLimiter.LimiterFullException> { limiter.acquire("r", "flood-$it") }
+        }
+        limiter.sweepVisits.get().assert().describedAs("buckets visited by the flood").isEqualTo(visits)
+        now.set(STALE_AFTER)
+        limiter.acquire("r", "after").allowed.assert().isTrue()
+        limiter.held().first.assert().isEqualTo(1)
+    }
+
+    /**
+     * Two requests for one new key on a limiter with one slot: the one that loses the admission finds the other's bucket
+     * and counts into it, never answers "full" for a key that has a bucket.
+     */
+    @Test
+    fun `a request that loses the admission of its key counts into the winner's bucket`() {
+        val pool = Executors.newFixedThreadPool(2)
+        try {
+            repeat(RACES) { race ->
+                val limiter = limiter(maximum = 1, perRule = 1)
+                val start = CyclicBarrier(2)
+                val both = List(2) {
+                    pool.submit<Boolean> {
+                        start.await()
+                        limiter.acquire("r", "k-$race", RateLimitSpec(10.0, 1)).allowed
+                    }
+                }
+                both.forEach { it.get(TIMEOUT_SECONDS, TimeUnit.SECONDS).assert().isTrue() }
+            }
+        } finally {
+            pool.shutdownNow()
+        }
+    }
+
     /** (e) A bucket a sweep removes while another thread holds it is never counted into: the thread finds its successor. */
     @Test
     fun `a bucket removed while held is not counted into`() {
         val limiter = limiter(maximum = 1_000, expiry = Duration.ofMillis(1))
+        limiter.sweepChunk = SMALL_CHUNK
         repeat(ROUNDS) { round ->
-            now.set(round * 10 * 60_000L)
+            now.set(round * TEN_MINUTES)
             val key = "k-$round"
             concurrently(THREADS, 50) { _, _ -> limiter.acquire("r", key, RateLimitSpec(1_000.0, 60)) }
             // Every bucket of the previous rounds is idle for two windows now: the next round's sweep removes them while
@@ -178,6 +245,13 @@ class LocalRateLimiterBoundsTest {
         const val PER_THREAD = 10_000
         const val LIMIT = 500L
         const val ROUNDS = 20
+        const val TEN_MINUTES = 600_000L
+        const val SMALL_CHUNK = 7
+        const val STALE = 200
+
+        /** Past a ten-second expiry and two one-minute windows. */
+        const val STALE_AFTER = 121_000L
+        const val RACES = 20_000
         const val TIMEOUT_SECONDS = 60L
     }
 }

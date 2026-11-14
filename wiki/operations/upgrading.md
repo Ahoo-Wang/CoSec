@@ -370,8 +370,9 @@ and have to be provisioned again.
   so the rule's `strictFailure` decides: a strict rule answers `503` (`RateLimiterUnavailable`), a lenient one is
   skipped. Before, it was counted from zero. If a rule keyed on something a client can vary now answers `503`, key it on
   the principal or a trusted address instead ([The local limiter is
-  bounded](../policies/rate-limiting.md#the-local-limiter-is-bounded)). `LocalRateLimiter`'s constructor takes a fourth
-  parameter, `maximumBucketsPerRule`; calls by name are unchanged. `cosec-runtime` no longer brings Guava: an
+  bounded](../policies/rate-limiting.md#the-local-limiter-is-bounded)). `LocalRateLimiter`'s constructor takes a new second
+  parameter, `maximumBucketsPerRule`, before `expireAfterAccess` and `clock`: calls by name are unchanged, positional
+  ones change. `cosec-runtime` no longer brings Guava: an
   application that used it through CoSec declares it itself.
 
 - **The public API of the starter, `cosec-login`, `cosec-social` and the web adapters is classified for 8.0** (R9):

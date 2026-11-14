@@ -13,4 +13,4 @@ diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/ratelimit/RateLi
 +        fun removable(now: Long, expireMillis: Long): Boolean = now - lastAccess > expireMillis
      }
  
-     /** Thrown when a new bucket cannot be admitted: the rule cannot be counted, so its `strictFailure` decides. */
+     /**

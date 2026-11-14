@@ -180,7 +180,7 @@ class RateLimitObligationTest {
     /** `OBL-6`: a local limiter that cannot admit a bucket cannot count the rule, so `strictFailure` decides. */
     @Test
     fun aFullLocalLimiterIsOneThatCannotCount() {
-        val full = LocalRateLimiter(maximumBuckets = 1, clock = { now }, maximumBucketsPerRule = 1)
+        val full = LocalRateLimiter(maximumBuckets = 1, maximumBucketsPerRule = 1, clock = { now })
         runBlocking { full.tryAcquire("another rule", "its bucket", RateLimitSpec(1.0, 1)) }
         val strict = """{"id":"strict","action":"*","permitsPerSecond":2,"strictFailure":true}"""
         val refused = evaluate(strict, full).single()
