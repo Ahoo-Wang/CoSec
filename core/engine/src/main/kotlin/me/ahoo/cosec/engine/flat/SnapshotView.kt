@@ -101,4 +101,3 @@ class SnapshotView(
         val NOT_LOADED_APP = Cause.NotLoaded(DocumentKind.APP)
     }
 }
-

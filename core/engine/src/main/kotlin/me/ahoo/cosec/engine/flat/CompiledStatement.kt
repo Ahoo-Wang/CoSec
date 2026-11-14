@@ -139,6 +139,9 @@ enum class OnMissing {
     NOMATCH,
 }
 
+// `internal` compiles to a public static getter of the file's facade, which `PublicSignatures` cannot read as
+// internal; the marker says it.
+@InternalCoSecApi
 internal val NO_ATTRIBUTES: Array<Attribute> = emptyArray()
 
 internal val NO_HEADERS: Array<String> = emptyArray()

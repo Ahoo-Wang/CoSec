@@ -264,7 +264,6 @@ public final class me/ahoo/cosec/runtime/document/DocumentCompileException : me/
 
 public final class me/ahoo/cosec/runtime/document/PolicyDocument {
 	public synthetic fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;JLjava/time/Instant;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Catalog;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/Provenance;Lme/ahoo/cosec/model/condition/ConditionLimits;Ljava/util/List;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getAttributes ()Ljava/util/List;
 	public final fun getBoundary-7sgtQuM ()Ljava/lang/String;
 	public final fun getKind ()Lme/ahoo/cosec/model/decision/DocumentKind;
 	public final fun getOwner ()Ljava/lang/String;
@@ -493,18 +492,6 @@ public abstract interface class me/ahoo/cosec/runtime/http/Headers {
 public final class me/ahoo/cosec/runtime/http/Headers$Companion {
 	public final fun getEMPTY ()Lme/ahoo/cosec/runtime/http/Headers;
 	public final fun of (Ljava/util/Map;)Lme/ahoo/cosec/runtime/http/Headers;
-}
-
-public final class me/ahoo/cosec/runtime/http/HttpAttributes : me/ahoo/cosec/model/condition/ConditionInput {
-	public fun <init> (Lme/ahoo/cosec/runtime/http/Headers;Ljava/util/Map;Ljava/lang/String;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/http/Headers;Ljava/util/Map;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun <init> (Lme/ahoo/cosec/runtime/http/HttpFacts;Ljava/lang/String;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/runtime/http/HttpFacts;Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun bool (Lme/ahoo/cosec/model/condition/Attribute;)Ljava/lang/Boolean;
-	public fun ip (Lme/ahoo/cosec/model/condition/Attribute;)Lme/ahoo/cosec/model/condition/IpAddress;
-	public fun string (Lme/ahoo/cosec/model/condition/Attribute;)Ljava/lang/String;
-	public fun stringSet (Lme/ahoo/cosec/model/condition/Attribute;)Ljava/util/Set;
-	public fun time (Lme/ahoo/cosec/model/condition/Attribute;)J
 }
 
 public final class me/ahoo/cosec/runtime/http/HttpFacts {

@@ -41,6 +41,7 @@ import java.net.URISyntaxException
  * Every other attribute is absent here: the engine answers it. Only an ambiguous header throws, and [credentialHeader]:
  * the engine counts the statement that read it as erring.
  */
+@InternalCoSecApi
 class HttpAttributes(
     private val headers: Headers,
     private val requestAttributes: Map<String, String> = emptyMap(),

@@ -72,6 +72,7 @@ class SnapshotDocument(
          * that code compiled against one release reads the schema of the release it runs on.
          */
         @JvmField
+        @Suppress("MayBeConst") // on purpose: a const is inlined into the caller's class file
         val DOCUMENT_SCHEMA: Int = 2
     }
 }
