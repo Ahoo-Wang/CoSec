@@ -330,5 +330,27 @@ class MigrateMainTest {
 
     private companion object {
         const val REDIS = "redis://localhost:6379"
+
+        /** How far a command's usage lines are indented under it. */
+        const val CONTINUATION = 10
+    }
+
+    /**
+     * Round 2 M3: each command takes what its usage lists, no more and no less. `api-keys` listed `--app`, its code
+     * read it, and its table refused it. What the code reads is held to the table when the command runs.
+     */
+    @Test
+    fun `every command takes the options its usage lists`() {
+        // A command's usage goes on in lines indented under it; a parenthesis starts a note.
+        val usage = MigrateMain.USAGE_TEXT.lines()
+        for ((command, allowed) in MigrateMain.OPTIONS) {
+            val start = usage.indexOfFirst { it.trimStart().startsWith("$command ") }
+            start.assert().describedAs("usage of $command").isNotNegative()
+            val block = listOf(usage[start]) + usage.drop(start + 1).takeWhile { line ->
+                line.startsWith(" ".repeat(CONTINUATION)) && !line.trimStart().startsWith("(")
+            }
+            val listed = Regex("--([a-z-]+)").findAll(block.joinToString(" ")).map { it.groupValues[1] }.toSet()
+            listed.assert().describedAs(command).isEqualTo(allowed)
+        }
     }
 }

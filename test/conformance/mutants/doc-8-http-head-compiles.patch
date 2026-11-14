@@ -1,0 +1,17 @@
+# Rule: DOC-8
+# Mutant: a statement on http:HEAD compiles again, so a DENY on it denies nothing
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.PolicyCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
+index 1a8e168f..d54b80c3 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
+@@ -196,7 +196,7 @@ class PolicyCompiler(
+         if (pattern.service != ResourcePattern.HTTP_TYPE || verb == null) {
+             return null
+         }
+-        if (verb == HEAD) {
++        if (false && verb == HEAD) {
+             return "$pattern matches no request: a HEAD request is decided as GET; write http:GET (DOC-8, PIP-18)"
+         }
+         if (verb.any { it in 'a'..'z' }) {

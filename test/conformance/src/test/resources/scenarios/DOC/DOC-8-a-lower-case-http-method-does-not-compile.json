@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "DOC-8"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A DENY on http:delete: a method holding a lower-case letter is refused before any decision (PIP-18), so the statement could match no request. The document does not compile, whichever action of the statement it is.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "dead",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": [
+                "http:DELETE",
+                "http:delete"
+              ]
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "dead",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "dead"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "http:delete matches no request"
+  }
+}

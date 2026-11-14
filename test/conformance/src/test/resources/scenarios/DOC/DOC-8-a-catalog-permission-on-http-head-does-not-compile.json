@@ -1,0 +1,45 @@
+{
+  "rules": [
+    "DOC-8"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A catalog entry's short-form action reaches the compiler as the statement RoleExpansion.effective writes for it: on http:HEAD it does not compile, as a written statement does not.",
+  "documents": {
+    "platform": {},
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "probe",
+                  "action": "http:HEAD"
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "tenants": {
+      "acme": {
+        "roles": [
+          {
+            "id": "monitor",
+            "app": "wms",
+            "permissions": [
+              "probe"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "http:HEAD matches no request"
+  }
+}

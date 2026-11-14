@@ -1,0 +1,17 @@
+# Rule: MIG-1
+# Mutant: a DENY whose condition holds on the absent value of a part only 7.x filled is kept, so it denies every request in scope (review of #1342, point 1)
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.Round2ConversionTest --tests me.ahoo.cosec.migrate.ConditionTranslatorTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt
+index a21f4e3e..973b0790 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt
+@@ -395,7 +395,7 @@ internal class PartTranslation(
+      */
+     private fun unmatched(mapped: Parts.Mapped, matches: (String) -> Boolean): Boolean {
+         if (mapped.setBy7x != null) {
+-            return neverSet(mapped, matches(mapped.absentAs))
++            return !(deny && matches(mapped.absentAs)) && neverSet(mapped, matches(mapped.absentAs))
+         }
+         val reason = methodReason(mapped, matches) ?: return false
+         val direction = when {

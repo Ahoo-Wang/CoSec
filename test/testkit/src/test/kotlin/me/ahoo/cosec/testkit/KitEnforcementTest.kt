@@ -32,10 +32,13 @@ import kotlin.io.path.writeText
  * that what it confirms is what the pipeline decides. [PipelineFixture] is the pipeline itself, over the same documents.
  */
 class KitEnforcementTest {
-    /** Members may do anything; a HEAD under /reports is denied as written; nothing under /admin is allowed. */
+    /**
+     * Members may do anything; a GET under /reports is denied, and so a HEAD, decided as GET (a DENY on `http:HEAD`
+     * does not compile, `DOC-8`); nothing under /admin is allowed.
+     */
     private val platform = """{"policies":[
         {"id":"members","statements":[{"effect":"allow","action":"http:*","condition":{"eq":["subject.authenticated",true]}}]},
-        {"id":"no-head","statements":[{"effect":"deny","action":"http:HEAD","resource":"http:path:/reports/**"}]},
+        {"id":"no-head","statements":[{"effect":"deny","action":"http:GET","resource":"http:path:/reports/**"}]},
         {"id":"no-admin","statements":[{"effect":"deny","action":"http:*","resource":"http:path:/admin/**"}]}],
         "bindings":[
         {"id":"members","subject":"*","app":"*","space":"*","policy":"members"},
@@ -60,12 +63,13 @@ class KitEnforcementTest {
     @Test
     fun `a HEAD is decided as the GET it is, by the kit as by the pipeline`() {
         val (outcome, status) = both("HEAD", "/reports/1")
-        status.assert().isEqualTo(200)
+        status.assert().isEqualTo(403)
         (outcome as EngineOutcome.Decided).decision.assert().isInstanceOf(
-            me.ahoo.cosec.model.decision.Decision.Permit::class.java
+            me.ahoo.cosec.model.decision.Decision.Deny::class.java
         )
-        // GET is GET: the DENY written on HEAD applies to neither.
-        both("GET", "/reports/1").second.assert().isEqualTo(200)
+        // The DENY on GET is the one a HEAD meets, by the kit as by the pipeline.
+        both("GET", "/reports/1").second.assert().isEqualTo(403)
+        both("HEAD", "/orders/1").second.assert().isEqualTo(200)
     }
 
     @Test

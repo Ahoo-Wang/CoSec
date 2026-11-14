@@ -95,7 +95,8 @@ class ConverterTest {
             .containsExactly("g" to false, "c" to true, "s" to true)
         val global = platform.policies.first()
         global.statements.map { it.effect }.assert().containsExactly(Effect.ALLOW, Effect.DENY)
-        global.statements[0].actions.assert().containsExactly("http:GET", "http:HEAD")
+        // HEAD beside GET says nothing more in 8.0, which decides a HEAD request as GET (PIP-18, DOC-8).
+        global.statements[0].actions.assert().containsExactly("http:GET")
         global.statements[0].resources.single().pattern.assert().isEqualTo("http:path:/orders/**")
         global.statements[1].actions.assert().containsExactly("http:*")
         platform.policies[1].statements.single().resources.map { it.pattern }.assert()
@@ -416,7 +417,8 @@ class ConverterTest {
                         condition = """{"authenticated":{}}""",
                         statements = listOf(
                             statement(condition = """{"bool":{"and":[{"inRole":{"value":"admin","negate":true}}]}}""", effect = "deny"),
-                            statement(condition = """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}"""),
+                            // The gateway's route id, which 8.0 sets as 7.x did: a part only 7.x filled is NOT-IN-8.0.
+                            statement(condition = """{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}"""),
                             statement(condition = """{"regular":{"part":"request.path","pattern":"^/a$"}}"""),
                             statement(condition = """{"spel":{"value":"true"}}"""),
                         ),

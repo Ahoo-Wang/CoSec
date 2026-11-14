@@ -110,6 +110,19 @@ class ApiKeysCommandTest {
             .isEqualTo(setOf("h1", "h2"))
     }
 
+    /** Round 2 M3: `--app` is read, and the keys it converts declare that app (RFC 0012 §3.5); without it, none. */
+    @Test
+    fun `--app sets the app of the keys it converts`() {
+        val legacy = """{"id":"k1","principalId":"svc","tenantId":"acme","roles":["billing"],"policies":[],"attributes":{},"expiresAt":null,"enabled":true}"""
+        redis.set("$apiKeyPrefix:h1", legacy)
+        val memberships = temp.resolve("memberships.json").also {
+            Files.writeString(it, """[{"tenant":"acme","principal":"svc","roles":["billing"]}]""")
+        }
+        val (code, output) = apiKeys(temp.resolve("app"), "--memberships", memberships.toString(), "--app", "order")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+        ApiKeyCodec.decode(redis.get("$apiKeyPrefix:h1")).app.assert().isEqualTo("order")
+    }
+
     @Test
     fun `a refused key stops the run before anything is written`() {
         val legacy = """{"id":"k1","principalId":"svc","tenantId":"acme","roles":["billing"],"policies":[],"attributes":{"team":"a"},"enabled":true}"""

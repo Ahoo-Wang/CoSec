@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "DOC-8"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A rate limit rule on http:HEAD would limit no request: its action is compiled as a statement's is.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "dead",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "dead",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "dead"
+        }
+      ],
+      "rateLimits": [
+        {
+          "id": "heads",
+          "action": "http:HEAD",
+          "permitsPerSecond": 1
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "http:HEAD matches no request"
+  }
+}

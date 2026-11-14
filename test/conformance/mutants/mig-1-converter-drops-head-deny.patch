@@ -1,0 +1,17 @@
+# Rule: MIG-1
+# Mutant: the converter drops HEAD from a 7.x DENY on HEAD alone, so the DENY is dropped and HEAD requests are permitted
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.Round2ConversionTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
+index 469941f1..93c09620 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
+@@ -117,7 +117,7 @@ internal class StatementTranslator(
+         if (HTTP_GET in action.actions) {
+             return MatcherTranslator.Action(others, action.resources)
+         }
+-        if (deny) {
++        if (false && deny) {
+             reject(
+                 RejectionKind.ACTION_NOT_TRANSLATED,
+                 location,

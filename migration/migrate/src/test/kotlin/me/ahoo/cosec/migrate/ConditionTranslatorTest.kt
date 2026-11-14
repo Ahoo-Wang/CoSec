@@ -45,6 +45,39 @@ class ConditionTranslatorTest {
         )
             .translate(CoSecJson.mapper.readTree(json), "c", deny)
 
+    /**
+     * Round 2 addition C: the same rows against 8.0 as enforcement fills a request, not as the 7.x request held it. 7.x's
+     * appenders filled request attributes and `resource.*`, which no 8.0 host fills, and 8.0 decides a HEAD request as
+     * GET (PIP-18, reported once per conversion). A translation may be narrower in the ALLOW direction, never in the
+     * DENY one.
+     */
+    @Test
+    fun `no row widens access against what enforcement fills`() {
+        val random = Random(SEED)
+        val facts = (List(REQUESTS) { Facts.random(random) } + FIXED).filter { it.reachesDecision }
+        Matchers7x.use {
+            for (row in CORPUS) {
+                val matcher = Matchers7x.matcher(row.json)
+                for (deny in listOf(false, true)) {
+                    val translated = translate(row.json, deny) ?: continue
+                    val ast = Matchers7x.evaluator(translated) { it.enforced }
+                    for (request in facts) {
+                        val old = Matchers7x.matches(matcher, request)
+                        val new = ast(request)
+                        val safe = if (deny) !old || new else !new || old || request.method == "HEAD"
+                        if (!safe) {
+                            fail(
+                                "${row.json} (deny=$deny): 7.x=$old 8.0 as enforced=$new on $request; ${render(
+                                    translated
+                                )}"
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     @Test
     fun `every row agrees with 7x on adversarial requests, never widening`() {
         val random = Random(SEED)
@@ -158,11 +191,11 @@ class ConditionTranslatorTest {
         ).single().shape.assert().contains("ALLOW direction")
         changes("""{"inRole":{"value":"admin@team"}}""", true).assert().isEmpty()
         changes(
-            """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+            """{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}""",
             false
         ).single().change.assert().isEqualTo("D2")
         changes(
-            """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+            """{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}""",
             true
         ).single().shape.assert().contains("kept")
         changes("""{"regular":{"part":"request.path","pattern":"^/a$"}}""", false).map { it.change }.assert()
@@ -178,12 +211,37 @@ class ConditionTranslatorTest {
         changes("""{"eq":{"part":"request.path","value":"","ignoreCase":false}}""", false).assert().isEmpty()
     }
 
+    /**
+     * An ownership check against a template on a part only 7.x filled (review of #1342, point 2): 8.0's eq never holds
+     * on an absent value, not even against another absent one, so as enforced the ALLOW never holds, whatever the
+     * principal carries. Recorded as a narrowing, never wider; in the DENY direction it is rejected.
+     */
+    @Test
+    fun `a template on a part only 7x filled never holds as enforced, and is recorded`() {
+        Matchers7x.use {
+            for (template in listOf("#{principal.id}", "#{principal.attributes['owner']}", "#{tenant.tenantId}")) {
+                val json = """{"eq":{"part":"resource.owner","value":"$template"}}"""
+                val changes = ArrayList<SemanticChange>()
+                val translated = translate(json, false, changes = changes) as Translated.Ast
+                changes.map { it.change }.assert().containsExactly("NOT-IN-8.0")
+                val ast = Matchers7x.evaluator(translated) { it.enforced }
+                val bothEmpty = FIXED.first().copy(principalAttributes = emptyMap(), resourceAttributes = emptyMap())
+                for (request in List(REQUESTS) { Facts.random(Random(SEED + it)) } + FIXED + bothEmpty) {
+                    ast(request).assert().describedAs("$template on $request").isFalse()
+                }
+                val rejections = ArrayList<Rejection>()
+                translate(json, true, rejections).assert().isNull()
+                rejections.single().message.assert().contains("never holds")
+            }
+        }
+    }
+
     @Test
     fun `a template becomes an attribute reference that matches only the principal's own id`() {
         Matchers7x.use {
             for (deny in listOf(false, true)) {
                 val translated = translate(
-                    """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+                    """{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}""",
                     deny
                 ) as Translated.Ast
                 // No expression language reaches 8.0: SpEL only reads the 7.x value when converting.
@@ -193,7 +251,10 @@ class ConditionTranslatorTest {
                 val base = FIXED.first()
                 for (id in Facts.PRINCIPAL_IDS) {
                     for (owner in Facts.PRINCIPAL_IDS) {
-                        val facts = base.copy(principalId = id, requestAttributes = mapOf("owner" to owner))
+                        val facts = base.copy(
+                            principalId = id,
+                            requestAttributes = mapOf("cosec.audit.routeId" to owner)
+                        )
                         ast(facts).assert().describedAs("deny=$deny id=$id owner=$owner").isEqualTo(id == owner)
                     }
                 }
@@ -281,7 +342,8 @@ class ConditionTranslatorTest {
                 directional("""{"inRole":{"value":"admin"}}"""),
                 directional("""{"inRole":{"value":"admin@team"}}"""),
                 exact("""{"eq":{"part":"request.path","value":"/orders/1"}}"""),
-                exact("""{"eq":{"part":"request.method","value":"GET"}}"""),
+                // Negated in a DENY it denied HEAD in 7.x; 8.0 decides HEAD as GET (PIP-18): that DENY is refused.
+                directional("""{"eq":{"part":"request.method","value":"GET"}}"""),
                 exact("""{"eq":{"part":"request.appId","value":""}}"""),
                 exact("""{"eq":{"part":"request.appId","value":"order"}}"""),
                 exact("""{"eq":{"part":"request.spaceId","value":""}}"""),
@@ -290,8 +352,13 @@ class ConditionTranslatorTest {
                 exact("""{"eq":{"part":"request.header.x-tenant","value":"acme"}}"""),
                 exact("""{"eq":{"part":"request.header.x-tenant","value":"1-2","ignoreCase":true}}"""),
                 directional("""{"eq":{"part":"request.header.x-tenant","value":"key","ignoreCase":true}}"""),
-                exact("""{"eq":{"part":"request.attributes.owner","value":"alice"}}"""),
-                exact("""{"eq":{"part":"resource.owner","value":""}}"""),
+                // The gateway's route id: the one request attribute 8.0 sets as 7.x did.
+                exact("""{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"alice"}}"""),
+                // Only 7.x set this one (addition C): an ALLOW narrows to nothing, a DENY is rejected.
+                directional("""{"eq":{"part":"request.attributes.owner","value":"alice"}}"""),
+                // 8.0 never sets resource attributes: holding on the empty value, it would hold for every request, which
+                // is rejected in both directions (review of #1342, point 1).
+                directional("""{"eq":{"part":"resource.owner","value":""}}"""),
                 exact("""{"eq":{"part":"request.path.var.id","value":"owner-1"}}"""),
                 exact("""{"eq":{"part":"context.principal.id","value":"alice"}}"""),
                 exact("""{"eq":{"part":"context.principal.id","value":"(0)"}}"""),
@@ -300,12 +367,18 @@ class ConditionTranslatorTest {
                 exact("""{"eq":{"part":"request.origin","value":"https://example.com"}}"""),
                 exact("""{"eq":{"part":"request.origin.host","value":""}}"""),
                 exact("""{"eq":{"part":"request.referer.host","value":"example.com"}}"""),
+                directional("""{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}"""),
                 directional("""{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}"""),
                 directional(
                     """{"eq":{"part":"request.attributes.owner","value":"#{principal.attributes['owner']}"}}"""
                 ),
                 directional("""{"eq":{"part":"resource.owner","value":"#{tenant.tenantId}"}}"""),
                 exact("""{"in":{"part":"request.path","value":["/orders","/orders/1"]}}"""),
+                // RFC 0006 §5.4.5: the country prefix of 7.x's region is ext.ip2region.country; nothing else of it is.
+                exact("""{"startsWith":{"part":"request.attributes.ipRegion","value":"中国|"}}"""),
+                exact("""{"regular":{"part":"request.attributes.ipRegion","pattern":"^中国\\|.*$"}}"""),
+                directional("""{"eq":{"part":"request.attributes.ipRegion","value":"中国|0|上海|上海市|电信"}}"""),
+                directional("""{"startsWith":{"part":"request.attributes.ipRegion","value":"中国"}}"""),
                 exact("""{"in":{"part":"request.header.x-debug","value":["","1"]}}"""),
                 exact("""{"in":{"part":"context.principal.id","value":["(0)","alice"]}}"""),
                 exact("""{"in":{"part":"request.path","value":[]}}"""),
@@ -335,7 +408,9 @@ class ConditionTranslatorTest {
                 ),
                 exact("""{"time":{"daysOfWeek":["SAT","SUN"],"zone":"America/New_York"}}"""),
                 exact("""{"time":{"from":"02:00","to":"03:00","zone":"Europe/Berlin"}}"""),
-                exact("""{"bool":{"and":[{"authenticated":{}},{"eq":{"part":"request.method","value":"GET"}}]}}"""),
+                directional(
+                    """{"bool":{"and":[{"authenticated":{}},{"eq":{"part":"request.method","value":"GET"}}]}}"""
+                ),
                 exact(
                     """{"bool":{"or":[{"inTenant":{"value":"platform"}},{"eq":{"part":"request.header.x-debug","value":""}}]}}"""
                 ),

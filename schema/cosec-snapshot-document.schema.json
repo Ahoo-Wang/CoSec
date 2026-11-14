@@ -14,7 +14,7 @@
   ],
   "definitions": {
     "actionPattern": {
-      "description": "`service:verb`, `service:*` or `*` (RFC 0005 §5.1).",
+      "description": "`service:verb`, `service:*` or `*` (RFC 0005 §5.1). No `http` action no request can have (`DOC-8`): not `http:HEAD`, which is decided as `http:GET`, and no verb with a lower-case letter.",
       "examples": [
         "*",
         "order:*",
@@ -22,7 +22,7 @@
         "http:GET",
         "http:*"
       ],
-      "pattern": "^(\\*|[^:*\\s\\x00-\\x1F\\x7F-\\x9F]+:(\\*|[^:*\\s\\x00-\\x1F\\x7F-\\x9F]+))$",
+      "pattern": "^(?!http:(HEAD|[^:]*[a-z][^:]*)$)(\\*|[^:*\\s\\x00-\\x1F\\x7F-\\x9F]+:(\\*|[^:*\\s\\x00-\\x1F\\x7F-\\x9F]+))$",
       "type": "string"
     },
     "appDocument": {

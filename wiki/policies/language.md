@@ -145,8 +145,10 @@ Where a request's action comes from:
   typed resource. A HEAD request takes a HEAD route, and without one GET's.
 - Any other HTTP request has the action `http:<METHOD>` (the method as received, such as `http:GET`) on the resource
   of type `http` whose id is its path. HEAD is decided as `http:GET`: it is GET without the content, and servers run the
-  GET handler for it, so `http:HEAD` matches nothing unless a route map maps it. A method holding a lower-case letter
-  is `400` before anything is decided (`PIP-18`). Statements on `service:verb` never match it, and statements on `http:*` never
+  GET handler for it, so `http:HEAD` matches no request, and a route map maps HEAD to a `service:verb` action. A method
+  holding a lower-case letter is `400` before anything is decided (`PIP-18`). So a statement or rate limit rule on
+  `http:HEAD`, or on an `http` verb with a lower-case letter (`http:get`), does not compile (`DOC-8`): a DENY on it
+  would deny nothing. Write `http:GET`, or the method in upper case. Statements on `service:verb` never match it, and statements on `http:*` never
   match a mapped request.
 - A check in code names the action and resource itself ([Checks in code](../integration/checks.md)).
 
