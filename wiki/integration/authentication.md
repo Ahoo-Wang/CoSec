@@ -228,12 +228,16 @@ lifetime, call `TokenConverter.toToken(principal)` or `toToken(principal, access
 A client whose access token expired sends both tokens back. `TokenVerifier.refresh(compositeToken)` checks that:
 
 - the refresh token is validly signed and not expired;
+- it is a refresh token (`cosec.token: "refresh"`, `IDN-13`): an access token in its place is refused, even one whose
+  `sub`, a principal id, is the access token's `jti`;
 - the access token, which may be expired, is validly signed with the same key;
-- the refresh token belongs to that access token (its `sub` is the access token's `jti`);
-- the access token was not revoked, and neither were its principal's tokens.
+- the refresh token belongs to that access token: its `sub` is the access token's `jti`, and its `iat` the access
+  token's, as `JwtTokenConverter` issues the two together.
 
 A failed check throws a `TokenVerificationException`; a refresh token that was issued with another access token
-throws its subclass `RefreshTokenMismatchException`. It returns the principal from the old access token; issue new
+throws its subclass `RefreshTokenMismatchException`. Revocation is not the verifier's question: the caller checks next
+that the access token was not revoked, and neither were its principal's tokens (`SimpleRefreshTokenAuthentication`
+does, below). It returns the principal from the old access token; issue new
 tokens for it with `TokenConverter.toToken`. Refreshing a [delegation token](#tokens) (one with an `act` claim) fails
 too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
 `SimpleRefreshTokenAuthentication` does the check above as an `Authentication`, so with it declared as a bean, a

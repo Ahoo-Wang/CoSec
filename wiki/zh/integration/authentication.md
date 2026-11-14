@@ -135,11 +135,11 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 访问令牌过期的客户端把两个令牌都发回来。`TokenVerifier.refresh(compositeToken)` 检查：
 
 - 刷新令牌签名有效且未过期；
+- 它确实是刷新令牌（`cosec.token: "refresh"`，`IDN-13`）：放在它位置上的访问令牌会被拒绝，即使该访问令牌的 `sub`（一个主体 id）恰好是访问令牌的 `jti`；
 - 访问令牌（可以已过期）由同一个密钥有效签名；
-- 刷新令牌属于该访问令牌（其 `sub` 是访问令牌的 `jti`）；
-- 该访问令牌未被吊销，其主体的令牌也未被吊销。
+- 刷新令牌属于该访问令牌：其 `sub` 是访问令牌的 `jti`，其 `iat` 与访问令牌的相同，因为 `JwtTokenConverter` 同时签发这两个令牌。
 
-检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。它返回旧访问令牌中的主体；用 `TokenConverter.toToken` 为该主体签发新令牌。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。starter 不注册刷新端点。`SimpleRefreshTokenAuthentication` 以 `Authentication` 的形式完成上述检查，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算），再通过 starter 提供的 Bean `TokenRevocation` 读取吊销，判断方式与流水线相同；全程没有阻塞：
+检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。吊销不由校验器判断：调用方接着检查该访问令牌未被吊销，其主体的令牌也未被吊销（下文的 `SimpleRefreshTokenAuthentication` 会这样做）。它返回旧访问令牌中的主体；用 `TokenConverter.toToken` 为该主体签发新令牌。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。starter 不注册刷新端点。`SimpleRefreshTokenAuthentication` 以 `Authentication` 的形式完成上述检查，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算），再通过 starter 提供的 Bean `TokenRevocation` 读取吊销，判断方式与流水线相同；全程没有阻塞：
 
 ```kotlin
 @Bean
