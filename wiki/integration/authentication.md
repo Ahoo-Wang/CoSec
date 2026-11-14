@@ -263,8 +263,10 @@ Two things a refresh does not do:
 - **It does not re-read the user.** The new token carries the claims of the old one. To pick up changed roles on
   refresh, write your own `Authentication` for refresh credentials that verifies them with `TokenVerifier.refresh`
   and then loads the user.
-- **It does not invalidate the old refresh token.** A refresh token stays usable until it expires. To end a
-  session, [revoke](#logout-and-revocation) its access token, which also blocks the refresh token bound to it.
+- **It does not invalidate the old refresh token.** A refresh token stays usable until it expires, and every refresh
+  issues a pair with a refresh token of its own: one pair refreshed again and again lasts as long as its user keeps
+  refreshing. Revoking an access token blocks that token and the refresh token bound to it, not the pairs refreshed
+  from it or before it (see [Logout and revocation](#logout-and-revocation)).
 
 ## Logout and revocation
 
@@ -276,8 +278,11 @@ can set `cosec.jwt.enabled=false`.
 
 From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, then records its `jti`
 in Redis for the refresh token's lifetime. From then on every instance rejects the access token as `token-revoked`,
-and refreshing it fails. Revoke before the access token expires: an expired token cannot be revoked, and its refresh
-token then stays usable. Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to
+and refreshing it fails. That is all a logout ends: the pair the client presents. A pair the session was refreshed
+from, and any pair refreshed from that one, stays usable, so a pair that was copied earlier outlives the logout; so
+does any other session of the user. Revoke before the access token expires: an expired token cannot be revoked, and its
+refresh token then stays usable. To end every session of a user, after a compromise for one, call
+[`revokeSubject`](#revoking-every-token-of-a-principal). Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to
 revoke. `TokenRevoker`'s calls suspend and never block: call them from a `suspend` handler, on any thread.
 
 Every authenticated request checks revocation, without blocking. Three properties of the check matter:

@@ -30,8 +30,8 @@ import java.time.Instant
 interface TokenRevoker {
 
     /**
-     * Revokes the access token so that neither it nor the refresh token bound
-     * to it can be used any more.
+     * Revokes the access token so that neither it nor the refresh token bound to it can be used any more. Only that
+     * pair: a pair it was refreshed from, or one refreshed from that, stays usable; [revokeSubject] ends them all.
      *
      * @param accessToken the access token to revoke
      * @return what the revoked token said
