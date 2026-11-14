@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "pipeline",
-  "description": "Without a HEAD route, HEAD takes GET's: it is order:read on order/7, which the DENY denies.",
+  "description": "Without a HEAD route, HEAD takes GET's: it is order:read on order/7, which the DENY denies, never the http namespace that the http:* ALLOW opens.",
   "documents": {
     "platform": {
       "policies": [
@@ -26,6 +26,16 @@
               "resource": "order/7"
             }
           ]
+        },
+        {
+          "id": "http",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
         }
       ],
       "bindings": [
@@ -42,6 +52,13 @@
           "app": "*",
           "space": "*",
           "policy": "no-read"
+        },
+        {
+          "id": "g:http",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "http"
         }
       ]
     }
