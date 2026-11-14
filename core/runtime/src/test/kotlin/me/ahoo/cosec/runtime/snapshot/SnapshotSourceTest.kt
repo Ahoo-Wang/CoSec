@@ -297,12 +297,15 @@ class SnapshotSourceTest {
 
             store.failure = IllegalStateException("down")
             clock.advance(Duration.ofSeconds(61))
+            // A tick queues its own report on the housekeeping thread, which join() does not wait for: until it has
+            // reported, it would race the reports below (`[true, false]` when it records its warning last).
             source.tick().join()
+            await { metrics.lagExceeded.size == 1 }
             source.reportLag()
             clock.advance(Duration.ofMinutes(5))
             source.reportLag()
 
-            // The second report within lagLogInterval is throttled; the escalation comes after it.
+            // The tick's report warns; the next one within lagLogInterval is throttled; the escalation comes after it.
             metrics.lagExceeded.map { it.third }.assert().containsExactly(false, true)
             metrics.lagExceeded.last().second.assert().isEqualTo(Duration.ofSeconds(361))
 
