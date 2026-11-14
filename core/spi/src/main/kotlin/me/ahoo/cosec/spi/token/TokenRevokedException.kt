@@ -20,7 +20,7 @@ package me.ahoo.cosec.spi.token
  * the security context resolves to anonymous and protected routes answer `401`.
  *
  * @see TokenStore
- * @see RevocableTokenVerifier
+ * @see RevocationReader
  * @see TokenVerificationException
  */
 class TokenRevokedException(s: String) : TokenVerificationException(s)

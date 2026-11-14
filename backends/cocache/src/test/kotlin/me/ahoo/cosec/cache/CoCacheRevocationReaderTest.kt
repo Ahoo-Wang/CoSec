@@ -94,7 +94,7 @@ class CoCacheRevocationReaderTest {
     @Test
     fun aLocalHitDoesNotSuspend() {
         val revoked = tokenId()
-        CoCacheTokenStore(reading.revokedTokenCache).revoke(revoked, Duration.ofMinutes(1))
+        runBlocking { CoCacheTokenStore(reading.revokedTokenCache).revoke(revoked, Duration.ofMinutes(1)) }
         var answer: Result<Boolean>? = null
         repeat(PRIMING_ATTEMPTS) {
             if (answer != null) return@repeat

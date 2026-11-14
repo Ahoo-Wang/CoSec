@@ -17,13 +17,12 @@ import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.api.token.CompositeToken
 
 /**
- * Verifier for validating access and refresh tokens.
+ * Verifies access tokens, and the pair a refresh presents: signatures, expiry and claims.
  *
- * This interface is responsible for:
- * - Verifying the validity of access tokens
- * - Extracting principal information from tokens
- * - Refreshing tokens using refresh tokens
- *
+ * Pure computation by contract: no I/O, no blocking, no state that changes between calls, so the pipeline calls it on
+ * the request's thread, which may be an event loop, and a login calls it wherever it runs. Whether a token was
+ * revoked is not its question: that is a [RevocationReader]'s, read by the caller after this answers (the pipeline's
+ * `TokenAuthenticator`, refresh, `TokenRevoker`), with the one judgement CoSec keeps for it (`TokenRevocation`).
  */
 @CoSecSpi
 interface TokenVerifier {

@@ -20,7 +20,7 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
-import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
@@ -52,10 +52,9 @@ import java.time.Duration
  * - Break-glass (RFC 0009 §4.2, `BRK-8`): only when [verifier] is CoSec's own ([CoSecTokenVerifier]), whose credential
  *   is then [Identity.Method.JWT]. Any other verifier's credential is named [method], and never gets break-glass.
  *
- * Give it the plain verifier (such as `JwtTokenVerifier`), not a [RevocableTokenVerifier]: that one reads the
- * [me.ahoo.cosec.spi.token.TokenStore] synchronously, which may block. A [RevocationReader] that cannot be read answers
- * "not revoked" itself, the documented exception to fail closed; anything it or [verifier] throws otherwise reaches
- * the pipeline, which answers 503.
+ * Revocation is judged by [TokenRevocation], as refresh and logout judge it. A [RevocationReader] that cannot be read
+ * answers "not revoked" itself, the documented exception to fail closed; anything it or [verifier] throws otherwise
+ * reaches the pipeline, which answers 503.
  */
 class TokenAuthenticator(
     private val verifier: TokenVerifier,
@@ -73,8 +72,9 @@ class TokenAuthenticator(
 
     private val credentialMethod = if (ownTokens) Identity.Method.JWT else Identity.Method(method)
 
+    private val revocation = TokenRevocation(revocations, revocationSkew)
+
     init {
-        require(!revocationSkew.isNegative) { "The revocation skew must not be negative, not $revocationSkew." }
         require(ownTokens || credentialMethod != Identity.Method.JWT) {
             "The method [$method] names CoSec's own token; name the tokens of this verifier another way."
         }
@@ -96,14 +96,13 @@ class TokenAuthenticator(
         if (token.attributes.keys.any { it in RESERVED_ATTRIBUTES }) {
             return INVALID
         }
-        if (revocations.isRevoked(token.id)) {
+        try {
+            revocation.check(token)
+        } catch (_: TokenRevokedException) {
             return REVOKED
         }
         val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
         val id = PrincipalId(token.principal)
-        if (SubjectRevocation.revokes(revocations.subjectRevokedBefore(tenant, id), token.issuedAt, revocationSkew)) {
-            return REVOKED
-        }
         return AuthnResult.Authenticated(
             AuthenticatedPrincipal(
                 id,

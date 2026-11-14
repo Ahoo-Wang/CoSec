@@ -802,11 +802,12 @@ public final class me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource$Compa
 	public static synthetic fun of$default (Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource$Companion;Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;
 }
 
-public final class me/ahoo/cosec/runtime/token/RevocableTokenVerifier : me/ahoo/cosec/spi/token/TokenVerifier {
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun refresh (Lme/ahoo/cosec/api/token/CompositeToken;)Lme/ahoo/cosec/spi/token/VerifiedToken;
-	public fun verify (Ljava/lang/String;)Lme/ahoo/cosec/spi/token/VerifiedToken;
+public final class me/ahoo/cosec/runtime/token/DefaultTokenRevoker : me/ahoo/cosec/spi/token/TokenRevoker {
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun revoke (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/runtime/token/SimpleCompositeToken : me/ahoo/cosec/api/token/CompositeToken {
@@ -820,5 +821,11 @@ public final class me/ahoo/cosec/runtime/token/SimpleCompositeToken : me/ahoo/co
 	public fun getRefreshToken ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/token/TokenRevocation {
+	public fun <init> (Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/time/Duration;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun check (Lme/ahoo/cosec/spi/token/VerifiedToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 

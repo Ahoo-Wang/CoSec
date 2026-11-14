@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.cache
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -52,61 +53,61 @@ internal class CoCacheTokenStoreSubjectIntegrationTest {
     }
 
     @Test
-    fun revokeSubjectUntilTtlExpires() {
+    fun revokeSubjectUntilTtlExpires() = runBlocking<Unit> {
         val principal = principal()
-        tokenStoreA.subjectRevokedBefore(tenant, principal).assert().isNull()
+        tokenStoreA.reader.subjectRevokedBefore(tenant, principal).assert().isNull()
 
         tokenStoreA.revokeSubject(tenant, principal, issuedBefore, REVOCATION_TTL)
 
-        tokenStoreA.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
-        tokenStoreA.subjectRevokedBefore(TenantId("other"), principal).assert().isNull()
+        tokenStoreA.reader.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
+        tokenStoreA.reader.subjectRevokedBefore(TenantId("other"), principal).assert().isNull()
         // the entry lives for the ttl plus one second
         Thread.sleep(REVOCATION_TTL.toMillis() + MARGIN_MS)
-        tokenStoreA.subjectRevokedBefore(tenant, principal).assert().isNull()
+        tokenStoreA.reader.subjectRevokedBefore(tenant, principal).assert().isNull()
     }
 
     @Test
-    fun revocationOnOneInstanceReplacesCachedNotRevokedOnAnother() {
+    fun revocationOnOneInstanceReplacesCachedNotRevokedOnAnother() = runBlocking<Unit> {
         val principal = principal()
         // instance B caches "not revoked" locally
-        tokenStoreB.subjectRevokedBefore(tenant, principal).assert().isNull()
+        tokenStoreB.reader.subjectRevokedBefore(tenant, principal).assert().isNull()
 
         tokenStoreA.revokeSubject(tenant, principal, issuedBefore, Duration.ofMinutes(1))
 
         val deadline = System.nanoTime() + Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS / 2).toNanos()
-        while (tokenStoreB.subjectRevokedBefore(tenant, principal) == null && System.nanoTime() < deadline) {
+        while (tokenStoreB.reader.subjectRevokedBefore(tenant, principal) == null && System.nanoTime() < deadline) {
             Thread.sleep(POLL_MS)
         }
-        tokenStoreB.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
+        tokenStoreB.reader.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
     }
 
     @Test
-    fun anEarlierRevocationNeverShortensALaterOne() {
+    fun anEarlierRevocationNeverShortensALaterOne() = runBlocking<Unit> {
         val principal = principal()
         tokenStoreA.revokeSubject(tenant, principal, issuedBefore, Duration.ofMinutes(1))
 
         tokenStoreB.revokeSubject(tenant, principal, issuedBefore.minusSeconds(60), Duration.ofMinutes(1))
-        tokenStoreA.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
+        tokenStoreA.reader.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
 
         tokenStoreB.revokeSubject(tenant, principal, issuedBefore.plusSeconds(60), Duration.ofMinutes(1))
-        tokenStoreB.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore.plusSeconds(60))
+        tokenStoreB.reader.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore.plusSeconds(60))
     }
 
     @Test
-    fun aStaleLocalCopyNeverShortensALaterRevocation() {
+    fun aStaleLocalCopyNeverShortensALaterRevocation() = runBlocking<Unit> {
         val principal = principal()
         // instance B caches "not revoked" locally, then A revokes; B's local copy may still say "not revoked"
-        tokenStoreB.subjectRevokedBefore(tenant, principal).assert().isNull()
+        tokenStoreB.reader.subjectRevokedBefore(tenant, principal).assert().isNull()
         tokenStoreA.revokeSubject(tenant, principal, issuedBefore, Duration.ofMinutes(1))
 
         tokenStoreB.revokeSubject(tenant, principal, issuedBefore.minusSeconds(60), Duration.ofMinutes(1))
 
         instanceA.clearLocal(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME)
-        tokenStoreA.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
+        tokenStoreA.reader.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
     }
 
     @Test
-    fun concurrentRevocationsKeepTheLatest() {
+    fun concurrentRevocationsKeepTheLatest() = runBlocking<Unit> {
         val principal = principal()
         val stores = listOf(tokenStoreA, tokenStoreB)
         val pool = Executors.newFixedThreadPool(CONCURRENT_REVOCATIONS)
@@ -115,13 +116,15 @@ internal class CoCacheTokenStoreSubjectIntegrationTest {
             val revocations = (1..CONCURRENT_REVOCATIONS).map { offset ->
                 pool.submit {
                     start.await()
-                    stores[offset % stores.size]
-                        .revokeSubject(
-                            tenant,
-                            principal,
-                            issuedBefore.plusSeconds(offset.toLong()),
-                            Duration.ofMinutes(1)
-                        )
+                    runBlocking {
+                        stores[offset % stores.size]
+                            .revokeSubject(
+                                tenant,
+                                principal,
+                                issuedBefore.plusSeconds(offset.toLong()),
+                                Duration.ofMinutes(1)
+                            )
+                    }
                 }
             }
             start.countDown()
@@ -131,45 +134,45 @@ internal class CoCacheTokenStoreSubjectIntegrationTest {
         }
 
         instanceA.clearLocal(CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME)
-        tokenStoreA.subjectRevokedBefore(tenant, principal)
+        tokenStoreA.reader.subjectRevokedBefore(tenant, principal)
             .assert().isEqualTo(issuedBefore.plusSeconds(CONCURRENT_REVOCATIONS.toLong()))
     }
 
     @Test
-    fun subMillisecondIssuedBeforeIsRoundedUp() {
+    fun subMillisecondIssuedBeforeIsRoundedUp() = runBlocking<Unit> {
         val principal = principal()
         // a token issued at the whole second, just before a revocation 0.3 ms later, must stay revoked
         val wholeSecond = Instant.ofEpochSecond(1_790_000_000)
         tokenStoreA.revokeSubject(tenant, principal, wholeSecond.plusNanos(300_000), Duration.ofMinutes(1))
 
-        tokenStoreA.subjectRevokedBefore(tenant, principal).assert().isEqualTo(wholeSecond.plusMillis(1))
+        tokenStoreA.reader.subjectRevokedBefore(tenant, principal).assert().isEqualTo(wholeSecond.plusMillis(1))
     }
 
     @Test
-    fun keysAreUnambiguous() {
+    fun keysAreUnambiguous() = runBlocking<Unit> {
         tokenStoreA.revokeSubject(TenantId("a:b"), PrincipalId("c"), issuedBefore, Duration.ofMinutes(1))
 
-        tokenStoreA.subjectRevokedBefore(TenantId("a"), PrincipalId("b:c")).assert().isNull()
+        tokenStoreA.reader.subjectRevokedBefore(TenantId("a"), PrincipalId("b:c")).assert().isNull()
         RevokedSubjectCache.key(TenantId("a:b"), PrincipalId("c"))
             .assert().isNotEqualTo(RevokedSubjectCache.key(TenantId("a"), PrincipalId("b:c")))
     }
 
     @Test
-    fun tokenRevocationsAndSubjectRevocationsStayApart() {
+    fun tokenRevocationsAndSubjectRevocationsStayApart() = runBlocking<Unit> {
         val principal = principal()
         tokenStoreA.revokeSubject(tenant, principal, issuedBefore, Duration.ofMinutes(1))
 
-        tokenStoreA.isRevoked(RevokedSubjectCache.key(tenant, principal)).assert().isFalse()
+        tokenStoreA.reader.isRevoked(RevokedSubjectCache.key(tenant, principal)).assert().isFalse()
     }
 
     @Test
-    fun withoutSubjectCacheItCannotRevokeSubjects() {
+    fun withoutSubjectCacheItCannotRevokeSubjects() = runBlocking<Unit> {
         val tokenStore = CoCacheTokenStore(instanceA.revokedTokenCache)
 
         assertThrows<UnsupportedOperationException> {
-            tokenStore.revokeSubject(tenant, principal(), issuedBefore, Duration.ofMinutes(1))
+            runBlocking { tokenStore.revokeSubject(tenant, principal(), issuedBefore, Duration.ofMinutes(1)) }
         }
-        tokenStore.subjectRevokedBefore(tenant, principal()).assert().isNull()
+        tokenStore.reader.subjectRevokedBefore(tenant, principal()).assert().isNull()
     }
 
     companion object {

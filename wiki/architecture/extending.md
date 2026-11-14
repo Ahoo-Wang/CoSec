@@ -202,9 +202,10 @@ membership marker. Its constructor throws `TokenVerificationException` for claim
 beginning with `(`, an empty tenant, an unpaired surrogate, an impossible app), so `verify` refuses them whichever
 verifier read them.
 
-Give `TokenAuthenticator` the plain verifier (`JwtTokenVerifier`), never a `RevocableTokenVerifier` or another wrapper:
-revocation is checked through the suspending `RevocationReader`, and only the plain verifier's tokens may use
-break-glass. A token with an `act` claim must never become a principal
+A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the
+request's thread. Whether a token was revoked is not its question: `TokenAuthenticator`, refresh
+(`SimpleRefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one
+judgement, `TokenRevocation`. Only CoSec's own verifier's tokens may use break-glass. A token with an `act` claim must never become a principal
 (`IDN-4`): a `TokenVerifier` of your own throws `DelegationUnsupportedException` for it, which `TokenAuthenticator`
 turns into a `token-invalid` refusal, and an `Authenticator` of your own that reads tokens itself returns
 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)` instead of a principal for its `sub`. How tokens, claims and memberships work for
@@ -214,7 +215,7 @@ users is in [Authentication](../integration/authentication.md).
 
 | Extension point | Contract |
 |---|---|
-| `TokenStore` | The write side of revocation, used by logout: `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
+| `TokenStore` | The write side of revocation, used by logout: `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`, both suspending and non-blocking. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
 | `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`, suspending. Return null for an unknown key; throw when the lookup fails (the request answers `503`). |
 

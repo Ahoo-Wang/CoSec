@@ -13,27 +13,29 @@
 
 package me.ahoo.cosec.login.token
 
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.runInterruptible
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.TokenVerifier
 
 abstract class AbstractRefreshTokenAuthentication<C : RefreshTokenCredentials>(
     override val supportCredentials: Class<C>
 ) : Authentication<C>
 
-class SimpleRefreshTokenAuthentication(private val tokenVerifier: TokenVerifier) :
-    AbstractRefreshTokenAuthentication<RefreshTokenCredentials>(RefreshTokenCredentials::class.java) {
-    private val blocking = Dispatchers.IO.limitedParallelism(BLOCKING_PARALLELISM)
-
-    /** Off the caller's thread: [TokenVerifier.refresh] may read a revocation store over blocking I/O. */
-    override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject =
-        runInterruptible(blocking) { TokenSubject.of(tokenVerifier.refresh(credentials)) }
-
-    private companion object {
-        const val BLOCKING_PARALLELISM = 16
+/**
+ * Refreshes a token pair (`authentication.md`, Refreshing tokens): [tokenVerifier] checks the pair, pure computation on
+ * the caller's thread, then [revocation] reads whether the access token, or every token of its principal, was revoked,
+ * suspending without blocking. The subject is what the old access token said, for the new token to say again.
+ */
+class SimpleRefreshTokenAuthentication(
+    private val tokenVerifier: TokenVerifier,
+    private val revocation: TokenRevocation,
+) : AbstractRefreshTokenAuthentication<RefreshTokenCredentials>(RefreshTokenCredentials::class.java) {
+    override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
+        val token = tokenVerifier.refresh(credentials)
+        revocation.check(token)
+        return TokenSubject.of(token)
     }
 }
 

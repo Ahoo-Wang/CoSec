@@ -237,11 +237,14 @@ throws its subclass `RefreshTokenMismatchException`. It returns the principal fr
 tokens for it with `TokenConverter.toToken`. Refreshing a [delegation token](#tokens) (one with an `act` claim) fails
 too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
 `SimpleRefreshTokenAuthentication` does the check above as an `Authentication`, so with it declared as a bean, a
-refresh is a login with credentials that implement `RefreshTokenCredentials`:
+refresh is a login with credentials that implement `RefreshTokenCredentials`. It verifies the pair on the caller's
+thread, which is pure computation, and reads revocations through `TokenRevocation`, the starter's bean, which judges them
+as the pipeline does; nothing blocks:
 
 ```kotlin
 @Bean
-fun refreshTokenAuthentication(tokenVerifier: TokenVerifier) = SimpleRefreshTokenAuthentication(tokenVerifier)
+fun refreshTokenAuthentication(tokenVerifier: TokenVerifier, tokenRevocation: TokenRevocation) =
+    SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -271,7 +274,7 @@ From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies 
 in Redis for the refresh token's lifetime. From then on every instance rejects the access token as `token-revoked`,
 and refreshing it fails. Revoke before the access token expires: an expired token cannot be revoked, and its refresh
 token then stays usable. Revoking a [delegation token](#tokens) fails too, since it never verifies: there is nothing to
-revoke. `TokenRevoker` is synchronous: call it off the event loop.
+revoke. `TokenRevoker`'s calls suspend and never block: call them from a `suspend` handler, on any thread.
 
 Every authenticated request checks revocation, without blocking. Three properties of the check matter:
 

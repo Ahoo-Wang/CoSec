@@ -139,11 +139,12 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 - 刷新令牌属于该访问令牌（其 `sub` 是访问令牌的 `jti`）；
 - 该访问令牌未被吊销，其主体的令牌也未被吊销。
 
-检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。它返回旧访问令牌中的主体；用 `TokenConverter.toToken` 为该主体签发新令牌。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。starter 不注册刷新端点。`SimpleRefreshTokenAuthentication` 以 `Authentication` 的形式完成上述检查，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录：
+检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。它返回旧访问令牌中的主体；用 `TokenConverter.toToken` 为该主体签发新令牌。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。starter 不注册刷新端点。`SimpleRefreshTokenAuthentication` 以 `Authentication` 的形式完成上述检查，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算），再通过 starter 提供的 Bean `TokenRevocation` 读取吊销，判断方式与流水线相同；全程没有阻塞：
 
 ```kotlin
 @Bean
-fun refreshTokenAuthentication(tokenVerifier: TokenVerifier) = SimpleRefreshTokenAuthentication(tokenVerifier)
+fun refreshTokenAuthentication(tokenVerifier: TokenVerifier, tokenRevocation: TokenRevocation) =
+    SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -162,7 +163,7 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 
 JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore` 和 `RevocationReader` Bean。开启 JWT 但两者都没有时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验、从不吊销令牌的服务仍然需要读取器；既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
 
-在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。此后每个实例都以 `token-revoked` 拒绝该访问令牌，刷新它也会失败。请在访问令牌过期之前吊销：已过期的令牌无法吊销，它的刷新令牌随后仍然可用。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 是同步的：请在事件循环之外调用它。
+在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。此后每个实例都以 `token-revoked` 拒绝该访问令牌，刷新它也会失败。请在访问令牌过期之前吊销：已过期的令牌无法吊销，它的刷新令牌随后仍然可用。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 的调用都是挂起函数，不会阻塞：在任何线程上从 `suspend` 处理函数里调用即可。
 
 每个已认证的请求都会以非阻塞方式检查吊销。这个检查有三点值得注意：
 

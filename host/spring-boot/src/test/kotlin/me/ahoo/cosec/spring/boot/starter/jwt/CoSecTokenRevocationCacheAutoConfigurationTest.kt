@@ -13,6 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import io.mockk.mockk
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.RevokedSubjectCache
@@ -78,8 +79,9 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
                 val tenant = TenantId("tenant")
                 val principal = PrincipalId(RandomIdGenerator.generate())
                 val issuedBefore = Instant.ofEpochMilli(1_790_000_000_000)
-                context.getBean(TokenRevoker::class.java).revokeSubject(tenant, principal, issuedBefore)
-                tokenStore.subjectRevokedBefore(tenant, principal).assert().isEqualTo(issuedBefore)
+                runBlocking { context.getBean(TokenRevoker::class.java).revokeSubject(tenant, principal, issuedBefore) }
+                runBlocking { (tokenStore as CoCacheTokenStore).reader.subjectRevokedBefore(tenant, principal) }
+                    .assert().isEqualTo(issuedBefore)
             }
     }
 }

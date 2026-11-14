@@ -20,11 +20,9 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * The read side of a [TokenStore] for the coroutine pipeline (RFC 0006 §5.3.2): the same two questions, as suspend
- * functions that never block the calling thread, which may be an event loop.
- *
- * It sits next to [TokenStore] rather than replacing its methods (RFC 0006 Q11): outside the pipeline,
- * `RevocableTokenVerifier` reads [TokenStore] synchronously, as the `TokenVerifier` that login and refresh use.
+ * The read side of a [TokenStore] (RFC 0006 §5.3.2): whether a token, or every token of its principal, was revoked, as
+ * suspend functions that never block the calling thread, which may be an event loop. The pipeline, refresh and
+ * [TokenRevoker] all read it, through one judgement (`TokenRevocation` in `cosec-runtime`).
  *
  * A store that cannot be read follows the documented exception to "fail closed" (AGENTS.md): it answers "not revoked"
  * itself, as `CoSecCacheSpecs` configures the revocation caches to do. Anything an implementation throws fails the
@@ -39,7 +37,7 @@ interface RevocationReader {
     suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant?
 
     companion object {
-        /** Nothing is ever revoked: the default when no [TokenStore] is configured, like [TokenStore.NoOp]. */
+        /** Nothing is ever revoked: for a host that verifies tokens no one revokes. */
         val NONE: RevocationReader = object : RevocationReader {
             override suspend fun isRevoked(tokenId: String): Boolean = false
 
@@ -49,9 +47,9 @@ interface RevocationReader {
 }
 
 /**
- * RFC 0004 §4.5.3: the one rule for revoking all tokens of a principal. Both token paths read it with the same skew
- * (`cosec.authentication.revocation.skew`): the pipeline's `TokenAuthenticator` and `RevocableTokenVerifier`, which
- * guards refresh, so a token the pipeline refuses cannot be refreshed into one it accepts.
+ * RFC 0004 §4.5.3: the one rule for revoking all tokens of a principal. Every token path reads it with the same skew
+ * (`cosec.authentication.revocation.skew`), through `TokenRevocation`: the pipeline's `TokenAuthenticator` and
+ * refresh, so a token the pipeline refuses cannot be refreshed into one it accepts.
  */
 object SubjectRevocation {
     /**

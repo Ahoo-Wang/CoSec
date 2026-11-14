@@ -18,12 +18,18 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
 import me.ahoo.cosec.login.token.TokenSubject
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.time.Instant
 
 class SimpleRefreshTokenAuthenticationTest {
     var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
@@ -38,7 +44,10 @@ class SimpleRefreshTokenAuthenticationTest {
 
     @Test
     fun authenticate(): Unit = runBlocking {
-        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(jwtTokenVerifier)
+        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(
+            jwtTokenVerifier,
+            TokenRevocation(RevocationReader.NONE)
+        )
         refreshTokenAuthentication.supportCredentials.assert().isEqualTo(RefreshTokenCredentials::class.java)
         val oldToken: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", null))
 
@@ -49,16 +58,19 @@ class SimpleRefreshTokenAuthenticationTest {
 
     @Test
     fun `a refresh token of another token is refused`(): Unit = runBlocking {
-        val authentication = SimpleRefreshTokenAuthentication(jwtTokenVerifier)
+        val authentication = SimpleRefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE))
         val alice = jwtTokenConverter.toToken(TokenSubject("alice", null))
         val bob = jwtTokenConverter.toToken(TokenSubject("bob", null))
 
         assertThrows<TokenVerificationException> { authentication.authenticate(credentials(alice, bob)) }
     }
 
-    /** A verifier reads the revocation store over blocking I/O: never on the caller's thread, an event loop in WebFlux. */
+    /**
+     * The verifier is pure computation and runs on the caller's thread; the revocation read suspends. A revoked access
+     * token is not refreshed.
+     */
     @Test
-    fun `the refresh runs off the caller's thread`(): Unit = runBlocking {
+    fun `the refresh verifies on the caller's thread and refuses a revoked token`(): Unit = runBlocking {
         var verifying: Thread? = null
         val verifier = object : TokenVerifier by jwtTokenVerifier {
             override fun refresh(token: CompositeToken): VerifiedToken {
@@ -66,10 +78,17 @@ class SimpleRefreshTokenAuthenticationTest {
                 return jwtTokenVerifier.refresh(token)
             }
         }
+        val old = jwtTokenConverter.toToken(TokenSubject("alice", null))
+        val revoked = Jwts.decode(old.accessToken).id
+        val revocations = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = tokenId == revoked
 
-        SimpleRefreshTokenAuthentication(verifier)
-            .authenticate(credentials(jwtTokenConverter.toToken(TokenSubject("alice", null))))
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
+        }
 
-        verifying.assert().isNotNull().isNotSameAs(Thread.currentThread())
+        assertThrows<TokenRevokedException> {
+            SimpleRefreshTokenAuthentication(verifier, TokenRevocation(revocations)).authenticate(credentials(old))
+        }
+        verifying.assert().isSameAs(Thread.currentThread())
     }
 }

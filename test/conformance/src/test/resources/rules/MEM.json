@@ -40,7 +40,7 @@
         "runtime:TokenAuthenticatorTest#aRevokedSubjectsOlderTokensAreRejected",
         "spi:RevocationReaderTest#subjectRevocation",
         "runtime:SubjectRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
-        "spring-boot:CoSecJwtAutoConfigurationTest#theRefreshVerifierTakesTheRevocationSkew"
+        "spring-boot:CoSecJwtAutoConfigurationTest#theRevocationJudgementTakesTheRevocationSkew"
       ],
       "pending": null
     }

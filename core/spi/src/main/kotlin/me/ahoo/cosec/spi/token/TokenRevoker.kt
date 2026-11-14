@@ -16,17 +16,14 @@ package me.ahoo.cosec.spi.token
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 
 /**
  * Revokes tokens for logout.
  *
- * The application exposes its own logout endpoint and calls [revoke] with the
- * access token to invalidate.
+ * The application exposes its own logout endpoint and calls [revoke] with the access token to invalidate. Both calls
+ * suspend and never block the calling thread.
  *
- * @see DefaultTokenRevoker
  * @see TokenStore
  */
 @CoSecSpi
@@ -43,50 +40,18 @@ interface TokenRevoker {
      * the bound refresh token) or already revoked
      */
     @Throws(TokenVerificationException::class)
-    fun revoke(accessToken: String): VerifiedToken
+    suspend fun revoke(accessToken: String): VerifiedToken
 
     /**
      * Revokes every token of [principal] in [tenant] issued before [issuedBefore], access and refresh tokens alike:
      * the emergency revocation that memberships read from token claims rely on (RFC 0004 §4.5.3). Tokens issued
      * later, such as after the principal logs in again, are accepted, unless [issuedBefore] lies in the future.
      *
-     * Like [revoke], it takes effect only where tokens are verified by a `RevocableTokenVerifier` over the same
+     * Like [revoke], it takes effect wherever tokens are checked against a [RevocationReader] over the same
      * [TokenStore]. The default implementation throws.
      *
      * @throws UnsupportedOperationException if the revoker or its [TokenStore] cannot record it
      */
-    fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant = Instant.now()): Unit =
+    suspend fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant = Instant.now()): Unit =
         throw UnsupportedOperationException("${javaClass.name} cannot revoke the tokens of a principal.")
-}
-
-/**
- * Default [TokenRevoker] backed by a [TokenStore].
- *
- * @param tokenVerifier verifies the token and resolves its tokenId before revoking
- * @param tokenStore where the revocation entry is recorded
- * @param revocationTtl how long each revocation entry is kept; must cover the
- * full refresh token validity, so it never expires before the bound refresh
- * token does -- the starter wires it from `cosec.jwt.token-validity.refresh`
- * @param clock the time [revokeSubject] measures a future `issuedBefore` from
- */
-class DefaultTokenRevoker @JvmOverloads constructor(
-    private val tokenVerifier: TokenVerifier,
-    private val tokenStore: TokenStore,
-    private val revocationTtl: Duration,
-    private val clock: Clock = Clock.systemUTC()
-) : TokenRevoker {
-
-    override fun revoke(accessToken: String): VerifiedToken {
-        val token = tokenVerifier.verify(accessToken)
-        tokenStore.revoke(token.id, revocationTtl)
-        return token
-    }
-
-    /**
-     * The entry is kept for [revocationTtl] past [issuedBefore], so it outlives every refresh token it revokes.
-     */
-    override fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant) {
-        val untilIssuedBefore = Duration.between(clock.instant(), issuedBefore).coerceAtLeast(Duration.ZERO)
-        tokenStore.revokeSubject(tenant, principal, issuedBefore, revocationTtl + untilIssuedBefore)
-    }
 }

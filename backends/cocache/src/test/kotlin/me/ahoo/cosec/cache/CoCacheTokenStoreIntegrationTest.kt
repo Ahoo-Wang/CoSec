@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.cache
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -38,35 +39,35 @@ internal class CoCacheTokenStoreIntegrationTest {
     }
 
     @Test
-    fun revokeThenIsRevokedUntilTtlExpires() {
+    fun revokeThenIsRevokedUntilTtlExpires() = runBlocking<Unit> {
         val tokenId = RandomIdGenerator.generate()
-        tokenStoreA.isRevoked(tokenId).assert().isFalse()
+        tokenStoreA.reader.isRevoked(tokenId).assert().isFalse()
         tokenStoreA.revoke(tokenId, REVOCATION_TTL)
-        tokenStoreA.isRevoked(tokenId).assert().isTrue()
+        tokenStoreA.reader.isRevoked(tokenId).assert().isTrue()
         // the entry lives for the ttl plus one second
         Thread.sleep(REVOCATION_TTL.toMillis() + MARGIN_MS)
-        tokenStoreA.isRevoked(tokenId).assert().isFalse()
+        tokenStoreA.reader.isRevoked(tokenId).assert().isFalse()
     }
 
     @Test
-    fun isRevokedWhenUnknownTokenId() {
-        tokenStoreA.isRevoked(RandomIdGenerator.generate()).assert().isFalse()
+    fun isRevokedWhenUnknownTokenId() = runBlocking<Unit> {
+        tokenStoreA.reader.isRevoked(RandomIdGenerator.generate()).assert().isFalse()
     }
 
     @Test
-    fun revocationOnOneInstanceReplacesCachedNotRevokedOnAnother() {
+    fun revocationOnOneInstanceReplacesCachedNotRevokedOnAnother() = runBlocking<Unit> {
         val tokenId = RandomIdGenerator.generate()
         // instance B caches "not revoked" locally
-        tokenStoreB.isRevoked(tokenId).assert().isFalse()
+        tokenStoreB.reader.isRevoked(tokenId).assert().isFalse()
 
         tokenStoreA.revoke(tokenId, Duration.ofMinutes(1))
 
         // the write's invalidation reaches B well before the local "not revoked" answer would expire
         val deadline = System.nanoTime() + Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS / 2).toNanos()
-        while (!tokenStoreB.isRevoked(tokenId) && System.nanoTime() < deadline) {
+        while (!tokenStoreB.reader.isRevoked(tokenId) && System.nanoTime() < deadline) {
             Thread.sleep(POLL_MS)
         }
-        tokenStoreB.isRevoked(tokenId).assert().isTrue()
+        tokenStoreB.reader.isRevoked(tokenId).assert().isTrue()
     }
 
     companion object {
