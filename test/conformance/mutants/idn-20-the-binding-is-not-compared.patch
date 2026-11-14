@@ -1,0 +1,17 @@
+# Rule: IDN-20
+# Mutant: the browser's binding is not compared with the one recorded, so another browser's callback signs in
+# Tests: :social:test --tests me.ahoo.cosec.social.justauth.JustAuthProviderTest
+
+diff --git a/extensions/social/src/main/kotlin/me/ahoo/cosec/social/justauth/JustAuthProvider.kt b/extensions/social/src/main/kotlin/me/ahoo/cosec/social/justauth/JustAuthProvider.kt
+index f3900350..eab8d61d 100644
+--- a/extensions/social/src/main/kotlin/me/ahoo/cosec/social/justauth/JustAuthProvider.kt
++++ b/extensions/social/src/main/kotlin/me/ahoo/cosec/social/justauth/JustAuthProvider.kt
+@@ -101,7 +101,7 @@ class JustAuthProvider(
+         // Taken first, whatever follows: a state is never tried twice.
+         val recorded = states.take(state) ?: return "The [$name] callback's state is unknown, expired or already used."
+         val presented = hash(credentials.binding)
+-        return if (MessageDigest.isEqual(presented.toByteArray(), recorded.toByteArray())) {
++        return if (presented.isNotEmpty() || recorded.isNotEmpty()) {
+             null
+         } else {
+             "The [$name] callback's state was issued to another browser."

@@ -1,0 +1,17 @@
+# Rule: IDN-20
+# Mutant: a callback reads its state and leaves it, so one state signs in as often as its callback is opened
+# Tests: :social:test --tests me.ahoo.cosec.social.justauth.RedisAuthStateCacheTest
+
+diff --git a/extensions/social/src/main/kotlin/me/ahoo/cosec/social/justauth/RedisSocialStateStore.kt b/extensions/social/src/main/kotlin/me/ahoo/cosec/social/justauth/RedisSocialStateStore.kt
+index e8c2d50f..8b417ea6 100644
+--- a/extensions/social/src/main/kotlin/me/ahoo/cosec/social/justauth/RedisSocialStateStore.kt
++++ b/extensions/social/src/main/kotlin/me/ahoo/cosec/social/justauth/RedisSocialStateStore.kt
+@@ -40,7 +40,7 @@ class RedisSocialStateStore(
+     }
+ 
+     override suspend fun take(state: String): String? = runInterruptible(blocking) {
+-        redisTemplate.opsForValue().getAndDelete(keyPrefix + state)
++        redisTemplate.opsForValue().get(keyPrefix + state)
+     }
+ 
+     private companion object {

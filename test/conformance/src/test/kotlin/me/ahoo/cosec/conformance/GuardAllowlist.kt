@@ -50,6 +50,9 @@ object GuardAllowlist {
             "cocache:ReactiveRedisRateLimiterTest#aPrefixWithAnEmptyHashTagIsRefused",
             "cocache:ReactiveRedisRateLimiterTest#aRuleIdThatWouldEmptyTheHashTagIsRefused",
             "cocache:ReactiveRedisRateLimiterTest#bucketsSpreadOverTheCluster",
+            "social:JustAuthProviderTest#a state is used once",
+            "social:JustAuthProviderTest#another browser's state is refused",
+            "social:RedisAuthStateCacheTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
             "spring-boot:StarterWiringTest#a required Kafka audit that cannot be created fails startup",

@@ -184,6 +184,18 @@
         "cocache:CoCacheRevocationReaderTest#aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails",
         "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens"
       ]
+    },
+    {
+      "id": "IDN-20",
+      "source": "Round-2 review M4 (2026-11-13)",
+      "statement": "A social sign-in's callback is accepted only with a state CoSec issued, once, and only from the browser that started the sign-in: the state is taken from the SocialStateStore (removed atomically) before the provider is called, whatever follows, and the browser's binding must hash to the one recorded with the state. A callback whose state is unknown, expired, already used or issued to another browser is refused, and the provider is never called for it.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "social:JustAuthProviderTest#a state is used once",
+        "social:JustAuthProviderTest#another browser's state is refused",
+        "social:RedisAuthStateCacheTest#aStateIsTakenOnce"
+      ]
     }
   ]
 }
