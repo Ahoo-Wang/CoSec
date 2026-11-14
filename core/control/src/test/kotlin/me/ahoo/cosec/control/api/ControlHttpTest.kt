@@ -199,6 +199,14 @@ class ControlHttpTest {
     }
 
     @Test
+    fun `a rollback carries the confirmations it is given`() {
+        val body = """{"revision":1,"note":"back","confirmations":[{"policy":"p","statement":0,"digest":"d"}]}"""
+        val (created, change) = call("POST", "/documents/tenant:acme:rollback", body)
+        created.assert().describedAs("$change").isEqualTo(201)
+        change.get("confirmations").single().get("digest").asString().assert().isEqualTo("d")
+    }
+
+    @Test
     fun `simulate, explain and analyze over HTTP`() {
         val request = """{"tenant":"acme","principal":"bob","roles":["ops@team-a"],"app":"order","space":"team-a",""" +
             """"action":"order:read","resource":"order/1","time":"2026-11-01T00:00:00Z"}"""
@@ -532,6 +540,12 @@ class ControlHttpTest {
                 "[document]: ",
             ),
             Case("POST", "/documents/tenant:acme:rollback", """{"revision":"one"}""", "[revision] is not an integer"),
+            Case(
+                "POST",
+                "/documents/tenant:acme:rollback",
+                """{"revision":1,"confirmations":"x"}""",
+                "[confirmations] is not an array",
+            ),
             Case("POST", "/changes/a b:publish", null, "[change] is not a change id"),
             Case(
                 "POST",

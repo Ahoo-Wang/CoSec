@@ -266,7 +266,8 @@ reference index, the diff, `simulate`, `explain` and `analyze` all read that exp
 
 A `putRole` needs `cosec:write` on the role (`doc/tenant/<t>/role/<id>`). When it adds a binding it did not derive, it
 also needs `cosec:grant` on its one scope; `removeRole` and a `putRole` that only removes permissions need only
-`cosec:write`. So an administrator can be narrower than `cosec:tenant-admin`:
+`cosec:write`. A `putCatalog` or `putPolicy` that makes a `"*"` role derive a binding it did not needs the same
+`cosec:grant`: what a role derives is what counts, not which operation made it so. So an administrator can be narrower than `cosec:tenant-admin`:
 
 | Administrator | `cosec:write` | `cosec:grant` |
 |---|---|---|

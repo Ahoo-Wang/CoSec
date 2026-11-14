@@ -1,0 +1,169 @@
+{
+  "rules": [
+    "CTL-31"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "olga writes, publishes and skips windows on the platform document, but does not hold cosec:approve. She removes the binding that holds the platform's DENY on exporting orders for everyone: nothing above the platform still denies it, so the change waits for a second person, and publishes once pia approves.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "platform-operator",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:publish",
+                "cosec:skip-shadow"
+              ],
+              "resource": [
+                "doc/platform",
+                "doc/platform/**",
+                "doc/app/wms",
+                "doc/app/wms/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "no-export",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:export",
+              "resource": "order/**"
+            }
+          ]
+        },
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "olga",
+          "subject": {
+            "principal": "olga",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "platform-operator"
+        },
+        {
+          "id": "no-export",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-export"
+        },
+        {
+          "id": "readers",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "olga": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "olga",
+        "document": "platform",
+        "operations": [
+          {
+            "removeBinding": "no-export"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "olga"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "olga"
+      }
+    },
+    {
+      "approve": {
+        "change": "c1",
+        "by": "pia"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "olga"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "AWAITING_APPROVAL",
+      "refused 409",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 2
+    },
+    "escalations": {
+      "c1": [
+        "NOT_ANALYZED"
+      ]
+    }
+  }
+}

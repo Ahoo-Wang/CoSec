@@ -11,13 +11,13 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 控制面随 `cosec-control` 模块提供（它需要 `cosec-cocache`，因为文档保存在 Redis 中）。它在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供 HTTP API；其设置为 `cosec.control.*`（[配置](../operations/configuration.md)），文档如何存储以及如何首次发布见[存储](../operations/storage.md)。
 
-控制请求首先是一个普通请求：宿主管道对它认证，并且必须允许它，因此文档必须允许运维人员访问该 API 路径。之后每一步都以该主体的身份再次授权，所在应用为 `cosec.control.app-id`（默认 `cosec-control`），动作为针对所涉及文档（`doc/platform`、`doc/app/<appId>`、`doc/tenant/<tenantId>`）或条目的 `cosec:<verb>`。在任何策略之前，先执行一条硬性规则：租户的主体只能操作自己租户的文档；平台文档和应用文档属于 `(platform)` 租户的主体。
+控制请求首先是一个普通请求：宿主管道对它认证，并且必须允许它，因此文档必须允许运维人员访问该 API 路径。之后每一步都以该主体的身份再次授权，所在应用为 `cosec.control.app-id`（默认 `cosec-control`），动作为针对所涉及文档（`doc/platform`、`doc/app/<appId>`、`doc/tenant/<tenantId>`）或条目的 `cosec:<verb>`。条目的 id 是其资源中的一段，所以变更不能写入含 `/` 的 id；唯一的例外是权限策略的 `perm:<app>/<id>`，规则要用 `**` 才能匹配到它。在任何策略之前，先执行一条硬性规则：租户的主体只能操作自己租户的文档；平台文档和应用文档属于 `(platform)` 租户的主体。
 
 | 步骤 | 需要 |
 |---|---|
 | 读取文档、历史、差异 | `cosec:read` |
-| 提议、`apply`、rebase | 对写入或删除的每个条目需要 `cosec:write`，对写入的每个绑定的作用域需要 `cosec:grant`；`apply` 和回滚还需要 `cosec:read` |
-| 开启影子窗口、发布 | `cosec:publish` |
+| 提议、`apply`、rebase | 对写入或删除的每个条目需要 `cosec:write`，对写入的每个绑定的作用域、以及因此派生出新绑定的每个角色的作用域需要 `cosec:grant`；`apply` 和回滚还需要 `cosec:read` |
+| 开启影子窗口、发布 | `cosec:publish`；break-glass 的申请和撤销改为需要 `cosec:breakglass` |
 | 跳过影子窗口 | `cosec:skip-shadow` |
 | 审批、驳回 | `cosec:approve` |
 | `simulate`、`explain`、`analyze` | 在决定该请求的租户文档上分别需要 `cosec:simulate`、`cosec:explain`（没有主体的请求是 `(0)` 的文档）；在所查询租户的文档上需要 `cosec:analyze` |
@@ -48,9 +48,9 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | 检查 | 状态码 | 发现 |
 |---|---|---|
 | `V1` | 400 | 候选无法读回为文档。 |
-| `V2` | 400、422、503 | 文档超过 8 MB；id 使用了保留前缀（`cosec:`、`g:`、`r:`）；租户策略复用了平台策略的 id 但不是它的完全相同的副本（完全相同的副本是[分区流程](../operations/upgrading.md#partition-plan)的第一步）；平台策略使用了某个租户文档已经定义或绑定的 id，或在某个租户文档持有它的副本时被修改，发现中列出这些文档（这类租户的文档读不到时为 `503`）；候选中任何位置的绑定所在的应用不能作为应用 id（空白、`*`、含 `:`、控制字符或落单的代理项、超过 128 个字符；位于 `$.bindings[i].app` 的 `400`：仍含有这种绑定的文档必须移除它，只移除它的变更是合法的）。 |
+| `V2` | 400、422、503 | 文档超过 8 MB；id 使用了保留前缀（`cosec:`、`g:`、`r:`）；变更写入的 id 含 `/`（`422`；权限策略的 `perm:<app>/<id>` 可以含，文档中已有这种 id 的条目可以保留或删除）；租户策略复用了平台策略的 id 但不是它的完全相同的副本（完全相同的副本是[分区流程](../operations/upgrading.md#partition-plan)的第一步）；平台策略使用了某个租户文档已经定义或绑定的 id，或在某个租户文档持有它的副本时被修改，发现中列出这些文档（这类租户的文档读不到时为 `503`）；候选中任何位置的绑定所在的应用不能作为应用 id（空白、`*`、含 `:`、控制字符或落单的代理项、超过 128 个字符；位于 `$.bindings[i].app` 的 `400`：仍含有这种绑定的文档必须移除它，只移除它的变更是合法的）。 |
 | `COMPILE` | 422 | 某个策略、条件、模式、绑定或规则无法用平台的限制、平台声明的属性以及控制面主机的属性提供者声明的属性编译。 |
-| `REFERENCES` | 422 | 绑定指向的策略无处可解析；平台变更删除了其他文档引用的策略（自己定义了同 id 策略的租户不算）；租户的 `boundary` 不是平台边界。 |
+| `REFERENCES` | 422 | 绑定指向的策略无处可解析，或指向平台边界（边界不能被绑定）；平台变更删除了其他文档引用的策略，或把被引用的策略改成边界、把被引用的边界改成策略（`CTL-30`；自己定义了同 id 策略的租户不算）；租户的 `boundary` 不是平台边界。 |
 | `OPERATION` | 422 | 操作删除了不存在的内容，或设置了该文档没有的字段。 |
 | `IF_MATCH` | 412 | 条目已不再是操作的 `ifMatch` 所说的样子。 |
 | `V3`（警告） | | 平台的 `limits` 或 `attributes` 有变化：其他文档会在每个实例上重新编译，不再能编译的文档失败即拒绝。 |
@@ -227,7 +227,7 @@ flowchart LR
 | `UNRESOLVED` | 新增或修改的绑定指向一条没有任何文档定义的策略，它授予什么无从判断。 |
 | `ANONYMOUS` | 授给默认租户 `(0)` 中的 `Anyone`：未认证的调用方都在这个租户中，授出也会作用于它们。 |
 | `UNREADABLE` | 授出触及的某个 app 文档读不到，作者在那里持有什么无从得知；或 app 列表不可信，而授出触及所有 app（[存储](../operations/storage.md#publishing-through-the-control-plane)）。 |
-| `NOT_ANALYZED` | 非信任根所做的平台或应用文档变更，或租户边界变更。 |
+| `NOT_ANALYZED` | 由非信任根所做：放入任何内容、或删除一条 DENY 的平台或应用文档变更（`CTL-31`，每条策略或绑定一项，见下文），或租户边界变更。 |
 | `TENANT_BINDING` | 与应用文档的 `NOT_ANALYZED` 一起出现：变更新增或放宽了某条权限策略的 ALLOW，租户文档中每条绑定该策略的绑定各是一项，只写出绑定 id 和它所在的租户文档，审批人由此看到变更影响到谁。仅供参考：审批针对的是 `NOT_ANALYZED`，只有这些条目变化时，已审批的变更不会退回 `AWAITING_APPROVAL`。 |
 | `BREAK_GLASS` | 新增或修改的 break-glass 绑定：总是需要第二个人。 |
 
@@ -240,7 +240,11 @@ flowchart LR
 - **租户与平台都定义的 id。** 执行时，两条策略内容不同，这样的绑定或附加才因二义而被拒绝。分析不比较内容，把每个这样的 id 都当作二义，这只会减少权利：作者经它什么也不持有；它绑定到作者的地方，按拒绝一切的 DENY 计。
 - **每一份 app 文档。** app 文档绑定角色，所以无论变更是否点名该 app，它都可能在该 app 中拒绝作者某些东西。分析读取 app 列表列出的每一份 app 文档；读不到的那份，使触及它所在 app 的每个授出成为 `UNREADABLE`。app 列表完整之前（升级后，在 [`cosec-migrate repair-references`](../operations/upgrading.md#repair-the-back-reference-index) 运行之前），覆盖所有 app 的每个授出（app 为 `*` 的绑定或附加）都是 `UNREADABLE`，经条件收窄到变更没有点名的 app 的授出也是：分析从绑定的作用域取 app，不从条件中取。
 
-删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
+删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。
+
+租户可以独自删除自己的 DENY：平台和各应用的 DENY 以及它的边界仍然约束着它。平台文档和应用文档之上没有这样的约束，所以删除其中一条 DENY 的变更需要第二个人（`CTL-31`）：每条含 DENY 的 `policy <id> of <document>`、每条所绑策略含 DENY 或找不到的 `binding <id> of <document>`，各是一项 `NOT_ANALYZED` 升级。两份文档按[展开后](./role-permissions.md#roles)的形式读取：删除角色，或用 `putRole` 去掉一项权限，按角色不再派生的每条绑定计。撤销 break-glass 绑定不算这样的删除：它结束的是一次应急，一个人即可（[break-glass](../guide/security-model.md#break-glass)）。
+
+对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
 
 API key 无论其主体持有什么，都不是信任根，也从不审批。CoSec 按校验来源识别自己的 API key，任何名为 `api-key` 的凭证（包括网关转发的身份所带的）也算作 API key。你自己的认证器认可的凭证，在 CoSec 看来是人的凭证：不要给面向工作负载的认证器授予 `cosec:approve` 或 `cosec:platform-admin`。
 
@@ -264,7 +268,7 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 
 写入时只比较该文档自己的头。检查读过的其他文档（例如同一时刻落地的平台变更）可能在发布的最后一次检查与写入之间变化；这时控制面重新分析这次变更，记 `HEADS_MOVED`，分析发现了无人审批的升级项时记 `REVIEW_NEEDED`。变更保持已发布：为什么这是安全的、如何复核这类事件，见[一次发布比较什么](../operations/storage.md#what-a-publish-compares)。
 
-要撤销某个修订，用 `{"revision": 11, "note": "..."}` 调用 `POST /documents/{key}:rollback`，它会提议一个 `ROLLBACK` 变更，把文档恢复为该修订时的样子。它和其他变更一样经过检查、窗口、审批和发布。保留哪些修订、保留多久，见[存储](../operations/storage.md)。
+要撤销某个修订，用 `{"revision": 11, "note": "..."}` 调用 `POST /documents/{key}:rollback`，它会提议一个 `ROLLBACK` 变更，把文档恢复为该修订时的样子。它和其他变更一样经过检查、窗口、审批和发布，所以恢复带 `onMissing: "nomatch"` 的 DENY 时要像提议一样带上 `confirmations`：旧修订中的确认是为另一个变更给出的。保留哪些修订、保留多久，见[存储](../operations/storage.md)。
 
 ## 访问审查 {#access-reviews}
 

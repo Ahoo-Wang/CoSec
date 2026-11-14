@@ -108,7 +108,9 @@
         "control:ChangeBatchAuthorizationTest#an operator revoked during the decisions of a change is refused - #1218",
         "control:ChangeBatchAuthorizationTest#a document that moved during the decisions has them taken again - #1218",
         "control:ChangeBatchAuthorizationTest#documents that cannot be confirmed at the end refuse the change - #1218",
-        "control:ChangeBatchAuthorizationTest#documents that keep moving refuse the change - #1218"
+        "control:ChangeBatchAuthorizationTest#documents that keep moving refuse the change - #1218",
+        "control:EntryIdsTest#an id that would add a segment to its resource is refused",
+        "control:EntryIdsTest#a permission policy keeps the slash its id has"
       ],
       "pending": null
     },
@@ -298,7 +300,9 @@
       "level": "control",
       "guards": [
         "control:ReferrerCleanupRaceTest#a revision's late removal never drops a reference a later revision indexed again - #1207",
-        "control:ReferrerCleanupRaceTest#a revision's removal that waits still removes the reference when nothing indexed it again"
+        "control:ReferrerCleanupRaceTest#a revision's removal that waits still removes the reference when nothing indexed it again",
+        "control:RevisionsTest#repairing keeps what a head refers to, and what a publish still in flight indexed",
+        "control:RevisionsTest#repairing leaves a reference a later revision indexed meanwhile"
       ],
       "pending": null
     },
@@ -346,6 +350,45 @@
       "level": "control",
       "guards": [
         "control:SharedPolicyCopyTest"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-30",
+      "source": "RFC 0007 §5.8",
+      "statement": "A platform or app change that turns a policy other documents refer to into a boundary, or a boundary they refer to into a policy, is refused (422) when it is checked and again when it is written, as removing it is: a binding reaches only a policy and a tenant's boundary only a boundary, so one of the other kind is missing to them. A policy nothing refers to may change kind.",
+      "level": "control",
+      "guards": [
+        "control:BoundaryReferencesTest#a policy a tenant binds does not become a boundary",
+        "control:BoundaryReferencesTest#a boundary a tenant names does not become a policy",
+        "control:BoundaryReferencesTest#a policy nothing refers to changes kind, and a change of content is not one",
+        "control:BoundaryReferencesTest#the head write refuses a change of kind too, for a reference added after the check"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-31",
+      "source": "RFC 0007 §7.4.4",
+      "statement": "A platform or app change that removes a DENY needs a second person unless the trust root publishes it, and under four-eyes the trust root needs one too: removing a policy that holds a DENY, or a binding whose policy holds one or cannot be read, read from the expanded document, so a role removed or put with fewer permissions counts for each binding it no longer derives. Nothing holds over these documents as the platform's DENYs and a boundary hold over a tenant's, which removes its own DENY alone. Revoking a break-glass binding is not such a removal (§8).",
+      "level": "control",
+      "guards": [
+        "control:DenyRemovalTest#removing a platform DENY needs a second person, and removing an ALLOW does not",
+        "control:DenyRemovalTest#the trust root removes a DENY alone, and under four-eyes it needs a second person too",
+        "control:DenyRemovalTest#an app role whose permission holds a DENY is removed or narrowed by two people",
+        "control:DenyRemovalTest#a tenant removes its own DENY alone",
+        "control:DenyRemovalTest#revoking a break-glass binding ends an emergency, and a policy that cannot be read holds a DENY"
+      ],
+      "pending": null
+    },
+    {
+      "id": "CTL-32",
+      "source": "RFC 0007 §9.1, §7.6",
+      "statement": "A boundary is not bound: a tenant or app binding that names a platform boundary is refused when it is checked (422 REFERENCES), as the data plane would find no policy of that id, and the grant analysis reads a boundary as no policy at all.",
+      "level": "control",
+      "guards": [
+        "control:BoundaryReferencesTest#a tenant does not bind a platform boundary",
+        "control:BoundaryReferencesTest#an app does not bind a platform boundary either",
+        "control:BoundaryReferencesTest#a grant analysis reads a boundary as no policy at all"
       ],
       "pending": null
     }

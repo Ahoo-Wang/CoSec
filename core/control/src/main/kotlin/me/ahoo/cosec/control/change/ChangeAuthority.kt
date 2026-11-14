@@ -44,7 +44,6 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.document.RoleDefinition
 import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
@@ -66,7 +65,7 @@ import kotlin.time.TimeSource
  *
  * 1. the hard rule ([TenantIsolation]): a 403 that no policy can lift;
  * 2. each target with the [authorizer]: `cosec:write` on each entry an operation touches, `cosec:grant` on the scope
- *    of each binding it puts and of each role that derives a binding it did not, `cosec:unprotect` on each protected entry it changes, and the step's own action on the
+ *    of each binding it puts and of each role that comes to derive a binding it did not, `cosec:unprotect` on each protected entry it changes, and the step's own action on the
  *    document. A deny is a 403, an indeterminate decision or an error a 503;
  * 3. for a candidate that checks clean, the grant analysis ([GrantAnalyzer]) of what it grants, as the operator, against
  *    the current heads. What it cannot prove contained is an [Escalation]: approval, never "probably fine" (GRT-2).
@@ -142,7 +141,10 @@ class ChangeAuthority(
                 require(via, operator, ControlActions.BREAKGLASS, ControlResources.document(key))
             }
             for (operation in operations) {
-                authorizeOperation(via, operator, key, operation, base)
+                authorizeOperation(via, operator, key, operation)
+            }
+            for (binding in derivedAnew(key, operations, base)) {
+                require(via, operator, ControlActions.GRANT, scopeOf(key, binding))
             }
         }
     }
@@ -152,7 +154,6 @@ class ChangeAuthority(
         operator: Operator,
         key: SnapshotKey,
         operation: Operation,
-        base: PolicyDocument?
     ) {
         suspend fun need(action: Action, resource: Resource) = require(via, operator, action, resource)
         when (operation) {
@@ -166,7 +167,7 @@ class ChangeAuthority(
             is Operation.RemoveBinding -> need(ControlActions.WRITE, entry(key, BINDING, operation.id.value))
             is Operation.PutRateLimit -> need(ControlActions.WRITE, entry(key, RATE_LIMIT, operation.rule.id))
             is Operation.RemoveRateLimit -> need(ControlActions.WRITE, entry(key, RATE_LIMIT, operation.id))
-            is Operation.PutRole -> authorizeRole(via, operator, key, operation, base)
+            is Operation.PutRole -> need(ControlActions.WRITE, entry(key, ROLE, operation.role.id.value))
             is Operation.RemoveRole -> need(ControlActions.WRITE, entry(key, ROLE, operation.id.value))
             is Operation.PutCatalog -> need(ControlActions.WRITE, section(key, "catalog"))
             is Operation.SetLimits -> need(ControlActions.WRITE, section(key, "limits"))
@@ -175,32 +176,27 @@ class ChangeAuthority(
         }
     }
 
-    /** `cosec:write` on the role, and `cosec:grant` on the scope of a binding it derives that [base] does not. */
-    private suspend fun authorizeRole(
-        via: ControlAuthorizer,
-        operator: Operator,
-        key: SnapshotKey,
-        operation: Operation.PutRole,
-        base: PolicyDocument?,
-    ) {
-        require(via, operator, ControlActions.WRITE, entry(key, ROLE, operation.role.id.value))
-        newBinding(key, operation.role, base)?.let {
-            require(via, operator, ControlActions.GRANT, scopeOf(key, it))
-        }
-    }
-
     /**
-     * A binding [role] would derive that [base]'s role of its id does not, or `null` when it only narrows (RFC 0012
-     * §7.2). A role has one scope, so one is enough to check `cosec:grant` on it. A binding of the same id in another
-     * space is a new binding: the space is what `cosec:grant` is about.
+     * For each role of the candidate [operations] make of [base], a binding it derives that [base]'s role of its id does
+     * not (RFC 0012 §7.2), whichever operation makes it derive one: the role itself, or the catalog or the permission
+     * policy a `"*"` role takes its permissions from. Two changes must not reach what one is refused. A role has one
+     * scope, so one is enough to check `cosec:grant` on it. A binding of the same id in another space is a new binding:
+     * the space is what `cosec:grant` is about. Operations that do not apply make no candidate, which never publishes.
      */
-    private fun newBinding(key: SnapshotKey, role: RoleDefinition, base: PolicyDocument?): Binding? {
+    private fun derivedAnew(key: SnapshotKey, operations: List<Operation>, base: PolicyDocument?): List<Binding> {
+        if (operations.none { it is Operation.PutRole || it is Operation.PutCatalog || it is Operation.PutPolicy }) {
+            return emptyList()
+        }
+        val candidate = Operations.apply(key, base, operations).candidate ?: return emptyList()
         val (kind, owner) = Revisions.ownerOf(key)
-        val catalog = RoleExpansion.definedInCatalog(base)
-        val before = base?.roles?.firstOrNull { it.id == role.id }
-            ?.let { RoleExpansion.bindings(kind, owner, it, catalog) }.orEmpty()
-            .mapTo(HashSet()) { it.id to it.scope.space }
-        return RoleExpansion.bindings(kind, owner, role, catalog).firstOrNull { (it.id to it.scope.space) !in before }
+        val catalogBefore = RoleExpansion.definedInCatalog(base)
+        val catalogAfter = RoleExpansion.definedInCatalog(candidate)
+        val before = base?.roles.orEmpty().associateBy { it.id }
+        return candidate.roles.mapNotNull { role ->
+            val held = before[role.id]?.let { RoleExpansion.bindings(kind, owner, it, catalogBefore) }.orEmpty()
+                .mapTo(HashSet()) { it.id to it.scope.space }
+            RoleExpansion.bindings(kind, owner, role, catalogAfter).firstOrNull { (it.id to it.scope.space) !in held }
+        }
     }
 
     /**
@@ -461,8 +457,9 @@ class ChangeAuthority(
 
     /**
      * What a platform or app change needs (RFC 0007 §7.4.1): the analysis reads tenant documents, so one by anyone but
-     * the trust root, or by it under four-eyes, needs a second person for whatever it puts. For an app document, the
-     * approver also sees each tenant binding the change widens (RC1-34).
+     * the trust root, or by it under four-eyes, needs a second person for whatever it puts, and for each DENY it removes
+     * ([removedDenies], `CTL-31`). For an app document, the approver also sees each tenant binding the change widens
+     * (RC1-34).
      */
     private suspend fun untenanted(
         key: SnapshotKey,
@@ -475,10 +472,44 @@ class ChangeAuthority(
         if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding && it !is Operation.RemoveRole }) {
             escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
         }
+        escalations += removedDenies(key, base, candidate, documents)
         if (key is SnapshotKey.App) {
             escalations += referringBindings(key, base, candidate, documents)
         }
         return escalations
+    }
+
+    /**
+     * Each DENY of platform or app [key] that [candidate] removes (RFC 0007 §7.4.4, amended on 2026-11-09; `CTL-31`).
+     * A tenant may remove its own DENY alone, since the platform's and the apps' DENYs and its boundary still hold over
+     * it; nothing holds over these, so removing one widens what every tenant may do, and needs a second person. What the
+     * DENY is judged by is [Narrowing]'s: a binding removed is a DENY removed unless its policy is shown to be ALLOWs
+     * only. A document that cannot be read is a 503: an approval must not be skipped for what could not be read.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun removedDenies(
+        key: SnapshotKey,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        documents: ChangeChecks.Context,
+    ): List<Escalation> {
+        base ?: return emptyList()
+        val removed = try {
+            Narrowing.removedDenies(base, candidate) { policy ->
+                policyElsewhere(key, policy) { documents.head(it)?.document }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            throw ChangeRejectedException(UNAVAILABLE, "the DENYs [$key] removes could not be read: ${e.message}", e)
+        }
+        return removed.map {
+            Escalation(
+                "$it of $key",
+                NOT_ANALYZED,
+                "it removes a DENY: only the trust root does it alone"
+            )
+        }
     }
 
     /**

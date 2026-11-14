@@ -33,6 +33,8 @@ import me.ahoo.cosec.runtime.document.RoleExpansion
  * - The platform document has the built-in control-plane policies (RFC 0007 §7.3), as the engine's platform does.
  * - Break-glass bindings are left out: they let their principal act in an emergency, never grant (a check that only
  *   break-glass permits is refused as well, RFC 0006 §9.4.3). Leaving out a grantor's binding only takes rights away.
+ * - A boundary is no policy (RFC 0007 §7.6): the engine holds them apart and answers a binding of one as missing, so
+ *   here one does not resolve either.
  * - The document format has no `protected` flag yet; no entry is protected until it does (RFC 0007 §7.4.4).
  * - Roles and short-form permissions are read expanded (RFC 0012 §6.1), the one document that is enforced: fragments
  *   are split by permission, on both sides of a change.
@@ -44,7 +46,7 @@ internal object GrantDocuments {
         }
         val effective = RoleExpansion.effective(document)
         return GrantDocument(
-            policies = effective.policies.map(::policy),
+            policies = effective.policies.filterNot { it.boundary }.map(::policy),
             bindings = effective.bindings.filterNot { it.breakGlass },
         )
     }

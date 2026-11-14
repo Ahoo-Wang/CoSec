@@ -1,0 +1,102 @@
+{
+  "rules": [
+    "CTL-30"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "acme binds the platform's shared. Turning shared into a boundary would leave that binding naming nothing: every request it applies to would be indeterminate. The control plane refuses it (422), naming tenant:acme, and the head stays.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "staff",
+              "subject": {
+                "role": "staff"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "shared"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    },
+    {
+      "propose": {
+        "change": "c3",
+        "document": "platform",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "shared",
+              "boundary": true,
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "DRAFT"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": [],
+      "c3": [
+        "REFERENCES"
+      ]
+    },
+    "heads": {
+      "platform": 1,
+      "tenant:acme": 1
+    }
+  }
+}
