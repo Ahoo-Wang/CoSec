@@ -758,6 +758,10 @@ SPI 的契约（KDoc 与 `extending.md`）：**不得阻塞调用线程**。CoSe
 - 静态配置的规则（现在的 `LocalRateLimitRuleLoader` 与 `RateLimitRuleProvider`）由 `cosec-migrate` 转换进 `Platform` 文档；本地开发用内存
   `SnapshotDocumentStore` 装载本地文件，与本地策略相同（RFC 0003）。`RateLimitRuleProvider` SPI 在 PR-10 删除（Q16，AGENTS.md 要求先问）。
 - 规则是低基数、慢变化的数据，正是 P11 定义的快照数据（RFC 0003 I6）；计数器不进快照。
+- **上限**（2026-11-13 修订，第 2 轮审查的 M2 与 L5，#1318，`DOC-6`）：一份文档至多 64 条限流规则，超过即编译失败（控制面 `COMPILE` 422）。被放行的请求
+  每匹配一条规则就是一个义务，管道按平台、应用、租户的顺序、各文档内按书写顺序依次向限流器获取，每条一次调用；没有上限时，文档作者决定每个被放行
+  请求的限流器调用次数，而平台规则先获取，所以平台能先限住租户。上限可以在 8.x 提高而不破坏任何文档，降低则会。`windowSeconds` 有上界（#1318 定为一年，
+  后端组审查的 M3 将其降为一天：计数键在不允许淘汰的 Redis 中存活两个窗口），`permitsPerSecond × windowSeconds` 须有限且不超过 2⁶³。不改限流器 SPI。
 
 > **实现说明（2026-10-27，#1078）**：文档的 `schema` 仍是 2：`rateLimits` 一节是可选的，已有的 8.0 文档依然有效（RFC 0008 Q5）。应用与租户的规则用各自的计数桶
 > `app:<app>/<id>` 与 `tenant:<tenant>/<id>`；平台规则的 id 沿用 7.x 的 Redis 桶。
