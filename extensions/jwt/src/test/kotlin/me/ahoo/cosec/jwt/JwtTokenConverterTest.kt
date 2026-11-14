@@ -80,6 +80,39 @@ internal class JwtTokenConverterTest {
         verified2.principal.assert().isEqualTo(principal.id)
     }
 
+    /**
+     * A token's attributes are what every further check of the request decides on: no level of them can be changed
+     * after verification, nested objects and arrays included.
+     */
+    @Test
+    fun verifiedAttributesAreReadOnlyAtEveryLevel() {
+        val subject = TokenSubject(
+            "id",
+            null,
+            attributes = mapOf(
+                "department" to "ops",
+                "groups" to listOf("a", mapOf("b" to listOf("c"))),
+                "org" to mapOf("unit" to "ops", "teams" to listOf("x")),
+            )
+        )
+        val attributes = jwtTokenVerifier.verify(jwtTokenConverter.toToken(subject).accessToken).attributes
+        attributes.assert().isEqualTo(subject.attributes)
+
+        @Suppress("UNCHECKED_CAST")
+        fun <T> Any?.mutable() = this as T
+        assertThrownBy<UnsupportedOperationException> {
+            attributes.mutable<MutableMap<String, Any>>()["department"] = "finance"
+        }
+        val groups = attributes["groups"].mutable<MutableList<Any>>()
+        assertThrownBy<UnsupportedOperationException> { groups.add("finance") }
+        val nested = groups[1].mutable<MutableMap<String, Any>>()
+        assertThrownBy<UnsupportedOperationException> { nested["b"] = "finance" }
+        assertThrownBy<UnsupportedOperationException> { nested["b"].mutable<MutableList<Any>>().add("finance") }
+        val org = attributes["org"].mutable<MutableMap<String, Any>>()
+        assertThrownBy<UnsupportedOperationException> { org["unit"] = "finance" }
+        assertThrownBy<UnsupportedOperationException> { org["teams"].mutable<MutableList<Any>>().add("finance") }
+    }
+
     /** RC1-25: a token never carries an attribute CoSec sets for another credential, such as `apiKeyId`. */
     @Test
     fun aReservedAttributeIsNotIssued() {

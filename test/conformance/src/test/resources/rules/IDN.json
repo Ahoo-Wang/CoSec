@@ -258,6 +258,18 @@
         "social:JustAuthProviderTest#another browser's state is refused",
         "social:RedisAuthStateCacheTest#aStateIsTakenOnce"
       ]
+    },
+    {
+      "id": "IDN-21",
+      "source": "Round-2 review L3 (2026-11-14)",
+      "statement": "A principal's attributes cannot be changed once its authenticator has returned it: they are what the host reads from its SecurityContext and what every further check of the request decides on (subject.attributes.*). AuthenticatedPrincipal keeps a read-only view of the map it is handed, and CoSec's token verifier makes the attributes claim read-only at every level, nested objects and arrays included. A change through the principal, at any level, throws, and a further check decides as the first did; what is read is what the authenticator handed over.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "spi:AuthenticatedPrincipalTest#attributesAreReadOnly",
+        "jwt:JwtTokenConverterTest#verifiedAttributesAreReadOnlyAtEveryLevel",
+        "testkit:PipelineFixtureTest#aFurtherCheckCannotBeWidenedThroughThePrincipalsAttributes"
+      ]
     }
   ]
 }

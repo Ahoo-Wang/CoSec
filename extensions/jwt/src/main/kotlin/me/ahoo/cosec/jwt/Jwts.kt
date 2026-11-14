@@ -22,6 +22,7 @@ import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
+import java.util.Collections
 
 /**
  * What [JwtTokenVerifier] needs to read a token: decoding, which reads a token without checking its signature, and
@@ -158,7 +159,30 @@ internal object Jwts {
         if (claim.isMissing) {
             return emptyMap()
         }
-        return claim.asMap() ?: throw TokenVerificationException("The token's [$name] claim is not an object.")
+        val attributes = claim.asMap() ?: throw TokenVerificationException("The token's [$name] claim is not an object.")
+        return readOnly(attributes)
+    }
+
+    /**
+     * [map] with every nested object and array read-only too: the principal wraps only the outer map, and its attributes
+     * are what every further check of the request decides on. A map whose values hold no object or array, the usual
+     * claim, is wrapped without a copy.
+     */
+    private fun <V> readOnly(map: Map<String, V>): Map<String, V> {
+        if (map.values.none { it is Map<*, *> || it is List<*> }) {
+            return Collections.unmodifiableMap(map)
+        }
+        @Suppress("UNCHECKED_CAST")
+        return Collections.unmodifiableMap(map.mapValues { (_, value) -> readOnlyValue(value) as V })
+    }
+
+    private fun readOnlyValue(value: Any?): Any? = when (value) {
+        is Map<*, *> -> {
+            @Suppress("UNCHECKED_CAST")
+            readOnly(value as Map<String, Any?>)
+        }
+        is List<*> -> Collections.unmodifiableList(value.map(::readOnlyValue))
+        else -> value
     }
 
     /**

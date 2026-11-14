@@ -42,6 +42,11 @@ and have to be provisioned again.
 - **The control plane's authorization beans cannot be replaced, `@Primary` or not** (round 2 L6). A second
   `ControlAuthorizer`, `ChangeAuthority`, `Changes`, `ControlPlane` or `ControlHttp` bean marked `@Primary`, or named as
   an injection point's parameter, was injected in place of CoSec's; it now fails startup, as a plain second bean did.
+- **A principal's attributes are read-only** (round 2 L3). `SecurityContext.principal.attributes` was the map the
+  authenticator handed over: an application that cast it to a mutable map and changed it changed what every further
+  `AuthorizationChecker` check of the request decided on. It is now an unmodifiable view, and a token's nested objects
+  and arrays are read-only too: a change throws `UnsupportedOperationException`. Copy the map to change it. An
+  authenticator of your own must not change the map it hands over afterwards.
 - **The test kit reads a request as enforcement does** (round 2 M2, `PIP-15`). `PolicyTestKit` decided `http:HEAD`, a
   lower-case method and a path with a dot segment as written, so it confirmed a DENY on `http:HEAD` that the pipeline,
   which decides HEAD as GET, never applies. It now decides HEAD as GET and normalizes paths, and answers
