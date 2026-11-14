@@ -35,7 +35,8 @@ and have to be provisioned again.
   for HEAD, so a DENY on `http:GET` did not stop it: HEAD now takes a route map's HEAD route, or GET's, and unmapped it
   is `http:GET`; a statement on `http:HEAD` matches nothing unless a route map maps HEAD. A method such as `delete` was
   decided as `http:delete`, which a DENY on `http:DELETE` does not name, while backends that fold case served it as
-  DELETE: it is now `400 invalid-request`.
+  DELETE: it is now `400 invalid-request`. `AuthorizationChecker` and the control plane's simulate, explain and analyze
+  read an `http` action the same way: `http:HEAD` as `http:GET`, and a lower-case verb is a deny, or `400`.
 - **The client address is read once** (`PIP-16`). Where the server resolves forwarded headers itself
   (`server.forward-headers-strategy=native`, which Spring Boot also turns on by itself on Kubernetes and the other
   cloud platforms it detects), CoSec no longer reads `X-Forwarded-For` a second time: on Tomcat it takes the address the

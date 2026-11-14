@@ -73,8 +73,9 @@ object PipelineFixtures {
         headers: Map<String, List<String>> = emptyMap(),
         cookies: Map<String, List<String>> = emptyMap(),
         host: HostScope = HostScope(null),
+        method: String = "GET",
     ): HttpFacts = HttpFacts(
-        method = "GET",
+        method = method,
         rawPath = path,
         rawQuery = query,
         headers = Headers.of(headers),

@@ -176,12 +176,13 @@
     {
       "id": "PIP-15",
       "source": "RFC 0006 §7.6; round-2 review M2",
-      "statement": "A check by host code (`AuthorizationChecker`) never permits what enforcement would refuse to decide: an `http` path is normalized as a request's path is, one enforcement answers 400 for is a deny, and any other resource is held to a request path's length bounds.",
+      "statement": "A check by host code (`AuthorizationChecker`) never permits what enforcement would refuse to decide: an `http` path is normalized as a request's path is, one enforcement answers 400 for is a deny, and any other resource is held to a request path's length bounds. An `http` action is read as a request's method is (`PIP-18`): a verb with a lower-case letter is a deny, and `http:HEAD` is decided as `http:GET`.",
       "level": "pipeline",
       "guards": [
         "runtime:AuthorizationCheckerTest#a path enforcement refuses is never permitted",
         "runtime:AuthorizationCheckerTest#a path is decided as enforcement normalizes it",
-        "runtime:AuthorizationCheckerTest#a resource longer than a request path can be is denied"
+        "runtime:AuthorizationCheckerTest#a resource longer than a request path can be is denied",
+        "runtime:AuthorizationCheckerTest#a check reads an http method as enforcement does"
       ],
       "pending": null
     },

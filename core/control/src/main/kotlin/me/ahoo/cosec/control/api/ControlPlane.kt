@@ -392,8 +392,19 @@ class DefaultControlPlane(
                     "it names no other tenant."
             )
         }
-        return Decidable(key, request.copy(resource = enforceable(request.resource)))
+        return Decidable(
+            key,
+            request.copy(action = enforceable(request.action), resource = enforceable(request.resource))
+        )
     }
+
+    /** [action] as enforcement would decide it (`PIP-18`): [PathNormalizer.enforceable]. */
+    private fun enforceable(action: Action): Action = PathNormalizer.enforceable(action)
+        ?: throw ChangeRejectedException(
+            BAD_REQUEST,
+            "The action is not one enforcement decides: an http method with a lower-case letter is refused as a " +
+                "request's is; http:HEAD is decided as http:GET."
+        )
 
     /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [PathNormalizer.enforceable]. */
     private fun enforceable(resource: Resource): Resource = PathNormalizer.enforceable(resource)
@@ -430,12 +441,14 @@ class DefaultControlPlane(
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)
         val resource = enforceable(query.resource)
+        // The query's action as enforcement reads it (PIP-18): who may HEAD is who may GET.
+        val asked = query.copy(action = enforceable(query.action))
         val app = queriedApp(query)
         val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
         val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
         val platform = SnapshotKey.Platform.takeIf { it in readable }?.let { entry(it) }
         val application = app?.takeIf { it in readable }?.let { entry(it) }
-        val found = AccessFindings(query, ResourceTarget(resource))
+        val found = AccessFindings(asked, ResourceTarget(resource))
         for (key in readable) {
             // The documents and their parsed statements come from the cache simulate and explain read (RC1-41).
             val entry = when (key) {
@@ -444,7 +457,7 @@ class DefaultControlPlane(
                 else -> entry(key)
             } ?: continue
             for (binding in entry.effective.bindings) {
-                if (!applies(binding, query)) {
+                if (!applies(binding, asked)) {
                     continue
                 }
                 found.add(key, binding, analyzed(binding, entry, platform, application))

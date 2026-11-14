@@ -169,6 +169,15 @@ class ClientIpReadingsTest {
         ).assert().isNotNull()
     }
 
+    /** Where Spring lacks one of them, startup fails naming the cause, never with a bare NullPointerException. */
+    @Test
+    fun `a Spring member the detection cannot find fails startup naming it`() {
+        assertThrownBy<ClientIpConfigurationException> {
+            ClientIpReadings.reflected(null, "ForwardedHeaderFilter", "forwardedHeaderFilter", "field removeOnly")
+        }.hasMessageContaining("[forwardedHeaderFilter]").hasMessageContaining("field removeOnly")
+        ClientIpReadings.reflected("found", "T", "b", "m").assert().isEqualTo("found")
+    }
+
     @Test
     fun `the native strategy on a server CoSec cannot tell fails startup`() {
         assertThrownBy<ClientIpConfigurationException> {
