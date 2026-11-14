@@ -186,8 +186,13 @@ data class Facts(
 
         /** Regions as the bundled database writes them, and the 7.x value of a request the appender left alone. */
         val REGIONS = listOf(
-            "中国|0|上海|上海市|电信", "中国|0|广东省|深圳市|移动", "中国香港|0|0|0|0", "美国|0|0|0|0",
-            "0|0|0|0|内网IP", "中国|0|0|0|0", "",
+            "中国|0|上海|上海市|电信",
+            "中国|0|广东省|深圳市|移动",
+            "中国香港|0|0|0|0",
+            "美国|0|0|0|0",
+            "0|0|0|0|内网IP",
+            "中国|0|0|0|0",
+            "",
         )
 
         private val STRINGS = listOf(
@@ -305,7 +310,10 @@ internal object Matchers7x {
             Translated.Never -> { _ -> false }
             is Translated.Ast -> {
                 val checked = when (
-                    val result = ConditionChecker(zones = JavaZones.RESOLVER, catalog = IP2REGION).check(translated.condition)
+                    val result = ConditionChecker(
+                        zones = JavaZones.RESOLVER,
+                        catalog = IP2REGION
+                    ).check(translated.condition)
                 ) {
                     is CheckResult.Valid -> result.condition
                     is CheckResult.Invalid -> error("The translation does not compile: ${result.errors}")
@@ -316,7 +324,12 @@ internal object Matchers7x {
 
     /** What 8.0's ip2region provider declares. */
     private val IP2REGION = AttributeCatalog.of(
-        listOf("country", "province", "city", "isp").map { Attribute.external("ext.ip2region.$it", AttributeType.STRING) },
+        listOf(
+            "country",
+            "province",
+            "city",
+            "isp"
+        ).map { Attribute.external("ext.ip2region.$it", AttributeType.STRING) },
     )
 }
 

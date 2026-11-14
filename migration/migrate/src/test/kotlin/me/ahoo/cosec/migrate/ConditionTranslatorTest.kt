@@ -66,7 +66,11 @@ class ConditionTranslatorTest {
                         val new = ast(request)
                         val safe = if (deny) !old || new else !new || old || request.method == "HEAD"
                         if (!safe) {
-                            fail("${row.json} (deny=$deny): 7.x=$old 8.0 as enforced=$new on $request; ${render(translated)}")
+                            fail(
+                                "${row.json} (deny=$deny): 7.x=$old 8.0 as enforced=$new on $request; ${render(
+                                    translated
+                                )}"
+                            )
                         }
                     }
                 }
@@ -378,7 +382,9 @@ class ConditionTranslatorTest {
                 ),
                 exact("""{"time":{"daysOfWeek":["SAT","SUN"],"zone":"America/New_York"}}"""),
                 exact("""{"time":{"from":"02:00","to":"03:00","zone":"Europe/Berlin"}}"""),
-                directional("""{"bool":{"and":[{"authenticated":{}},{"eq":{"part":"request.method","value":"GET"}}]}}"""),
+                directional(
+                    """{"bool":{"and":[{"authenticated":{}},{"eq":{"part":"request.method","value":"GET"}}]}}"""
+                ),
                 exact(
                     """{"bool":{"or":[{"inTenant":{"value":"platform"}},{"eq":{"part":"request.header.x-debug","value":""}}]}}"""
                 ),

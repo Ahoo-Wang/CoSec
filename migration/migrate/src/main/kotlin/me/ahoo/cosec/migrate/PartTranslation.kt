@@ -60,7 +60,12 @@ internal object Parts {
     /** The region 7.x's ip2region appender wrote (RFC 0006 §5.4.5), and what 8.0's provider reads instead. */
     const val IP_REGION = "request.attributes.ipRegion"
     const val IP2REGION_COUNTRY = "ext.ip2region.country"
-    val IP2REGION_ATTRIBUTES = listOf(IP2REGION_COUNTRY, "ext.ip2region.province", "ext.ip2region.city", "ext.ip2region.isp")
+    val IP2REGION_ATTRIBUTES = listOf(
+        IP2REGION_COUNTRY,
+        "ext.ip2region.province",
+        "ext.ip2region.city",
+        "ext.ip2region.isp"
+    )
     private const val REQUEST_ATTRIBUTES = "request.attributes."
     private const val RESOURCE = "resource."
 
@@ -271,7 +276,8 @@ internal class PartTranslation(
             return null
         }
         val country = prefix.dropLast(1)
-        if (country.isEmpty() || REGION_SEPARATOR in country || country == UNKNOWN_FIELD || !caseFoldable(country, folds)) {
+        val oneField = country.isNotEmpty() && REGION_SEPARATOR !in country && country != UNKNOWN_FIELD
+        if (!oneField || !caseFoldable(country, folds)) {
             return null
         }
         translator.note(
@@ -392,38 +398,10 @@ internal class PartTranslation(
      * A predicate that holds on the absent value, or on GET, matches at least what 7.x matched, which a DENY may.
      */
     private fun unmatched(mapped: Parts.Mapped, matches: (String) -> Boolean): Boolean {
-        // Always absent in 8.0, where 7.x read "": an ALLOW that holds on "" would hold for every request, though 7.x's
-        // appender filled the part (found by the enforcement-only property test).
-        if (!deny && mapped.setBy7x != null && matches(mapped.absentAs)) {
-            translator.rejected<Unit>(
-                RejectionKind.CONDITION_NOT_TRANSLATED,
-                location,
-                "in the ALLOW direction, a condition that holds when part [${mapped.part}] is empty: it was set by " +
-                    "${mapped.setBy7x}, 8.0 sets no such attribute, so it would hold for every request; rewrite it " +
-                    "with an ext.* attribute of an AttributeProvider",
-            )
+        if (allowOnEmpty(mapped, matches)) {
             return true
         }
-        val reason = when {
-            mapped.part == Parts.IP_REGION && !matches(mapped.absentAs) ->
-                "part [${mapped.part}] was the whole region 7.x's ip2region appender wrote; 8.0 has the region as " +
-                    "${Parts.IP2REGION_ATTRIBUTES.joinToString()}, and only a country prefix (startsWith \"<country>|\") " +
-                    "translates: rewrite this condition with them by hand"
-            mapped.setBy7x != null && !matches(mapped.absentAs) ->
-                "part [${mapped.part}] was set by ${mapped.setBy7x}; 8.0 sets no such attribute, so " +
-                    "[${mapped.attribute}] is always absent there and this condition never holds: rewrite it with an " +
-                    "ext.* attribute of an AttributeProvider"
-            // A DENY statement must still hold for a HEAD request wherever 7.x's held. Read as GET, a condition that
-            // tells HEAD from GET may stop holding for it, directly or under a negation (`not eq GET`).
-            mapped.part == Parts.METHOD && statementDeny && !deny && matches(GET) && !matches(HEAD) ->
-                "a condition that holds on method GET but not HEAD: 8.0 decides a HEAD request as GET (PIP-18), so " +
-                    "the DENY no longer holds for one"
-            // Under a negation in a DENY, one that holds on HEAD but not GET only makes the DENY hold more.
-            mapped.part == Parts.METHOD && matches(HEAD) && !matches(GET) && (deny || !statementDeny) ->
-                "a condition on method HEAD but not GET: 8.0 decides a HEAD request as GET (PIP-18), so action.verb is " +
-                    "never HEAD and this condition no longer holds for one"
-            else -> return false
-        }
+        val reason = neverSetReason(mapped, matches) ?: methodReason(mapped, matches) ?: return false
         val refusedUnderNegation = mapped.part == Parts.METHOD && statementDeny && !deny
         if (deny || refusedUnderNegation) {
             val direction = if (deny) "in the DENY direction" else "under a negation in a DENY"
@@ -432,6 +410,59 @@ internal class PartTranslation(
         }
         translator.note("NOT-IN-8.0", location, "in the ALLOW direction, $reason: the ALLOW matches fewer requests")
         return false
+    }
+
+    /**
+     * Always absent in 8.0, where 7.x read "": an ALLOW that holds on "" would hold for every request, though 7.x's
+     * appender filled the part (found by the enforcement-only property test). Rejected.
+     */
+    private fun allowOnEmpty(mapped: Parts.Mapped, matches: (String) -> Boolean): Boolean {
+        if (deny || mapped.setBy7x == null || !matches(mapped.absentAs)) {
+            return false
+        }
+        translator.rejected<Unit>(
+            RejectionKind.CONDITION_NOT_TRANSLATED,
+            location,
+            "in the ALLOW direction, a condition that holds when part [${mapped.part}] is empty: it was set by " +
+                "${mapped.setBy7x}, 8.0 sets no such attribute, so it would hold for every request; rewrite it " +
+                "with an ext.* attribute of an AttributeProvider",
+        )
+        return true
+    }
+
+    /** Why a condition on a part 8.0 never sets no longer holds; null when it is not one, or holds on the absent value. */
+    private fun neverSetReason(mapped: Parts.Mapped, matches: (String) -> Boolean): String? = when {
+        mapped.setBy7x == null || matches(mapped.absentAs) -> null
+        mapped.part == Parts.IP_REGION ->
+            "part [${mapped.part}] was the whole region 7.x's ip2region appender wrote; 8.0 has the region as " +
+                "${Parts.IP2REGION_ATTRIBUTES.joinToString()}, and only a country prefix (startsWith \"<country>|\") " +
+                "translates: rewrite this condition with them by hand"
+        else ->
+            "part [${mapped.part}] was set by ${mapped.setBy7x}; 8.0 sets no such attribute, so " +
+                "[${mapped.attribute}] is always absent there and this condition never holds: rewrite it with an " +
+                "ext.* attribute of an AttributeProvider"
+    }
+
+    /**
+     * Why a condition on the method stops holding for a HEAD request, decided as GET (`PIP-18`), where it must: a DENY
+     * statement still holds for a HEAD request wherever 7.x's held, directly or under a negation (`not eq GET`). Under a
+     * negation in a DENY, one that holds on HEAD but not GET only makes the DENY hold more.
+     */
+    private fun methodReason(mapped: Parts.Mapped, matches: (String) -> Boolean): String? {
+        if (mapped.part != Parts.METHOD) {
+            return null
+        }
+        val onHead = matches(HEAD)
+        val onGet = matches(GET)
+        return when {
+            statementDeny && !deny && onGet && !onHead ->
+                "a condition that holds on method GET but not HEAD: 8.0 decides a HEAD request as GET (PIP-18), so " +
+                    "the DENY no longer holds for one"
+            onHead && !onGet && (deny || !statementDeny) ->
+                "a condition on method HEAD but not GET: 8.0 decides a HEAD request as GET (PIP-18), so action.verb " +
+                    "is never HEAD and this condition no longer holds for one"
+            else -> null
+        }
     }
 
     private companion object {

@@ -16,6 +16,7 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.condition.Condition
@@ -81,6 +82,18 @@ internal class StatementTranslator(
         if (path != null && resources == null) {
             return null
         }
+        return assembled(name, deny, action, resources ?: action.resources, condition, location)
+    }
+
+    /** The statement of [action], [resources] and [condition]; null when the condition can never hold (rejected). */
+    private fun assembled(
+        name: String,
+        deny: Boolean,
+        action: MatcherTranslator.Action,
+        resources: List<ResourceSource>,
+        condition: Translated,
+        location: String,
+    ): Translation? {
         if (condition == Translated.Never) {
             reject(
                 RejectionKind.CONDITION_NOT_TRANSLATED,
@@ -97,7 +110,7 @@ internal class StatementTranslator(
                 name = name,
                 effect = if (deny) Effect.DENY else Effect.ALLOW,
                 actions = action.actions,
-                resources = resources ?: action.resources,
+                resources = resources,
                 condition = (condition as? Translated.Ast)?.condition,
             ),
         )

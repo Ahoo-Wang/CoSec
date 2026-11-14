@@ -145,7 +145,9 @@ class Round2ConversionTest {
             )
         geo.documents.assert().isEmpty()
         rejected(geo, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert()
-            .contains("request.attributes.ipRegion").contains("ext.ip2region.country").contains("ext.ip2region.province")
+            .contains(
+                "request.attributes.ipRegion"
+            ).contains("ext.ip2region.country").contains("ext.ip2region.province")
             .contains("ext.ip2region.city").contains("ext.ip2region.isp")
         val resource = convert(statement(effect = "deny", condition = on("resource.owner", "bob")))
         rejected(resource, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert().contains("resource.owner")
@@ -174,7 +176,9 @@ class Round2ConversionTest {
             .report.rejections.assert().isEmpty()
     }
 
-    private fun region(condition: String, effect: String = "deny") = convert(statement(effect = effect, condition = condition))
+    private fun region(condition: String, effect: String = "deny") = convert(
+        statement(effect = effect, condition = condition)
+    )
 
     /** RFC 0006 §5.4.5: the one shape of 7.x's region that says one 8.0 attribute, the country prefix. */
     @ParameterizedTest
@@ -197,7 +201,12 @@ class Round2ConversionTest {
         // By itself, as an instance without the provider compiles it, and beside the provider's own declarations.
         PolicyDocumentCompiler.forPlatform(platform).compile(platform)
         val provider = AttributeCatalog.of(
-            listOf("country", "province", "city", "isp").map { Attribute.external("ext.ip2region.$it", AttributeType.STRING) },
+            listOf(
+                "country",
+                "province",
+                "city",
+                "isp"
+            ).map { Attribute.external("ext.ip2region.$it", AttributeType.STRING) },
         )
         PolicyDocumentCompiler.forPlatform(platform, provider).compile(platform)
     }

@@ -370,13 +370,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return inIndex && type == PolicyType.GLOBAL
     }
 
-    /** A policy translated: its condition, the statements kept, and where each of them came from. */
-    private class TranslatedPolicy(
-        val condition: Condition?,
-        val statements: List<StatementSource>,
-        val locations: List<String>,
-    )
-
     /**
      * The condition and statements of a policy, or null when one of them or the condition is rejected. Everything is
      * translated even after a rejection, so one run reports every problem of the policy.
@@ -684,12 +677,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return ids
     }
 
-    private fun isValidGrant(grant: Source7x.Grant): Boolean {
-        val separator = SpacedRoleId.SPACE_ID_SEPARATOR
-        val validRole = grant.roleId.isNotEmpty() && !grant.roleId.contains(separator)
-        return validRole && grant.spaceId != Match.WILDCARD && !grant.spaceId.contains(separator)
-    }
-
     private fun permissionIdsOf(bytes: ByteArray): List<String>? {
         val node = try {
             treeReader.readTree(bytes)
@@ -720,23 +707,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             )
         }
     }
-
-    private fun catalogOf(tree: JsonNode): Catalog = Catalog(
-        tree.get(GROUPS)?.values().orEmpty().map { group ->
-            CatalogGroup(
-                name = group.get(NAME)?.asString().orEmpty(),
-                description = group.get(DESCRIPTION)?.asString()?.ifEmpty { null },
-                spaced = group.get(SPACED)?.asBoolean() ?: false,
-                permissions = group.get(PERMISSIONS)?.values().orEmpty().map { permission ->
-                    CatalogPermission(
-                        id = permission.get(ID).asString(),
-                        name = permission.get(NAME)?.asString()?.ifEmpty { null },
-                        description = permission.get(DESCRIPTION)?.asString()?.ifEmpty { null },
-                    )
-                },
-            )
-        },
-    )
 
     // ---- rate limit rules (RFC 0005 §7.3) ----
 
@@ -828,20 +798,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val conditions = policies.values.flatten().flatMap { policy ->
             listOfNotNull(policy.condition) + policy.statements.mapNotNull { it.condition }
         } + rateLimits.mapNotNull { it.statement.condition }
-        return conditions.any { reads(it, Parts.IP2REGION_COUNTRY) }
-    }
-
-    private fun reads(condition: Condition, path: String): Boolean = when (condition) {
-        is Condition.Eq -> condition.attribute == path || (condition.value as? Operand.Attr)?.path == path
-        is Condition.In -> condition.attribute == path || condition.values.any { (it as? Operand.Attr)?.path == path }
-        is Condition.Contains -> condition.attribute == path || (condition.value as? Operand.Attr)?.path == path
-        is Condition.Prefix -> condition.attribute == path || (condition.value as? Operand.Attr)?.path == path
-        is Condition.Cidr -> condition.attribute == path
-        is Condition.Time -> false
-        is Condition.Exists -> condition.attribute == path
-        is Condition.And -> condition.conditions.any { reads(it, path) }
-        is Condition.Or -> condition.conditions.any { reads(it, path) }
-        is Condition.Not -> reads(condition.condition, path)
+        return conditions.any { ConditionReads.reads(it, Parts.IP2REGION_COUNTRY) }
     }
 
     /** Whether [policy] compiles in a document of [key]'s kind; its errors are rejected at [statements]' locations. */
@@ -901,19 +858,6 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         null
     }
 
-    private fun isDeny(statement: JsonNode): Boolean =
-        statement.get(EFFECT)?.takeIf { it.isString }?.asString()?.equals("deny", ignoreCase = true) == true
-
-    @Suppress("SwallowedException")
-    private fun typeOf(text: String): PolicyType? = try {
-        PolicyType.valueOf(text.uppercase())
-    } catch (_: IllegalArgumentException) {
-        null
-    }
-
-    private fun grantKey(grant: Source7x.Grant): String =
-        if (grant.spaceId.isEmpty()) grant.roleId else "${grant.roleId}${SpacedRoleId.SPACE_ID_SEPARATOR}${grant.spaceId}"
-
     companion object {
         const val SCHEMA_7 = "7"
 
@@ -937,3 +881,71 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         const val SPACED = "spaced"
     }
 }
+
+/** Which attributes a condition reads, as an operand or on either side of a comparison. */
+private object ConditionReads {
+    fun reads(condition: Condition, path: String): Boolean = when (condition) {
+        is Condition.And -> condition.conditions.any { reads(it, path) }
+        is Condition.Or -> condition.conditions.any { reads(it, path) }
+        is Condition.Not -> reads(condition.condition, path)
+        else -> path in attributesOf(condition)
+    }
+
+    /** The attribute paths a condition that holds no other compares. */
+    private fun attributesOf(condition: Condition): List<String?> = when (condition) {
+        is Condition.Eq -> listOf(condition.attribute, condition.value.path())
+        is Condition.In -> listOf(condition.attribute) + condition.values.map { it.path() }
+        is Condition.Contains -> listOf(condition.attribute, condition.value.path())
+        is Condition.Prefix -> listOf(condition.attribute, condition.value.path())
+        is Condition.Cidr -> listOf(condition.attribute)
+        is Condition.Exists -> listOf(condition.attribute)
+        else -> emptyList()
+    }
+
+    private fun Operand.path(): String? = (this as? Operand.Attr)?.path
+}
+
+/** A policy translated: its condition, the statements kept, and where each of them came from. */
+private class TranslatedPolicy(
+    val condition: Condition?,
+    val statements: List<StatementSource>,
+    val locations: List<String>,
+)
+
+// Pure helpers of [Run]: what they read is their arguments alone.
+
+private fun isValidGrant(grant: Source7x.Grant): Boolean {
+    val separator = SpacedRoleId.SPACE_ID_SEPARATOR
+    val validRole = grant.roleId.isNotEmpty() && !grant.roleId.contains(separator)
+    return validRole && grant.spaceId != Match.WILDCARD && !grant.spaceId.contains(separator)
+}
+
+private fun catalogOf(tree: JsonNode): Catalog = Catalog(
+    tree.get(Run.GROUPS)?.values().orEmpty().map { group ->
+        CatalogGroup(
+            name = group.get(Run.NAME)?.asString().orEmpty(),
+            description = group.get(Run.DESCRIPTION)?.asString()?.ifEmpty { null },
+            spaced = group.get(Run.SPACED)?.asBoolean() ?: false,
+            permissions = group.get(Run.PERMISSIONS)?.values().orEmpty().map { permission ->
+                CatalogPermission(
+                    id = permission.get(Run.ID).asString(),
+                    name = permission.get(Run.NAME)?.asString()?.ifEmpty { null },
+                    description = permission.get(Run.DESCRIPTION)?.asString()?.ifEmpty { null },
+                )
+            },
+        )
+    },
+)
+
+private fun isDeny(statement: JsonNode): Boolean =
+    statement.get(Run.EFFECT)?.takeIf { it.isString }?.asString()?.equals("deny", ignoreCase = true) == true
+
+@Suppress("SwallowedException")
+private fun typeOf(text: String): PolicyType? = try {
+    PolicyType.valueOf(text.uppercase())
+} catch (_: IllegalArgumentException) {
+    null
+}
+
+private fun grantKey(grant: Source7x.Grant): String =
+    if (grant.spaceId.isEmpty()) grant.roleId else "${grant.roleId}${SpacedRoleId.SPACE_ID_SEPARATOR}${grant.spaceId}"
