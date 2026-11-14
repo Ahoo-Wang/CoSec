@@ -60,7 +60,9 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   not recompile its users incrementally: compile them with `--rerun-tasks` to see the opt-ins they now need.
 - `:conformance:mutationCheck` applies each patch in `test/conformance/mutants/` in a temporary worktree and requires a
   failing test (`-Pmutants=a,b` runs a subset). Run it in PRs that add or change a security property; list the
-  mutants the change kills in the PR.
+  mutants the change kills in the PR. `:conformance:check` requires every patch to apply to the working tree
+  (`MutationCheckTest`): a refactoring that moves the code a mutant breaks fails `check` and names the patch. Rewrite
+  it to break the same property where the code now lives (its header says what it is for), then run it.
 - Build cache, configuration cache and parallel execution are on in `gradle.properties`. If a task fails with a
   configuration-cache problem, don't capture `Project` in `doFirst`/`doLast`; `--no-configuration-cache` bypasses it.
   A cached `test` run does not hit Redis: use `--rerun` (or `cleanTest`) to force Redis-backed tests.
