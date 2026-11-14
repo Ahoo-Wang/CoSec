@@ -18,7 +18,6 @@ package me.ahoo.cosec.runtime.shadow
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
-import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -31,26 +30,6 @@ import java.util.concurrent.atomic.AtomicLong
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
-
-/**
- * A staged change's candidate for one document (RFC 0007 §6.4), as the control plane writes it to `candidate:<docKey>`:
- * the shadow window it belongs to, the revision of the head it was made on, and the document it would publish.
- */
-@ExperimentalCoSecApi
-class StoredCandidate(val window: String, val baseRevision: Long, val document: SnapshotDocument) {
-    init {
-        require(
-            window.isNotEmpty() && baseRevision >= 0
-        ) { "A candidate names its window and the revision of its base." }
-    }
-}
-
-/** Where candidates are read from: the `candidate:` namespace. Reads never block the caller. */
-@CoSecSpi
-@ExperimentalCoSecApi
-fun interface CandidateStore {
-    suspend fun candidate(key: SnapshotKey): StoredCandidate?
-}
 
 /** A candidate as an instance holds it: compiled, or why it could not be. */
 @InternalCoSecApi

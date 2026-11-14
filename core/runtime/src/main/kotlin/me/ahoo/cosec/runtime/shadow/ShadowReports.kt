@@ -15,14 +15,9 @@
 
 package me.ahoo.cosec.runtime.shadow
 
-import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import java.time.Clock
-import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
 
 /** How a sampled request came out on the candidate, against the enforced documents (RFC 0007 §6.4). */
 @ExperimentalCoSecApi
@@ -150,95 +145,5 @@ class ShadowReport(
          * match another's.
          */
         fun isInstanceId(id: String): Boolean = INSTANCE_ID.matches(id)
-    }
-}
-
-/** A document an instance has installed (RFC 0007 §6.5): its revision, and how long since it was last confirmed. */
-@ExperimentalCoSecApi
-class InstalledDocument(val revision: Long, val lag: Duration) {
-    private fun fields(): List<Any?> = listOf(revision, lag)
-
-    override fun equals(other: Any?): Boolean = other is InstalledDocument && other.fields() == fields()
-
-    override fun hashCode(): Int = fields().hashCode()
-
-    override fun toString(): String = "InstalledDocument(${fields().joinToString()})"
-}
-
-/** What an instance reported having installed, at [at] (RFC 0007 §6.5). */
-@ExperimentalCoSecApi
-class InstanceStatus(
-    val instance: String,
-    val at: Instant,
-    val documents: Map<SnapshotKey, InstalledDocument>,
-    /**
-     * The document format level this instance reads (RFC 0010 C5): 8.0 is [FORMAT_LEVEL], and the status codec requires
-     * it. The publish gate that compares it with a document's level arrives with the first document field that needs
-     * one (8.1); until then it is carried and not read.
-     */
-    val formatLevel: Int = FORMAT_LEVEL,
-) {
-    private fun fields(): List<Any?> = listOf(instance, at, documents, formatLevel)
-
-    override fun equals(other: Any?): Boolean = other is InstanceStatus && other.fields() == fields()
-
-    override fun hashCode(): Int = fields().hashCode()
-
-    override fun toString(): String = "InstanceStatus(${fields().joinToString()})"
-
-    companion object {
-        /**
-         * The document format level of this version: 8.0 reads level 1. Not a `const`, so that code compiled against one
-         * release reads the level of the release it runs on.
-         */
-        @JvmField
-        @Suppress("MayBeConst") // on purpose: a const is inlined into the caller's class file
-        val FORMAT_LEVEL: Int = 1
-    }
-}
-
-/** Where each instance writes its shadow reports and its status (RFC 0007 §6.4, §6.5). */
-@CoSecSpi
-@ExperimentalCoSecApi
-interface ShadowReportSink {
-    suspend fun write(report: ShadowReport)
-
-    suspend fun write(status: InstanceStatus)
-}
-
-/** What the control plane reads back: every instance's report of a window, and the statuses written recently. */
-@CoSecSpi
-@ExperimentalCoSecApi
-interface ShadowReportReader {
-    suspend fun reports(window: String): List<ShadowReport>
-
-    /** Statuses written within [STATUS_TTL] of now. */
-    suspend fun statuses(): List<InstanceStatus>
-
-    companion object {
-        /** An instance that has not written its status for this long is not counted (RFC 0007 §6.5). */
-        val STATUS_TTL: Duration = Duration.ofMinutes(1)
-    }
-}
-
-/** Reports and statuses in memory: for tests and single-instance deployments. */
-@InternalCoSecApi
-class InMemoryShadowReports(private val clock: Clock = Clock.systemUTC()) : ShadowReportSink, ShadowReportReader {
-    private val reports = ConcurrentHashMap<String, ConcurrentHashMap<String, ShadowReport>>()
-    private val statuses = ConcurrentHashMap<String, InstanceStatus>()
-
-    override suspend fun write(report: ShadowReport) {
-        reports.computeIfAbsent(report.window) { ConcurrentHashMap() }[report.instance] = report
-    }
-
-    override suspend fun write(status: InstanceStatus) {
-        statuses[status.instance] = status
-    }
-
-    override suspend fun reports(window: String): List<ShadowReport> = reports[window]?.values?.toList().orEmpty()
-
-    override suspend fun statuses(): List<InstanceStatus> {
-        val since = clock.instant().minus(ShadowReportReader.STATUS_TTL)
-        return statuses.values.filter { !it.at.isBefore(since) }
     }
 }
