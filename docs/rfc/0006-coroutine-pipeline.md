@@ -249,6 +249,11 @@ class HttpFacts(
 
 - `PathNormalizer` 是 [`RequestPaths`](../../core/src/main/kotlin/me/ahoo/cosec/context/request/RequestPaths.kt) 的规则原样搬进 `runtime/`（解码一次、
   合并斜杠、处理 `.`/`..`、剥离 `;` 矩阵参数、拒绝二次编码与编码后的 `/`），不改任何一条规则：门槛 C 要求 400 零差异。
+  **2026-11-13 修订（第 2 轮审查 `core/runtime` 的 M1，#1311，`PIP-14`）**：上面括号里的“合并斜杠、拒绝二次编码”与实现不符，以本段为准。不合并斜杠，而是拒绝：
+  去掉 `;` 参数后，路径末尾之前的空段（`//`，以及 `/;x/a` 去掉参数后留下的）、编码后的分隔符（`%2F`、`%2f`）和反斜杠（`\`、`%5C`、`%5c`）一律 400
+  `invalid-request`，在认证之前。理由：模式把它们读成段的一部分或单独的段，`/admin` 之下的 DENY 匹配不到，而合并斜杠、解码分隔符或把 `\` 当作 `/` 的后端
+  按 `/admin/...` 服务；CoSec 无法知道后端怎么读，合并后再授权同样要求后端也合并。末尾的 `/` 按原样读取。二次编码（`%252F`、`%255C`）不拒绝：解码一次后是
+  段内的文本，对引擎和只解码一次的后端都是。没有开关：开关会为打开它的部署带回这条绕过；确有需要时作为新增项在 8.x 评估。
   **2026-10-27 修订（PR-2 #1044 审查）**：在原有规则之外只增加更严的拒绝，全部是 400 `invalid-request`：① 引擎的 `HttpPath` 不处理 `.`/`..`
   （`/public` 下的通配符会匹配 `/public/../admin`），所以解码后的点段在任何编码下都拒绝（`%2e`、`%2E`、`.%2e`、`..;`、`..%3B`），`\`（含 `%5C`）也视为分隔符；
   ② 路径长度上限 `MAX_PATH_LENGTH` = 2048 字符、单段上限 `MAX_SEGMENT_LENGTH` = 256 字符（按收到的编码形式计，去掉 `;` 参数后量段）：
@@ -722,6 +727,8 @@ protected fun authorize(request: HttpServletRequest, response: HttpServletRespon
   `getTokenVerificationException`、`setRequest`、路径变量缓存等；Q22）。
 - `AuthorizationChecker`：`suspend fun check(security, action, resource): Boolean`；`cosec-webflux` 提供 `Mono<Boolean>` 扩展，`cosec-webmvc` 提供阻塞扩展。
   它走同一个 `Pipeline` 的 `decide` 后半段（快照视图 → 计划 → 引擎 → **不**执行义务、不投递 REQUIRED），与现在"检查不扣限流"一致。
+  **2026-11-13 修订（第 2 轮审查 M2，#1311，`PIP-15`）**：检查与执行读同一条路径。`http` 资源经 `PathNormalizer.normalize`，执行会以 400 拒绝的路径答
+  `Deny(null)`；其余资源受同样的长度上限。这一判断只有一处（`PathNormalizer.enforceable`），控制面的模拟、解释与分析（`CTL-3`）用同一个函数。
 
 > **实现说明（2026-11-07，#1231，审计 issue #1209，`ATR-8`）**：`AuthorizationChecker` 的检查为它自己的动作与资源规划外部属性，并向阶段 A 与阶段 B 的提供者都要计划中的属性，不论是否注册了阶段 B 的提供者；阶段 A 的提供者仍不带作用域（与请求路径的阶段 A 相同）。此前检查只在有阶段 B 提供者时才重新取属性，只由阶段 A 提供的属性在检查里读作取不到（`AttributeUnavailable`）。阶段 A 的提供者因此每次检查也会被问到，`AttributeDeclaration.Stage` 的 KDoc 与 `extending.md` 写明了这一点。
 
