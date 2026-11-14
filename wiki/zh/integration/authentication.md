@@ -277,7 +277,7 @@ cosec:
 
 ## 社交登录 {#social-login}
 
-启用 `cosec-social` 后，`SocialAuthentication` 通过 [JustAuth](https://github.com/justauth/JustAuth) 的提供方登录用户。在 `cosec.authentication.login.social.registration.<name>` 下配置每个提供方，包括它的 JustAuth `type`、client id、secret 和 redirect URI（[配置](../operations/configuration.md)）。
+启用 `cosec-social` 后，`SocialAuthentication` 通过 [JustAuth](https://github.com/justauth/JustAuth) 的提供方登录用户。在 `cosec.authentication.login.social.registration.<name>` 下配置每个提供方，包括它的 JustAuth `type`、client id、secret 和 redirect URI（[配置](../operations/configuration.md)）。8.0 中的提供方就是 JustAuth 的：应用不能添加自己的提供方，因为提供方接口和它的注册表是内部的。
 
 1. 用挂起函数 `socialAuthentication.authorize("<name>")` 开始登录。它返回一个 `SocialAuthorization`：提供方的 `url`（带有新生成的 OAuth `state`），以及新生成的 `binding`。两者都是来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为它们必须不可预测，而那些 id 不必如此。把绑定值设为浏览器上的 Cookie：`Set-Cookie: <authorization.setCookie(path)>`（`cosec_oauth_binding`，`HttpOnly; Secure; SameSite=Lax`，与 state 同样只活 3 分钟，作用于你的回调路径），然后把浏览器重定向到 `url`。CoSec 在 Redis 中把 state 与绑定值的 SHA-256 一起保存 3 分钟，从不保存绑定值本身，因此社交登录需要 `StringRedisTemplate`（或你自己的 `SocialStateStore` 与 JustAuth `AuthStateCache` Bean）。
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>", <绑定 Cookie 的值，没有则为 "">)`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。只有当回调的 `state` 是 CoSec 签发的、未过期、未被使用过（在调用提供方之前就以 `GETDEL` 立即从 Redis 取走），并且浏览器的绑定值哈希后与记录的一致（以恒定时间比较）时，回调才被接受。来自另一个浏览器、重复发送或伪造的 state 会抛出 `SocialAuthenticationException`。这就是阻止登录 CSRF 的方式：攻击者为自己的账户拿到的回调 URL，在受害者的浏览器中打开时，带的是攻击者的 state，却没有攻击者的 Cookie。注册上设置 `ignore-check-state: true` 会让启动失败。
