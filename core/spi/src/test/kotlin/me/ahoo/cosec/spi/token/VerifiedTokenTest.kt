@@ -45,6 +45,17 @@ class VerifiedTokenTest {
     }
 
     /** `IDN-12`. */
+    /** A token's tenant names one tenant document, as SnapshotKey.Tenant takes it, or the token is invalid (IDN-11). */
+    @Test
+    fun aTenantThatCannotNameATenantIsRefused() {
+        for (tenant in listOf(" ", "*", "a:b", "a\nb", "x".repeat(129))) {
+            assertThrows<TokenVerificationException> { VerifiedToken("jti", "alice", tenant, null) }
+        }
+        VerifiedToken("jti", "alice", "acme", null).tenant.assert().isEqualTo("acme")
+        VerifiedToken("jti", "alice", "(platform)", null).tenant.assert().isEqualTo("(platform)")
+        VerifiedToken("jti", "alice", "x".repeat(128), null).tenant!!.length.assert().isEqualTo(128)
+    }
+
     @Test
     fun aSubjectBeginningWithAParenthesisIsRefused() {
         for (subject in listOf("(0)", "(platform)", "(")) {

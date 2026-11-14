@@ -16,6 +16,10 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A credential's tenant must be a tenant id** (`IDN-11`). A token whose `tenantId` is blank, `*`, holds a `:` or a
+  control character, or is longer than 128 characters is now `401 token-invalid` (it was `503`, or `500` for a blank
+  one), and `JwtTokenConverter` does not issue it; an `ApiKey` with such a tenant cannot be built, so a stored one fails
+  its lookup (`503`) and a configured one fails startup.
 - **`SnapshotVersion` is removed** from `cosec-spi`: it named the two documents of 7.x. A decision event's
   `snapshotVersion` is a `ViewVersion` (`platform`, `app`, `tenant`), as before.
 - **A rate limit window is at most a year** (`windowSeconds` up to `31536000`), and `permitsPerSecond × windowSeconds`
