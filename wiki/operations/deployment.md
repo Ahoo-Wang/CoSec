@@ -241,7 +241,11 @@ overlay size them for their limits:
   request threads wait for it. The compiled documents live on the heap: size it for your documents and traffic, then
   set the limit to the heap, plus the direct memory, plus about 250 MiB, plus a quarter.
 - **The image's own defaults do not fit a small cluster.** Its start script sets `-Xms2048M -Xmx2048M
-  -XX:MaxDirectMemorySize=512M`, about 2.8 GiB with the native part. `JAVA_OPTS` comes after them on the command line,
+  -XX:MaxMetaspaceSize=256M -XX:MaxDirectMemorySize=512M -Xss1m -XX:+UseZGC`, about 2.8 GiB with the native part, and
+  writes the GC log to `logs/` and a heap dump on `OutOfMemoryError` to `data/`. The direct memory is a ceiling, not a
+  reservation: Netty's pooled buffers, for the HTTP server and the Redis client, take it as traffic needs it, so what
+  the gateway uses depends on its load and the CPU count. To see it, read the `java.nio:type=BufferPool,name=direct`
+  MBean through the pod's local JMX agent. `JAVA_OPTS` comes after the defaults on the command line,
   so its sizes win; `JAVA_TOOL_OPTIONS` cannot change them, because the JVM reads it first. The fixed `-Xmx` also
   overrides `-XX:MaxRAMPercentage`, so give explicit sizes. The base sets them in `JVM_MEMORY_OPTS`, and the production
   overlay replaces it; change it together with the memory request and limit.

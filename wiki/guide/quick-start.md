@@ -92,7 +92,7 @@ every sentence above against these documents on every build. Roles come in
 
 ## Publish the platform document
 
-Build `cosec-migrate` from your CoSec checkout:
+Download `cosec-migrate-<version>.zip` from the [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases) of the CoSec version you use and unzip it ([Upgrading](../operations/upgrading.md#migrating-the-data)), or build it from your CoSec checkout:
 
 ```bash
 ./gradlew :migrate:installDist
