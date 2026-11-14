@@ -33,31 +33,40 @@ jobs:
           done
       - name: Login to Aliyun
         run: echo "$ALIYUN_CR_TOKEN" | docker login "$REG" --username "$ALIYUN_CR_USERNAME" --password-stdin
-      - name: Attempt A, cancelled after 90 s, then which blobs are there
+      - name: Which blobs does Aliyun already have
         continue-on-error: true
         run: |
-          date -u +%T
-          timeout 90 docker buildx imagetools create --tag "$DST" "$SRC"; echo "exit=$?"
-          date -u +%T
           for d in $(docker buildx imagetools inspect --raw "$SRC" | jq -r '.manifests[].digest'); do
             for b in $(docker buildx imagetools inspect --raw "ghcr.io/ahoo-wang/cosec-gateway@$d" | jq -r '.layers[].digest, .config.digest'); do
-              code=$(curl -s -o /dev/null -w '%{http_code}' -I -u "$ALIYUN_CR_USERNAME:$ALIYUN_CR_TOKEN" "https://$REG/v2/ahoo/cosec-gateway/blobs/$b")
+              code=$(curl -s -o /dev/null -w '%{http_code} %{time_total}s' -I -u "$ALIYUN_CR_USERNAME:$ALIYUN_CR_TOKEN" "https://$REG/v2/ahoo/cosec-gateway/blobs/$b")
               echo "$d $b -> $code"
             done
           done
-      - name: Attempt B, up to 15 minutes, debug
+      - name: Download speed from ghcr
         continue-on-error: true
         run: |
           date -u +%T
-          time timeout 900 docker buildx --debug imagetools create --tag "$DST" "$SRC"; echo "exit=$?"
+          time docker pull --platform linux/amd64 "$SRC" >/dev/null
           date -u +%T
-      - name: Attempt C, crane
+      - name: Copy again with crane, everything already there
         continue-on-error: true
         run: |
           curl -sL https://github.com/google/go-containerregistry/releases/download/v0.20.6/go-containerregistry_Linux_x86_64.tar.gz | tar xz crane
-          echo "$GITHUB_TOKEN_UNUSED" >/dev/null
           echo "${{ secrets.GITHUB_TOKEN }}" | ./crane auth login ghcr.io -u "${{ github.repository_owner }}" --password-stdin
           echo "$ALIYUN_CR_TOKEN" | ./crane auth login "$REG" -u "$ALIYUN_CR_USERNAME" --password-stdin
           date -u +%T
-          time timeout 900 ./crane copy "$SRC" "$DST"; echo "exit=$?"
+          time timeout 900 ./crane copy -v "$SRC" "$DST"; echo "exit=$?"
           date -u +%T
+      - name: Copy again with imagetools, everything already there
+        continue-on-error: true
+        run: |
+          date -u +%T
+          time timeout 900 docker buildx imagetools create --tag "$DST" "$SRC"; echo "exit=$?"
+          date -u +%T
+      - name: Cancelled attempt, blobs after it
+        continue-on-error: true
+        run: |
+          # a tag whose blobs are all there, so nothing is cancelled mid-upload: only shows how long a no-op copy takes
+          set +e
+          time timeout 60 docker buildx imagetools create --tag "${DST}-noop" "$SRC"; echo "exit=$?"
+          docker buildx imagetools inspect "$DST" | head -12
