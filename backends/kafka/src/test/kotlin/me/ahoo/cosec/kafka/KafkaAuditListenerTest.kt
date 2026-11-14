@@ -52,6 +52,8 @@ import me.ahoo.cosec.runtime.audit.AuditRequestData
 import me.ahoo.cosec.runtime.audit.AuditSourceData
 import me.ahoo.cosec.runtime.audit.AuditStatementData
 import me.ahoo.cosec.runtime.audit.AuditTraceData
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
@@ -66,6 +68,7 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.assertThrows
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.beans.factory.config.BeanDefinitionCustomizer
@@ -84,6 +87,9 @@ import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
 
 /** RFC 0006 §9.4.1, §9.5.3: the Kafka audit as a listener; REQUIRED waits for the broker, and its failure is a 503. */
+// The shutdown tests wait for their records to reach the listener without a bound of their own (handOver): this ends one
+// that never gets there.
+@Timeout(60)
 class KafkaAuditListenerTest {
     private val opened = ArrayList<AutoCloseable>()
 
@@ -254,10 +260,7 @@ class KafkaAuditListenerTest {
             every { send(any<String>(), any<String>(), any<String>()) } returns answer
         }
         val listener = KafkaAuditListener(kafka, "audit")
-        val listeners = DecisionListeners(listOf(listener))
-        opened += listeners
-        evaluate(listeners)
-        listeners.drain().assert().isTrue()
+        handOver(listener)
         CompletableFuture.delayedExecutor(200, TimeUnit.MILLISECONDS).execute {
             answer.complete(mockk<SendResult<String, String>>())
         }
@@ -294,13 +297,9 @@ class KafkaAuditListenerTest {
         }
         val bound = 300.milliseconds
         val listener = KafkaAuditListener(kafka, "audit", drainTimeout = bound)
-        val listeners = DecisionListeners(listOf(listener))
-        opened += listeners
-        evaluate(listeners)
-        evaluate(listeners)
         // Both records are now the Kafka listener's: one send in progress, one queued behind it.
-        listeners.drain().assert().isTrue()
-        started.await(5, TimeUnit.SECONDS).assert().isTrue()
+        handOver(listener, records = 2)
+        started.await()
 
         val startedAt = System.nanoTime()
         listener.destroy()
@@ -318,15 +317,18 @@ class KafkaAuditListenerTest {
     /** #1250: a broker that never answers a send cannot hang shutdown either. */
     @Test
     fun shutdownEndsAtItsBoundWhenTheBrokerNeverAnswers() {
+        val sent = CountDownLatch(1)
         val kafka = mockk<KafkaOperations<String, String>> {
-            every { send(any<String>(), any<String>(), any<String>()) } returns CompletableFuture()
+            every { send(any<String>(), any<String>(), any<String>()) } answers {
+                sent.countDown()
+                CompletableFuture()
+            }
         }
         val bound = 300.milliseconds
         val listener = KafkaAuditListener(kafka, "audit", drainTimeout = bound)
-        val listeners = DecisionListeners(listOf(listener))
-        opened += listeners
-        evaluate(listeners)
-        listeners.drain().assert().isTrue()
+        handOver(listener)
+        // The send is made and never answered: the bound is all that ends the wait below.
+        sent.await()
 
         val startedAt = System.nanoTime()
         listener.destroy()
@@ -344,10 +346,7 @@ class KafkaAuditListenerTest {
             every { send(any<String>(), any<String>(), any<String>()) } returns answer
         }
         val listener = KafkaAuditListener(kafka, "audit", drainTimeout = 5.seconds)
-        val listeners = DecisionListeners(listOf(listener))
-        opened += listeners
-        evaluate(listeners)
-        listeners.drain().assert().isTrue()
+        handOver(listener)
         CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS).execute {
             answer.completeExceptionally(IllegalStateException("broker down"))
         }
@@ -366,10 +365,7 @@ class KafkaAuditListenerTest {
             every { send(any<String>(), any<String>(), any<String>()) } returns CompletableFuture()
         }
         val listener = KafkaAuditListener(kafka, "audit", drainTimeout = 5.seconds)
-        val listeners = DecisionListeners(listOf(listener))
-        opened += listeners
-        evaluate(listeners)
-        listeners.drain().assert().isTrue()
+        handOver(listener)
 
         val startedAt = System.nanoTime()
         Thread.currentThread().interrupt()
@@ -383,6 +379,29 @@ class KafkaAuditListenerTest {
     @Test
     fun aBlankTopicIsRefused() {
         assertThrows<IllegalArgumentException> { KafkaAuditListener(mockk(), " ") }
+    }
+
+    /**
+     * Hands [records] decisions to [listener] through a pipeline, and returns once its `onDecision` has taken each: the
+     * records are then the Kafka listener's, queued in its sender or sent. It waits for that rather than for a bound: on
+     * a cold runner the first event can take seconds (the JSON mapper, the mock), and the shutdown bound must be the
+     * only clock these tests assert. The class's timeout ends a test that never gets there.
+     */
+    private fun handOver(listener: KafkaAuditListener, records: Int = 1) {
+        val taken = CountDownLatch(records)
+        val counting = object : DecisionListener {
+            override val name: String = listener.name
+            override val delivery: Delivery = listener.delivery
+
+            override suspend fun onDecision(event: DecisionEvent) {
+                listener.onDecision(event)
+                taken.countDown()
+            }
+        }
+        val listeners = DecisionListeners(listOf(counting))
+        opened += listeners
+        repeat(records) { evaluate(listeners) }
+        taken.await()
     }
 
     private val audit = AuditEventData(
