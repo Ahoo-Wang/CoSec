@@ -56,7 +56,8 @@ import java.time.Duration
  * Revocation is judged by [TokenRevocation], as refresh and logout judge it. A [RevocationReader] that cannot read its
  * store throws [RevocationUnavailableException], and this is the one place that lets a token through on it: the token is
  * verified, signed and unexpired, and refusing every authenticated request during a Redis outage would be worse. That is
- * the documented exception to failing closed (PIP-7), which [acceptUnavailableRevocations] false turns off (503).
+ * the documented exception to failing closed (PIP-7), which [acceptUnavailableRevocations] false turns off (503). Each
+ * token so accepted is counted, and logged at most every few seconds ([UncheckedRevocations]).
  * Nothing that issues a token reads it so (`IDN-14`). Anything else [revocations] or [verifier] throws reaches the
  * pipeline, which answers 503.
  */
@@ -75,6 +76,8 @@ class TokenAuthenticator(
      * false, the default); false answers the request 503 instead.
      */
     private val acceptUnavailableRevocations: Boolean = true,
+    /** Where a token accepted without a revocation check is counted and logged (`cosec.revocation.unchecked`). */
+    private val unchecked: UncheckedRevocations = UncheckedRevocations(),
 ) : Authenticator {
     /** Whether [verifier] verifies CoSec's own tokens, which alone may use break-glass (RC1-26). */
     private val ownTokens = verifier is CoSecTokenVerifier
@@ -111,6 +114,7 @@ class TokenAuthenticator(
             return REVOKED
         } catch (unavailable: RevocationUnavailableException) {
             if (!acceptUnavailableRevocations) throw unavailable
+            unchecked.record(unavailable)
         }
         val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
         val id = PrincipalId(token.principal)

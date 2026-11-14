@@ -361,7 +361,11 @@ class TokenAuthenticatorTest {
             override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
                 throw RevocationUnavailableException("down")
         }
-        authenticate({ token() }, unavailable).principal().id.assert().isEqualTo(PrincipalId("alice"))
+        val unchecked = UncheckedRevocations()
+        TokenAuthenticator(Verifier(mapOf("t" to { token() })), unavailable, unchecked = unchecked)
+            .authenticate(Credentials("t", null)).principal().id.assert().isEqualTo(PrincipalId("alice"))
+        // L6: counted, so an operator sees the tokens accepted without a check
+        unchecked.count.assert().isEqualTo(1)
 
         val refusing = TokenAuthenticator(
             Verifier(mapOf("t" to { token() })),

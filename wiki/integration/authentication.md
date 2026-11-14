@@ -290,7 +290,9 @@ Every authenticated request checks revocation, without blocking. Three propertie
   [the two documented exceptions](../guide/security-model.md#the-two-documented-exceptions) to failing closed: the
   signature and expiry are still checked, and rejecting every authenticated request during a Redis outage would be
   worse. Keep access tokens short-lived so this window stays small, or set
-  `cosec.authentication.revocation.fail-closed: true` to answer `503` instead.
+  `cosec.authentication.revocation.fail-closed: true` to answer `503` instead. Each token so accepted is counted
+  (`cosec.revocation.unchecked`, [Metrics](../operations/observability.md#metrics)) and logged at `WARN`, at most every
+  10 seconds.
 - **A refresh fails while Redis cannot be read.** A token is never issued on a revocation read that failed (`IDN-14`):
   issued then, it would be named by no revocation, neither the old token's nor its principal's, and outlive both.
   `SimpleRefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`.

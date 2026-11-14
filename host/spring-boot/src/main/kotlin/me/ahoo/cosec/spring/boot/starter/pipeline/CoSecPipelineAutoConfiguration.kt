@@ -29,6 +29,7 @@ import me.ahoo.cosec.runtime.audit.AuditListener
 import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
+import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
@@ -138,6 +139,11 @@ class CoSecPipelineAutoConfiguration {
         )
     }
 
+    /** The tokens accepted without a revocation check while the store cannot be read (`cosec.revocation.unchecked`). */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecUncheckedRevocations(): UncheckedRevocations = UncheckedRevocations()
+
     /**
      * Token and API-key authentication. A token is verified by the JWT algorithm and checked against the revocation
      * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store.
@@ -152,6 +158,7 @@ class CoSecPipelineAutoConfiguration {
         apiKeyStore: ObjectProvider<ApiKeyStore>,
         revocationProperties: RevocationProperties,
         environment: Environment,
+        unchecked: ObjectProvider<UncheckedRevocations>,
     ): Authenticator {
         val token = algorithm.ifAvailable?.let {
             TokenAuthenticator(
@@ -159,6 +166,7 @@ class CoSecPipelineAutoConfiguration {
                 revocationReader(revocationReader, tokenStore),
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,
+                unchecked = unchecked.getIfAvailable { UncheckedRevocations() },
             )
         } ?: NO_TOKEN
         val apiKeys = if (apiKeysEnabled(environment)) {

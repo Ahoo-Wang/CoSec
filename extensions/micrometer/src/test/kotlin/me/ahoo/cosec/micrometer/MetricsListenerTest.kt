@@ -20,6 +20,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.FlatEngine
@@ -28,6 +29,8 @@ import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
@@ -36,6 +39,8 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
+import me.ahoo.cosec.runtime.authn.TokenAuthenticator
+import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -48,9 +53,15 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
+import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.time.Duration.Companion.seconds
 
@@ -139,5 +150,27 @@ class MetricsListenerTest {
         registry.get("cosec.listener.failures").tags("listener", "failing").functionCounter().count()
             .assert().isGreaterThan(0.0)
         registry.get("cosec.audit.required.failures").functionCounter().count().assert().isGreaterThan(0.0)
+    }
+
+    /** L6 of the round-2 review: each token accepted without a revocation check counts in `cosec.revocation.unchecked`. */
+    @Test
+    fun tokensAcceptedWithoutARevocationCheckAreCounted() = runBlocking<Unit> {
+        val registry = SimpleMeterRegistry()
+        val unchecked = UncheckedRevocations()
+        MetricsListener.bind(registry, unchecked)
+        val verifier = object : TokenVerifier {
+            override fun verify(accessToken: String): VerifiedToken = VerifiedToken("t1", "alice", null, null)
+
+            override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
+        }
+        val unreadable = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = throw RevocationUnavailableException("down")
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
+        }
+        val authenticator = TokenAuthenticator(verifier, unreadable, unchecked = unchecked)
+        repeat(3) { authenticator.authenticate(Credentials("t", null)) }
+
+        registry.get(MetricsListener.UNCHECKED_REVOCATIONS).functionCounter().count().assert().isEqualTo(3.0)
     }
 }
