@@ -72,6 +72,16 @@
         "spi:RateLimitTest#initWhenTheWindowArithmeticWouldOverflow"
       ],
       "pending": null
+    },
+    {
+      "id": "DOC-8",
+      "source": "RFC 0005 §5.1, RFC 0006 §5.3.1 (round 2 review of host and tools, M2)",
+      "statement": "An http action no request can have does not compile, in a statement or a rate limit rule: http:HEAD, since a HEAD request is decided as GET (PIP-18), and an http verb holding an ASCII lower-case letter, since a method that holds one is refused before any decision. The message names the action and says to write http:GET, or the verb in upper case. http:*, upper-case verbs and the verbs of other services stay valid. The data plane and the control plane compile with the one compiler, so a stored document with such an action is installed as failed, and the control plane refuses a change that makes one; the schema says the same.",
+      "level": "engine",
+      "guards": [
+        "engine:PolicyCompilerTest#an http action no request can have does not compile"
+      ],
+      "pending": null
     }
   ]
 }

@@ -78,7 +78,8 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
 ### Actions and resources
 
 - Action: `service:verb`, `service:*` or `*`; compared exactly, case included. HTTP actions are `http:GET`,
-  `http:POST`, ..., and `http:*`.
+  `http:POST`, ..., and `http:*`. Never `http:HEAD` or a lower-case `http` verb (`http:get`): a HEAD request is decided
+  as GET and a lower-case method is refused, so such a statement matches nothing and does not compile (`DOC-8`).
 - Resource: a typed pattern `type/segment/...` where a segment is a literal, `*` (one non-empty segment), `{name}`
   (one segment, captured) or a final `**`; or `http:path:<pattern>` (Spring-like: literals, `?`, `*`, `{name}`,
   `**` and `{*name}` at the start or end; no `{name:regex}`, and no half of a surrogate pair without the other: write

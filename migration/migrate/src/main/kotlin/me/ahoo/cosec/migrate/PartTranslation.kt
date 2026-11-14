@@ -25,7 +25,12 @@ import tools.jackson.databind.JsonNode
  * is absent as `""`, the anonymous principal's id as `(0)`; the attribute is absent instead ([absentAs]).
  */
 internal object Parts {
-    class Mapped(val attribute: String, val absentAs: String)
+    /**
+     * [part] reads [attribute] in 8.0, absent where 7.x read [absentAs]. [setBy7x] names what filled a part that no 8.0
+     * host fills (round 2 addition C): 7.x set request attributes and `resource.*` through `RequestAttributesAppender`s
+     * (ip2region's `ipRegion`, an application's own), which 8.0 does not have, so the attribute is always absent there.
+     */
+    class Mapped(val part: String, val attribute: String, val absentAs: String, val setBy7x: String? = null)
 
     private const val EMPTY = ""
     private val FIXED = mapOf(
@@ -50,16 +55,33 @@ internal object Parts {
     )
     const val PRINCIPAL_ID = "context.principal.id"
     const val REMOTE_IP = "request.remoteIp"
+    const val METHOD = "request.method"
+    private const val REQUEST_ATTRIBUTES = "request.attributes."
+    private const val RESOURCE = "resource."
+
+    /**
+     * The request attributes an 8.0 host sets, as 7.x named them: the gateway's route id
+     * (`AuditRequest.ROUTE_ID_ATTRIBUTE_KEY`), which 7.x's gateway appender set too. Every other one is absent in 8.0.
+     */
+    private val REQUEST_ATTRIBUTES_8_0 = setOf("cosec.audit.routeId")
 
     /** The attribute [part] reads in 8.0; null when it has none that reads the same (see [reason]). */
     fun of(part: String): Mapped? {
         if (part == PRINCIPAL_ID) {
             // Anonymous in 7.x is the principal `(0)`; in 8.0 an anonymous subject has no id.
-            return Mapped("subject.id", "(0)")
+            return Mapped(part, "subject.id", "(0)")
         }
-        FIXED[part]?.let { return Mapped(it, EMPTY) }
+        FIXED[part]?.let { return Mapped(part, it, EMPTY) }
         return PREFIXES.firstOrNull { (prefix, _) -> part.length > prefix.length && part.startsWith(prefix) }
-            ?.let { (prefix, attribute) -> Mapped(attribute + part.substring(prefix.length), EMPTY) }
+            ?.let { (prefix, attribute) ->
+                val name = part.substring(prefix.length)
+                val setBy7x = when {
+                    prefix == REQUEST_ATTRIBUTES && name !in REQUEST_ATTRIBUTES_8_0 -> "a 7.x request attributes appender"
+                    prefix == RESOURCE -> "7.x's CheckRequest.resource or a request attributes appender"
+                    else -> null
+                }
+                Mapped(part, attribute + name, EMPTY, setBy7x)
+            }
     }
 
     fun reason(part: String): String = if (part == REMOTE_IP) {
@@ -236,6 +258,14 @@ internal class PartTranslation(
                 value
             )?.let { attribute(it) }
         }
+        if (mapped.setBy7x != null && deny) {
+            return translator.rejected(
+                RejectionKind.CONDITION_NOT_TRANSLATED,
+                location,
+                "in the DENY direction, part [${mapped.part}] was set by ${mapped.setBy7x}; 8.0 sets no such " +
+                    "attribute, so this comparison never holds: rewrite it with an ext.* attribute of an AttributeProvider",
+            )
+        }
         if (right == null || ignoreCase || part == Parts.PRINCIPAL_ID) {
             return translator.rejected(
                 RejectionKind.CONDITION_NOT_TRANSLATED,
@@ -303,16 +333,52 @@ internal class PartTranslation(
         return false
     }
 
-    /** [base], and absence where 7.x's reading of it ([Parts.Mapped.absentAs]) matches. */
-    private fun absent(mapped: Parts.Mapped, base: Translated, matches: (String) -> Boolean): Translated =
-        if (matches(mapped.absentAs)) {
+    /**
+     * [base], and absence where 7.x's reading of it ([Parts.Mapped.absentAs]) matches. Null when the predicate reads,
+     * in the DENY direction, what 8.0 decides otherwise ([unmatched]).
+     */
+    private fun absent(mapped: Parts.Mapped, base: Translated, matches: (String) -> Boolean): Translated? {
+        if (unmatched(mapped, matches)) {
+            return null
+        }
+        return if (matches(mapped.absentAs)) {
             Translated.or(listOf(Translated.Ast(Condition.Not(Condition.Exists(mapped.attribute))), base))
         } else {
             base
         }
+    }
+
+    /**
+     * Whether a DENY on this predicate would stop matching requests 7.x denied, which is rejected; in the ALLOW
+     * direction the same is a narrowing, recorded:
+     * - a part 7.x filled and 8.0 never does ([Parts.Mapped.setBy7x]): the attribute is always absent, so a predicate
+     *   that does not hold on the absent value never holds (round 2 addition C);
+     * - `request.method` holding HEAD but not GET: a HEAD request is decided as GET (`PIP-18`), and `action.verb` is GET.
+     * A predicate that holds on the absent value, or on GET, matches at least what 7.x matched, which a DENY may.
+     */
+    private fun unmatched(mapped: Parts.Mapped, matches: (String) -> Boolean): Boolean {
+        val reason = when {
+            mapped.setBy7x != null && !matches(mapped.absentAs) ->
+                "part [${mapped.part}] was set by ${mapped.setBy7x}; 8.0 sets no such attribute, so " +
+                    "[${mapped.attribute}] is always absent there and this condition never holds: rewrite it with an " +
+                    "ext.* attribute of an AttributeProvider (7.x's ipRegion is ext.ip2region.*)"
+            mapped.part == Parts.METHOD && matches(HEAD) && !matches(GET) ->
+                "a condition on method HEAD but not GET: 8.0 decides a HEAD request as GET (PIP-18), so action.verb is " +
+                    "never HEAD and this condition no longer holds for one"
+            else -> return false
+        }
+        if (deny) {
+            translator.rejected<Unit>(RejectionKind.CONDITION_NOT_TRANSLATED, location, "in the DENY direction, $reason")
+            return true
+        }
+        translator.note("NOT-IN-8.0", location, "in the ALLOW direction, $reason: the ALLOW matches fewer requests")
+        return false
+    }
 
     private companion object {
         const val ANONYMOUS_ID = "(0)"
+        const val HEAD = "HEAD"
+        const val GET = "GET"
 
         /**
          * Whether a character of [value] has any case mapping, and so a spelling 7.x folds to it. Not only letters

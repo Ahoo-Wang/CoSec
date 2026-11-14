@@ -95,7 +95,8 @@ class ConverterTest {
             .containsExactly("g" to false, "c" to true, "s" to true)
         val global = platform.policies.first()
         global.statements.map { it.effect }.assert().containsExactly(Effect.ALLOW, Effect.DENY)
-        global.statements[0].actions.assert().containsExactly("http:GET", "http:HEAD")
+        // HEAD beside GET says nothing more in 8.0, which decides a HEAD request as GET (PIP-18, DOC-8).
+        global.statements[0].actions.assert().containsExactly("http:GET")
         global.statements[0].resources.single().pattern.assert().isEqualTo("http:path:/orders/**")
         global.statements[1].actions.assert().containsExactly("http:*")
         platform.policies[1].statements.single().resources.map { it.pattern }.assert()

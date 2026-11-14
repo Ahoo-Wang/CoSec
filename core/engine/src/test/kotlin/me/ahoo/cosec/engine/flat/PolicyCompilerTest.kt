@@ -240,4 +240,22 @@ class PolicyCompilerTest {
         statement.actionPatterns.single().toString().assert().isEqualTo("order:delete")
         (statement.actionPatterns === statement.actionPatterns).assert().isTrue()
     }
+
+    /** `DOC-8`: a DENY on an http action no request can have is a hole its author believes closed. */
+    @Test
+    fun `an http action no request can have does not compile`() {
+        val dead = errors(
+            null,
+            StatementSource("dead", Effect.DENY, listOf("http:HEAD", "http:delete", "http:GET"), emptyList(), null),
+        )
+        dead.map { it.path }.assert().containsExactly("$.statements[0].action[0]", "$.statements[0].action[1]")
+        dead[0].message.assert().contains("http:HEAD matches no request").contains("http:GET").contains("DOC-8")
+        dead[1].message.assert().contains("http:delete matches no request").contains("http:DELETE")
+        // What can still match compiles: http:*, upper-case methods, and the lower-case verbs of other services.
+        compiler.statement(
+            id,
+            0,
+            StatementSource("live", Effect.DENY, listOf("http:*", "http:GET", "order:head", "*"), emptyList(), null),
+        ).actionPatterns.size.assert().isEqualTo(4)
+    }
 }

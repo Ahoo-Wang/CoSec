@@ -16,6 +16,14 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
+  (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
+  it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests
+  closed (`503`), and the control plane refuses a change that makes one. Find them before upgrading, in the documents
+  the control plane lists (`"http:HEAD"`, or an `"http:` action with a lower-case letter after the colon), and publish
+  them again with `http:GET`, or the method in upper case.
+- **`cosec-migrate api-keys --app` works** (round 2 M3). The command refused `--app`, which this page tells you to pass,
+  as an option it does not take: rerun it with `--app <id>` for keys a service with an app must accept.
 - **A generated route map sits at the `servers` path, and its resources name every path variable** (round 2 L4). The
   `cosecServiceGenerator` endpoint dropped a server path (`/api/v1`), so its routes matched no request and every
   request was in the `http` namespace; and `/users/{id}/avatar/{size}` was the resource `user/{size}`, one resource for
@@ -894,10 +902,10 @@ then convert again into a new directory.
 | `INVALID_ID` | An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id, or an unpaired UTF-16 surrogate in any id of a converted document (a JSON escape such as `"\uD800"`, `IDN-10`), located by the document and its JSON path. | Rename it. In 8.0 `*` means any app or space. |
 | `DUPLICATE_ID` | The same policy twice in an export, the same app twice in an export (one entry would replace the other, and its grants would be lost), the same permission twice in one app, or two app or tenant ids whose converted file names differ only in case (`Order` and `order`: one file on macOS and Windows). Ids that differ in more than their file names, such as `strasse` and `straße`, are not a collision. | Keep one, or rename. |
 | `OWNER_TENANT` | `--partition by-owner`, and a policy whose `tenantId` names no tenant. | Set its `tenantId`, or convert with `--partition platform`. |
-| `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...). |
+| `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. In the DENY direction also: a part only 7.x filled (`request.attributes.*` but the gateway's `cosec.audit.routeId`, set by a `RequestAttributesAppender` such as ip2region's `ipRegion`, and `resource.*`), which is always absent in 8.0, when the condition does not hold on the absent value; and `request.method` holding HEAD but not GET, since 8.0 decides a HEAD request as GET. | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...); a value an appender set becomes an `ext.*` attribute of an `AttributeProvider` (`ipRegion`: `ext.ip2region.*`). |
 | `EXPRESSION_CONDITION` | A `spel` or `ognl` condition. | Rewrite it as conditions of the [policy language](../policies/language.md). |
 | `CUSTOM_CONDITION` | A condition of a custom `ConditionMatcherFactory`. | Move the value it reads into an `AttributeProvider` and write a condition on that attribute ([Extending](../architecture/extending.md)). |
-| `ACTION_NOT_TRANSLATED` | A `#{...}` path template, a path `separator` other than `/`, an action array whose members have different methods, or a method that is not an HTTP token. | See [Path templates in actions](#path-templates-in-actions); split statements by method; remove methods no request can have. |
+| `ACTION_NOT_TRANSLATED` | A `#{...}` path template, a path `separator` other than `/`, an action array whose members have different methods, a method that is not an HTTP token, or a DENY on method HEAD without GET: 8.0 decides a HEAD request as GET (`PIP-18`), so it cannot deny HEAD apart from GET. | See [Path templates in actions](#path-templates-in-actions); split statements by method; remove methods no request can have; deny GET too, or remove HEAD. |
 | `CUSTOM_ACTION` | An action of a custom `ActionMatcherFactory`. | Rewrite it as HTTP paths and methods, or as route-mapped actions. |
 | `DOES_NOT_COMPILE` | A translated statement does not compile, such as a path pattern outside what 8.0 accepts; or a document does not compile as a whole, such as when each policy fits the budget of path patterns and all of them together exceed it. The rejection names the policy it can trace, else the document. | See the message and the [policy language](../policies/language.md). |
 
@@ -916,6 +924,11 @@ they are dropped).
   spellings. In a DENY condition whose value has letters outside ASCII, the condition is rejected instead.
 - `RATE-LIMIT`: a 7.x rate limit rule, translated into the platform document's rate limits
   ([Rate limit rules become obligations](#rate-limit-rules-become-obligations)).
+- `PIP-18`: once per conversion, that a HEAD request is decided as GET, so it is permitted, and denied, wherever GET
+  is. And at a statement: method HEAD dropped from an ALLOW (beside GET it says nothing more and goes without a
+  record), or an ALLOW on HEAD alone dropped, which narrows it.
+- `NOT-IN-8.0`: an ALLOW condition on a part 8.0 never sets (a request attribute an appender set, `resource.*`), or on
+  method HEAD but not GET: the ALLOW matches fewer requests. In a DENY condition the same is rejected.
 
 Read each entry. Nothing in the report needs a change to the data, but each one can change a response.
 

@@ -212,6 +212,12 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     fun convert(): Conversion {
         policies[SnapshotKey.Platform] = ArrayList()
         bindings[SnapshotKey.Platform] = ArrayList()
+        // What PIP-18 changes for every converted deployment, whatever its statements say: reported once.
+        changes += SemanticChange(
+            "PIP-18",
+            CONVERSION,
+            "a HEAD request is decided as GET: it is permitted wherever GET is, and denied wherever GET is",
+        )
         checkMarker()
         convertPolicies()
         source.apps.forEach(::convertApp)
@@ -273,17 +279,19 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val type = decoded?.type ?: tree.get(TYPE)?.takeIf { it.isString }?.let { typeOf(it.asString()) }
         val global = isGlobal(id, type, entry.location) ?: return
         val key = placement(id, global, tree, entry.location) ?: return
-        val locations = tree.get(STATEMENTS)?.values().orEmpty().indices.map { "${entry.location}#$.$STATEMENTS[$it]" }
+        val written = tree.get(STATEMENTS)?.values().orEmpty().indices.map { "${entry.location}#$.$STATEMENTS[$it]" }
         // Translated even when it does not decode, so one run reports every problem of the policy.
-        val translated = translatePolicy(tree, locations, entry.location)
+        val translated = translatePolicy(tree, written, entry.location)
         if (translated == null || decoded == null) {
             return
         }
+        // The locations of the statements kept: a dropped one (PIP-18) has none in the 8.0 policy.
+        val locations = translated.locations
         val definition = PolicyDefinition(
             PolicyId(id),
             attachable = !global,
-            condition = translated.first,
-            translated.second
+            condition = translated.condition,
+            translated.statements
         )
         if (!compiles(key, definition, locations)) {
             return
@@ -346,6 +354,13 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         return inIndex && type == PolicyType.GLOBAL
     }
 
+    /** A policy translated: its condition, the statements kept, and where each of them came from. */
+    private class TranslatedPolicy(
+        val condition: Condition?,
+        val statements: List<StatementSource>,
+        val locations: List<String>,
+    )
+
     /**
      * The condition and statements of a policy, or null when one of them or the condition is rejected. Everything is
      * translated even after a rejection, so one run reports every problem of the policy.
@@ -354,13 +369,22 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         tree: JsonNode,
         locations: List<String>,
         location: String,
-    ): Pair<Condition?, List<StatementSource>>? {
+    ): TranslatedPolicy? {
         val condition = tree.get(CONDITION)
         val nodes = tree.get(STATEMENTS)?.values().orEmpty()
         scan.policyCondition(condition, "$location#$.$CONDITION")
         val translated = nodes.mapIndexed { i, statement -> translateStatement(statement, condition, locations[i]) }
-        val policy = statements.policy(condition, "$location#$.$CONDITION", translated.filterNotNull())
-        return if (translated.none { it == null }) policy else null
+        val kept = translated.indices.filter { translated[it] is StatementTranslator.Translation.Kept }
+        val policy = statements.policy(
+            condition,
+            "$location#$.$CONDITION",
+            kept.map { (translated[it] as StatementTranslator.Translation.Kept).statement },
+        )
+        return if (policy != null && translated.none { it == null }) {
+            TranslatedPolicy(policy.first, policy.second, kept.map { locations[it] })
+        } else {
+            null
+        }
     }
 
     /** Whether [tree] names an id other than the [id] its key or position names. */
@@ -413,18 +437,19 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         policyCondition: JsonNode?,
         location: String,
         name: String = statement.get(NAME)?.takeIf { it.isString }?.asString().orEmpty(),
-    ): StatementSource? {
+    ): StatementTranslator.Translation? {
         if (!statement.isObject) {
             reject(RejectionKind.UNDECODABLE, location, "a statement is an object")
             return null
         }
         scan.statement(isDeny(statement), statement.get(ACTION), statement.get(CONDITION), policyCondition, location)
-        return statements.statement(statement, location, name)
+        return statements.translation(statement, location, name)
     }
 
     // ---- apps (RFC 0004 §5.1: app permissions and role grants) ----
 
-    private class AppPermissionStatement(val permissionId: String, val statement: StatementSource, val location: String)
+    /** A permission of an app; [statement] null when it was an ALLOW 8.0 could never match, dropped (PIP-18). */
+    private class AppPermissionStatement(val permissionId: String, val statement: StatementSource?, val location: String)
 
     private fun convertApp(app: Source7x.App) {
         count("apps")
@@ -444,7 +469,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val guard = statements.policy(
             appCondition,
             "$location#$.$CONDITION",
-            permissions?.values?.map {
+            permissions?.values?.mapNotNull {
                 it.statement
             }.orEmpty()
         )
@@ -524,14 +549,15 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val definitions = sources.map { (permissionId, members, origin) ->
             val id = Converter.permissionPolicyId(appId, permissionId)
             // The app condition is the policy condition of every permission policy (RFC 0004 §5.1).
+            val kept = members.filter { it.statement != null }
             val (condition, guarded) = statements.policy(
                 appCondition, conditionLocation,
-                members.map {
-                    it.statement
+                kept.map {
+                    it.statement!!
                 }
             ) ?: return null
             val definition = PolicyDefinition(PolicyId(id), attachable = false, condition = condition, guarded)
-            val locations = members.map { it.location }
+            val locations = kept.map { it.location }
             if (!compiles(key, definition, locations)) {
                 return null
             }
@@ -570,11 +596,13 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
 
                     else -> {
                         // An app condition guards every permission statement, as a policy condition does.
-                        val statement = translateStatement(permission, appCondition, at, name = permissionId)
-                        if (statement == null) {
-                            ok = false
-                        } else {
-                            permissions[permissionId] = AppPermissionStatement(permissionId, statement, at)
+                        when (val statement = translateStatement(permission, appCondition, at, name = permissionId)) {
+                            null -> ok = false
+                            is StatementTranslator.Translation.Kept ->
+                                permissions[permissionId] = AppPermissionStatement(permissionId, statement.statement, at)
+                            // Still a permission grants may name: its policy holds no statement.
+                            StatementTranslator.Translation.Dropped ->
+                                permissions[permissionId] = AppPermissionStatement(permissionId, null, at)
                         }
                     }
                 }
@@ -835,6 +863,9 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
 
     companion object {
         const val SCHEMA_7 = "7"
+
+        /** The location of what the conversion as a whole reports. */
+        const val CONVERSION = "conversion"
         const val REVISION = 1L
         const val RATE_LIMIT_POLICY = "rate-limit/"
         val RESERVED = Converter.RESERVED_PREFIXES

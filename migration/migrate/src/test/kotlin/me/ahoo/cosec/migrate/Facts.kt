@@ -184,7 +184,7 @@ data class Facts(
                 origin = ORIGINS.random(random),
                 referer = ORIGINS.random(random),
                 headers = map(listOf("x-tenant", "x-debug")),
-                requestAttributes = map(listOf("owner", "region")),
+                requestAttributes = map(listOf("owner", "region", "cosec.audit.routeId")),
                 resourceAttributes = map(listOf("owner")),
                 pathVariables = map(listOf("id")),
                 authenticated = authenticated,

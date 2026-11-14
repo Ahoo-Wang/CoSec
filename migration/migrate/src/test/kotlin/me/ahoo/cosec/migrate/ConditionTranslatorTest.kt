@@ -158,11 +158,11 @@ class ConditionTranslatorTest {
         ).single().shape.assert().contains("ALLOW direction")
         changes("""{"inRole":{"value":"admin@team"}}""", true).assert().isEmpty()
         changes(
-            """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+            """{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}""",
             false
         ).single().change.assert().isEqualTo("D2")
         changes(
-            """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+            """{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}""",
             true
         ).single().shape.assert().contains("kept")
         changes("""{"regular":{"part":"request.path","pattern":"^/a$"}}""", false).map { it.change }.assert()
@@ -183,7 +183,7 @@ class ConditionTranslatorTest {
         Matchers7x.use {
             for (deny in listOf(false, true)) {
                 val translated = translate(
-                    """{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}""",
+                    """{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}""",
                     deny
                 ) as Translated.Ast
                 // No expression language reaches 8.0: SpEL only reads the 7.x value when converting.
@@ -193,7 +193,7 @@ class ConditionTranslatorTest {
                 val base = FIXED.first()
                 for (id in Facts.PRINCIPAL_IDS) {
                     for (owner in Facts.PRINCIPAL_IDS) {
-                        val facts = base.copy(principalId = id, requestAttributes = mapOf("owner" to owner))
+                        val facts = base.copy(principalId = id, requestAttributes = mapOf("cosec.audit.routeId" to owner))
                         ast(facts).assert().describedAs("deny=$deny id=$id owner=$owner").isEqualTo(id == owner)
                     }
                 }
@@ -290,7 +290,10 @@ class ConditionTranslatorTest {
                 exact("""{"eq":{"part":"request.header.x-tenant","value":"acme"}}"""),
                 exact("""{"eq":{"part":"request.header.x-tenant","value":"1-2","ignoreCase":true}}"""),
                 directional("""{"eq":{"part":"request.header.x-tenant","value":"key","ignoreCase":true}}"""),
-                exact("""{"eq":{"part":"request.attributes.owner","value":"alice"}}"""),
+                // The gateway's route id: the one request attribute 8.0 sets as 7.x did.
+                exact("""{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"alice"}}"""),
+                // Only 7.x set this one (addition C): an ALLOW narrows to nothing, a DENY is rejected.
+                directional("""{"eq":{"part":"request.attributes.owner","value":"alice"}}"""),
                 exact("""{"eq":{"part":"resource.owner","value":""}}"""),
                 exact("""{"eq":{"part":"request.path.var.id","value":"owner-1"}}"""),
                 exact("""{"eq":{"part":"context.principal.id","value":"alice"}}"""),
@@ -300,6 +303,7 @@ class ConditionTranslatorTest {
                 exact("""{"eq":{"part":"request.origin","value":"https://example.com"}}"""),
                 exact("""{"eq":{"part":"request.origin.host","value":""}}"""),
                 exact("""{"eq":{"part":"request.referer.host","value":"example.com"}}"""),
+                directional("""{"eq":{"part":"request.attributes.cosec.audit.routeId","value":"#{principal.id}"}}"""),
                 directional("""{"eq":{"part":"request.attributes.owner","value":"#{principal.id}"}}"""),
                 directional(
                     """{"eq":{"part":"request.attributes.owner","value":"#{principal.attributes['owner']}"}}"""
