@@ -271,6 +271,13 @@ The image ships an AOT cache (JDK 25, [JEP 483](https://openjdk.org/jeps/483), [
 loaded and linked, plus method profiles from a training run. The JVM maps the file at startup instead of doing that
 work again. No code changes and no Spring AOT are involved.
 
+**Spring AOT and GraalVM native images are not supported in 8.0.** Nothing in CoSec's build processes them
+(`processAot`) or tests a native image, so whether CoSec runs in one is unknown, and no module carries the hints one
+needs. Support is planned for a later 8.x release. The JDK AOT cache described here is the supported way to start
+faster. If you try anyway, expect it to fail closed rather than run unchecked: the
+[unknown-property check](./configuration.md#unknown-properties) reads CoSec's configuration metadata from the class
+path, and when it finds none it treats every `cosec.*` key as unknown and refuses to start.
+
 ### What it changes
 
 - **Startup, and the first seconds after it.** Time to `Started GatewayServerKt` drops by about a quarter; see
