@@ -120,6 +120,33 @@ class NomatchConfirmationTest {
     }
 
     /** Review K4: the policy condition guards the statement as much as its own, so the confirmation covers it too. */
+    /** RFC 0007 §5.6, §9.5: a rollback is a change like any other, so it can carry the confirmation it needs. */
+    @Test
+    fun `a rollback restores a lapsing deny with a confirmation of its content, and not without one`() = runBlocking<Unit> {
+        publish(
+            SnapshotKey.Platform,
+            listOf(Operation.SetAttributes(listOf(Attribute.external("ext.geo.inFence", AttributeType.BOOL))))
+        )
+        val confirmation = Confirmation(PolicyId("fence"), 0, StatementDigest.of(lapsing().statements.single()))
+        publish(
+            ACME,
+            listOf(Operation.PutPolicy(lapsing())),
+            listOf(confirmation)
+        ).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        publish(ACME, listOf(Operation.RemovePolicy(PolicyId("fence")))).state.assert().isEqualTo(ChangeState.PUBLISHED)
+
+        val unconfirmed = changes.rollback(operatorFor(ACME), ACME, 1, "restore")
+        unconfirmed.state.assert().isEqualTo(ChangeState.DRAFT)
+        unconfirmed.errors.map { it.check to it.status }.assert().contains("V5" to 428)
+        changes.abandon(operatorFor(ACME), unconfirmed.id)
+
+        val confirmed = changes.rollback(operatorFor(ACME), ACME, 1, "restore", listOf(confirmation))
+        confirmed.errors.assert().describedAs("${confirmed.findings}").isEmpty()
+        confirmed.state.assert().isEqualTo(ChangeState.CHECKED)
+        confirmed.kind.assert().isEqualTo(me.ahoo.cosec.runtime.document.ProvenanceKind.ROLLBACK)
+        confirmed.confirmations.assert().containsExactly(confirmation)
+    }
+
     @Test
     fun `a confirmation does not survive a change of its policy's condition`() = runBlocking<Unit> {
         publish(

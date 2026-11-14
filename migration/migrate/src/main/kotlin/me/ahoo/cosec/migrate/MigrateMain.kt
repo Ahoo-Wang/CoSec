@@ -65,8 +65,8 @@ import kotlin.system.exitProcess
  * ```
  *
  * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
- * what they write (RFC 0007 §5.9). `repair-references` adds to the back-reference index what the heads refer to
- * ([ReferenceRepair]). With `--cluster`, `--to-redis` names seed nodes of a Redis Cluster, comma-separated.
+ * what they write (RFC 0007 §5.9). `repair-references` brings the back-reference index in line with what the heads refer
+ * to ([ReferenceRepair]). With `--cluster`, `--to-redis` names seed nodes of a Redis Cluster, comma-separated.
  *
  * It writes no break-glass binding (RC1-27): `publish` and `bootstrap` refuse documents that hold one, and a 7.x root
  * is not converted. After the switch, break-glass is requested through the control plane, by two people (RFC 0007 §8).
@@ -345,6 +345,7 @@ object MigrateMain {
         val result = controlStore(options) { store -> ReferenceRepair(store).run() }
         result.failed.forEach { (key, message) -> out.println("FAILED $key: $message") }
         out.println("Visited ${result.documents} document(s); added ${result.added} reference(s).")
+        out.println("Removed ${result.removed} reference(s) no head refers to.")
         result.apps?.let { out.println("The app list is complete: $it app(s).") }
             ?: out.println("FAILED the app list could not be completed: run again.")
         if (result.failed.isNotEmpty() || result.apps == null) {

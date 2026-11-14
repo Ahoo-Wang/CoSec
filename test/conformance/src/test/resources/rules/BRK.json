@@ -135,6 +135,18 @@
         "control:PreemptionRaceTest#a revoke whose binding expired meanwhile is not made again",
         "control:PreemptionRaceTest#a revoke that keeps conflicting gives up after three more"
       ]
+    },
+    {
+      "id": "BRK-12",
+      "source": "RFC 0007 §8",
+      "statement": "A platform principal holding cosec:breakglass on the platform document requests break-glass, publishes an approved request and revokes it alone: no other control action is needed, and cosec:breakglass stands in for cosec:publish on a break-glass change only. A request refused for want of it answers 403 before the platform document is read, whether or not a binding of that id exists.",
+      "level": "control",
+      "guards": [
+        "control:BreakGlassAuthorityTest#cosec breakglass alone requests it, publishes what was approved and revokes it",
+        "control:BreakGlassAuthorityTest#cosec breakglass does not stand in for cosec publish on any other change",
+        "control:BreakGlassAuthorityTest#a refused request tells nothing of the bindings there are"
+      ],
+      "pending": null
     }
   ]
 }

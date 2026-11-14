@@ -1,0 +1,153 @@
+{
+  "rules": [
+    "CTL-31"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "olga, who does not hold cosec:approve, removes a platform binding whose policy is ALLOWs only, and the policy with it: that only narrows, so she publishes alone.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "platform-operator",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:publish",
+                "cosec:skip-shadow"
+              ],
+              "resource": [
+                "doc/platform",
+                "doc/platform/**",
+                "doc/app/wms",
+                "doc/app/wms/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "no-export",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:export",
+              "resource": "order/**"
+            }
+          ]
+        },
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "olga",
+          "subject": {
+            "principal": "olga",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "platform-operator"
+        },
+        {
+          "id": "no-export",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-export"
+        },
+        {
+          "id": "readers",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "olga": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "olga",
+        "document": "platform",
+        "operations": [
+          {
+            "removeBinding": "readers"
+          },
+          {
+            "removePolicy": "read"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "olga"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "olga"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 2
+    }
+  }
+}

@@ -152,7 +152,13 @@ interface ControlPlane {
 
     suspend fun apply(operator: Operator, key: SnapshotKey, desired: PolicyDocument, mode: ApplyMode, note: String): ChangeRequest
 
-    suspend fun rollback(operator: Operator, key: SnapshotKey, toRevision: Long, note: String): ChangeRequest
+    suspend fun rollback(
+        operator: Operator,
+        key: SnapshotKey,
+        toRevision: Long,
+        note: String,
+        confirmations: List<Confirmation> = emptyList(),
+    ): ChangeRequest
 
     suspend fun rebase(operator: Operator, change: ChangeId): ChangeRequest
 
@@ -256,9 +262,15 @@ class DefaultControlPlane(
         return changes.apply(operator, key, desired, mode, note)
     }
 
-    override suspend fun rollback(operator: Operator, key: SnapshotKey, toRevision: Long, note: String): ChangeRequest {
+    override suspend fun rollback(
+        operator: Operator,
+        key: SnapshotKey,
+        toRevision: Long,
+        note: String,
+        confirmations: List<Confirmation>,
+    ): ChangeRequest {
         authority.require(operator, key, ControlActions.READ)
-        return changes.rollback(operator, key, toRevision, note)
+        return changes.rollback(operator, key, toRevision, note, confirmations)
     }
 
     override suspend fun rebase(operator: Operator, change: ChangeId): ChangeRequest = changes.rebase(operator, change)

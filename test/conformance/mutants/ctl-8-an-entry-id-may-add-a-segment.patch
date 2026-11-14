@@ -1,0 +1,17 @@
+# Rule: CTL-8
+# Mutant: an entry id may hold a slash, which adds a segment to the resource cosec:write is checked on
+# Tests: :control:test --tests me.ahoo.cosec.control.change.EntryIdsTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+index 164cd7dd..fbf9b65a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
+@@ -250,7 +250,7 @@ class ChangeChecks(
+                 is Operation.PutRateLimit -> operation.rule.id
+                 else -> null
+             } ?: continue
+-            if ('/' in id) {
++            if (id.isEmpty() && '/' in id) {
+                 findings += Finding("V2", "operations[$i]", "[${printable(id)}]: an entry's id has no [/]", UNPROCESSABLE)
+             }
+         }

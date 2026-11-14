@@ -1,0 +1,222 @@
+{
+  "rules": [
+    "CTL-31"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "App wms's role guard lists the hand-written permission no-ship, a DENY. olga, who does not hold cosec:approve, removes the role reader, which derives ALLOWs only, and publishes alone; removing guard drops the binding that carries the DENY, read from the expanded document, so it waits for a second person.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "platform-operator",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": [
+                "cosec:read",
+                "cosec:write",
+                "cosec:publish",
+                "cosec:skip-shadow"
+              ],
+              "resource": [
+                "doc/platform",
+                "doc/platform/**",
+                "doc/app/wms",
+                "doc/app/wms/**"
+              ]
+            }
+          ]
+        },
+        {
+          "id": "no-export",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:export",
+              "resource": "order/**"
+            }
+          ]
+        },
+        {
+          "id": "read",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "plato",
+          "subject": {
+            "principal": "plato",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "pia",
+          "subject": {
+            "principal": "pia",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "cosec:platform-admin"
+        },
+        {
+          "id": "olga",
+          "subject": {
+            "principal": "olga",
+            "tenant": "(platform)"
+          },
+          "app": "cosec-control",
+          "space": "",
+          "policy": "platform-operator"
+        },
+        {
+          "id": "no-export",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-export"
+        },
+        {
+          "id": "readers",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "read"
+        }
+      ]
+    },
+    "apps": {
+      "wms": {
+        "catalog": {
+          "groups": [
+            {
+              "name": "ops",
+              "permissions": [
+                {
+                  "id": "read",
+                  "action": "wms:read"
+                },
+                {
+                  "id": "no-ship"
+                }
+              ]
+            }
+          ]
+        },
+        "policies": [
+          {
+            "id": "perm:wms/no-ship",
+            "statements": [
+              {
+                "effect": "deny",
+                "action": "wms:ship"
+              }
+            ]
+          }
+        ],
+        "roles": [
+          {
+            "id": "guard",
+            "permissions": [
+              "read",
+              "no-ship"
+            ]
+          },
+          {
+            "id": "reader",
+            "permissions": [
+              "read"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "operators": {
+    "olga": {
+      "tenant": "(platform)"
+    },
+    "pia": {
+      "tenant": "(platform)"
+    },
+    "plato": {
+      "tenant": "(platform)"
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "by": "olga",
+        "document": "app:wms",
+        "operations": [
+          {
+            "removeRole": "reader"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "olga"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "olga"
+      }
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "by": "olga",
+        "document": "app:wms",
+        "operations": [
+          {
+            "removeRole": "guard"
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c2",
+        "by": "olga"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "AWAITING_APPROVAL"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "app:wms": 2
+    },
+    "escalations": {
+      "c2": [
+        "NOT_ANALYZED"
+      ]
+    }
+  }
+}

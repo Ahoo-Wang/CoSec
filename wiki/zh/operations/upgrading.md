@@ -43,6 +43,13 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **需要访问令牌的地方拒绝刷新令牌**（`IDN-13`）。`JwtTokenConverter` 在每个刷新令牌上写 `cosec.token: "refresh"`，带该声明的令牌不会完成认证。此前签发的令牌在过期前继续有效。
 - **实例状态携带文档格式级别**（RFC 0010 C5）：没有 `formatLevel` 的实例状态会被本版本的控制面拒绝，读取到它的影子窗口会失败，直到所有实例升级完毕（状态一分钟后过期）。
 
+- **控制面拒绝原本到运行时才失败的内容。** 平台变更把被其他文档引用的策略改成边界、或把被引用的边界改成策略，是 `REFERENCES`（`422`、`CTL-30`）。绑定指向平台边界同样是 `REFERENCES`：这样的绑定从未授予任何东西，它适用的每个请求都是 `503`，含有它的文档要先移除它才能再次发布。变更写入的 id 不能含 `/`（`V2`、`422`）：以 `*` 结尾的规则匹配不到这样的条目。权限策略的 `perm:<app>/<id>` 可以含；文档中已有这种 id 的条目可以保留或删除。
+- **从平台或应用文档删除 DENY 需要第二个人**（RFC 0007 §7.4.4、`CTL-31`）。此前，没有 `cosec:approve` 的平台主体可以独自发布只删除条目的变更。现在，拿掉 DENY 的删除（含 DENY 的策略，或所绑策略含 DENY 的绑定，也包括经删除角色或以更少权限 `putRole` 去掉的）会停在 `AWAITING_APPROVAL`，每项带一个 `NOT_ANALYZED` 升级；开启 `four-eyes` 时信任根的这类变更也是如此（[审批](../policies/testing.md#approval)）。删除 ALLOW、租户删除自己的 DENY 以及撤销 break-glass 不变。请为紧急删除平台 DENY 安排好审批人。
+- **`cosec:grant` 看角色实际派生了什么**（RFC 0012 §7.2）：让 `"*"` 角色派生出新绑定的 `putCatalog` 或 `putPolicy`，与 `putRole` 一样需要该角色作用域上的 `cosec:grant`。
+- **break-glass 只需要 `cosec:breakglass`**（RFC 0007 §8）：申请、批准后发布以及撤销都不再额外需要 `cosec:publish`。其他变更不能用 `cosec:breakglass` 代替。
+- **回滚可以带 `confirmations`**，恢复带 `onMissing: "nomatch"` 的 DENY 时与提议相同。此前这样的回滚根本无法确认。
+- **`repair-references` 也会删除**未能写入头的发布登记的条目，并输出 `Removed <n> reference(s) no head refers to.`。见[修复反向引用索引](#repair-the-back-reference-index)。
+
 ## 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
 
 8.0.0-alpha.3 是预览版，没有兼容性承诺。它保存的数据仍然可读，只有反向引用集合、已批准的变更以及用其他拼法写星期的文档例外（见下）。
@@ -284,7 +291,7 @@ migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
 | `publish` | 把一次已接受的转换中的文档作为它们的第一个修订写入 Redis，经过控制面的存储。从不触碰 7.x 的 key。 |
 | `bootstrap` | 把平台租户的一个主体绑定到 `cosec:platform-admin`，让控制面有人可以写入。 |
 | `partition plan` | 分别用 `--partition platform` 和 `by-owner` 转换两次，为每个租户写出一份计划，由控制面提交。不向 Redis 写任何东西。 |
-| `repair-references` | 把每份文档的头所引用、而反向引用索引缺少的条目补进索引，并补全 app 列表。只增不删。 |
+| `repair-references` | 把每份文档的头所引用、而反向引用索引缺少的条目补进索引，删除没有任何头引用的条目，并补全 app 列表。 |
 
 #### 转换 {#convert}
 
@@ -397,7 +404,7 @@ cosec-migrate partition plan (--from-redis redis://localhost:6379 [--key-prefix 
 cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
 ```
 
-控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。`repair-references` 读取存储列出的每份文档的头，补上索引缺少的条目，并输出访问了多少文档、补了多少条引用。它只增不删，所以可以在控制面运行时执行，再运行一次也不会新增：索引已有的条目保留，多出的条目最多误拦一次删除。头读不到的文档输出为 `FAILED <doc>: <原因>`，其余文档照常访问，命令以 `1` 退出。
+控制面维护一个"哪些文档引用了哪条策略"的索引，使平台变更不能删除文档仍在使用的策略，也不能新增与租户文档所用 id 相同的策略（[存储](./storage.md#redis-keys)）。`repair-references` 读取存储列出的每份文档的头，补上索引缺少的条目，并输出访问了多少文档、补了多少条引用。然后它删除没有任何头引用的条目（这些条目是未能写入头的发布登记的）并输出数量：留着的话，会永远拦住对那条策略的删除。只有文档的头不低于登记该条目的修订时才删除，所以仍在进行的发布的条目会保留，失败的发布留下的条目要等该文档发布到更高修订之后才能删除。因此它可以在控制面运行时执行，再运行一次也不会改变任何东西。头读不到的文档输出为 `FAILED <doc>: <原因>`，其余文档照常访问，命令以 `1` 退出。
 
 在写这个 Redis 的每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后再运行它，不要在滚动升级期间运行；降级之后要再运行一次。只要还有旧版本实例在运行，它就按旧的分析自行判断：它检查的变更不受 RC1-4 的保护，它发布的 app 文档也不会被列入。每个新实例在启动时对账一次，之后每次回收任务再对账：完整的列表缺了某份有头的 app 文档时，列表被标回不完整（[存储](./storage.md#publishing-through-the-control-plane)），新实例于是让覆盖所有 app 的授出退回审批。升级完成之后运行的那次 `repair-references`，才结束这个窗口。
 

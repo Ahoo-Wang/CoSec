@@ -1,0 +1,68 @@
+{
+  "rules": [
+    "CTL-32"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "fence is a boundary of the platform. acme binds editors to it: a boundary is not bound, and the data plane would find no policy fence, so the check refuses it (REFERENCES) and nothing publishes.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "fence",
+          "boundary": true,
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:*"
+            }
+          ]
+        },
+        {
+          "id": "shared",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "order:read",
+              "resource": "order/**"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putBinding": {
+              "id": "b",
+              "subject": {
+                "role": "editor"
+              },
+              "app": "order",
+              "space": "*",
+              "policy": "fence"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "DRAFT"
+    ],
+    "errors": {
+      "c1": [
+        "REFERENCES"
+      ]
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

@@ -108,6 +108,22 @@ class Reclaimed(
     }
 }
 
+/**
+ * What each referrer's head refers to, read once for a whole [Revisions.pruneReferences] run: a document refers to many
+ * policies, and reading its head for each would decode it that many times.
+ */
+@InternalCoSecApi
+class ReferrerHeads {
+    internal val read = HashMap<SnapshotKey, Referring>()
+
+    /** Whether [referrer], whose reference to [policy] of [target] was indexed by [revision], no longer has it. */
+    internal fun gone(referrer: SnapshotKey, revision: Long, target: SnapshotKey, policy: PolicyId): Boolean =
+        read[referrer]?.let { it.revision >= revision && (target to policy) !in it.references } == true
+
+    /** A head's [revision] and what it [references]; revision 0 for one that is not there or cannot be read. */
+    internal class Referring(val revision: Long, val references: Set<Pair<SnapshotKey, PolicyId>>)
+}
+
 /** How long revision records are kept (RFC 0007 §5.7). */
 @InternalCoSecApi
 class RetentionPolicy(
@@ -604,8 +620,8 @@ class Revisions(
 
     /**
      * Adds whatever the head of [key] refers to and the back-reference index misses (`repair-references`, RFC 0007
-     * §5.8); the number of references it added. It only adds: an extra entry blocks a deletion at most, a missing one
-     * would let it through. A head that cannot be read throws.
+     * §5.8); the number of references it added. A missing entry would let a deletion through. A head that cannot be read
+     * throws. What the index has and no head does is [pruneReferences]'s.
      */
     suspend fun repairReferences(key: SnapshotKey): Int {
         val head = head(key) ?: return 0
@@ -623,8 +639,58 @@ class Revisions(
     }
 
     /**
-     * The removed policies of a platform or app candidate that other documents still refer to; `null` for none. A
-     * tenant whose head defines the id itself does not refer to the platform's policy, and does not block (RC1-9).
+     * Removes from the back-reference index, for every policy the head of [target] defines, the references no head has
+     * (`repair-references`, RFC 0007 §5.8): what a publish indexed before a head write it then lost, which would block
+     * removing that policy for good. The number removed. It may run while the control plane runs, and the index stays a
+     * superset of the true references (the only thing it must be, §5.8):
+     *
+     * - an entry goes only when its referrer's head is at or above the revision that indexed it, and does not have the
+     *   reference. The publish that indexed it is then over: one still in flight has indexed a revision above the head;
+     * - a later revision that brings the reference back indexes itself before its head write, so the entry then names a
+     *   revision above any head read here. The removal is conditional on the entry as it is, so it leaves that alone;
+     * - a referrer whose head is not there or cannot be read keeps its entries: it may have the reference.
+     *
+     * A publish that lost its race and that no later revision has passed stays indexed until one does. The policies
+     * [target] does not define are not looked at: an entry of one blocks nothing.
+     */
+    suspend fun pruneReferences(target: SnapshotKey, heads: ReferrerHeads = ReferrerHeads()): Int {
+        val document = head(target)?.document ?: return 0
+        var removed = 0
+        for (policy in RoleExpansion.effective(document).policies.map { it.id }) {
+            store.referrers(target, policy)?.value?.keys.orEmpty().forEach { referring(it, heads) }
+            var gone = 0
+            check(
+                updateReferrers(target, policy) { current ->
+                    current.filterNot { (referrer, revision) -> heads.gone(referrer, revision, target, policy) }
+                        .also { gone = current.size - it.size }
+                }
+            ) { "[$target]: the references to [$policy] kept changing." }
+            removed += gone
+        }
+        return removed
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private suspend fun referring(referrer: SnapshotKey, heads: ReferrerHeads) {
+        if (referrer in heads.read) {
+            return
+        }
+        heads.read[referrer] = try {
+            head(referrer).let {
+                ReferrerHeads.Referring(it?.revision ?: 0, it?.let { head -> references(head.document) }.orEmpty())
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            log.warn(e) { "The head of [$referrer] could not be read; what it is indexed as referring to stays." }
+            ReferrerHeads.Referring(0, emptySet())
+        }
+    }
+
+    /**
+     * The policies a platform or app candidate removes, or turns from a policy into a boundary or back (`CTL-30`), that
+     * other documents still refer to; `null` for none. A tenant whose head defines the id itself does not refer to the
+     * platform's policy, and does not block (RC1-9).
      */
     private suspend fun referenced(
         key: SnapshotKey,
@@ -635,8 +701,10 @@ class Revisions(
             return null
         }
         // What a short form derives is a policy like any other: tenants' roles may refer to it (RFC 0012 §7.5).
-        val kept = RoleExpansion.effective(candidate).policies.map { it.id }.toSet()
-        val blocked = RoleExpansion.effective(base.document).policies.map { it.id }.filter { it !in kept }
+        val kept = RoleExpansion.effective(candidate).policies.associate { it.id to it.boundary }
+        val blocked = RoleExpansion.effective(
+            base.document
+        ).policies.filter { kept[it.id] != it.boundary }.map { it.id }
             .associateWith { policy ->
                 val referrers = referrers(key, policy) - key
                 referrers.filterNotTo(HashSet()) { definesItself(it, policy) }

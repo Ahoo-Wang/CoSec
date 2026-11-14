@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RolesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index 4db57ebd..0ba9c1ca 100644
+index a7ec3424..26752932 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -174,7 +174,7 @@ class ChangeAuthority(
-             )
-             is Operation.PutRole -> {
-                 require(operator, ControlActions.WRITE, entry(key, ROLE, operation.role.id.value))
--                newBinding(key, operation.role, base)?.let { require(operator, ControlActions.GRANT, scopeOf(key, it)) }
-+                newBinding(key, operation.role, base)?.let { require(operator, ControlActions.READ, scopeOf(key, it)) }
+@@ -144,7 +144,7 @@ class ChangeAuthority(
+                 authorizeOperation(via, operator, key, operation)
              }
- 
-             is Operation.RemoveRole -> require(operator, ControlActions.WRITE, entry(key, ROLE, operation.id.value))
+             for (binding in derivedAnew(key, operations, base)) {
+-                require(via, operator, ControlActions.GRANT, scopeOf(key, binding))
++                require(via, operator, ControlActions.READ, scopeOf(key, binding))
+             }
+         }
+     }
