@@ -23,10 +23,13 @@ dependencies {
     // CoCacheControlStore implements the control plane's ControlStore (RFC 0007 §5.1). Compile-only, so an application
     // that reads snapshots without the control plane does not pull it in; the control plane brings it with it.
     compileOnlyApi(project(":control"))
-    // The shadow stores implement runtime's shadow ports (RFC 0007 §6.4), and the stored formats are written with
-    // runtime's one mapper (CoSecJson, RFC 0011 D3), which cocache calls at run time: implementation, not compile-only.
-    api(project(":runtime"))
+    // The stored formats are written with the one mapper (CoSecJson, RFC 0011 D3) and the shadow codec, both in
+    // cosec-document. No backend depends on cosec-runtime (RFC 0013 §3): the shadow ports it implements are cosec-spi's.
+    implementation(project(":document"))
     testImplementation(project(":control"))
+    // The tests decide requests through the pipeline (MembershipCacheFailureTest), read snapshots through
+    // SnapshotSource and verify tokens with TokenRevocation.
+    testImplementation(project(":runtime"))
     testImplementation("me.ahoo.cocache:cocache-test")
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.
     testImplementation("io.lettuce:lettuce-core")

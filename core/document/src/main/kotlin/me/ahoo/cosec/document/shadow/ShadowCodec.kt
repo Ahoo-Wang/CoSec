@@ -13,11 +13,17 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.shadow
+package me.ahoo.cosec.document.shadow
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.spi.shadow.InstalledDocument
+import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReport
+import me.ahoo.cosec.spi.shadow.ShadowSample
+import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -33,6 +39,9 @@ import java.time.Instant
 /**
  * Candidates, shadow reports and instance statuses as JSON (RFC 0007 §6.4, §6.5), for every store of them. Reading is
  * strict: anything else is a [SnapshotFormatException], never a value read as absent.
+ *
+ * It lives in `cosec-document`, the formats CoSec stores and exchanges, because both of its writers, `cosec-cocache`'s
+ * store and the control plane's in-memory one, must agree on the bytes.
  */
 @InternalCoSecApi
 object ShadowCodec {

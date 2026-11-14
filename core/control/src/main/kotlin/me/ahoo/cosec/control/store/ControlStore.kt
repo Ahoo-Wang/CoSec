@@ -22,8 +22,8 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.runtime.shadow.CandidateStore
-import me.ahoo.cosec.runtime.shadow.StoredCandidate
+import me.ahoo.cosec.spi.shadow.CandidateStore
+import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey

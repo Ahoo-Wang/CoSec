@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.shadow
+package me.ahoo.cosec.spi.shadow
 
 import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi

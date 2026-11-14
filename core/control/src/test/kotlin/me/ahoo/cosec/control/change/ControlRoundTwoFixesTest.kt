@@ -54,12 +54,12 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
-import me.ahoo.cosec.runtime.shadow.InstanceStatus
-import me.ahoo.cosec.runtime.shadow.ShadowOutcome
-import me.ahoo.cosec.runtime.shadow.ShadowReport
-import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
+import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
+import me.ahoo.cosec.spi.shadow.InstanceStatus
+import me.ahoo.cosec.spi.shadow.ShadowOutcome
+import me.ahoo.cosec.spi.shadow.ShadowReport
+import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
