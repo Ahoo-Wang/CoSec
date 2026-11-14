@@ -4,7 +4,7 @@
   ],
   "polarity": "negative",
   "level": "engine",
-  "description": "The near miss: http:GET, http:DELETE and http:* can match a request, and a service's lower-case verb (order:head) is no HTTP method: the document compiles and the request is decided.",
+  "description": "The near miss: http:GET, http:DELETE and http:* can match a request, and a service's lower-case verb (order:head) is no HTTP method: the document compiles, and a request with action order:head meets the DENY.",
   "documents": {
     "platform": {
       "policies": [
@@ -51,7 +51,7 @@
     }
   },
   "request": {
-    "action": "order:read"
+    "action": "order:head"
   },
   "expect": {
     "decision": "Deny",
