@@ -91,7 +91,8 @@ contain `:`, so a key names one document only.
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
 | `<s>:rate-limiter:<ruleId>:<bucket>` | the Redis rate limiter | a hash of one rule's bucket: the window it counts in and that window's and the previous window's counts; expires two windows after its last count. One key per bucket value: a rule keyed on what a client chooses, with a long window, is memory the client controls ([Rate limiting](../policies/rate-limiting.md#counting-and-backends)) |
-| `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress; expires after 3 minutes |
+| `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress, as JustAuth keeps it; expires after 3 minutes |
+| `<s>:oauth:binding:<state>` | social login | the SHA-256 of the binding of the browser the state was issued to; taken (`GETDEL`) by the callback, so a state is used once; expires after 3 minutes |
 
 - When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
   key, so an API key one issues is never accepted by the other, and their rate limit counters stay apart.

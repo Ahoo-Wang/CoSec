@@ -279,11 +279,11 @@ cosec:
 
 启用 `cosec-social` 后，`SocialAuthentication` 通过 [JustAuth](https://github.com/justauth/JustAuth) 的提供方登录用户。在 `cosec.authentication.login.social.registration.<name>` 下配置每个提供方，包括它的 JustAuth `type`、client id、secret 和 redirect URI（[配置](../operations/configuration.md)）。
 
-1. 把用户引导到挂起函数 `socialAuthentication.authorizeUrl("<name>")` 返回的地址。该 URL 带有新生成的 OAuth `state`：来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为 state 必须不可预测，而那些 id 不必如此。state 在 Redis 中保留 3 分钟，因此社交登录需要 `StringRedisTemplate`（或你自己的 JustAuth `AuthStateCache` Bean）。
-2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>")`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。
+1. 用挂起函数 `socialAuthentication.authorize("<name>")` 开始登录。它返回一个 `SocialAuthorization`：提供方的 `url`（带有新生成的 OAuth `state`），以及新生成的 `binding`。两者都是来自 `SecureRandom` 的 128 个随机位，从不使用应用 `IdGenerator` 生成的 id，因为它们必须不可预测，而那些 id 不必如此。把绑定值设为浏览器上的 Cookie：`Set-Cookie: <authorization.setCookie(path)>`（`cosec_oauth_binding`，`HttpOnly; Secure; SameSite=Lax`，与 state 同样只活 3 分钟，作用于你的回调路径），然后把浏览器重定向到 `url`。CoSec 在 Redis 中把 state 与绑定值的 SHA-256 一起保存 3 分钟，从不保存绑定值本身，因此社交登录需要 `StringRedisTemplate`（或你自己的 `SocialStateStore` 与 JustAuth `AuthStateCache` Bean）。
+2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>", <绑定 Cookie 的值，没有则为 "">)`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。只有当回调的 `state` 是 CoSec 签发的、未过期、未被使用过（在调用提供方之前就以 `GETDEL` 立即从 Redis 取走），并且浏览器的绑定值哈希后与记录的一致（以恒定时间比较）时，回调才被接受。来自另一个浏览器、重复发送或伪造的 state 会抛出 `SocialAuthenticationException`。这就是阻止登录 CSRF 的方式：攻击者为自己的账户拿到的回调 URL，在受害者的浏览器中打开时，带的是攻击者的 state，却没有攻击者的 Cookie。注册上设置 `ignore-check-state: true` 会让启动失败。
 3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 令牌属于 `cosec.authorization.scope.app-id`（用户登录的宿主的应用，未配置则不属于任何应用），并创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。登录只需要提供方的用户 id：提供方不返回用户名（StackOverflow）、性别（Figma）或原始用户信息时仍可登录，此时 `SocialUser.username` 取用户 id，`gender` 为 `UNKNOWN`，`rawInfo` 为空。成功响应里没有用户 id 或没有用户，则以 `SocialAuthenticationException` 拒绝。
 
-JustAuth 是阻塞的：`authorizeUrl` 从 `SecureRandom` 抽取 state 并写入 state 缓存，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，最多 16 个线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
+JustAuth 是阻塞的：`authorize` 把 state 写入 Redis，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，最多 16 个线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
 
 ## 网关之后 {#behind-a-gateway}
 
