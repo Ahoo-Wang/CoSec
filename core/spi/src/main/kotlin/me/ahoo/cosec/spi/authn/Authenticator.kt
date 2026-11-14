@@ -26,6 +26,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
+import java.util.Collections
 
 /**
  * Turns a request's credentials into a principal (RFC 0006 §5.3.2).
@@ -96,13 +97,18 @@ sealed interface AuthnResult {
  * [Identity.Method.JWT] names CoSec's own token and nothing else: a principal whose [credential] has that method is made
  * only through the internal constructor, by CoSec's token authenticator, which also sets [breakGlass]. The public
  * constructors refuse it, so no other authenticator can be taken for CoSec's token by its name (RC1-26).
+ *
+ * Its [attributes] are what the application reads from its `SecurityContext` and what every further check of the
+ * request decides on (`AuthorizationChecker`): read-only, so that nothing an application could set reaches a decision.
+ * The authenticator hands its map over and must not change it afterwards, and puts only immutable values in it:
+ * strings, booleans, numbers, and immutable lists and maps of them.
  */
 class AuthenticatedPrincipal @InternalCoSecApi constructor(
     val id: PrincipalId,
     val tenant: TenantId,
     /** Where the principal's memberships come from (RFC 0004 §4.5). */
     val membershipSource: MembershipSource,
-    val attributes: Map<String, Any>,
+    attributes: Map<String, Any>,
     /** The credential that proved it, by id and expiry, never its value: a gateway forwards it with the identity. */
     val credential: Identity.Credential?,
     /**
@@ -127,6 +133,12 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
      */
     val app: AppId?,
 ) {
+    /**
+     * What the credential says about the principal, such as a token's `attributes` claim: an unmodifiable view of the map
+     * the authenticator handed over, with no copy, so a cast to a mutable map cannot change it.
+     */
+    val attributes: Map<String, Any> = Collections.unmodifiableMap(attributes)
+
     init {
         require(breakGlass == (credential?.method == Identity.Method.JWT)) {
             "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +

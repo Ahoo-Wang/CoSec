@@ -1,0 +1,17 @@
+# Rule: IDN-21
+# Mutant: the principal keeps the map its authenticator handed over, so an application that casts its attributes to a mutable map changes what a further check decides on
+# Tests: :spi:test --tests me.ahoo.cosec.spi.authn.AuthenticatedPrincipalTest
+
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+index 516b0d2b..8c631769 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/authn/Authenticator.kt
+@@ -137,7 +137,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
+      * What the credential says about the principal, such as a token's `attributes` claim: an unmodifiable view of the map
+      * the authenticator handed over, with no copy, so a cast to a mutable map cannot change it.
+      */
+-    val attributes: Map<String, Any> = Collections.unmodifiableMap(attributes)
++    val attributes: Map<String, Any> = attributes
+ 
+     init {
+         require(breakGlass == (credential?.method == Identity.Method.JWT)) {

@@ -1,0 +1,17 @@
+# Rule: IDN-21
+# Mutant: the token verifier wraps only the outer attributes map, so a nested object or array of the attributes claim can be changed after verification
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenConverterTest
+
+diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+index 4c6f92d5..70e44252 100644
+--- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
++++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
+@@ -160,7 +160,7 @@ internal object Jwts {
+             return emptyMap()
+         }
+         val attributes = claim.asMap() ?: throw TokenVerificationException("The token's [$name] claim is not an object.")
+-        return readOnly(attributes)
++        return Collections.unmodifiableMap(attributes)
+     }
+ 
+     /**
