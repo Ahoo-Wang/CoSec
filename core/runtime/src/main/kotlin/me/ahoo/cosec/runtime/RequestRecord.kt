@@ -20,8 +20,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId

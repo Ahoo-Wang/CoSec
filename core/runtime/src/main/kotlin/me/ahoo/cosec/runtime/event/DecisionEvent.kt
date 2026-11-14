@@ -18,10 +18,10 @@ package me.ahoo.cosec.runtime.event
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.AttributeStatus
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.trace.EvaluationTrace
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.engine.ViewVersion
+import me.ahoo.cosec.engine.flat.FlatRequest
+import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.BindingRef

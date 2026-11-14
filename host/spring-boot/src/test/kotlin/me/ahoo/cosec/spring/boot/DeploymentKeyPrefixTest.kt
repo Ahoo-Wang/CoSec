@@ -106,7 +106,8 @@ class DeploymentKeyPrefixTest {
                     runtime.admin(name)
                 ).keyspace.storagePrefix.assert().describedAs(name).startsWith("$prefix:")
             }
-            context.getBean(RedisApiKeyStore::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
+            val apiKeys = context.getBean(RedisApiKeyStore::class.java)
+            apiKeys.field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
             context.getBean(ApiKeyReader::class.java).assert().isInstanceOf(RedisApiKeyReader::class.java)
             context.getBean(ApiKeyReader::class.java).field<String>("keyPrefix").assert().isEqualTo("$prefix:api-key")
             context.getBean(RateLimiter::class.java).assert().isInstanceOf(ReactiveRedisRateLimiter::class.java)

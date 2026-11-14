@@ -74,7 +74,6 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
 import org.springframework.boot.web.servlet.FilterRegistrationBean
-import org.springframework.data.redis.core.StringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.MockHttpServletRequest
@@ -234,9 +233,9 @@ class CoSecPipelineAutoConfigurationTest {
                 context.getBean(Authenticator::class.java).authenticate(Credentials(null, "unknown"))
             }.assert().isInstanceOf(AuthnResult.Rejected::class.java)
         }
-        // The Redis store without its reactive reader: nothing the pipeline could read keys with.
+        // The Redis store, without cosec-cocache to provide it: no in-memory store and no reader to read keys with.
         keys.withPropertyValues("cosec.api-key.store=redis")
-            .withBean(StringRedisTemplate::class.java, { StringRedisTemplate() })
+            .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER, "me.ahoo.cosec.cocache.RedisApiKeyStore"))
             .run { context -> context.startupFailure!!.stackTraceToString().assert().contains("no ApiKeyReader") }
     }
 
