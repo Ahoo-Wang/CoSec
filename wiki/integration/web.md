@@ -37,7 +37,10 @@ suspension (a Redis read, say) the request continues on `Dispatchers.Default`, n
 thread.
 
 **Spring MVC.** The servlet filter blocks its request thread until the outcome is known, which is the normal
-servlet model.
+servlet model. It authorizes the `REQUEST` dispatch, the one a client's request makes. The container's other dispatches
+of that request are not authorized again: a `forward:` or include your handler makes (its target runs as the request
+CoSec permitted), an `ASYNC` dispatch that resumes it, and the `ERROR` dispatch that renders an error page. None of them
+reaches a handler the client chose, but a handler that forwards to another path decides that the target may run.
 
 **Spring Cloud Gateway.** When the gateway's `GlobalFilter` is on the classpath, the starter registers
 `PipelineGatewayFilter` and no `PipelineWebFilter`. See [Gateway](#gateway) for what differs.

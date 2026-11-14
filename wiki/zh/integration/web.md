@@ -23,7 +23,7 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 
 **Spring WebFlux。** 过滤器在事件循环上启动管道，不切换线程。真正挂起之后（例如一次 Redis 读取），请求在 `Dispatchers.Default` 上继续，绝不会留在客户端库的 I/O 线程上。
 
-**Spring MVC。** Servlet 过滤器阻塞它的请求线程直到得出结果，这是常规的 Servlet 模型。
+**Spring MVC。** Servlet 过滤器阻塞它的请求线程直到得出结果，这是常规的 Servlet 模型。它授权 `REQUEST` 分派，也就是客户端请求产生的那一次。容器对这个请求的其他分派不会再次授权：处理器发起的 `forward:` 或 include（目标按 CoSec 已放行的请求运行）、恢复它的 `ASYNC` 分派，以及渲染错误页的 `ERROR` 分派。这些分派都不会到达客户端自选的处理器，但转发到其他路径的处理器，等于自己决定了目标可以运行。
 
 **Spring Cloud Gateway。** 类路径上有网关的 `GlobalFilter` 时，starter 注册 `PipelineGatewayFilter`，不注册 `PipelineWebFilter`。差异见[网关](#gateway)。
 
