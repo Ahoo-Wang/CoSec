@@ -14,7 +14,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
 
 - **任何请求都不可能有的 `http` 动作不能编译**（`DOC-8`）。`http:HEAD`（自 `PIP-18` 起按 `http:GET` 判定）或动词含小写字母（`http:get`）的语句或限流规则不匹配任何请求，这样的 DENY 什么也拒绝不了。现在这样的文档被拒绝：已存储的会被装载为失败，其请求失败即拒绝（`503`），控制面也拒绝会产生这种文档的变更。升级之前，请在控制面列出的文档中查找它们（`"http:HEAD"`，或冒号后含小写字母的 `"http:` 动作），改为 `http:GET` 或大写的方法后重新发布。
-- **`cosec-migrate api-keys --app` 可用了**（第 2 轮 M3）。此前该命令把本页要求传入的 `--app` 当作它不接受的选项而拒绝：对配置了应用的服务必须接受的 key，请带上 `--app <id>` 重新运行。
+- **`cosec-migrate api-keys --app` 可用了**（第 2 轮 M3）。自 #1302 起这一步无法运行：#1302 把 `--app` 加进了代码和本页，却没有加进该命令接受的选项，命令因此把 `--app` 当作它不接受的选项而拒绝。对配置了应用的服务必须接受的 key，请带上 `--app <id>` 重新运行。
 - **测试工具按执行的方式读取请求**（第 2 轮 M2，`PIP-15`）。此前 `PolicyTestKit` 按原样判定 `http:HEAD`、含小写字母的方法和带点段的路径，所以会确认一条 `http:HEAD` 上的 DENY，而管道把 HEAD 按 GET 判定，从不应用它。现在它把 HEAD 按 GET 判定、规范化路径，并在管道回答 `400` 时给出 `{"decision": "InvalidRequest"}`：请改写这样的场景，并把 `http:HEAD` 上的语句改写为 `http:GET` 上的。`expect` 必须写出 `decision`（此前空的 `expect` 无论决策如何都会通过）；文件名被缩短的目录需要 `cosec-migrate convert` 在旁边写下的 `report.json`。实验性的 `evaluate(JsonNode)` 和 `check(String, JsonNode)` 已删除：以文本传入场景，用 `check(name, json)`。
 - **生成的路由映射位于 `servers` 路径之下，资源包含路径的每个变量**（第 2 轮 L4）。`cosecServiceGenerator` 端点丢掉了服务器路径（`/api/v1`），生成的路由匹配不到任何请求，所有请求都落在 `http` 命名空间；`/users/{id}/avatar/{size}` 的资源是 `user/{size}`，所有用户共用一个资源。现在路由以服务器路径开头（不含上下文路径），资源是 `user/{id}/{size}`：重新生成路由映射，并改写策略中按生成结果写的资源。多个服务器路径不同，或路径含服务器变量时，生成失败。
 - **ip2region：无法定位的是取不到**（第 2 轮 M5）。只有随附的 IPv4 数据库时，IPv6 客户端没有国家，写成 `country in [...]` 的地域封锁 DENY 会放行它；现在它是取不到，这条 DENY 使请求返回 `503`（或者用 `onMissing: nomatch` 放行）。用 `cosec.ip2region.ipv6-location` 加载 IPv6 数据库。`Ip2RegionAttributeProvider` 改为接收数据库列表，每个数据库的版本取自其文件头，不再接收单个数据库和版本。
@@ -370,7 +370,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 | `INVALID_ID` | 8.0 无法容纳的 id：应用或空间 id 为 `*` 或空、应用 id 含 `:`、角色 id 含 `@`，或者转换出的文档中任何 id 含落单的 UTF-16 代理项（如 JSON 转义 `"\uD800"`，`IDN-10`），位置为文档及其 JSON 路径。 | 重命名。8.0 中 `*` 表示任意应用或空间。 |
 | `DUPLICATE_ID` | 导出中同一条策略出现两次，导出中同一个应用出现两次（一项会替换另一项，它的授权就丢了），同一个应用中同一个权限出现两次，或两个应用 id 或租户 id 转换后的文件名只有大小写之差（`Order` 与 `order`：在 macOS 和 Windows 上是同一个文件）。文件名不同的 id，例如 `strasse` 与 `straße`，不算冲突。 | 只保留一个，或改名。 |
 | `OWNER_TENANT` | 使用 `--partition by-owner`，而策略的 `tenantId` 不指向任何租户。 | 设置它的 `tenantId`，或改用 `--partition platform` 转换。 |
-| `CONDITION_NOT_TRANSLATED` | 没有精确翻译的 7.x 内置条件，例如不是字面量、字面量前缀或字面量选择的 `regular`，或者动作不是 `all` 的语句中的 `path` 条件。在 DENY 方向还包括：只有 7.x 填写的部件（除网关的 `cosec.audit.routeId` 之外的 `request.attributes.*`，由 `RequestAttributesAppender` 设置，例如 ip2region 的 `ipRegion`；以及 `resource.*`），它们在 8.0 中总是缺失，而条件在缺失值上不成立；以及含 HEAD 而不含 GET 的 `request.method`，因为 8.0 把 HEAD 请求按 GET 判定。 | 按消息给出的条件（`eq`、`in`、`startsWith` ……）重写；appender 设置的值改为 `AttributeProvider` 的 `ext.*` 属性（`ipRegion`：`ext.ip2region.*`）。 |
+| `CONDITION_NOT_TRANSLATED` | 没有精确翻译的 7.x 内置条件，例如不是字面量、字面量前缀或字面量选择的 `regular`，或者动作不是 `all` 的语句中的 `path` 条件。还包括只有 7.x 填写的部件（除网关的 `cosec.audit.routeId` 之外的 `request.attributes.*`，由 `RequestAttributesAppender` 设置；以及 `resource.*`），它们在 8.0 中总是缺失：条件在缺失值上不成立的 DENY，以及条件在缺失值上成立的 ALLOW（它会对每个请求成立）。7.x ip2region 的 `ipRegion`（`country|region|province|city|isp`）只有一种形状能翻译：国家前缀（`startsWith "中国|"`，或表达它的 `regular`），翻译为 `ext.ip2region.country`；其上的其他条件按只有 7.x 填写的部件处理。以及在 DENY 需要时区分方法 HEAD 与 GET 的条件，因为 8.0 把 HEAD 请求按 GET 判定（包括 DENY 中的 `not eq GET`）。 | 按消息给出的条件（`eq`、`in`、`startsWith` ……）重写；appender 设置的值改为 `AttributeProvider` 的 `ext.*` 属性（`ipRegion`：`ext.ip2region.*`）。 |
 | `EXPRESSION_CONDITION` | `spel` 或 `ognl` 条件。 | 用[策略语言](../policies/language.md)的条件重写。 |
 | `CUSTOM_CONDITION` | 自定义 `ConditionMatcherFactory` 的条件。 | 把它读取的值移进一个 `AttributeProvider`，并在这个属性上写条件（[扩展](../architecture/extending.md)）。 |
 | `ACTION_NOT_TRANSLATED` | `#{...}` 路径模板、不是 `/` 的路径 `separator`、成员方法不同的动作数组、不是 HTTP token 的方法，或者含 HEAD 而不含 GET 的 DENY：8.0 把 HEAD 请求按 GET 判定（`PIP-18`），无法脱离 GET 单独拒绝 HEAD。 | 见[动作中的路径模板](#path-templates-in-actions)；按方法拆分语句；删除任何请求都不可能有的方法；同时拒绝 GET，或删除 HEAD。 |
@@ -389,6 +389,7 @@ cosec-migrate convert --from-files ./export --out ./converted
   这个条件改为被拒绝。
 - `RATE-LIMIT`：一条 7.x 限流规则，翻译成了平台文档的限流规则（[限流规则变为义务](#rate-limit-rules-become-obligations)）。
 - `PIP-18`：每次转换记一次：HEAD 请求按 GET 判定，所以凡是允许或拒绝 GET 的地方也同样允许或拒绝它。语句上也会记录：从 ALLOW 中去掉的方法 HEAD（与 GET 并列时它没有更多含义，去掉时不记录），或者被去掉的只针对 HEAD 的 ALLOW，这使它变窄。
+- `IP2REGION`：语句上，`ipRegion` 的国家前缀按 `ext.ip2region.country` 读取；每次转换记一次：平台文档声明了这个属性，所以执行这些语句的每个宿主都需要 `cosec-ip2region`（没有它，该属性取不到，这样的 DENY 是 Indeterminate，`503`），且已加载的库都不覆盖的地址同样取不到（`ATR-9`）。
 - `NOT-IN-8.0`：读取 8.0 从不设置的部件（appender 设置的请求属性、`resource.*`）、或含 HEAD 而不含 GET 的方法的 ALLOW 条件：这条 ALLOW 匹配的请求更少。DENY 条件中同样的情形会被拒绝。
 
 逐条阅读。报告中的条目都不要求修改数据，但每一条都可能改变某个响应。

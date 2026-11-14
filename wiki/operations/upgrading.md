@@ -22,8 +22,9 @@ and have to be provisioned again.
   closed (`503`), and the control plane refuses a change that makes one. Find them before upgrading, in the documents
   the control plane lists (`"http:HEAD"`, or an `"http:` action with a lower-case letter after the colon), and publish
   them again with `http:GET`, or the method in upper case.
-- **`cosec-migrate api-keys --app` works** (round 2 M3). The command refused `--app`, which this page tells you to pass,
-  as an option it does not take: rerun it with `--app <id>` for keys a service with an app must accept.
+- **`cosec-migrate api-keys --app` works** (round 2 M3). The step could not be run since #1302, which added `--app` to
+  the code and this page but not to the options the command takes: it refused `--app` as an option it does not take.
+  Rerun it with `--app <id>` for keys a service with an app must accept.
 - **The test kit reads a request as enforcement does** (round 2 M2, `PIP-15`). `PolicyTestKit` decided `http:HEAD`, a
   lower-case method and a path with a dot segment as written, so it confirmed a DENY on `http:HEAD` that the pipeline,
   which decides HEAD as GET, never applies. It now decides HEAD as GET and normalizes paths, and answers
@@ -909,7 +910,7 @@ then convert again into a new directory.
 | `INVALID_ID` | An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id, or an unpaired UTF-16 surrogate in any id of a converted document (a JSON escape such as `"\uD800"`, `IDN-10`), located by the document and its JSON path. | Rename it. In 8.0 `*` means any app or space. |
 | `DUPLICATE_ID` | The same policy twice in an export, the same app twice in an export (one entry would replace the other, and its grants would be lost), the same permission twice in one app, or two app or tenant ids whose converted file names differ only in case (`Order` and `order`: one file on macOS and Windows). Ids that differ in more than their file names, such as `strasse` and `straße`, are not a collision. | Keep one, or rename. |
 | `OWNER_TENANT` | `--partition by-owner`, and a policy whose `tenantId` names no tenant. | Set its `tenantId`, or convert with `--partition platform`. |
-| `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. In the DENY direction also: a part only 7.x filled (`request.attributes.*` but the gateway's `cosec.audit.routeId`, set by a `RequestAttributesAppender` such as ip2region's `ipRegion`, and `resource.*`), which is always absent in 8.0, when the condition does not hold on the absent value; and `request.method` holding HEAD but not GET, since 8.0 decides a HEAD request as GET. | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...); a value an appender set becomes an `ext.*` attribute of an `AttributeProvider` (`ipRegion`: `ext.ip2region.*`). |
+| `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. Also, on a part only 7.x filled (`request.attributes.*` but the gateway's `cosec.audit.routeId`, set by a `RequestAttributesAppender`, and `resource.*`), always absent in 8.0: a DENY whose condition does not hold on the absent value, and an ALLOW whose condition does (it would hold for every request). 7.x's ip2region `ipRegion` (`country|region|province|city|isp`) translates in one shape only, a country prefix (`startsWith "中国|"`, or a `regular` that says it), which becomes `ext.ip2region.country`; any other condition on it is a part only 7.x filled. And a condition that tells method HEAD from GET where a DENY needs it, since 8.0 decides a HEAD request as GET (`not eq GET` in a DENY included). | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...); a value an appender set becomes an `ext.*` attribute of an `AttributeProvider` (`ipRegion`: `ext.ip2region.*`). |
 | `EXPRESSION_CONDITION` | A `spel` or `ognl` condition. | Rewrite it as conditions of the [policy language](../policies/language.md). |
 | `CUSTOM_CONDITION` | A condition of a custom `ConditionMatcherFactory`. | Move the value it reads into an `AttributeProvider` and write a condition on that attribute ([Extending](../architecture/extending.md)). |
 | `ACTION_NOT_TRANSLATED` | A `#{...}` path template, a path `separator` other than `/`, an action array whose members have different methods, a method that is not an HTTP token, or a DENY on method HEAD without GET: 8.0 decides a HEAD request as GET (`PIP-18`), so it cannot deny HEAD apart from GET. | See [Path templates in actions](#path-templates-in-actions); split statements by method; remove methods no request can have; deny GET too, or remove HEAD. |
@@ -934,6 +935,10 @@ they are dropped).
 - `PIP-18`: once per conversion, that a HEAD request is decided as GET, so it is permitted, and denied, wherever GET
   is. And at a statement: method HEAD dropped from an ALLOW (beside GET it says nothing more and goes without a
   record), or an ALLOW on HEAD alone dropped, which narrows it.
+- `IP2REGION`: at a statement, a country prefix of `ipRegion` read as `ext.ip2region.country`; once per conversion, that
+  the platform document declares that attribute, so every host that enforces such statements needs `cosec-ip2region`
+  (without it the attribute is unavailable and such a DENY is Indeterminate, `503`), and that an address no loaded
+  database covers is unavailable too (`ATR-9`).
 - `NOT-IN-8.0`: an ALLOW condition on a part 8.0 never sets (a request attribute an appender set, `resource.*`), or on
   method HEAD but not GET: the ALLOW matches fewer requests. In a DENY condition the same is rejected.
 
