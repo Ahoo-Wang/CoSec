@@ -21,6 +21,10 @@ private val log = KotlinLogging.logger {}
  * The registry of [Authentication]s. One instance per application: the starter assembles one for each Spring context,
  * so what one context registers or closes never reaches another (#1222).
  *
+ * A credentials type finds the [Authentication] registered for it, else the one whose [Authentication.supportCredentials]
+ * it is assignable to. When more than one is, [get] fails rather than pick by registration order: which authentication
+ * checks a login must never depend on it.
+ *
  * @author ahoo wang
  */
 class DefaultAuthenticationProvider : AuthenticationProvider {
@@ -45,11 +49,12 @@ class DefaultAuthenticationProvider : AuthenticationProvider {
         if (authentication != null) {
             return authentication
         }
-        return authenticationMaps.values
-            .firstOrNull {
-                it.supportCredentials.isAssignableFrom(credentialsType)
-            }?.let {
-                return it as A
-            }
+        // Which one supports a type registered for none of them is not a matter of order (round-2 review L3).
+        val supporting = authenticationMaps.values.filter { it.supportCredentials.isAssignableFrom(credentialsType) }
+        check(supporting.size <= 1) {
+            "Credentials [${credentialsType.name}] are supported by more than one Authentication " +
+                "(${supporting.joinToString { it.javaClass.name }}): register the one for this type."
+        }
+        return supporting.singleOrNull() as A?
     }
 }

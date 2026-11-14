@@ -168,9 +168,9 @@ to retry, and the audit `reasonCode` is `TOO_MANY_REQUESTS` ([Rate limiting](../
 - **A rule never applies:** denied requests spend no permit, and a rule whose limiter fails is skipped
   (`Rate limiter unavailable: rule [<id>] is skipped.` at `WARN`) unless it is strict.
 - **No rule applies on a Redis Cluster**, and that `WARN` carries `CROSSSLOT Keys in request don't hash to the same
-  slot`: the instance runs a version whose counters have no hash tag (8.0.0-alpha.2 or earlier), so every call fails,
-  and a rule with `strictFailure` makes every permitted request `503` instead. Upgrade it
-  ([Upgrading](./upgrading.md#from-8-0-0-alpha-2)). A `cosec.key-prefix` with a hash tag of its own, such as
+  slot`: the instance runs a version whose counters span two keys without a hash tag (8.0.0-alpha.2 or earlier), so
+  every call fails, and a rule with `strictFailure` makes every permitted request `503` instead. Upgrade it
+  ([Upgrading](./upgrading.md#from-8-0-0-alpha-2)): a bucket is now one key. A `cosec.key-prefix` with a hash tag of its own, such as
   `{cosec}`, puts every counter on one slot: it works, but one node counts for the whole deployment.
 
 ### `unavailable` {#unavailable}

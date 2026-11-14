@@ -547,7 +547,7 @@ request spends one permit of every rule it matches, each a call to the limiter (
 | `onMissing` | `"indeterminate"` or `"nomatch"` | `"indeterminate"` | For an external attribute that cannot be fetched: `indeterminate` leaves it to `strictFailure`; `nomatch` skips the rule. `nomatch` compiles only in the platform document: rate limit rules have no confirmation, unlike a [DENY](#external-attributes-and-onmissing). |
 | `key` | attribute path | one shared bucket | A String or Ip attribute whose value names the bucket. `resource.var.<name>` must be captured by every resource pattern; with several, the first pattern under whose captures the rule's condition holds gives the value ([path variables](#path-variables)). |
 | `permitsPerSecond` | number | required | Greater than `0`; `permitsPerSecond × windowSeconds` is at most 2⁶³. |
-| `windowSeconds` | integer | `1` | From `1` to `31536000` (a year). |
+| `windowSeconds` | integer | `1` | From `1` to `86400` (a day). |
 | `strictFailure` | boolean | `false` | Whether a limiter that cannot count refuses the request (`503`). |
 
 A rule matches as a DENY statement does: action, resource and condition, with its own path variables; a bare

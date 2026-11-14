@@ -61,6 +61,17 @@
         "engine:CompiledDocumentTest#a document holds at most its rate limit rules"
       ],
       "pending": null
+    },
+    {
+      "id": "DOC-7",
+      "source": "RFC 0006 §8.1; round-2 review M3 of the backends",
+      "statement": "A rate limit rule's window is at most a day (windowSeconds from 1 to 86400): a counter key lives two windows in a Redis that must not evict, one key per bucket value, so a long window keyed by something a client chooses would be memory the client controls. A document with a longer window does not decode (a stored one is installed as failed, and the control plane refuses a change that makes one), and the schema says the same.",
+      "level": "engine",
+      "guards": [
+        "model:DecisionTest#a rate limit spec is bounded",
+        "spi:RateLimitTest#initWhenTheWindowArithmeticWouldOverflow"
+      ],
+      "pending": null
     }
   ]
 }

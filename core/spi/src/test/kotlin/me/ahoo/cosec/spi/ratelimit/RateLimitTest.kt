@@ -42,9 +42,10 @@ class RateLimitTest {
         assertThrows(
             IllegalArgumentException::class.java
         ) { RateLimit(permitsPerSecond = 1e300, windowSeconds = 1_000) }
-        val year = RateLimit(permitsPerSecond = 1.0, windowSeconds = 31_536_000)
-        year.windowMillis.assert().isEqualTo(31_536_000_000L)
-        RateLimiter.window(RateLimitSpec(1.0, 31_536_000)).assert().isEqualTo(year)
+        val day = RateLimit(permitsPerSecond = 1.0, windowSeconds = 86_400)
+        day.windowMillis.assert().isEqualTo(86_400_000L)
+        RateLimiter.window(RateLimitSpec(1.0, 86_400)).assert().isEqualTo(day)
+        assertThrows(IllegalArgumentException::class.java) { RateLimit(permitsPerSecond = 1.0, windowSeconds = 86_401) }
     }
 
     @Test

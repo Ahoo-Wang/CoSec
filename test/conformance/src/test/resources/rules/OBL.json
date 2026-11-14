@@ -35,13 +35,12 @@
     },
     {
       "id": "OBL-4",
-      "source": "RFC 0006 §8.4; #1229",
-      "statement": "The Redis rate limiter keeps a bucket's two windows on one Redis Cluster slot, so its script, which reads and counts both atomically, runs on a cluster as on one node: the keys are `<prefix>:{<rule>:<bucket>}:<window>`, differing only after the hash tag. Either way of emptying that tag is refused: a key prefix whose first `{` is immediately followed by `}` when the limiter is built, and a rule id that begins with `}` when it counts, as a failure of the limiter. Different buckets spread over the slots, unless the key prefix carries a hash tag of its own.",
+      "source": "RFC 0006 §8.4; #1229; round-2 review L1 and M3",
+      "statement": "The Redis rate limiter keeps each bucket in one key, `<prefix>:<rule>:<bucket>`, a hash of the window it counts in and that window's and the previous window's counts, and its script takes the time from Redis: it touches only the key it declares, so it runs on a Redis Cluster as on one node, and instances whose clocks differ count in the same window. A window ahead of Redis's clock keeps counting, never restarts. Every count leaves the key with an expiry of two windows, whatever the key held before. Different buckets are different keys, and spread over the slots.",
       "level": "build",
       "guards": [
-        "cocache:ReactiveRedisRateLimiterTest#aBucketsTwoWindowsShareASlotWhateverThePrefixRuleAndBucketHold",
-        "cocache:ReactiveRedisRateLimiterTest#aPrefixWithAnEmptyHashTagIsRefused",
-        "cocache:ReactiveRedisRateLimiterTest#aRuleIdThatWouldEmptyTheHashTagIsRefused",
+        "cocache:ReactiveRedisRateLimiterTest#aBucketIsOneKeyThatEveryCountGivesAnExpiry",
+        "cocache:ReactiveRedisRateLimiterTest#theWindowIsRedissNotTheCallers",
         "cocache:ReactiveRedisRateLimiterTest#bucketsSpreadOverTheCluster"
       ],
       "pending": null
