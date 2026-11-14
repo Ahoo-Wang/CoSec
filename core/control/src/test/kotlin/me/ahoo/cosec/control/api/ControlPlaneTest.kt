@@ -42,6 +42,7 @@ import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.flat.ViewVersion
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -270,10 +271,10 @@ class ControlPlaneTest {
         changes.shadowed(change.id)
         plane.publish(alice, change.id)
         plane.explain(alice, bob("read")).decision.decision.assert().isEqualTo("Deny")
-        val then = plane.explain(alice, bob("read"), SnapshotVersion(1, null, 1))
+        val then = plane.explain(alice, bob("read"), ViewVersion(1, null, 1))
         then.decision.decision.assert().isEqualTo("Permit")
         then.version.tenant.assert().isEqualTo(1L)
-        refused { plane.explain(alice, bob("read"), SnapshotVersion(1, null, 7)) }.assert().isEqualTo(410)
+        refused { plane.explain(alice, bob("read"), ViewVersion(1, null, 7)) }.assert().isEqualTo(410)
         refused { plane.explain(mallory, bob("read")) }.assert().isEqualTo(403)
     }
 
@@ -461,7 +462,7 @@ class ControlPlaneTest {
         compiled.assert().isEqualTo(2L)
         repeat(3) { plane.simulate(alice, bob("read")) }
         plane.explain(alice, bob("read"))
-        plane.explain(alice, bob("read"), SnapshotVersion(1, null, 1))
+        plane.explain(alice, bob("read"), ViewVersion(1, null, 1))
         plane.analyze(
             alice,
             AccessQuery(ACME, "order", "team-a", Action("order", "read"), Resource("order", "1", emptyMap()))
