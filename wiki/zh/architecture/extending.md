@@ -50,7 +50,7 @@ gate 会成为第二条决策路径。编译器守住这一点：实现 `Request
 |---|---|---|
 | 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
 | `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点，以及主体声明的能力（`ExpiresAtCapable`、`IssuedAtCapable`、`MembershipMarkerCapable`）。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
-| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API，即 `PolicyTestKit`、`PipelineFixture`、`EngineOutcome` 及其异常。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
+| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API，即 `PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
 | `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
 
 这些承诺由构建守住。每个发布的库模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`
@@ -200,6 +200,25 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
 - **阶段。** B 阶段属性（默认）只在引擎的计划表明本请求可能读取它时才获取，发生在作用域解析之后。A 阶段属性在每个请求上都获取，发生在作用域之前，与成员关系一起获取。只有决定要加载什么的属性才用 A 阶段，例如黑名单。`AuthorizationChecker` 的检查在两个阶段都询问它自己的动作与资源可能读取的属性：那时 A 阶段提供者会再被询问一次，仍不带作用域。
 - **提供者能看到什么。** `AttributeRequest` 包含租户、主体、已解析的作用域（A 阶段为 null）、动作、资源、客户端地址、请求 id 和设备 id，绝不包含其他属性的值。
 
+**测试提供者。** `AttributeRequests`（`cosec-testkit`，`@ExperimentalCoSecApi`）构造提供者被询问时收到的请求。只有管道能构造解析后的作用域，所以测试工具用管道自己的解析器来解析它，依据主体的角色、请求选择的空间和宿主的应用：
+
+```kotlin
+@OptIn(ExperimentalCoSecApi::class)
+class DirectoryAttributeProviderTest {
+    private val provider = DirectoryAttributeProvider(FakeDirectory(mapOf("acme/alice" to "finance")))
+    private val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
+
+    @Test
+    fun `reads the department of the principal`() = runBlocking<Unit> {
+        val request = AttributeRequests.of(Action("order", "read"), Resource("order", "7", emptyMap()), alice)
+        val values = provider.fetch(request, setOf("ext.directory.department"))
+        check(values == mapOf("ext.directory.department" to "finance"))
+    }
+}
+```
+
+`AttributeRequests.beforeScope` 是 A 阶段的请求，没有作用域。管道会拒绝的作用域（主体在其中没有角色的空间、与宿主不同的应用）会抛出异常：B 阶段的提供者从不会以这样的请求被询问。
+
 **黑名单**是一个 A 阶段提供者：`BlacklistAttributeProvider(source)` 声明 `ext.blacklist.principal`、`ext.blacklist.ip` 和 `ext.blacklist.device`，被其中任何一个拦截的请求会遇到内置的 DENY `cosec:blacklist`。基于你的存储实现 `BlacklistSource.contains(kind, value)`（主体的值为 `<tenant>:<principal id>`），或使用 `InMemoryBlacklistSource`，并把来源声明为 bean：starter 会把它包装进 `BlacklistAttributeProvider`。没有时，启动以 `INFO` 记录 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).`。来源失败绝不意味着“未被拦截”：除非有 DENY 匹配，否则请求得到 `503`。
 
 使用 `cosec-ip2region` 时，starter 注册 `Ip2RegionAttributeProvider`（`ext.ip2region.country`、`.province`、`.city`、`.isp`）。
@@ -231,6 +250,7 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
 - 所有 `DecisionListener` bean 都会按 `@Order` 顺序注册，不同时是监听器的每个 `AuditEventSink` bean 也会注册，作为以 bean 名命名的 `BEST_EFFORT` 监听器。starter 会加入审计日志（`LoggingAuditListener`，除非 `cosec.audit.enabled=false`），并在启用相应 feature 时加入 `MetricsListener`、`TracingListener`、`KafkaAuditListener` 和影子监听器。事件、指标和 span 见[可观测性](../operations/observability.md)。
 - `event.evaluationTrace` 是引擎按 `cosec.pipeline.trace-level` 记录的追踪；在默认的 `off` 时为 null。
 - 关闭时，队列中的事件仍会在 `cosec.observability.listener.drain-timeout` 内继续投递。
+- **测试监听器**：`PipelineFixture`（`cosec-testkit`）接受 `listeners`，把管道产生的事件投递给它们，所以测试读到的是真实事件，而不是手工构造的事件：REQUIRED 监听器在 `evaluate` 返回前收到事件，BEST_EFFORT 监听器在夹具关闭时收到（[用真实管道测试代码](../policies/testing.md#testing-your-code-against-a-real-pipeline)）。
 
 ## 限流器 {#rate-limiters}
 

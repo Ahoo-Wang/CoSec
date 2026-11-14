@@ -1,3 +1,11 @@
+public final class me/ahoo/cosec/testkit/AttributeRequests {
+	public static final field INSTANCE Lme/ahoo/cosec/testkit/AttributeRequests;
+	public final fun beforeScope (Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lme/ahoo/cosec/testkit/PipelineFixture$Principal;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/spi/attribute/AttributeRequest;
+	public static synthetic fun beforeScope$default (Lme/ahoo/cosec/testkit/AttributeRequests;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lme/ahoo/cosec/testkit/PipelineFixture$Principal;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/spi/attribute/AttributeRequest;
+	public final fun of (Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lme/ahoo/cosec/testkit/PipelineFixture$Principal;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/spi/attribute/AttributeRequest;
+	public static synthetic fun of$default (Lme/ahoo/cosec/testkit/AttributeRequests;Lme/ahoo/cosec/model/Action;Lme/ahoo/cosec/model/Resource;Lme/ahoo/cosec/testkit/PipelineFixture$Principal;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/spi/attribute/AttributeRequest;
+}
+
 public final class me/ahoo/cosec/testkit/DocumentException : java/lang/RuntimeException {
 	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
@@ -54,9 +62,10 @@ public final class me/ahoo/cosec/testkit/PipelineFixture : java/lang/AutoCloseab
 }
 
 public final class me/ahoo/cosec/testkit/PipelineFixture$Companion {
-	public final fun load (Ljava/nio/file/Path;)Lme/ahoo/cosec/testkit/PipelineFixture;
-	public final fun of (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;)Lme/ahoo/cosec/testkit/PipelineFixture;
-	public static synthetic fun of$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public final fun load (Ljava/nio/file/Path;Lme/ahoo/cosec/runtime/route/RouteMap;Ljava/util/List;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public static synthetic fun load$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/nio/file/Path;Lme/ahoo/cosec/runtime/route/RouteMap;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public final fun of (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Lme/ahoo/cosec/runtime/route/RouteMap;Ljava/util/List;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public static synthetic fun of$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Lme/ahoo/cosec/runtime/route/RouteMap;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
 }
 
 public final class me/ahoo/cosec/testkit/PipelineFixture$Principal {
