@@ -532,16 +532,6 @@ public abstract interface class me/ahoo/cosec/runtime/http/RemoteIpResolver {
 	public abstract fun resolve (Ljava/lang/Object;)Ljava/lang/String;
 }
 
-public abstract class me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver : me/ahoo/cosec/runtime/http/RemoteIpResolver {
-	public static final field Companion Lme/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver$Companion;
-	public static final field DELIMITER C
-	public static final field X_FORWARDED_FOR Ljava/lang/String;
-	public fun <init> (Lme/ahoo/cosec/runtime/http/RemoteIpResolver;)V
-	public abstract fun extractXForwardedHeaderValues (Ljava/lang/Object;)Ljava/util/List;
-	public fun getMaxTrustedIndex ()I
-	public fun resolve (Ljava/lang/Object;)Ljava/lang/String;
-}
-
 public final class me/ahoo/cosec/runtime/http/XForwardedRemoteIpResolver$Companion {
 }
 

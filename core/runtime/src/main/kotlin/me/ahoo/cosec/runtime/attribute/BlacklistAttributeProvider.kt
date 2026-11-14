@@ -14,7 +14,9 @@
 package me.ahoo.cosec.runtime.attribute
 
 import me.ahoo.cosec.annotations.CoSecSpi
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.condition.AttributeType
+import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.attribute.AttributeRequest
@@ -85,12 +87,24 @@ class BlacklistAttributeProvider(private val source: BlacklistSource) : Attribut
             val value = when (kind) {
                 BlacklistKind.PRINCIPAL -> request.subject.takeIf { it.authenticated }
                     ?.let { BlacklistKind.principal(request.tenant.value, it.id) }
-                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }
+                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }?.also(::requireAddress)
                 BlacklistKind.DEVICE -> request.deviceId.takeIf { it.isNotEmpty() }
             } ?: continue
             values[kind.attribute] = source.contains(kind, value)
         }
         return values
+    }
+
+    /**
+     * A client address that is no address (`unknown`, `PIP-17`) cannot be looked up: the attributes are unavailable, and
+     * the request is a 503 unless a DENY matches, never "not blocked".
+     */
+    private fun requireAddress(remoteIp: String) {
+        check(IpAddress.parse(remoteIp) != null) {
+            "The client address [${Identifiers.printable(
+                remoteIp
+            )}] is no address: the blacklist cannot be read for it."
+        }
     }
 
     override fun toString(): String = "BlacklistAttributeProvider($source)"

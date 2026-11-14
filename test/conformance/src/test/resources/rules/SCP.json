@@ -46,6 +46,7 @@
         "runtime:CoSecParametersTest#theQueryIsNotRead",
         "runtime:PipelineTest#conflictingCoSecParameterIsInvalidRequest",
         "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike",
+        "spring-boot:RealServerParityTest#every server answers alike",
         "runtime:CoSecParametersTest#aBlankValueBesideAValueIsAmbiguous",
         "runtime:CoSecParametersTest#unicodeSpacesAreAValue"
       ],

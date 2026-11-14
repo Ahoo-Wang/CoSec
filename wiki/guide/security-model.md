@@ -302,7 +302,7 @@ A grant is only as trustworthy as the inputs it depends on.
 | Space | `CoSec-Space-Id`, accepted only when the principal has a role in that space | The client, among the credential's spaces |
 | Device | `CoSec-Device-Id` | The client |
 | Method, path, query | The HTTP request; the route map turns method and path into an action and a resource | The client, within your route map |
-| Client IP | The connection, or `X-Forwarded-For` up to `cosec.authorization.remote-ip.max-trusted-index` hops | The client, beyond the proxies you trust |
+| Client IP | The connection, `X-Forwarded-For` up to `cosec.authorization.remote-ip.max-trusted-index` hops, or the address Tomcat's `RemoteIpValve` resolved; read once (`PIP-16`) | The client, beyond the proxies you trust |
 | Headers, `Origin`, `Referer` (`http.*`) | The HTTP request | The client |
 | Request attributes (`request.attributes.*`) | The adapter, such as the gateway's route id | You |
 | External attributes (`ext.*`) | Your `AttributeProvider` beans | You |
@@ -347,10 +347,13 @@ requests out of the `http` namespace, and with it out of the reach of any platfo
 A restriction that must hold for a path whether or not it is mapped is written twice, for the `http` form and for the
 action ([Authorizing business actions](../scenarios/route-maps.md)). There is no condition on the request path to say it once.
 
-**Client IP.** `max-trusted-index` is the number of proxies in front of the application; the default `1` assumes
-one. CoSec takes that entry counted from the right of `X-Forwarded-For`, which your proxy appended. On a host that
-clients reach directly, set it to `0`, or a client can write any address into the header
-([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)).
+**Client IP.** CoSec reads the client address once, from one party it trusts (`PIP-16`). Without a forward-headers
+strategy, `max-trusted-index` is the number of proxies in front of the application (default `1`), and CoSec takes that
+entry counted from the right of `X-Forwarded-For`, which your proxy appended; on a host that clients reach directly,
+set it to `0`, or a client can write any address into the header. Spring Boot turns on `native` by itself on the cloud
+platforms it detects: then Tomcat's `RemoteIpValve` has resolved the address and CoSec takes it, and on Reactor Netty or
+Jetty CoSec reads the header and never the address the server forwarded. Under `framework`, Spring's filter takes the
+client's own entry, so startup fails ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)).
 
 **Headers are client input.** Conditions can read request headers (`http.header.<name>`), `Origin` and `Referer`
 (`http.origin`, `http.referer` and their hosts): the client writes all of them. A DENY on a header is a hint the
@@ -473,7 +476,9 @@ CoSec decides whether a request may reach your handler. It does not:
 Before production:
 
 - Load `cosec.jwt.secret` from a secret store, and keep access tokens short-lived.
-- Set `cosec.authorization.remote-ip.max-trusted-index` to match your proxy chain, `0` on a directly exposed host.
+- Set `cosec.authorization.remote-ip.max-trusted-index` to match your proxy chain, `0` on a directly exposed host; with
+  the `native` forward-headers strategy, configure the proxy chain on the server instead
+  ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)).
 - Set `cosec.authorization.scope.app-id` on every service that serves one app, and `cosec-app-id` on every route of
   a gateway that fronts several.
 - On a gateway, mark `cosec-identity: true` only the routes to your own services that are not `lb://`, and serve

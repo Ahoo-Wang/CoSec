@@ -1,0 +1,67 @@
+{
+  "rules": [
+    "PIP-17"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "An address in the denied block: the DENY matches.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/**"
+            }
+          ]
+        },
+        {
+          "id": "blocked-range",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "resource": "http:path:/**",
+              "condition": {
+                "cidr": [
+                  "environment.ip",
+                  [
+                    "192.0.2.0/24"
+                  ]
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        },
+        {
+          "id": "g:blocked-range",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "blocked-range"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders",
+    "remoteAddress": "192.0.2.5"
+  },
+  "expect": {
+    "status": 403,
+    "type": "forbidden"
+  }
+}

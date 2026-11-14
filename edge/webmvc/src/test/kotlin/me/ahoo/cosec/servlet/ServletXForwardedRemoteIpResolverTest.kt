@@ -24,7 +24,7 @@ class ServletXForwardedRemoteIpResolverTest {
     @Test
     fun defaultMaxTrustedIndex() {
         val xForwardedRemoteIpResolver = ServletXForwardedRemoteIpResolver()
-        // The default trusts exactly one hop (rightmost entry); use TRUST_ALL for the old trust-all behavior.
+        // The default trusts exactly one hop: the rightmost entry.
         xForwardedRemoteIpResolver.maxTrustedIndex.assert().isEqualTo(1)
     }
 }

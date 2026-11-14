@@ -1,0 +1,17 @@
+# Rule: PIP-17
+# Mutant: the blacklist looks up a client address that is no address, and answers not blocked
+# Tests: :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider.kt
+index 0faf29ec..c021c6c5 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider.kt
+@@ -87,7 +87,7 @@ class BlacklistAttributeProvider(private val source: BlacklistSource) : Attribut
+             val value = when (kind) {
+                 BlacklistKind.PRINCIPAL -> request.subject.takeIf { it.authenticated }
+                     ?.let { BlacklistKind.principal(request.tenant.value, it.id) }
+-                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }?.also(::requireAddress)
++                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }
+                 BlacklistKind.DEVICE -> request.deviceId.takeIf { it.isNotEmpty() }
+             } ?: continue
+             values[kind.attribute] = source.contains(kind, value)

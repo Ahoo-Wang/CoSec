@@ -19,14 +19,10 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver
 import org.springframework.web.server.ServerWebExchange
 
+/** [XForwardedRemoteIpResolver] over the host's requests: the peer is [ReactiveRemoteIpResolver]. */
 @InternalCoSecApi
-class ReactiveXForwardedRemoteIpResolver(override val maxTrustedIndex: Int = 1) :
-    XForwardedRemoteIpResolver<ServerWebExchange>(ReactiveRemoteIpResolver) {
-    @InternalCoSecApi
-    companion object {
-        val TRUST_ALL = ReactiveXForwardedRemoteIpResolver(Int.MAX_VALUE)
-    }
-
+class ReactiveXForwardedRemoteIpResolver(maxTrustedIndex: Int = 1, peerIsConnection: Boolean = true) :
+    XForwardedRemoteIpResolver<ServerWebExchange>(ReactiveRemoteIpResolver, maxTrustedIndex, peerIsConnection) {
     override fun extractXForwardedHeaderValues(request: ServerWebExchange): List<String>? {
         return request.request.headers[X_FORWARDED_FOR]
     }

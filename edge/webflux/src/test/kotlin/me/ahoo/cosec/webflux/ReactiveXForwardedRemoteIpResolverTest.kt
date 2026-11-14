@@ -27,7 +27,7 @@ class ReactiveXForwardedRemoteIpResolverTest {
     @Test
     fun extractXForwardedHeaderValues() {
         val xForwardedRemoteIpResolver = ReactiveXForwardedRemoteIpResolver()
-        // The default trusts exactly one hop (rightmost entry); use TRUST_ALL for the old trust-all behavior.
+        // The default trusts exactly one hop: the rightmost entry.
         xForwardedRemoteIpResolver.maxTrustedIndex.assert().isEqualTo(1)
         val serverRequest = MockServerHttpRequest.get("")
             .header(X_FORWARDED_FOR, "localhost")

@@ -11,6 +11,7 @@
         "architecture:OneDecisionPathTest#adaptersNeverSeeDecisions",
         "architecture:OneDecisionPathTest#bridgesWriteOnlyEncodedProblems",
         "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike",
+        "spring-boot:RealServerParityTest#every server answers alike",
         "spring-boot:WebAdapterParityTest#the three adapters make the same decision event"
       ]
     },
@@ -182,6 +183,33 @@
         "runtime:AuthorizationCheckerTest#a path is decided as enforcement normalizes it",
         "runtime:AuthorizationCheckerTest#a resource longer than a request path can be is denied"
       ],
+      "pending": null
+    },
+    {
+      "id": "PIP-16",
+      "source": "RFC 0006 §5.3.1; round-2 review H1",
+      "statement": "The client address (`environment.ip`) is read once, from one party the host trusts, never from both the server's forwarded-header handling and CoSec's: without a forward-headers strategy, the connection's peer, or the `X-Forwarded-For` entry `max-trusted-index` places from the right; under `native` on Tomcat (configured, inferred from the cloud platform, or `server.tomcat.remoteip.*`), the address RemoteIpValve resolved; under `native` on Reactor Netty or Jetty, `X-Forwarded-For` alone, never the address the server forwarded. Startup fails under `framework` or a ForwardedHeaderFilter or ForwardedHeaderTransformer that rewrites, under `native` on a server CoSec cannot tell, with `max-trusted-index` set explicitly on Tomcat `native`, and with `max-trusted-index: 0` on Reactor Netty or Jetty `native`.",
+      "level": "startup",
+      "guards": [
+        "spring-boot:ClientIpReadingsTest#without a strategy CoSec reads the peer and X-Forwarded-For",
+        "spring-boot:ClientIpReadingsTest#on Tomcat with the native strategy CoSec takes the valve's address",
+        "spring-boot:ClientIpReadingsTest#on Tomcat with the native strategy an explicit max-trusted-index fails startup",
+        "spring-boot:ClientIpReadingsTest#on Netty and Jetty with the native strategy CoSec reads the header only",
+        "spring-boot:ClientIpReadingsTest#the framework strategy fails startup",
+        "spring-boot:ClientIpReadingsTest#a forwarded-header filter or transformer of the application fails startup unless it only removes",
+        "spring-boot:ClientIpReadingsTest#the native strategy on a server CoSec cannot tell fails startup",
+        "spring-boot:ClientIpReadingsTest#the starter fails startup with the reason",
+        "spring-boot:RealServerClientIpTest#a client cannot claim an internal address",
+        "spring-boot:RealServerClientIpTest#a denied client cannot claim another address",
+        "runtime:XForwardedRemoteIpResolverTest#withoutTheConnectionsPeerAnAddressComesFromTheHeaderOnly"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-17",
+      "source": "RFC 0006 §5.3.1; round-2 review L3",
+      "statement": "A client address the host reported that is not an address (`unknown`, an obfuscated identifier) is unavailable, never absent: a statement that reads `environment.ip` errs as on a missing external attribute (a DENY is Indeterminate unless `onMissing: nomatch`), and the blacklist cannot be read for it. A trusted `X-Forwarded-For` entry or a peer written with a port, brackets or a zone is read as its address, and several `X-Forwarded-For` lines are one list, in order.",
+      "level": "pipeline",
       "pending": null
     }
   ]
