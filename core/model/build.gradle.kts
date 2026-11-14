@@ -12,7 +12,7 @@
  */
 
 // Pure data types of the decision engine (RFC 0002 §2). Kotlin standard library only: the root build leaves out the
-// library defaults (platform, Guava, SLF4J) and verifyPureClasspath fails on anything else.
+// library defaults (platform, SLF4J) and verifyPureClasspath fails on anything else.
 
 dependencies {
     // The stability markers, annotation classes with no code: @InternalCoSecApi must be visible to every consumer, or a

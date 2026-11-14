@@ -21,7 +21,6 @@ dependencies {
     constraints {
         api(libs.java.jwt)
         api(libs.ip2region)
-        api(libs.guava)
         api(libs.kotlin.logging)
         api(libs.swagger)
         api(libs.justAuth)

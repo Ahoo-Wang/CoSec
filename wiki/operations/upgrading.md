@@ -411,6 +411,8 @@ and have to be provisioned again.
   - `checkMono` (`cosec-webflux`) and `checkBlocking` (`cosec-webmvc`) are in Java classes named
     `AuthorizationCheckers`, no longer `PipelineWebFilterKt` and `PipelineServletFilterKt`; Kotlin callers do not
     notice. `SuspendingHandlerHolderInterceptor` is `@InternalCoSecApi`: the starter registers it.
+- **`cosec-dependencies` no longer manages Guava's version**, and no CoSec module brings Guava. An application that
+  takes Guava's version from CoSec's BOM declares it itself.
 
 ## From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 

@@ -13,8 +13,6 @@
 
 package me.ahoo.cosec.migrate.v7.policy.action
 
-import com.google.common.cache.Cache
-import com.google.common.cache.CacheBuilder
 import me.ahoo.cosec.migrate.v7.api.configuration.Configuration
 import me.ahoo.cosec.migrate.v7.api.context.SecurityContext
 import me.ahoo.cosec.migrate.v7.api.context.request.Request
@@ -162,7 +160,7 @@ internal class ReplaceablePathActionMatcher private constructor(
     private val pattern: String,
     configuration: Configuration,
     private val parts: List<TemplatePart>,
-    private val pathPatternCache: Cache<String, PathPattern>,
+    private val pathPatternCache: PathPatternCache,
     val onRejected: RejectedTemplateValue,
 ) : AbstractActionMatcher(PathActionMatcherFactory.TYPE, configuration) {
     constructor(
@@ -180,7 +178,7 @@ internal class ReplaceablePathActionMatcher private constructor(
     )
 
     companion object {
-        private const val PATH_PATTERN_CACHE_SIZE = 1024L
+        private const val PATH_PATTERN_CACHE_SIZE = 1024
         private const val CURRENT_SEGMENT = "."
         private const val PARENT_SEGMENT = ".."
         private val PATTERN_CHARS = charArrayOf('*', '?', '{', '}', '\\')
@@ -192,9 +190,7 @@ internal class ReplaceablePathActionMatcher private constructor(
          * Resolved patterns vary per principal/tenant, so parsed patterns are cached in a bounded LRU
          * to avoid re-parsing on every request.
          */
-        private fun newPathPatternCache(): Cache<String, PathPattern> = CacheBuilder.newBuilder()
-            .maximumSize(PATH_PATTERN_CACHE_SIZE)
-            .build()
+        private fun newPathPatternCache(): PathPatternCache = PathPatternCache(PATH_PATTERN_CACHE_SIZE)
 
         private fun String.asTemplateParts(): List<TemplatePart> {
             val parsed = SpelExpression.SPEL_PARSER.parseExpression(this, ParserContext.TEMPLATE_EXPRESSION)
@@ -263,7 +259,7 @@ internal class ReplaceablePathActionMatcher private constructor(
         // at run time (and so passes the load-time check) must not see another statement's path variables.
         securityContext.clearPathVariables()
         val resolvedPattern = resolve(securityContext) ?: return onRejectedValue()
-        val pathPattern = pathPatternCache.get(resolvedPattern) { patternParser.parse(resolvedPattern) }
+        val pathPattern = pathPatternCache.get(resolvedPattern, patternParser::parse)
         val pathContainer = securityContext.parseRequestPath(request, patternParser.pathOptions)
         val pathMatchInfo = pathPattern.matchAndExtract(pathContainer) ?: return false
         securityContext.setPathVariables(pathMatchInfo.uriVariables)
@@ -356,4 +352,15 @@ internal class PathActionMatcherFactory : ActionMatcherFactory {
         }
         return configuration.objectAsActionMatcher()
     }
+}
+
+/** A bounded LRU of parsed patterns. Synchronized: a converted matcher may be shared between threads. */
+internal class PathPatternCache(private val maximumSize: Int) {
+    private val patterns = object : LinkedHashMap<String, PathPattern>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, PathPattern>): Boolean =
+            size > maximumSize
+    }
+
+    fun get(pattern: String, parse: (String) -> PathPattern): PathPattern =
+        synchronized(patterns) { patterns.getOrPut(pattern) { parse(pattern) } }
 }
