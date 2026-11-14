@@ -122,8 +122,18 @@ refused requests are not counted.
 
 | Limiter | Used when | Scope |
 |---|---|---|
-| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Counters live under `<cosec.key-prefix>:rate-limiter:{<rule>:<bucket>}:<window>` and expire after two windows. The braces are a Redis Cluster hash tag: the two windows of a bucket, which the script reads together, are on one slot, and different buckets spread over the cluster. |
+| `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Each bucket is one key, `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`, which holds its current and previous window and expires two windows after its last count. The script takes the time from Redis, so instances whose clocks differ count in the same window, and it touches only that key, so it runs on a Redis Cluster as on one node. |
 | `LocalRateLimiter` | otherwise | Per JVM: with N instances the effective limit is N times higher. Keeps at most 100,000 buckets and drops buckets idle for an hour; a dropped bucket starts again from zero. |
+
+**The counters are memory a client can grow.** They live in the same Redis as the documents, which must not evict
+([Storage](../operations/storage.md#redis-requirements)): one key per bucket value, for two windows. A rule whose `key`
+reads something the client chooses, a header above all, with a long window, lets a client create keys as fast as it
+sends requests, and keep them for two windows; a full Redis then refuses every write, publishing and revocations
+included. That is why a window is at most a day. Key a rule on what a client cannot multiply (the principal, the
+address a trusted proxy reports) and keep windows short; to keep the counters away from the documents altogether, give
+the limiter a Redis of its own: declare a `RateLimiter` bean,
+`ReactiveRedisRateLimiter(ReactiveStringRedisTemplate(<a connection factory of its own>), "<prefix>:rate-limiter")`, and
+the starter's is not created.
 
 Your own `RateLimiter` bean replaces both ([Extending](../architecture/extending.md)). Each call has
 `cosec.authorization.rate-limit.timeout` (default `500ms`, [Configuration](../operations/configuration.md)); a call
@@ -204,7 +214,7 @@ size.
 
 Rules are part of their documents, so they are checked and compiled with them: an invalid id, a duplicate id in one
 document, more than 64 rules in one document, `permitsPerSecond` not above `0`, `windowSeconds` below `1` or above a
-year (`31536000`), a quota `permitsPerSecond × windowSeconds` above 2⁶³, a `key` that is not a String or Ip attribute,
+day (`86400`), a quota `permitsPerSecond × windowSeconds` above 2⁶³, a `key` that is not a String or Ip attribute,
 or a variable a pattern does not capture fails the whole document ([Testing policies](./testing.md#validating-policies)).
 
 Change rules through the control plane like any other entry ([Changes](./testing.md#changes)):

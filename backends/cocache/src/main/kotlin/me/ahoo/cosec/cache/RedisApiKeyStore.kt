@@ -27,8 +27,9 @@ const val DEFAULT_API_KEY_KEY_PREFIX = "cosec:api-key"
  * API keys kept in Redis by hash, shared by every instance: `<keyPrefix>:<sha256>` holds the [ApiKey] as [ApiKeyCodec]
  * writes it.
  *
- * Lookups are Redis round trips, so the security context must be parsed off the event loop (the starter does so
- * when `cosec.api-key.store=redis`). A Redis failure propagates and fails closed.
+ * It blocks on Redis: it is for managing keys ([issue], [save], [revoke]) off the event loop. Requests read keys through
+ * [RedisApiKeyReader], over the reactive template, which never blocks; the starter wires that one when
+ * `cosec.api-key.store=redis`. A Redis failure propagates and fails closed.
  */
 class RedisApiKeyStore(
     private val stringRedisTemplate: StringRedisTemplate,
