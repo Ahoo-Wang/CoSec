@@ -90,5 +90,9 @@ class Ip2RegionAttributeProvider(databases: List<ByteArray> = listOf(loadDefault
     }
 }
 
-/** The client address cannot be located: its attributes are unavailable, never absent. */
-internal class UnlocatableAddressException(reason: String) : IllegalStateException("Cannot locate the client: $reason.")
+/**
+ * The client address cannot be located: its attributes are unavailable, never absent. An answer, not a bug: an IPv6
+ * client without an IPv6 database throws it on every request, so it has no stack trace to fill.
+ */
+internal class UnlocatableAddressException(reason: String) :
+    RuntimeException("Cannot locate the client: $reason.", null, false, false)

@@ -102,6 +102,12 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     /** The application's generator, falling back to a random id when it throws (round 2 M6). */
     private val ids = FallbackIds(components.idGenerator)
 
+    /**
+     * A provider's failures, reported at most once per interval per provider: a failure can repeat on every request (an
+     * address no ip2region database covers, a backend that is down), and each decision already carries its cause.
+     */
+    private val providerFailures = Throttle(PROVIDER_FAILURE_INTERVAL)
+
     private val clock = components.clock
     private val options = components.options
 
@@ -760,7 +766,13 @@ class Pipeline(components: PipelineComponents) : RequestGate {
         return when (val answer = call(timeout) { registered.provider.fetch(request, names) }) {
             is Fetched.Value -> answer.value
             is Fetched.Failed -> {
-                log.warn(answer.error) { "${registered.provider} failed to fetch $names." }
+                if (providerFailures.allow(registered.provider)) {
+                    log.warn(answer.error) {
+                        "${registered.provider} failed to fetch $names. Reported at most once every " +
+                            "$PROVIDER_FAILURE_INTERVAL per provider; each decision it affects carries the cause " +
+                            "(AttributeUnavailable)."
+                    }
+                }
                 null
             }
         }
@@ -904,6 +916,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
     }
 
     private companion object {
+        val PROVIDER_FAILURE_INTERVAL: java.time.Duration = java.time.Duration.ofSeconds(10)
         const val HTTP = "http"
         const val AUTHORIZATION = "authorization"
         val AUTHORIZATION_NAMES = setOf(AUTHORIZATION)

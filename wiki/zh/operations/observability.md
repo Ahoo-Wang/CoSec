@@ -227,7 +227,7 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 | Logger | 记录内容 |
 |---|---|
 | `me.ahoo.cosec.audit` | 审计日志（[审计日志与 Kafka](#audit-log-and-kafka)） |
-| `me.ahoo.cosec.runtime` | 每个 `500` 都以 `ERROR` 记录 `Request [<requestId>] failed with an unmodelled exception.` 及堆栈；`REQUIRED` 监听器失败；被丢弃的事件；失败的属性提供者；无法计数的限流器 |
+| `me.ahoo.cosec.runtime` | 每个 `500` 都以 `ERROR` 记录 `Request [<requestId>] failed with an unmodelled exception.` 及堆栈；`REQUIRED` 监听器失败；被丢弃的事件；失败的属性提供者（以 `WARN` 记录 `<provider> failed to fetch [...]`，每个提供者最多每 10 秒一次：每个决策都带有原因）；无法计数的限流器 |
 | `me.ahoo.cosec.runtime.snapshot` | 加载、滞后、丢失和回退的文档（[快照健康状况](#snapshot-health)） |
 | `me.ahoo.cosec.spring.boot.starter` | 启动检查，例如 `!!!` 驱逐警告；应用没有声明 `BlacklistSource` 时以 `INFO` 记录的 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).`（[黑名单](../guide/security-model.md#blacklist)）；gateway 模式服务的 `WARN`（[网关后面的服务](./deployment.md#services-behind-the-gateway)） |
 | `me.ahoo.cosec.control` | 变更日志，以及每个控制面 `500` 的 `Control API <method> <path> failed (request <requestId>).` |

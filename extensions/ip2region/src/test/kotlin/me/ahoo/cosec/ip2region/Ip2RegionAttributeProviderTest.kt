@@ -27,6 +27,7 @@ import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 
 class Ip2RegionAttributeProviderTest {
     private val provider = Ip2RegionAttributeProvider()
@@ -87,7 +88,8 @@ class Ip2RegionAttributeProviderTest {
     fun anAddressNoDatabaseCoversIsUnavailable() {
         provider.versions.assert().containsExactly("IPv4")
         for (remote in listOf("2001:db8::1", "localhost", "", "unknown")) {
-            assertThrownBy<IllegalStateException> { fetch(remote) }
+            // An answer, thrown on every such request: no stack trace to fill.
+            assertThrows<UnlocatableAddressException> { fetch(remote) }.stackTrace.assert().isEmpty()
         }
     }
 

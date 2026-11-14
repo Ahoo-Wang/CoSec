@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.runtime.attribute
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.runBlocking
@@ -29,6 +33,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.Basis
 import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
@@ -47,6 +52,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.slf4j.LoggerFactory
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
@@ -125,6 +131,16 @@ class ExternalAttributesPipelineTest {
         headers: Map<String, List<String>> = emptyMap(),
         path: String = "/orders",
     ): Pair<Outcome, Views> {
+        val (pipeline, views) = pipeline(providers, policies, membershipProvider, memberships)
+        return runBlocking { pipeline.evaluate(PipelineFixtures.facts(path = path, headers = headers)) } to views
+    }
+
+    private fun pipeline(
+        providers: List<AttributeProvider>,
+        policies: Policies,
+        membershipProvider: MembershipProvider? = null,
+        memberships: Memberships? = PipelineFixtures.claims(),
+    ): Pair<Pipeline, Views> {
         val attributes = AttributeProviders(providers)
         val views = Views(PolicyDocumentCompiler(attributes.catalog), policies.body)
         val pipeline = PipelineFixtures.pipeline(
@@ -138,7 +154,7 @@ class ExternalAttributesPipelineTest {
                 attributes = attributes,
             )
         }
-        return runBlocking { pipeline.evaluate(PipelineFixtures.facts(path = path, headers = headers)) } to views
+        return pipeline to views
     }
 
     private val Outcome.decision: Decision get() = (basis as Basis.Decided).decision
@@ -333,6 +349,34 @@ class ExternalAttributesPipelineTest {
         evaluate(listOf(Geo { awaitCancellation() }), allow(condition = inFence())).first.status.assert().isEqualTo(503)
         evaluate(listOf(Geo { mapOf(IN_FENCE to "yes") }), allow(condition = inFence())).first.status
             .assert().isEqualTo(503)
+    }
+
+    /**
+     * Round 2 M5: a failure that repeats on every request (an IPv6 client without an IPv6 database) is reported at most
+     * once per interval per provider, never once per request; every decision still carries its cause.
+     */
+    @Test
+    fun aProviderFailingOnEveryRequestIsReportedOncePerIntervalPerProvider() {
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        val logger = LoggerFactory.getLogger(Pipeline::class.java) as Logger
+        logger.addAppender(appender)
+        try {
+            val (pipeline, _) = pipeline(
+                listOf(Geo { error("geo down") }, Risk { error("risk down") }),
+                allow() + deny(condition = """{"or":[${inFence()},{"eq":["$HIGH_RISK",true]}]}"""),
+            )
+            repeat(3) {
+                val outcome = runBlocking { pipeline.evaluate(PipelineFixtures.facts(path = "/orders")) }
+                outcome.status.assert().isEqualTo(503)
+                outcome.unavailableCause.assert().isInstanceOf(Cause.AttributeUnavailable::class.java)
+            }
+            val reports = appender.list.filter { "failed to fetch" in it.formattedMessage }
+            reports.map { it.formattedMessage.substringBefore(" failed") }.assert().hasSize(2)
+                .anyMatch { it.contains("Geo") }.anyMatch { it.contains("Risk") }
+            reports.forEach { it.level.assert().isEqualTo(Level.WARN) }
+        } finally {
+            logger.detachAppender(appender)
+        }
     }
 
     /** A provider that fails makes only its own attributes unavailable: the other's DENY still matches (RFC 0004 Q6). */
