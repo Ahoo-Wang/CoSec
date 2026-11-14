@@ -32,6 +32,9 @@ sealed interface Decision {
 /**
  * Why a decision is [Decision.Indeterminate]. The engine finds some of them itself (missing
  * policies, documents not loaded), so not every cause carries an exception: the adapter builds the one it reports.
+ *
+ * A set that grows: a minor release may add a member, such as the failure of a new port (RFC 0010 Q6), so a `when`
+ * over it needs an `else`, and a decision listener never matches it exhaustively.
  */
 sealed interface Cause {
     /**
