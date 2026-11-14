@@ -41,7 +41,11 @@ object PublicSignatures {
      * Each public supertype and member signature of [classes] that names a type matching [type]. With [stableOnly], a
      * member marked `@ExperimentalCoSecApi` is left out too: it promises no more than the type it names.
      */
-    fun violations(classes: List<JavaClass>, type: Regex, stableOnly: Boolean = false): List<String> = classes.flatMap { javaClass ->
+    fun violations(
+        classes: List<JavaClass>,
+        type: Regex,
+        stableOnly: Boolean = false
+    ): List<String> = classes.flatMap { javaClass ->
         val supertypes = (listOfNotNull(javaClass.rawSuperclass.orElse(null)) + javaClass.rawInterfaces)
             .filter { type.containsMatchIn(it.name) }
             .map { "${javaClass.name} extends ${it.name}" }
