@@ -272,8 +272,9 @@ loaded and linked, plus method profiles from a training run. The JVM maps the fi
 work again. No code changes and no Spring AOT are involved.
 
 **Spring AOT and GraalVM native images are not supported in 8.0.** Nothing in CoSec's build processes them
-(`processAot`) or tests a native image, so whether CoSec runs in one is unknown, and no module carries the hints one
-needs. Support is planned for a later 8.x release. The JDK AOT cache described here is the supported way to start
+(`processAot`) or tests a native image, so whether CoSec runs in one is unknown. The only runtime hints CoSec carries are `cosec-cocache`'s, for the Jackson
+module that decodes snapshot documents; they are incomplete (the starter's configuration metadata and the framework
+members it reads by reflection have none) and no native build has verified them. Support is planned for a later 8.x release. The JDK AOT cache described here is the supported way to start
 faster. If you try anyway, expect it to fail closed rather than run unchecked: the
 [unknown-property check](./configuration.md#unknown-properties) reads CoSec's configuration metadata from the class
 path, and when it finds none it treats every `cosec.*` key as unknown and refuses to start.
