@@ -344,6 +344,35 @@ rejected or publishing failed, `2` on a usage error. Converting 7.x data into do
 `cosec-migrate bootstrap` lets the administrator act on the control plane, but the HTTP request to the control API
 must first be permitted by the documents like any other request ([Testing changes](../policies/testing.md)).
 
+#### Seeding documents you wrote by hand {#seeding-documents-you-wrote-by-hand}
+
+`cosec-migrate publish` takes only files that `report.json` lists with their SHA-256: the report is what says the
+bytes are the ones that were checked, so `publish` has no option to skip it. Use it for the one document nothing else
+can create, the platform document, and publish the rest of what you wrote through the control plane, which checks and
+compiles every document it writes:
+
+1. **Publish the platform document**, with the report you write for it
+   ([Quick start](../guide/quick-start.md#publish-the-platform-document)). It has to let the administrator reach the
+   control API's paths, and it should hold no more than that and your platform-wide policies.
+2. **Name the first administrator** with `cosec-migrate bootstrap`, and issue that principal a token for the tenant
+   `(platform)` and the app `cosec-control` ([Change a document later](../guide/quick-start.md#change-a-document-later)).
+3. **Apply each other document** (`app:<id>`, `tenant:<id>`) as a change. `apply` takes the whole document and turns
+   the current revision, or an empty one, into it; `MERGE` only adds and changes. The control API is under
+   [`cosec.control.http.base-path`](./configuration.md#control-plane):
+
+   ```bash
+   CONTROL=https://gateway.example.com/cosec/control/v1
+   AUTH="Authorization: Bearer $PLATFORM_TOKEN"
+   ID=$(jq -n --slurpfile document documents/apps/wms.json '{document: $document[0], mode: "MERGE", note: "seed wms"}' \
+     | curl -s -X POST "$CONTROL/documents/app:wms:apply" -H "$AUTH" -H 'Content-Type: application/json' -d @- | jq -r .id)
+   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"seeding"}'
+   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   ```
+
+   The change is checked as any other. Skipping the shadow window is for a deployment with no traffic on the document
+   yet; where the change needs an approval (`state` `AWAITING_APPROVAL`), a second administrator approves it
+   ([Testing changes](../policies/testing.md#approval)). The document's revision chain then starts with this change.
+
 ### Publishing through the control plane
 
 At runtime every change goes through the control API under
