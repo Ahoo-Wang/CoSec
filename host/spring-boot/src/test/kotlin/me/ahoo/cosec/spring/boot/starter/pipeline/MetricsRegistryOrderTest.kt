@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.micrometer.MetricsListener
+import me.ahoo.cosec.spring.boot.starter.lazily
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
@@ -70,6 +71,15 @@ class MetricsRegistryOrderTest {
             context.startupFailure.assert().isNull()
             context.getBeansOfType(MeterRegistry::class.java).assert().hasSize(1)
             context.getBeansOfType(MetricsListener::class.java).assert().isEmpty()
+        }
+    }
+
+    /** `STA-3`: the listeners' counters are bound at startup under lazy initialization too, though nothing asks for them. */
+    @Test
+    fun `the listeners' counters are bound under lazy initialization`() {
+        runner.withConfiguration(boot).lazily().run { context ->
+            context.startupFailure.assert().isNull()
+            context.beanFactory.containsSingleton("cosecListenerMetrics").assert().isTrue()
         }
     }
 }

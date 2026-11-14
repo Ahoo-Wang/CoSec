@@ -36,6 +36,8 @@ import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
+import me.ahoo.cosec.spring.boot.starter.StartupCheck
+import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
 import me.ahoo.cosec.spring.boot.starter.audit.AuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.starter.audit.kafka.kafkaAuditDelivery
@@ -50,6 +52,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.context.annotation.Import
 import org.springframework.core.io.ResourceLoader
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
@@ -85,6 +88,7 @@ private val log = KotlinLogging.logger {}
     Ip2RegionProperties::class,
 )
 @InternalCoSecApi
+@Import(StartupCheckExclusion::class)
 class CoSecPipelineIntegrationAutoConfiguration {
     /** MDC for every host: the request's logging context reaches the threads the pipeline resumes on. */
     @Bean
@@ -168,20 +172,17 @@ class CoSecPipelineIntegrationAutoConfiguration {
 
         /**
          * The listeners' own counters: drops, failures and REQUIRED failures; and the tokens accepted without a
-         * revocation check.
+         * revocation check. Bound at startup whatever lazy initialization says (`STA-3`): nothing asks for it.
          */
         @Bean
         fun cosecListenerMetrics(
             registry: MeterRegistry,
             listeners: ObjectProvider<DecisionListeners>,
             unchecked: ObjectProvider<UncheckedRevocations>,
-        ): Any =
-            object : org.springframework.beans.factory.SmartInitializingSingleton {
-                override fun afterSingletonsInstantiated() {
-                    listeners.ifAvailable?.let { MetricsListener.bind(registry, it) }
-                    unchecked.ifAvailable?.let { MetricsListener.bind(registry, it) }
-                }
-            }
+        ): StartupCheck = StartupCheck.AfterSingletons {
+            listeners.ifAvailable?.let { MetricsListener.bind(registry, it) }
+            unchecked.ifAvailable?.let { MetricsListener.bind(registry, it) }
+        }
     }
 
     @Configuration(proxyBeanMethods = false)

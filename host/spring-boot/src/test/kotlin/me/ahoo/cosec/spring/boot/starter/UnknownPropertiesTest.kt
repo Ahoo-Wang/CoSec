@@ -391,4 +391,28 @@ class UnknownPropertiesTest {
         environment.propertySources.addFirst(MapPropertySource("more", mapOf("cosec.third-party.flag.x" to "1")))
         UnknownProperties.load(loader).of(environment).assert().containsExactly("cosec.third-party.flag.x")
     }
+
+    /** `STA-3`: under lazy initialization, as with `spring.main.lazy-initialization=true`, the check still runs. */
+    @Test
+    fun `an unknown key fails startup lazily too`() {
+        runner.withPropertyValues("cosec.pipeline.timeuot=3s").lazily().run { context ->
+            context.startupFailure!!.messages().assert().contains("cosec.pipeline.timeuot")
+        }
+    }
+
+    /** The real `SpringApplication` path: the property itself, not an initializer standing in for it. */
+    @Test
+    fun `an unknown key fails a lazily initialized application`() {
+        val failure = org.junit.jupiter.api.assertThrows<Exception> {
+            org.springframework.boot.builder.SpringApplicationBuilder(Checked::class.java)
+                .web(org.springframework.boot.WebApplicationType.NONE)
+                .properties("spring.main.banner-mode=off", "spring.main.lazy-initialization=true", "cosec.jwt.secrt=x")
+                .run().close()
+        }
+        failure.messages().assert().contains("cosec.jwt.secrt")
+    }
+
+    @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
+    @org.springframework.boot.autoconfigure.ImportAutoConfiguration(CoSecPropertyCheckAutoConfiguration::class)
+    class Checked
 }

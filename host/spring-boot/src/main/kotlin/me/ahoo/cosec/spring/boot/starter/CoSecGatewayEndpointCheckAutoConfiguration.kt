@@ -11,12 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spring.boot.starter.pipeline.ConditionalOnEnforceMode
 import me.ahoo.cosec.spring.boot.starter.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.cosec.spring.boot.starter.pipeline.GatewayProperties
-import org.springframework.beans.factory.SmartInitializingSingleton
 import org.springframework.boot.actuate.autoconfigure.web.server.ManagementPortType
 import org.springframework.boot.actuate.endpoint.ExposableEndpoint
 import org.springframework.boot.actuate.endpoint.web.PathMappedEndpoints
@@ -25,6 +27,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Import
 
 /**
  * `STA-2` (RC1-48): on a Spring Cloud Gateway host, CoSec authorizes the gateway's routes only, so an actuator endpoint
@@ -45,16 +48,17 @@ import org.springframework.context.annotation.Bean
     ]
 )
 @EnableConfigurationProperties(GatewayProperties::class)
+@Import(StartupCheckExclusion::class)
 internal class CoSecGatewayEndpointCheckAutoConfiguration {
     /** After every singleton: the endpoints are known only once their beans exist. */
     @Bean
     fun cosecGatewayEndpointCheck(
         context: ApplicationContext,
         properties: GatewayProperties
-    ): SmartInitializingSingleton =
-        SmartInitializingSingleton {
+    ): StartupCheck =
+        StartupCheck.AfterSingletons {
             val endpoints = context.getBeanProvider(PathMappedEndpoints::class.java).ifAvailable
-                ?: return@SmartInitializingSingleton
+                ?: return@AfterSingletons
             // Every path-mapped endpoint is an exposable one; any other is checked by its path, never skipped.
             val exposed = endpoints.map {
                 (it as? ExposableEndpoint<*>)?.endpointId?.toLowerCaseString() ?: it.rootPath.lowercase()
