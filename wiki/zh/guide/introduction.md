@@ -40,6 +40,7 @@ decide(principal, scope, action, resource, environment) -> decision
 - **它不过滤数据。** CoSec 决定请求能否到达处理器。处理器返回哪些行、哪些字段，仍由你的代码决定。策略可以把资源与主体绑定（把资源变量与 `subject.id` 比较），但除非有属性提供者替它获取，它无法查询某条数据库记录归谁所有。
 - **除非你绑定，否则它不校验客户端指定的应用。** 绑定了某个应用（`cosec.authorization.scope.app-id`）的服务会拒绝声明了其他应用的请求；没有绑定的服务接受请求声明的应用。空间会被检查：只有主体在某个非默认空间中有角色时，请求才能声明该空间。见[信任边界](./security-model.md#trust-boundaries)。
 - **它没有管理界面。** 文档通过控制面的 HTTP API 或 `cosec-migrate` 发布。
+- **8.0 不支持 Spring AOT 和 GraalVM 原生镜像。** 受支持的是网关镜像的 JDK AOT 缓存（[AOT 缓存](../operations/deployment.md#aot-cache)）。
 
 ## 什么时候用它 {#when-to-use-it}
 

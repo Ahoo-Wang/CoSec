@@ -54,6 +54,8 @@ The terms are defined in [Concepts](./concepts.md), and the rules the function f
   the default only if the principal has a role there. See [Trust boundaries](./security-model.md#trust-boundaries).
 - **It has no administration UI.** Documents are published through the control plane's HTTP API, or with
   `cosec-migrate`.
+- **It does not support Spring AOT or GraalVM native images in 8.0.** The gateway image's JDK AOT cache is supported
+  ([AOT cache](../operations/deployment.md#aot-cache)).
 
 ## When to use it
 
