@@ -18,7 +18,7 @@ description: "CoSec 8.0 的内部构造：模块及其依赖规则、请求 Pipe
 
 ## 模块分层 {#module-layering}
 
-模块按分组目录存放：`api/`（annotations、api）、`core/`（model、engine、spi、document、runtime、control）、`backends/`（cocache、kafka）、`edge/`（webflux、webmvc、gateway、openapi）、`extensions/`（jwt、social、login、ip2region、micrometer、opentelemetry、cosid）、`host/`（spring-boot）、`migration/`、`test/`、`bom/` 和 `platform/`（gateway-server）。Gradle 项目以其目录命名（`:engine`、`:spring-boot`），制品保留 `cosec-` 前缀。
+模块按分组目录存放：`api/`（annotations、api）、`core/`（model、engine、spi、document、runtime、control）、`backends/`（cocache）、`edge/`（webflux、webmvc、gateway、openapi）、`extensions/`（jwt、social、login、ip2region、micrometer、opentelemetry、cosid、kafka）、`host/`（spring-boot）、`migration/`、`test/`、`bom/` 和 `platform/`（gateway-server）。Gradle 项目以其目录命名（`:engine`、`:spring-boot`），制品保留 `cosec-` 前缀。
 
 ```mermaid
 flowchart BT
@@ -64,7 +64,7 @@ flowchart BT
 
 `architecture`（目录 `test/architecture/`）持有扫描多个模块的结构规则（RFC 0011 §5）：
 
-- `DependencyRulesTest` 读取每个项目声明的和解析出的 main 依赖（由根构建的 `architectureFacts` 任务写出），当声明的依赖指向外层（经评审的例外，例如 `cosec-kafka` 为实现 `DecisionListener` 依赖 `cosec-runtime`，连同理由列在 `DependencyRules` 中），当 `cosec-annotations`、`cosec-api`、`cosec-model` 或 `cosec-engine` 解析出 Kotlin 标准库以外的依赖（`cosec-spi` 另加协程，`cosec-document` 另加 Jackson），当 `cosec-runtime`、`cosec-control` 解析出 Reactor、Spring、Servlet API 或 Redis 客户端，或当 `cosec-cosid` 和 starter 以外的项目声明或解析出 CosId、或其他构建脚本提到 CosId（包括导入 CosId 的 BOM）时失败：CoSec 自己生成 id（`IdGenerator`），因此应用可以使用任意版本的 CosId。
+- `DependencyRulesTest` 读取每个项目声明的和解析出的 main 依赖（由根构建的 `architectureFacts` 任务写出），当声明的依赖指向外层（经评审的例外，例如 `cosec-kafka` 为实现 `ChangeListener` 依赖 `cosec-control`，连同理由列在 `DependencyRules` 中），当 `cosec-annotations`、`cosec-api`、`cosec-model` 或 `cosec-engine` 解析出 Kotlin 标准库以外的依赖（`cosec-spi` 另加协程，`cosec-document` 另加 Jackson），当 `cosec-runtime`、`cosec-control` 解析出 Reactor、Spring、Servlet API 或 Redis 客户端，或当 `cosec-cosid` 和 starter 以外的项目声明或解析出 CosId、或其他构建脚本提到 CosId（包括导入 CosId 的 BOM）时失败：CoSec 自己生成 id（`IdGenerator`），因此应用可以使用任意版本的 CosId。
 - `SourceRulesTest` 扫描编译出的类：Reactor 只出现在 edge 和 host（以及 `cosec-cocache`，挂起端口要等待它的响应式 Redis 客户端）；`api/` 与 `core/` 中没有 Spring、Servlet API 或 Redis 客户端；backends 与 extensions 只使用自己那部分 Spring 技术；backends 只通过列出的端口进入 `cosec-runtime` 与 `cosec-control`；只有 `cosec-cosid` 和 starter 的源码提到 CosId 的包；一个包只属于一个模块；只有 CoSec 自己的源码 opt in 内部 API。
 - `JacksonSignatureTest`（`api/` 与 `core/` 的公共签名中没有 Jackson 类型；`cosec-cocache` 在内部以响应式方式读取 Redis，但其公共签名中没有 Reactor 类型），上面的纯净性与边界测试，单一决策路径与令牌规则，项目清单（`ProjectListTest`）和版本目录。
 - `ApiVariantTest`：应用编译依赖某个库模块时拿到的 Gradle API 变体（usage `java-api`）必须带上公共类所继承或实现的类型所在的 CoSec 模块，以及公共签名中出现的 Jackson。模块自己的测试看到的是实现类路径，发现不了这一点。

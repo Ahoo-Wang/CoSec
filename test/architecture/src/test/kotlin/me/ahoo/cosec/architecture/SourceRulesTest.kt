@@ -56,8 +56,8 @@ class SourceRulesTest {
         private val NOT_IN_CORE = listOf("jakarta.servlet.", "io.lettuce.", "redis.clients.", "org.springframework.")
 
         /**
-         * What `cocache` and `kafka` may use of `runtime` and `control` (#1140): package of the using class to the
-         * classes or packages it may reach. The mapper is in `cosec-document`, outside both (RFC 0013 §3).
+         * What `cocache` may use of `runtime` and `control` (#1140): package of the using class to the classes or
+         * packages it may reach. The mapper is in `cosec-document`, outside both (RFC 0013 §3).
          */
         val BACKEND_REACH: Map<String, List<String>> = mapOf(
             "me.ahoo.cosec.cocache.shadow" to listOf("me.ahoo.cosec.runtime.shadow."),
@@ -71,11 +71,14 @@ class SourceRulesTest {
                 "me.ahoo.cosec.control.change.StageSlot",
                 "me.ahoo.cosec.runtime.shadow.StoredCandidate",
             ),
-            "me.ahoo.cosec.kafka" to listOf(
-                "me.ahoo.cosec.runtime.event.",
-                "me.ahoo.cosec.runtime.audit.AuditEvents",
-                "me.ahoo.cosec.control.audit.",
-            ),
+        )
+
+        /**
+         * What an extension may use of `control`, which only `cosec-kafka` depends on (`DependencyRules.EXCEPTIONS`):
+         * the change listener port and its events. Extensions use `runtime` as any outer module does.
+         */
+        val EXTENSION_REACH: Map<String, List<String>> = mapOf(
+            "me.ahoo.cosec.kafka" to listOf("me.ahoo.cosec.control.audit."),
         )
 
         /** The main source files of [project], by extension. */
@@ -136,6 +139,19 @@ class SourceRulesTest {
             val origin = violation.substringBefore(" -> ")
             val target = violation.substringAfter(" -> ")
             BACKEND_REACH.any { (from, to) ->
+                origin.substringBeforeLast('.') == from && to.any { reach(target, it) }
+            }
+        }.assert().isEmpty()
+    }
+
+    @Test
+    fun `extensions reach into control only through the listed ports`() {
+        violations { project, target ->
+            Projects.groupOf(project) == "extensions" && target.startsWith("me.ahoo.cosec.control.")
+        }.filterNot { violation ->
+            val origin = violation.substringBefore(" -> ")
+            val target = violation.substringAfter(" -> ")
+            EXTENSION_REACH.any { (from, to) ->
                 origin.substringBeforeLast('.') == from && to.any { reach(target, it) }
             }
         }.assert().isEmpty()

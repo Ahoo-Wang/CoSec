@@ -34,7 +34,6 @@ object DependencyRules {
         "runtime" to setOf("document", "engine", "spi", "model", "api", "annotations"),
         "control" to CORE - "control",
         "cocache" to setOf("spi", "model", "api", "annotations"),
-        "kafka" to setOf("spi", "model", "api", "annotations"),
         "webflux" to CORE - "control",
         "webmvc" to CORE - "control",
         "gateway" to CORE - "control",
@@ -45,6 +44,7 @@ object DependencyRules {
         "ip2region" to CORE - "control",
         "micrometer" to CORE - "control",
         "opentelemetry" to CORE - "control",
+        "kafka" to CORE - "control",
         // An implementation of the IdGenerator port, and nothing more of CoSec.
         "cosid" to setOf("spi", "model", "api", "annotations"),
     )
@@ -59,7 +59,6 @@ object DependencyRules {
             "implementation: the shadow stores implement runtime's shadow ports; CoSecJson writes the stored formats",
         ),
         Exception("cocache", "control", "CoCacheControlStore implements the control plane's ControlStore"),
-        Exception("kafka", "runtime", "KafkaAuditListener is a DecisionListener; CoSecJson is the one mapper"),
         Exception("kafka", "control", "KafkaChangeListener is the control plane's ChangeListener"),
         Exception("jwt", "login", "jwt implements login's token issuing port (RFC 0011 §2)"),
         Exception("social", "login", "social login is a login AuthenticationProvider"),

@@ -29,8 +29,8 @@ change must keep. What a decision *means* (deny first, default deny, fail closed
 ## Module layering
 
 Modules sit in group directories: `api/` (annotations, api), `core/` (model, engine, spi, document, runtime, control),
-`backends/` (cocache, kafka), `edge/` (webflux, webmvc, gateway, openapi), `extensions/` (jwt, social, login,
-ip2region, micrometer, opentelemetry, cosid), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/`
+`backends/` (cocache), `edge/` (webflux, webmvc, gateway, openapi), `extensions/` (jwt, social, login,
+ip2region, micrometer, opentelemetry, cosid, kafka), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/`
 (gateway-server). A Gradle project is named after its directory (`:engine`, `:spring-boot`); its artifact keeps the
 `cosec-` prefix.
 
@@ -132,7 +132,7 @@ The rules behind the picture:
 
 - `DependencyRulesTest` reads the declared and resolved main dependencies of every project, which the root build's
   `architectureFacts` task writes, and fails when a declared dependency points outwards (the reviewed exceptions, such
-  as `cosec-kafka` on `cosec-runtime` for `DecisionListener`, are listed with their reason in `DependencyRules`), when
+  as `cosec-kafka` on `cosec-control` for `ChangeListener`, are listed with their reason in `DependencyRules`), when
   `cosec-annotations`, `cosec-api`, `cosec-model` or `cosec-engine` resolves anything but the Kotlin standard library
   (`cosec-spi` adds coroutines, `cosec-document` Jackson), when `cosec-runtime` or `cosec-control` resolves Reactor,
   Spring, the Servlet API or a Redis client, or when a project other than `cosec-cosid` and the starter declares or

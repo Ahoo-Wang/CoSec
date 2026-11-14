@@ -59,7 +59,7 @@
       - any-glob-to-any-file: 'test/e2e/**'
 'module: kafka':
   - changed-files:
-      - any-glob-to-any-file: 'backends/kafka/**'
+      - any-glob-to-any-file: 'extensions/kafka/**'
 'module: engine':
   - changed-files:
       - any-glob-to-any-file: ['core/model/**', 'core/engine/**']
