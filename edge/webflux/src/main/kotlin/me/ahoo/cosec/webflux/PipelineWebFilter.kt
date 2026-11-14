@@ -19,9 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.reactor.mono
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.ProblemEncoder
 import me.ahoo.cosec.runtime.RequestGate
@@ -180,7 +178,3 @@ class PipelineWebFilter @InternalCoSecApi constructor(
         const val REACTIVE_AUTHORIZATION_FILTER_ORDER = 1000
     }
 }
-
-/** [AuthorizationChecker.check] for reactive callers (RFC 0006 §7.6): resumes off the caller's I/O thread. */
-fun AuthorizationChecker.checkMono(security: SecurityContext, action: String, resource: String): Mono<Boolean> =
-    mono(Dispatchers.Unconfined + ResumeDispatcher(Dispatchers.Default)) { check(security, action, resource) }

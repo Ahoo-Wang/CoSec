@@ -14,7 +14,7 @@ package me.ahoo.cosec.login.token
 
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.login.Authentication
-import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.TokenVerificationException
@@ -37,7 +37,7 @@ import java.time.Instant
 abstract class AbstractSwitchTenantAuthentication(
     private val tokenVerifier: TokenVerifier,
 ) : Authentication<SwitchTenantCredentials> {
-    override val supportCredentials: Class<SwitchTenantCredentials>
+    override val credentialsType: Class<SwitchTenantCredentials>
         get() = SwitchTenantCredentials::class.java
 
     final override suspend fun authenticate(credentials: SwitchTenantCredentials): TokenSubject {
@@ -115,11 +115,11 @@ class TenantMembership private constructor(
 }
 
 /**
- * Switch Tenant Credentials .
+ * Switch Tenant LoginCredentials .
  *
  * @author ahoo wang
  */
-interface SwitchTenantCredentials : Credentials {
+interface SwitchTenantCredentials : LoginCredentials {
     val targetTenantId: String
 
     /** The context of the permitted request asking to switch: the token the user switches from. */

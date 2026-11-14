@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.login
 
 import io.mockk.coEvery
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -28,14 +31,14 @@ class CompositeAuthenticationTest {
 
     @Test
     fun getSupportCredentials() {
-        compositeAuthentication.supportCredentials.assert().isEqualTo(Credentials::class.java)
+        compositeAuthentication.credentialsType.assert().isEqualTo(LoginCredentials::class.java)
     }
 
     @Test
     fun authenticate() = runTest {
-        val credentials = mockk<Credentials>()
-        val authentication = mockk<Authentication<Credentials>> {
-            every { supportCredentials } returns credentials.javaClass
+        val credentials = mockk<LoginCredentials>()
+        val authentication = mockk<Authentication<LoginCredentials>> {
+            every { credentialsType } returns credentials.javaClass
             coEvery { authenticate(any()) } returns TokenSubject("alice", null)
         }
         authenticationProvider.register(credentials.javaClass, authentication)
@@ -45,6 +48,6 @@ class CompositeAuthenticationTest {
 
     @Test
     fun `credentials no authentication supports are refused`() = runTest {
-        assertThrows<IllegalArgumentException> { compositeAuthentication.authenticate(mockk<Credentials>()) }
+        assertThrows<IllegalArgumentException> { compositeAuthentication.authenticate(mockk<LoginCredentials>()) }
     }
 }

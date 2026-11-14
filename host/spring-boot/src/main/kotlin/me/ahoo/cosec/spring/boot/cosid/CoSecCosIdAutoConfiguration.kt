@@ -11,8 +11,11 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.cosid
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cosid.CosIdIdGenerator
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled

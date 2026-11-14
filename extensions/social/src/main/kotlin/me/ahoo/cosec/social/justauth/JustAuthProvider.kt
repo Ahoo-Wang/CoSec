@@ -11,10 +11,13 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.social.justauth
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.runInterruptible
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.social.SocialAuthenticationException
 import me.ahoo.cosec.social.SocialAuthenticationProvider
 import me.ahoo.cosec.social.SocialAuthorization
@@ -47,7 +50,7 @@ import java.util.Base64
  *
  * @author ahoo wang
  */
-class JustAuthProvider(
+class JustAuthProvider @InternalCoSecApi constructor(
     override val name: String,
     private val authRequest: AuthRequest,
     private val states: SocialStateStore,
@@ -114,9 +117,5 @@ class JustAuthProvider(
             throw SocialAuthenticationException(authResponse.msg ?: authResponse.code.toString())
         }
         return authResponse.data ?: throw SocialAuthenticationException("The [$name] provider returned no user.")
-    }
-
-    fun name(): String {
-        return name
     }
 }

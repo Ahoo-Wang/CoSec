@@ -58,7 +58,7 @@ class SimpleRefreshTokenAuthenticationTest {
             TokenRevocation(RevocationReader.NONE),
             families,
         )
-        refreshTokenAuthentication.supportCredentials.assert().isEqualTo(RefreshTokenCredentials::class.java)
+        refreshTokenAuthentication.credentialsType.assert().isEqualTo(RefreshTokenCredentials::class.java)
         val oldToken: CompositeToken = issue(TokenSubject("alice", null))
 
         val subject = refreshTokenAuthentication.authenticate(credentials(oldToken))

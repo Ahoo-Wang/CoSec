@@ -1,3 +1,7 @@
+public final class me/ahoo/cosec/webflux/AuthorizationCheckers {
+	public static final fun checkMono (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;)Lreactor/core/publisher/Mono;
+}
+
 public final class me/ahoo/cosec/webflux/OrderedCorsWebFilter : org/springframework/web/cors/reactive/CorsWebFilter, org/springframework/core/Ordered {
 	public static final field Companion Lme/ahoo/cosec/webflux/OrderedCorsWebFilter$Companion;
 	public static final field DEFAULT_ORDERED_CORS_WEB_FILTER_ORDER I
@@ -17,10 +21,6 @@ public final class me/ahoo/cosec/webflux/PipelineWebFilter : me/ahoo/cosec/webfl
 }
 
 public final class me/ahoo/cosec/webflux/PipelineWebFilter$Companion {
-}
-
-public final class me/ahoo/cosec/webflux/PipelineWebFilterKt {
-	public static final fun checkMono (Lme/ahoo/cosec/runtime/AuthorizationChecker;Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;)Lreactor/core/publisher/Mono;
 }
 
 public final class me/ahoo/cosec/webflux/ReactiveSecurityContexts {

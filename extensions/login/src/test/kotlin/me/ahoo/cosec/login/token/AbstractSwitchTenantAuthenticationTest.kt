@@ -84,7 +84,7 @@ class AbstractSwitchTenantAuthenticationTest {
 
     @Test
     fun `it supports switch-tenant credentials`() {
-        Switching(emptyMap()).supportCredentials.assert().isEqualTo(SwitchTenantCredentials::class.java)
+        Switching(emptyMap()).credentialsType.assert().isEqualTo(SwitchTenantCredentials::class.java)
     }
 
     /** RC1-23: the new token holds the target tenant's memberships only, never the previous tenant's. */
