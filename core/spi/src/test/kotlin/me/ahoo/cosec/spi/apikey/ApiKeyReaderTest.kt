@@ -82,4 +82,19 @@ class ApiKeyReaderTest {
         now { reader.findByHash("hash") }.assert().isEqualTo(key)
         now { reader.findByHash("other") }.assert().isNull()
     }
+
+    @Test
+    fun inMemoryStoreFindsByHash() {
+        val key = ApiKey(
+            id = "k",
+            principalId = "svc",
+            tenantId = "acme",
+            app = null,
+            roles = null,
+            expiresAt = expiresAt
+        )
+        val store = InMemoryApiKeyStore(mapOf("hash" to key))
+        store.findByHash("hash").assert().isSameAs(key)
+        store.findByHash("other").assert().isNull()
+    }
 }
