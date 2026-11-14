@@ -22,10 +22,10 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenFamilyStore

@@ -22,6 +22,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.requireRequest
+import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.engine.flat.SubjectAttributes
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -33,7 +34,6 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.RequestSecurity
-import me.ahoo.cosec.runtime.document.Actor
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import kotlin.coroutines.cancellation.CancellationException

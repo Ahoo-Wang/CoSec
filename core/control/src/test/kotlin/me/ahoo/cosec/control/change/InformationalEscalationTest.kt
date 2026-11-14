@@ -19,10 +19,10 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.document.Actor
-import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

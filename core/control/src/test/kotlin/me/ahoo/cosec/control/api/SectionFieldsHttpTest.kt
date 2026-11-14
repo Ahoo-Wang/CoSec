@@ -17,8 +17,8 @@ package me.ahoo.cosec.control.api
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.JsonNode

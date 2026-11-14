@@ -21,6 +21,12 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.Catalog
+import me.ahoo.cosec.document.CatalogGroup
+import me.ahoo.cosec.document.CatalogPermission
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Effect
@@ -33,12 +39,6 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
-import me.ahoo.cosec.runtime.document.Actor
-import me.ahoo.cosec.runtime.document.Catalog
-import me.ahoo.cosec.runtime.document.CatalogGroup
-import me.ahoo.cosec.runtime.document.CatalogPermission
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -352,7 +352,7 @@ class ChangesTest {
             me.ahoo.cosec.model.decision.RateLimitSpec(10.0),
         )
         val (kind, owner) = me.ahoo.cosec.control.store.Revisions.ownerOf(ACME)
-        val limited = me.ahoo.cosec.runtime.document.PolicyDocument(
+        val limited = me.ahoo.cosec.document.PolicyDocument(
             kind,
             owner,
             1,

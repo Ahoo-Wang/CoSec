@@ -88,7 +88,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 
 已开启的功能所需的模块会在启动时检查（STA-1）：以下情况应用无法启动，报错信息会给出要添加的制品——Spring MVC 宿主缺少 `cosec-webmvc`；WebFlux 宿主缺少 `cosec-webflux`；Spring Cloud Gateway 宿主缺少 `cosec-gateway`（即使 `cosec.enabled=false`）；`cosec.api-key.store=redis` 缺少 `cosec-cocache`；`cosec.audit.kafka.delivery=required` 缺少 `cosec-kafka`；`cosec.cosid.generator` 缺少 `cosec-cosid`（[故障排查](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。
 
-starter 始终引入 `cosec-runtime`（协程请求 Pipeline、策略文档、快照与令牌校验）、`cosec-spi`（扩展点）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）、`cosec-login`（登录与签发令牌）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐所有已发布模块的版本。
+starter 始终引入 `cosec-runtime`（协程请求 Pipeline、快照与令牌校验）、`cosec-document`（策略文档、路由映射及其格式）、`cosec-spi`（扩展点）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）、`cosec-login`（登录与签发令牌）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐所有已发布模块的版本。
 
 `cosec-testkit` 是测试依赖：它用 JUnit 5 针对你自己的策略文档运行场景，方式与 CoSec 的一致性测试套件相同（[策略测试](../policies/testing.md)）。
 

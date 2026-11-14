@@ -60,7 +60,7 @@
       "guards": [
         "architecture:ScopeConstructionTest#onlyTheResolverConstructsScopes",
         "architecture:ScopeConstructionTest#scopeIsNotADataClass",
-        "runtime:PolicyDocumentCodecTest#a scope is never decoded"
+        "document:PolicyDocumentCodecTest#a scope is never decoded"
       ],
       "pending": null
     },
@@ -101,7 +101,7 @@
       "pending": null,
       "guards": [
         "model:ScopeResolverTest#a reserved space is rejected even for a principal that claims roles in it",
-        "runtime:PolicyDocumentCompilerTest#the platform admin is bound only by the platform, and no binding names a reserved space",
+        "document:PolicyDocumentCompilerTest#the platform admin is bound only by the platform, and no binding names a reserved space",
         "control:ControlAuthorizationTest#resources name one document each"
       ]
     },

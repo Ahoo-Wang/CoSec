@@ -20,12 +20,12 @@ import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.runtime.token.DefaultTokenRevoker
 import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation

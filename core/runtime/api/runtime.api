@@ -21,8 +21,8 @@ public final class me/ahoo/cosec/runtime/Pipeline : me/ahoo/cosec/runtime/Reques
 }
 
 public final class me/ahoo/cosec/runtime/PipelineComponents {
-	public fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/runtime/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/document/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/document/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAttributes ()Lme/ahoo/cosec/runtime/attribute/AttributeProviders;
 	public final fun getAuthenticator ()Lme/ahoo/cosec/spi/authn/Authenticator;
 	public final fun getClock ()Ljava/time/Clock;
@@ -32,7 +32,7 @@ public final class me/ahoo/cosec/runtime/PipelineComponents {
 	public final fun getMembershipProvider ()Lme/ahoo/cosec/spi/membership/MembershipProvider;
 	public final fun getOptions ()Lme/ahoo/cosec/runtime/PipelineOptions;
 	public final fun getRateLimiter ()Lme/ahoo/cosec/spi/ratelimit/RateLimiter;
-	public final fun getRoutes ()Lme/ahoo/cosec/runtime/route/RouteMap;
+	public final fun getRoutes ()Lme/ahoo/cosec/document/route/RouteMap;
 	public final fun getSnapshots ()Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;
 }
 
@@ -239,59 +239,6 @@ public final class me/ahoo/cosec/runtime/authn/UncheckedRevocations {
 
 public final class me/ahoo/cosec/runtime/authn/UncheckedRevocations$Companion {
 	public final fun getDEFAULT_INTERVAL ()Ljava/time/Duration;
-}
-
-public final class me/ahoo/cosec/runtime/document/Actor {
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun component1-Zu1zXv4 ()Ljava/lang/String;
-	public final fun component2-YkQvfWk ()Ljava/lang/String;
-	public final fun copy-xnbzu10 (Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/runtime/document/Actor;
-	public static synthetic fun copy-xnbzu10$default (Lme/ahoo/cosec/runtime/document/Actor;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/document/Actor;
-	public fun equals (Ljava/lang/Object;)Z
-	public final fun getPrincipal-YkQvfWk ()Ljava/lang/String;
-	public final fun getTenant-Zu1zXv4 ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/document/DocumentCompileException : me/ahoo/cosec/model/CoSecException {
-	public final fun getDocument ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/document/PolicyDocument {
-	public synthetic fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;JLjava/time/Instant;Ljava/util/List;Ljava/util/List;Lme/ahoo/cosec/runtime/document/Catalog;Ljava/lang/String;Lme/ahoo/cosec/runtime/document/Provenance;Lme/ahoo/cosec/model/condition/ConditionLimits;Ljava/util/List;Ljava/util/List;Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getBoundary-7sgtQuM ()Ljava/lang/String;
-	public final fun getKind ()Lme/ahoo/cosec/model/decision/DocumentKind;
-	public final fun getOwner ()Ljava/lang/String;
-	public final fun getPublishedAt ()Ljava/time/Instant;
-	public final fun getRevision ()J
-}
-
-public final class me/ahoo/cosec/runtime/document/PolicyDocumentCodec {
-	public static final field INSTANCE Lme/ahoo/cosec/runtime/document/PolicyDocumentCodec;
-	public final fun decode (Lme/ahoo/cosec/model/decision/DocumentKind;Ljava/lang/String;[B)Lme/ahoo/cosec/runtime/document/PolicyDocument;
-}
-
-public final class me/ahoo/cosec/runtime/document/PolicyDocumentCompiler : me/ahoo/cosec/runtime/snapshot/SnapshotCompiler {
-	public static final field Companion Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion;
-	public final fun checkReferences (Lme/ahoo/cosec/runtime/document/PolicyDocument;Lme/ahoo/cosec/runtime/document/PolicyDocument;)V
-	public final fun validate (Lme/ahoo/cosec/runtime/document/PolicyDocument;)V
-}
-
-public final class me/ahoo/cosec/runtime/document/PolicyDocumentCompiler$Companion {
-	public final fun forPlatform (Lme/ahoo/cosec/runtime/document/PolicyDocument;)Lme/ahoo/cosec/runtime/document/PolicyDocumentCompiler;
-}
-
-public final class me/ahoo/cosec/runtime/document/ProvenanceKind : java/lang/Enum {
-	public static final field BOOTSTRAP Lme/ahoo/cosec/runtime/document/ProvenanceKind;
-	public static final field BREAK_GLASS Lme/ahoo/cosec/runtime/document/ProvenanceKind;
-	public static final field EXPIRE Lme/ahoo/cosec/runtime/document/ProvenanceKind;
-	public static final field MIGRATE Lme/ahoo/cosec/runtime/document/ProvenanceKind;
-	public static final field PUBLISH Lme/ahoo/cosec/runtime/document/ProvenanceKind;
-	public static final field ROLLBACK Lme/ahoo/cosec/runtime/document/ProvenanceKind;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/runtime/document/ProvenanceKind;
-	public static fun values ()[Lme/ahoo/cosec/runtime/document/ProvenanceKind;
 }
 
 public abstract interface class me/ahoo/cosec/runtime/event/BridgeContextContributor {
@@ -528,71 +475,6 @@ public final class me/ahoo/cosec/runtime/ratelimit/LocalRateLimiter : me/ahoo/co
 
 public final class me/ahoo/cosec/runtime/ratelimit/LocalRateLimiter$Companion {
 	public final fun getDEFAULT_EXPIRE_AFTER_ACCESS ()Ljava/time/Duration;
-}
-
-public final class me/ahoo/cosec/runtime/route/Route {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
-	public final fun getAction ()Ljava/lang/String;
-	public final fun getMethod ()Ljava/lang/String;
-	public final fun getPath ()Ljava/lang/String;
-	public final fun getResource ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteMap {
-	public static final field Companion Lme/ahoo/cosec/runtime/route/RouteMap$Companion;
-	public final fun getSize ()I
-	public final fun isEmpty ()Z
-	public final fun resolve (Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/runtime/route/RouteResolution;
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteMap$Companion {
-	public final fun getEMPTY ()Lme/ahoo/cosec/runtime/route/RouteMap;
-	public final fun of (Ljava/util/List;)Lme/ahoo/cosec/runtime/route/RouteMap;
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteMap$Located {
-	public fun <init> (Lme/ahoo/cosec/runtime/route/Route;Ljava/lang/String;)V
-	public final fun getLocation ()Ljava/lang/String;
-	public final fun getRoute ()Lme/ahoo/cosec/runtime/route/Route;
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteMapCodec {
-	public static final field INSTANCE Lme/ahoo/cosec/runtime/route/RouteMapCodec;
-	public final fun decode ([BLjava/lang/String;)Lme/ahoo/cosec/runtime/route/RouteMapDocument;
-	public final fun encode (Lme/ahoo/cosec/runtime/route/RouteMapDocument;)[B
-	public final fun load (Ljava/util/List;)Lme/ahoo/cosec/runtime/route/RouteMap;
-	public final fun located (Ljava/util/List;)Ljava/util/List;
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteMapDocument {
-	public fun <init> (Ljava/lang/String;Ljava/util/List;)V
-	public final fun getRoutes ()Ljava/util/List;
-	public final fun getService ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteMapException : me/ahoo/cosec/model/CoSecException {
-	public fun <init> (Ljava/lang/String;Ljava/lang/Throwable;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/Throwable;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-}
-
-public abstract interface class me/ahoo/cosec/runtime/route/RouteResolution {
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteResolution$Invalid : me/ahoo/cosec/runtime/route/RouteResolution {
-	public final fun getReason ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteResolution$Mapped : me/ahoo/cosec/runtime/route/RouteResolution {
-	public final fun getAction ()Lme/ahoo/cosec/model/Action;
-	public final fun getResource ()Lme/ahoo/cosec/model/Resource;
-	public final fun getRoute ()Lme/ahoo/cosec/runtime/route/Route;
-}
-
-public final class me/ahoo/cosec/runtime/route/RouteResolution$Unmapped : me/ahoo/cosec/runtime/route/RouteResolution {
-	public static final field INSTANCE Lme/ahoo/cosec/runtime/route/RouteResolution$Unmapped;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
 }
 
 public abstract interface class me/ahoo/cosec/runtime/shadow/CandidateStore {

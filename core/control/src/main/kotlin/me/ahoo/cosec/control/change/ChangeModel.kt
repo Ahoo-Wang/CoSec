@@ -17,6 +17,11 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.Catalog
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.RoleDefinition
 import me.ahoo.cosec.engine.flat.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -26,11 +31,6 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionLimits
-import me.ahoo.cosec.runtime.document.Actor
-import me.ahoo.cosec.runtime.document.Catalog
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.document.RoleDefinition
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant

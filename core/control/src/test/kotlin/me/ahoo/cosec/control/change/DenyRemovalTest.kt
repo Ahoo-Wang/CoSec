@@ -21,6 +21,13 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
+import me.ahoo.cosec.document.Catalog
+import me.ahoo.cosec.document.CatalogGroup
+import me.ahoo.cosec.document.CatalogPermission
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.RoleDefinition
+import me.ahoo.cosec.document.RolePermissions
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -31,13 +38,6 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.document.Catalog
-import me.ahoo.cosec.runtime.document.CatalogGroup
-import me.ahoo.cosec.runtime.document.CatalogPermission
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.PolicyDocument
-import me.ahoo.cosec.runtime.document.RoleDefinition
-import me.ahoo.cosec.runtime.document.RolePermissions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

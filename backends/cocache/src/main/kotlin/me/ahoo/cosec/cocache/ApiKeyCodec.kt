@@ -16,7 +16,7 @@
 package me.ahoo.cosec.cocache
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.apikey.ApiKey
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode

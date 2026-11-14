@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -29,7 +30,6 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 

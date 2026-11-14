@@ -39,14 +39,20 @@ import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 
 /**
- * Reactor stays at the adapter bridges (RFC 0006 §5.1, Q6): the code of `runtime/`, `engine/` and `model/` never
- * references `reactor.*`, and no data-plane SPI signature carries a Reactor type. `runtime/` also stays out of its host
- * (Spring, the Servlet API, the coroutine bridges) and never uses `runCatching`. SPI implementations in other
- * modules may still await a Reactor-based client internally. A classpath check follows once cosec-core no
- * longer brings Reactor.
+ * Reactor stays at the adapter bridges (RFC 0006 §5.1, Q6): the code of `runtime/`, `document/`, `engine/` and
+ * `model/` never references `reactor.*`, and no data-plane SPI signature carries a Reactor type. `runtime/` and
+ * `document/` also stay out of their host (Spring, the Servlet API, the coroutine bridges) and never use `runCatching`.
+ * SPI implementations in other modules may still await a Reactor-based client internally. A classpath check follows
+ * once cosec-core no longer brings Reactor.
  */
 @AnalyzeClasses(
-    packages = ["me.ahoo.cosec.runtime", "me.ahoo.cosec.engine", "me.ahoo.cosec.model", "me.ahoo.cosec.spi"],
+    packages = [
+        "me.ahoo.cosec.runtime",
+        "me.ahoo.cosec.document",
+        "me.ahoo.cosec.engine",
+        "me.ahoo.cosec.model",
+        "me.ahoo.cosec.spi",
+    ],
     importOptions = [DoNotIncludeTests::class],
 )
 class RuntimeBoundaryTest {
@@ -62,7 +68,7 @@ class RuntimeBoundaryTest {
      */
     @ArchTest
     val noHostTypesInRuntime: ArchRule = noClasses()
-        .that().resideInAPackage("$RUNTIME..")
+        .that().resideInAnyPackage(*RUNTIME_MODULES)
         .should().dependOnClassesThat().resideInAnyPackage(*HOST_PACKAGES)
         .because("adapters bridge to their host; runtime/ only sees HttpFacts and its own SPIs (RFC 0006 §5.1, §7.3)")
 
@@ -72,7 +78,7 @@ class RuntimeBoundaryTest {
      */
     @ArchTest
     val noBridgeOrUnscopedCoroutinesInRuntime: ArchRule = noClasses()
-        .that().resideInAPackage("$RUNTIME..")
+        .that().resideInAnyPackage(*RUNTIME_MODULES)
         .should().callMethodWhere(
             target(owner(name("kotlinx.coroutines.BuildersKt")))
                 .and(target(DescribedPredicate.describe("runBlocking") { it.name.startsWith("runBlocking") })),
@@ -102,7 +108,7 @@ class RuntimeBoundaryTest {
      */
     @ArchTest
     val noRunCatching: ArchRule = noClasses()
-        .that().resideInAPackage("$RUNTIME..")
+        .that().resideInAnyPackage(*RUNTIME_MODULES)
         .should().callMethodWhere(target(name("createFailure")).and(target(owner(name("kotlin.ResultKt")))))
         .because("runCatching swallows CancellationException (RFC 0006 §7.4)")
 
@@ -122,7 +128,15 @@ class RuntimeBoundaryTest {
         const val RUNTIME = "me.ahoo.cosec.runtime"
 
         fun JavaClass.isIn(root: String) = packageName == root || packageName.startsWith("$root.")
-        val PIPELINE_PACKAGES = arrayOf("me.ahoo.cosec.runtime..", "me.ahoo.cosec.engine..", "me.ahoo.cosec.model..")
+        val PIPELINE_PACKAGES = arrayOf(
+            "me.ahoo.cosec.runtime..",
+            "me.ahoo.cosec.document..",
+            "me.ahoo.cosec.engine..",
+            "me.ahoo.cosec.model..",
+        )
+
+        /** `cosec-runtime` and the documents it was split from (RFC 0013 §3): the same rules hold for both. */
+        val RUNTIME_MODULES = arrayOf("$RUNTIME..", "me.ahoo.cosec.document..")
         val HOST_PACKAGES = arrayOf("org.springframework..", "jakarta.servlet..", "kotlinx.coroutines.reactor..")
 
         val dataPlaneSpi: DescribedPredicate<JavaClass> = belongToAnyOf(

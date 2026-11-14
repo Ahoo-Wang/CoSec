@@ -15,7 +15,10 @@
 // cosec-core still brings Reactor onto the classpath and the Redis store lives in cosec-cocache, so ControlBoundaryTest
 // guards what the code references, not the classpath (RFC 0007 §3 M12, Q20).
 dependencies {
+    // Every write is itself authorized through the pipeline (AuthorizationChecker).
     api(project(":runtime"))
+    // The documents it validates, compiles and publishes (RFC 0013 §3).
+    api(project(":document"))
     // The control API and the change records are JSON (RFC 0007 §9); Jackson stays internal (RFC 0011 D3).
     implementation("tools.jackson.core:jackson-databind")
 }

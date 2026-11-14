@@ -21,17 +21,17 @@ import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.PolicyDocument
-import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
-import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 

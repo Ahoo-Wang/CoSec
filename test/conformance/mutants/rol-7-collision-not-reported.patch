@@ -1,11 +1,11 @@
 # Rule: ROL-7
 # Mutant: a derived binding id may equal a hand-written one
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.document.RoleExpansionTest :conformance:test
+# Tests: :document:test --tests me.ahoo.cosec.document.RoleExpansionTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
 index cf613126..01d34633 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt
 @@ -298,7 +298,7 @@ object RoleExpansion {
          errors: MutableList<CompileError>,
      ) {

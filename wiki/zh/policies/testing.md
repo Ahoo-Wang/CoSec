@@ -284,12 +284,12 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 
 ## CI 中的策略 {#policies-in-ci}
 
-用 [JSON Schema](./language.md#json-schema) 校验文档文件，然后用 `cosec-runtime` 中控制面和每个实例所用的读取器和编译器编译它们：
+用 [JSON Schema](./language.md#json-schema) 校验文档文件，然后用 `cosec-document` 中控制面和每个实例所用的读取器和编译器编译它们：
 
 ```kotlin
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.PolicyDocumentCompiler
 import java.io.File
 
 val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", File("platform.json").readBytes())

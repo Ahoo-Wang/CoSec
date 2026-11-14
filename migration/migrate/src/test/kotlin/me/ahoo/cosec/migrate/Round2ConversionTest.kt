@@ -16,6 +16,7 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.migrate.Fixtures7x.source
@@ -26,7 +27,6 @@ import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.AttributeType
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

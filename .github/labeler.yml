@@ -63,6 +63,9 @@
 'module: engine':
   - changed-files:
       - any-glob-to-any-file: ['core/model/**', 'core/engine/**']
+'module: document':
+  - changed-files:
+      - any-glob-to-any-file: 'core/document/**'
 'module: runtime':
   - changed-files:
       - any-glob-to-any-file: 'core/runtime/**'

@@ -16,8 +16,8 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.route.RouteMap
-import me.ahoo.cosec.runtime.route.RouteMapException
+import me.ahoo.cosec.document.route.RouteMap
+import me.ahoo.cosec.document.route.RouteMapException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows

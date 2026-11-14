@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.snapshot
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
@@ -25,7 +26,6 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.runtime.document.DocumentCompileException
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.StoredCandidate

@@ -17,6 +17,10 @@ package me.ahoo.cosec.control.store
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -29,10 +33,6 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.document.Actor
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.PolicyDocument
-import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Instant

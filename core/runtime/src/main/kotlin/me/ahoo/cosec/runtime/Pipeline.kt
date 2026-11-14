@@ -25,6 +25,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.document.route.RouteResolution
 import me.ahoo.cosec.engine.flat.AttributePlan
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -62,7 +63,6 @@ import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
-import me.ahoo.cosec.runtime.route.RouteResolution
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal

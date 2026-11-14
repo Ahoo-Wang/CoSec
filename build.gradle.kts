@@ -57,6 +57,9 @@ val pureProjects = setOf(
 // The ports (RFC 0011 §3): what a third party implements, so no logging facade forced on it.
 val spiProject = project(":spi")
 
+// The documents and their formats (RFC 0013 §3): they log nothing, so neither does what only reads a document.
+val documentProject = project(":document")
+
 // The modules whose public ABI is kept in a dump (RFC 0011 D4). cosec-migrate is a command-line tool: its contract is
 // the command line, and its classes are not a library API.
 val abiProjects = libraryProjects - project(":migrate")
@@ -121,7 +124,7 @@ configure(libraryProjects) {
             testImplementation(platform(dependenciesProject))
         } else {
             api(platform(dependenciesProject))
-            if (this@configure != spiProject) {
+            if (this@configure != spiProject && this@configure != documentProject) {
                 implementation("org.slf4j:slf4j-api")
             }
         }

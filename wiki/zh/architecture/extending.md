@@ -32,7 +32,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
 | `ChangeListener` | `cosec-control`，`control.audit` | 观察或把关控制面变更。 | 所有 bean，使用 `cosec-control` 时 |
 | `ControlStore` | `cosec-control`，`control.store` | 把控制面的记录保存在 Redis 以外的地方。实验性的，连同它的记录和影子窗口端口。 | 一个 bean，使用 `cosec-control` 时 |
-| 路由映射 | `cosec-runtime`，`runtime.route` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
+| 路由映射 | `cosec-document`，`document.route` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
 
 包名都在 `me.ahoo.cosec` 之下。签名只需要模型和契约的端口放在 `cosec-spi`，连同它们的值类型和内存实现（`InMemorySnapshotDocumentStore`、`InMemoryMembershipProvider`、`InMemoryApiKeyStore`）；它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，所以实现其中一个端口不需要 CoSec 的其他东西。签名带有某一层自身类型的端口留在那一层：`DecisionListener` 接收 runtime 的 `DecisionEvent`，影子窗口端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`）接收 runtime 的候选与报告，`ControlStore` 和 `ChangeListener` 接收控制面的记录与事件。
 
@@ -353,8 +353,8 @@ starter 注册 `MdcContextContributor`（SLF4J MDC），使用 `cosec-openteleme
 - starter 在启动时加载 `cosec.authorization.routes.location` 列出的路由映射（逗号分隔）。映射缺失或无效、映射没有路由，或者有两个路由可能匹配同一个请求，都会让启动失败。未设置时服务不加载路由映射，但 `classpath:cosec-routes.json` 存在时启动失败，直到该属性指明它或设为空。网关宿主不加载路由映射。
 - 使用 `cosec-openapi`、springdoc 和 Spring Boot Actuator 时，`cosecServiceGenerator` 端点从 springdoc 扫描到的 OpenAPI 文档生成两份文档：`routes` 是作为 `cosec-routes.json` 随服务发布的路由映射，`app` 是通过控制面发布的应用文档（目录与权限策略）。
 
-文件按严格模式读取：未知或缺失的字段都会让它失败（[`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMapCodec.kt)）。
+文件按严格模式读取：未知或缺失的字段都会让它失败（[`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt)）。
 
-在代码中由 `RouteMapCodec`（`me.ahoo.cosec.runtime.route`）读取：`load(listOf(location to bytes))` 给出管道使用的 `RouteMap`，检查与启动时相同；`decode(bytes, location)` 给出一个 `RouteMapDocument`。`RouteMap.of(routes)` 用 `RouteMap.Located` 路由构建映射，`resolve(method, path)` 给出管道会为请求给出的结果：`Mapped`（路由及其动作和资源）、`Unmapped` 或 `Invalid`（`400`）。测试你自己的路由映射时这样加载它们，或通过 `PipelineFixture(routes = …)`。应用文档和目录见[角色权限](../policies/role-permissions.md)。
+在代码中由 `RouteMapCodec`（`me.ahoo.cosec.document.route`）读取：`load(listOf(location to bytes))` 给出管道使用的 `RouteMap`，检查与启动时相同；`decode(bytes, location)` 给出一个 `RouteMapDocument`。`RouteMap.of(routes)` 用 `RouteMap.Located` 路由构建映射，`resolve(method, path)` 给出管道会为请求给出的结果：`Mapped`（路由及其动作和资源）、`Unmapped` 或 `Invalid`（`400`）。测试你自己的路由映射时这样加载它们，或通过 `PipelineFixture(routes = …)`。应用文档和目录见[角色权限](../policies/role-permissions.md)。
 
 **下一步：** 如何提出并合入修改，见 [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md)；修改 CoSec 的构建规则与不变量，见 [`AGENTS.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/AGENTS.md)。

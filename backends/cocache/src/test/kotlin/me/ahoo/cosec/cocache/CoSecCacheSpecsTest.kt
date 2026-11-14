@@ -17,8 +17,8 @@ package me.ahoo.cosec.cocache
 
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Memberships
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

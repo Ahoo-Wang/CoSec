@@ -25,8 +25,8 @@ import me.ahoo.cosec.control.store.StoreFixtures.binding
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.policy
 import me.ahoo.cosec.control.store.StoreFixtures.publication
+import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert

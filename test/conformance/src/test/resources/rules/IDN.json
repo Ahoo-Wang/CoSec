@@ -118,7 +118,7 @@
         "runtime:TokenAuthenticatorTest#aTokenClaimingAnIdWithAnUnpairedSurrogateIsInvalid",
         "runtime:UnpairedSurrogatePipelineTest#an authenticator whose principal holds an unpaired surrogate is unavailable",
         "runtime:UnpairedSurrogatePipelineTest#a membership provider whose answer holds an unpaired surrogate is unavailable",
-        "runtime:IdentityCodecTest#an id with an unpaired surrogate is refused as malformed",
+        "document:IdentityCodecTest#an id with an unpaired surrogate is refused as malformed",
         "jwt:JwtTokenVerifierTest#aTokenClaimingAnIdWithAnUnpairedSurrogateIsInvalid",
         "jwt:JwtTokenConverterTest#anIdWithAnUnpairedSurrogateIsNotIssued",
         "control:ControlHttpTest#a request holding an unpaired surrogate is a 400, wherever it holds it",

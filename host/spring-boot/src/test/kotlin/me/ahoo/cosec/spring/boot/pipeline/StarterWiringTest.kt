@@ -39,6 +39,8 @@ import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.change.ChangeAuthority
+import me.ahoo.cosec.document.DocumentCompileException
+import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.login.token.TokenConverter
@@ -55,8 +57,6 @@ import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind
 import me.ahoo.cosec.runtime.attribute.BlacklistSource
 import me.ahoo.cosec.runtime.attribute.InMemoryBlacklistSource
-import me.ahoo.cosec.runtime.document.DocumentCompileException
-import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners

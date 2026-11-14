@@ -16,7 +16,7 @@
 package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.json.CoSecJson
 import org.springframework.boot.context.properties.source.ConfigurationPropertyName
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource

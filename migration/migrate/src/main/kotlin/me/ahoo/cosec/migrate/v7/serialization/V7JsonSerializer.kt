@@ -16,7 +16,7 @@
 package me.ahoo.cosec.migrate.v7.serialization
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.json.CoSecJson
 
 /** [CoSecJson.mapper] that also reads and writes the 7.x policy, app permission and rate limit formats. */
 internal val V7JsonSerializer = CoSecJson.mapper.rebuild().addModule(CoSecModule()).build()

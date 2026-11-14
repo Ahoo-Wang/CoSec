@@ -18,13 +18,13 @@ package me.ahoo.cosec.cocache
 import me.ahoo.cocache.api.Cache
 import me.ahoo.cocache.api.Codec
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.json.CoSecJson
 import tools.jackson.databind.JsonNode
 import java.util.Collections
 

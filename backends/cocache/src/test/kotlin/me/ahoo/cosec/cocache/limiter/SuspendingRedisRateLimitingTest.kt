@@ -36,7 +36,7 @@ class SuspendingRedisRateLimitingTest {
         factory.destroy()
     }
 
-    private val platform = me.ahoo.cosec.runtime.document.PolicyDocumentCompiler().compile(
+    private val platform = me.ahoo.cosec.document.PolicyDocumentCompiler().compile(
         me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform,
         me.ahoo.cosec.spi.snapshot.SnapshotDocument(
             2,

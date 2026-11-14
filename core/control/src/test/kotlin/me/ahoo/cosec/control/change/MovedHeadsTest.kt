@@ -57,7 +57,7 @@ class MovedHeadsTest {
         operations = emptyList(),
         author = ALICE,
         note = "",
-        kind = me.ahoo.cosec.runtime.document.ProvenanceKind.PUBLISH,
+        kind = me.ahoo.cosec.document.ProvenanceKind.PUBLISH,
         state = ChangeState.PUBLISHED,
         findings = emptyList(),
         candidate = null,

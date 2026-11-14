@@ -104,6 +104,16 @@ class DependencyRulesTest {
     }
 
     @Test
+    fun `the documents resolve the engine, the ports and Jackson only`() {
+        val inner = setOf("annotations", "api", "model", "engine", "spi", "document")
+        val violations = modules("document", "resolved").filterNot { it in DependencyRules.DOCUMENT_LIBRARIES } +
+            resolvedProjects("document").filterNot { it in inner }.map { "project $it" }
+        modules("document", "resolved").assert().describedAs("document resolves no Jackson: the rule checks nothing")
+            .contains("tools.jackson.core:jackson-databind")
+        violations.assert().isEmpty()
+    }
+
+    @Test
     fun `runtime and control never have Reactor, Spring, the Servlet API or a Redis client`() {
         val violations = listOf("runtime", "control").flatMap { project ->
             modules(project, "resolved", "runtimeClasspath")

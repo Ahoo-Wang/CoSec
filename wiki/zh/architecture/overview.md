@@ -18,7 +18,7 @@ description: "CoSec 8.0 的内部构造：模块及其依赖规则、请求 Pipe
 
 ## 模块分层 {#module-layering}
 
-模块按分组目录存放：`api/`（annotations、api）、`core/`（model、engine、spi、runtime、control）、`backends/`（cocache、kafka）、`edge/`（webflux、webmvc、gateway、openapi）、`extensions/`（jwt、social、login、ip2region、micrometer、opentelemetry、cosid）、`host/`（spring-boot）、`migration/`、`test/`、`bom/` 和 `platform/`（gateway-server）。Gradle 项目以其目录命名（`:engine`、`:spring-boot`），制品保留 `cosec-` 前缀。
+模块按分组目录存放：`api/`（annotations、api）、`core/`（model、engine、spi、document、runtime、control）、`backends/`（cocache、kafka）、`edge/`（webflux、webmvc、gateway、openapi）、`extensions/`（jwt、social、login、ip2region、micrometer、opentelemetry、cosid）、`host/`（spring-boot）、`migration/`、`test/`、`bom/` 和 `platform/`（gateway-server）。Gradle 项目以其目录命名（`:engine`、`:spring-boot`），制品保留 `cosec-` 前缀。
 
 ```mermaid
 flowchart BT
@@ -27,14 +27,15 @@ flowchart BT
     model[cosec-model]
     engine[cosec-engine] --> model
     spi[cosec-spi] --> model & api
-    runtime[cosec-runtime] --> engine & spi & annotations
-    control[cosec-control] --> runtime
+    document[cosec-document] --> engine & spi
+    runtime[cosec-runtime] --> document & engine & spi & annotations
+    control[cosec-control] --> runtime & document
     cocache[cosec-cocache] --> spi
     kafka[cosec-kafka] --> spi & runtime
     login[cosec-login] --> runtime
     jwt[cosec-jwt] --> login
     social[cosec-social] --> login
-    openapi[cosec-openapi] --> runtime
+    openapi[cosec-openapi] --> document
     listeners[cosec-opentelemetry<br>cosec-micrometer<br>cosec-ip2region] --> runtime
     cosid[cosec-cosid] --> spi
     webflux[cosec-webflux] --> runtime
@@ -42,7 +43,7 @@ flowchart BT
     gateway[cosec-gateway] --> webflux
     starter[cosec-spring-boot] --> runtime & login & jwt
     starter -. on the classpath .-> webflux & webmvc & gateway & cocache & control & kafka & social & listeners & openapi & cosid
-    migrate[cosec-migrate] --> cocache & control
+    migrate[cosec-migrate] --> cocache & control & document
     testkit[cosec-testkit] --> runtime
     server[cosec-gateway-server] --> starter
 ```
@@ -53,7 +54,8 @@ flowchart BT
 - **`cosec-api`**（目录 `api/api/`）容纳应用编译时依赖的契约：`CoSecPrincipal`、`CompositeToken`、`SecurityContext` 和 `AuditEvent`。它只依赖 Kotlin 标准库。修改它就是破坏性变更。
 - **`cosec-annotations`**（目录 `api/annotations/`）容纳稳定性标记（[稳定性等级](./extending.md#stability-levels)）。`@InternalCoSecApi` 是一个错误级别的 opt-in 标记：带有它的声明之所以公开，只是为了让 CoSec 自己的模块能访问，不作兼容性承诺。应用不 opt in；opt-in 出现在 CoSec 自己的 Kotlin 源码之外时，`SourceRulesTest` 失败。`@ExperimentalCoSecApi`（警告级别的 opt-in）标记次版本仍可能改变的公共 API，`@CoSecSpi` 标记应用要实现的接口。
 - **`cosec-spi`**（目录 `core/spi/`）在 `me.ahoo.cosec.spi.*` 下容纳请求或存储会调用的端口，以及它们的值类型和内存实现：快照存储（`SnapshotDocumentStore`）、成员关系、令牌校验与吊销（`TokenVerifier`、`RevocationReader`、`TokenStore`、`TokenRevoker`）、API key、限流器、属性提供者、认证器、转发的身份、审计 sink 和 id 生成器（`IdGenerator`，及其默认实现 `RandomIdGenerator`）。它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，第三方只需依赖它就能实现一个端口。签名需要某一层类型的端口留在那一层：`DecisionListener`、`RequestGate` 和影子窗口端口在 `cosec-runtime`；`ControlStore` 和 `ChangeListener` 在 `cosec-control`（[扩展 CoSec](./extending.md)）。
-- **`cosec-runtime`**（目录 `core/runtime/`）是数据面：协程 `Pipeline`、`StatusMapping`、`AuthorizationChecker`，快照文档及其编解码器、编译器和格式描述符（由它们生成 `schema/*.schema.json`），`SnapshotSource`，路由映射，令牌校验，内置认证器，以及写日志的审计 sink。它唯一的 Jackson mapper `CoSecJson` 是内部 API（`@InternalCoSecApi`），`api/` 与 `core/` 的公共签名中不出现 Jackson 类型（`JacksonSignatureTest`）。协程只留在本模块和适配器中，Reactor 只出现在适配器的桥接处：当 `runtime/`、`engine/` 或 `model/` 中的代码引用 `reactor.*`，当数据面 SPI 的签名带有 Reactor 类型，当 `runtime/` 引用 Spring、Servlet API 或协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时，`RuntimeBoundaryTest`（ArchUnit）失败。
+- **`cosec-document`**（目录 `core/document/`，包 `me.ahoo.cosec.document`）容纳 CoSec 存储与交换的格式：平台、应用和租户文档及其编解码器（`PolicyDocumentCodec`）和编译器（`PolicyDocumentCompiler`，实现 `cosec-spi` 的 `SnapshotCompiler` 端口），`RoleExpansion`，生成 `schema/*.schema.json` 的格式描述符（`document.format`），路由映射（`document.route`），转发的 `CoSec-Identity` 头的编解码器（`document.identity`），以及唯一的 Jackson mapper `CoSecJson`（`document.json`，内部 API，`@InternalCoSecApi`）。它只依赖 `cosec-engine`、`cosec-spi` 和 Jackson，所以读写文档的模块（例如 `cosec-openapi`）不会带上请求路径。`api/` 与 `core/` 的公共签名中不出现 Jackson 类型（`JacksonSignatureTest`）。
+- **`cosec-runtime`**（目录 `core/runtime/`）是数据面：协程 `Pipeline`、`StatusMapping`、`AuthorizationChecker`，`SnapshotSource`，令牌校验，内置认证器，以及写日志的审计 sink，它们建立在 `cosec-document` 的文档之上。协程只留在本模块和适配器中，Reactor 只出现在适配器的桥接处：当 `runtime/`、`document/`、`engine/` 或 `model/` 中的代码引用 `reactor.*`，当数据面 SPI 的签名带有 Reactor 类型，当 `runtime/` 或 `document/` 引用 Spring、Servlet API 或协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时，`RuntimeBoundaryTest`（ArchUnit）失败。
 - **`cosec-control`**（目录 `core/control/`）是控制面：修订、变更请求、影子窗口、审批、break-glass、模拟与分析。它是一个由宿主装配的库。`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类，当其中任何一个位于 `me.ahoo.cosec.control` 之外、引用 Spring、`reactor.*`、协程或 Reactive Streams 桥接、Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。
 - **其余每个库模块只适配一种技术**：一种 Web 栈（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`），通过 CoCache 使用 Redis（`cosec-cocache`：快照存储、控制面存储、吊销、限流器、影子报告），Kafka（`cosec-kafka`），登录与签发令牌（`cosec-login`），JWT（`cosec-jwt`），OAuth（`cosec-social`），OpenAPI，CosId 5 的 id（`cosec-cosid`），或决策的观察者（`cosec-opentelemetry`、`cosec-micrometer`、`cosec-ip2region`）。适配器从不做决策，只做翻译。
 - **`cosec-spring-boot`**（目录 `host/spring-boot/`）负责装配。它引入 `cosec-runtime`、`cosec-login` 和 `cosec-jwt`；其他每个模块在 [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts) 中都是 `compileOnly`，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用添加了该模块才会生效。已开启的功能所需的模块会在启动时检查（STA-1，[`CoSecModuleCheckAutoConfiguration`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt)）：否则漏加的适配器会让 Web 宿主没有过滤器，所以启动失败并给出制品名。各模块及其所需依赖列在[简介](../guide/introduction.md#modules)中。
@@ -62,8 +64,8 @@ flowchart BT
 
 `architecture`（目录 `test/architecture/`）持有扫描多个模块的结构规则（RFC 0011 §5）：
 
-- `DependencyRulesTest` 读取每个项目声明的和解析出的 main 依赖（由根构建的 `architectureFacts` 任务写出），当声明的依赖指向外层（经评审的例外，例如 `cosec-kafka` 为实现 `DecisionListener` 依赖 `cosec-runtime`，连同理由列在 `DependencyRules` 中），当 `cosec-annotations`、`cosec-api`、`cosec-model` 或 `cosec-engine` 解析出 Kotlin 标准库以外的依赖（`cosec-spi` 另加协程），当 `cosec-runtime`、`cosec-control` 解析出 Reactor、Spring、Servlet API 或 Redis 客户端，或当 `cosec-cosid` 和 starter 以外的项目声明或解析出 CosId、或其他构建脚本提到 CosId（包括导入 CosId 的 BOM）时失败：CoSec 自己生成 id（`IdGenerator`），因此应用可以使用任意版本的 CosId。
-- `SourceRulesTest` 扫描编译出的类：Reactor 只出现在 edge 和 host（以及 `cosec-cocache`，挂起端口要等待它的响应式 Redis 客户端）；`api/` 与 `core/` 中没有 Spring、Servlet API 或 Redis 客户端；backends 与 extensions 只使用自己那部分 Spring 技术；backends 只通过列出的端口和 `CoSecJson` 进入 `cosec-runtime` 与 `cosec-control`；只有 `cosec-cosid` 和 starter 的源码提到 CosId 的包；一个包只属于一个模块；只有 CoSec 自己的源码 opt in 内部 API。
+- `DependencyRulesTest` 读取每个项目声明的和解析出的 main 依赖（由根构建的 `architectureFacts` 任务写出），当声明的依赖指向外层（经评审的例外，例如 `cosec-kafka` 为实现 `DecisionListener` 依赖 `cosec-runtime`，连同理由列在 `DependencyRules` 中），当 `cosec-annotations`、`cosec-api`、`cosec-model` 或 `cosec-engine` 解析出 Kotlin 标准库以外的依赖（`cosec-spi` 另加协程，`cosec-document` 另加 Jackson），当 `cosec-runtime`、`cosec-control` 解析出 Reactor、Spring、Servlet API 或 Redis 客户端，或当 `cosec-cosid` 和 starter 以外的项目声明或解析出 CosId、或其他构建脚本提到 CosId（包括导入 CosId 的 BOM）时失败：CoSec 自己生成 id（`IdGenerator`），因此应用可以使用任意版本的 CosId。
+- `SourceRulesTest` 扫描编译出的类：Reactor 只出现在 edge 和 host（以及 `cosec-cocache`，挂起端口要等待它的响应式 Redis 客户端）；`api/` 与 `core/` 中没有 Spring、Servlet API 或 Redis 客户端；backends 与 extensions 只使用自己那部分 Spring 技术；backends 只通过列出的端口进入 `cosec-runtime` 与 `cosec-control`；只有 `cosec-cosid` 和 starter 的源码提到 CosId 的包；一个包只属于一个模块；只有 CoSec 自己的源码 opt in 内部 API。
 - `JacksonSignatureTest`（`api/` 与 `core/` 的公共签名中没有 Jackson 类型；`cosec-cocache` 在内部以响应式方式读取 Redis，但其公共签名中没有 Reactor 类型），上面的纯净性与边界测试，单一决策路径与令牌规则，项目清单（`ProjectListTest`）和版本目录。
 - `ApiVariantTest`：应用编译依赖某个库模块时拿到的 Gradle API 变体（usage `java-api`）必须带上公共类所继承或实现的类型所在的 CoSec 模块，以及公共签名中出现的 Jackson。模块自己的测试看到的是实现类路径，发现不了这一点。
 - `SpiMarkerTest`：`cosec-spi` 中应用能够实现的每个公共接口，以及[扩展 CoSec](./extending.md#extension-points) 列出的每个扩展点，都带有 `@CoSecSpi`，且这个标记不出现在其他地方。
@@ -157,7 +159,7 @@ sequenceDiagram
 
 策略以**快照文档**的形式到达引擎，每个键一个文档：平台文档、每个应用一个文档、每个租户一个文档。它们以 JSON（schema 2）存储，每个修订编译一次，以不可变的编译结果保存在内存中。视图只是对其中三个文档的引用，所以一次求值总是看到每个文档的同一个修订（`SNP-1`，由 `SnapshotConsistencyPropertyTest` 守护）。
 
-文档可以用简写形式写角色和权限（[角色权限](../policies/role-permissions.md#roles)）。存储时保持简写，由 [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt) 展开成普通的策略和绑定：编译、授出分析、引用索引和差异都读取展开结果，所以决定不依赖简写形式（`ROL-1`、`ROL-2`）。
+文档可以用简写形式写角色和权限（[角色权限](../policies/role-permissions.md#roles)）。存储时保持简写，由 [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt) 展开成普通的策略和绑定：编译、授出分析、引用索引和差异都读取展开结果，所以决定不依赖简写形式（`ROL-1`、`ROL-2`）。
 
 [`SnapshotSource`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt) 持有它们：
 

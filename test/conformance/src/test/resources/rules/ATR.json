@@ -32,7 +32,7 @@
       "level": "pipeline",
       "guards": [
         "engine:ExternalAttributesTest",
-        "runtime:ExternalAttributeDocumentTest"
+        "document:ExternalAttributeDocumentTest"
       ],
       "pending": null,
       "superseded": "ATR-6"
@@ -43,7 +43,7 @@
       "statement": "A policy that reads an external attribute no registered AttributeProvider declares does not compile.",
       "level": "pipeline",
       "guards": [
-        "runtime:ExternalAttributeDocumentTest"
+        "document:ExternalAttributeDocumentTest"
       ],
       "pending": null
     },
@@ -64,7 +64,7 @@
       "level": "pipeline",
       "guards": [
         "engine:ExternalAttributesTest",
-        "runtime:ExternalAttributeDocumentTest"
+        "document:ExternalAttributeDocumentTest"
       ],
       "pending": null
     },

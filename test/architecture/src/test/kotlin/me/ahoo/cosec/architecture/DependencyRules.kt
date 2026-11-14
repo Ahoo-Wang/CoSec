@@ -20,7 +20,7 @@ package me.ahoo.cosec.architecture
  */
 object DependencyRules {
     private val PURE = setOf("annotations", "api")
-    private val CORE = PURE + setOf("model", "engine", "spi", "runtime", "control")
+    private val CORE = PURE + setOf("model", "engine", "spi", "document", "runtime", "control")
 
     /** The project edges each project may declare; a project not listed (host, migration, test) may use any library project. */
     val ALLOWED: Map<String, Set<String>> = mapOf(
@@ -29,7 +29,9 @@ object DependencyRules {
         "model" to setOf("api", "annotations"),
         "engine" to setOf("model", "api"),
         "spi" to setOf("model", "api", "annotations"),
-        "runtime" to setOf("engine", "spi", "model", "api", "annotations"),
+        // The documents and their formats (RFC 0013 §3): what reads a document does not need the request path.
+        "document" to setOf("engine", "spi", "model", "api", "annotations"),
+        "runtime" to setOf("document", "engine", "spi", "model", "api", "annotations"),
         "control" to CORE - "control",
         "cocache" to setOf("spi", "model", "api", "annotations"),
         "kafka" to setOf("spi", "model", "api", "annotations"),
@@ -75,6 +77,15 @@ object DependencyRules {
     val SPI_LIBRARIES: Set<String> = PURE_LIBRARIES + setOf(
         "org.jetbrains.kotlinx:kotlinx-coroutines-core",
         "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm",
+    )
+
+    /** What `document` may resolve besides the ports' libraries: Jackson, the one mapper's (RFC 0013 §3). No logging. */
+    val DOCUMENT_LIBRARIES: Set<String> = SPI_LIBRARIES + setOf(
+        "tools.jackson.core:jackson-core",
+        "tools.jackson.core:jackson-databind",
+        "com.fasterxml.jackson.core:jackson-annotations",
+        "tools.jackson.module:jackson-module-kotlin",
+        "org.jetbrains.kotlin:kotlin-reflect",
     )
 
     /**

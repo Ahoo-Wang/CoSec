@@ -81,7 +81,7 @@ not apply yet. Nothing checks the title against the dumps: the author and the re
 
 ```bash
 ./gradlew check                                   # tests + detekt for all modules
-./gradlew :runtime:test --tests "me.ahoo.cosec.runtime.document.*"
+./gradlew :document:test --tests "me.ahoo.cosec.document.*"
 ./gradlew :code-coverage-report:codeCoverageReport
 ```
 

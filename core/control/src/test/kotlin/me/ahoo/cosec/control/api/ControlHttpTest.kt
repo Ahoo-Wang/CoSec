@@ -24,6 +24,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -34,7 +35,6 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.RequestSecurity
-import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

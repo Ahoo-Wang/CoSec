@@ -673,8 +673,8 @@ example in VS Code's `settings.json`:
 }
 ```
 
-The files are generated from the format descriptors in `cosec-runtime`
-([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/format/DocumentFormats.kt))
+The files are generated from the format descriptors in `cosec-document`
+([`DocumentFormats`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/document/src/main/kotlin/me/ahoo/cosec/document/format/DocumentFormats.kt))
 and never edited by hand. A test keeps them and the document reader in agreement: what one accepts, the other accepts.
 
 Passing the schema is necessary, not sufficient. JSON Schema cannot express, among others: which of the three

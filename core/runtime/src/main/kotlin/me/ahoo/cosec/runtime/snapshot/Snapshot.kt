@@ -17,25 +17,12 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import java.time.Duration
 import java.time.Instant
-
-/**
- * Compiles one snapshot document. Called once per stored revision, never on the caller's thread of
- * [SnapshotSource.load], and its result is shared by every request until a newer revision replaces it, so it must be
- * immutable.
- *
- * An entry that fails to compile should be recorded in the result (RFC 0003 §3.4 `Broken`) so that only the evaluations
- * reading it fail. Throwing fails the whole document closed.
- */
-@InternalCoSecApi
-fun interface SnapshotCompiler<out T : Any> {
-    fun compile(key: SnapshotKey, document: SnapshotDocument): T
-}
 
 /** The state of one document in a [SnapshotSource] (RFC 0003 §3.4). */
 @InternalCoSecApi

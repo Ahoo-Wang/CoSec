@@ -26,7 +26,7 @@ class JacksonSignatureTest {
     fun `the contracts and the core carry no Jackson type in a public signature`() {
         val checked = PublicSignatures.classes { Projects.groupOf(it) in setOf("api", "core") }
         // The rule sees the codec: a filter that let nothing through would pass vacuously.
-        checked.map { it.name }.assert().contains("me.ahoo.cosec.runtime.document.PolicyDocumentCodec")
+        checked.map { it.name }.assert().contains("me.ahoo.cosec.document.PolicyDocumentCodec")
         PublicSignatures.violations(checked, Regex("""tools\.jackson\.""")).assert().isEmpty()
     }
 

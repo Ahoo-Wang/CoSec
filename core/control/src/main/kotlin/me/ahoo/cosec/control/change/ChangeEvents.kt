@@ -21,7 +21,7 @@ import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.audit.RevisionRef
 import me.ahoo.cosec.control.authz.Operator
-import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.document.Actor
 import java.time.Clock
 
 /** The event of [kind] for this change, by [operator], now (RFC 0007 §10.5); [moved] for the RC1-33 events. */

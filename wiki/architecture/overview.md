@@ -28,7 +28,7 @@ change must keep. What a decision *means* (deny first, default deny, fail closed
 
 ## Module layering
 
-Modules sit in group directories: `api/` (annotations, api), `core/` (model, engine, spi, runtime, control),
+Modules sit in group directories: `api/` (annotations, api), `core/` (model, engine, spi, document, runtime, control),
 `backends/` (cocache, kafka), `edge/` (webflux, webmvc, gateway, openapi), `extensions/` (jwt, social, login,
 ip2region, micrometer, opentelemetry, cosid), `host/` (spring-boot), `migration/`, `test/`, `bom/` and `platform/`
 (gateway-server). A Gradle project is named after its directory (`:engine`, `:spring-boot`); its artifact keeps the
@@ -41,14 +41,15 @@ flowchart BT
     model[cosec-model]
     engine[cosec-engine] --> model
     spi[cosec-spi] --> model & api
-    runtime[cosec-runtime] --> engine & spi & annotations
-    control[cosec-control] --> runtime
+    document[cosec-document] --> engine & spi
+    runtime[cosec-runtime] --> document & engine & spi & annotations
+    control[cosec-control] --> runtime & document
     cocache[cosec-cocache] --> spi
     kafka[cosec-kafka] --> spi & runtime
     login[cosec-login] --> runtime
     jwt[cosec-jwt] --> login
     social[cosec-social] --> login
-    openapi[cosec-openapi] --> runtime
+    openapi[cosec-openapi] --> document
     listeners[cosec-opentelemetry<br>cosec-micrometer<br>cosec-ip2region] --> runtime
     cosid[cosec-cosid] --> spi
     webflux[cosec-webflux] --> runtime
@@ -56,7 +57,7 @@ flowchart BT
     gateway[cosec-gateway] --> webflux
     starter[cosec-spring-boot] --> runtime & login & jwt
     starter -. on the classpath .-> webflux & webmvc & gateway & cocache & control & kafka & social & listeners & openapi & cosid
-    migrate[cosec-migrate] --> cocache & control
+    migrate[cosec-migrate] --> cocache & control & document
     testkit[cosec-testkit] --> runtime
     server[cosec-gateway-server] --> starter
 ```
@@ -88,15 +89,21 @@ The rules behind the picture:
   whose signature needs a layer's types stays with that layer: `DecisionListener`, `RequestGate`, the shadow window
   ports in `cosec-runtime`; `ControlStore` and `ChangeListener` in `cosec-control`
   ([Extending](./extending.md)).
+- **`cosec-document`** (directory `core/document/`, `me.ahoo.cosec.document`) holds the formats CoSec stores and
+  exchanges: the platform, app and tenant documents with their codec (`PolicyDocumentCodec`) and compiler
+  (`PolicyDocumentCompiler`, an implementation of the `SnapshotCompiler` port of `cosec-spi`), `RoleExpansion`, the
+  format descriptors that generate `schema/*.schema.json` (`document.format`), route maps (`document.route`), the
+  codec of the forwarded `CoSec-Identity` header (`document.identity`) and the one Jackson mapper, `CoSecJson`
+  (`document.json`), which is internal (`@InternalCoSecApi`). It depends on `cosec-engine`, `cosec-spi` and Jackson
+  only, so a module that reads or writes a document, such as `cosec-openapi`, does not bring the request path. No
+  Jackson type appears in a public signature of `api/` or `core/` (`JacksonSignatureTest`).
 - **`cosec-runtime`** (directory `core/runtime/`) is the data plane: the coroutine `Pipeline`, `StatusMapping`,
-  `AuthorizationChecker`, the snapshot documents and their codec, compiler and format descriptors (which generate
-  `schema/*.schema.json`), `SnapshotSource`, route maps, token verification, the built-in authenticators and the
-  logging audit sink. Its one Jackson mapper, `CoSecJson`, is internal (`@InternalCoSecApi`), and no Jackson type
-  appears in a public signature of `api/` or `core/` (`JacksonSignatureTest`). Coroutines stay in this module and the adapters,
-  Reactor only at the adapter bridges: `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `engine/` or
-  `model/` references `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` references
-  Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or
-  `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
+  `AuthorizationChecker`, `SnapshotSource`, token verification, the built-in authenticators and the logging audit
+  sink, over the documents of `cosec-document`. Coroutines stay in this module and the adapters, Reactor only at the
+  adapter bridges: `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `document/`, `engine/` or `model/`
+  references `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` or `document/`
+  references Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`),
+  `GlobalScope` or `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
 - **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
   approvals, break-glass, simulation and analysis. It is a library that a host wires in. `ControlBoundaryTest`
   (ArchUnit) imports the module's own compiled classes and fails when one of them is outside `me.ahoo.cosec.control`,
@@ -127,14 +134,14 @@ The rules behind the picture:
   `architectureFacts` task writes, and fails when a declared dependency points outwards (the reviewed exceptions, such
   as `cosec-kafka` on `cosec-runtime` for `DecisionListener`, are listed with their reason in `DependencyRules`), when
   `cosec-annotations`, `cosec-api`, `cosec-model` or `cosec-engine` resolves anything but the Kotlin standard library
-  (`cosec-spi` adds coroutines), when `cosec-runtime` or `cosec-control` resolves Reactor, Spring, the Servlet API or
-  a Redis client, or when a project other than `cosec-cosid` and the starter declares or resolves CosId, or another
-  build script names it (a BOM importing CosId included): CoSec makes its own ids (`IdGenerator`), so that an application
-  can use any CosId version.
+  (`cosec-spi` adds coroutines, `cosec-document` Jackson), when `cosec-runtime` or `cosec-control` resolves Reactor,
+  Spring, the Servlet API or a Redis client, or when a project other than `cosec-cosid` and the starter declares or
+  resolves CosId, or another build script names it (a BOM importing CosId included): CoSec makes its own ids
+  (`IdGenerator`), so that an application can use any CosId version.
 - `SourceRulesTest` scans the compiled classes: Reactor only in the edge and the host (and
   `cosec-cocache`, whose reactive Redis client the suspending ports await); no Spring, Servlet API or Redis client in
   `api/` and `core/`; the backends and extensions use only their own Spring technology; the backends reach into
-  `cosec-runtime` and `cosec-control` only through the listed ports and `CoSecJson`; only `cosec-cosid`'s and the starter's
+  `cosec-runtime` and `cosec-control` only through the listed ports; only `cosec-cosid`'s and the starter's
   sources name CosId's packages; a package belongs to one module; opt-ins to the internal API only in CoSec's own sources.
 - `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, and no Reactor type in one of
   `cosec-cocache`, which reads Redis reactively inside), the purity and boundary tests above, the one-decision-path and token rules, the project list
@@ -305,7 +312,7 @@ documents. A view is a reference to three of them, so an evaluation always sees 
 (`SNP-1`, guarded by `SnapshotConsistencyPropertyTest`).
 
 A document may write roles and permissions in short form ([Role permissions](../policies/role-permissions.md#roles)).
-It is stored that way, and [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/document/RoleExpansion.kt)
+It is stored that way, and [`RoleExpansion.effective`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleExpansion.kt)
 writes it out as plain policies and bindings: the compiler, the grant analysis, the reference index and the diff all read
 that, so nothing about a decision depends on the short form (`ROL-1`, `ROL-2`).
 

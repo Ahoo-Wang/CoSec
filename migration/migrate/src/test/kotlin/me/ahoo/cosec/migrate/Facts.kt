@@ -16,6 +16,7 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.JavaZones
 import me.ahoo.cosec.migrate.v7.api.configuration.Configuration
 import me.ahoo.cosec.migrate.v7.api.context.SecurityContext
 import me.ahoo.cosec.migrate.v7.api.context.request.AppIdCapable
@@ -40,7 +41,6 @@ import me.ahoo.cosec.model.condition.CheckResult
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
-import me.ahoo.cosec.runtime.document.JavaZones
 import java.net.URI
 import java.time.Clock
 import java.time.Instant

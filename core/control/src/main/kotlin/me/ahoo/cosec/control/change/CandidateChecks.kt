@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.store.Head
-import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocument
 import java.time.Clock
 
 /** A change's candidate on a head, and the checks and grant analysis it goes through there (RFC 0007 §6.2, §7.4). */

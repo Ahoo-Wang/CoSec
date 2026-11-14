@@ -39,7 +39,7 @@ tests get a real pipeline from `PipelineFixture` (`cosec-testkit`).
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
 | `ChangeListener` | `cosec-control`, `control.audit` | Observe or gate control-plane changes. | every bean, with `cosec-control` |
 | `ControlStore` | `cosec-control`, `control.store` | Keep the control plane's records somewhere other than Redis. Experimental, with its records and the shadow window ports. | one bean, with `cosec-control` |
-| Route maps | `cosec-runtime`, `runtime.route` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
+| Route maps | `cosec-document`, `document.route` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
 
 Packages are under `me.ahoo.cosec`. The ports whose signatures need only the model and the contracts live in
 `cosec-spi`, with their value types and in-memory implementations (`InMemorySnapshotDocumentStore`,
@@ -552,9 +552,9 @@ service's terms. Mapped requests get the route's action; every other request kee
   (catalog and permission policies) to publish through the control plane.
 
 The file is read strictly: an unknown or missing field fails it
-([`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/route/RouteMapCodec.kt)).
+([`RouteMapCodec.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteMapCodec.kt)).
 
-In code, `RouteMapCodec` (`me.ahoo.cosec.runtime.route`) reads them: `load(listOf(location to bytes))` gives the
+In code, `RouteMapCodec` (`me.ahoo.cosec.document.route`) reads them: `load(listOf(location to bytes))` gives the
 `RouteMap` the pipeline uses, with the same checks as startup, and `decode(bytes, location)` one `RouteMapDocument`.
 `RouteMap.of(routes)` builds one from `RouteMap.Located` routes, and `resolve(method, path)` answers what the pipeline
 would give a request: `Mapped` (the route, its action and resource), `Unmapped`, or `Invalid` (a `400`). A test of

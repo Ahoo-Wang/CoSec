@@ -21,7 +21,7 @@ import me.ahoo.cosec.engine.flat.ResourceSource
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.BenchmarkMode

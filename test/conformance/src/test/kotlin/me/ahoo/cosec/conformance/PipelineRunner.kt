@@ -23,6 +23,11 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.document.route.RouteMap
+import me.ahoo.cosec.document.route.RouteMapCodec
+import me.ahoo.cosec.document.route.RouteMapException
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
@@ -60,12 +65,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.runtime.identity.IdentityCodec
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
-import me.ahoo.cosec.runtime.json.CoSecJson
-import me.ahoo.cosec.runtime.route.RouteMap
-import me.ahoo.cosec.runtime.route.RouteMapCodec
-import me.ahoo.cosec.runtime.route.RouteMapException
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.StoredCandidate
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews

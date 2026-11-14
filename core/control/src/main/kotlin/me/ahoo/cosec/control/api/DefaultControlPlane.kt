@@ -34,6 +34,9 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.engine.pattern.ResourceTarget
 import me.ahoo.cosec.model.Action
@@ -45,9 +48,6 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.appliesIn
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolution
-import me.ahoo.cosec.runtime.document.PolicyDocument
-import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.document.RoleExpansion
 import me.ahoo.cosec.runtime.http.Enforceable
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
