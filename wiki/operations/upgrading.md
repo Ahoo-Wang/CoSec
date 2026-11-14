@@ -1150,7 +1150,8 @@ spec:
 ```
 
 `kubectl -n cosec logs job/cosec-repair-references` shows what the tool printed, and the Job fails (exit code `1` or `2`)
-when the command does. Set `--key-prefix` to [`cosec.key-prefix`](./configuration.md#key-prefix) of your instances.
+when the command does. What it prints leaves out the credentials of the Redis URIs it was given, so the log holds no
+password: a command it prints to run next, such as `publish ... --resume`, takes `$(REDIS_URI)` again. Set `--key-prefix` to [`cosec.key-prefix`](./configuration.md#key-prefix) of your instances.
 For `bootstrap` change `args` to `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`. For a Redis
 Cluster add `--cluster` to the commands that take it and write the seed nodes, comma-separated, in the Secret.
 

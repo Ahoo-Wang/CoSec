@@ -31,6 +31,7 @@ import me.ahoo.cosec.cocache.ApiKeyCodec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.runtime.json.CoSecJson
 import tools.jackson.core.JacksonException
@@ -118,22 +119,25 @@ object MigrateMain {
 
     @Suppress("TooGenericExceptionCaught")
     fun run(args: List<String>, out: PrintStream): Int {
+        // What the tool prints of an error leaves out the credentials of every URI it was given ([RedisUris]).
+        val uris = args.filter { "://" in it }
+        fun printed(error: Throwable): String = RedisUris.scrub(error.message ?: error.javaClass.name, uris)
         val command = args.firstOrNull().let { if (it == "partition" && args.getOrNull(1) == "plan") "partition plan" else it }
         val options = try {
             Options.parse(args.drop(if (command == "partition plan") 2 else 1))
         } catch (error: IllegalArgumentException) {
-            out.println(error.message)
+            out.println(printed(error))
             out.println(USAGE_TEXT)
             return USAGE
         }
         return try {
             dispatch(command, options, out)
         } catch (error: UsageException) {
-            out.println(error.message)
+            out.println(printed(error))
             out.println(USAGE_TEXT)
             USAGE
         } catch (error: Exception) {
-            out.println("Failed: ${error.message}")
+            out.println("Failed: ${printed(error)}")
             FAILED
         }
     }
@@ -195,13 +199,20 @@ object MigrateMain {
         /** Every option given, valued or not. */
         val names: Set<String> get() = values.keys + flags
 
+        /**
+         * The Redis URIs given, whatever the command reads: only so that nothing printed shows their credentials
+         * ([RedisUris]), never as input.
+         */
+        val redisUris: List<String> get() = REDIS_URIS.mapNotNull { values[it] }
+
         companion object {
             private val VALUED = setOf(
                 "from-redis", "from-files", "key-prefix", "out", "partition", "to-redis", "in",
                 "rate-limit-rules", "platform-admin", "redis", "role-prefix", "app",
                 "memberships", "grant-to-principal",
             )
-            private val FLAGS = setOf("resume", "force", "dry-run", "cluster", "discard-pending")
+            private val FLAGS = setOf("resume", "force", "dry-run", "cluster")
+            private val REDIS_URIS = listOf("to-redis", "from-redis", "redis")
 
             /** The options that wrote break-glass, gone with it (RC1-27): what to do instead. */
             private val REMOVED = setOf("root-enabled", "root-id", "root-expires-at", "break-glass-max-duration")
@@ -325,9 +336,10 @@ object MigrateMain {
                 result.skipped.forEach { out.println("Already published, identical: $it") }
             }
         } catch (error: PublishException) {
-            out.println("Failed: ${error.message}")
+            out.println("Failed: ${RedisUris.scrub(error.message.orEmpty(), options.redisUris)}")
             out.println(
-                "Finish with: cosec-migrate publish --to-redis $uri --key-prefix $keyPrefix" +
+                "Finish with (the credentials of --to-redis left out): cosec-migrate publish --to-redis " +
+                    RedisUris.withoutUserInfo(uri) + " --key-prefix $keyPrefix" +
                     (if (cluster) " --cluster" else "") + " --in ${input.toAbsolutePath()} --resume"
             )
             return FAILED
@@ -347,7 +359,8 @@ object MigrateMain {
         val key = "${keyPrefix.trimEnd(':')}:meta:cocache8"
         val marker = redisValue(uri, cluster, key) ?: return null
         val export = try {
-            CoSecJson.mapper.readTree(marker).get("out")?.asString()
+            // Read from Redis, not written by this tool: printed so that it cannot drive the terminal.
+            CoSecJson.mapper.readTree(marker).get("out")?.asString()?.let(Identifiers::printable)
         } catch (_: JacksonException) {
             null
         }
@@ -390,7 +403,11 @@ object MigrateMain {
     /** `repair-references`: every document visited, every failed one listed; any failure exits with [FAILED]. */
     private fun repairReferences(options: Options, out: PrintStream): Int {
         val result = controlStore(options) { store -> ReferenceRepair(store).run() }
-        result.failed.forEach { (key, message) -> out.println("FAILED $key: $message") }
+        result.failed.forEach { (key, message) ->
+            out.println(
+                "FAILED $key: ${RedisUris.scrub(message, options.redisUris)}"
+            )
+        }
         out.println("Visited ${result.documents} document(s); added ${result.added} reference(s).")
         out.println("Removed ${result.removed} reference(s) no head refers to.")
         result.apps?.let { out.println("The app list is complete: $it app(s).") }

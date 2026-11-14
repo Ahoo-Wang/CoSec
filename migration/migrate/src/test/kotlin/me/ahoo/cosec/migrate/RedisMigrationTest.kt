@@ -373,7 +373,8 @@ class RedisMigrationTest {
         run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
             .first.assert().isEqualTo(MigrateMain.OK)
         val marker = "$keyPrefix:meta:cocache8".encodeToByteArray()
-        redis.sync().set(marker, """{"out":"/srv/cocache8","documents":["platform"]}""".encodeToByteArray())
+        // The export as the marker says it, with an escape sequence a marker should not be able to send to a terminal.
+        redis.sync().set(marker, """{"out":"/srv/cocache8\u001b[2J","documents":["platform"]}""".encodeToByteArray())
         val publish = arrayOf("publish", "--to-redis", REDIS, "--key-prefix", keyPrefix, "--in", out.toString())
         val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
         val store = me.ahoo.cosec.cocache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
@@ -381,13 +382,49 @@ class RedisMigrationTest {
         val (refused, output) = run(*publish)
 
         refused.assert().isEqualTo(MigrateMain.FAILED)
-        output.assert().contains("$keyPrefix:meta:cocache8").contains("/srv/cocache8").contains("8.0.0-alpha.4")
-            .contains("Nothing was written.")
+        output.assert().contains(
+            "$keyPrefix:meta:cocache8"
+        ).contains("/srv/cocache8\\u001B[2J").contains("8.0.0-alpha.4")
+            .contains("Nothing was written.").doesNotContain("\u001b")
         runBlocking { store.head(SnapshotKey.Platform) }.assert().isNull()
 
         redis.sync().del(marker)
         run(*publish).first.assert().isEqualTo(MigrateMain.OK)
         runBlocking { store.head(SnapshotKey.Platform) }.assert().isNotNull()
+    }
+
+    /**
+     * The documented Job takes `--to-redis` from a Secret as `redis://:<password>@redis:6379` (#1333): what a failed
+     * publish prints, its resume command included, leaves the credentials out (review of #1351).
+     */
+    @Test
+    fun `a failed publish prints no credentials of the Redis it was given`() {
+        write7x()
+        val out = temp.resolve("converted")
+        run("convert", "--from-redis", REDIS, "--key-prefix", keyPrefix, "--out", out.toString())
+            .first.assert().isEqualTo(MigrateMain.OK)
+        val cache = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
+        val store = me.ahoo.cosec.cocache.control.CoCacheControlStore.create(factory, cache, keyPrefix)
+        // A first run that stopped after the platform document, so that a publish without --resume fails.
+        DocumentPublisher(store).publish(
+            mapOf(SnapshotKey.Platform to ConvertedDirectory.read(out).getValue(SnapshotKey.Platform))
+        )
+        // The test Redis's default user has no password, so it accepts any: the URI connects, and the publish fails.
+        val withPassword = REDIS.replace("redis://", "redis://default:s3cret-of-the-job@")
+
+        val (failed, output) = run(
+            "publish",
+            "--to-redis",
+            withPassword,
+            "--key-prefix",
+            keyPrefix,
+            "--in",
+            out.toString()
+        )
+
+        failed.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().doesNotContain("s3cret-of-the-job").contains("credentials of --to-redis left out")
+            .contains("--to-redis $REDIS ").contains("--resume")
     }
 
     @Test
