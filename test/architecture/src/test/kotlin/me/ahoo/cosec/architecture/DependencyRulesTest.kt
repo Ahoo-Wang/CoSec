@@ -99,6 +99,18 @@ class DependencyRulesTest {
     }
 
     @Test
+    fun `a generator of documents does not bring the request path`() {
+        val violations = DependencyRules.DOCUMENT_ONLY.flatMap { project ->
+            declaredProjects(project).filter { it == DependencyRules.RUNTIME }.map { "$project declares it" } +
+                resolvedProjects(project, "runtimeClasspath").filter { it == DependencyRules.RUNTIME }
+                    .map { "$project resolves it at run time" }
+        }
+        DependencyRules.DOCUMENT_ONLY.flatMap { resolvedProjects(it, "runtimeClasspath") }.assert()
+            .describedAs("no facts for the document-only projects: the rule would check nothing").contains("document")
+        violations.assert().isEmpty()
+    }
+
+    @Test
     fun `the contracts and the engine resolve the Kotlin standard library only`() {
         val pure = setOf("annotations", "api", "model", "engine")
         val violations = pure.flatMap { project ->
