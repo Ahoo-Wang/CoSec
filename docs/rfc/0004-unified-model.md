@@ -339,6 +339,12 @@ interface MembershipProvider {
 >
 > **实现说明（2026-11-08，#1203，CoCache 8.0.0）**：两个吊销表是 CoCache 8 的 `Store`，读失败按 `unknown-read: absent` 读作"没有吊销"（仍是 `PIP-7` 文档化的例外），但只在 Redis 读失败时：CoCache 6 写的值（包括缓存缺失标记）抛出格式错误，答 503，从不读成"没有吊销"（`CoCache6ValuesTest`）。吊销表的 `read-timeout` 固定为命令超时，`cocache.defaults.store.read-timeout` 一类的全局默认值不能把它缩短，否则更多的读会超时并读作"没有吊销"。
 
+> **实现说明（2026-11-14，#1321，第 2 轮审查后端与登录组的 H1、L5）**：取代上面两条关于 `read-failure: degrade` 与 `unknown-read: absent` 的说明，以及本节的
+> `RevocableTokenVerifier`。吊销的判断只有一处，`TokenRevocation`（`cosec-runtime`），管道、刷新与登出共用，拒绝 `iat < issuedBefore` 的 token。两个吊销表的
+> `unknown-read` 锁定为 `throw`：`RevocationReader` 读不到时抛出 `RevocationUnavailableException`，从不回答“未吊销”。只有 `TokenAuthenticator` 验证请求令牌时放行并计数
+> （`cosec.revocation.unchecked`，`PIP-7`；`cosec.authentication.revocation.fail-closed=true` 改为 503），签发令牌的刷新失败（`IDN-14`）。`TokenVerifier` 是纯计算；
+> `TokenStore` 只剩写入并改为挂起，`TokenRevoker` 是挂起函数。刷新槽必须是与访问令牌同时签发的刷新令牌（`IDN-13` 双向）。
+
 ### 4.6 `ScopeResolver`
 
 ```kotlin
