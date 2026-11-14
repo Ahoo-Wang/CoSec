@@ -517,7 +517,8 @@ internal object PolicyDocumentFormats {
             pattern = FormatPatterns.ACTION_PATTERN,
             examples = listOf("*", "order:*", "order:read", "http:GET", "http:*"),
             counterExamples = FormatPatterns.ACTION_PATTERN_COUNTER_EXAMPLES,
-            description = "`service:verb`, `service:*` or `*` (RFC 0005 §5.1).",
+            description = "`service:verb`, `service:*` or `*` (RFC 0005 §5.1). No `http` action no request can have " +
+                "(`DOC-8`): not `http:HEAD`, which is decided as `http:GET`, and no verb with a lower-case letter.",
         ),
         "resource" to AnyOf(
             listOf(

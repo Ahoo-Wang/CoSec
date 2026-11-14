@@ -34,6 +34,8 @@ import me.ahoo.cosec.migrate.v7.policy.condition.TimeConditionMatcher
 import me.ahoo.cosec.migrate.v7.policy.condition.TimeConditionMatcherFactory
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.model.condition.Attribute
+import me.ahoo.cosec.model.condition.AttributeCatalog
+import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.CheckResult
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionInput
@@ -120,6 +122,7 @@ data class Facts(
                 Attribute.Kind.RESOURCE_VAR -> pathVariables[attribute.name]
                 Attribute.Kind.HTTP_HEADER -> headers[attribute.name]
                 Attribute.Kind.REQUEST_ATTRIBUTE -> requestAttributes[attribute.name]
+                Attribute.Kind.EXTERNAL -> region(attribute.path)
                 else -> null
             }
         }
@@ -144,7 +147,54 @@ data class Facts(
             if (attribute.path == "environment.time") time.toEpochMilli() else ConditionInput.NO_TIME
     }
 
+    /**
+     * What 8.0's ip2region provider reads of the region 7.x's appender wrote as `ipRegion` (RFC 0006 §5.4.5): the
+     * fields of `country|region|province|city|isp`, `0` absent; the region field is not read.
+     */
+    private fun region(path: String): String? {
+        val field = IP2REGION_FIELDS[path] ?: return null
+        return requestAttributes[IP_REGION]?.split('|')?.getOrNull(field)?.takeUnless { it.isEmpty() || it == "0" }
+    }
+
+    /**
+     * 8.0's view as enforcement fills it (round 2 addition C): no request attribute but the gateway's route id, no
+     * resource attribute, both of which 7.x's appenders filled and 8.0 has none of; a HEAD request decided as GET
+     * (`PIP-18`). A lower-case method never reaches a decision, so [reachesDecision] leaves it out.
+     */
+    val enforced: ConditionInput = object : ConditionInput by input {
+        override fun string(attribute: Attribute): String? = when {
+            attribute.kind == Attribute.Kind.REQUEST_ATTRIBUTE ->
+                requestAttributes[attribute.name].takeIf { attribute.name == ROUTE_ID }
+            attribute.kind == Attribute.Kind.RESOURCE_ATTRIBUTE -> null
+            attribute.path == "action.verb" -> if (method == "HEAD") "GET" else method
+            else -> input.string(attribute)
+        }
+    }
+
+    /** Whether 8.0's pipeline decides this request: a method with a lower-case letter is 400 first (`PIP-18`). */
+    val reachesDecision: Boolean get() = method.none { it in 'a'..'z' }
+
     companion object {
+        const val IP_REGION = "ipRegion"
+        private const val ROUTE_ID = "cosec.audit.routeId"
+        private val IP2REGION_FIELDS = mapOf(
+            "ext.ip2region.country" to 0,
+            "ext.ip2region.province" to 2,
+            "ext.ip2region.city" to 3,
+            "ext.ip2region.isp" to 4,
+        )
+
+        /** Regions as the bundled database writes them, and the 7.x value of a request the appender left alone. */
+        val REGIONS = listOf(
+            "中国|0|上海|上海市|电信",
+            "中国|0|广东省|深圳市|移动",
+            "中国香港|0|0|0|0",
+            "美国|0|0|0|0",
+            "0|0|0|0|内网IP",
+            "中国|0|0|0|0",
+            "",
+        )
+
         private val STRINGS = listOf(
             "", "a", "A", "admin", "Admin", "ADMIN", "adm", "admin2", "(0)", "(platform)", "acme", "x", "é", "É",
             "K", "k", "K", "ſ", "s", "S", "İ", "i", "I", "/orders/1", "/Orders/1", "/orders", "/orders/1/items",
@@ -177,14 +227,15 @@ data class Facts(
             val authenticated = random.nextInt(4) != 0
             return Facts(
                 path = STRINGS.filter { it.startsWith("/") }.random(random),
-                method = listOf("GET", "POST", "get").random(random),
+                method = listOf("GET", "POST", "HEAD", "get").random(random),
                 appId = listOf("", "order", "Order").random(random),
                 spaceId = listOf("", "team", "other").random(random),
                 deviceId = listOf("", "d1").random(random),
                 origin = ORIGINS.random(random),
                 referer = ORIGINS.random(random),
                 headers = map(listOf("x-tenant", "x-debug")),
-                requestAttributes = map(listOf("owner", "region")),
+                requestAttributes = map(listOf("owner", "region", "cosec.audit.routeId")) +
+                    if (random.nextBoolean()) mapOf(IP_REGION to REGIONS.random(random)) else emptyMap(),
                 resourceAttributes = map(listOf("owner")),
                 pathVariables = map(listOf("id")),
                 authenticated = authenticated,
@@ -252,18 +303,34 @@ internal object Matchers7x {
         return matcher.match(request, context)
     }
 
-    /** 8.0's verdict on [translated], checked as the policy compiler checks it. */
-    fun evaluator(translated: Translated): (Facts) -> Boolean = when (translated) {
-        Translated.Always -> { _ -> true }
-        Translated.Never -> { _ -> false }
-        is Translated.Ast -> {
-            val checked = when (val result = ConditionChecker(zones = JavaZones.RESOLVER).check(translated.condition)) {
-                is CheckResult.Valid -> result.condition
-                is CheckResult.Invalid -> error("The translation does not compile: ${result.errors}")
+    /** 8.0's verdict on [translated], checked as the policy compiler checks it, on the facts [view] gives. */
+    fun evaluator(translated: Translated, view: (Facts) -> ConditionInput = { it.input }): (Facts) -> Boolean =
+        when (translated) {
+            Translated.Always -> { _ -> true }
+            Translated.Never -> { _ -> false }
+            is Translated.Ast -> {
+                val checked = when (
+                    val result = ConditionChecker(
+                        zones = JavaZones.RESOLVER,
+                        catalog = IP2REGION
+                    ).check(translated.condition)
+                ) {
+                    is CheckResult.Valid -> result.condition
+                    is CheckResult.Invalid -> error("The translation does not compile: ${result.errors}")
+                }
+                { facts -> checked.evaluate(view(facts)) }
             }
-            { facts -> checked.evaluate(facts.input) }
         }
-    }
+
+    /** What 8.0's ip2region provider declares. */
+    private val IP2REGION = AttributeCatalog.of(
+        listOf(
+            "country",
+            "province",
+            "city",
+            "isp"
+        ).map { Attribute.external("ext.ip2region.$it", AttributeType.STRING) },
+    )
 }
 
 /** What the 7.x evaluation reads of a context: the principal, its tenant, and the path variables it keeps there. */
