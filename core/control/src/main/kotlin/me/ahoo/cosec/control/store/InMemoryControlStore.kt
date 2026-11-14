@@ -36,6 +36,8 @@ import java.time.Instant
  * bytes and, for the indexes, of their rendering, as CoCache's are (RFC 0003 §4.1). They address content; they are not a
  * security control. Every write is atomic under one lock.
  */
+// stays: one method per store operation of ControlStore
+@Suppress("TooManyFunctions")
 @ExperimentalCoSecApi
 class InMemoryControlStore(private val clock: Clock = Clock.systemUTC()) : ControlStore {
     private val lock = Any()

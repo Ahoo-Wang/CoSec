@@ -59,6 +59,8 @@ import kotlin.coroutines.cancellation.CancellationException
  * A failure after step 3 loses no decision and no content: the index is rebuilt from the chain ([history]), extra
  * references block at most a deletion. The records of conflicted publishes are reclaimed as orphans ([reclaim]).
  */
+// B4: revisions split by operation
+@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class Revisions(
     private val store: ControlStore,

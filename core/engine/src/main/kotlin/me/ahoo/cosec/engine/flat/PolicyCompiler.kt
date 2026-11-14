@@ -310,6 +310,8 @@ class PolicyCompiler(
         }
     }
 
+    // B3: the variable check extracts into a function of its own
+    @Suppress("NestedBlockDepth")
     private fun checkVariables(
         condition: CheckedCondition,
         resources: List<ResourcePattern>,

@@ -74,6 +74,8 @@ import kotlin.time.TimeSource
  * An operator holding `cosec:approve` on the document is the trust root (§7.3): its changes are not analyzed, unless
  * [ChangeOptions.fourEyes] is on. A new or changed break-glass binding always needs a second person (§8).
  */
+// B4: the change authority splits by responsibility
+@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class ChangeAuthority(
     private val authorizer: ControlAuthorizer,
@@ -518,7 +520,8 @@ class ChangeAuthority(
      * scoped to the app (N1). The approver sees whom the change reaches in which tenant, not only the app document. An
      * index or a head that cannot be read is a 503: an approval must not be asked for what cannot be shown.
      */
-    @Suppress("TooGenericExceptionCaught")
+    // B4: the referrer walk extracts into a function of its own
+    @Suppress("NestedBlockDepth", "TooGenericExceptionCaught")
     private suspend fun referringBindings(
         key: SnapshotKey.App,
         base: PolicyDocument?,

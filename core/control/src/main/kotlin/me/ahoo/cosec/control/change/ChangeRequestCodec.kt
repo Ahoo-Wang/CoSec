@@ -50,6 +50,8 @@ import java.time.Instant
  * with the same entries, digests included. Reading is strict: anything else is a [SnapshotFormatException], whose
  * message escapes control characters, a document key of an app no key can name included (SCP-10).
  */
+// B4: the codec splits by record
+@Suppress("TooManyFunctions")
 @ExperimentalCoSecApi
 object ChangeRequestCodec {
     private val SHOWN_APPROVAL_FIELDS = listOf("approver", "at", "candidate", "covers")

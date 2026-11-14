@@ -210,6 +210,8 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
         val types = LinkedHashMap<String, MutableList<Int>>()
         var http: PathBuilder? = null
 
+        // B3: the index builder extracts per key kind
+        @Suppress("NestedBlockDepth")
         fun add(statement: CompiledStatement, position: Int) {
             for (resource in statement.resources) {
                 when (resource) {
@@ -259,6 +261,8 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
 
     companion object {
         /** ASCII lower case, as `ignoreCase` keys are folded (RFC 0005 §3.2). */
+        // B3: the fold extracts its scan
+        @Suppress("NestedBlockDepth")
         fun foldAscii(value: String): String {
             for (i in value.indices) {
                 if (value[i] in 'A'..'Z') {

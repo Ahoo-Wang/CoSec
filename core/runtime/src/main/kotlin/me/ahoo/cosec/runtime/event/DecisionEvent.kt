@@ -41,6 +41,8 @@ import kotlin.coroutines.CoroutineContext
  * It carries no external attribute value, no header and no token: what must not be in an audit is not in the event
  * ([attributes] holds statuses only). [replay] is for shadow listeners only, and exists only on a sample hit (§9.5.4).
  */
+// stays: one parameter per field of the decision event (RFC 0006 §9.2)
+@Suppress("LongParameterList")
 class DecisionEvent internal constructor(
     val id: String,
     val requestId: String,

@@ -124,6 +124,8 @@ class ConditionChecker(
         }
     }
 
+    // stays: one function per condition operator of a closed AST, in one pass
+    @Suppress("TooManyFunctions")
     private inner class Run {
         val errors = ArrayList<ConditionError>()
         private var nodes = 0

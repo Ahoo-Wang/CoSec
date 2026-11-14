@@ -99,6 +99,8 @@ internal object SnapshotDocumentCodec : Codec<SnapshotDocument> {
 
     private const val UTF_DETECTION_BYTES = 4
 
+    // B7: the header loop extracts into a function of its own
+    @Suppress("NestedBlockDepth")
     private fun readHeader(bytes: ByteArray): Header {
         requireUtf8(bytes)
         val found = Fields()

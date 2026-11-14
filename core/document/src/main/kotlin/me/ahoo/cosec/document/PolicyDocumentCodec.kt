@@ -61,6 +61,8 @@ import java.time.Instant
  * A subject's tenant may be left out in a tenant document, where it is that tenant, and for a role binding of the app
  * document, where it means any tenant. A platform principal names its tenant.
  */
+// B5: the codec splits into one section codec per document section
+@Suppress("TooManyFunctions")
 object PolicyDocumentCodec {
     /** The format of platform, app and tenant documents: the `schema` they declare. */
     @JvmField

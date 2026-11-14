@@ -104,6 +104,8 @@ import java.util.function.LongSupplier
  * retries); eviction, lag reports and log lines with stack traces run on a separate housekeeping thread, so a slow log
  * appender cannot delay a timeout (#1252).
  */
+// B2a: the snapshot source splits into its state, its transitions and its runner
+@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class SnapshotSource<P : Any, A : Any> internal constructor(
     private val store: SnapshotDocumentStore,
@@ -858,6 +860,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private class Seen(val revision: Long, val digest: SnapshotDigest?)
 
     /** One key: its installed entry and its single in-flight load. */
+    // B2a: the slot's transitions leave it
+    @Suppress("TooManyFunctions")
     private inner class Slot<T : Any>(val key: SnapshotKey, private val compiler: SnapshotCompiler<T>) {
         @Volatile
         var installed: SnapshotEntry<T>? = null

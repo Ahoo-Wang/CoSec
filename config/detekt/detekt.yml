@@ -1,11 +1,26 @@
 # TODO Compliance
 complexity:
+  # RFC 0013 §8.1: the structure guards, on main code. detekt reports at the threshold: fewer than 8 parameters, fewer
+  # than 20 functions. A finding today is suppressed at its declaration with a `// B<n>:` or `// stays:` line above
+  # the @Suppress; test/architecture's DetektSuppressionTest counts them, so the number can only go down.
   LongParameterList:
-    active: false
+    active: true
+    functionThreshold: 8
+    constructorThreshold: 14
+    # Spring injects a @Bean method's parameters.
+    ignoreAnnotated: ['Bean']
+    excludes: ['**/test/**', '**/jmh/**']
   NestedBlockDepth:
-    active: false
+    active: true
+    threshold: 4
+    excludes: ['**/test/**', '**/jmh/**']
   TooManyFunctions:
-    active: false
+    active: true
+    thresholdInClasses: 20
+    thresholdInFiles: 25
+    thresholdInInterfaces: 20
+    thresholdInObjects: 20
+    excludes: ['**/test/**', '**/jmh/**']
 style:
   # G2 (RFC 0008 §4.6.2): main code explains what it does now, not how it got here. A reference to an RFC section is
   # fine; one to a PR, to "the switch" or to code that is gone is not. cosec-migrate is about 7.x by nature.

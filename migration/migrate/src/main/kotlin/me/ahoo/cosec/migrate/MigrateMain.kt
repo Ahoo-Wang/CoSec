@@ -74,6 +74,8 @@ import kotlin.system.exitProcess
  * Exit codes: 0 done; 1 the data was rejected, publishing failed, or a document's references could not be repaired
  * (see `report.json` and the console); 2 usage.
  */
+// B6: each command gets a file of its own
+@Suppress("TooManyFunctions")
 object MigrateMain {
     const val OK = 0
     const val FAILED = 1

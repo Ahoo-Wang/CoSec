@@ -54,6 +54,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
 
 /** The [ControlPlane] over [changes] and [revisions], authorizing with [authority]. */
+// B4: the control plane splits by responsibility
+@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class DefaultControlPlane(
     private val changes: Changes,
