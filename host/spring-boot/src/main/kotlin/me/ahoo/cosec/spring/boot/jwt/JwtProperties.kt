@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot.jwt
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.spring.boot.EnabledCapable
@@ -26,6 +27,7 @@ import java.time.Duration
  * @author ahoo wang
  */
 @ConfigurationProperties(prefix = JwtProperties.PREFIX)
+@InternalCoSecApi
 class JwtProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
     @DefaultValue("hmac256") var algorithm: Algorithm = Algorithm.HMAC256,
@@ -33,16 +35,19 @@ class JwtProperties(
     @NestedConfigurationProperty var tokenValidity: TokenValidity = TokenValidity(),
     @NestedConfigurationProperty var session: Session = Session(),
 ) : EnabledCapable {
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
     }
 
+    @InternalCoSecApi
     class TokenValidity(
         var access: Duration = Duration.ofMinutes(10),
         var refresh: Duration = Duration.ofDays(7)
     )
 
     /** `cosec.jwt.session.*`: the refresh token families (RFC 0009). */
+    @InternalCoSecApi
     class Session(
         /** How long a session lasts from its login, however often it is refreshed; then the user signs in again. */
         var lifetime: Duration = TokenFamilies.DEFAULT_LIFETIME,
@@ -57,6 +62,7 @@ class JwtProperties(
      * [minSecretBytes]: the shortest `secret` each algorithm accepts, in UTF-8 bytes, its hash's output size (RFC 7518
      * §3.2). A shorter one can be guessed offline from any token issued with it (RC1-24).
      */
+    @InternalCoSecApi
     enum class Algorithm(val minSecretBytes: Int) {
         HMAC256(32), HMAC384(48), HMAC512(64)
     }

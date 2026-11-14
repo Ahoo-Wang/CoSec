@@ -11,13 +11,16 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.authentication
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.AuthenticationProvider
 import me.ahoo.cosec.login.CompositeAuthentication
-import me.ahoo.cosec.login.Credentials
+import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
@@ -81,10 +84,10 @@ internal class CoSecAuthenticationAutoConfigurationTest {
     private fun AssertableApplicationContext.authenticated(): String =
         runBlocking { getBean(CompositeAuthentication::class.java).authenticate(ContextCredentials).id }
 
-    private object ContextCredentials : Credentials
+    private object ContextCredentials : LoginCredentials
 
     private class ContextAuthentication(private val principal: String) : Authentication<ContextCredentials> {
-        override val supportCredentials = ContextCredentials::class.java
+        override val credentialsType = ContextCredentials::class.java
 
         override suspend fun authenticate(credentials: ContextCredentials): TokenSubject =
             TokenSubject(principal, null)

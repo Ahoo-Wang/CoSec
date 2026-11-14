@@ -187,12 +187,12 @@ CoSec does not ship a login endpoint. You check the credentials, CoSec turns the
    `accessToken` and `refreshToken`.
 
 ```kotlin
-data class PasswordCredentials(val username: String, val password: String) : Credentials
+data class PasswordCredentials(val username: String, val password: String) : LoginCredentials
 
 @Component
 class PasswordAuthentication(private val users: UserService) :
     Authentication<PasswordCredentials> {
-    override val supportCredentials = PasswordCredentials::class.java
+    override val credentialsType = PasswordCredentials::class.java
 
     override suspend fun authenticate(credentials: PasswordCredentials): TokenSubject {
         val user = users.verify(credentials.username, credentials.password)
@@ -215,7 +215,7 @@ client (a JDBC user table, say) moves that call to a bounded dispatcher of its o
 MVC needs `kotlinx-coroutines-reactor` on the classpath for it; without it, call `runBlocking { ... }` on the request
 thread.
 
-`Credentials` and `Authentication` here are the login types of `me.ahoo.cosec.login` (`TokenCompositeAuthentication`
+`LoginCredentials` and `Authentication` here are the login types of `me.ahoo.cosec.login` (`TokenCompositeAuthentication`
 and `TokenConverter` are in `me.ahoo.cosec.login.token`), from `cosec-login`, which the starter brings; they are not
 the pipeline's `Credentials` and `Authenticator` (`me.ahoo.cosec.spi.authn`).
 `cosec.authentication.login.enabled` (on by default) switches only these login beans, `TokenCompositeAuthentication`
@@ -504,7 +504,8 @@ cannot influence.
 
 With `cosec-social`, `SocialAuthentication` signs users in through [JustAuth](https://github.com/justauth/JustAuth)
 providers. Configure each provider under `cosec.authentication.login.social.registration.<name>`, with its JustAuth
-`type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)).
+`type`, client id, secret and redirect URI ([Configuration](../operations/configuration.md)). In 8.0 the providers are
+JustAuth's: an application cannot add one of its own, since the provider interface and its registry are internal.
 
 1. Start the sign-in with `socialAuthentication.authorize("<name>")`, a suspending function. It answers a
    `SocialAuthorization`: the provider's `url`, which carries a fresh OAuth `state`, and a fresh `binding`. Both are 128

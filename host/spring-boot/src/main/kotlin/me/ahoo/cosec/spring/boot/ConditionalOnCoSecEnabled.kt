@@ -21,7 +21,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
  * @author ahoo wang
  */
 @ConditionalOnProperty(value = [ConditionalOnCoSecEnabled.ENABLED_KEY], matchIfMissing = true, havingValue = "true")
-annotation class ConditionalOnCoSecEnabled {
+internal annotation class ConditionalOnCoSecEnabled {
     companion object {
         const val ENABLED_KEY = CoSec.COSEC + ENABLED_SUFFIX_KEY
     }

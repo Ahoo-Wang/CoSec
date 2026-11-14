@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spring.boot.control
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.runtime.event.Delivery
 import org.springframework.boot.context.properties.ConfigurationProperties
@@ -21,6 +22,7 @@ import java.time.Duration
 
 /** `cosec.control.*` (RFC 0007 X5): the control plane, with `cosec-control`. */
 @ConfigurationProperties(prefix = ControlProperties.PREFIX)
+@InternalCoSecApi
 class ControlProperties {
     /** The app control-plane actions are authorized in (RFC 0007 §7.2). */
     var appId: String = "cosec-control"
@@ -32,6 +34,7 @@ class ControlProperties {
     val shadow = Shadow()
     val audit = Audit()
 
+    @InternalCoSecApi
     class Http {
         /** Where the control API is served (RFC 0007 §10.2): its routes are under `{base-path}/v1`. */
         var basePath: String = "/cosec/control"
@@ -43,6 +46,7 @@ class ControlProperties {
         var maxBodySize: DataSize = DataSize.ofMegabytes(16)
     }
 
+    @InternalCoSecApi
     class Revisions {
         var maxCount: Int = 50
         var minAge: Duration = Duration.ofDays(7)
@@ -52,11 +56,13 @@ class ControlProperties {
         var reclaimInterval: Duration = Duration.ofHours(1)
     }
 
+    @InternalCoSecApi
     class Changes {
         /** An open change request expires this long after it was proposed. */
         var expireAfter: Duration = Duration.ofDays(7)
     }
 
+    @InternalCoSecApi
     class Approval {
         var expireAfter: Duration = Duration.ofHours(72)
 
@@ -67,11 +73,13 @@ class ControlProperties {
         var fourEyes: Boolean = false
     }
 
+    @InternalCoSecApi
     class BreakGlass {
         /** The longest a break-glass binding may last; at most 24 hours. */
         var maxDuration: Duration = Duration.ofHours(4)
     }
 
+    @InternalCoSecApi
     class Shadow {
         var minDuration: Duration = Duration.ofMinutes(15)
         var minSamples: Long = 1_000
@@ -81,12 +89,14 @@ class ControlProperties {
         var checkInterval: Duration = Duration.ofMinutes(1)
     }
 
+    @InternalCoSecApi
     class Audit {
         /** How long every REQUIRED change listener together may take to record a gated step before it fails (503). */
         var requiredTimeout: Duration = Duration.ofSeconds(5)
         val kafka = Kafka()
 
         /** `KafkaChangeListener`, when `cosec-kafka` and a `KafkaOperations` bean are present. */
+        @InternalCoSecApi
         class Kafka {
             var enabled: Boolean = true
             var topic: String = "cosec-control-audit"
@@ -96,6 +106,7 @@ class ControlProperties {
         }
     }
 
+    @InternalCoSecApi
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "control"
         const val KAFKA_AUDIT_PREFIX = "$PREFIX.audit.kafka"
