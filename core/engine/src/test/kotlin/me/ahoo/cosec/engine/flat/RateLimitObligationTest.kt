@@ -211,4 +211,25 @@ class RateLimitObligationTest {
         }
         assertThrownBy<IllegalArgumentException> { permitting(rule("twice"), rule("twice")) }
     }
+
+    /**
+     * `ALG-8` (round 2 review L2): an Error a rule's condition or key throws propagates at every trace level, as it does
+     * untraced; a trace never turns it into a strict obligation.
+     */
+    @Test
+    fun `an error of a rule propagates at every trace level`() {
+        val key = "obligation-error"
+        Probes.register(
+            key,
+            Probes.Probe(me.ahoo.cosec.engine.CallLog(), key) { throw AssertionError("host attribute broke") }
+        )
+        val byCondition = rule("by-condition", condition = Condition.Eq("request.attributes.$key", Literal.Str("x")))
+        val byKey = rule("by-key", key = "request.attributes.$key")
+        for (rules in listOf(byCondition, byKey)) {
+            val view = SnapshotView(permitting(rules), null, tenant())
+            for (level in TraceLevel.entries) {
+                assertThrownBy<AssertionError> { CoSecFlatEngine.evaluate(flatRequest(), view, level) }
+            }
+        }
+    }
 }

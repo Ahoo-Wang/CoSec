@@ -155,14 +155,26 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
             return decision
         }
         var obligations: ArrayList<Obligation>? = null
-        for (rules in arrayOf(view.platform.rateLimits, view.app?.rateLimits, view.tenant?.rateLimits)) {
-            for (rule in rules ?: continue) {
-                val obligation = obligation(rule) ?: continue
-                (obligations ?: ArrayList<Obligation>().also { obligations = it }) += obligation
+        obligating = true
+        try {
+            for (rules in arrayOf(view.platform.rateLimits, view.app?.rateLimits, view.tenant?.rateLimits)) {
+                for (rule in rules ?: continue) {
+                    val obligation = obligation(rule) ?: continue
+                    (obligations ?: ArrayList<Obligation>().also { obligations = it }) += obligation
+                }
             }
+        } finally {
+            obligating = false
         }
         return obligations?.let { Decision.Permit(decision.by, it) } ?: decision
     }
+
+    /**
+     * Set while [withObligations] decides a permit's obligations: they are part of the decision, so an evaluation that
+     * records a trace catches their errors as the untraced one does, although a statement has already matched (`ALG-8`).
+     */
+    protected var obligating: Boolean = false
+        private set
 
     private fun obligation(rule: CompiledRateLimit): Obligation? {
         val result = step(rule.policy, rule.statement)

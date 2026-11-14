@@ -82,6 +82,9 @@
       "source": "RFC 0004 §6.5",
       "statement": "The decision does not depend on the trace level: what FULL and EXHAUSTIVE evaluate after the decision never changes it.",
       "level": "engine",
+      "guards": [
+        "engine:RateLimitObligationTest#an error of a rule propagates at every trace level"
+      ],
       "properties": [
         "engine:FlatEnginePropertyTest#P2 the decision does not depend on the trace level"
       ],

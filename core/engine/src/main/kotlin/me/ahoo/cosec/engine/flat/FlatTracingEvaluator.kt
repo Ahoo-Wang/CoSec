@@ -65,7 +65,7 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
         return FlatEvaluation(decision, FlatTrace(request.scope, candidates, expired, allUnresolved(), boundary))
     }
 
-    private fun traceOnly(): Boolean = !inBoundary && (decided || matched != null)
+    private fun traceOnly(): Boolean = !inBoundary && !obligating && (decided || matched != null)
 
     override fun catches(error: Throwable): Boolean = if (traceOnly()) recordable(error) else error is Exception
 

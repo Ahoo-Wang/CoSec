@@ -1,0 +1,17 @@
+# Rule: ALG-8
+# Mutant: the trace catches the errors of a permit's obligations as trace-only work
+# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.RateLimitObligationTest
+
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatTracingEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatTracingEvaluator.kt
+index e99dfcef..8a63b2e0 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatTracingEvaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatTracingEvaluator.kt
+@@ -65,7 +65,7 @@ internal class FlatTracingEvaluator(request: FlatRequest, view: SnapshotView, pr
+         return FlatEvaluation(decision, FlatTrace(request.scope, candidates, expired, allUnresolved(), boundary))
+     }
+ 
+-    private fun traceOnly(): Boolean = !inBoundary && !obligating && (decided || matched != null)
++    private fun traceOnly(): Boolean = !inBoundary && (decided || matched != null)
+ 
+     override fun catches(error: Throwable): Boolean = if (traceOnly()) recordable(error) else error is Exception
+ 
