@@ -30,6 +30,7 @@ import org.springframework.context.support.GenericApplicationContext
 import org.springframework.core.env.StandardEnvironment
 import org.springframework.core.env.SystemEnvironmentPropertySource
 import org.springframework.mock.env.MockEnvironment
+import org.springframework.util.ReflectionUtils
 import org.springframework.web.filter.ForwardedHeaderFilter
 import org.springframework.web.server.adapter.ForwardedHeaderTransformer
 import java.util.function.Supplier
@@ -151,6 +152,21 @@ class ClientIpReadingsTest {
                 Supplier { ForwardedHeaderFilter().apply { setRemoveOnly(true) } }
             )
         }.peerIsConnection.assert().isTrue()
+    }
+
+    /** What the detection reads by reflection exists on this Spring: a rename fails here, not with a bare NPE at startup. */
+    @Test
+    fun `the Spring members the detection reads exist`() {
+        ReflectionUtils.findMethod(ForwardedHeaderTransformer::class.java, ClientIpReadings.TRANSFORMER_REMOVE_ONLY)
+            .assert().isNotNull()
+        ReflectionUtils.findField(
+            ForwardedHeaderFilter::class.java,
+            ClientIpReadings.FILTER_REMOVE_ONLY
+        ).assert().isNotNull()
+        ReflectionUtils.findMethod(
+            FilterRegistrationBean::class.java,
+            ClientIpReadings.REGISTRATION_FILTER
+        ).assert().isNotNull()
     }
 
     @Test

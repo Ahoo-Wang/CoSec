@@ -192,9 +192,11 @@ internal object ClientIpReadings {
     private fun rewritingTransformer(beans: ListableBeanFactory, loader: ClassLoader): String? {
         if (!ClassUtils.isPresent(TRANSFORMER, loader)) return null
         val type = ClassUtils.forName(TRANSFORMER, loader)
-        val removeOnly = ReflectionUtils.findMethod(type, "isRemoveOnly")!!
-        return beans.getBeanNamesForType(type, true, false)
-            .firstOrNull { !(removeOnly.invoke(beans.getBean(it)) as Boolean) }
+        val names = beans.getBeanNamesForType(type, true, false)
+        if (names.isEmpty()) return null
+        val removeOnly = ReflectionUtils.findMethod(type, TRANSFORMER_REMOVE_ONLY)
+            ?: throw unknownSpring("ForwardedHeaderTransformer", names.first(), "method $TRANSFORMER_REMOVE_ONLY()")
+        return names.firstOrNull { !(removeOnly.invoke(beans.getBean(it)) as Boolean) }
             ?.let { "The ForwardedHeaderTransformer bean [$it]" }
     }
 
@@ -205,20 +207,35 @@ internal object ClientIpReadings {
         beans.getBeanNamesForType(type, true, false).forEach { filters[it] = beans.getBean(it) }
         if (ClassUtils.isPresent(REGISTRATION, loader)) {
             val registration = ClassUtils.forName(REGISTRATION, loader)
-            val filterOf = ReflectionUtils.findMethod(registration, "getFilter")!!
+            val filterOf = ReflectionUtils.findMethod(registration, REGISTRATION_FILTER)
             // Every registration but one being created, such as CoSec's own filter's while this runs.
             val creating = (beans as? ConfigurableListableBeanFactory)
                 ?: (beans as? ConfigurableApplicationContext)?.beanFactory
             for (name in beans.getBeanNamesForType(registration, true, false)) {
                 if (creating?.isCurrentlyInCreation(name) == true) continue
+                filterOf ?: throw unknownSpring("FilterRegistrationBean", name, "method $REGISTRATION_FILTER()")
                 filterOf.invoke(beans.getBean(name))?.let { filters[name] = it }
             }
         }
-        val removeOnly = ReflectionUtils.findField(type, "removeOnly")!!.also { ReflectionUtils.makeAccessible(it) }
-        return filters.entries
-            .firstOrNull { (_, filter) -> type.isInstance(filter) && !(removeOnly.get(filter) as Boolean) }
+        val forwarded = filters.entries.filter { (_, filter) -> type.isInstance(filter) }
+        if (forwarded.isEmpty()) return null
+        val removeOnly = ReflectionUtils.findField(type, FILTER_REMOVE_ONLY)
+            ?.also { ReflectionUtils.makeAccessible(it) }
+            ?: throw unknownSpring("ForwardedHeaderFilter", forwarded.first().key, "field $FILTER_REMOVE_ONLY")
+        return forwarded.firstOrNull { (_, filter) -> !(removeOnly.get(filter) as Boolean) }
             ?.let { "The ForwardedHeaderFilter bean [${it.key}]" }
     }
+
+    /**
+     * Spring no longer has the [member] of [type] CoSec reads to tell whether bean [name] only removes forwarded
+     * headers: whether it rewrites the request is unknown, so startup fails, naming why (the names are pinned by
+     * `ClientIpReadingsTest`).
+     */
+    private fun unknownSpring(type: String, name: String, member: String) = ClientIpConfigurationException(
+        "CoSec cannot tell whether the $type bean [$name] rewrites the request on this Spring version: it has no $member, " +
+            "which CoSec reads to tell one that only removes forwarded headers. Remove the bean, or use a CoSec release " +
+            "for this Spring version ($TROUBLESHOOTING).",
+    )
 
     private fun namesOf(beans: ListableBeanFactory, type: String, loader: ClassLoader): Array<String> =
         if (ClassUtils.isPresent(type, loader)) {
@@ -230,5 +247,10 @@ internal object ClientIpReadings {
     private const val WEB_SERVER_FACTORY = "org.springframework.boot.web.server.WebServerFactory"
     private const val TRANSFORMER = "org.springframework.web.server.adapter.ForwardedHeaderTransformer"
     private const val FILTER = "org.springframework.web.filter.ForwardedHeaderFilter"
+
+    /** The members of Spring read by reflection, so the starter needs no compile-time Spring Web types. */
+    internal const val TRANSFORMER_REMOVE_ONLY = "isRemoveOnly"
+    internal const val FILTER_REMOVE_ONLY = "removeOnly"
+    internal const val REGISTRATION_FILTER = "getFilter"
     private const val REGISTRATION = "org.springframework.boot.web.servlet.FilterRegistrationBean"
 }
