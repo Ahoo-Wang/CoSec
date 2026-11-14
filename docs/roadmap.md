@@ -341,13 +341,20 @@ E3（✅ #1298）增加 migrate 的 #1232 #1233 #1244 #1247 #1256 #1259 #1264；
 | 核心 | `core/model`、`core/spi`、`core/engine` | 0 高、2 中、6 低；没有发现跳过 DENY、跨租户生效或失败即放行的常规路径 | ✅ #1318：多个资源模式等价于每个模式各一条语句（`ALG-10`）；每份文档至多 64 条限流规则（`DOC-6`）；同名策略内容相同时求值平台的那条（`BND-7`）；删除 `SnapshotVersion`；决定见 §9 |
 | 后端与登录 | `cocache`、`kafka`、`jwt`、`login`、`social` | 1 高、4 中、6 低：撤销读降级时刷新会把已撤销的令牌换成新令牌（高）；刷新槽接受访问令牌；刷新不轮换、登出不结束会话；限流窗口无上限；OAuth `state` 可重用且不绑定浏览器 | 令牌 ✅ #1321（`IDN-14`、`IDN-13` 双向、`PIP-7` 收窄）；限流与其余 ✅ #1322（`OBL-4`、`DOC-7`）；社交登录 ✅ #1323（`IDN-20`）；刷新令牌族 #1325（已审核，自动合并中；`IDN-15` 至 `IDN-19`） |
 | edge 与扩展 | `webflux`、`webmvc`、`gateway`、`openapi`、`ip2region`、`micrometer`、`opentelemetry`、`cosid` | 1 高、6 中、6 低：客户端 IP 被解析两次，`environment.ip` 可由客户端决定（高）；WebMvc 上改写方法的过滤器排在授权之后；小写方法与 HEAD 绕过按方法写的 DENY；Jetty 上编码的 context path 不被剥离；挂起的 MVC 处理器里 `SecurityContextHolder` 给出别的请求的主体；ip2region 对 IPv6 回答缺失；CosId 生成器会在事件循环上等待。适配器“只翻译、不决定”成立，问题都在读进来的事实一侧 | 客户端 IP 与真实服务器测试 ✅ #1326（`PIP-16`、`PIP-17`）；方法、路径与过滤器顺序 ✅ #1328（`PIP-18` 至 `PIP-20`）；应用代码里的安全上下文 ✅ #1329（`PIP-21`、`PIP-22`）；扩展 ✅ #1330（`PIP-23` id 生成器失败只损失 id，`ATR-9` ip2region 取不到而不是缺失，`RTE-4` 生成的路由映射位于 `servers` 路径并包含每个路径变量）。本组完成，决定见 §9。遗留：CosId 5 不暴露时钟回拨策略，无法在启动时检查，只能写进文档；挂起处理器在另一个请求的阻塞处理器线程上恢复时 holder 仍是那个请求的上下文，已写进 `wiki/integration/web.md`；发布说明需单列 ip2region 只带 IPv4 库 |
-| 宿主与工具 | `spring-boot`、`migrate`、`testkit`、`api` | 0 高、2 中、10 低：`spring.main.lazy-initialization=true` 时 starter 的启动检查全部不运行，缺了 `cosec-webmvc` 的服务没有任何授权照样启动（中）；测试工具不经 `Enforceable` 读动作和路径，`DENY http:HEAD` 在测试工具里有效、在管道里从不生效，编译器也接受这种永远不生效的语句（中）；测试工具把截断的文件名还原成另一个 id；空的 `expect` 永远通过；主体属性是可变 Map；社交登录的拼错字段被忽略；`cosec-migrate api-keys --app` 被选项表拒绝。starter 的接线、门的顺序、缓存锁定、属性与文档逐项核对无误 | 已分诊（全部接受），修复按四个 PR 进行：starter 启动检查（`STA-3`）、测试工具、文档编译与 migrate（`DOC-8`）、主体属性。决定见 §9 |
+| 宿主与工具 | `spring-boot`、`migrate`、`testkit`、`api` | 0 高、2 中、10 低：`spring.main.lazy-initialization=true` 时 starter 的启动检查全部不运行，缺了 `cosec-webmvc` 的服务没有任何授权照样启动（中）；测试工具不经 `Enforceable` 读动作和路径，`DENY http:HEAD` 在测试工具里有效、在管道里从不生效，编译器也接受这种永远不生效的语句（中）；测试工具把截断的文件名还原成另一个 id；空的 `expect` 永远通过；主体属性是可变 Map；社交登录的拼错字段被忽略；`cosec-migrate api-keys --app` 被选项表拒绝。starter 的接线、门的顺序、缓存锁定、属性与文档逐项核对无误 | 已分诊（全部接受，另有复查中确认的第三个中等问题：`api-keys --app` 被选项表拒绝）。测试工具 ✅ #1340；starter 启动检查 #1339（`STA-3`，已审核）；文档编译与 migrate（`DOC-8`）、主体属性两个 PR 进行中。决定见 §9 |
 
 之后：R8 → R9 → §10 中其余的 RC 前事项 → 与维护者讨论 RC/GA。
 
 观察项（2026-11-14）：`ChangesB1Test` 的 RC1-33 用例在 #1318 的会话本地失败一次，重跑三次通过，该 PR 未改动它。再失败就按“可能放行”调查，不只重跑。
 
-R9 开始前要核对的 RC 前事项（2026-11-14 抽查，均未完成）：`cosec-migrate` 发行包作为 release 资产、macOS kqueue 排障条目、阿里云镜像推送拆成非阻塞作业、网关 512M 直接内存默认值的重新评估；播种文档未核对。已不适用的变异体在 R9 重新生成，RC 门禁跑一次全量 `mutationCheck`。
+R9 开始前要核对的 RC 前事项（2026-11-14，由一个并行的 Sonnet 子会话完成）：
+- ✅ `cosec-migrate` 发行包作为 release 资产，文档写明以 Kubernetes Job 运行，以及手写文档的播种路径（平台文档 `publish`，然后 `bootstrap`，其余文档走控制面 `apply`）：#1333。发布作业本身只有下次发版才能验证。
+- ✅ macOS kqueue 排障条目、网关镜像的 JVM 默认值：#1336。
+- ✅ 8.0 对 AOT 的支持范围写进部署文档：#1338（决定见 §9）。
+- 阿里云镜像同步拆成不阻塞的作业：#1332（自动合并中）。从 ghcr 复制而不是重新构建；冷复制约 800 MB 实测 5 分半，每次尝试限时 10 分钟。
+- ✅ 网关 512M 直接内存默认值：重新评估后保持不变（决定见 §9）。
+
+已不适用的变异体在 R9 重新生成，RC 门禁跑一次全量 `mutationCheck`。
 
 接下来（各批次包含哪些发现、已定的决定，见 [`docs/security/8.0-rc-review.md`](security/8.0-rc-review.md) 的 Fix plan）：D1（✅ #1200，共享文档 ✅ #1230）→ 审计 issue 的 E1a（数据面正确性，✅ #1231）→ D2（控制面与运维，✅ #1240）→ CoCache 8.0.0-alpha.6 在 #1203 上的试用（✅）→ RC1-52（✅ #1254）→ CoCache 8.0.0（✅ #1203）→ `v8.0.0-alpha.3`（✅ 2026-11-08）→ E2a（控制面正确性，#1268）→ F1（易用性，代码）→ F2（模型与场景文档）→ E2b（控制面规模与性能）→ E3（迁移、宿主与登录）→ E1b（热路径性能）→ 第 2 轮（按模块）→ 公共声明归类（所有发布模块，含 [RFC 0010](rfc/0010-ga-extension-points.md) 的 C4、C5）与 testkit 夹具 → RC。
 
@@ -464,6 +471,7 @@ R9 开始前要核对的 RC 前事项（2026-11-14 抽查，均未完成）：`c
 | **第二轮审查（edge 与扩展）的协调者决定**：CoSec 授权的是应用将要执行的那个请求，每个事实由一个可信方读一次：服务器或框架已经改写过的事实，要么明知地读改写后的值，要么拒绝启动。客户端 IP 只解析一次：无 forward-headers 策略时由 CoSec 按 `max-trusted-index` 解析；Tomcat `native` 用阀门的结果，不再读头；Netty `native` 只读头；`framework` 策略使启动失败。含小写字母的方法是 400；HEAD 按 GET 决策。WebMvc 的过滤器排在 Boot 改写请求的过滤器之后。应用内路径由 `runtime` 的一个函数从请求 URI 与 context path 得出。安全上下文的写入只属于适配器；处理器里推荐用参数解析器读取。ip2region 没有对应 IP 版本的库时回答“取不到”而不是“缺失”。`IdGenerator` 抛出时管道退回随机 id，CosId 生成器不等待。三个适配器的一致性由真实服务器上的测试守护 | 2026-11-14 | 协调者按推荐（维护者："默认按你推荐"）；修复合入时修订 [RFC 0006](rfc/0006-coroutine-pipeline.md) §5.3.1 |
 | **挂起处理器里的 `SecurityContextHolder`**（edge 组的 M4）：默认配置下，被另一个请求唤醒的挂起处理器从 holder 读到的是那个请求的主体。保留 holder（阻塞代码需要它，删掉只会让应用自己写同样有隐患的 ThreadLocal）；处理器里推荐以参数注入 `SecurityContext`；为 holder 注册上下文传播的访问器；上下文传播不会恢复 holder 时，在挂起处理器运行前解绑它，使读取明确失败而不是答出别人的主体。starter 不替应用打开全局的自动上下文传播。剩下的一种情形写进文档：在阻塞处理器的请求线程上被唤醒、且只在唤醒后才读 holder | 2026-11-14 | 协调者按推荐（维护者："默认按你推荐"）；`wiki/integration/web.md` |
 | **第二轮审查（宿主与工具）的协调者决定**：一道保护不能被静默关掉，文档里不能有不可能生效的语句。starter 的启动检查有自己的类型，不受 `spring.main.lazy-initialization` 影响（`STA-3`）。`http` 动作的动词恰为 `HEAD` 或含小写字母时文档不编译（`DOC-8`）：HEAD 按 GET 决策，这样的 DENY 是作者以为堵上了的洞；转换工具对只含 HEAD 的 7.x DENY 拒绝转换，对只含 HEAD 的 ALLOW 丢弃并在报告里说明。测试工具经 `Enforceable` 决策，与管道一致；保持 experimental，公共签名里不出现 Jackson。`AuthenticatedPrincipal` 的属性在构造时成为不可修改的视图，JWT 解析出的嵌套集合不可变。社交登录注册项的未知字段、设置了却不生效的 `cosec.cosid.generator`、重复的内存 API Key hash 都使启动失败。8.0 不支持 Spring AOT 与原生镜像（未测试），支持的是网关镜像的 JDK AOT 缓存；原生镜像留到 8.x | 2026-11-14 | 协调者按推荐（维护者："默认按你推荐"）；修复合入时修订 [RFC 0006](rfc/0006-coroutine-pipeline.md) §12 与 [RFC 0005](rfc/0005-condition-ast.md) |
+| **宿主与工具组的后续决定**：7.x 按请求属性写的条件，8.0 的执行路径不填这些属性，转换后永远不匹配；转换工具按方向处理：DENY 拒绝转换，ALLOW 收窄并记录。`ipRegion` 只翻译一种形状：国家前缀（`startsWith "X\|"`）成为 `ext.ip2region.country` 等于 X，并在平台文档里声明该属性；其余形状不做四个属性的合取（地区字段读不到，`0` 字段在 8.0 是缺失）。测试工具场景里的外部属性（`ext.*` 的目录、取值与“取不到”）放到 8.1，设计已有。网关镜像的 512M 直接内存默认值保持：它是上限不是预留，只有裸跑 `docker run` 用到，没有带请求体流量下的实测，实测随端到端基线在 GA 后做 | 2026-11-14 | 协调者按推荐（维护者："默认按你推荐"）；[RFC 0006](rfc/0006-coroutine-pipeline.md) §5.4.5 |
 
 ## 10. 尚未派发的下一步
 
@@ -496,4 +504,5 @@ GA 之后（8.1），在 8.0 GA 之前不派发：
     - 密钥轮换；
     - 一个部署同时接受 CoSec 自己的 token 和外部 token 时怎么组合认证器；
     - 拒绝带 `act` 的 token：这道闸门今天只在 `cosec-jwt` 的 `Jwts.toPrincipal`，要移到每个认证器都经过的地方。
+- **测试工具场景里的外部属性**（第二轮审查 L9，2026-11-14 决定）：`PolicyTestKit.load` 接受应用的属性声明作为目录，场景在 `request.external` 里给出取值或“取不到”，复用 conformance 格式的 `declares`。8.0 里读 `ext.*` 的文档在测试工具中不编译，`wiki/policies/testing.md` 已写明并指向 `simulate`。
 - **委托（RFC 8693 `act`）**，[RFC 0009](rfc/0009-identity-and-credentials.md) 已定在 8.1：外部 IdP 的 token exchange 是它的主要来源，两份 RFC 一起排期。
