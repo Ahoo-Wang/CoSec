@@ -17,7 +17,6 @@ package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
@@ -51,25 +50,24 @@ internal class RequestFacts(
     val headers: Map<String, String>,
     val requestAttributes: Map<String, String>,
 ) {
-    /** The input of a condition; [captures] are the variables of the statement's resource pattern, if any. */
-    fun input(captures: Captures?): ConditionInput = FactsInput(this, captures)
+    private val facts: ConditionInput = FactsInput(this)
 
     /**
      * The host attributes of the engine's request: the engine answers the rest itself. A read of
      * `request.attributes.<FAULT><message>` throws [ScenarioFault] (see [DocumentSnapshotCompiler]).
      */
-    val host: ConditionInput = object : ConditionInput by FactsInput(this, null) {
+    val host: ConditionInput = object : ConditionInput by facts {
         override fun string(attribute: Attribute): String? {
             if (attribute.kind == Kind.REQUEST_ATTRIBUTE && attribute.name.startsWith(FAULT)) {
                 throw ScenarioFault(attribute.name.removePrefix(FAULT))
             }
-            return input(null).string(attribute)
+            return facts.string(attribute)
         }
     }
 }
 
 /** An absent attribute reads as null (RFC 0005 §3.4). */
-private class FactsInput(private val facts: RequestFacts, private val captures: Captures?) : ConditionInput {
+private class FactsInput(private val facts: RequestFacts) : ConditionInput {
     @Suppress("CyclomaticComplexMethod")
     override fun string(attribute: Attribute): String? = when (attribute.kind) {
         Kind.SUBJECT_ID -> if (facts.authenticated) facts.principal else null
@@ -82,7 +80,6 @@ private class FactsInput(private val facts: RequestFacts, private val captures: 
         Kind.RESOURCE_TYPE -> facts.resource.type
         Kind.RESOURCE_ID -> facts.resource.id
         Kind.RESOURCE_ATTRIBUTE -> facts.resource.attributes[attribute.name]
-        Kind.RESOURCE_VAR -> captures?.get(attribute.name)
         Kind.ENVIRONMENT_DEVICE -> facts.device
         Kind.HTTP_HEADER -> facts.headers[attribute.name]
         Kind.HTTP_ORIGIN -> facts.headers[ORIGIN]
