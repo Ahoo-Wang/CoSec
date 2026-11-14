@@ -1,0 +1,16 @@
+# Rule: PIP-15
+# Mutant: a check decides http:delete, which no request is decided as
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.AuthorizationCheckerTest :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+index 3f46b368..5bf73e64 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
+@@ -104,7 +104,6 @@ object PathNormalizer {
+     @InternalCoSecApi
+     fun enforceable(action: Action): Action? = when {
+         action.namespace != ResourcePattern.HTTP_TYPE -> action
+-        HttpMethods.hasLowerCase(action.verb) -> null
+         action.verb == HttpMethods.HEAD -> Action(action.namespace, HttpMethods.decidedAs(action.verb))
+         else -> action
+     }

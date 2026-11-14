@@ -354,6 +354,40 @@ class ControlPlaneTest {
             .enforced.decision.assert().isEqualTo("Permit")
     }
 
+    /**
+     * `PIP-18`, `CTL-3`: an `http` action is read as enforcement reads a request's method: HEAD as GET, which a DENY on
+     * `http:GET` denies, and a verb with a lower-case letter, which no request is decided as, refused.
+     */
+    @Test
+    fun `an http action is read as enforcement reads a method`() = runBlocking<Unit> {
+        val initech = SnapshotKey.Tenant("initech")
+        val noRead = PolicyDefinition(
+            PolicyId("no-read"),
+            attachable = false,
+            condition = null,
+            statements = listOf(
+                StatementSource("", Effect.DENY, listOf("http:GET"), listOf(ResourceSource("http:path:/salaries/**")))
+            ),
+        )
+        bootstrap(
+            initech,
+            listOf(allow("open", action = "http:*", resource = "http:path:/salaries/**"), noRead),
+            listOf("open", "no-read").map {
+                Binding(BindingId(it), SubjectRef.Anyone, BindingScope(Match.Any, Match.Any), PolicyId(it))
+            },
+        )
+        val request = bob("read", TenantId("initech"))
+            .copy(roles = emptyList(), app = "", space = "", resource = Resource("http", "/salaries/7", emptyMap()))
+        fun with(verb: String) = request.copy(action = Action("http", verb))
+        plane.simulate(plato, with("POST")).enforced.decision.assert().isEqualTo("Permit")
+        plane.simulate(plato, with("HEAD")).enforced.decision.assert().isNotEqualTo("Permit")
+        plane.explain(plato, with("HEAD")).decision.decision.assert().isNotEqualTo("Permit")
+        refused { plane.simulate(plato, with("delete")) }.assert().isEqualTo(400)
+        refused { plane.explain(plato, with("delete")) }.assert().isEqualTo(400)
+        val query = AccessQuery(TenantId("initech"), null, null, Action("http", "delete"), request.resource)
+        refused { plane.analyze(plato, query) }.assert().isEqualTo(400)
+    }
+
     /** RC1-41, review L5 of #1200: a resource no request path could be is not decided, nor analyzed. */
     @Test
     fun `a resource is held to a request path's bounds`() = runBlocking<Unit> {

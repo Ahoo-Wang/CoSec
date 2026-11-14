@@ -24,7 +24,10 @@ request to the same `Pipeline`, so they answer every request byte for byte alike
 On both web stacks CoSec runs after Spring Boot's filters that rewrite the request, so it authorizes what is executed:
 the hidden-method filter (`spring.mvc.hiddenmethod.filter.enabled`, `-10000`), which turns a `POST` with `_method=DELETE`
 into a DELETE, runs first, and the DELETE is what CoSec decides. A filter of your own that rewrites the method or the
-path must run before CoSec too: one after it changes the request CoSec has already authorized.
+path must run before CoSec too: one after it changes the request CoSec has already authorized. On Spring Cloud Gateway
+the question does not arise: the gateway turns the reactive hidden-method filter off itself
+(`spring.webflux.hiddenmethod.filter.enabled=false`, ahead of every other property source), so it never rewrites the
+method it forwards.
 
 Every adapter needs its module, `cosec-cocache` (the snapshot documents and token revocation live in Redis), a
 JWT secret and a route map; a service that only reads the identity its gateway forwards needs none of them
