@@ -66,7 +66,7 @@ Every public declaration of a published module is in one of four levels. The mar
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
 | `@CoSecSpi` | An interface applications implement, not only call: the extension points above, and the capabilities a principal declares (`ExpiresAtCapable`, `IssuedAtCapable`, `MembershipMarkerCapable`). Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
-| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline`'s constructor and `evaluate`, `RequestGate`, `PipelineComponents`, `PipelineOptions`, `SnapshotOptions`, `SuspendingSnapshotSource`, `AttributeProviders`, `DecisionListeners`, `IdentityIssuer`, `IdentityGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `RequestSecurity`, `CoSecParameters.read`); and the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
+| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `AttributeRequests`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline`'s constructor and `evaluate`, `RequestGate`, `PipelineComponents`, `PipelineOptions`, `SnapshotOptions`, `SuspendingSnapshotSource`, `AttributeProviders`, `DecisionListeners`, `IdentityIssuer`, `IdentityGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `RequestSecurity`, `CoSecParameters.read`); and the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
 | `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
 
 The build keeps these promises. Every published library module stores its public ABI in a dump file,
@@ -315,6 +315,28 @@ class DirectoryAttributeProvider(private val directory: DirectoryClient) : Attri
 - **What a provider sees.** `AttributeRequest` holds the tenant, the subject, the resolved scope (null in stage A), the action,
   the resource, the client address, the request id and the device id, never another attribute's value.
 
+**Testing a provider.** `AttributeRequests` (`cosec-testkit`, `@ExperimentalCoSecApi`) builds the request a provider
+is asked with. Only the pipeline constructs a resolved scope, so the kit resolves it with the pipeline's own resolver,
+from the principal's roles, the space the request selects and the host's app:
+
+```kotlin
+@OptIn(ExperimentalCoSecApi::class)
+class DirectoryAttributeProviderTest {
+    private val provider = DirectoryAttributeProvider(FakeDirectory(mapOf("acme/alice" to "finance")))
+    private val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
+
+    @Test
+    fun `reads the department of the principal`() = runBlocking<Unit> {
+        val request = AttributeRequests.of(Action("order", "read"), Resource("order", "7", emptyMap()), alice)
+        val values = provider.fetch(request, setOf("ext.directory.department"))
+        check(values == mapOf("ext.directory.department" to "finance"))
+    }
+}
+```
+
+`AttributeRequests.beforeScope` is the request of stage A, without a scope. A scope the pipeline would reject (a space
+the principal has no role in, another app than the host's) throws: no stage-B provider is ever asked with one.
+
 **The blacklist** is a stage-A provider: `BlacklistAttributeProvider(source)` declares `ext.blacklist.principal`,
 `ext.blacklist.ip` and `ext.blacklist.device`, and a request one of them blocks meets the built-in DENY
 `cosec:blacklist`. Implement `BlacklistSource.contains(kind, value)` over your store (principals are
@@ -359,6 +381,10 @@ class BreakGlassAlerts(private val pager: PagerClient) : DecisionListener {
   [Observability](../operations/observability.md).
 - `event.evaluationTrace` holds the engine's trace at `cosec.pipeline.trace-level`; it is null at `off`, the default.
 - On shutdown, queued events are still delivered for up to `cosec.observability.listener.drain-timeout`.
+- **Testing a listener**: `PipelineFixture` (`cosec-testkit`) takes `listeners` and delivers them the events the
+  pipeline makes, so a test reads real events, never hand-built ones: a REQUIRED listener has the event before
+  `evaluate` returns, a BEST_EFFORT one once the fixture is closed
+  ([Testing your code against a real pipeline](../policies/testing.md#testing-your-code-against-a-real-pipeline)).
 
 ## Rate limiters
 
