@@ -39,7 +39,7 @@
       "guards": [
         "runtime:TokenAuthenticatorTest#aRevokedSubjectsOlderTokensAreRejected",
         "spi:RevocationReaderTest#subjectRevocation",
-        "login:SubjectRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
+        "runtime:TokenRevocationTest#theSkewRevokesTokensIssuedJustAfterTheRevocation",
         "spring-boot:CoSecJwtAutoConfigurationTest#theRevocationJudgementTakesTheRevocationSkew"
       ],
       "pending": null
