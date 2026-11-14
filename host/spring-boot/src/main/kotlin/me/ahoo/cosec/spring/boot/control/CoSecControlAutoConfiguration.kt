@@ -104,9 +104,7 @@ import kotlin.time.toKotlinDuration
     afterName = ["org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration"],
 )
 @ConditionalOnCoSecEnabled
-@ConditionalOnClass(
-    name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cocache.control.CoCacheControlStore"]
-)
+@ConditionalOnClass(name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cocache.control.CoCacheControlStore"])
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
 @Import(StartupTaskExclusion::class)
