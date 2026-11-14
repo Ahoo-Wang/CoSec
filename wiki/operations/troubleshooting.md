@@ -46,7 +46,7 @@ The request cannot be read without ambiguity, so it is refused before authentica
 `BAD_REQUEST`. Causes:
 
 - the path has `.` or `..` segments, a malformed percent-escape, an empty segment before its end (`//`, often two
-  URL parts joined with a `/` each), or an encoded separator (`%2F`). A trailing `/` is not refused;
+  URL parts joined with a `/` each), an encoded separator (`%2F`), or a backslash (`\`, `%5C`). A trailing `/` is not refused;
 - a `CoSec-Space-Id` or `CoSec-Device-Id` header is sent with two different values, a blank one beside
   a non-blank one included. Send each header once, or leave it out;
 - a route map captures a value that would change the resource id's segments;

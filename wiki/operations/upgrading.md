@@ -16,10 +16,11 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
-- **A path with an empty segment or an encoded separator is a `400`** (`PIP-14`). `//admin`, `/admin//x`, `/;x/admin`
-  and `/admin%2Fx` were decided as paths of their own, so a `DENY` under `/admin` did not match them, while a backend
-  that merges slashes or decodes separators served them as `/admin/...`. A trailing `/` is unchanged: `/admin/` stays
+- **A path with an empty segment, an encoded separator or a backslash is a `400`** (`PIP-14`). `//admin`, `/admin//x`,
+  `/;x/admin`, `/admin%2Fx`, `/admin\x` and `/admin%5Cx` were decided as paths of their own, so a `DENY` under `/admin` did not match them, while a backend
+  that merges slashes, decodes separators or reads `\` as `/` served them as `/admin/...`. A trailing `/` is unchanged: `/admin/` stays
   its own path. Requests that were served before and are refused now:
+  - a `\` in a path, raw or encoded: no client is expected to send one, as browsers turn it into `/`;
   - a `/` encoded inside a path variable, such as `/files/a%2Fb.txt` or `/repos/group%2Fproject`: send the value in the
     query, or encode its `/` twice (`%252F`), which the pipeline decodes once, to the text `%2F`, and the application
     decodes again;

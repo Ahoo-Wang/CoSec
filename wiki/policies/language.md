@@ -199,8 +199,8 @@ contain `:`; no literal may contain `*`, `?`, `{`, `}`, whitespace or control ch
 ### HTTP paths
 
 `http:path:<pattern>` matches a resource of type `http` whose id is the request path, as the pipeline normalized it
-([Web integration](../integration/web.md)). A pattern never meets an empty segment before the end of a path or an
-encoded `/`, which the pipeline refuses with `400`. A trailing `/` is part of the path: `/admin` does not match
+([Web integration](../integration/web.md)). A pattern never meets an empty segment before the end of a path, an
+encoded `/` or a `\`, which the pipeline refuses with `400`. A trailing `/` is part of the path: `/admin` does not match
 `/admin/`, and `/admin/**` does. It matches what Spring's `PathPattern` matches, on this subset:
 
 | Element | Matches |

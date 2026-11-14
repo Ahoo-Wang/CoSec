@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.PathNormalizerTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
-index b05d96ef..202ed4ba 100644
+index 90132c2d..21fd628f 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
-@@ -120,7 +120,6 @@ object PathNormalizer {
+@@ -147,7 +147,6 @@ object PathNormalizer {
          for (index in path.indices) {
              when (path[index]) {
                  '%', '.', '\\' -> return false

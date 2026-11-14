@@ -413,6 +413,7 @@ class WebAdapterParityTest {
                 type = "invalid-request"
             ),
             Scenario("an encoded separator is 400", path = "/public%2Fpage", status = 400, type = "invalid-request"),
+            Scenario("an encoded backslash is 400", path = "/public%5Cpage", status = 400, type = "invalid-request"),
             Scenario("a trailing separator is decided", path = "/public/page/", status = 200, type = null),
             Scenario(
                 "an ambiguous CoSec parameter is 400",
