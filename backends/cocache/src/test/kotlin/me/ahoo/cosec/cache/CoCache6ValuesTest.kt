@@ -88,7 +88,6 @@ class CoCache6ValuesTest {
         CoSecTestCaches(redis, keyPrefix).use { caches ->
             val store = CoCacheTokenStore(caches.revokedTokenCache, caches.revokedSubjectCache)
             foreign { runBlocking { store.reader.isRevoked("jti-6") } }
-            foreign { store.isRevoked("jti-6") }
             // A cached absence CoCache 6 wrote is no answer either.
             foreign { runBlocking { store.reader.isRevoked("jti-6-absent") } }
             foreign { runBlocking { store.reader.subjectRevokedBefore(tenant, alice) } }

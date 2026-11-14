@@ -22,11 +22,12 @@ import java.time.Duration
 import java.time.Instant
 
 /**
- * [TokenStore] backed by a CoCache two-level cache (local + Redis),
- * so revocation is shared across instances.
+ * [TokenStore] backed by CoCache `Store`s (a local copy over Redis), so revocations are shared across instances, and
+ * read back through [reader].
  *
- * Local hits cost no network; cross-instance propagation is bounded by the
- * local cache TTL (default 30 seconds, `cosec.authentication.revocation.cache.*`).
+ * A write invalidates every instance's local copy of the entry at once; a "not revoked" kept locally while that
+ * invalidation is lost lives at most [RevokedTokenCache.MISSING_TTL_SECONDS]. Writes go through CoCache's suspending
+ * view and never block the caller. A Redis failure throws.
  *
  * Revoking all tokens of a principal ([revokeSubject]) needs [subjectCache]; without it, it throws.
  *
@@ -38,7 +39,7 @@ class CoCacheTokenStore @JvmOverloads constructor(
     private val cache: RevokedTokenCache,
     private val subjectCache: RevokedSubjectCache? = null
 ) : TokenStore {
-    /** The same revocations, read without blocking, for the coroutine pipeline (RFC 0006 §5.3.2). */
+    /** The revocations this store writes, read without blocking (RFC 0006 §5.3.2). */
     val reader: RevocationReader = CoCacheRevocationReader(cache, subjectCache)
 
     /**
@@ -48,16 +49,10 @@ class CoCacheTokenStore @JvmOverloads constructor(
      * @param tokenId the token id (jti) to revoke
      * @param ttl how long to keep the entry
      */
-    override fun revoke(tokenId: String, ttl: Duration) {
+    override suspend fun revoke(tokenId: String, ttl: Duration) {
         // the extra second keeps the entry past the token's natural expiry (CoCache needs a positive lifetime)
-        cache.put(RevokedTokenCache.key(tokenId), true, ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1))
+        cache.suspending().put(RevokedTokenCache.key(tokenId), true, ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1))
     }
-
-    /**
-     * @param tokenId the token id (jti) to check
-     * @return true if the token has been revoked; false on a miss
-     */
-    override fun isRevoked(tokenId: String): Boolean = cache.get(RevokedTokenCache.key(tokenId)) == true
 
     /**
      * Keeps the later of the existing and the new `issuedBefore`, so that a second revocation never shortens the
@@ -65,14 +60,14 @@ class CoCacheTokenStore @JvmOverloads constructor(
      * what was read, so two instances revoking the same principal at once cannot replace a later entry with an earlier
      * one. A Redis failure throws rather than writing blind.
      */
-    override fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) {
-        val subjectCache = subjectCache
+    override suspend fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) {
+        val subjects = subjectCache?.suspending()
             ?: throw UnsupportedOperationException("CoCacheTokenStore needs a RevokedSubjectCache to revoke a principal.")
         val key = RevokedSubjectCache.key(tenant, principal)
         val revokedBefore = epochMilliRoundedUp(issuedBefore)
         val entryTtl = ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1)
         repeat(MAX_REVOKE_SUBJECT_ATTEMPTS) {
-            val current = when (val read = subjectCache.getIfChanged(key, null)) {
+            val current = when (val read = subjects.getIfChanged(key, null)) {
                 is ConditionalGet.Present -> read
                 ConditionalGet.Absent -> null
                 ConditionalGet.Unchanged -> error("A read with no known digest cannot be unchanged.")
@@ -80,7 +75,7 @@ class CoCacheTokenStore @JvmOverloads constructor(
             if (current != null && current.value >= revokedBefore) {
                 return
             }
-            when (subjectCache.putIfMatch(key, current?.digest, revokedBefore, entryTtl)) {
+            when (subjects.putIfMatch(key, current?.digest, revokedBefore, entryTtl)) {
                 is ConditionalPut.Written -> return
                 is ConditionalPut.Conflict -> Unit
             }
@@ -90,12 +85,6 @@ class CoCacheTokenStore @JvmOverloads constructor(
                 "the entry kept changing for $MAX_REVOKE_SUBJECT_ATTEMPTS attempts."
         )
     }
-
-    /**
-     * @return the instant before which the principal's tokens are revoked; `null` on a miss, or without [subjectCache]
-     */
-    override fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
-        subjectCache?.get(RevokedSubjectCache.key(tenant, principal))?.let(Instant::ofEpochMilli)
 
     private companion object {
         const val MAX_REVOKE_SUBJECT_ATTEMPTS = 8

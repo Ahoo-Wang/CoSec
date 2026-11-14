@@ -1,0 +1,20 @@
+# Rule: IDN-14
+# Mutant: refresh reads a revocation store it cannot read as "not revoked", and issues a token on that read
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.SimpleRefreshTokenAuthenticationTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication.kt
+index 0bb93e04..384d5c6c 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication.kt
+@@ -39,7 +39,10 @@ class SimpleRefreshTokenAuthentication(
+ ) : AbstractRefreshTokenAuthentication<RefreshTokenCredentials>(RefreshTokenCredentials::class.java) {
+     override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
+         val token = tokenVerifier.refresh(credentials)
+-        revocation.check(token)
++        try {
++            revocation.check(token)
++        } catch (_: me.ahoo.cosec.spi.token.RevocationUnavailableException) {
++        }
+         return TokenSubject.of(token)
+     }
+ }

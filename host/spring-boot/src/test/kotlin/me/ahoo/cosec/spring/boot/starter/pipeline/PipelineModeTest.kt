@@ -26,6 +26,7 @@ import me.ahoo.cosec.servlet.PipelineServletFilter
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spring.boot.starter.NoTokenStore
 import me.ahoo.cosec.spring.boot.starter.apikey.CoSecApiKeyAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -83,10 +84,12 @@ class PipelineModeTest {
         gateway.withPropertyValues(
             "${JwtProperties.PREFIX}.enabled=true",
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
-        ).withBean(TokenStore::class.java, { mockk<TokenStore>() }).run { context ->
-            context.startupFailure.assert().isNull()
-            context.getBeansOfType(TokenConverter::class.java).assert().hasSize(1)
-        }
+        ).withBean(TokenStore::class.java, { mockk<TokenStore>() })
+            // A service that issues tokens reads their revocations, for refresh and logout.
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE }).run { context ->
+                context.startupFailure.assert().isNull()
+                context.getBeansOfType(TokenConverter::class.java).assert().hasSize(1)
+            }
     }
 
     @Test
@@ -105,7 +108,7 @@ class PipelineModeTest {
             "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
             "cosec.authorization.routes.location=",
         )
-        .withBean(TokenStore::class.java, { TokenStore.NoOp })
+        .withBean(TokenStore::class.java, { NoTokenStore })
         .withBean(RevocationReader::class.java, { RevocationReader.NONE })
 
     @Test

@@ -1,0 +1,17 @@
+# Rule: MEM-4
+# Mutant: the revocation judgement reads a subject revocation without the skew, so a token issued by a clock running ahead escapes it, in the pipeline and in refresh alike
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.SubjectRevocationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt
+index 28db031a..3bfb5d5d 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt
+@@ -50,7 +50,7 @@ class TokenRevocation(
+         }
+         val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
+         val revokedBefore = revocations.subjectRevokedBefore(tenant, PrincipalId(token.principal))
+-        if (SubjectRevocation.revokes(revokedBefore, token.issuedAt, skew)) {
++        if (SubjectRevocation.revokes(revokedBefore, token.issuedAt, Duration.ZERO)) {
+             throw TokenRevokedException(
+                 "The tokens of principal [${token.principal}] issued before [$revokedBefore] have been revoked."
+             )

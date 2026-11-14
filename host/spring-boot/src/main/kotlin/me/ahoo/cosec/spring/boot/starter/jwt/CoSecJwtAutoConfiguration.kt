@@ -10,23 +10,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import com.auth0.jwt.algorithms.Algorithm
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
-import me.ahoo.cosec.runtime.token.RevocableTokenVerifier
+import me.ahoo.cosec.runtime.token.DefaultTokenRevoker
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
-import me.ahoo.cosec.spi.token.DefaultTokenRevoker
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.starter.authentication.ConditionalOnLoginEnabled
+import me.ahoo.cosec.spring.boot.starter.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.pipeline.RevocationProperties
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -109,27 +114,39 @@ internal class CoSecJwtAutoConfiguration {
             "or a TokenStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
     )
 
-    /** Refresh reads subject revocations with the pipeline's skew (`cosec.authentication.revocation.skew`). */
+    /** CoSec's own verifier: pure computation, whose answers are then checked against revocations (`TokenRevocation`). */
     @Bean
     @ConditionalOnMissingBean
-    fun cosecJwtTokenVerifier(
-        algorithm: Algorithm,
-        tokenStore: TokenStore,
+    fun cosecJwtTokenVerifier(algorithm: Algorithm): TokenVerifier = JwtTokenVerifier(algorithm)
+
+    /**
+     * The one revocation judgement outside the pipeline: refresh and [TokenRevoker] read revocations through it, with the
+     * pipeline's reader and skew (`cosec.authentication.revocation.skew`), so a token the pipeline refuses is neither
+     * refreshed nor revoked again.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecTokenRevocation(
+        revocationReader: ObjectProvider<RevocationReader>,
+        tokenStore: ObjectProvider<TokenStore>,
         revocationProperties: RevocationProperties,
-    ): TokenVerifier {
-        return RevocableTokenVerifier(JwtTokenVerifier(algorithm), tokenStore, revocationProperties.skew)
-    }
+    ): TokenRevocation = TokenRevocation(
+        CoSecPipelineAutoConfiguration.revocationReader(revocationReader, tokenStore),
+        revocationProperties.skew,
+    )
 
     @Bean
     @ConditionalOnMissingBean
     fun cosecTokenRevoker(
         tokenVerifier: TokenVerifier,
         tokenStore: TokenStore,
+        tokenRevocation: TokenRevocation,
         jwtProperties: JwtProperties
     ): TokenRevoker {
         return DefaultTokenRevoker(
             tokenVerifier,
             tokenStore,
+            tokenRevocation,
             jwtProperties.tokenValidity.refresh
         )
     }

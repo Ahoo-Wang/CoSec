@@ -54,7 +54,7 @@ public final class me/ahoo/cosec/login/token/RefreshTokenMismatchException : me/
 }
 
 public final class me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication : me/ahoo/cosec/login/token/AbstractRefreshTokenAuthentication {
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;)V
 	public synthetic fun authenticate (Lme/ahoo/cosec/login/Credentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun authenticate (Lme/ahoo/cosec/login/token/RefreshTokenCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }

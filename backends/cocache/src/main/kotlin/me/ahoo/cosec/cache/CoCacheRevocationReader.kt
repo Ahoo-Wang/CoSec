@@ -14,31 +14,50 @@
 package me.ahoo.cosec.cache
 
 import kotlinx.coroutines.future.await
+import me.ahoo.cocache.api.CacheReadException
+import me.ahoo.cocache.api.Lookup
+import me.ahoo.cocache.api.Store
+import me.ahoo.cocache.core.ForeignFormatException
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import java.time.Instant
 
 /**
  * The [RevocationReader] over the caches [CoCacheTokenStore] writes: the non-blocking reads the coroutine pipeline makes
- * (RFC 0006 §5.3.2). [CoCacheTokenStore] answers the same questions synchronously, for login and refresh.
+ * (RFC 0006 §5.3.2), and the reads refresh and logout make through the same judgement.
  *
  * Both reads go through CoCache's async view. A local hit answers on the caller's thread without suspending (RFC 0006
  * T1); a miss reads Redis without blocking any thread and completes on CoCache's async pool, from which the pipeline
- * moves on (T2). The caches degrade a failed read, as [CoSecCacheSpecs.revokedToken] sets them to: it is a miss, so
- * the token counts as not revoked, the documented exception to failing closed. An id that names no key (an unpaired
- * surrogate, [RevokedTokenCache.key], RC1-52) is no failed read: it throws, before Redis is asked.
+ * moves on (T2). A Redis read with no answer (`Lookup.Unknown`: Redis down, a command that timed out) is
+ * [RevocationUnavailableException], never "not revoked": the tables read a failure as unknown ([CoSecCacheSpecs.locks]),
+ * and the caller decides what it means. Content the tables cannot decode is an error of its own, never an unavailable
+ * store. An id that names no key (an unpaired surrogate, [RevokedTokenCache.key], RC1-52) throws before Redis is asked.
  */
 internal class CoCacheRevocationReader @JvmOverloads constructor(
     private val cache: RevokedTokenCache,
     private val subjectCache: RevokedSubjectCache? = null,
 ) : RevocationReader {
-    override suspend fun isRevoked(tokenId: String): Boolean =
-        cache.async().get(RevokedTokenCache.key(tokenId)).await() == true
+    override suspend fun isRevoked(tokenId: String): Boolean = read(cache, RevokedTokenCache.key(tokenId)) == true
 
     /** Null without [subjectCache]: then no principal's tokens can have been revoked through this store. */
     override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? {
         val subjectCache = subjectCache ?: return null
-        return subjectCache.async().get(RevokedSubjectCache.key(tenant, principal)).await()?.let(Instant::ofEpochMilli)
+        return read(subjectCache, RevokedSubjectCache.key(tenant, principal))?.let(Instant::ofEpochMilli)
     }
+
+    private suspend fun <V : Any> read(store: Store<String, V>, key: String): V? =
+        when (val lookup = store.async().lookup(key).await()) {
+            is Lookup.Present -> lookup.value
+            is Lookup.Absent -> null
+            is Lookup.Unknown -> throw unanswered(lookup.error)
+        }
+
+    private fun unanswered(error: CacheReadException): Exception =
+        if (generateSequence<Throwable>(error) { it.cause }.any { it is ForeignFormatException }) {
+            error
+        } else {
+            RevocationUnavailableException("The revocation store could not be read: ${error.message}", error)
+        }
 }

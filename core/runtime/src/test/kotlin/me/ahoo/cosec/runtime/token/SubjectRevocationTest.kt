@@ -13,11 +13,12 @@
 
 package me.ahoo.cosec.runtime.token
 
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.spi.token.DefaultTokenRevoker
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
@@ -26,7 +27,6 @@ import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.assertDoesNotThrow
 import org.junit.jupiter.api.assertThrows
 import java.time.Clock
 import java.time.Duration
@@ -34,7 +34,8 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * RFC 0004 §4.5.3: revoking every token of a principal, against a real store.
+ * RFC 0004 §4.5.3: revoking every token of a principal, against a real store, judged by [TokenRevocation], which the
+ * pipeline, refresh and logout share.
  */
 class SubjectRevocationTest {
     private val now = Instant.parse("2026-10-26T12:00:00Z")
@@ -43,7 +44,7 @@ class SubjectRevocationTest {
     private val tenant = TenantId("tenant")
     private val alice = PrincipalId("alice")
 
-    /** Answers with a fixed principal: the decorator under test only reads what the delegate verified. */
+    /** Answers with a fixed principal: the revoker only reads what the verifier verified. */
     private class FixedVerifier(var principal: VerifiedToken) : TokenVerifier {
         override fun verify(accessToken: String): VerifiedToken = principal
 
@@ -54,27 +55,23 @@ class SubjectRevocationTest {
         VerifiedToken("jti-$issuedAt", id, tenantId, null, issuedAt = issuedAt)
 
     private val verifier = FixedVerifier(token(now))
+    private val accessToken = "access"
 
     // No skew: these tests place tokens to the millisecond of the revocation; the skew has its own test.
-    private val revocableVerifier = RevocableTokenVerifier(verifier, tokenStore, Duration.ZERO)
-    private val revoker = DefaultTokenRevoker(verifier, tokenStore, refreshValidity, Clock.fixed(now, ZoneOffset.UTC))
-    private val accessToken = "access"
-    private val compositeToken = SimpleCompositeToken("access", "refresh")
+    private val revocation = TokenRevocation(tokenStore, Duration.ZERO)
+    private val revoker =
+        DefaultTokenRevoker(verifier, tokenStore, revocation, refreshValidity, Clock.fixed(now, ZoneOffset.UTC))
 
-    private fun assertRevoked(principal: VerifiedToken) {
-        verifier.principal = principal
-        assertThrows<TokenRevokedException> { revocableVerifier.verify(accessToken) }
-        assertThrows<TokenRevokedException> { revocableVerifier.refresh(compositeToken) }
+    private fun assertRevoked(principal: VerifiedToken, judgement: TokenRevocation = revocation) {
+        assertThrows<TokenRevokedException> { runBlocking { judgement.check(principal) } }
     }
 
-    private fun assertAccepted(principal: VerifiedToken) {
-        verifier.principal = principal
-        assertDoesNotThrow { revocableVerifier.verify(accessToken) }
-        assertDoesNotThrow { revocableVerifier.refresh(compositeToken) }
+    private fun assertAccepted(principal: VerifiedToken, judgement: TokenRevocation = revocation) {
+        runBlocking { judgement.check(principal) }
     }
 
     @Test
-    fun tokensIssuedBeforeAreRevokedAndLaterOnesAccepted() {
+    fun tokensIssuedBeforeAreRevokedAndLaterOnesAccepted() = runTest {
         assertAccepted(token(now.minusSeconds(60)))
 
         revoker.revokeSubject(tenant, alice, now)
@@ -85,22 +82,22 @@ class SubjectRevocationTest {
         assertAccepted(token(now.plusSeconds(1)))
     }
 
-    /** Review A7: refresh revokes within the skew exactly as the pipeline does, so a refused token is not renewed. */
+    /**
+     * Review A7: a token issued within the skew after the revocation is revoked too. Refresh and the pipeline ask the
+     * same judgement, so a token the pipeline refuses is never renewed.
+     */
     @Test
-    fun theSkewRevokesTokensIssuedJustAfterTheRevocation() {
-        val skewed = RevocableTokenVerifier(verifier, tokenStore, SubjectRevocation.DEFAULT_SKEW)
+    fun theSkewRevokesTokensIssuedJustAfterTheRevocation() = runTest {
+        val skewed = TokenRevocation(tokenStore, SubjectRevocation.DEFAULT_SKEW)
         revoker.revokeSubject(tenant, alice, now)
 
-        verifier.principal = token(now.plusSeconds(4))
-        assertThrows<TokenRevokedException> { skewed.verify(accessToken) }
-        assertThrows<TokenRevokedException> { skewed.refresh(compositeToken) }
-        verifier.principal = token(now.plus(SubjectRevocation.DEFAULT_SKEW))
-        assertDoesNotThrow { skewed.refresh(compositeToken) }
-        assertThrows<IllegalArgumentException> { RevocableTokenVerifier(verifier, tokenStore, Duration.ofSeconds(-1)) }
+        assertRevoked(token(now.plusSeconds(4)), skewed)
+        assertAccepted(token(now.plus(SubjectRevocation.DEFAULT_SKEW)), skewed)
+        assertThrows<IllegalArgumentException> { TokenRevocation(tokenStore, Duration.ofSeconds(-1)) }
     }
 
     @Test
-    fun otherPrincipalsAndTenantsAreUntouched() {
+    fun otherPrincipalsAndTenantsAreUntouched() = runTest {
         revoker.revokeSubject(tenant, alice, now)
 
         assertAccepted(token(now.minusSeconds(60), id = "bob"))
@@ -108,7 +105,7 @@ class SubjectRevocationTest {
     }
 
     @Test
-    fun aPrincipalWithoutTenantIsInTheDefaultTenant() {
+    fun aPrincipalWithoutTenantIsInTheDefaultTenant() = runTest {
         revoker.revokeSubject(TenantId(CoSec.DEFAULT), alice, now)
 
         assertRevoked(token(now.minusSeconds(60), tenantId = null))
@@ -116,7 +113,7 @@ class SubjectRevocationTest {
     }
 
     @Test
-    fun aTokenThatDoesNotSayWhenItWasIssuedIsRevoked() {
+    fun aTokenThatDoesNotSayWhenItWasIssuedIsRevoked() = runTest {
         assertAccepted(token(null))
 
         revoker.revokeSubject(tenant, alice, now)
@@ -125,7 +122,7 @@ class SubjectRevocationTest {
     }
 
     @Test
-    fun aTokenWithoutIssuedAtIsRevoked() {
+    fun aTokenWithoutIssuedAtIsRevoked() = runTest {
         val plain = VerifiedToken("plain", alice.value, null, null)
         assertAccepted(plain)
 
@@ -135,14 +132,22 @@ class SubjectRevocationTest {
     }
 
     @Test
-    fun aRevokedTokenIdStaysRevoked() {
+    fun aRevokedTokenIdStaysRevoked() = runTest {
         tokenStore.revoke("jti-$now", refreshValidity)
 
         assertRevoked(token(now))
     }
 
     @Test
-    fun theEntryOutlivesTheRefreshTokensItRevokes() {
+    fun aRevokerRefusesATokenItsPrincipalsRevocationCovers() = runTest {
+        revoker.revokeSubject(tenant, alice, now)
+        verifier.principal = token(now.minusSeconds(60))
+
+        assertThrows<TokenRevokedException> { revoker.revoke(accessToken) }
+    }
+
+    @Test
+    fun theEntryOutlivesTheRefreshTokensItRevokes() = runTest {
         revoker.revokeSubject(tenant, alice, now)
         tokenStore.revokedSubjects.getValue(tenant.value to alice.value).second.assert().isEqualTo(refreshValidity)
 
@@ -154,7 +159,7 @@ class SubjectRevocationTest {
     }
 
     @Test
-    fun anEarlierRevocationDoesNotShortenALaterOne() {
+    fun anEarlierRevocationDoesNotShortenALaterOne() = runTest {
         revoker.revokeSubject(tenant, alice, now)
         revoker.revokeSubject(tenant, alice, now.minusSeconds(3600))
 
@@ -162,24 +167,27 @@ class SubjectRevocationTest {
     }
 
     @Test
-    fun issuedBeforeDefaultsToNow() {
+    fun issuedBeforeDefaultsToNow() = runTest {
         val before = Instant.now()
-        DefaultTokenRevoker(verifier, tokenStore, refreshValidity).revokeSubject(tenant, alice)
+        DefaultTokenRevoker(verifier, tokenStore, revocation, refreshValidity).revokeSubject(tenant, alice)
 
         tokenStore.subjectRevokedBefore(tenant, alice)!!.isBefore(before).assert().isFalse()
     }
 
     @Test
-    fun aStoreThatCannotRecordItFails() {
-        val revoker = DefaultTokenRevoker(verifier, TokenStore.NoOp, refreshValidity)
+    fun aStoreThatCannotRecordItFails() = runTest {
+        val writesTokensOnly = object : TokenStore {
+            override suspend fun revoke(tokenId: String, ttl: Duration) = Unit
+        }
+        val revoker = DefaultTokenRevoker(verifier, writesTokensOnly, revocation, refreshValidity)
 
         assertThrows<UnsupportedOperationException> { revoker.revokeSubject(tenant, alice, now) }
     }
 
     @Test
-    fun aRevokerThatCannotRevokeSubjectsFails() {
+    fun aRevokerThatCannotRevokeSubjectsFails() = runTest {
         val revoker = object : TokenRevoker {
-            override fun revoke(accessToken: String): VerifiedToken = throw UnsupportedOperationException()
+            override suspend fun revoke(accessToken: String): VerifiedToken = throw UnsupportedOperationException()
         }
 
         assertThrows<UnsupportedOperationException> { revoker.revokeSubject(tenant, alice, now) }

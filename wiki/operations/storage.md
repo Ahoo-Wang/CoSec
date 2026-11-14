@@ -49,12 +49,13 @@ them ([Precedence](./configuration.md#precedence)):
 key encoding, codec, data source, key filter and per-entry lifetime ([Precedence](./configuration.md#precedence)).
 Unreadable revocations fail the read, and memberships always expire, without jitter, and fail closed on a failed read.
 The shadow caches keep their declared lifetimes, and the revocation tables read for the store's whole command timeout
-(`cocache.redis.command-timeout`): a read that times out reads "not revoked", so no `read-timeout` may shorten it.
+(`cocache.redis.command-timeout`): a read that times out is unavailable, which the pipeline's verification accepts, so
+no `read-timeout` may shorten it.
 The rest of the cache policy stays the application's, through customizers and `cocache.*` properties
 ([Precedence](./configuration.md#precedence) lists every field CoSec locks): on every cache the local cache's size and
 `expireAfterAccess`, and but for the snapshot store `local-max-age`; on every cache but the revocation tables
-`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl` and
-`unknown-read`; on memberships `ttl` (never forever), `absent-ttl`, `lease-*`, `load-*` and `invalidate-failure`. None
+`read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl`; on
+memberships `ttl` (never forever), `absent-ttl`, `lease-*`, `load-*` and `invalidate-failure`. None
 of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer `local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
 when the revocation's invalidation message is lost (`cosec.authentication.revocation.cache.local-max-age`, 30 seconds, is the
 default bound), and a longer membership `ttl` keeps a removed role applied that long.
@@ -265,7 +266,7 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | A document that disappeared from Redis after it was seen | Failed until a document returns (`Snapshot document [<doc>] disappeared from the store; failing closed.` at `ERROR`). Requests that need it are **`503`**, unless a DENY matches first. |
 | A tenant listed in `fail-closed.tenants`, once its documents lag past `fail-closed.max-lag` | **`503`**, unless a DENY matches first ([How instances read documents](#how-instances-read-documents)). |
 | No platform document published | Every request is **`503`** ([The first documents](#the-first-documents)). |
-| Revoked tokens and principals | The check answers "not revoked" and the token is **accepted**, so an outage does not reject every authenticated request. Tokens are still signature-verified and expire on their own. A failed read is not cached: each check asks Redis again, and a revocation applies as soon as Redis answers. |
+| Revoked tokens and principals | Verifying a request's token, the pipeline **accepts** it, so an outage does not reject every authenticated request (**`503`** with `cosec.authentication.revocation.fail-closed`). Tokens are still signature-verified and expire on their own. A failed read is not cached: each check asks Redis again, and a revocation applies as soon as Redis answers. A **refresh fails** instead (`IDN-14`): a token issued then would escape every revocation. |
 | Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
 | API keys in Redis (`cosec.api-key.store=redis`) | **`503`**. |
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |
