@@ -219,7 +219,12 @@ class EngineScenarios(
     }
 
     /** The engine's request; null when enforcement refuses the request's action or resource ([enforceable]). */
-    private fun flatRequest(credential: Credential, memberships: Memberships, scope: Scope, request: JsonNode): FlatRequest? {
+    private fun flatRequest(
+        credential: Credential,
+        memberships: Memberships,
+        scope: Scope,
+        request: JsonNode
+    ): FlatRequest? {
         val written = action(request)
         val action = if (enforceable) Enforceable.action(written) ?: return null else written
         val asWritten = resource(request.get("resource"))

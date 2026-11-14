@@ -53,7 +53,9 @@ object EngineExpectations {
     /** Throws [AssertionError] naming the scenario [name] when [outcome] is not what [expected] says. */
     fun check(name: String, expected: JsonNode, outcome: EngineOutcome, exact: Boolean) {
         if (expected.get("decision") == null) {
-            throw ScenarioFormatException("$name: expect names no decision, so it would pass whatever is decided: $expected")
+            throw ScenarioFormatException(
+                "$name: expect names no decision, so it would pass whatever is decided: $expected"
+            )
         }
         val notCompiled = expected.get("decision")?.textOrNull() == "NotCompiled"
         if (outcome is EngineOutcome.NotCompiled || notCompiled) {

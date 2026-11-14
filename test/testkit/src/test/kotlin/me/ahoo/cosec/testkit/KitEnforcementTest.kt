@@ -61,7 +61,9 @@ class KitEnforcementTest {
     fun `a HEAD is decided as the GET it is, by the kit as by the pipeline`() {
         val (outcome, status) = both("HEAD", "/reports/1")
         status.assert().isEqualTo(200)
-        (outcome as EngineOutcome.Decided).decision.assert().isInstanceOf(me.ahoo.cosec.model.decision.Decision.Permit::class.java)
+        (outcome as EngineOutcome.Decided).decision.assert().isInstanceOf(
+            me.ahoo.cosec.model.decision.Decision.Permit::class.java
+        )
         // GET is GET: the DENY written on HEAD applies to neither.
         both("GET", "/reports/1").second.assert().isEqualTo(200)
     }
@@ -85,10 +87,14 @@ class KitEnforcementTest {
     fun `a request the pipeline decides is decided alike by the kit`() {
         val (denied, deniedStatus) = both("DELETE", "/admin/x")
         deniedStatus.assert().isEqualTo(403)
-        (denied as EngineOutcome.Decided).decision.assert().isInstanceOf(me.ahoo.cosec.model.decision.Decision.Deny::class.java)
+        (denied as EngineOutcome.Decided).decision.assert().isInstanceOf(
+            me.ahoo.cosec.model.decision.Decision.Deny::class.java
+        )
         val (permitted, permittedStatus) = both("GET", "/orders/1")
         permittedStatus.assert().isEqualTo(200)
-        (permitted as EngineOutcome.Decided).decision.assert().isInstanceOf(me.ahoo.cosec.model.decision.Decision.Permit::class.java)
+        (permitted as EngineOutcome.Decided).decision.assert().isInstanceOf(
+            me.ahoo.cosec.model.decision.Decision.Permit::class.java
+        )
     }
 
     @Test
@@ -103,7 +109,9 @@ class KitEnforcementTest {
     /** A document id too long for a file name, as `cosec-migrate convert` names its file (`ConvertedDirectory`). */
     private fun boundedName(id: String): String {
         val encoded = URLEncoder.encode(id, Charsets.UTF_8)
-        val hash = MessageDigest.getInstance("SHA-256").digest(id.encodeToByteArray()).joinToString("") { "%02x".format(it) }
+        val hash = MessageDigest.getInstance(
+            "SHA-256"
+        ).digest(id.encodeToByteArray()).joinToString("") { "%02x".format(it) }
         var end = 200 - ".json".length - "~".length - hash.length
         if (encoded[end - 1] == '%') end -= 1 else if (encoded[end - 2] == '%') end -= 2
         return encoded.substring(0, end) + "~" + hash + ".json"
@@ -120,7 +128,9 @@ class KitEnforcementTest {
                "bindings":[{"id":"no-admin","subject":"*","app":"*","space":"*","policy":"no-admin"}]}""",
         )
         if (report) {
-            directory.resolve("report.json").writeText("""{"accepted":true,"documentIds":{"tenants/$name":"$tenant"}}""")
+            directory.resolve(
+                "report.json"
+            ).writeText("""{"accepted":true,"documentIds":{"tenants/$name":"$tenant"}}""")
         }
         return directory
     }
@@ -139,7 +149,8 @@ class KitEnforcementTest {
 
     @Test
     fun `a shortened file name without the report fails rather than naming another id`(@TempDir directory: Path) {
-        assertThrows<ScenarioFormatException> { PolicyTestKit.load(converted(directory, "租".repeat(30), report = false)) }
-            .message.assert().contains("report.json")
+        val unreported = converted(directory, "租".repeat(30), report = false)
+        val error = assertThrows<ScenarioFormatException> { PolicyTestKit.load(unreported) }
+        error.message.assert().contains("report.json")
     }
 }
