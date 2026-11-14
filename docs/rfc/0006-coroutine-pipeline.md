@@ -142,7 +142,7 @@ suspend Pipeline.evaluate(HttpFacts): Outcome
 
 | # | 文档或测试的说法 | 实际 | 本文的处理 |
 |---|---|---|---|
-| L1 | AGENTS.md："Three adapters must answer identically"，守护是 `WebAdapterParityTest` | [`WebAdapterParityTest`](../../spring-boot-starter/src/test/kotlin/me/ahoo/cosec/spring/boot/starter/WebAdapterParityTest.kt) 只构造 `ReactiveAuthorizationFilter` 和 `AuthorizationFilter`；`AuthorizationGatewayFilter` 与前者共用 `ReactiveSecurityFilter.filterInternal`，但从未在这个测试里被调用 | PR-7 把 Gateway 加进同一组场景（§6.3）。不必等本阶段：可以作为独立的 `test:` PR 先进 `main` |
+| L1 | AGENTS.md："Three adapters must answer identically"，守护是 `WebAdapterParityTest` | [`WebAdapterParityTest`](../../spring-boot-starter/src/test/kotlin/me/ahoo/cosec/spring/boot/WebAdapterParityTest.kt) 只构造 `ReactiveAuthorizationFilter` 和 `AuthorizationFilter`；`AuthorizationGatewayFilter` 与前者共用 `ReactiveSecurityFilter.filterInternal`，但从未在这个测试里被调用 | PR-7 把 Gateway 加进同一组场景（§6.3）。不必等本阶段：可以作为独立的 `test:` PR 先进 `main` |
 | L2 | AGENTS.md："Fail closed：只有两个例外……" | 现在 `SecurityPipeline` 在 `SecurityContextParser` 抛出非 token 异常时记日志、得到 500（`switchIfEmpty`），审计装饰器根本没有被调用，这次失败不留审计记录 | 本阶段每个 `Outcome`（含 400、认证不可用、取消）都产生 `DecisionEvent`（§9.2，X1） |
 
 ---
@@ -152,17 +152,17 @@ suspend Pipeline.evaluate(HttpFacts): Outcome
 | 部分 | 现在怎么做 | 代码 |
 |---|---|---|
 | 请求解析 | `RequestParser.parse`，路径非法抛 `InvalidRequestPathException` → 400（`SecurityDecision.BAD_REQUEST`，不带 `request`，适配器只写状态码）；规范化规则在 `RequestPaths` | [`SecurityPipeline`](../../core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt)、[`RequestPaths`](../../core/src/main/kotlin/me/ahoo/cosec/context/request/RequestPaths.kt) |
-| 认证 | 同步的 `SecurityContextParser.parse`，经 `Mono.fromCallable(...).subscribeOn(securityContextParseScheduler)`；吊销检查（`TokenStore.isRevoked`）或阻塞的 API Key 存储开启时调度器是 `boundedElastic`，否则 `immediate` | [`SecurityContextParseSchedulers`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/SecurityContextParseSchedulers.kt)、[`TokenStore`](../../core/src/main/kotlin/me/ahoo/cosec/token/TokenStore.kt)、[`ApiKeys`](../../core/src/main/kotlin/me/ahoo/cosec/apikey/ApiKeys.kt) |
+| 认证 | 同步的 `SecurityContextParser.parse`，经 `Mono.fromCallable(...).subscribeOn(securityContextParseScheduler)`；吊销检查（`TokenStore.isRevoked`）或阻塞的 API Key 存储开启时调度器是 `boundedElastic`，否则 `immediate` | [`SecurityContextParseSchedulers`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/authorization/SecurityContextParseSchedulers.kt)、[`TokenStore`](../../core/src/main/kotlin/me/ahoo/cosec/token/TokenStore.kt)、[`ApiKeys`](../../core/src/main/kotlin/me/ahoo/cosec/apikey/ApiKeys.kt) |
 | 认证失败 | `TokenVerificationException` → 匿名上下文并记下异常；其他异常 → 500 | `SecurityPipeline.parseSecurityContext`、`evaluate` |
 | 授权 | `Authorization.decide(request, context): Mono<AuthorizationDecision>`；空结果 → 隐式拒绝；错误 → `toErrorDecision`（`RegexTimeoutException` → 401/403，其余 → 500） | `SecurityPipeline.authorize` |
-| 装饰器链 | starter 中由外到内：`TracingAuthorization` → `AuditingAuthorization` → `MeteredAuthorization`（经 `CoSecAuthorizationCustomizer`）→ `RateLimitingAuthorization` → `ShadowAuthorization` → `SimpleAuthorization` | [`CoSecAuthorizationAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/authorization/CoSecAuthorizationAutoConfiguration.kt)、[`CoSecAuditAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/audit/CoSecAuditAutoConfiguration.kt)、[`CoSecOpenTelemetryAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/opentelemetry/CoSecOpenTelemetryAutoConfiguration.kt)、[`CoSecMetricsAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/micrometer/CoSecMetricsAutoConfiguration.kt) |
+| 装饰器链 | starter 中由外到内：`TracingAuthorization` → `AuditingAuthorization` → `MeteredAuthorization`（经 `CoSecAuthorizationCustomizer`）→ `RateLimitingAuthorization` → `ShadowAuthorization` → `SimpleAuthorization` | [`CoSecAuthorizationAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/authorization/CoSecAuthorizationAutoConfiguration.kt)、[`CoSecAuditAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/audit/CoSecAuditAutoConfiguration.kt)、[`CoSecOpenTelemetryAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/opentelemetry/CoSecOpenTelemetryAutoConfiguration.kt)、[`CoSecMetricsAutoConfiguration`](../../spring-boot-starter/src/main/kotlin/me/ahoo/cosec/spring/boot/micrometer/CoSecMetricsAutoConfiguration.kt) |
 | 状态码 | `toDecision`：限流未通过 → 429；授权 → 200；否则已认证 403、匿名 401（原因优先取 token 异常）；`SecurityStatus` 只有 200/400/401/403/429/500 | [`SecurityDecision`](../../core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityDecision.kt) |
-| 限流 | 授权通过后逐条匹配规则、即时算桶，按顺序 `tryAcquire`，第一条耗尽即 429；后端失败时 `strictFailure` → 429，否则跳过；`RedisRateLimiter` `subscribeOn(boundedElastic)` | [`RateLimitingAuthorization`](../../core/src/main/kotlin/me/ahoo/cosec/limiter/RateLimitingAuthorization.kt)、[`RedisRateLimiter`](../../cocache/src/main/kotlin/me/ahoo/cosec/cache/limiter/RedisRateLimiter.kt) |
+| 限流 | 授权通过后逐条匹配规则、即时算桶，按顺序 `tryAcquire`，第一条耗尽即 429；后端失败时 `strictFailure` → 429，否则跳过；`RedisRateLimiter` `subscribeOn(boundedElastic)` | [`RateLimitingAuthorization`](../../core/src/main/kotlin/me/ahoo/cosec/limiter/RateLimitingAuthorization.kt)、[`RedisRateLimiter`](../../cocache/src/main/kotlin/me/ahoo/cosec/cocache/limiter/RedisRateLimiter.kt) |
 | 审计 | `doOnSuccess`/`doOnError` 中同步调用 `AuditEventSink.publish`，异常吞掉记 WARN；Kafka sink 在自己的单线程有界调度器（队列 1024）上发送，满了丢弃 | [`AuditingAuthorization`](../../core/src/main/kotlin/me/ahoo/cosec/audit/AuditingAuthorization.kt)、[`KafkaAuditEventSink`](../../kafka/src/main/kotlin/me/ahoo/cosec/kafka/KafkaAuditEventSink.kt) |
 | 指标 | `cosec.authorization` 计时器，标签 `result`、`source` | [`MeteredAuthorization`](../../micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MeteredAuthorization.kt) |
 | 追踪 | 订阅时取 `Context.current()` 作父上下文，开 `cosec.authorize` span，把 trace/span id 写进请求属性供审计读取；span 属性从 `SecurityContext` 的可变属性里读 `VerifyContext` | [`AuthorizationMono`](../../opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/AuthorizationMono.kt)、[`CoSecInstrumenter`](../../opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/CoSecInstrumenter.kt) |
 | 影子 | 装饰器，采样后用覆盖仓库构造候选 `SimpleAuthorization` 再评估一次（RFC 0003 PR-5 改为快照叠加） | [`ShadowAuthorization`](../../core/src/main/kotlin/me/ahoo/cosec/shadow/ShadowAuthorization.kt) |
-| 适配器 | WebFlux 与 Gateway 共用 `ReactiveSecurityFilter.filterInternal`（`pipeline.evaluate(exchange).flatMap`）；WebMvc 在 Servlet 线程上 `pipeline.evaluate(request).block()`，`SecurityContextHolder` 是 `ThreadLocal` | [`ReactiveSecurityFilter`](../../webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)、[`AuthorizationGatewayFilter`](../../gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt)、[`AbstractAuthorizationInterceptor`](../../webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt) |
+| 适配器 | WebFlux 与 Gateway 共用 `ReactiveSecurityFilter.filterInternal`（`pipeline.evaluate(exchange).flatMap`）；WebMvc 在 Servlet 线程上 `pipeline.evaluate(request).block()`，`SecurityContextHolder` 是 `ThreadLocal` | [`ReactiveSecurityFilter`](../../webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt)、[`AuthorizationGatewayFilter`](../../gateway/src/main/kotlin/me/ahoo/cosec/gateway/AuthorizationGatewayFilter.kt)、[`AbstractAuthorizationInterceptor`](../../webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/AbstractAuthorizationInterceptor.kt) |
 | 阻塞匹配器 | `BlockingAware.requiresBlocking` 为真的组让整次评估在 `boundedElastic` 上执行 | [`BlockingAware`](../../core/src/main/kotlin/me/ahoo/cosec/policy/BlockingAware.kt) |
 | 协程 | 仓库里没有任何 `kotlinx-coroutines` 依赖 | [`libs.versions.toml`](../../gradle/libs.versions.toml) |
 
@@ -276,7 +276,7 @@ class HttpFacts(
   （`/public` 下的通配符会匹配 `/public/../admin`），所以解码后的点段在任何编码下都拒绝（`%2e`、`%2E`、`.%2e`、`..;`、`..%3B`），`\`（含 `%5C`）也视为分隔符；
   ② 路径长度上限 `MAX_PATH_LENGTH` = 2048 字符、单段上限 `MAX_SEGMENT_LENGTH` = 256 字符（按收到的编码形式计，去掉 `;` 参数后量段）：
   通配符匹配的代价约为段长的平方，8 KB 的段每条语句要 200–400 ms，上限让一个请求无法长时间占住事件循环。两者是常量，不是配置项。
-- 三个适配器的 `RequestParser` 只剩"从宿主对象读出 `HttpFacts`"，不再各自调用规范化。现在 [`ServletRequestParser`](../../webmvc/src/main/kotlin/me/ahoo/cosec/servlet/ServletRequestParser.kt)
+- 三个适配器的 `RequestParser` 只剩"从宿主对象读出 `HttpFacts`"，不再各自调用规范化。现在 [`ServletRequestParser`](../../webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletRequestParser.kt)
   自己抛 `InvalidRequestPathException`，搬走之后这类判断只剩一处。
 - 恶意路径语料（`WebAdapterParityTest` 的 `traversal`、`path parameters`、`encoded path` 等场景）三个适配器结果一致，RFC 0001 §5"路径一致"不变量。
 
@@ -590,7 +590,7 @@ class Pipeline internal constructor(/* 认证器、成员关系、快照、属�
 > 上表的原因码；客户端解析不需要改（X5）"。8.0 不考虑兼容性（[RFC 0008](0008-conformance-and-direct-build.md)），保留形状的理由随之消失。
 
 **现状**（`main`）：拒绝时，WebFlux / Gateway 的 [`ReactiveSecurityFilter`](../../webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactiveSecurityFilter.kt) 与
-WebMvc 的 [`AbstractAuthorizationInterceptor`](../../webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AbstractAuthorizationInterceptor.kt) 各自用 Jackson
+WebMvc 的 [`AbstractAuthorizationInterceptor`](../../webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/AbstractAuthorizationInterceptor.kt) 各自用 Jackson
 （`CoSecJsonSerializer`）把 `AuthorizeResult` 写成 `application/json` 的 `{"authorized": false, "reason": "..."}`；`reason` 是人读的英文（`Explicit Deny`、
 `Implicit Deny`、`Token Expired`、`Token Invalid`、`Too Many Requests`），500 时也写 `Implicit Deny`，吊销的 token 报 `Token Invalid`。400
 （[`SecurityPipeline`](../../core/src/main/kotlin/me/ahoo/cosec/pipeline/SecurityPipeline.kt) 的 `SecurityDecision.BAD_REQUEST`）没有响应体，也不带 `CoSec-Request-Id`。
@@ -705,7 +705,7 @@ protected fun authorize(request: HttpServletRequest, response: HttpServletRespon
 - `mono {}` 的协程随 Reactor 订阅的取消而取消（§7.4）；`runBlocking` 在 Servlet 宿主上看不到客户端断开，只受整体超时约束。
 - 不在已经是协程的上下文里调用 `runBlocking`：Servlet 过滤器运行在容器线程上，不是协程。Spring MVC 的挂起控制器方法在过滤器之后执行，与此无关。
 - 允许的请求：WebFlux 把校验后的 `SecurityContext` 写进 Reactor `Context` 和 exchange 属性（现在的 `writeSecurityContext`、`setSecurityContext`），WebMvc 写进
-  `SecurityContextHolder` 并在 `finally` 中清除（现在的 [`AuthorizationFilter`](../../webmvc/src/main/kotlin/me/ahoo/cosec/servlet/AuthorizationFilter.kt) 已经这样做）。
+  `SecurityContextHolder` 并在 `finally` 中清除（现在的 [`AuthorizationFilter`](../../webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/AuthorizationFilter.kt) 已经这样做）。
 
 > **2026-11-14 修订（第二轮审查，#1329，`PIP-21`、`PIP-22`）**：应用代码里的安全上下文。
 > - **只读。** 应用只读取 `SecurityContext`；写入它的函数是内部 API，只有适配器调用。
