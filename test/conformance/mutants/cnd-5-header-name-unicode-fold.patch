@@ -3,11 +3,11 @@
 # Tests: :model:test --tests me.ahoo.cosec.model.condition.AttributeTest :conformance:test
 
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/HttpNames.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/HttpNames.kt
-index c29b9b0d..34e427d2 100644
+index 93f6b862..cad333e4 100644
 --- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/HttpNames.kt
 +++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/HttpNames.kt
-@@ -21,7 +21,7 @@ package me.ahoo.cosec.model.condition
-  */
+@@ -26,7 +26,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
+ @InternalCoSecApi
  object HttpNames {
      /** Whether [name] is a non-empty token. */
 -    fun isToken(name: String): Boolean = name.isNotEmpty() && name.all(::isTokenChar)

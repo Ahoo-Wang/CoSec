@@ -3,11 +3,11 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.TokenAuthenticatorTest :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
-index 85ad9e91..01189b15 100644
+index 25fcdc9a..3925d061 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
-@@ -71,7 +71,7 @@ class TokenAuthenticator(
-     private val revocationSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
+@@ -80,7 +80,7 @@ class TokenAuthenticator(
+     private val unchecked: UncheckedRevocations = UncheckedRevocations(),
  ) : Authenticator {
      /** Whether [verifier] verifies CoSec's own tokens, which alone may use break-glass (RC1-26). */
 -    private val ownTokens = verifier is CoSecTokenVerifier

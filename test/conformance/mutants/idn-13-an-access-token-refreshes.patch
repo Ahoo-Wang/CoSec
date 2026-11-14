@@ -3,7 +3,7 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-index a74ea37a..d831b018 100644
+index efa7a555..de3bec80 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 @@ -73,7 +73,6 @@ class JwtTokenVerifier(
@@ -11,6 +11,6 @@ index a74ea37a..d831b018 100644
          }
          verifyAccessTokenSignature(decodedAccessToken)
 -        Jwts.requireRefreshToken(decodedRefreshToken)
+         Jwts.requireSameSession(decodedRefreshToken, decodedAccessToken)
          // The converter issues the pair together: the refresh token's `sub` is the access token's `jti`, and both carry
          // the same `iat`.
-         if (decodedRefreshToken.subject != decodedAccessToken.id ||
