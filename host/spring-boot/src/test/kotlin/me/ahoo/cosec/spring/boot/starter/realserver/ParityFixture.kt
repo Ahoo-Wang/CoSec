@@ -152,7 +152,9 @@ internal class ParityFixture : AutoCloseable {
         /** A permit's `Content-Type` and body are the handler's, which writes what its server received: not compared. */
         fun comparable(response: RawResponse): Map<String, Any?> {
             val refused = !response.body.startsWith(SERVED)
-            val headers = COMPARED.filter { refused || it != "content-type" }.associateWith { response.headers[it] }
+            // A refusal is CoSec's to frame: its length on every stack, never chunked.
+            val framing = if (refused) listOf("content-length", "transfer-encoding") else emptyList()
+            val headers = (COMPARED + framing).filter { refused || it != "content-type" }.associateWith { response.headers[it] }
             return headers + mapOf("status" to response.status, "body" to response.body.takeIf { refused })
         }
     }

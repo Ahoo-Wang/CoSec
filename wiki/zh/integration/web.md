@@ -268,6 +268,14 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 
 使用 Spring MVC 时，注册一个顺序早于 `-9999` 的 CORS 过滤器。
 
+CORS 在哪里处理，决定了浏览器能看到拒绝的哪些内容，因此除非你把三种栈配置得一样，它们会有差别：
+
+| 栈 | 默认的 CORS 处理 | 预检请求 | 被拒绝请求的 CORS 头 |
+|---|---|---|---|
+| Spring MVC | 在 `DispatcherServlet` 中，位于 CoSec 之后 | 由 CoSec 判定：`http:OPTIONS`，匿名时为 `401` | 没有：浏览器读不到问题体。顺序早于 `-9999` 的 CORS 过滤器会回应预检并加上这些头 |
+| WebFlux | 取决于你放在哪里；`OrderedCorsWebFilter` 在 CoSec 之前运行 | 由 CORS 过滤器回应，从不判定 | 由 CORS 过滤器加上 |
+| 网关 | `spring.cloud.gateway.server.webflux.globalcors`，在匹配路由时、网关过滤器之前处理 | 由网关回应，从不判定 | 在 CoSec 回应之前加上 |
+
 ## 网关 {#gateway}
 
 在 Spring Cloud Gateway 上，`PipelineGatewayFilter` 在任何路由过滤器运行之前授权请求。它与 WebFlux 过滤器有三点不同：

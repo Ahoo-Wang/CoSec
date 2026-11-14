@@ -114,7 +114,10 @@ abstract class ReactivePipelineBridge(
         val problem = outcome.problem
         if (problem != null) {
             response.statusCode = HttpStatusCode.valueOf(outcome.status)
-            return response.writeWith(response.bufferFactory().wrap(ProblemEncoder.encode(problem)).toMono())
+            val body = ProblemEncoder.encode(problem)
+            // With its length on every server: Reactor Netty sets it for one buffer, the servlet containers would chunk.
+            response.headers.contentLength = body.size.toLong()
+            return response.writeWith(response.bufferFactory().wrap(body).toMono())
         }
         val securityContext = checkNotNull(outcome.security) { "A proceeding outcome carries its security." }
             .securityContext

@@ -360,6 +360,15 @@ fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source
 
 With Spring MVC, register a CORS filter with an order before `-9999`.
 
+Where CORS is handled decides what a browser sees of a refusal, so the three stacks differ unless you configure them
+alike:
+
+| Stack | CORS by default | A preflight | A refused request's CORS headers |
+|---|---|---|---|
+| Spring MVC | In `DispatcherServlet`, after CoSec | Decided by CoSec: `http:OPTIONS`, `401` for an anonymous one | None: the browser cannot read the problem. A CORS filter before `-9999` answers preflights and adds them |
+| WebFlux | Where you put it; `OrderedCorsWebFilter` runs before CoSec | Answered by the CORS filter, never decided | Added by the CORS filter |
+| Gateway | `spring.cloud.gateway.server.webflux.globalcors`, when the route is matched, before the gateway filter | Answered by the gateway, never decided | Added before CoSec answers |
+
 ## Gateway
 
 On Spring Cloud Gateway, `PipelineGatewayFilter` authorizes the request before any route filter runs. It differs

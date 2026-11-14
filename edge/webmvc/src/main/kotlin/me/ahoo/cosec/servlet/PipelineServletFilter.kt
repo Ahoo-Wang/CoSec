@@ -105,6 +105,8 @@ class PipelineServletFilter(
         if (problem != null) {
             response.status = outcome.status
             val body = ProblemEncoder.encode(problem)
+            // As the reactive stacks frame it: with its length, not chunked (round 2 L2).
+            response.setContentLength(body.size)
             response.outputStream.write(body)
             response.outputStream.flush()
             return false
