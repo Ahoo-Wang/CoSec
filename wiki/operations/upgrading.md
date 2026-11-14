@@ -16,6 +16,11 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **HEAD is decided as GET, and a method with a lower-case letter is a `400`** (`PIP-18`). Servers run the GET handler
+  for HEAD, so a DENY on `http:GET` did not stop it: HEAD now takes a route map's HEAD route, or GET's, and unmapped it
+  is `http:GET`; a statement on `http:HEAD` matches nothing unless a route map maps HEAD. A method such as `delete` was
+  decided as `http:delete`, which a DENY on `http:DELETE` does not name, while backends that fold case served it as
+  DELETE: it is now `400 invalid-request`.
 - **The client address is read once** (`PIP-16`). Where the server resolves forwarded headers itself
   (`server.forward-headers-strategy=native`, which Spring Boot also turns on by itself on Kubernetes and the other
   cloud platforms it detects), CoSec no longer reads `X-Forwarded-For` a second time: on Tomcat it takes the address the

@@ -211,6 +211,13 @@
       "statement": "A client address the host reported that is not an address (`unknown`, an obfuscated identifier) is unavailable, never absent: a statement that reads `environment.ip` errs as on a missing external attribute (a DENY is Indeterminate unless `onMissing: nomatch`), and the blacklist cannot be read for it. A trusted `X-Forwarded-For` entry or a peer written with a port, brackets or a zone is read as its address, and several `X-Forwarded-For` lines are one list, in order.",
       "level": "pipeline",
       "pending": null
+    },
+    {
+      "id": "PIP-18",
+      "source": "RFC 0006 §5.3.1; round-2 review M2",
+      "statement": "A method holding an ASCII lower-case letter is 400 `invalid-request`, before authentication. HEAD is decided as GET: a route map's HEAD route wins, without one HEAD takes GET's route, and unmapped it is `http:GET`; `http:HEAD` matches nothing unless a route map maps it.",
+      "level": "pipeline",
+      "pending": null
     }
   ]
 }

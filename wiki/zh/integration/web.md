@@ -116,7 +116,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | 状态码 | problem 类型 | 何时出现 |
 |---|---|---|
 | `200`（继续处理） | 无，由处理器回应 | 决策为 Permit，且每条限流义务都还有许可。 |
-| `400` | `invalid-request` | 路径无法无歧义地读取（[请求路径](#the-request-path)）、某个 `CoSec-*` 参数的值相互冲突（[应用与空间](#app-and-space)），路由捕获了不能作为资源 id 段的值（[路由映射](#route-maps)），或某个请求头以不同的值发送而请求所依据的文档读取它，无论读取它的语句效果是什么（[请求头](../policies/language.md#headers)、`PIP-12`）。引擎根本看不到这个请求。在网关之后：无法读取的 `CoSec-Identity`（[网关之后的服务](#services-behind-the-gateway)）。 |
+| `400` | `invalid-request` | 路径无法无歧义地读取（[请求路径](#the-request-path)）、方法含小写字母（`PIP-18`）、某个 `CoSec-*` 参数的值相互冲突（[应用与空间](#app-and-space)），路由捕获了不能作为资源 id 段的值（[路由映射](#route-maps)），或某个请求头以不同的值发送而请求所依据的文档读取它，无论读取它的语句效果是什么（[请求头](../policies/language.md#headers)、`PIP-12`）。引擎根本看不到这个请求。在网关之后：无法读取的 `CoSec-Identity`（[网关之后的服务](#services-behind-the-gateway)）。 |
 | `401` | `unauthorized` | Deny，且调用方是匿名的：没有凭证。包括作用域被拒绝，例如声明了 `CoSec-Space-Id` 的匿名请求。 |
 | `401` | `token-invalid` | Deny，且凭证因无效被拒绝：令牌校验不通过，或 API key 未知、已停用或已过期。在网关之后：版本未知、来自未来或没有凭证有效期的 `CoSec-Identity`。 |
 | `401` | `token-expired` | Deny，且令牌已过期。在网关之后：`CoSec-Identity` 或其凭证过旧。 |
