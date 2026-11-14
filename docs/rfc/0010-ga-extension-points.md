@@ -115,6 +115,24 @@ C1–C3 合成一个 PR（`fix!`），排在 RFC 0008 PR-5（死代码清理）�
 `wiki/integration/web.md`（版本错配时的 500）、`wiki/operations/upgrading.md`。C4、C5 由 2026-11-03 的复查加入，放在 RC 前的公共声明归类那一步做
 （[路线图](../roadmap.md) §10）。文档：`wiki/architecture/extending.md`（会增长的集合）、`wiki/operations/upgrading.md`（改了形状的公共类型）。
 
+> **2026-11-14 修订（R9：ABI 冻结前的公共声明归类，#1354、#1355、#1356、#1358、#1359）**：衡量标准是文档写到的才算 API。
+> 313 个公共顶层类型里，约三分之二保持稳定或 SPI，其余转为 `@ExperimentalCoSecApi` 或内部；不涉及任何安全性质。
+> - **实验性**（公开、可用，次版本可变）：不经 Spring 手工装配 `Pipeline` 的那组类型（`PipelineComponents`、`PipelineOptions`、
+>   `SnapshotOptions`、`SuspendingSnapshotSource`、`HttpFacts`、`Outcome`、`RequestGate` 等）；`ControlStore`、影子端口及其记录；
+>   评估轨迹（`me.ahoo.cosec.engine.trace.EvaluationTrace`，原 `engine.flat.FlatTrace`）。转为稳定时，手工装配要用构建器而不是十一个参数的构造器。
+> - **保持稳定**：`Pipeline` 类、`AuthorizationChecker` 的字符串形式、`ProblemType`、`CoSecParameters` 的请求头名、`RouteMap` 与 `RouteMapCodec`、
+>   `DecisionListener` 与 `DecisionEvent`、`ChangeListener` 与 `ChangeEvent` 及其携带的值、`me.ahoo.cosec.engine.ViewVersion`、`cosec-api` 的全部类型。
+> - **退出 API**：`cosec-cocache` 的四个缓存接口与带 CoCache、Spring Data 类型的构造器；starter 的 `*Properties` 类与 `@ConditionalOn*` 注解（契约是属性键，
+>   由 `ConfigurationMetadataTest` 钉住）；条件 AST 的字面量、`ScopeResolver`、`IdentityCodec`、`PathNormalizer`、`RemoteIpResolver`；社交登录的注册表与提供者接口
+>   （8.0 不能添加 JustAuth 之外的提供者，列为 8.1 外部身份提供者 RFC 的候选）。
+> - **SPI 变更**：`ApiKeyStore` 删除（上文“保留为较低层的存储”不再成立；请求只读 `ApiKeyReader`，存储是 `InMemoryApiKeyStore` 与 `RedisApiKeyStore`）；
+>   `cosec-login` 的 `Credentials` 改名 `LoginCredentials`，`Authentication.supportCredentials` 改名 `credentialsType`。
+> - **不被内联的版本号**：`SnapshotDocument.DOCUMENT_SCHEMA`、`InstanceStatus.FORMAT_LEVEL` 等不再是 `const`。
+> - **原则**：应用自己的测试需要构造的类型保持可达。SPI 实现者与监听器作者不 opt-in 内部 API 也能做单元测试：`cosec-testkit` 的 `PipelineFixture`
+>   接受路由映射与监听器，`AttributeRequests` 构造属性提供者的请求。没有手工构造 `DecisionEvent` 的工厂：结果只能由 `StatusMapping` 决定，测试里也不设第二条决策路径。
+> - **守护**（`test/architecture`）：稳定的公共签名不得引用实验性类型；转储里不得有空的公共伴生对象，也不得有外层类已被排除的嵌套类；
+>   `AuditRecordFormatTest` 逐字节钉住决策事件变成的审计记录，类或包的移动不能改变下游读到的 JSON。
+
 ## 4. 决定记录
 
 | 编号 | 决定 | 日期 |
