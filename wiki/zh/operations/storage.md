@@ -275,6 +275,25 @@ CoSec 不改动这个客户端：它由应用共享。
 `cosec-migrate bootstrap` 让管理员可以操作控制面，但访问控制 API 的 HTTP 请求本身必须先像其他请求一样被文档放行
 （[测试变更](../policies/testing.md)）。
 
+#### 播种手写的文档 {#seeding-documents-you-wrote-by-hand}
+
+`cosec-migrate publish` 只接受 `report.json` 列出的、SHA-256 与之一致的文件：报告证明这些字节就是被检查过的那些，所以 `publish` 没有跳过报告的选项。只把它用于唯一无法由别处创建的文档，即平台文档；你写的其余文档通过控制面发布，控制面会检查并编译它写入的每个文档：
+
+1. **发布平台文档**，用你为它写的报告（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。它必须放行管理员访问控制 API 的路径，除此之外只放平台范围的策略。
+2. **指定第一位管理员**：运行 `cosec-migrate bootstrap`，并给该主体签发租户为 `(platform)`、应用为 `cosec-control` 的令牌（[之后修改文档](../guide/quick-start.md#change-a-document-later)）。
+3. **把其他每个文档**（`app:<id>`、`tenant:<id>`）作为一个变更 `apply`。`apply` 接收整份文档，把当前修订（或空文档）变成它；`MERGE` 只新增与修改。控制 API 在 [`cosec.control.http.base-path`](./configuration.md#control-plane) 之下：
+
+   ```bash
+   CONTROL=https://gateway.example.com/cosec/control/v1
+   AUTH="Authorization: Bearer $PLATFORM_TOKEN"
+   ID=$(jq -n --slurpfile document documents/apps/wms.json '{document: $document[0], mode: "MERGE", note: "seed wms"}' \
+     | curl -s -X POST "$CONTROL/documents/app:wms:apply" -H "$AUTH" -H 'Content-Type: application/json' -d @- | jq -r .id)
+   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"seeding"}'
+   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   ```
+
+   变更与其他变更一样被检查。跳过影子窗口适用于该文档上还没有流量的部署；变更需要审批时（`state` 为 `AWAITING_APPROVAL`），由第二位管理员批准（[测试变更](../policies/testing.md#approval)）。该文档的修订链从这个变更开始。
+
 ### 通过控制面发布 {#publishing-through-the-control-plane}
 
 运行时，每个变更都通过 [`cosec.control.http.base-path`](./configuration.md#control-plane) 下的控制 API 进行：变更基于

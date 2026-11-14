@@ -816,13 +816,19 @@ What is different, in short:
 ### Migrating the data
 
 `cosec-migrate` is a one-time command-line tool in the `migration/migrate/` module. No application depends on it, and the starter
-never does. Its contract is the command line: its classes are not a library API, and may change in any release. Build it
-from the CoSec sources of the version you deploy:
+never does. Its contract is the command line: its classes are not a library API, and may change in any release. Use the
+tool of the version you deploy. Every [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases) carries it as
+`cosec-migrate-<version>.zip`, with `cosec-migrate-<version>.zip.sha256` beside it. It is not on Maven Central. It needs
+Java 21 or later:
 
 ```bash
-./gradlew :migrate:installDist
-migration/migrate/build/install/cosec-migrate/bin/cosec-migrate convert ...
+sha256sum -c cosec-migrate-8.0.0.zip.sha256   # macOS: shasum -a 256 -c
+unzip cosec-migrate-8.0.0.zip
+cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 ```
+
+To build it from the CoSec sources instead, run `./gradlew :migrate:installDist`; the tool is then
+`migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`.
 
 Its commands are below. Exit codes: `0` done, `1` the data was rejected or a write failed, `2` a usage error.
 `publish`, `bootstrap` and `repair-references` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
@@ -1003,6 +1009,90 @@ unknown. If the list kept changing under it, it prints `FAILED the app list coul
 `1`: run it again. The list it completes is as good as `<s>:control:list:documents`, which names every document the
 control plane or `cosec-migrate` ever published, as long as that list has not been lost; a document written to Redis
 another way is in neither.
+
+#### Run it as a Kubernetes Job {#run-as-a-kubernetes-job}
+
+In a cluster, run each command as a Job in the namespace that can reach Redis, so the tool needs no access from your
+machine. An init container downloads the release's zip, checks its SHA-256 and unpacks it into a volume; the main
+container runs the tool on a plain JRE. The Redis address, with its credentials, comes from a Secret and reaches the
+tool as `--to-redis` (the tool reads its Redis only from its options; Kubernetes expands `$(REDIS_URI)` in `args`):
+
+```bash
+kubectl -n cosec create secret generic cosec-migrate-redis --from-literal=uri='redis://:<password>@redis:6379'
+```
+
+```yaml
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: cosec-repair-references
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      volumes:
+        - name: tool
+          emptyDir: {}
+      initContainers:
+        - name: fetch
+          image: eclipse-temurin:21-jdk # has curl and jar; the JRE image has no jar
+          env:
+            - name: VERSION
+              value: 8.0.0 # the CoSec version you deploy
+          volumeMounts:
+            - name: tool
+              mountPath: /tool
+          command: ["sh", "-ec"]
+          args:
+            - |
+              cd /tool
+              base="https://github.com/Ahoo-Wang/CoSec/releases/download/v${VERSION}"
+              curl -fsSLO "$base/cosec-migrate-${VERSION}.zip"
+              curl -fsSLO "$base/cosec-migrate-${VERSION}.zip.sha256"
+              sha256sum -c "cosec-migrate-${VERSION}.zip.sha256"
+              jar xf "cosec-migrate-${VERSION}.zip"
+              mv "cosec-migrate-${VERSION}" cosec-migrate
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+      containers:
+        - name: migrate
+          image: eclipse-temurin:21-jre
+          env:
+            - name: REDIS_URI
+              valueFrom:
+                secretKeyRef:
+                  name: cosec-migrate-redis
+                  key: uri
+          volumeMounts:
+            - name: tool
+              mountPath: /tool
+          # `jar` does not restore the executable bit, so the start script runs through `sh`.
+          command: ["sh", "/tool/cosec-migrate/bin/cosec-migrate"]
+          args: ["repair-references", "--to-redis", "$(REDIS_URI)", "--key-prefix", "cosec"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+```
+
+`kubectl -n cosec logs job/cosec-repair-references` shows what the tool printed, and the Job fails (exit code `1` or `2`)
+when the command does. Set `--key-prefix` to [`cosec.key-prefix`](./configuration.md#key-prefix) of your instances.
+For `bootstrap` change `args` to `["bootstrap", "--to-redis", "$(REDIS_URI)", "--platform-admin", "alice"]`. For a Redis
+Cluster add `--cluster` to the commands that take it and write the seed nodes, comma-separated, in the Secret.
+
+`convert`, `publish`, `partition plan` and `api-keys` read or write a directory: mount a PersistentVolumeClaim at `/data`
+in the main container and give the paths as `--out /data/converted` and `--in /data/converted`. Run `convert` as one Job,
+read `report.json` from the volume (a second pod mounting it, or `kubectl cp`), and run `publish` as another Job only
+once the conversion is accepted: `publish` takes only files `report.json` lists, with the SHA-256 recorded there.
 
 #### Rollback
 
