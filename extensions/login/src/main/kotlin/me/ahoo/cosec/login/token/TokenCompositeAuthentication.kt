@@ -21,7 +21,7 @@ import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.token.TokenFamilies
+import me.ahoo.cosec.login.token.TokenFamilies
 
 /**
  * Turns credentials into a token: the [Authentication] for their type answers the subject, and [tokenConverter] issues

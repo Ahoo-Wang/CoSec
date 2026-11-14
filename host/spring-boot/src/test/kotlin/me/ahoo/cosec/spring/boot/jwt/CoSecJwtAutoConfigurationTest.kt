@@ -22,8 +22,8 @@ import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
-import me.ahoo.cosec.runtime.token.DefaultTokenRevoker
-import me.ahoo.cosec.runtime.token.TokenFamilies
+import me.ahoo.cosec.login.token.DefaultTokenRevoker
+import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore

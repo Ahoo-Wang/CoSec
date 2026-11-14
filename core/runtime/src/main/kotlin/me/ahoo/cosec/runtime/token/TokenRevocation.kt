@@ -27,8 +27,8 @@ import java.time.Duration
 /**
  * The one judgement of whether a verified token was revoked (RFC 0004 §4.5.3, `MEM-4`): its id, or every token of its
  * principal issued before a revocation, read from [revocations] with the same [skew] wherever a token is checked. The
- * pipeline's `TokenAuthenticator`, refresh and [DefaultTokenRevoker] all ask it, so a token one of them refuses
- * none of them accepts.
+ * pipeline's `TokenAuthenticator`, refresh and cosec-login's `DefaultTokenRevoker` all ask it, so a token one of them
+ * refuses none of them accepts.
  *
  * It never decides what a failed read means: whatever [revocations] throws reaches the caller, an unavailable store as
  * [me.ahoo.cosec.spi.token.RevocationUnavailableException]. The pipeline's verification may let a token through on it
