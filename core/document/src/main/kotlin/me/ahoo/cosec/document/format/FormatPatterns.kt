@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime.document.format
+package me.ahoo.cosec.document.format
 
 /**
  * The value rules the compilers enforce that JSON Schema can express, as `pattern`s, each with values the compilers

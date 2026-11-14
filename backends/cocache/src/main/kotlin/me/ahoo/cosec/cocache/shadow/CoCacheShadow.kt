@@ -33,7 +33,7 @@ import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.runtime.shadow.CandidateStore
 import me.ahoo.cosec.runtime.shadow.InstanceStatus
 import me.ahoo.cosec.runtime.shadow.ShadowCodec

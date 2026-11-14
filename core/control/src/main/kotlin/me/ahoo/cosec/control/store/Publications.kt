@@ -18,11 +18,11 @@ package me.ahoo.cosec.control.store
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.runtime.document.Actor
-import me.ahoo.cosec.runtime.document.ParentRevision
-import me.ahoo.cosec.runtime.document.PolicyDocument
-import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.document.ShadowWindow
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.ParentRevision
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.ShadowWindow
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 

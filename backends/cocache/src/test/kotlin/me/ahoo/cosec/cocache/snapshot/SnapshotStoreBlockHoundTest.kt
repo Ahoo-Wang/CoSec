@@ -22,7 +22,7 @@ import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiterTest
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
-import me.ahoo.cosec.runtime.snapshot.SnapshotCompiler
+import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener

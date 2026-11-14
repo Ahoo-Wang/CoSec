@@ -39,7 +39,7 @@ import me.ahoo.cosec.runtime.ThreadingFixtures.singleThread
 import me.ahoo.cosec.runtime.ThreadingFixtures.startOn
 import me.ahoo.cosec.runtime.Unavailability
 import me.ahoo.cosec.runtime.audit.AuditEvents
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult

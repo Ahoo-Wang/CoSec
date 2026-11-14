@@ -28,10 +28,10 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.document.Actor
-import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
-import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey

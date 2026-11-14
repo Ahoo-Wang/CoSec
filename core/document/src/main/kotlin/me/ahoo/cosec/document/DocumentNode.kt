@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime.document
+package me.ahoo.cosec.document
 
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.databind.JsonNode

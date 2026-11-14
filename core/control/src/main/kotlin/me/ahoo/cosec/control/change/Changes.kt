@@ -34,9 +34,9 @@ import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.model.condition.AttributeCatalog
-import me.ahoo.cosec.runtime.document.Actor
-import me.ahoo.cosec.runtime.document.PolicyDocument
-import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.runtime.shadow.InMemoryShadowReports
 import me.ahoo.cosec.runtime.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey

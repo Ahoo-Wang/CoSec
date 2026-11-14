@@ -16,14 +16,14 @@
 package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.document.format.AnyOf
-import me.ahoo.cosec.runtime.document.format.ArrayType
-import me.ahoo.cosec.runtime.document.format.DocumentFormats
-import me.ahoo.cosec.runtime.document.format.FormatType
-import me.ahoo.cosec.runtime.document.format.MapType
-import me.ahoo.cosec.runtime.document.format.ObjectType
-import me.ahoo.cosec.runtime.document.format.StringType
-import me.ahoo.cosec.runtime.document.format.TupleType
+import me.ahoo.cosec.document.format.AnyOf
+import me.ahoo.cosec.document.format.ArrayType
+import me.ahoo.cosec.document.format.DocumentFormats
+import me.ahoo.cosec.document.format.FormatType
+import me.ahoo.cosec.document.format.MapType
+import me.ahoo.cosec.document.format.ObjectType
+import me.ahoo.cosec.document.format.StringType
+import me.ahoo.cosec.document.format.TupleType
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

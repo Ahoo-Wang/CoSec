@@ -31,9 +31,9 @@ import me.ahoo.cosec.control.change.ShadowSummary
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy

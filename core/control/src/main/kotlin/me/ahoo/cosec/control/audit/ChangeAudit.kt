@@ -33,7 +33,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.ShadowSummary
-import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
@@ -291,6 +291,6 @@ object ChangeEventJson {
                 "counts"
             ).apply { shadow.counts.toSortedMap().forEach { (outcome, count) -> put(outcome, count) } }
         }
-        return me.ahoo.cosec.runtime.json.CoSecJson.mapper.writeValueAsString(root)
+        return me.ahoo.cosec.document.json.CoSecJson.mapper.writeValueAsString(root)
     }
 }

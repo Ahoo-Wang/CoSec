@@ -24,7 +24,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.document.Actor
+import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -187,7 +187,7 @@ class ChangeListenersTest {
                 MovedHead("app:order", "c", null, readable = false),
             ),
         )
-        val json = me.ahoo.cosec.runtime.json.CoSecJson.mapper.readTree(ChangeEventJson.write(event))
+        val json = me.ahoo.cosec.document.json.CoSecJson.mapper.readTree(ChangeEventJson.write(event))
         json.get("kind").asString().assert().isEqualTo("REVIEW_NEEDED")
         json.get("moved").values().map {
             "${it.get("document").asString()} ${it.get("checked").asString()} ${it.get("readable").asBoolean()}"
@@ -195,7 +195,7 @@ class ChangeListenersTest {
             .assert().containsExactly("platform a true", "app:order c false")
         json.get("moved").get(1).get("current").isNull.assert().isTrue()
         // Other events have no moved member.
-        val plain = me.ahoo.cosec.runtime.json.CoSecJson.mapper.readTree(
+        val plain = me.ahoo.cosec.document.json.CoSecJson.mapper.readTree(
             ChangeEventJson.write(event(ChangeEvent.Kind.PUBLISHED))
         )
         plain.has("moved").assert().isFalse()

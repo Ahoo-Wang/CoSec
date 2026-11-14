@@ -27,9 +27,9 @@ import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.document.RoleDefinition
-import me.ahoo.cosec.runtime.document.RolePermissions
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.RoleDefinition
+import me.ahoo.cosec.document.RolePermissions
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

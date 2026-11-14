@@ -27,8 +27,8 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -144,7 +144,7 @@ class NomatchConfirmationTest {
         val confirmed = changes.rollback(operatorFor(ACME), ACME, 1, "restore", listOf(confirmation))
         confirmed.errors.assert().describedAs("${confirmed.findings}").isEmpty()
         confirmed.state.assert().isEqualTo(ChangeState.CHECKED)
-        confirmed.kind.assert().isEqualTo(me.ahoo.cosec.runtime.document.ProvenanceKind.ROLLBACK)
+        confirmed.kind.assert().isEqualTo(me.ahoo.cosec.document.ProvenanceKind.ROLLBACK)
         confirmed.confirmations.assert().containsExactly(confirmation)
     }
 

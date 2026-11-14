@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.SubjectRef
-import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocument
 
 /**
  * The ids of a converted document that hold an unpaired UTF-16 surrogate (RC1-52, `IDN-10`), as the control plane

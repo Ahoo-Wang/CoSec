@@ -41,8 +41,8 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
-import me.ahoo.cosec.runtime.document.Actor
-import me.ahoo.cosec.runtime.document.PolicyDefinition
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.atomic.AtomicInteger
 

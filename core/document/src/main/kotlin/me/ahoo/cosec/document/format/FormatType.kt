@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.document.format
+package me.ahoo.cosec.document.format
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 

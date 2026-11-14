@@ -28,7 +28,7 @@ import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Versioned
-import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock

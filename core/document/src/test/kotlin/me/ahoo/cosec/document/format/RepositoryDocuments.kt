@@ -13,10 +13,10 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.document.format
+package me.ahoo.cosec.document.format
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.json.CoSecJson
 import tools.jackson.databind.JsonNode
 import java.io.File
 

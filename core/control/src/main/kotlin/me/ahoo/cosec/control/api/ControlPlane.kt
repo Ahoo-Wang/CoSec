@@ -27,7 +27,7 @@ import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.engine.ViewVersion
-import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**

@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.document.format
+package me.ahoo.cosec.document.format
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.util.TreeMap
@@ -21,9 +21,11 @@ import java.util.TreeMap
 /**
  * Writes a [SchemaFile] as a draft-07 JSON Schema: object keys sorted, two-space indentation, a trailing newline, so
  * the same descriptor always gives the same bytes. Hand-written rather than through Jackson so the output does not
- * depend on a mapper's configuration.
+ * depend on a mapper's configuration. Public only for `cosec-runtime`'s `ProblemSchemaTest`, which writes the problem
+ * format with it.
  */
-internal object JsonSchemaWriter {
+@InternalCoSecApi
+object JsonSchemaWriter {
     const val DRAFT_07 = "http://json-schema.org/draft-07/schema#"
 
     /** Every file says so: a schema cannot express all the compiler checks ([FormatPatterns]). */

@@ -34,14 +34,14 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.document.Catalog
-import me.ahoo.cosec.runtime.document.CatalogGroup
-import me.ahoo.cosec.runtime.document.CatalogPermission
-import me.ahoo.cosec.runtime.document.PolicyDocument
-import me.ahoo.cosec.runtime.document.PolicyDocumentCodec
-import me.ahoo.cosec.runtime.document.RoleDefinition
-import me.ahoo.cosec.runtime.document.RolePermissions
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.Catalog
+import me.ahoo.cosec.document.CatalogGroup
+import me.ahoo.cosec.document.CatalogPermission
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.RoleDefinition
+import me.ahoo.cosec.document.RolePermissions
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -152,7 +152,7 @@ class RolesTest {
         val written = ChangeRequest(
             ChangeId("c1"), ACME, Base.NONE,
             listOf(Operation.PutRole(role, "d1"), Operation.RemoveRole(RoleId("old"), "d2")),
-            ALICE, "note", me.ahoo.cosec.runtime.document.ProvenanceKind.PUBLISH, ChangeState.DRAFT,
+            ALICE, "note", me.ahoo.cosec.document.ProvenanceKind.PUBLISH, ChangeState.DRAFT,
             emptyList(), null, emptyMap(), now, now,
         )
         val read = ChangeRequestCodec.decode(ChangeRequestCodec.encode(written))

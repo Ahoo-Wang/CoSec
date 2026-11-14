@@ -44,7 +44,7 @@ import me.ahoo.cosec.runtime.event.OutcomeSummary
 import me.ahoo.cosec.runtime.event.RequestSummary
 import me.ahoo.cosec.runtime.event.SubjectSummary
 import me.ahoo.cosec.runtime.event.TraceContext
-import me.ahoo.cosec.runtime.json.CoSecJson
+import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant

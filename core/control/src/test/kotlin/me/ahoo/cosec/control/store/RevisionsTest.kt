@@ -24,7 +24,7 @@ import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.policy
 import me.ahoo.cosec.control.store.StoreFixtures.publication
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -67,7 +67,7 @@ class RevisionsTest {
 
     private fun publish(
         key: SnapshotKey = ACME,
-        document: me.ahoo.cosec.runtime.document.PolicyDocument = candidate(
+        document: me.ahoo.cosec.document.PolicyDocument = candidate(
             key
         ),
         change: String = "c"
@@ -76,7 +76,7 @@ class RevisionsTest {
 
     private fun published(
         key: SnapshotKey = ACME,
-        document: me.ahoo.cosec.runtime.document.PolicyDocument = candidate(
+        document: me.ahoo.cosec.document.PolicyDocument = candidate(
             key
         )
     ) =
@@ -317,7 +317,7 @@ class RevisionsTest {
 
         /** A publish of [document] that indexes its references and then writes no head, as one that lost its slot does. */
         private fun lost(
-            document: me.ahoo.cosec.runtime.document.PolicyDocument,
+            document: me.ahoo.cosec.document.PolicyDocument,
             key: SnapshotKey = ACME
         ) = runBlocking {
             revisions.publish(key, revisions.head(key), document, publication("lost"), precondition = { false })

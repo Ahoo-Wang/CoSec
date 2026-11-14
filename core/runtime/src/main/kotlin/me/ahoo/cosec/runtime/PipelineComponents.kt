@@ -22,7 +22,7 @@ import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
-import me.ahoo.cosec.runtime.route.RouteMap
+import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.id.IdGenerator

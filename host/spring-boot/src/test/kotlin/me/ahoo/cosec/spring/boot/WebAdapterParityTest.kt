@@ -44,7 +44,7 @@ import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener

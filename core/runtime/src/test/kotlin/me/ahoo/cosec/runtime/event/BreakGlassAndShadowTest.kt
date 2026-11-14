@@ -34,7 +34,7 @@ import me.ahoo.cosec.runtime.Basis
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.Unavailability
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.shadow.ShadowOutcome

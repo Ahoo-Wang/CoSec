@@ -48,9 +48,9 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
-import me.ahoo.cosec.runtime.document.ProvenanceKind
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.ShadowListener
 import me.ahoo.cosec.runtime.http.Cookies

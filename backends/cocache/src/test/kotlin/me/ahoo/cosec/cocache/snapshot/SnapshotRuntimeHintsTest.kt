@@ -16,7 +16,7 @@
 package me.ahoo.cosec.cocache.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.json.CoSecModule
+import me.ahoo.cosec.document.json.CoSecModule
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.aot.hint.MemberCategory

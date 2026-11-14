@@ -40,7 +40,7 @@ import me.ahoo.cosec.model.condition.CheckResult
 import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
-import me.ahoo.cosec.runtime.document.JavaZones
+import me.ahoo.cosec.document.JavaZones
 import java.net.URI
 import java.time.Clock
 import java.time.Instant

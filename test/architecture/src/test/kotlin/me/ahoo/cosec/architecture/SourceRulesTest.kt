@@ -79,7 +79,7 @@ class SourceRulesTest {
         )
 
         /** The one entry every backend class has (the mapper allowlist entry): the mapper factory and nothing else. */
-        const val MAPPER = "me.ahoo.cosec.runtime.json.CoSecJson"
+        const val MAPPER = "me.ahoo.cosec.document.json.CoSecJson"
 
         /** The main source files of [project], by extension. */
         fun mainSources(project: String, extensions: Set<String> = setOf("kt", "java")): List<Path> {

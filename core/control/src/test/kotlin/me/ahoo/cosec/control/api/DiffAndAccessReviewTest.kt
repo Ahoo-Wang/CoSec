@@ -51,11 +51,11 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.runtime.document.Catalog
-import me.ahoo.cosec.runtime.document.CatalogGroup
-import me.ahoo.cosec.runtime.document.CatalogPermission
-import me.ahoo.cosec.runtime.document.PolicyDefinition
-import me.ahoo.cosec.runtime.document.PolicyDocument
+import me.ahoo.cosec.document.Catalog
+import me.ahoo.cosec.document.CatalogGroup
+import me.ahoo.cosec.document.CatalogPermission
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

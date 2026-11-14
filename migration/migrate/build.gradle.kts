@@ -26,6 +26,8 @@ dependencies {
     api(project(":cocache"))
     // publish and bootstrap write through the control plane's store, so the revision chain starts with them (RFC 0007 §5.9).
     implementation(project(":control"))
+    // Converted data is written as 8.0 documents, encoded and checked by their codec and compiler (RFC 0013 §3).
+    implementation(project(":document"))
     implementation("io.lettuce:lettuce-core")
     // convert decodes 7.x data with 7.x's own model, serializers and matchers (me.ahoo.cosec.migrate.v7, RFC 0008 §4.6
     // L8): path actions through Spring's PathPatternParser, SpEL and OGNL conditions through their engines, so a policy

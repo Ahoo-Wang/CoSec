@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.route
+package me.ahoo.cosec.document.route
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert

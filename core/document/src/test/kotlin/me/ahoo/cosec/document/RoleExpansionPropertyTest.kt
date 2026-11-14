@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.document
+package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
@@ -185,5 +185,5 @@ class RoleExpansionPropertyTest {
 }
 
 private object CoSecJsonTree {
-    fun of(json: String): tools.jackson.databind.JsonNode = me.ahoo.cosec.runtime.json.CoSecJson.mapper.readTree(json)
+    fun of(json: String): tools.jackson.databind.JsonNode = me.ahoo.cosec.document.json.CoSecJson.mapper.readTree(json)
 }

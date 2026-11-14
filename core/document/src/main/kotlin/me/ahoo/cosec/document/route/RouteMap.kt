@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.route
+package me.ahoo.cosec.document.route
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
@@ -25,7 +25,10 @@ import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.runtime.http.HttpMethods
+
+// The methods of the HEAD fallback (PIP-18); the pipeline's own method rules are `HttpMethods`, in cosec-runtime.
+private const val HEAD = "HEAD"
+private const val GET = "GET"
 
 /** A route map that does not load: malformed, or with routes that could answer one request two ways. */
 class RouteMapException(message: String, cause: Throwable? = null) : CoSecException(message, cause)
@@ -89,8 +92,8 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
      */
     fun resolve(method: String, path: String): RouteResolution {
         val resolved = resolveExactly(method, path)
-        if (resolved == RouteResolution.Unmapped && method == HttpMethods.HEAD) {
-            return resolveExactly(HttpMethods.GET, path)
+        if (resolved == RouteResolution.Unmapped && method == HEAD) {
+            return resolveExactly(GET, path)
         }
         return resolved
     }

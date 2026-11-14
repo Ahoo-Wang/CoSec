@@ -13,18 +13,18 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.document.format
+package me.ahoo.cosec.document.format
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.runtime.document.ProvenanceKind
-import me.ahoo.cosec.runtime.document.format.DocumentFormats.BINDING
-import me.ahoo.cosec.runtime.document.format.DocumentFormats.CATALOG
-import me.ahoo.cosec.runtime.document.format.DocumentFormats.DEFINITIONS
-import me.ahoo.cosec.runtime.document.format.DocumentFormats.SNAPSHOT_DOCUMENT
+import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.format.DocumentFormats.BINDING
+import me.ahoo.cosec.document.format.DocumentFormats.CATALOG
+import me.ahoo.cosec.document.format.DocumentFormats.DEFINITIONS
+import me.ahoo.cosec.document.format.DocumentFormats.SNAPSHOT_DOCUMENT
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 
 /**

@@ -18,7 +18,7 @@ package me.ahoo.cosec.conformance
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRequestCodec
-import me.ahoo.cosec.runtime.route.RouteMapCodec
+import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.testkit.PolicyTestKit
 import me.ahoo.cosec.testkit.ScenarioJson
 import me.ahoo.cosec.testkit.strings
