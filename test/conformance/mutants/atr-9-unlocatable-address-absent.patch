@@ -1,0 +1,18 @@
+# Rule: ATR-9
+# Mutant: an address no ip2region database covers has its attributes absent: an IPv6 client steps around a geo-block DENY
+# Tests: :ip2region:test --tests me.ahoo.cosec.ip2region.GeoBlockDecisionTest --tests me.ahoo.cosec.ip2region.Ip2RegionAttributeProviderTest
+
+diff --git a/extensions/ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider.kt b/extensions/ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider.kt
+index f9f65114..a8f7a28b 100644
+--- a/extensions/ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider.kt
++++ b/extensions/ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider.kt
+@@ -56,8 +56,7 @@ class Ip2RegionAttributeProvider(databases: List<ByteArray> = listOf(loadDefault
+         val address = IpAddress.parse(request.remoteIp)
+             ?: throw UnlocatableAddressException("[${Identifiers.printable(request.remoteIp)}] is no address")
+         val version = if (address.v4) Version.IPv4 else Version.IPv6
+-        val searcher = searchers[version]
+-            ?: throw UnlocatableAddressException("no ip2region database is loaded for ${version.name}")
++        val searcher = searchers[version] ?: return emptyMap()
+         // country|region|province|city|isp, 0 where unknown.
+         val region = searcher.search(address.toString()).split('|')
+         val values = HashMap<String, Any>(names.size)

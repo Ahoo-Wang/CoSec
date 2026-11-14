@@ -3,14 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-index 75e8f88a..7646be03 100644
+index 671c94b7..ff0fb896 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlane.kt
-@@ -383,14 +383,7 @@ class DefaultControlPlane(
-     }
+@@ -408,14 +408,8 @@ class DefaultControlPlane(
+         )
  
-     /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [PathNormalizer.enforceable]. */
--    private fun enforceable(resource: Resource): Resource = PathNormalizer.enforceable(resource)
+     /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
+-    private fun enforceable(resource: Resource): Resource = Enforceable.resource(resource)
 -        ?: throw ChangeRejectedException(
 -            BAD_REQUEST,
 -            "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
@@ -19,6 +19,7 @@ index 75e8f88a..7646be03 100644
 -                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
 -        )
 +    private fun enforceable(resource: Resource): Resource = resource
++
  
      /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
      private suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }

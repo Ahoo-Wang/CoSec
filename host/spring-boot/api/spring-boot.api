@@ -322,10 +322,12 @@ public final class me/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionProperti
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionProperties$Companion;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> ()V
-	public fun <init> (Z)V
-	public synthetic fun <init> (ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZLjava/lang/String;)V
+	public synthetic fun <init> (ZLjava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getEnabled ()Z
+	public final fun getIpv6Location ()Ljava/lang/String;
 	public fun setEnabled (Z)V
+	public final fun setIpv6Location (Ljava/lang/String;)V
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/ip2region/Ip2RegionProperties$Companion {

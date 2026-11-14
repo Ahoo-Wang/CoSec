@@ -326,7 +326,12 @@ setup from the OpenAPI document springdoc scans:
 - `cosecServiceGenerator/app`: the app document.
 
 The service is `info.x-cosec-service`, or else `info.title`. Each operation's action is `<service>:<operationId>`, or
-its `x-cosec-action`. The app document is a catalog with one group per operation's first tag (`default` without one),
+its `x-cosec-action`. Its resource is `<service>/{<variable>}/...`, every variable of its path in order
+(`/users/{id}/avatar/{size}` is `user/{id}/{size}`; `<service>` without a variable), or its `x-cosec-resource`. Its path
+is the document's `servers` path followed by the operation's, without the context path (`server.servlet.context-path`,
+`spring.webflux.base-path`), as CoSec decides requests: a server `https://api.example.com/api/v1` and a path
+`/orders/{id}` are the route `/api/v1/orders/{id}`. Servers with different paths, or a server path holding a server
+variable, fail generation: which one the host serves cannot be told. The app document is a catalog with one group per operation's first tag (`default` without one),
 and one [short-form permission](#short-form-permissions) per action, `<verb>`, allowing that action on any resource
 (the policy `perm:<service>/<verb>`); no policy is written by hand. It has no roles and no bindings: add them, review
 the document, and publish it as above. The groups are not `spaced`, so a permission applies in the default space only:

@@ -15,6 +15,7 @@ package me.ahoo.cosec.spring.boot.starter.actuate
 
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.info.Info
+import io.swagger.v3.oas.models.servers.Server
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -67,6 +68,22 @@ class CoSecServiceGeneratorEndpointTest {
             permission.get("action").toString().assert().contains("order:getOrder")
             endpoint.generate("other").assert().isNull()
         }
+    }
+
+    /**
+     * Round 2 L4: the routes sit at the servers' path, without the context path, which the host removes before it
+     * decides (the server URL holds it; the host's paths do not).
+     */
+    @Test
+    fun `the routes sit at the servers path within the application`() {
+        val served = { titled().addServersItem(Server().url("http://localhost:8080/app/api")) }
+        runner.withUserConfiguration(Orders::class.java).withBean(OpenAPI::class.java, served)
+            .withPropertyValues("spring.webflux.base-path=/app")
+            .run { context ->
+                val routes = context.getBean(CoSecServiceGeneratorEndpoint::class.java)
+                    .generate(CoSecServiceGeneratorEndpoint.ROUTES)!!
+                routes.get("routes").single().get("path").asString().assert().isEqualTo("/api/orders/{id}")
+            }
     }
 
     @Test

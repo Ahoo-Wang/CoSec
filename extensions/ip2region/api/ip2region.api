@@ -6,11 +6,12 @@ public final class me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider : me/ahoo/
 	public static final field ISP Ljava/lang/String;
 	public static final field PROVINCE Ljava/lang/String;
 	public fun <init> ()V
-	public fun <init> ([BLorg/lionsoul/ip2region/xdb/Version;)V
-	public synthetic fun <init> ([BLorg/lionsoul/ip2region/xdb/Version;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/util/List;)V
+	public synthetic fun <init> (Ljava/util/List;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun fetch (Lme/ahoo/cosec/spi/attribute/AttributeRequest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getAttributes ()Ljava/util/List;
 	public fun getTimeout-FghU774 ()Lkotlin/time/Duration;
+	public final fun getVersions ()Ljava/util/Set;
 	public fun toString ()Ljava/lang/String;
 }
 

@@ -262,12 +262,14 @@ CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追�
 
 | 属性 | 由谁添加 | 值 |
 |---|---|---|
-| `ext.ip2region.country`、`.province`、`.city`、`.isp` | `cosec-ip2region`，需开启 `cosec.ip2region.enabled`（默认开启） | 客户端 IP 的归属地，来自内嵌的 [ip2region](https://github.com/lionsoul2014/ip2region) 数据库。 |
+| `ext.ip2region.country`、`.province`、`.city`、`.isp` | `cosec-ip2region`，需开启 `cosec.ip2region.enabled`（默认开启） | 客户端 IP 的归属地，来自内嵌的 [ip2region](https://github.com/lionsoul2014/ip2region) 数据库：IPv4 的随附，IPv6 的来自 `cosec.ip2region.ipv6-location`。没有数据库覆盖的地址（没有 IPv6 数据库时的 IPv6 地址，或不是地址）是取不到；数据库不知道的字段（私有地址的国家）是缺失。 |
 | `ext.blacklist.principal`、`.ip`、`.device` | 你的 `BlacklistAttributeProvider` Bean | 请求是否被拦截（[黑名单](../guide/security-model.md#blacklist)）。 |
 
 ```json
 { "eq": ["ext.ip2region.country", "中国"] }
 ```
+
+地域封锁是针对这些属性的 DENY，至于无法定位的地址如何处理，由作者决定。写成 `DENY when country in [...]` 时，数据库不知道国家的客户端（私有地址）不会被封锁，完全无法定位的客户端（没有 IPv6 数据库时的 IPv6 地址）使请求返回 `503`，绝不会被放行。若要封锁名单之外的所有人，把 DENY 写成 `not in [允许的国家]`，缺失的国家也会匹配；若要放行无法定位的客户端，把 DENY 标为 `onMissing: nomatch`（[缺失的外部属性](../guide/security-model.md#missing-external-attributes)）。
 
 要添加自己的外部属性，声明一个 `AttributeProvider` Bean（[扩展 CoSec](../architecture/extending.md)）。
 

@@ -24,6 +24,17 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "openapi:OpenAPIServiceGeneratorTest#the servers path prefixes every route",
+            "openapi:OpenAPIServiceGeneratorTest#servers whose path cannot be told fail generation",
+            "openapi:OpenAPIServiceGeneratorTest#a path with several variables names all of them in its resource, in order",
+            "spring-boot:CoSecServiceGeneratorEndpointTest#the routes sit at the servers path within the application",
+            "ip2region:GeoBlockDecisionTest#a geo block is not stepped around over IPv6",
+            "ip2region:GeoBlockDecisionTest#onMissing nomatch lets an unlocatable address through",
+            "ip2region:Ip2RegionAttributeProviderTest#anAddressNoDatabaseCoversIsUnavailable",
+            "spring-boot:RealServerFailingIdsTest#a failing IdGenerator still answers through StatusMapping on every server",
+            "runtime:PipelineTest#aFailingIdGeneratorFallsBackToARandomId",
+            "runtime:IdentityGateTest#a failing id generator falls back to a random id",
+            "cosid:CosIdIdGeneratorTest#a failing generator falls back to a random id",
             "spring-boot:SuspendingHandlerContextTest#without context propagation the holder fails loudly in a suspend handler",
             "spring-boot:SuspendingHandlerContextTest#a blocking handler reads the holder",
             "webmvc:SuspendingHandlerHolderInterceptorTest#aSuspendHandlerFindsTheHolderUnbound",

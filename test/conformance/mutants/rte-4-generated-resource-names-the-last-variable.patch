@@ -1,0 +1,17 @@
+# Rule: RTE-4
+# Mutant: the generated resource names only the path's last variable
+# Tests: :openapi:test --tests me.ahoo.cosec.openapi.generator.OpenAPIServiceGeneratorTest
+
+diff --git a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
+index 46850511..8d8ae0ae 100644
+--- a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
++++ b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
+@@ -106,7 +106,7 @@ object OpenAPIServiceGenerator {
+                     ?: throw OpenAPIGenerationException("$where: the operation has neither an operationId nor $ACTION_EXTENSION")
+                 // Every variable, in order: the last alone would name every user's avatar of one size alike (round 2 L4).
+                 val resource = extension(operation, RESOURCE_EXTENSION)
+-                    ?: VARIABLE.findAll(path).map { "{${it.groupValues[1]}}" }.toList().takeIf { it.isNotEmpty() }
++                    ?: VARIABLE.findAll(path).map { "{${it.groupValues[1]}}" }.toList().takeLast(1).takeIf { it.isNotEmpty() }
+                         ?.joinToString("/", prefix = "$service/")
+                     ?: service
+                 GeneratedOperation(Route(method.name, path, action, resource), operation)

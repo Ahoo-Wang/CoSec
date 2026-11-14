@@ -25,7 +25,7 @@ import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.runtime.http.PathNormalizer
+import me.ahoo.cosec.runtime.http.Enforceable
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
@@ -60,7 +60,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
 
     /**
      * The decision that [check] answers for the same arguments. A context the pipeline did not make, an action
-     * without `:`, or an action or resource enforcement would not decide ([PathNormalizer.enforceable], `PIP-15`,
+     * without `:`, or an action or resource enforcement would not decide ([Enforceable], `PIP-15`,
      * `PIP-18`: an `http` verb with a lower-case letter; `http:HEAD` is decided as `http:GET`) is an implicit deny
      * (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check writes no audit. The obligations
      * of a permit, rate limits, did not run.
@@ -94,8 +94,8 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
     /** As [decide], with the action and resource given as the engine reads them. */
     @OptIn(InternalCoSecApi::class)
     suspend fun decide(security: RequestSecurity, action: Action, resource: Resource): Decision {
-        val decidable = PathNormalizer.enforceable(resource) ?: return Decision.Deny(null)
-        val decidedAs = PathNormalizer.enforceable(action) ?: return Decision.Deny(null)
+        val decidable = Enforceable.resource(resource) ?: return Decision.Deny(null)
+        val decidedAs = Enforceable.action(action) ?: return Decision.Deny(null)
         return decided(security, decidedAs, decidable)
     }
 
@@ -119,10 +119,10 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * Three-valued, so that the caller can tell a deny from an outage; it fails closed like [check]. An anonymous
      * request is denied.
      *
-     * [resource] is not put through [PathNormalizer.enforceable], nor is it in [decideAs]: these check the control
+     * [resource] is not put through [Enforceable], nor is it in [decideAs]: these check the control
      * plane's own actions on resources the server builds from ids it has validated (a document, a change), never a path
      * a client sent, and their bounds are those of the ids, not of a request path. The control plane decides a resource
-     * a client names (simulate, explain) through [PathNormalizer.enforceable] before it gets here.
+     * a client names (simulate, explain) through [Enforceable] before it gets here.
      */
     @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {

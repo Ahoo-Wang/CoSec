@@ -31,8 +31,15 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 class OpenAPIServiceGeneratorTest {
-    private fun spec(paths: String, info: String = """{"title":"order","version":"1"}"""): OpenAPI =
-        Json.mapper().readValue("""{"openapi":"3.0.1","info":$info,"paths":$paths}""", OpenAPI::class.java)
+    private fun spec(
+        paths: String,
+        info: String = """{"title":"order","version":"1"}""",
+        servers: String? = null
+    ): OpenAPI =
+        Json.mapper().readValue(
+            """{"openapi":"3.0.1","info":$info,${servers?.let { "\"servers\":$it," }.orEmpty()}"paths":$paths}""",
+            OpenAPI::class.java,
+        )
 
     private val api = spec(
         """
@@ -46,7 +53,8 @@ class OpenAPIServiceGeneratorTest {
             "delete": {"operationId":"remove", "x-cosec-action":"order:delete"}
           },
           "/orders/{orderId}/items/{itemId}": {
-            "put": {"operationId":"updateItem", "tags":["items"], "x-cosec-resource":"order/{orderId}/item/{itemId}"}
+            "put": {"operationId":"updateItem", "tags":["items"], "x-cosec-resource":"order/{orderId}/item/{itemId}"},
+            "get": {"operationId":"readItem", "tags":["items"]}
           },
           "/reports/monthly": {
             "get": {"operationId":"monthly", "tags":["reports"]}
@@ -61,7 +69,7 @@ class OpenAPIServiceGeneratorTest {
             val action = operation.extensions?.get("x-cosec-action") as? String ?: "order:${operation.operationId}"
             val variables = Regex("""\{([^}]+)}""").findAll(path).map { it.groupValues[1] }.toList()
             val resource = operation.extensions?.get("x-cosec-resource") as? String
-                ?: variables.lastOrNull()?.let { "order/{$it}" } ?: "order"
+                ?: variables.takeIf { it.isNotEmpty() }?.joinToString("/", prefix = "order/") { "{$it}" } ?: "order"
             val id = resource.substringAfter('/', "").let { template ->
                 variables.fold(template) { text, variable -> text.replace("{$variable}", "v-$variable") }
             }
@@ -132,7 +140,7 @@ class OpenAPIServiceGeneratorTest {
             mapOf(
                 "orders" to listOf("list", "create", "read"),
                 "default" to listOf("delete"),
-                "items" to listOf("updateItem"),
+                "items" to listOf("readItem", "updateItem"),
                 "reports" to listOf("monthly")
             ),
         )
@@ -193,6 +201,47 @@ class OpenAPIServiceGeneratorTest {
         )
         fails("""{"/a":{"get":{"operationId":"x","x-cosec-action":"billing:pay"}}}""", "not of service [order]")
         fails("""{"/a":{"get":{"operationId":"has space"}}}""", "action")
+    }
+
+    @Test
+    fun `a path with several variables names all of them in its resource, in order`() {
+        val routes = RouteMapCodec.load(
+            listOf("generated" to RouteMapCodec.encode(OpenAPIServiceGenerator.routeMap(api))),
+        )
+        val resolved = routes.resolve("GET", "/orders/7/items/3") as RouteResolution.Mapped
+        resolved.resource.id.assert().isEqualTo("7/3")
+        // Two items of one order, or one item number of two orders, are different resources.
+        (routes.resolve("GET", "/orders/8/items/3") as RouteResolution.Mapped).resource.id.assert().isEqualTo("8/3")
+    }
+
+    @Test
+    fun `the servers path prefixes every route`() {
+        val paths = """{"/orders/{id}":{"get":{"operationId":"read"}}}"""
+        fun pathsOf(servers: String?, contextPath: String = "") =
+            OpenAPIServiceGenerator.routeMap(spec(paths, servers = servers), contextPath).routes.map { it.path }
+        pathsOf("""[{"url":"https://api.example.com/api/v1/"}]""").assert().containsExactly("/api/v1/orders/{id}")
+        pathsOf("""[{"url":"/api/v1"},{"url":"http://localhost:8080/api/v1?x=1"}]""")
+            .assert().containsExactly("/api/v1/orders/{id}")
+        pathsOf("""[{"url":"https://api.example.com"}]""").assert().containsExactly("/orders/{id}")
+        pathsOf(null).assert().containsExactly("/orders/{id}")
+        // The context path is the host's, not the application's: CoSec decides the path within the application.
+        pathsOf("""[{"url":"http://localhost:8080/app/api"}]""", "/app/").assert().containsExactly("/api/orders/{id}")
+        pathsOf("""[{"url":"http://localhost:8080/app"}]""", "/app").assert().containsExactly("/orders/{id}")
+        pathsOf("""[{"url":"http://localhost:8080/apps"}]""", "/app").assert().containsExactly("/apps/orders/{id}")
+        OpenAPIServiceGenerator.operations(spec(paths, servers = """[{"url":"/api"}]""")).single()
+            .route.resource.assert().isEqualTo("order/{id}")
+    }
+
+    @Test
+    fun `servers whose path cannot be told fail generation`() {
+        val paths = """{"/orders":{"get":{"operationId":"list"}}}"""
+        fun fails(servers: String, message: String) {
+            assertThrows<OpenAPIGenerationException> {
+                OpenAPIServiceGenerator.routeMap(spec(paths, servers = servers))
+            }.message.assert().contains(message)
+        }
+        fails("""[{"url":"/api/v1"},{"url":"/api/v2"}]""", "different paths")
+        fails("""[{"url":"https://example.com/{base}"}]""", "server variable")
     }
 
     private fun spec31(paths: String, pathItems: String): OpenAPI = Json31.mapper().readValue(

@@ -261,10 +261,10 @@ fun interface RateLimiter {
 `IdGenerator`（`generate(): String`）为 CoSec 创建的东西生成 id：请求 id（`CoSec-Request-Id`，以及网关在 `CoSec-Identity` 中转发的 `rid`）、决策事件 id、令牌 id（`jti`）和控制面变更 id。没有你自己的实现时，CoSec 使用 `RandomIdGenerator`：从 `ThreadLocalRandom` 抽取的随机版本 4 UUID。`ThreadLocalRandom` 从不阻塞，而 `SecureRandom` 可能阻塞。
 
 - id 在共享存储的所有实例之间唯一，由 1 到 64 个 `A-Z a-z 0-9 . _ -` 字符组成：它会进入响应头、URL 和 Redis 键。
-- 每个请求都会在请求所在的线程上（包括事件循环）调用 `generate`，此时还没有可用来应答失败的结果：它从不阻塞，也从不抛出异常。
+- 每个请求都会在请求所在的线程上（包括事件循环）调用 `generate`：它从不阻塞，也不应抛出异常。抛出异常的生成器只损失它自己的 id（`PIP-23`）：由随机 id 命名请求或事件，应答与 CoSec 本来会给出的相同，失败至多每十秒记录一次。
 - id 不是秘密，也不必不可预测：令牌是签名的，请求 id 只用来关联日志和审计事件。社交登录的 OAuth `state` 和 API key 的密钥必须不可预测，因此从不由它生成：CoSec 自己从 `SecureRandom` 抽取它们。
 
-CoSec 的核心不依赖任何 id 库。使用 CosId 5 时，添加 `cosec-cosid`。当应用有 CosId 的 `CosIdRuntime`、且没有自己的 `IdGenerator` 时，starter 把 `cosec.cosid.generator` 指定的生成器（未设置时为 CosId 的 `default`）生成的 id，按该生成器的编解码器写出，交给 CoSec（`CosIdIdGenerator`）。生成的 id 不符合上面第一条要求的生成器会导致启动失败。
+CoSec 的核心不依赖任何 id 库。使用 CosId 5 时，添加 `cosec-cosid`。当应用有 CosId 的 `CosIdRuntime`、且没有自己的 `IdGenerator` 时，starter 把 `cosec.cosid.generator` 指定的生成器（未设置时为 CosId 的 `default`）生成的 id，按该生成器的编解码器写出，交给 CoSec（`CosIdIdGenerator`）。生成的 id 不符合上面第一条要求的生成器会导致启动失败。请选择基于时间的生成器（Snowflake、CosId80），并把时钟回拨策略设为失败而不是等待（等待为零，即 CosId 的 `ClockRegressionPolicy.FAIL`）：时钟回拨时，CosId 的默认策略会在事件循环上等待至多一秒；号段生成器在号段用完时会等待它的存储。CosId 不公开生成器的策略，所以 CoSec 无法检查；CosId 的失败以随机 id 应答，至多每十秒记录一次。
 
 ```kotlin
 implementation("me.ahoo.cosec:cosec-cosid")

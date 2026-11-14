@@ -371,12 +371,19 @@ Facts the request does not carry come from `AttributeProvider` beans as **extern
 
 | Attributes | Added by | Value |
 |---|---|---|
-| `ext.ip2region.country`, `.province`, `.city`, `.isp` | `cosec-ip2region`, with `cosec.ip2region.enabled` (on by default) | The client IP's location from an embedded [ip2region](https://github.com/lionsoul2014/ip2region) database. |
+| `ext.ip2region.country`, `.province`, `.city`, `.isp` | `cosec-ip2region`, with `cosec.ip2region.enabled` (on by default) | The client IP's location from an embedded [ip2region](https://github.com/lionsoul2014/ip2region) database: IPv4's is bundled, IPv6's comes from `cosec.ip2region.ipv6-location`. An address no database covers (IPv6 without one, or no address) is unavailable; a field the database does not know (a private address's country) is absent. |
 | `ext.blacklist.principal`, `.ip`, `.device` | Your `BlacklistAttributeProvider` bean | Whether the request is blocked ([Blacklist](../guide/security-model.md#blacklist)). |
 
 ```json
 { "eq": ["ext.ip2region.country", "中国"] }
 ```
+
+A geo block is a DENY on these attributes, and what it does with an address it cannot locate is the author's choice.
+Written as `DENY when country in [...]`, a client whose country the database does not know (a private address) is not
+blocked, and one it cannot locate at all (IPv6 without an IPv6 database) makes the request `503`, never let through. To
+block everyone outside a list instead, write the DENY as `not in [allowed]`, which an absent country also matches; to let
+an unlocatable client through, mark the DENY `onMissing: nomatch`
+([Missing external attributes](../guide/security-model.md#missing-external-attributes)).
 
 To add your own, declare an `AttributeProvider` bean ([Extending CoSec](../architecture/extending.md)).
 

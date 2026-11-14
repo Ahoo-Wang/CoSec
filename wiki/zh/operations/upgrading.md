@@ -13,6 +13,9 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
 
+- **生成的路由映射位于 `servers` 路径之下，资源包含路径的每个变量**（第 2 轮 L4）。`cosecServiceGenerator` 端点丢掉了服务器路径（`/api/v1`），生成的路由匹配不到任何请求，所有请求都落在 `http` 命名空间；`/users/{id}/avatar/{size}` 的资源是 `user/{size}`，所有用户共用一个资源。现在路由以服务器路径开头（不含上下文路径），资源是 `user/{id}/{size}`：重新生成路由映射，并改写策略中按生成结果写的资源。多个服务器路径不同，或路径含服务器变量时，生成失败。
+- **ip2region：无法定位的是取不到**（第 2 轮 M5）。只有随附的 IPv4 数据库时，IPv6 客户端没有国家，写成 `country in [...]` 的地域封锁 DENY 会放行它；现在它是取不到，这条 DENY 使请求返回 `503`（或者用 `onMissing: nomatch` 放行）。用 `cosec.ip2region.ipv6-location` 加载 IPv6 数据库。`Ip2RegionAttributeProvider` 改为接收数据库列表，每个数据库的版本取自其文件头，不再接收单个数据库和版本。
+- **失败的 `IdGenerator` 只损失它自己的 id**（`PIP-23`）。此前抛出异常的生成器（时钟回拨后 CosId 的 `ClockBackwardsException`）会在得出任何结果之前离开管道：没有问题体，没有 `CoSec-Request-Id`，没有决策事件，各适配器各自应答。现在以随机 id 代替，并至多每十秒记录一次 WARN；`CosIdIdGenerator` 对 CosId 的失败也是如此。请把 CosId 的时钟回拨策略配置为失败而不是等待。
 - **处理器从 `SecurityContext` 参数读取安全上下文**（第 2 轮 M4）。starter 注册了 `SecurityContextArgumentResolver`。`SecurityContextHolder` 只用于请求线程上的阻塞代码：在另一个请求的线程上恢复的 `suspend` 处理器，此前会从它读到那个请求的上下文。有 `io.micrometer:context-propagation` 并设置 `spring.reactor.context-propagation=auto` 时，Spring 现在也会恢复持有者；否则在 `suspend` 处理器中持有者是未绑定的，在那里读取会抛出异常（`PIP-22`）。
 - **应用只读取安全上下文**（第 2 轮 L5）。`SecurityContextHolder.setContext` 和 `remove`、`ServletRequests.setSecurityContext`、`ServerWebExchanges.setSecurityContext`，以及 `ReactiveSecurityContexts.setSecurityContext` 和 `writeSecurityContext` 都是内部 API：只有适配器绑定上下文。自行绑定上下文的代码（`AuthorizationChecker` 本来就拒绝这样的上下文）不再能编译。
 - **context path 按段去掉**（`PIP-20`）。Jetty 以规范形式给出 context path，而 URI 保留客户端的写法：context path 为 `/app` 时，`/%61pp/orders/1` 此前按 `/app/orders/1` 判定，绕过了 `/orders` 上的所有语句；现在是 `/orders/1`。不以 context path 开头的 URI 是 `400`。

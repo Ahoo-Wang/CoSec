@@ -267,6 +267,19 @@
         "webmvc:SuspendingHandlerHolderInterceptorTest#underAutomaticContextPropagationASuspendHandlerKeepsTheHolder"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-23",
+      "source": "RFC 0006 §6.3; round-2 review M6",
+      "statement": "An IdGenerator that throws never takes the answer: the request id and the decision event's id are made where StatusMapping answers, and a random id stands in for a failed one, so the outcome is StatusMapping's, alike on every adapter, with its CoSec-Request-Id and its event. CosIdIdGenerator answers a random id for a CosId failure.",
+      "level": "build",
+      "guards": [
+        "spring-boot:RealServerFailingIdsTest#a failing IdGenerator still answers through StatusMapping on every server",
+        "runtime:PipelineTest#aFailingIdGeneratorFallsBackToARandomId",
+        "runtime:IdentityGateTest#a failing id generator falls back to a random id",
+        "cosid:CosIdIdGeneratorTest#a failing generator falls back to a random id"
+      ],
+      "pending": null
     }
   ]
 }

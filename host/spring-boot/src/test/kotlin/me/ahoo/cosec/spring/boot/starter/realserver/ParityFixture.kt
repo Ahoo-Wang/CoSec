@@ -27,12 +27,14 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
@@ -47,7 +49,10 @@ import java.util.concurrent.CompletableFuture
  * internal network (`10.0.0.0/8`). `Authorization: Bearer <who>@<tenant>:<role>,...` authenticates; every id is `parity-request`, so the stacks' answers compare byte
  * for byte.
  */
-internal class ParityFixture : AutoCloseable {
+internal class ParityFixture(
+    private val ids: IdGenerator = IdGenerator { REQUEST_ID },
+    private val listeners: DecisionListeners = DecisionListeners(emptyList()),
+) : AutoCloseable {
     private val platform: CompiledDocument = compile(
         SnapshotKey.Platform,
         ""","policies":[
@@ -116,15 +121,16 @@ internal class ParityFixture : AutoCloseable {
         PipelineComponents(
             authenticator,
             SuspendingSnapshotSource(views),
-            idGenerator = { REQUEST_ID },
+            idGenerator = ids,
             rateLimiter = rateLimiter,
+            listeners = listeners,
         )
     )
 
     /** What [stack]'s adapter calls: the pipeline, on every stack. */
     fun gate(@Suppress("UNUSED_PARAMETER") stack: Stack): RequestGate = pipeline
 
-    override fun close() = Unit
+    override fun close() = listeners.cancel()
 
     private fun compile(key: SnapshotKey, body: String): CompiledDocument = PolicyDocumentCompiler().compile(
         key,

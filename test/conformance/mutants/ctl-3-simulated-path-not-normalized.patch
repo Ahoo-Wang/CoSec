@@ -1,17 +1,17 @@
 # Rule: CTL-3
 # Mutant: an http path is held to the length bounds only, not normalized as a request path is (the reading simulate and checks share)
-# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :runtime:test --tests me.ahoo.cosec.runtime.http.PathNormalizerTest :conformance:test
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :runtime:test --tests me.ahoo.cosec.runtime.http.EnforceableTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
-index 90132c2d..aa02e0e1 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/PathNormalizer.kt
-@@ -83,7 +83,7 @@ object PathNormalizer {
-     @InternalCoSecApi
-     fun enforceable(resource: Resource): Resource? {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Enforceable.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Enforceable.kt
+index 8405a94b..fa89515e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Enforceable.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Enforceable.kt
+@@ -33,7 +33,7 @@ object Enforceable {
+      */
+     fun resource(resource: Resource): Resource? {
          val id = if (resource.type == ResourcePattern.HTTP_TYPE) {
--            normalize(resource.id)
-+            resource.id.takeIf(::withinBounds)
+-            PathNormalizer.normalize(resource.id)
++            resource.id.takeIf(PathNormalizer::withinBounds)
          } else {
-             resource.id.takeIf(::withinBounds)
+             resource.id.takeIf(PathNormalizer::withinBounds)
          }

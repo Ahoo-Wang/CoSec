@@ -49,6 +49,7 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.document.PolicyDocument
 import me.ahoo.cosec.runtime.document.ProvenanceKind
 import me.ahoo.cosec.runtime.document.RoleExpansion
+import me.ahoo.cosec.runtime.http.Enforceable
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
@@ -398,16 +399,16 @@ class DefaultControlPlane(
         )
     }
 
-    /** [action] as enforcement would decide it (`PIP-18`): [PathNormalizer.enforceable]. */
-    private fun enforceable(action: Action): Action = PathNormalizer.enforceable(action)
+    /** [action] as enforcement would decide it (`PIP-18`): [Enforceable]. */
+    private fun enforceable(action: Action): Action = Enforceable.action(action)
         ?: throw ChangeRejectedException(
             BAD_REQUEST,
             "The action is not one enforcement decides: an http method with a lower-case letter is refused as a " +
                 "request's is; http:HEAD is decided as http:GET."
         )
 
-    /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [PathNormalizer.enforceable]. */
-    private fun enforceable(resource: Resource): Resource = PathNormalizer.enforceable(resource)
+    /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
+    private fun enforceable(resource: Resource): Resource = Enforceable.resource(resource)
         ?: throw ChangeRejectedException(
             BAD_REQUEST,
             "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
