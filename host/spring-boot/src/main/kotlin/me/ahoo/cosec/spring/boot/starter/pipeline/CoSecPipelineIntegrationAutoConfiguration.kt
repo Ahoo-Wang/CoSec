@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cache.CoSecCacheSpecs
@@ -53,6 +54,8 @@ import org.springframework.core.io.ResourceLoader
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
 import kotlin.time.toKotlinDuration
+
+private val log = KotlinLogging.logger {}
 
 /**
  * What the optional modules add to the [me.ahoo.cosec.runtime.Pipeline]: a rate limiter, decision listeners
@@ -213,13 +216,26 @@ class CoSecPipelineIntegrationAutoConfiguration {
                 }
                 resource.inputStream.use { it.readBytes() }
             }
-            return Ip2RegionAttributeProvider(
+            val provider = Ip2RegionAttributeProvider(
                 listOfNotNull(Ip2RegionAttributeProvider.loadDefaultIp2RegionDb(), ipv6)
             )
+            // So that an operator learns it before the first 503 of a client of the other version (round 2 M5).
+            val missing = IP_VERSIONS - provider.versions
+            log.info {
+                "ip2region databases: ${provider.versions}." + if (missing.isEmpty()) {
+                    ""
+                } else {
+                    " The ${missing.joinToString()} addresses are unavailable: a DENY on ext.ip2region.* is " +
+                        "Indeterminate (503) for them unless onMissing: nomatch; load a database with " +
+                        "${Ip2RegionProperties.PREFIX}.ipv6-location."
+                }
+            }
+            return provider
         }
     }
 
     private companion object {
         const val KAFKA_DELIVERY_KEY = "cosec.audit.kafka.delivery"
+        val IP_VERSIONS = setOf("IPv4", "IPv6")
     }
 }

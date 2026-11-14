@@ -203,6 +203,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **External attribute unavailable**: a statement reads `ext.<provider>.<name>` with `onMissing: indeterminate`
   (default) and the provider failed, timed out (`cosec.authorization.attributes.timeout`) or is not registered on this
   instance. A blacklist source failure makes every request 503 unless a DENY matches.
+- **Only IPv6 clients get 503, on a statement reading `ext.ip2region.*`**: the host has only the bundled IPv4 ip2region
+  database, and an address no loaded database covers is unavailable, not absent (`ATR-9`). Confirm with the startup
+  line `ip2region databases: [IPv4]. The IPv6 addresses are unavailable: ...` and the clients' addresses in the audit
+  events. Fix: load an IPv6 database with `cosec.ip2region.ipv6-location`, or put `onMissing: nomatch` (with its
+  control-plane confirmation) on a DENY where letting an unlocatable client past it is what the policy means.
 - **A DENY's condition errored**, or the tenant's boundary statement errored. A DENY on `http.header.<name>` errors when
   the request sent that header more than once with different values (`Header [<name>] arrived with different
   values`); an ALLOW on it then does not match. One value repeated reads as that value.

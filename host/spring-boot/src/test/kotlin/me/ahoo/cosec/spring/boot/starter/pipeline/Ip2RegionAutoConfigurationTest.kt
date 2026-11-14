@@ -15,10 +15,15 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 
@@ -28,10 +33,20 @@ class Ip2RegionAutoConfigurationTest {
         .withConfiguration(AutoConfigurations.of(CoSecPipelineIntegrationAutoConfiguration::class.java))
 
     @Test
-    fun `without a location only the bundled IPv4 database is loaded`() {
-        runner.run { context ->
-            context.getBean(Ip2RegionAttributeProvider::class.java).versions.assert().containsExactly("IPv4")
+    fun `without a location only the bundled IPv4 database is loaded, and startup says so`() {
+        val appender = ListAppender<ILoggingEvent>().apply { start() }
+        val logger = LoggerFactory.getLogger(CoSecPipelineIntegrationAutoConfiguration::class.java) as Logger
+        logger.addAppender(appender)
+        try {
+            runner.run { context ->
+                context.getBean(Ip2RegionAttributeProvider::class.java).versions.assert().containsExactly("IPv4")
+            }
+        } finally {
+            logger.detachAppender(appender)
         }
+        val line = appender.list.single { it.formattedMessage.startsWith("ip2region databases") }
+        line.level.assert().isEqualTo(Level.INFO)
+        line.formattedMessage.assert().contains("[IPv4]", "The IPv6 addresses are unavailable", "ipv6-location")
     }
 
     @Test
