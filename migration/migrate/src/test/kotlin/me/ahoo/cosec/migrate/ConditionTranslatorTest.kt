@@ -193,7 +193,10 @@ class ConditionTranslatorTest {
                 val base = FIXED.first()
                 for (id in Facts.PRINCIPAL_IDS) {
                     for (owner in Facts.PRINCIPAL_IDS) {
-                        val facts = base.copy(principalId = id, requestAttributes = mapOf("cosec.audit.routeId" to owner))
+                        val facts = base.copy(
+                            principalId = id,
+                            requestAttributes = mapOf("cosec.audit.routeId" to owner)
+                        )
                         ast(facts).assert().describedAs("deny=$deny id=$id owner=$owner").isEqualTo(id == owner)
                     }
                 }

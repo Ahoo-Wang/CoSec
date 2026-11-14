@@ -345,7 +345,6 @@ class PolicyCompiler(
         }
 }
 
-
 /** The namespace and method of `DOC-8`. */
 private const val HTTP = "http"
 private const val HEAD = "HEAD"

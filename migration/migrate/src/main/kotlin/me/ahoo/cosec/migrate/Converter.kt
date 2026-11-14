@@ -449,7 +449,11 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
     // ---- apps (RFC 0004 §5.1: app permissions and role grants) ----
 
     /** A permission of an app; [statement] null when it was an ALLOW 8.0 could never match, dropped (PIP-18). */
-    private class AppPermissionStatement(val permissionId: String, val statement: StatementSource?, val location: String)
+    private class AppPermissionStatement(
+        val permissionId: String,
+        val statement: StatementSource?,
+        val location: String
+    )
 
     private fun convertApp(app: Source7x.App) {
         count("apps")

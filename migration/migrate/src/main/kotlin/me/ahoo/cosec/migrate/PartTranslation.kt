@@ -368,7 +368,11 @@ internal class PartTranslation(
             else -> return false
         }
         if (deny) {
-            translator.rejected<Unit>(RejectionKind.CONDITION_NOT_TRANSLATED, location, "in the DENY direction, $reason")
+            translator.rejected<Unit>(
+                RejectionKind.CONDITION_NOT_TRANSLATED,
+                location,
+                "in the DENY direction, $reason"
+            )
             return true
         }
         translator.note("NOT-IN-8.0", location, "in the ALLOW direction, $reason: the ALLOW matches fewer requests")

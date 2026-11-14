@@ -37,7 +37,9 @@ import kotlin.random.Random
  */
 class Round2ConversionTest {
     private fun convert(vararg statements: String) =
-        Converter().convert(source(listOf("p" to policy("p", type = "global", statements = statements.toList())), setOf("p")))
+        Converter().convert(
+            source(listOf("p" to policy("p", type = "global", statements = statements.toList())), setOf("p"))
+        )
 
     private fun pathAction(vararg methods: String) =
         """{"path":{"pattern":"/r/**","method":[${methods.joinToString(",") { "\"$it\"" }}]}}"""
@@ -130,7 +132,13 @@ class Round2ConversionTest {
     /** Addition C: 7.x's ip2region appender set `ipRegion`; 8.0 sets no request attribute but the gateway's route id. */
     @Test
     fun `a DENY on a request attribute only 7x set is refused`() {
-        val geo = convert(statement(effect = "deny", condition = """{"startsWith":{"part":"request.attributes.ipRegion","value":"中国"}}"""))
+        val geo =
+            convert(
+                statement(
+                    effect = "deny",
+                    condition = """{"startsWith":{"part":"request.attributes.ipRegion","value":"中国"}}"""
+                )
+            )
         geo.documents.assert().isEmpty()
         rejected(geo, RejectionKind.CONDITION_NOT_TRANSLATED).single().message.assert()
             .contains("request.attributes.ipRegion").contains("always absent").contains("ext.ip2region")
@@ -150,7 +158,12 @@ class Round2ConversionTest {
         allow.report.semanticChanges.filter { it.change == "NOT-IN-8.0" }.single().shape.assert()
             .contains("in the ALLOW direction")
         // Under negate a DENY reads its inner condition in the ALLOW direction, where absence only narrows it.
-        convert(statement(effect = "deny", condition = """{"eq":{"part":"request.attributes.ipRegion","value":"x","negate":true}}"""))
+        convert(
+            statement(
+                effect = "deny",
+                condition = """{"eq":{"part":"request.attributes.ipRegion","value":"x","negate":true}}"""
+            )
+        )
             .report.rejections.assert().isEmpty()
     }
 }
