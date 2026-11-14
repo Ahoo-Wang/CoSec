@@ -28,8 +28,8 @@ import me.ahoo.cosec.servlet.SecurityContextArgumentResolver
 import me.ahoo.cosec.servlet.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.servlet.SuspendingHandlerHolderInterceptor
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
-import me.ahoo.cosec.spring.boot.starter.StartupCheck
-import me.ahoo.cosec.spring.boot.starter.StartupCheckExclusion
+import me.ahoo.cosec.spring.boot.starter.StartupTask
+import me.ahoo.cosec.spring.boot.starter.StartupTaskExclusion
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -56,7 +56,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
  */
 @AutoConfiguration(after = [CoSecPipelineAutoConfiguration::class, CoSecGatewayModeAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
-@Import(StartupCheckExclusion::class)
+@Import(StartupTaskExclusion::class)
 internal class CoSecPipelineWebAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
@@ -104,7 +104,7 @@ internal class CoSecPipelineWebAutoConfiguration {
 
         /** Which of the two this host has, once every singleton (Reactor's hooks included) is set up. */
         @Bean
-        fun cosecSuspendingHandlerReport(): StartupCheck = StartupCheck.AfterSingletons {
+        fun cosecSuspendingHandlerReport(): StartupTask = StartupTask.AfterSingletons {
             log.info {
                 if (SuspendingHandlerHolderInterceptor.restored()) {
                     "SecurityContextHolder in suspend handlers: restored by context propagation on each resumption."

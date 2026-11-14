@@ -39,7 +39,7 @@
     {
       "id": "STA-3",
       "source": "RFC 0011 D2 (round 2 review of host and tools, M1)",
-      "statement": "The starter's startup checks run whatever spring.main.lazy-initialization says: every module check (STA-1), the actuator endpoint check (STA-2), the eviction policy check and monitor (SNP-3), the replica read check (RC1-47), the API key membership check (IDN-6), the pipeline mode check, the unknown property check and the control plane's own-authorization check fail startup under lazy initialization as they do without it, and the components that keep watching once the host runs (the eviction policy monitor, shadow reporting, control-plane maintenance, the listeners' metrics) start at startup. A check is a StartupCheck bean, which lazy initialization never defers; no auto-configuration of the starter declares a check any other way. A configuration none of them refuses starts under lazy initialization.",
+      "statement": "The starter's startup checks run whatever spring.main.lazy-initialization says: every module check (STA-1), the actuator endpoint check (STA-2), the eviction policy check and monitor (SNP-3), the replica read check (RC1-47), the API key membership check (IDN-6), the pipeline mode check, the unknown property check and the control plane's own-authorization check fail startup under lazy initialization as they do without it, and the components that keep watching once the host runs (the eviction policy monitor, shadow reporting, control-plane maintenance, the listeners' metrics) start at startup. Each of them is a StartupTask bean, which lazy initialization never defers; no auto-configuration of the starter declares one any other way. A configuration none of them refuses starts under lazy initialization.",
       "level": "startup",
       "pending": null,
       "guards": [
@@ -64,10 +64,10 @@
         "spring-boot:ShadowReportingWiringTest#the reporting runs from startup under lazy initialization",
         "spring-boot:StarterWiringTest#control-plane maintenance starts under lazy initialization",
         "spring-boot:MetricsRegistryOrderTest#the listeners' counters are bound under lazy initialization",
-        "spring-boot:StartupCheckTest#no bean method returns a check that lazy initialization would defer",
-        "spring-boot:StartupCheckTest#the checks are found and are startup checks",
-        "spring-boot:StartupCheckTest#the exclusion keeps startup checks, and only them, eager",
-        "spring-boot:StartupCheckTest#every auto-configuration with a check imports the exclusion"
+        "spring-boot:StartupTaskTest#no bean method returns a check that lazy initialization would defer",
+        "spring-boot:StartupTaskTest#the checks are found and are startup tasks",
+        "spring-boot:StartupTaskTest#the exclusion keeps startup tasks, and only them, eager",
+        "spring-boot:StartupTaskTest#every auto-configuration with a check imports the exclusion"
       ]
     }
   ]

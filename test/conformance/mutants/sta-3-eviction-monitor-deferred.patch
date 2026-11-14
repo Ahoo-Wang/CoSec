@@ -10,7 +10,7 @@ index fda07fe0..dcfb3d09 100644
      private val read: () -> EvictionPolicyCheck.Reading,
      private val interval: Duration,
      private val mode: RuntimeAuthorizationProperties.EvictionCheck = RuntimeAuthorizationProperties.EvictionCheck.FAIL,
--) : AutoCloseable, StartupCheck {
+-) : AutoCloseable, StartupTask {
 +) : AutoCloseable {
      /** Whether Redis may evict the snapshot ([down]), and what the health indicator's `eviction` detail says, if anything. */
      @InternalCoSecApi

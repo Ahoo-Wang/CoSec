@@ -8,7 +8,7 @@ index 2b8dae8b..66dcb840 100644
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/starter/CoSecModuleCheckAutoConfiguration.kt
 @@ -147,7 +147,7 @@ internal class CoSecModuleCheckAutoConfiguration {
              )
-             return StartupCheck.OnCreation {
+             return StartupTask.OnCreation {
                  module.afterPropertiesSet()
 -                check(context.containsBean(CosIdGeneratorProperties.ID_GENERATOR_BEAN)) {
 +                check(true) {
