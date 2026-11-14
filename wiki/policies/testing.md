@@ -668,4 +668,10 @@ the fixture is built. `Principal` says who a request is, as a token would: `tena
 `policies`, `app` and `attributes`; without one, a request is anonymous. It replaces the credential check only: the
 status codes, `SecurityContext` and decisions are the pipeline's. Close the fixture, usually one per test class.
 
+`of` and `load` also take `routes` and `listeners`. With a route map (`RouteMapCodec.load`), a request has your
+service's actions and resources, as on a host with `cosec.authorization.routes.location`; without one, its action is
+`http:<METHOD>` on its path. Listeners receive the events the pipeline makes: a `REQUIRED` one before `evaluate`
+returns, a `BEST_EFFORT` one by the time the fixture is closed. That is how a `DecisionListener` of your own is tested
+([Decision listeners](../architecture/extending.md#decision-listeners)).
+
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).

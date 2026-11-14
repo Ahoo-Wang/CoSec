@@ -29,9 +29,12 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.route.RouteMap
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
@@ -56,7 +59,12 @@ import java.util.concurrent.atomic.AtomicLong
  * problem, headers, `CoSec-Identity`), and the [securityContext] of a request the pipeline permitted, for the code
  * under test to read or to check more permissions with `AuthorizationChecker(fixture.pipeline)`.
  *
- * It holds a snapshot source: close it (`use { }`), one per test class.
+ * With `routes`, requests get the actions and resources of a route map (`RouteMapCodec.load`), as a host with
+ * `cosec.authorization.routes.location` does. With `listeners`, each evaluation is delivered to them as a host delivers
+ * it: a `REQUIRED` listener has the event before [evaluate] returns, a `BEST_EFFORT` one by the time [close] returns,
+ * which delivers what is queued. So a `DecisionListener` is tested with the events the pipeline itself makes.
+ *
+ * It holds a snapshot source and the listeners: close it (`use { }`), one per test class.
  */
 @ExperimentalCoSecApi
 class PipelineFixture private constructor(
@@ -79,7 +87,18 @@ class PipelineFixture private constructor(
         val policies: Set<String> = emptySet(),
         val app: String? = null,
         val attributes: Map<String, Any> = emptyMap(),
-    )
+    ) {
+        internal fun tenant(): TenantId = tenant?.let(::TenantId) ?: TenantId.DEFAULT
+
+        /** The memberships a token would carry: `role` in the default space, `role@space` in that space. */
+        internal fun memberships(): Memberships {
+            val bySpace = roles.groupBy(
+                { SpaceId(it.substringAfter('@', SpaceId.DEFAULT.value)) },
+                { RoleId(it.substringBefore('@')) },
+            ).mapValues { (_, roles) -> roles.toSet() }
+            return Memberships(Memberships.Source.CLAIMS, bySpace, policies.map(::PolicyId))
+        }
+    }
 
     /**
      * A request as an adapter would hand it to the pipeline. With a [principal] it carries a credential for it, without
@@ -134,25 +153,40 @@ class PipelineFixture private constructor(
         private const val PREWARM_SECONDS = 30L
 
         /**
-         * The documents in [directory], laid out as [PolicyTestKit.load] reads them. Throws [DocumentException] when a
-         * document does not compile.
+         * The documents in [directory], laid out as [PolicyTestKit.load] reads them, with the route map [routes] and the
+         * decision [listeners]. Throws [DocumentException] when a document does not compile.
          */
-        fun load(directory: Path): PipelineFixture = assemble(PolicyTestKit.documents(directory))
+        fun load(
+            directory: Path,
+            routes: RouteMap = RouteMap.EMPTY,
+            listeners: List<DecisionListener> = emptyList(),
+        ): PipelineFixture = assemble(PolicyTestKit.documents(directory), routes, listeners)
 
-        /** The documents as JSON text: [apps] and [tenants] by id. Throws [DocumentException] when one does not compile. */
+        /**
+         * The documents as JSON text: [apps] and [tenants] by id, with the route map [routes] and the decision
+         * [listeners]. Throws [DocumentException] when one does not compile.
+         */
         fun of(
             platform: String? = null,
             apps: Map<String, String> = emptyMap(),
             tenants: Map<String, String> = emptyMap(),
+            routes: RouteMap = RouteMap.EMPTY,
+            listeners: List<DecisionListener> = emptyList(),
         ): PipelineFixture = assemble(
             ScenarioDocuments(
                 platform?.let(ScenarioJson::parse),
                 apps.mapValues { ScenarioJson.parse(it.value) },
                 tenants.mapValues { ScenarioJson.parse(it.value) },
             ),
+            routes,
+            listeners,
         )
 
-        private fun assemble(documents: ScenarioDocuments): PipelineFixture {
+        private fun assemble(
+            documents: ScenarioDocuments,
+            routes: RouteMap,
+            listeners: List<DecisionListener>,
+        ): PipelineFixture {
             // Compiled here first, so that a document that cannot compile fails the test, not its first request.
             DocumentSnapshotCompiler.stored.compile(documents)
             val store = InMemorySnapshotDocumentStore()
@@ -169,13 +203,23 @@ class PipelineFixture private constructor(
             // Installed before the first evaluate, so a test's first request is decided as any later one.
             source.prewarm(keys).get(PREWARM_SECONDS, TimeUnit.SECONDS)
             val principals = ConcurrentHashMap<String, Principal>()
+            val decisionListeners = if (listeners.isEmpty()) DecisionListeners.NONE else DecisionListeners(listeners)
             val pipeline = Pipeline(
                 PipelineComponents(
                     authenticator = fixtureAuthenticator(principals),
                     snapshots = SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true)),
+                    listeners = decisionListeners,
+                    routes = routes,
                 ),
             )
-            return PipelineFixture(pipeline, principals, source::close)
+            return PipelineFixture(pipeline, principals) {
+                try {
+                    // NONE is shared: only the fixture's own listeners are drained, and so closed.
+                    if (decisionListeners !== DecisionListeners.NONE) decisionListeners.drain()
+                } finally {
+                    source.close()
+                }
+            }
         }
 
         /** Answers the token a [request] wrote; a request with any other token is anonymous, never authenticated. */
@@ -188,19 +232,14 @@ class PipelineFixture private constructor(
             }
         }
 
-        private fun authenticated(principal: Principal): AuthenticatedPrincipal {
-            val bySpace = principal.roles.groupBy(
-                { SpaceId(it.substringAfter('@', SpaceId.DEFAULT.value)) },
-                { RoleId(it.substringBefore('@')) },
-            ).mapValues { (_, roles) -> roles.toSet() }
-            return AuthenticatedPrincipal(
+        private fun authenticated(principal: Principal): AuthenticatedPrincipal =
+            AuthenticatedPrincipal(
                 PrincipalId(principal.id),
-                principal.tenant?.let(::TenantId) ?: TenantId.DEFAULT,
-                Memberships(Memberships.Source.CLAIMS, bySpace, principal.policies.map(::PolicyId)),
+                principal.tenant(),
+                principal.memberships(),
                 principal.attributes,
                 app = principal.app?.let(::AppId),
             )
-        }
 
         private fun published(body: JsonNode?): SnapshotDocument = DocumentSnapshotCompiler.published(body)
     }

@@ -18,11 +18,16 @@ package me.ahoo.cosec.testkit
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.runtime.AuthorizationChecker
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.route.RouteMapCodec
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Path
+import java.util.concurrent.CopyOnWriteArrayList
 import kotlin.io.path.createDirectory
 import kotlin.io.path.writeText
 
@@ -132,5 +137,55 @@ class PipelineFixtureTest {
             assertThrownBy<UnsupportedOperationException> { attributes["department"] = "finance" }
             checker.check(context, "http:GET", "/finance/x").assert().isFalse()
         }
+    }
+
+    private val routed = """{"policies":[{"id":"reads","statements":[{"effect":"allow","action":"order:read","resource":"order/*"}]}],""" +
+        """"bindings":[{"id":"reads","subject":{"role":"reader"},"app":"*","space":"*","policy":"reads"}]}"""
+
+    private val routes = RouteMapCodec.load(
+        listOf(
+            "routes.json" to
+                """{"service":"order","routes":[{"method":"GET","path":"/orders/{id}","action":"order:read","resource":"order/{id}"}]}"""
+                    .toByteArray(),
+        ),
+    )
+
+    @Test
+    fun `with a route map a request has the route's action and resource`() = runBlocking<Unit> {
+        PipelineFixture.of(platform = anyone, tenants = mapOf("acme" to routed), routes = routes).use {
+            it.evaluate(it.request("GET", "/orders/7", reader)).status.assert().isEqualTo(200)
+            // Without the route map, the same request is `http:GET` on its path, which nothing permits.
+            PipelineFixture.of(platform = anyone, tenants = mapOf("acme" to routed)).use { plain ->
+                plain.evaluate(plain.request("GET", "/orders/7", reader)).status.assert().isEqualTo(403)
+            }
+        }
+    }
+
+    private class Recording(override val delivery: Delivery) : DecisionListener {
+        val events = CopyOnWriteArrayList<DecisionEvent>()
+        override val name: String = "recording-$delivery"
+
+        override suspend fun onDecision(event: DecisionEvent) {
+            events += event
+        }
+    }
+
+    @Test
+    fun `listeners receive the events the pipeline makes`() {
+        val required = Recording(Delivery.REQUIRED)
+        val bestEffort = Recording(Delivery.BEST_EFFORT)
+        val fixture = PipelineFixture.of(
+            platform = anyone,
+            tenants = mapOf("acme" to tenant),
+            listeners = listOf(required, bestEffort),
+        )
+        fixture.use {
+            runBlocking { it.evaluate(it.request("GET", "/orders/1", reader)) }
+            // A REQUIRED listener has the event before the response.
+            required.events.single().outcome.status.assert().isEqualTo(200)
+            required.events.single().subject.id.assert().isEqualTo("alice")
+        }
+        // A BEST_EFFORT one by the time the fixture is closed.
+        bestEffort.events.single().outcome.status.assert().isEqualTo(200)
     }
 }
