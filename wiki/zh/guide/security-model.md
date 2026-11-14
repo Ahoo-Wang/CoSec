@@ -64,6 +64,10 @@ flowchart TD
 
 策略可以有自己的 `condition`。它在每个请求中最多求值一次，而且只在该策略的某条语句已经按动作和资源命中之后才求值。条件不成立时，策略中的所有语句都不命中，DENY 也一样。条件抛出异常时，经由它到达的 DENY 视为失败的 DENY（Indeterminate），ALLOW 视为未命中。必须始终生效的 DENY，应放在没有条件的策略里。
 
+### 有多个资源模式的语句 {#statements-with-several-resource-patterns}
+
+有多个资源模式的语句，含义与每个模式各写一条语句完全相同。条件读取[路径变量](../policies/language.md#path-variables)且请求匹配其中多个模式时，按书写顺序依次用每个匹配模式的捕获值判断条件：任一成立即命中；都不成立且其中某次判断失败时，语句失败（DENY 使决策为 Indeterminate，ALLOW 视为未命中）。模式换个顺序写永远不改变决策，DENY 也不会漏掉它的某个模式单独就会拒绝的请求。
+
 ## 拒绝优先 {#deny-first}
 
 ALLOW 永远不会胜过命中的 DENY。所有候选的 DENY 语句都在任何 ALLOW 语句之前求值，不论它们来自哪个文档、哪个绑定或附加策略。平台的 ALLOW 推翻不了租户的 DENY，租户的 ALLOW 推翻不了平台的 DENY，break-glass 也推翻不了任何 DENY。

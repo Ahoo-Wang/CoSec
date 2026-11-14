@@ -222,6 +222,8 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 ```
 
 - 语句的每个资源模式都必须捕获它读取的变量，否则语句无法编译：某个模式没有捕获的变量会读作缺失，针对它写的 DENY 会悄悄失效。策略条件不能读取任何变量。
+- 有多个资源模式的语句，含义与每个模式各写一条语句完全相同。路径同时匹配其中多个模式时，按书写顺序依次用每个匹配模式的捕获值判断条件，任一成立即命中。都不成立且其中某次判断失败时，语句失败：DENY 使决策为 Indeterminate，ALLOW 视为未命中。所以模式的书写顺序永远不改变决策。例如 `"resource": ["http:path:/files/{*p}", "http:path:/{*p}"]` 加 `{ "prefix": ["resource.var.p", "/files/secret"] }`，`GET /files/secret/x` 经第二个模式命中，尽管第一个模式捕获的是 `/secret/x`。
+- `key` 读取变量的限流规则，取书写顺序中第一个使规则条件成立的模式的捕获值。
 - 变量名是 Java 标识符，另外允许包含 `-`；同一模式中一个名字只能捕获一次。
 - 捕获的值是该片段解码后的值（`{*name}` 为路径余下部分）。值只会被比较，永远不会成为模式的一部分，所以 id 为 `**` 的主体无法扩大任何范围。
 
@@ -443,7 +445,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `resource` | 资源模式或其非空数组 | 任意资源 | |
 | `condition` | 条件 | 恒为真 | |
 | `onMissing` | `"indeterminate"` 或 `"nomatch"` | `"indeterminate"` | 无法获取的外部属性：`indeterminate` 交给 `strictFailure` 决定；`nomatch` 跳过该规则。`nomatch` 只在平台文档中能编译：与 [DENY](#external-attributes-and-onmissing) 不同，限流规则没有确认流程。 |
-| `key` | 属性路径 | 一个共享桶 | String 或 Ip 属性，其值决定桶。`resource.var.<name>` 必须被每个资源模式捕获。 |
+| `key` | 属性路径 | 一个共享桶 | String 或 Ip 属性，其值决定桶。`resource.var.<name>` 必须被每个资源模式捕获；有多个模式时，取第一个使规则条件成立的模式的值（[路径变量](#path-variables)）。 |
 | `permitsPerSecond` | 数字 | 必填 | 大于 `0`。 |
 | `windowSeconds` | 整数 | `1` | 至少为 `1`。 |
 | `strictFailure` | 布尔 | `false` | 限流器无法计数时是否拒绝请求（`503`）。 |

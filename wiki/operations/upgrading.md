@@ -16,6 +16,13 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A statement with several resource patterns means one statement per pattern** (`ALG-10`). When its condition reads
+  a path variable and a request matches more than one of its patterns, the condition is now tested under each matching
+  pattern's captures and the statement matches if any holds; before, only the first matching pattern's captures were
+  read, so a DENY could miss a request one of its own patterns denied, and the order of the patterns changed the
+  decision. A DENY written this way now denies at least what it did; an ALLOW may permit more. A rate limit rule keyed
+  by a variable takes it from the first pattern under whose captures its condition holds. To check: search your
+  documents for statements with several `resource` patterns whose `condition` reads `resource.var.*`.
 - **Tokens and API keys declare their app** (batch R7b, RFC 0012 §3.5, `SCP-11`). A token's `aud` and an API key's `app`
   name the app the credential belongs to, and `ScopeResolver` compares them with the host's: a host with an app
   (`cosec.authorization.scope.app-id`, or a route's `cosec-app-id`) refuses a credential declaring another app, or none,
@@ -892,6 +899,7 @@ In 8.0 these are the rules; each has an id in the conformance suite. Without err
 | **D1** | `inRole: r` in an ALLOW matches only a role in effect in the requested space; `inRole: r@s` in an ALLOW matches only while the request is in space `s`; `inRole: r` in a DENY matches the role held in any space. | Literal role match, a bare role also matching `r@<requested space>`. | `inRole` conditions. A DENY never narrows and an ALLOW never widens. |
 | **D2** (`CND-1`) | An absent attribute equals no value, not the empty string. | An absent part read as `""`. | `eq` against `#{principal.id}`, `#{principal.attributes['k']}` or `#{tenant.tenantId}`. In an ALLOW, an absent part no longer matches an empty attribute (narrower). In a DENY, `convert` keeps 7.x's reading by adding the 7.x cases. |
 | **D3** | No regular expressions, so no regex timeouts. | A `RegexTimeoutException` was an implicit deny. | `regular` conditions; only literal, literal-prefix and choice-of-literals patterns translate. |
+| **D4** (`ALG-10`) | A statement with several path patterns matches when its condition holds under the variables of any matching pattern. | Only the first matching pattern's variables were read. | Path actions with several patterns and a condition on `request.path.var.*`: a DENY now denies what any of its patterns would, an ALLOW permits what any of them would. |
 
 #### Anonymous requests that declare a space are 401
 

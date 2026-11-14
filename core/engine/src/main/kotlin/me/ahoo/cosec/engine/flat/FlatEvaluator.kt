@@ -62,7 +62,9 @@ import java.util.IdentityHashMap
  * index, so none of those allocate. [FlatTracingEvaluator] overrides only [candidate], the step per candidate, so no
  * trace code sits in the untraced one (see `Evaluator` for why).
  */
-@Suppress("TooManyFunctions")
+// Large by design: the evaluator is its own visitor, condition input, index lookup and scratch source, so that an
+// evaluation allocates nothing for them; splitting it would add an object, or a call, per request.
+@Suppress("TooManyFunctions", "LargeClass")
 internal open class FlatEvaluator(protected val request: FlatRequest, protected val view: SnapshotView) :
     CandidateVisitor,
     ConditionInput,
@@ -187,7 +189,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
     private fun bucket(rule: CompiledRateLimit, key: Attribute): String? = try {
         // The statement captures only for its own condition: a key reading a variable matches with captures here.
         captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
-            rule.statement.resources.firstNotNullOfOrNull { it.match(target, this) }
+            keyCaptures(rule.statement)
         } else {
             null
         }
@@ -201,6 +203,37 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         null
     } finally {
         captures = null
+    }
+
+    /**
+     * The captures a rule's key reads: those of the first pattern, in declared order, that matches and under whose
+     * captures the rule's condition holds (`ALG-10`). The rule matched, so one does; a pattern whose condition fails is
+     * not one under which it holds.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private fun keyCaptures(statement: CompiledStatement): Captures? {
+        val condition = statement.condition
+        for (pattern in statement.resources) {
+            val captures = pattern.match(target, this) ?: continue
+            if (!statement.eachPattern || condition == null) {
+                return captures
+            }
+            this.captures = captures
+            val holds = try {
+                condition.evaluate(this)
+            } catch (thrown: Throwable) {
+                if (!catches(thrown)) {
+                    throw thrown
+                }
+                false
+            } finally {
+                this.captures = null
+            }
+            if (holds) {
+                return captures
+            }
+        }
+        return null
     }
 
     /**
@@ -388,6 +421,9 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         if (!statement.admits(this)) {
             return CONDITION_MISS
         }
+        if (statement.eachPattern) {
+            return stepEachPattern(policy, statement)
+        }
         var failure: Throwable? = null
         val captures = try {
             resource(statement)
@@ -424,6 +460,76 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
         } finally {
             this.captures = null
         }
+    }
+
+    /**
+     * [step] for a statement whose condition reads captures of several patterns (`ALG-10`): it means what one statement
+     * per pattern would. The condition is tested against each matching pattern's captures in declared order, and any
+     * one holding is a match. Otherwise the first failure, of matching a pattern or of the condition, in declared
+     * order, is the statement's error; a policy condition that does not hold, or fails, decides before either, as it
+     * would for each of those statements.
+     */
+    @Suppress("ReturnCount", "TooGenericExceptionCaught")
+    private fun stepEachPattern(policy: CompiledPolicy, statement: CompiledStatement): Int {
+        val condition = statement.condition!!
+        val globs = statement.globUnits > 0
+        var failure: Throwable? = null
+        var guarded = false
+        for (pattern in statement.resources) {
+            val captures = try {
+                if (globs) pattern.match(target, this) else pattern.match(target)
+            } catch (error: Exception) {
+                failure = failure ?: error
+                null
+            } ?: continue
+            if (!guarded) {
+                val guard = guardOf(policy)
+                if (guard != MATCHED) {
+                    return guard
+                }
+                guarded = true
+            }
+            when (holdsUnder(condition, captures)) {
+                MATCHED -> return MATCHED
+                ERROR -> failure = failure ?: stepError
+            }
+        }
+        return eachPatternMissed(policy, failure, guarded)
+    }
+
+    /** [MATCHED] when [condition] holds under [captures], [CONDITION_MISS] when not, [ERROR] with [stepError] when it threw. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun holdsUnder(condition: CheckedCondition, captures: Captures): Int {
+        this.captures = captures
+        return try {
+            if (condition.evaluate(this)) MATCHED else CONDITION_MISS
+        } catch (thrown: Throwable) {
+            if (!catches(thrown)) {
+                throw thrown
+            }
+            stepError = thrown
+            ERROR
+        } finally {
+            this.captures = null
+        }
+    }
+
+    /**
+     * [stepEachPattern]'s result when no pattern held: a miss without [failure]; otherwise the failure, unless the policy
+     * condition, consulted if no pattern [guarded] it yet, rules the statement out, as in [step].
+     */
+    private fun eachPatternMissed(policy: CompiledPolicy, failure: Throwable?, guarded: Boolean): Int {
+        if (failure == null) {
+            return if (guarded) CONDITION_MISS else RESOURCE_MISS
+        }
+        if (!guarded) {
+            val guard = guardOf(policy)
+            if (guard != MATCHED) {
+                return guard
+            }
+        }
+        stepError = failure
+        return ERROR
     }
 
     /** [MATCHED] when [policy] has no condition or it holds, else [GUARD_MISS] or [GUARD_FAILED] with [stepError]. */

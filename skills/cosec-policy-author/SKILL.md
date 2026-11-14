@@ -97,7 +97,9 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   unmapped one.** When a route map is in use, write DENYs on the mapped actions, or on `*`.
 - Captured variables (`{orderId}` in a resource, or in the route map's path) are read as `resource.var.orderId`, only
   by the statement whose own patterns capture them, and only if every resource pattern of that statement captures it;
-  otherwise the statement does not compile. Values are compared with `eq`; they never become part of a pattern.
+  otherwise the statement does not compile. Values are compared with `eq`; they never become part of a pattern. With
+  several resource patterns the statement means one statement per pattern: the condition is tested under each
+  matching pattern's captures and matches if any holds, so pattern order never changes the decision.
 
 ## Conditions (AST)
 
@@ -245,7 +247,8 @@ and `Retry-After`.
 relaxes a platform or app rule, even with the same id. `action` is
 required; `resource`, `condition` as in a statement, matched as a DENY is (so a bare resource type does not compile).
 `key` names a string or IP attribute (one bucket per value; absent key = one shared bucket; absent value = the empty
-bucket); a `resource.var.*` key must be captured by every resource pattern. A window allows
+bucket); a `resource.var.*` key must be captured by every resource pattern, and takes its value from the first
+pattern under whose captures the rule's condition holds. A window allows
 `permitsPerSecond x windowSeconds` (default 1) requests. When the limiter cannot count, `strictFailure: false` (default)
 skips the rule and `true` answers 503. `onMissing: nomatch` on a rule compiles in the platform document only (rules
 have no confirmation flow).

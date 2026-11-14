@@ -270,6 +270,15 @@ pattern captured it can read it, as `resource.var.<name>`, in its own condition 
 - Every resource pattern of the statement must capture the variable it reads, or the statement does not compile: a
   variable some pattern does not capture would read as absent, and a DENY written against it would silently miss.
   A policy condition cannot read any variable.
+- A statement with several resource patterns means exactly what one statement per pattern would mean. When a path
+  matches more than one of them, the condition is tested against each matching pattern's captures, in the order the
+  patterns are written, and the statement matches if it holds under any one. If it holds under none and testing one
+  of them failed, the statement fails: a DENY makes the decision Indeterminate, an ALLOW counts as no match. So the
+  order of the patterns never changes the decision. With `"resource": ["http:path:/files/{*p}", "http:path:/{*p}"]`
+  and `{ "prefix": ["resource.var.p", "/files/secret"] }`, `GET /files/secret/x` matches through the second pattern,
+  although the first captures `/secret/x`.
+- A rate limit rule whose `key` reads a variable takes the value from the first pattern, in written order, under
+  whose captures the rule's condition holds.
 - A name is a Java identifier that may also contain `-`, and is captured once per pattern.
 - A captured value is the segment's decoded value (`{*name}`: the rest of the path). A value is only ever compared:
   it never becomes part of a pattern, so a principal id of `**` cannot widen anything.
@@ -534,7 +543,7 @@ compile, and `role:` is reserved to these bindings: a change may not put one. A 
 | `resource` | resource pattern or non-empty array | any resource | |
 | `condition` | condition | always | |
 | `onMissing` | `"indeterminate"` or `"nomatch"` | `"indeterminate"` | For an external attribute that cannot be fetched: `indeterminate` leaves it to `strictFailure`; `nomatch` skips the rule. `nomatch` compiles only in the platform document: rate limit rules have no confirmation, unlike a [DENY](#external-attributes-and-onmissing). |
-| `key` | attribute path | one shared bucket | A String or Ip attribute whose value names the bucket. `resource.var.<name>` must be captured by every resource pattern. |
+| `key` | attribute path | one shared bucket | A String or Ip attribute whose value names the bucket. `resource.var.<name>` must be captured by every resource pattern; with several, the first pattern under whose captures the rule's condition holds gives the value ([path variables](#path-variables)). |
 | `permitsPerSecond` | number | required | Greater than `0`. |
 | `windowSeconds` | integer | `1` | At least `1`. |
 | `strictFailure` | boolean | `false` | Whether a limiter that cannot count refuses the request (`503`). |

@@ -68,6 +68,13 @@ class CompiledStatement internal constructor(
         it.kind == Attribute.Kind.RESOURCE_VAR
     }
 
+    /**
+     * Whether [condition] is tested against each matching resource pattern's captures in turn (`ALG-10`): it reads a
+     * captured variable, and more than one pattern can capture it. Decided here, so every other statement matches its
+     * resource once, as before.
+     */
+    internal val eachPattern: Boolean = captures && resources.size > 1
+
     val actionPatterns: List<ActionPattern> get() = actions.asList()
 
     val resourcePatterns: List<ResourcePattern> get() = resources.asList()

@@ -105,6 +105,19 @@
         "engine:FlatEnginePropertyTest#P2 the decision does not depend on the trace level"
       ],
       "pending": null
+    },
+    {
+      "id": "ALG-10",
+      "source": "RFC 0005 §6.1; round 2 review M1",
+      "statement": "A statement with several resource patterns means exactly what one statement per pattern would mean. A condition that reads a captured variable is tested against each matching pattern's captures, in declared order: any one holding is a match; if none holds and testing one failed, the statement fails (a DENY makes the decision Indeterminate, an ALLOW counts as no match). The order of the patterns never changes the decision. A rate limit rule's bucket comes from the first pattern, in declared order, under whose captures its condition holds.",
+      "level": "engine",
+      "guards": [
+        "engine:PatternCapturesTest#a deny holds under any matching pattern, whatever their order",
+        "engine:PatternCapturesTest#a rest capture of a narrower pattern does not hide the wider one",
+        "engine:PatternCapturesTest#a pattern whose condition fails makes the statement fail only when no other pattern holds",
+        "engine:PatternCapturesTest#a rate limit bucket comes from the first pattern under which the rule's condition holds"
+      ],
+      "pending": null
     }
   ]
 }
