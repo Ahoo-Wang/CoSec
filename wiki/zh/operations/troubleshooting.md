@@ -96,7 +96,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 ### `token-revoked` {#token-revoked}
 
 令牌已被登出吊销，或者它所属主体在一次主体吊销之前签发的所有令牌都已被吊销（[认证](../integration/authentication.md)）。
-重新登录。刷新以 `token-revoked` 被拒绝，还说明它的会话已经结束：因为登出，或者因为在更新的一对签发之后又出示了该会话更早的一对（重放：某对令牌被复制，或某个客户端保留了旧的一对）。请检查是否有两个客户端共用一个会话的令牌。在主体吊销之后 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒）以内签发的
+重新登录。刷新以 `token-revoked` 被拒绝，还说明它的会话已经结束：因为登出，或者因为在更新的一对签发之后又出示了该会话更早的一对，且晚于其后的 `cosec.jwt.session.rotation-leeway`（30 秒）（重放：某对令牌被复制，或某个客户端保留了旧的一对，或重试晚于宽限期）。请检查是否有两个客户端共用一个会话的令牌，或某个客户端的重试超出了宽限期。在主体吊销之后 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒）以内签发的
 令牌也会被吊销，所以紧接着吊销之后的登录可能需要等几秒。刷新令牌时应用同样的偏差。
 
 登出后令牌在另一个实例上仍然可用：本地会把"未吊销"的回答缓存 30 秒，这限定了失效消息丢失时一个实例错过吊销的最长

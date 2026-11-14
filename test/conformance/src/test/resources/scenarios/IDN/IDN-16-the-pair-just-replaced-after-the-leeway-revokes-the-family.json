@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "IDN-16"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice's family moved to generation 2 six seconds ago, past the five-second leeway, and a copy of her pair of generation 1 is presented: that is reuse, and the family is revoked.",
+  "refresh": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "refresh": {
+      "jti": "r1",
+      "sub": "a1",
+      "iat": 1793404800,
+      "claims": {
+        "cosec.token": "refresh",
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    }
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 2,
+      "rotatedAt": "2026-10-31T23:59:54Z"
+    }
+  ],
+  "expect": {
+    "status": 401,
+    "type": "token-revoked"
+  }
+}

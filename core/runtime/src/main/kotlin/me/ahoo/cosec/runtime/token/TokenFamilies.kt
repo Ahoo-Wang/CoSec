@@ -33,20 +33,25 @@ import java.time.Instant
  * rotates it ([rotate]); a logout ends it ([end]). The request path never reads a family: an access token of an older
  * generation stays valid until it expires.
  *
- * - **Only the current generation refreshes.** [rotate] moves the family to the next generation with a conditional
- *   write on the record it read; the pair it was given cannot refresh again.
- * - **Reuse revokes the family.** An older generation presented again means a pair was copied: the whole family is
- *   revoked, and the refresh refused. A pair that was current until less than [leeway] ago is refused without
- *   revoking it: two tabs refreshing the same pair at once must not log the user out. The leeway is the window in
- *   which a copied pair used right after the user's own refresh goes unnoticed.
+ * - **Only the current generation moves the family.** [rotate] moves it to the next generation with a conditional
+ *   write on the record it read.
+ * - **The generation just replaced is answered within [leeway]**, at the current generation, without moving the
+ *   family or writing anything. A refresh whose response never reached the client (a lost network, an instance that
+ *   failed after the write) is retried with the pair the client still holds, and heals; two tabs refreshing the same
+ *   pair at once both end with a usable pair. The window opens when the family moved and does not slide.
+ * - **Reuse revokes the family.** An older generation, or the one before the current after the leeway, means a pair was
+ *   copied: the whole family is revoked, and the refresh refused. A copy answered within the leeway is a second pair of
+ *   the current generation, so it is caught the same way at the next refresh: whichever of the two comes second after
+ *   the leeway revokes the family. What the leeway costs: whoever holds the just-replaced pair within it gets a fresh
+ *   pair, and may get one each time they ask until it closes; that holder held the current pair a moment earlier.
  * - **A family ends [lifetime] after its login**, whatever happens: a refresh after that is refused, the user signs in
  *   again, and no pair it issues outlives that end ([Issue.notAfter]).
  * - **It fails closed.** A record that cannot be read or a write that cannot be confirmed throws, and nothing is issued
  *   (503); a missing record refuses the refresh (401).
  *
  * @param lifetime `cosec.jwt.session.lifetime`: a family's absolute lifetime from its login
- * @param leeway `cosec.jwt.session.rotation-leeway`: how long the generation before the current one is refused without
- * revoking the family
+ * @param leeway `cosec.jwt.session.rotation-leeway`: how long after the family moved the generation before the current one
+ * is answered at the current generation: the window a client has to retry a refresh whose response it lost
  */
 class TokenFamilies @JvmOverloads constructor(
     private val store: TokenFamilyStore,
@@ -88,10 +93,11 @@ class TokenFamilies @JvmOverloads constructor(
 
     /**
      * Moves the family of [token], a verified and unrevoked access token presented for a refresh, to its next
-     * generation, and answers what the new pair says.
+     * generation, and answers what the new pair says. A token of the generation just replaced, within the leeway, is
+     * answered at the current generation and moves nothing.
      *
-     * @throws TokenVerificationException when the token belongs to no session, its family is unknown or not its
-     * principal's, or its pair was just refreshed by another request (the leeway)
+     * @throws TokenVerificationException when the token belongs to no session, or its family is unknown or not its
+     * principal's
      * @throws TokenRevokedException when the family is revoked, or the token is an older generation (it is then revoked)
      * @throws TokenExpiredException when the family's lifetime has ended
      */
@@ -123,7 +129,8 @@ class TokenFamilies @JvmOverloads constructor(
                     // Another refresh moved the family in between: read it again, the pair is now the one before.
                 }
                 session.generation == family.generation - 1 && family.rotatedAt?.plus(leeway)?.isAfter(now) == true ->
-                    throw RefreshSupersededException()
+                    // A retry, or another tab: the pair was current a moment ago. Nothing is written.
+                    return Issue(TokenSession(family.id, family.authTime, family.generation), family.expiresAt)
                 session.generation < family.generation -> {
                     if (revoke(read)) {
                         throw TokenRevokedException(
@@ -171,17 +178,13 @@ class TokenFamilies @JvmOverloads constructor(
         /** Thirty days: a session's absolute lifetime, so a changed role takes effect within a month at the latest. */
         val DEFAULT_LIFETIME: Duration = Duration.ofDays(30)
 
-        /** Five seconds: two tabs refreshing one pair land within it, a copied pair used later does not. */
-        val DEFAULT_LEEWAY: Duration = Duration.ofSeconds(5)
+        /**
+         * Thirty seconds: the window opens at the server's write, and a client retries only after its own timeout, which
+         * is ten seconds for each phase of a request in common mobile HTTP clients; thirty covers one timed-out attempt
+         * and its retry. A copy answered within it is still caught at the next refresh.
+         */
+        val DEFAULT_LEEWAY: Duration = Duration.ofSeconds(30)
 
         private const val MAX_ATTEMPTS = 8
     }
 }
-
-/**
- * The pair was refreshed by another request a moment ago (two tabs at once): refused, but the session goes on. The
- * client uses the tokens that refresh issued.
- */
-class RefreshSupersededException : TokenVerificationException(
-    "The token's pair has just been refreshed by another request."
-)

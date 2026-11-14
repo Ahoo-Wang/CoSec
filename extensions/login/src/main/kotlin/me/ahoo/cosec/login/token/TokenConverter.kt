@@ -23,6 +23,10 @@ import java.time.Duration
  * This interface is used to generate tokens (access and refresh)
  * for what a [TokenSubject] says.
  *
+ * A pair issued for a subject without a session ([TokenSubject.session]) never refreshes: a refresh needs the session
+ * its tokens carry. Issue through `TokenCompositeAuthentication`, which starts one, or start one with
+ * `TokenFamilies.start` and pass `subject.inSession(issue)`.
+ *
  * @see TokenVerifier
  */
 @CoSecSpi

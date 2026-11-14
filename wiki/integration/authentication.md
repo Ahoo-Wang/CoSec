@@ -233,14 +233,19 @@ generation (`cosec.generation`), which both tokens of every pair carry. The sess
 (`<cosec.key-prefix>:token:family:<sid>`, [Storage](../operations/storage.md#redis-keys)), one key per live session, read
 and written only when a token is refreshed or revoked, never on a request.
 
-- **A refresh rotates the session.** It issues the next generation, and only the current generation refreshes: the pair
-  it was given cannot refresh again. Two refreshes of one pair at once, on one instance or many, issue one pair.
-- **An older generation presented again ends the session.** It means a pair was copied and used after its owner
-  refreshed: the whole session is revoked, and every pair of it is refused from then on. The pair that was current until
-  less than `cosec.jwt.session.rotation-leeway` (5 seconds) ago is refused without ending the session, so that two tabs
-  refreshing the same pair at once do not log the user out. The leeway is a trade-off: a copied pair used within it after
-  the user's own refresh is refused without being noticed; a longer leeway lets more such reuse go unnoticed, a shorter
-  one logs out users whose tabs refresh a little apart.
+- **A refresh rotates the session.** Only the current generation moves it on, to the next generation. Two refreshes of
+  one pair at once, on one instance or many, move it once, and both get a pair.
+- **The pair just replaced is answered for `cosec.jwt.session.rotation-leeway` (30 seconds).** Presented within that
+  time after the session moved, it gets a new pair of the current generation, and the session does not move. This is
+  the retry window: a refresh whose response never reached the client (a lost connection, an instance that failed after
+  recording it) is retried with the pair the client still holds, and two tabs refreshing the same pair both end with a
+  usable pair. The window opens when the session moved and does not slide. Its cost: whoever holds the replaced pair
+  within it gets a fresh pair, as often as they ask until it closes; that holder had the current pair a moment earlier.
+- **An older generation presented again ends the session**, as does the pair just replaced once the leeway has passed.
+  It means a pair was copied and used after its owner refreshed: the whole session is revoked, and every pair of it is
+  refused from then on. A copy answered within the leeway is a second pair of the current generation, so it is caught
+  the same way: whichever of the two refreshes second, after the leeway, ends the session. A longer leeway gives clients
+  more time to retry and a copy more time to be answered; set it to cover your clients' timeout and one retry.
 - **A session lasts `cosec.jwt.session.lifetime` (30 days) from its login**, however often it is refreshed: then a refresh
   is refused (`token-expired`) and the user signs in again. No token of a pair outlives its session. Roles carried in the
   token take effect at the next login, so this is also the latest a changed role applies.
@@ -288,9 +293,8 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 ```
 
 A refresh is refused with `token-revoked` when the session was ended (by a logout, or because an older generation was
-presented), `token-expired` when the session's lifetime is over, `token-invalid` when the pair was just refreshed by
-another request (`RefreshSupersededException`: use the tokens that refresh issued) or belongs to no session (a pair
-issued before sessions existed, or outside one). It throws anything else, a store that cannot be read above all: answer
+presented), `token-expired` when the session's lifetime is over, `token-invalid` when the pair belongs to no session (a pair issued
+before sessions existed, or outside one). It throws anything else, a store that cannot be read above all: answer
 `503`, and nothing was issued.
 
 A refresh does not re-read the user: the new token carries the claims of the old one. To pick up changed roles on

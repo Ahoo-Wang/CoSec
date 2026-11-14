@@ -154,7 +154,8 @@ and have to be provisioned again.
     `TokenFamilies.start` and `TokenSubject.inSession`: a pair from `TokenConverter.toToken` alone never refreshes.
     `TokenCompositeAuthentication` and `SimpleRefreshTokenAuthentication` take a `TokenFamilies` (a starter bean).
   - **A client keeps only the newest pair:** presenting a pair after a newer one was issued ends the session, unless it
-    happens within `cosec.jwt.session.rotation-leeway` (5 seconds), which is refused without ending it.
+    happens within `cosec.jwt.session.rotation-leeway` (30 seconds) of that refresh: then it gets a pair of the newest
+    generation, so a refresh whose response was lost can be retried.
   - **`TokenRevoker.revoke(compositeToken)`** logs out with an expired access token; `revoke(accessToken)` now ends the
     session too. A `TokenRevoker` of your own implements both.
   - **A tenant switch needs the access token:** `SwitchTenantCredentials.accessToken`, and

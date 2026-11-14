@@ -46,9 +46,9 @@ internal class MovingClock(var now: Instant) : Clock() {
 }
 
 /**
- * RFC 0009, refresh token families: only the current generation refreshes, an older one revokes the family, the pair
- * just refreshed is refused within the leeway, a family ends at its absolute lifetime, logout ends it, and it fails
- * closed. Over the in-memory store, which honours the same atomicity as Redis (`CoCacheTokenFamilyStoreTest`).
+ * RFC 0009, refresh token families: only the current generation moves the family, the one before it is answered at
+ * the current generation within the leeway, an older one revokes the family, a family ends at its absolute lifetime,
+ * logout ends it, and it fails closed. Over the in-memory store, which honours the same atomicity as Redis (`CoCacheTokenFamilyStoreTest`).
  */
 class TokenFamiliesTest {
     private val clock = MovingClock(Instant.parse("2026-11-14T08:00:00Z"))
@@ -86,15 +86,47 @@ class TokenFamiliesTest {
         families.rotate(token(second)).session.generation.assert().isEqualTo(3L)
     }
 
-    /** IDN-16: within the leeway, the pair just refreshed is refused and the family goes on (two tabs at once). */
+    /**
+     * IDN-16: within the leeway the pair just replaced is answered at the current generation, without moving the family:
+     * a refresh whose response was lost is retried with the old pair, and two tabs racing both end with a usable pair.
+     */
     @Test
-    fun `the pair just refreshed is refused within the leeway without revoking the family`() = runBlocking<Unit> {
+    fun `the pair just replaced is answered at the current generation within the leeway`() = runBlocking<Unit> {
         val first = start()
         val second = families.rotate(token(first)).session
+        val rotatedAt = family(first).rotatedAt
         clock.now = clock.now.plusSeconds(4)
-        assertThrows<RefreshSupersededException> { runBlocking { families.rotate(token(first)) } }
+        families.rotate(token(first)).session.assert().isEqualTo(second)
+        families.rotate(token(first)).session.assert().isEqualTo(second)
+        // Answering writes nothing: the family has not moved, and its window has not slid.
+        family(first).generation.assert().isEqualTo(2L)
+        family(first).rotatedAt.assert().isEqualTo(rotatedAt)
         family(first).revoked.assert().isFalse()
         families.rotate(token(second)).session.generation.assert().isEqualTo(3L)
+    }
+
+    /**
+     * IDN-16: the window opens at the family's move and does not slide. Answered at the current generation, a copied pair
+     * is a second pair of that generation: whichever refreshes second, after the leeway, revokes the family.
+     */
+    @Test
+    fun `a copy answered within the leeway is caught at the next refresh`() = runBlocking<Unit> {
+        val first = start()
+        families.rotate(token(first))
+        clock.now = clock.now.plusSeconds(4)
+        val copy = families.rotate(token(first)).session
+        clock.now = clock.now.plusSeconds(2)
+        assertThrows<TokenRevokedException> { runBlocking { families.rotate(token(first)) } }
+        family(first).revoked.assert().isTrue()
+        assertThrows<TokenRevokedException> { runBlocking { families.rotate(token(copy)) } }
+
+        val other = start()
+        val owner = families.rotate(token(other)).session
+        clock.now = clock.now.plusSeconds(1)
+        val stolen = families.rotate(token(other)).session
+        families.rotate(token(owner)).session.generation.assert().isEqualTo(3L)
+        clock.now = clock.now.plusSeconds(6)
+        assertThrows<TokenRevokedException> { runBlocking { families.rotate(token(stolen)) } }
     }
 
     /** IDN-16: an older generation presented again, after the leeway, revokes the whole family. */
@@ -130,6 +162,7 @@ class TokenFamiliesTest {
                     return store.replace(version, next)
                 }
             },
+            leeway = Duration.ofSeconds(5),
             clock = clock,
         )
         assertThrows<TokenRevokedException> { runBlocking { racing.rotate(token(first)) } }
@@ -200,15 +233,14 @@ class TokenFamiliesTest {
         family(session).generation.assert().isEqualTo(1L)
     }
 
-    /** IDN-15, concurrently: of many refreshes of one pair at once, exactly one issues, and nothing is revoked. */
+    /** IDN-15, concurrently: of many refreshes of one pair at once, one moves the family and every one gets a pair. */
     @Test
-    fun `refreshes of one pair racing issue once`() = runBlocking<Unit> {
+    fun `refreshes of one pair racing move the family once`() = runBlocking<Unit> {
         val session = start()
-        val outcomes = (1..32).map {
-            async(Dispatchers.Default) { runCatching { families.rotate(token(session)) } }
+        val issued = (1..32).map {
+            async(Dispatchers.Default) { families.rotate(token(session)).session }
         }.awaitAll()
-        outcomes.count { it.isSuccess }.assert().isEqualTo(1)
-        outcomes.mapNotNull { it.exceptionOrNull() }.all { it is RefreshSupersededException }.assert().isTrue()
+        issued.map { it.generation }.toSet().assert().containsExactly(2L)
         family(session).generation.assert().isEqualTo(2L)
         family(session).revoked.assert().isFalse()
     }

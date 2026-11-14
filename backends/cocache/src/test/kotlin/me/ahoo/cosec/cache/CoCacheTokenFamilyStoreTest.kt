@@ -24,7 +24,6 @@ import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.token.RefreshSupersededException
 import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenRevokedException
@@ -89,16 +88,15 @@ class CoCacheTokenFamilyStoreTest {
         storeA.read("short").assert().isNull()
     }
 
-    /** IDN-15 on Redis: two instances racing to refresh one pair issue once; the loser is refused, nothing revoked. */
+    /** IDN-15 on Redis: two instances racing to refresh one pair move the family once, and every caller gets a pair. */
     @Test
-    fun `refreshes of one pair racing on two instances issue once`() = runBlocking<Unit> {
+    fun `refreshes of one pair racing on two instances move the family once`() = runBlocking<Unit> {
         val session = familiesA.start(TenantId("acme"), PrincipalId("alice")).session
-        val outcomes = (1..32).map { attempt ->
+        val issued = (1..32).map { attempt ->
             val families = if (attempt % 2 == 0) familiesA else familiesB
-            async(Dispatchers.Default) { runCatching { families.rotate(token(session)) } }
+            async(Dispatchers.Default) { families.rotate(token(session)).session }
         }.awaitAll()
-        outcomes.count { it.isSuccess }.assert().isEqualTo(1)
-        outcomes.mapNotNull { it.exceptionOrNull() }.all { it is RefreshSupersededException }.assert().isTrue()
+        issued.map { it.generation }.toSet().assert().containsExactly(2L)
         val family = checkNotNull(storeA.read(session.id)).family
         family.generation.assert().isEqualTo(2L)
         family.revoked.assert().isFalse()

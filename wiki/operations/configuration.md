@@ -205,7 +205,7 @@ How windows work: [Testing changes](../policies/testing.md).
 | `cosec.jwt.token-validity.access` | duration | `10m` | Access token lifetime. |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | Refresh token lifetime; a revocation is kept in Redis this long, plus one second. A refresh token never outlives its session. |
 | `cosec.jwt.session.lifetime` | duration | `30d` | How long a session lasts from its login, however often it is refreshed ([Sessions](../integration/authentication.md#sessions)); then the user signs in again. The latest a changed role carried in the token applies. |
-| `cosec.jwt.session.rotation-leeway` | duration | `5s` | How long the pair just refreshed is refused without ending its session, so that two tabs refreshing at once do not log the user out. A copied pair used within it after its owner's refresh goes unnoticed. |
+| `cosec.jwt.session.rotation-leeway` | duration | `30s` | How long after a refresh the pair it replaced is answered with a pair of the current generation instead of ending the session: the window a client has to retry a refresh whose response it lost, and in which two tabs refreshing at once both keep a pair. Cover your clients' timeout and one retry. A copy answered within it is caught at the next refresh after it. |
 
 With JWT enabled, startup fails unless revocations and sessions can be recorded and read: `cosec-cocache`, or a
 `TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own.

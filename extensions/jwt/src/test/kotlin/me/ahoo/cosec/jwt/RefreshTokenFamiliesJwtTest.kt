@@ -26,7 +26,6 @@ import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.DefaultTokenRevoker
-import me.ahoo.cosec.runtime.token.RefreshSupersededException
 import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
@@ -98,13 +97,19 @@ class RefreshTokenFamiliesJwtTest {
         next.generation.assert().isEqualTo(2L)
     }
 
-    /** IDN-15, IDN-16: the pair just refreshed no longer refreshes; the new one does. */
+    /**
+     * IDN-15, IDN-16: a refresh retried with the pair just replaced (its response was lost) is answered with a pair of
+     * the current generation; only the current one moves the session on, and a pair two generations back ends it.
+     */
     @Test
-    fun `only the current pair refreshes`() {
+    fun `a retried refresh heals, and only the current pair moves the session on`() {
         val first = login()
         val second = refreshed(first)
-        assertThrows<RefreshSupersededException> { refreshed(first) }
-        refreshed(second)
+        val retried = refreshed(first)
+        verifier.verify(retried.accessToken).session!!.assert().isEqualTo(verifier.verify(second.accessToken).session)
+        verifier.verify(refreshed(retried).accessToken).session!!.generation.assert().isEqualTo(3L)
+        assertThrows<TokenRevokedException> { refreshed(first) }
+        assertThrows<TokenRevokedException> { refreshed(second) }
     }
 
     /** IDN-17: no token of a pair outlives its session. */

@@ -191,7 +191,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.jwt.token-validity.access` | duration | `10m` | 访问令牌有效期。 |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | 刷新令牌有效期；吊销记录在 Redis 中保留这么久再加一秒。 |
 | `cosec.jwt.session.lifetime` | duration | `30d` | 会话从登录起持续多久，无论刷新多少次（[会话](../integration/authentication.md#sessions)）；之后用户需要重新登录。也是令牌中携带的角色变更最迟生效的时间。 |
-| `cosec.jwt.session.rotation-leeway` | duration | `5s` | 刚被刷新的那一对令牌在多长时间内被拒绝但不结束其会话，这样两个标签页同时刷新不会把用户登出。在其所有者刷新之后、宽限期之内使用的被复制的令牌对不会被发现。 |
+| `cosec.jwt.session.rotation-leeway` | duration | `30s` | 刷新之后，被它替换的那一对在多长时间内会得到一对当前一代的令牌，而不是结束会话：客户端重试响应丢失的刷新的窗口，两个标签页同时刷新时也都能保留一对令牌。请覆盖客户端的超时加一次重试。在窗口内得到应答的副本会在窗口之后的下一次刷新时被发现。 |
 
 启用 JWT 时，除非吊销和会话都能被记录和读取，否则启动失败：需要 `cosec-cocache`，或你自己的 `TokenStore`、
 `RevocationReader` 和 `TokenFamilyStore` bean。

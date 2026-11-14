@@ -188,25 +188,26 @@
     {
       "id": "IDN-15",
       "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
-      "statement": "Only a family's current generation refreshes: a refresh moves the family to its next generation with a conditional write of the record it read, so of two refreshes of one pair at most one issues, on one instance or many, and the pair it was given cannot refresh again.",
+      "statement": "Only a family's current generation moves it: a refresh of the current generation moves the family to its next generation with a conditional write of the record it read, so of concurrent refreshes of one pair exactly one moves it, on one instance or many. A refresh of any other generation never moves it.",
       "level": "pipeline",
       "pending": null,
       "guards": [
         "runtime:TokenFamiliesTest#only the current generation refreshes",
-        "runtime:TokenFamiliesTest#refreshes of one pair racing issue once",
-        "cocache:CoCacheTokenFamilyStoreTest#refreshes of one pair racing on two instances issue once",
-        "jwt:RefreshTokenFamiliesJwtTest#only the current pair refreshes"
+        "runtime:TokenFamiliesTest#refreshes of one pair racing move the family once",
+        "cocache:CoCacheTokenFamilyStoreTest#refreshes of one pair racing on two instances move the family once",
+        "jwt:RefreshTokenFamiliesJwtTest#a retried refresh heals, and only the current pair moves the session on"
       ]
     },
     {
       "id": "IDN-16",
       "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
-      "statement": "An older generation presented for a refresh revokes the whole family and is refused, so a copied pair used after its owner refreshed ends the session. The pair that was current until less than cosec.jwt.session.rotation-leeway ago is refused without revoking the family: two tabs refreshing the same pair must not log the user out.",
+      "statement": "The generation the family just replaced, presented within cosec.jwt.session.rotation-leeway of the move, is answered with a pair of the current generation and moves nothing: a refresh whose response was lost can be retried, and two tabs refreshing one pair both keep a usable pair. The window opens at the move and does not slide. Any older generation, or the one just replaced after the leeway, revokes the whole family and is refused, so a copied pair, even one answered within the leeway, is caught at the next refresh after it.",
       "level": "pipeline",
       "pending": null,
       "guards": [
         "runtime:TokenFamiliesTest#reuse revokes the family",
-        "runtime:TokenFamiliesTest#the pair just refreshed is refused within the leeway without revoking the family"
+        "runtime:TokenFamiliesTest#the pair just replaced is answered at the current generation within the leeway",
+        "runtime:TokenFamiliesTest#a copy answered within the leeway is caught at the next refresh"
       ]
     },
     {

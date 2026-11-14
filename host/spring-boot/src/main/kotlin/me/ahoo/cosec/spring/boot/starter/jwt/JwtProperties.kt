@@ -46,7 +46,10 @@ class JwtProperties(
     class Session(
         /** How long a session lasts from its login, however often it is refreshed; then the user signs in again. */
         var lifetime: Duration = TokenFamilies.DEFAULT_LIFETIME,
-        /** How long the pair just refreshed is refused without revoking its session: two tabs refreshing at once. */
+        /**
+         * How long after a refresh the pair it replaced is answered at the current generation: the window a client has to
+         * retry a refresh whose response it lost.
+         */
         var rotationLeeway: Duration = TokenFamilies.DEFAULT_LEEWAY,
     )
 

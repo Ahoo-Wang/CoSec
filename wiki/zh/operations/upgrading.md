@@ -50,7 +50,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 - **刷新令牌属于会话**（RFC 0009，第二轮复审 M2）。登录会开始一个会话，即一族令牌对，两个令牌都带有它的 id、登录时间和代数（`sid`、`auth_time`、`cosec.generation`），保存在 Redis 的 `<cosec.key-prefix>:token:family:<sid>` 下（[会话](../integration/authentication.md#sessions)）。只有当前一对能刷新；更早的一对再次出现会结束会话；会话从登录起持续 `cosec.jwt.session.lifetime`（30 天）；登出会结束整个会话。对应用的影响：
   - **每个用户需要重新登录一次：** 本版本之前签发的令牌对不带会话，刷新时被拒绝（`token-invalid`）；它的访问令牌在过期前仍可用。
   - **通过 `TokenCompositeAuthentication` 签发令牌**，它会开始会话；或者用 `TokenFamilies.start` 和 `TokenSubject.inSession` 自己开始会话：单独由 `TokenConverter.toToken` 签发的令牌对永远不能刷新。`TokenCompositeAuthentication` 和 `SimpleRefreshTokenAuthentication` 接收一个 `TokenFamilies`（starter 提供的 Bean）。
-  - **客户端只保留最新的一对：** 在更新的一对签发之后出示旧的一对会结束会话，除非发生在 `cosec.jwt.session.rotation-leeway`（5 秒）之内，此时被拒绝但不结束会话。
+  - **客户端只保留最新的一对：** 在更新的一对签发之后出示旧的一对会结束会话，除非发生在那次刷新之后的 `cosec.jwt.session.rotation-leeway`（30 秒）之内：此时它会得到最新一代的一对令牌，因此响应丢失的刷新可以重试。
   - **`TokenRevoker.revoke(compositeToken)`** 用于访问令牌已过期时登出；`revoke(accessToken)` 现在也会结束会话。自定义的 `TokenRevoker` 要实现两者。
   - **切换租户需要访问令牌：** `SwitchTenantCredentials.accessToken`，`AbstractSwitchTenantAuthentication` 接收 `TokenVerifier`；新令牌保留登录时间。
   - **不使用 `cosec-cocache` 时，请注册 `TokenFamilyStore`**，否则启动失败（单实例可用 `InMemoryTokenFamilyStore`）。Redis 中每个存活的会话一个 key。

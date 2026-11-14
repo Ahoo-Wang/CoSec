@@ -120,7 +120,9 @@ A refresh refused as `token-expired`: the session's lifetime is over ([`cosec.jw
 The token was revoked by logout, or every token of its principal issued before a subject revocation was revoked
 ([Authentication](../integration/authentication.md)). Sign in again. A refresh refused as `token-revoked` also means its
 session ended: by a logout, or because an older pair of the session was presented after a newer one had been issued
-(reuse: a pair was copied, or a client kept an old pair). Look for two clients sharing one session's tokens. A token issued up to
+more than `cosec.jwt.session.rotation-leeway` (30 seconds) after it (reuse: a pair was copied, or a client kept an
+old pair or retried later than that). Look for two clients sharing one session's tokens, or a client whose retry
+outlasts the leeway. A token issued up to
 [`cosec.authentication.revocation.skew`](./configuration.md#authentication) (5 seconds) after a subject revocation is
 revoked too, so a sign-in right after one may need a few seconds. A refresh applies the same skew.
 

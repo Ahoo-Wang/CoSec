@@ -1,10 +1,10 @@
 {
   "rules": [
-    "IDN-16"
+    "IDN-15"
   ],
   "polarity": "negative",
   "level": "pipeline",
-  "description": "Two tabs: the family moved to generation 2 two seconds ago, and the other tab presents generation 1. Refused without revoking the family, so the pair of generation 2 still refreshes.",
+  "description": "The near miss: alice's pair of generation 1 is refreshed, and the response is lost; she retries with it twice. The first refresh moved the family to 2; each retry is answered at generation 2 and moves nothing, so generation 1 stays the one just replaced, never two behind.",
   "refresh": {
     "pairs": [
       {
@@ -33,25 +33,49 @@
       },
       {
         "access": {
-          "jti": "a2",
+          "jti": "a1",
           "sub": "alice",
           "tenantId": "acme",
           "iat": 1793404800,
           "claims": {
             "sid": "f1",
             "auth_time": 1793404800,
-            "cosec.generation": 2
+            "cosec.generation": 1
           }
         },
         "refresh": {
-          "jti": "r2",
-          "sub": "a2",
+          "jti": "r1",
+          "sub": "a1",
           "iat": 1793404800,
           "claims": {
             "cosec.token": "refresh",
             "sid": "f1",
             "auth_time": 1793404800,
-            "cosec.generation": 2
+            "cosec.generation": 1
+          }
+        }
+      },
+      {
+        "access": {
+          "jti": "a1",
+          "sub": "alice",
+          "tenantId": "acme",
+          "iat": 1793404800,
+          "claims": {
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 1
+          }
+        },
+        "refresh": {
+          "jti": "r1",
+          "sub": "a1",
+          "iat": 1793404800,
+          "claims": {
+            "cosec.token": "refresh",
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 1
           }
         }
       }
@@ -63,8 +87,7 @@
       "tenant": "acme",
       "principal": "alice",
       "authTime": "2026-10-31T00:00:00Z",
-      "generation": 2,
-      "rotatedAt": "2026-10-31T23:59:58Z"
+      "generation": 1
     }
   ],
   "expect": {
