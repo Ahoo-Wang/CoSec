@@ -3,7 +3,8 @@
 > 状态：已定（2026-11-14，协调者执笔；维护者："基于第一性原理思考，不考虑兼容性问题。可推翻原设计决策。目标：设计完美目标架构"，
 > "目标架构设计说明由你亲自写"，冻结前必须做的那一档"默认按你推荐"） · 上位文档：[RFC 0001](0001-target-architecture.md) ·
 > 修订：[RFC 0011](0011-module-architecture.md) §3、[RFC 0010](0010-ga-extension-points.md) 2026-11-14 修订的 D1 与 D6 ·
-> 基线：`main` @ `75ca0604` · 交付：§8 的 A、B 两档在 8.0 RC 之前，C 档在 GA 之后
+> 基线：`main` @ `75ca0604` · 交付：§8 的 A、B 两档在 8.0 RC 之前，C 档在 GA 之后 ·
+> 回写：2026-11-14，A1 开工前的半页修正了 §3.1（见 §3.4）
 
 ## 0. 结论先行
 
@@ -72,9 +73,9 @@
 ```
 annotations ← api ← model ← engine ← spi ← document ← runtime ← control
                                       ↑         ↑          ↑
-                          backends（cocache、kafka）    edge、extensions、host、testkit
-                                      ↑         ↑
-                                   migrate、openapi（不再依赖 runtime）
+                              backends（cocache）       edge、extensions（含 kafka）、host、testkit
+                                                ↑
+                                             openapi（类路径上不再有 runtime）
 ```
 
 | 现在 | 之后 | 理由 |
@@ -83,11 +84,18 @@ annotations ← api ← model ← engine ← spi ← document ← runtime ← co
 | `runtime.route.*` | `me.ahoo.cosec.document.route` | 路由映射也是一种文档；`openapi` 只要这两样 |
 | `runtime.json.CoSecJson` | `me.ahoo.cosec.document.json`，仍是 `@InternalCoSecApi` | 文档与路由映射的编解码都要它 |
 | `runtime.snapshot.SnapshotCompiler` | `spi.snapshot` | 快照源的端口；移走之后 `document` 不再认识 `runtime` |
-| `runtime.shadow` 的端口与记录（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader` 及其值） | `spi.shadow`，仍是 `@ExperimentalCoSecApi` | AGENTS.md 的规则：签名只用到普通值的端口放在 `spi` |
-| `runtime.token` 的签发一侧（`TokenFamilies`、撤销器、令牌对） | `cosec-login` | `runtime.token` 只留验证 |
+| `runtime.shadow` 的端口与记录（`ShadowReportSink`、`ShadowReportReader`、`InMemoryShadowReports`、`CandidateStore`、`StoredCandidate` 及其值） | `spi.shadow`，仍是 `@ExperimentalCoSecApi` | AGENTS.md 的规则：签名只用到普通值的端口放在 `spi`。`Candidate`（签名里有 `engine.CompiledDocument`）、候选来源与记录器留在 `runtime.shadow` |
+| `runtime.shadow.ShadowCodec` | `me.ahoo.cosec.document.shadow`，`@InternalCoSecApi` | 它用 Jackson，`spi` 不解析 Jackson；`cocache` 与控制面的内存存储必须用它写出同样的字节，两者都依赖 `document` |
+| `runtime.identity.IdentityCodec` | `me.ahoo.cosec.document.identity`，仍是 `@InternalCoSecApi` | `CoSec-Identity` 头是一种交换格式；编解码器只用到 `model`、`spi.identity`、mapper，它的格式描述符本来就随 `document.format` 走。`IdentityGate`、`IdentityIssuer` 是请求路径上的行为，留在 `runtime.identity` |
+| `runtime.token` 的签发一侧（`TokenFamilies`、撤销器、令牌对） | `cosec-login`，包 `me.ahoo.cosec.login.token` | `runtime.token` 只留验证（`CoSecTokenVerifier`、`TokenRevocation`） |
+| `backends/kafka` | `extensions/kafka`（项目名 `:kafka`、构件 `cosec-kafka` 不变） | 它实现的是 `DecisionListener` 与 `ChangeListener`，和 `micrometer`、`opentelemetry` 同类；放在 `backends/` 只是历史 |
 
-移完之后：`cocache` 对 `runtime` 的 15 处 import 全部消失；`migrate`、`openapi` 不再依赖 `runtime`。`DependencyRules` 新增一条：**后端不依赖 `runtime`**。
-今天 Redis 后端的类路径上有整条管道，这条规则值得有。
+移完之后：`cocache` 对 `runtime` 的 15 处 import 全部消失；`openapi` 的类路径上不再有 `runtime`；`migrate` 不再 import `runtime` 的任何东西，
+声明的依赖是 `cocache`、`control`、`document`（`runtime` 仍经 `control` 在它的类路径上：它正是通过控制面发布的）。
+
+**后端的定义与规则。** 后端实现 `cosec-spi` 里的存储端口；按这个定义，`backends/` 里只有 `cocache`。`DependencyRules` 与 `SourceRulesTest` 新增一条，**后端不依赖 `runtime`**，写成三项断言，没有例外：
+主代码不声明对 `cosec-runtime` 的依赖；运行时类路径解析不到它；后端的类不引用 `me.ahoo.cosec.runtime.*`。编译类路径不查：`cocache` 经 `compileOnlyApi(:control)` 实现控制面的 `ControlStore`，
+这个端口的签名用到控制面的类型，按规则留在它那一层。今天 Redis 后端的类路径上有整条管道，这条规则值得有。
 
 `cosec-runtime` 不再拆。`snapshot`、`event`、`audit`、`identity` 的使用方本来就依赖整条请求路径，再分模块只多出构件，不减少任何依赖；对它们，10 月 28 日的理由仍然成立。
 
@@ -114,6 +122,24 @@ annotations ← api ← model ← engine ← spi ← document ← runtime ← co
 | `http`、`authn`、`token`、`attribute`、`identity`、`ratelimit`、`event`、`audit` | 各管一件事 | 只有现有的方向，不得成环 |
 
 `test/architecture` 增加包依赖规则，把这张表写成断言；今天 `event → shadow`、`event → 根包` 这样的反向引用要先理顺。
+
+### 3.4 开工前的修正（A1，2026-11-14）
+
+实现方读完 `main` @ `1c7aa800` 后交的半页确认了 §3.1 的切法，并指出六处与代码不符；下面是定下的结果，§3.1 已按它改过。
+
+| 半页指出的 | 定下的 |
+|---|---|
+| `ShadowCodec` 用 Jackson，进不了 `spi` | 放进 `cosec-document` 的 `document.shadow`。这个模块的定义因此是“CoSec 存储和交换的格式，以及唯一的 mapper”，不只是策略文档 |
+| `kafka` 依赖 `runtime` 的 `DecisionListener`，规则对它不成立 | 不给例外，把它移到 `extensions/`：规则不成立说明的是分类错了，不是规则要开口子 |
+| `migrate` 经 `control` 仍有 `runtime` | 原文“不再依赖”说过头了，改为“不再 import、不再声明” |
+| `cocache` 的编译类路径仍解析到 `runtime` | 规则写成上面的三项断言，不查编译类路径，并在规则的 KDoc 里写明原因 |
+| `SchemaConformanceTest` 用 `runtime.identity.IdentityCodec` 解码身份格式 | 把 `IdentityCodec` 移进 `cosec-document`（`document.identity`），测试原样留下。先定的是把这一例移到 `runtime` 的测试里，实现方发现它与生成器和变异机制（约 440 行测试代码）缠在一起，只能靠 test fixtures 或让 `document` 的测试反过来依赖 `runtime`；缠在一起说明的是切错了：格式描述符与它的编解码器一起变，应当在同一个模块。problem 格式不同，它的写出方是 `StatusMapping`，属于请求路径，由 `runtime` 的 `ProblemSchemaTest` 自上而下绑定 |
+| `ProblemSchemaTest` 跨模块调用 `internal` 的 `JsonSchemaWriter` | 改为 `@InternalCoSecApi`，不进 ABI 清单 |
+
+同时确认：`SnapshotCompiler` 只移接口本身，不带 `@CoSecSpi`（它是 CoSec 自己实现的内部端口）；`RouteMap` 的 HEAD 回落只用到两个方法名，在文件内各留一个私有常量，
+`HttpMethods` 及其规则（PIP-18）留在 `runtime.http`；三个 Web 适配器今天不 import 文档、路由映射或 mapper，不受这次移动影响。A1 之后各模块声明的主依赖：
+`document` → `engine`、`spi`、Jackson；`runtime` → `document`（api）、`engine`、`spi`；`control` → `runtime`、`document`；`cocache` → `spi`、`document`，`compileOnlyApi(control)`；
+`kafka` → `runtime`，`compileOnlyApi(control)`；`openapi` → `document`；`migrate` → `cocache`、`control`、`document`；`login` → `runtime`；`jwt` → `login`。
 
 ## 4. 请求路径
 
@@ -309,7 +335,7 @@ snapshot/
 
 | 批次 | 内容 | 推翻或修订 |
 |---|---|---|
-| A1 | `cosec-document` 模块；影子端口到 `spi`；签发一侧到 `cosec-login`（三个 PR） | 2026-10-28 对 `document` 模块的否决；AGENTS.md 里影子端口留在 `runtime` 的说法 |
+| A1 | `cosec-document` 模块；影子端口到 `spi`，`kafka` 到 `extensions/`；签发一侧到 `cosec-login`（三个 PR） | 2026-10-28 对 `document` 模块的否决；AGENTS.md 里影子端口留在 `runtime` 的说法；RFC 0011 §3 把 `kafka` 归在 `backends/` |
 | A2 | 构建器与适配器契约（§4.3） | D1 的“构建器留到 8.1” |
 | A3 | §7.3 的名字 | D6 留下的两个类名 |
 
