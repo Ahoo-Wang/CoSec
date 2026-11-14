@@ -1112,6 +1112,8 @@ class ChangeEvent(
 - `PUBLISHING`、break-glass 的三个事件：`REQUIRED` 监听器全部成功之后才写头（§5.4 第 1 步）。其余事件按各监听器的 `delivery`。
 - 默认没有 `REQUIRED` 监听器：修订记录本身就是"发布了什么、谁发布、谁批准"的持久记录，普通发布不强求外部审计。break-glass 必须有（§8）。Q21。
 - 实现：`LoggingChangeListener`（BEST_EFFORT）、`KafkaChangeListener`（`cosec-kafka`，主题 `cosec-control-audit`，可配置为 REQUIRED，与 `KafkaAuditListener` 相同的做法）。
+  **2026-11-14 修订（#1322）**：两个 Kafka 监听器共用一个有界发送器，关机时在 `cosec.observability.listener.drain-timeout` 内排空已排队的发送；此前变更监听器不排空。
+  控制面复核审批人时，吊销表读不到即 503，不发布（#1321）。
 
 ---
 
