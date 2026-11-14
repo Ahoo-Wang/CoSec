@@ -18,6 +18,13 @@
 
 > **2026-11-09 修订（#1307）**：`cosec-model` 依赖 `cosec-annotations`，否则带标记的类型可以不声明 opt-in 就被使用。
 
+> **2026-11-14 修订（[RFC 0013](0013-target-architecture.md) §3，#1369、#1370、#1372）**：`runtime` 只留请求路径。
+> 新增模块 `cosec-document`（`core/document/`）：策略文档、路由映射、`CoSec-Identity` 与影子窗口的编解码、格式描述符、唯一的 Jackson mapper；
+> 它只依赖 `engine`、`spi` 与 Jackson。这推翻了 10 月 28 日“文档留在 `runtime`，用包划分”的做法（理由见 RFC 0013 §3.2）。
+> 影子窗口的端口与值移到 `spi.shadow`：它们的签名只用普通值，10 月 28 日把它们留在 `runtime` 是因为当时编解码与它们在一起。
+> `kafka` 从 `backends/` 移到 `extensions/`：后端的定义是“实现 `spi` 的存储端口”，`kafka` 实现的是监听器。
+> 由此 §5 的 `backends` 规则不再有 `runtime` 的例外：后端不依赖 `runtime`。§2、§3、§5 已按此改。
+
 ## 0. 结论先行
 
 目标是让核心模型稳定、可靠、可扩展：技术的变化只发生在外圈，核心模块的公共 API 不因第三方库、宿主或存储的变化而变化。
@@ -63,14 +70,16 @@ flowchart BT
     model --> api
     engine --> model
     spi --> model
-    runtime --> engine
-    runtime --> spi
+    document --> engine
+    document --> spi
+    runtime --> document
     control --> runtime
   end
   subgraph outer[外圈]
-    backends[backends<br>cocache、kafka] --> spi
+    backends[backends<br>cocache] --> spi
+    backends --> document
     edge[edge<br>webflux、webmvc、gateway、openapi] --> runtime
-    extensions[extensions<br>jwt、social、login、ip2region、micrometer、opentelemetry] --> spi
+    extensions[extensions<br>jwt、social、login、ip2region、micrometer、opentelemetry、cosid、kafka] --> spi
   end
   host[host<br>spring-boot] --> outer
 ```
@@ -86,14 +95,15 @@ flowchart BT
 | `core/model/` | `:model` | `cosec-model` | 决策模型、条件 AST、绑定、属性目录；`CoSecException` |
 | `core/engine/` | `:engine` | `cosec-engine` | 编译后的结构与求值（不变） |
 | `core/spi/` | `:spi` | `cosec-spi` | 签名只用 `model` 与 `api` 类型的端口及其值：快照文档存储、`MembershipProvider`、`RevocationReader`、`ApiKeyReader`、`TokenVerifier`、`RateLimiter`、`AttributeProvider`、`Authenticator`（含 `Identity` 与声明值）、`RequestGate`（含 `HttpFacts`）、`AuditEventSink`；它们的内存实现。`DecisionListener` 在 `runtime`，`ControlStore`、`ChangeListener` 与影子报告存储在 `control`/`runtime` |
-| `core/runtime/` | `:runtime` | `cosec-runtime` | Pipeline、快照源与视图、文档模型与编译器（`runtime.document`）、身份传递、限流义务、编解码 |
+| `core/document/` | `:document` | `cosec-document` | CoSec 存储和交换的格式：策略文档及其编解码器与编译器、格式描述符（生成 `schema/`）、路由映射、`CoSec-Identity` 与影子窗口的编解码、唯一的 Jackson mapper（RFC 0013 §3） |
+| `core/runtime/` | `:runtime` | `cosec-runtime` | 请求路径：Pipeline、快照源与视图、令牌校验、身份传递、限流义务、决策事件与审计、影子记录 |
 | `core/control/` | `:control` | `cosec-control` | 控制面 |
 | `backends/cocache/` | `:cocache` | `cosec-cocache` | Redis 上的 `spi` 实现 |
-| `backends/kafka/` | `:kafka` | `cosec-kafka` | 审计与变更通知 |
 | `edge/webflux/`、`edge/webmvc/`、`edge/gateway/` | `:webflux` 等 | `cosec-webflux` 等 | 驱动适配器，只翻译 |
-| `edge/openapi/` | `:openapi` | `cosec-openapi` | 由 OpenAPI 生成路由映射 |
+| `edge/openapi/` | `:openapi` | `cosec-openapi` | 由 OpenAPI 生成路由映射；只依赖 `cosec-document` |
 | `extensions/jwt/`、`social/`、`login/` | `:jwt` 等 | `cosec-jwt` 等 | 凭据；`login` 是登录与 token 签发（从 `core/authentication`、`core/token` 的签发部分、`api/authentication` 移来，保留 Reactor） |
 | `extensions/ip2region/`、`micrometer/`、`opentelemetry/` | | | 属性提供者、指标、追踪 |
+| `extensions/kafka/` | `:kafka` | `cosec-kafka` | 审计与变更通知：`DecisionListener` 与 `ChangeListener` 的实现 |
 | `extensions/cosid/` | `:cosid` | `cosec-cosid` | 基于 CosId 5 的 `IdGenerator`，由 starter 按类路径装配；只有它与 `host/spring-boot` 可以引用 `me.ahoo.cosid`（2026-10-29，#1170） |
 | `host/spring-boot/` | `:spring-boot` | `cosec-spring-boot` | 自动配置，只做装配（D2） |
 | `migration/migrate/` | `:migrate` | `cosec-migrate` | 7.x 数据迁移 |
@@ -104,7 +114,7 @@ flowchart BT
 
 根目录保留 `config/`、`docs/`、`gradle/`、`k8s/`、`schema/`、`scripts/`、`skills/`、`wiki/`。
 
-包名与模块对齐：`me.ahoo.cosec.spi.*`、`me.ahoo.cosec.runtime.*`、`me.ahoo.cosec.runtime.document.*` 等；同一个包不跨模块。
+包名与模块对齐：`me.ahoo.cosec.spi.*`、`me.ahoo.cosec.document.*`、`me.ahoo.cosec.runtime.*` 等；同一个包不跨模块。
 
 ## 4. 今天的 `core/` 与 `api/` 的去向
 
@@ -134,9 +144,10 @@ flowchart BT
 |---|---|
 | `annotations`、`api`、`model`、`engine` | 仅标准库 |
 | `spi` | 以上，加 kotlinx-coroutines |
-| `runtime`、`control` | 以上，加 Jackson 与日志门面；不得引用 Reactor、Spring、Servlet、Redis 客户端 |
-| `backends` | `spi` 与自己的技术。例外只经 `test/architecture` 里的数据白名单：`cocache` 以 `compileOnly` 用 `control`（`ControlStore`）与 `runtime`（影子报告存储）；`kafka` 用 `runtime`（`DecisionListener`）与 `control`（`ChangeListener`）。其余一律不得依赖 `runtime`、`control` |
-| `edge`、`extensions` | `spi`、`runtime`；Reactor 只允许出现在这里 |
+| `document` | `engine`、`spi`，加 Jackson；没有日志门面 |
+| `runtime`、`control` | 以上，加日志门面；不得引用 Reactor、Spring、Servlet、Redis 客户端 |
+| `backends` | `spi`、`document` 与自己的技术。**不依赖 `runtime`**：主代码不声明、运行时类路径解析不到、类不引用 `me.ahoo.cosec.runtime.*`（编译类路径不查：`cocache` 以 `compileOnlyApi` 用 `control` 实现 `ControlStore`）。对 `document` 只用 mapper 与它所存格式的编解码器（`ShadowCodec`）：后端只存字节，不读文档授予了什么。对 `control` 只经 `test/architecture` 里的数据白名单 |
+| `edge`、`extensions` | `spi`、`document`、`runtime`；Reactor 只允许出现在这里。`openapi` 只依赖 `document`，运行时类路径上没有 `runtime`；`kafka` 对 `control` 只用变更监听端口 |
 | `host` | 全部；Spring 只允许出现在 `host` 与 `edge` |
 | 任何模块的 `main` | 不得依赖 `test/*` 与 `platform/*` |
 | `platform/*` | 是 CoSec 模块的应用：只依赖发布的模块，像用户一样使用它们；上面各组的规则不适用于它 |
@@ -147,7 +158,7 @@ PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增�
 
 | 例外 | 理由 |
 |---|---|
-| `cocache`、`kafka` 可以引用 `me.ahoo.cosec.runtime.json.CoSecJson`（`@InternalCoSecApi`，只构建共享的 JSON 映射器） | 存储格式只有一份配置；字节固定测试覆盖每一种存储类型 |
+| `cocache` 可以引用 `me.ahoo.cosec.document.json.CoSecJson` 与 `document.shadow.ShadowCodec`（都是 `@InternalCoSecApi`） | 存储格式只有一份配置；字节固定测试覆盖每一种存储类型 |
 | `gateway` → `webflux` | 网关过滤器运行在 WebFlux 桥上 |
 | `social` → `login` | 社交登录是 `login` 的一个认证提供者 |
 | `cocache` 内部使用 Reactor | 非阻塞的 Redis 读取用 Spring Data Redis 的响应式 API；公共签名中不得出现 Reactor 类型 |

@@ -89,10 +89,11 @@ Read [`wiki/architecture/overview.md`](wiki/architecture/overview.md) before tou
 the adapters, snapshots or the control plane. The parts that take several files to see:
 
 - **Layers.** `model ← engine ← document ← runtime ← {edge, extensions, host}`, with `spi` (the ports) between `model`
-  and `document`, `backends` implementing `spi`, and `control` on top of `runtime`. Projects sit in group directories
+  and `document`, `backends` implementing the store ports of `spi` and never depending on `runtime`, and `control` on
+  top of `runtime`. Projects sit in group directories
   (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`), `backends/`
-  (`cocache`, `kafka`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
-  `ip2region`, `micrometer`, `opentelemetry`, `cosid`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
+  (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
+  `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
   `conformance`, `architecture`, `e2e`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
@@ -100,11 +101,14 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
-  `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client; only `cosid` and the
+  `runtime` and `control` never resolve Reactor, Spring, the Servlet API or a Redis client; no backend declares
+  `runtime` or resolves it at run time (the compile classpath is left out: `cocache` implements `ControlStore` through
+  `compileOnlyApi(:control)`), and neither does `openapi`, a generator of documents; only `cosid` and the
   starter bring CosId, since CoSec owns its ids through `IdGenerator`), `SourceRulesTest`
   (Reactor only in edge and host, plus cocache's reactive Redis client, never in its public signatures; no Spring, Servlet or Redis client
-  in `api/` and `core/`; backends reach into `runtime` and `control` only through the listed ports, and into `document` only through the
-  mapper: a backend stores bytes and never reads what a document grants;
+  in `api/` and `core/`; no backend class references `runtime`; backends reach into `control` only through the listed ports and into
+  `document` only through the mapper and the codec of a format they store (`ShadowCodec`): a backend stores bytes and
+  never reads what a document grants; `kafka` reaches into `control` only through the change listener port;
   opt-ins to `InternalCoSecApi` only in CoSec's own Kotlin sources, so never in a doc sample),
   `JacksonSignatureTest` (no Jackson type in a public signature of `api/` or `core/`, no Reactor type in one of
   `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
@@ -131,12 +135,13 @@ the adapters, snapshots or the control plane. The parts that take several files 
     contracts, with their values and in-memory implementations: `snapshot` (`SnapshotDocumentStore`, `SnapshotRead`,
     `SnapshotKey`, `InMemorySnapshotDocumentStore`), `membership`, `token` (`TokenVerifier`, `RevocationReader`,
     `TokenStore`, `TokenRevoker`), `apikey`, `ratelimit`, `attribute`, `authn`, `identity`, `audit`, `id`
-    (`IdGenerator`). Model, api, annotations and kotlinx-coroutines-core only. A port whose signature needs a layer's types stays in that layer
-    (`DecisionListener`, `RequestGate`, `CandidateStore`, the shadow report ports in `runtime`; `ControlStore`,
-    `ChangeListener` in `control`).
+    (`IdGenerator`), `shadow` (`CandidateStore`, `ShadowReportSink`, `ShadowReportReader`, their values,
+    `InMemoryShadowReports`). Model, api, annotations and kotlinx-coroutines-core only. A port whose signature needs a layer's types stays in that layer
+    (`DecisionListener`, `RequestGate`, `CandidateSource` in `runtime`; `ControlStore`, `ChangeListener` in `control`).
   - `cosec-document` (`core/document/`, `me.ahoo.cosec.document`) holds the formats CoSec stores and exchanges: the
     policy documents with their codec, compiler and `RoleExpansion` (`document/`), the format descriptors that generate
-    `schema/` (`document/format/`), route maps (`document/route/`), the `CoSec-Identity` codec (`document/identity/`),
+    `schema/` (`document/format/`), route maps (`document/route/`), the `CoSec-Identity` codec (`document/identity/`), the shadow window's codec
+    (`document/shadow/`),
     and `CoSecJson.mapper` (`document/json/`, `@InternalCoSecApi`), the one Jackson mapper (`JacksonSignatureTest`
     keeps Jackson out of public signatures). It depends on `engine`, `spi` and Jackson only (`DependencyRulesTest`),
     and the root build leaves out the SLF4J default: whoever reads or writes a document does not bring the request
@@ -153,9 +158,10 @@ the adapters, snapshots or the control plane. The parts that take several files 
     fails when one of its classes is outside `me.ahoo.cosec.control`, references Spring, `reactor.*`, the coroutine
     or Reactive Streams bridges or a Redis client, or calls `runBlocking`, `Dispatchers.IO` or `GlobalScope`.
   - Every other module adapts one technology: `cosec-webflux`, `cosec-webmvc`, `cosec-gateway` (HTTP bridges),
-    `cosec-cocache` (Redis: snapshots, control store, shadow reports, tokens, memberships, API keys, rate limits),
+    `cosec-cocache` (Redis: snapshots, control store, shadow reports, tokens, memberships, API keys, rate limits; on
+    `cosec-spi` and `cosec-document`, never `cosec-runtime`),
     `cosec-login` (login and token issuing: `Authentication`, `TokenConverter`), `cosec-jwt` (on `cosec-login`), `cosec-social`, `cosec-opentelemetry`, `cosec-micrometer`,
-    `cosec-kafka` (decision listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps; on `cosec-document` only),
+    `cosec-kafka` (decision and change listeners), `cosec-ip2region` (an `AttributeProvider`), `cosec-openapi` (route maps; on `cosec-document` only),
     `cosec-cosid` (an `IdGenerator` over CosId 5). Only `cosec-cosid` and the starter, which wires it, may reference
     or bring CosId (`DependencyRules.COSID_OWNERS`).
     `cosec-migrate` (`migration/migrate/`) converts 7.x data, and holds the only copy of the 7.x model
