@@ -46,6 +46,12 @@ enum class ShadowOutcome {
     /** The same result, decided by another statement. */
     BY_CHANGED,
 
+    /** The enforced documents could not decide; the candidate denies. */
+    BECAME_DENIED,
+
+    /** The same permit, by the same statement, with other rate limit obligations. */
+    OBLIGATIONS_CHANGED,
+
     /** The candidate's base is not what this instance has installed: not compared. */
     BASE_MISMATCH,
     ;

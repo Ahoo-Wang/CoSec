@@ -316,7 +316,9 @@ class WebAdapterParityTest {
         scenario: Scenario,
         filter: (MockServerWebExchange, (ServerWebExchange) -> Mono<Void>) -> Mono<Void>,
     ): Written {
-        val request = MockServerHttpRequest.method(HttpMethod.valueOf(scenario.method), URI.create(scenario.path))
+        // Absolute, as Reactor Netty builds it from the request target: `//public` alone would be read as an authority.
+        val uri = URI.create("http://localhost${scenario.path}")
+        val request = MockServerHttpRequest.method(HttpMethod.valueOf(scenario.method), uri)
             .remoteAddress(InetSocketAddress("127.0.0.1", 50000))
         scenario.headers.forEach { (name, value) -> request.header(name, value) }
         val exchange = MockServerWebExchange.from(request)
@@ -402,6 +404,17 @@ class WebAdapterParityTest {
                 type = null
             ),
             Scenario("an ambiguous path is 400", path = "/public/%2e%2e/admin", status = 400, type = "invalid-request"),
+            // PIP-14: each form a backend that merges slashes or decodes separators reads as another path.
+            Scenario("an empty segment is 400", path = "//public/page", status = 400, type = "invalid-request"),
+            Scenario(
+                "what removing a path parameter leaves empty is 400",
+                path = "/;x/public/page",
+                status = 400,
+                type = "invalid-request"
+            ),
+            Scenario("an encoded separator is 400", path = "/public%2Fpage", status = 400, type = "invalid-request"),
+            Scenario("an encoded backslash is 400", path = "/public%5Cpage", status = 400, type = "invalid-request"),
+            Scenario("a trailing separator is decided", path = "/public/page/", status = 200, type = null),
             Scenario(
                 "an ambiguous CoSec parameter is 400",
                 path = "/public/page",

@@ -15,11 +15,17 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
+import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.shadow.CandidateStore
+import me.ahoo.cosec.runtime.shadow.StoredCandidate
+import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties
@@ -31,6 +37,7 @@ import org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoCo
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
+import java.time.Instant
 import java.util.UUID
 
 /**
@@ -87,6 +94,39 @@ class ShadowReportingWiringTest {
             .withBean("customSource", CandidateSource::class.java, { customSource })
             .run { context ->
                 context.getBean(ShadowReporting::class.java).reporter.candidates.assert().isNull()
+            }
+    }
+
+    /**
+     * SNP-10: the comparison compiles a staged platform candidate; the instance goes on compiling what it enforces with
+     * the platform that is published. The candidate here changes the limits, which [PlatformCompiler.compile] would
+     * make the live ones, and recompile every installed document with.
+     */
+    @Test
+    fun `a staged platform candidate leaves what the instance compiles with as it was`() {
+        val staged = StoredCandidate(
+            "w",
+            1,
+            SnapshotDocument(
+                2,
+                2,
+                Instant.parse("2026-11-01T00:00:00Z"),
+                """{"schema":2,"revision":2,"publishedAt":"2026-11-01T00:00:00Z","limits":{"maxNodes":7}}""".encodeToByteArray(),
+            ),
+        )
+        runner
+            .withBean(
+                "stagedPlatform",
+                CandidateStore::class.java,
+                { CandidateStore { key -> staged.takeIf { key == SnapshotKey.Platform } } },
+            )
+            .run { context ->
+                val compiler = context.getBean(PlatformCompiler::class.java)
+                val live = compiler.current
+                val source = context.getBean(CandidateSource::class.java)
+                val compiled = runBlocking { source.candidate(SnapshotKey.Platform) }
+                compiled.assert().isInstanceOf(Candidate.Ready::class.java)
+                compiler.current.assert().isSameAs(live)
             }
     }
 }

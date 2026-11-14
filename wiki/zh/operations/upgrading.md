@@ -13,6 +13,15 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
 
+- **含空段、编码分隔符或反斜杠的路径答 `400`**（`PIP-14`）。`//admin`、`/admin//x`、`/;x/admin`、`/admin%2Fx`、`/admin\x` 和 `/admin%5Cx` 以前被当作独立的路径决定，所以 `/admin` 之下的 `DENY` 匹配不到它们，而会合并斜杠、解码分隔符或把 `\` 当作 `/` 的后端却按 `/admin/...` 提供服务。末尾的 `/` 不变：`/admin/` 仍是一条独立的路径。以前能得到服务、现在被拒绝的请求：
+  - 路径中的 `\`，无论是否编码：客户端本不应发送它，浏览器会把它变成 `/`；
+  - 路径变量中编码的 `/`，例如 `/files/a%2Fb.txt` 或 `/repos/group%2Fproject`：把值放进查询参数，或者对其中的 `/` 编码两次（`%252F`），管道解码一次得到文本 `%2F`，由应用再解码一次；
+  - 用各自带 `/` 的两段拼接出的 URL（`https://host/api/` + `/orders`）：修正客户端；
+  - 最后一段之前单独成段的路径参数（`/;jsessionid=x/orders`）：URL 重写会把它放在最后一段的末尾（`/orders;jsessionid=x`），这种写法仍被接受。
+
+  没有开关可以接受它们：模式无法表达后端会把这些路径当成什么，决定它们就会让绕过重新出现。
+- **检查拒绝执行会拒绝的内容**（`PIP-15`）。`AuthorizationChecker.check` 和 `decide` 现在按管道读取请求的方式读取路径：管道答 `400` 的路径是拒绝，超过请求路径长度上限的资源也是拒绝。以前 `/public` 之下的 `ALLOW` 可能放行 `/public/../admin`。
+- **影子窗口多统计两种结果**：`BECAME_DENIED` 和 `OBLIGATIONS_CHANGED` 以前被计为 `SAME`，现在发布时必须确认。滚动升级之前请结束或放弃未关闭的窗口：上一版本的实例读不了包含它们的报告。
 - **令牌和 API key 声明它们的应用**（批次 R7b、RFC 0012 §3.5、`SCP-11`）。令牌的 `aud` 和 API key 的 `app` 指明凭证属于哪个应用，`ScopeResolver` 把它们与宿主的应用比较：配置了应用的宿主（`cosec.authorization.scope.app-id` 或路由的 `cosec-app-id`）拒绝声明其他应用或未声明应用的凭证，返回 `403 scope-rejected`。没有宿主应用时取凭证的应用，两者都没有时不读取应用文档。迁移方法：签发令牌时设置 `TokenSubject.app`，每个应用一个令牌；为 API key 设置 `app`（`ApiKey`、`cosec.api-key.keys[].app`）。存储的 key 升级为带必填 `app` 字段的 format 3：format 2 会失败（`API key format [2] is not 3.`），请重新发放（`cosec-migrate api-keys --app <id>` 会为它从 7.x 转换的 key 设置应用）。操作控制面的令牌发给 `cosec.control.app-id`（默认 `cosec-control`）；宿主应用与之不同的宿主上的控制面路由返回 `403`，请把它们放在没有应用或就是该应用的宿主上。
 - **`CoSec-App-Id` 已删除。** 客户端不再声明应用；该请求头不被读取，发送它的请求取凭证的应用。网关转发的身份仍然携带它的应用：配置了应用的服务拒绝声明其他应用或未声明应用的身份，返回 `400 invalid-request`。请读取 `SecurityContext.scope.appId` 获取请求的应用。
 - **`SecurityContext` 是只读的**：`tenantId`、`principal`、非空的 `scope` 和 `forwardedIdentity`（`gatewayRequestId`、`credentialId`，取代属性 `cosec.identity.rid` 和 `cosec.identity.jti`）。属性表及其访问方法已删除；`tenant.tenantId` 变为 `tenantId`。

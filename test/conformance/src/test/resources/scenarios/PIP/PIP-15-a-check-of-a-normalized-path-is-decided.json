@@ -1,0 +1,66 @@
+{
+  "rules": [
+    "PIP-15"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "A path enforcement accepts is decided, its path parameters removed as a request's are.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/{*rest}"
+            }
+          ]
+        },
+        {
+          "id": "public",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/public/{*rest}"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        },
+        {
+          "id": "public",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "public"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/public/a"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "check": {
+    "action": "http:GET",
+    "resource": "/public;v=1/a"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "check": "Permit"
+  }
+}

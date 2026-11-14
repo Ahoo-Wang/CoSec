@@ -128,6 +128,9 @@ class CachingCandidateSource(
         Candidate.Ready(stored.window, stored.baseRevision, compile(key, stored.document))
     } catch (e: Exception) {
         Candidate.Failed(stored.window, e)
+    } catch (e: StackOverflowError) {
+        // RC1-43: a document that compiles on the control plane can overflow a smaller stack here: it cannot compile.
+        Candidate.Failed(stored.window, e)
     }
 
     @InternalCoSecApi

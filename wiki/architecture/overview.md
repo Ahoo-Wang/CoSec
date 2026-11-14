@@ -382,7 +382,9 @@ What makes it safe:
   the decisions are taken again, so a change of a thousand bindings reads them a handful of times, not two thousand
   (`CTL-8`). A grant the analysis cannot prove contained is an escalation and needs an approval by another person.
 - **Shadow windows.** Instances sample requests (`cosec.authorization.shadow.sample-rate`), evaluate them on the staged
-  candidate as well, and report how the outcomes differ (`SAME`, `WIDENED`, `NARROWED`, ...). An instance that cannot
+  candidate as well, and report how the outcomes differ (`SAME`, `WIDENED`, `NARROWED`, ...). A candidate is compiled
+  for that comparison only: a staged platform document's limits and attributes never reach what an instance enforces
+  (`SNP-10`). An instance that cannot
   compile or evaluate the candidate blocks the window, and a blocked change never publishes. Documents compile against
   the platform's attribute declarations and the host's `AttributeProvider`s, so the control host and every instance
   must register the same providers: a candidate only the control host can compile blocks its window. Publishing requires the

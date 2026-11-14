@@ -44,6 +44,7 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.document.PolicyDocumentCompiler
+import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
@@ -52,6 +53,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
@@ -298,5 +301,39 @@ class AuthorizationCheckerTest {
         checker.check(security.securityContext, "http:GET", "/orders/2").assert().isFalse()
         checker.decide(security.securityContext, "http:GET", "/orders/2").assert()
             .isInstanceOf(Decision.Indeterminate::class.java)
+    }
+
+    /** PIP-15: a check reads a path as enforcement does: what no request could be permitted for, no check permits. */
+    @ParameterizedTest
+    @ValueSource(
+        strings = ["/orders/../admin", "/orders/%2e%2e/admin", "/orders/..;x/admin", "/orders//1", "/orders/%zz"]
+    )
+    fun `a path enforcement refuses is never permitted`(path: String) {
+        val security = permitted()
+        runBlocking {
+            checker.decide(security.securityContext, "http:GET", path).assert().isEqualTo(Decision.Deny(null))
+            checker.decide(security, Action("http", "GET"), Resource("http", path, emptyMap()))
+                .assert().isEqualTo(Decision.Deny(null))
+        }
+    }
+
+    /** PIP-15: its path parameters go as a request's do. */
+    @Test
+    fun `a path is decided as enforcement normalizes it`() {
+        runBlocking {
+            checker.check(permitted().securityContext, "http:GET", "/orders;v=2/1").assert().isTrue()
+        }
+    }
+
+    /** PIP-15: what no request path can be is not decided, as its globs would cost more than any request's. */
+    @Test
+    fun `a resource longer than a request path can be is denied`() {
+        val segment = "a".repeat(PathNormalizer.MAX_SEGMENT_LENGTH)
+        val security = permitted().securityContext
+        runBlocking {
+            checker.check(security, "order:read", "order/$segment").assert().isTrue()
+            checker.decide(security, "order:read", "order/${segment}a").assert().isEqualTo(Decision.Deny(null))
+            checker.decide(security, "http:GET", "/orders/${segment}a").assert().isEqualTo(Decision.Deny(null))
+        }
     }
 }

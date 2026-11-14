@@ -65,7 +65,7 @@ unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`), anywhere, is a `40
 a Redis key would write it as `?`, naming another id. A stored document or record that does not decode, such as
 one a newer version wrote during a rolling upgrade, is a `500`. A request no principal stands behind, an anonymous permit
 of the pipeline included, is a `401` before any of its body is read. Only a route's exact path is served: one with a
-trailing `/` or an empty segment is a `404`. A change whose record does not decode, one of an app that cannot be an app id included, is a `503` without detail to
+trailing `/` is a `404`, and the pipeline refuses one with an empty segment with `400` before it gets there. A change whose record does not decode, one of an app that cannot be an app id included, is a `503` without detail to
 every caller (`SCP-10`). The control
 host logs why at `INFO`, with the problem's `requestId`
 ([Troubleshooting](../operations/troubleshooting.md#control-plane-errors)).
@@ -259,6 +259,8 @@ that app's installed document where the request read none, and one that removes 
 |---|---|
 | `SAME` | The same decision, by the same statement. |
 | `BY_CHANGED` | The same decision, by another statement. |
+| `OBLIGATIONS_CHANGED` | The same permit, by the same statement, with other rate limit rules applying. |
+| `BECAME_DENIED` | Enforcement could not decide; the candidate denies. |
 | `WIDENED` | The candidate permits where enforcement did not. |
 | `NARROWED` | Enforcement permitted; the candidate does not. |
 | `BECAME_INDETERMINATE` | The candidate is Indeterminate where enforcement was not, for a reason other than a missing attribute. |
@@ -453,8 +455,8 @@ does not have, and the approver approves again.
 
 ## Publishing and rolling back
 
-`POST /changes/{id}:publish` publishes a `READY` change. When its window saw `WIDENED`, `NARROWED` or
-`BECAME_INDETERMINATE` requests, or closed as insufficient, the publisher must acknowledge exactly those numbers, or
+`POST /changes/{id}:publish` publishes a `READY` change. When its window saw `WIDENED`, `NARROWED`,
+`BECAME_INDETERMINATE`, `BECAME_DENIED` or `OBLIGATIONS_CHANGED` requests, or closed as insufficient, the publisher must acknowledge exactly those numbers, or
 the answer is `428`:
 
 ```json

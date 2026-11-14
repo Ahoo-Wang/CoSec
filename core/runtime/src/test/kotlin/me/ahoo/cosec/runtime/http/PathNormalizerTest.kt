@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Resource
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -64,6 +65,67 @@ class PathNormalizerTest {
         PathNormalizer.normalize(path).assert().isNull()
     }
 
+    /**
+     * PIP-14: what a backend may read as another path, which a pattern reads as segments of its own. A DENY on the
+     * segments under `/admin` does not match `//admin/x` or `/admin%2Fx`, and a broad ALLOW then lets through what a
+     * backend that merges slashes or decodes separators serves as `/admin/x`.
+     */
+    @ParameterizedTest
+    @ValueSource(
+        strings = [
+            "//",
+            "//admin/x",
+            "/admin//x",
+            "/a///b",
+            "/a//",
+            "a//b",
+            // Removing path parameters leaves an empty segment.
+            "/;x/admin/x",
+            "/admin/;x/x",
+            "/a;x//b",
+            // A backslash, raw or encoded in either case: a pattern reads it inside a segment, some containers and every
+            // browser as a separator.
+            "/admin\\1",
+            "/admin%5C1",
+            "/admin%5c1",
+            "/a\\",
+            "/\\admin/x",
+            "/a\\\\b",
+            "/a\\/b",
+            "/a%5C/b",
+            "/a%5c%5cb",
+            // An encoded separator, in either case, wherever it is.
+            "/admin%2Fx",
+            "/admin%2fx",
+            "/%2Fadmin/x",
+            "/a/%2F",
+            "/a/b%2F",
+        ]
+    )
+    fun emptySegmentsAndEncodedSeparatorsAreRejected(path: String) {
+        PathNormalizer.normalize(path).assert().isNull()
+    }
+
+    /** PIP-14: a trailing separator is not an empty segment before the end, and a double-encoded one decodes to text. */
+    @ParameterizedTest
+    @CsvSource(
+        delimiter = '|',
+        value = [
+            "/admin/|/admin/",
+            "/a/b/|/a/b/",
+            "/a/;x|/a/",
+            "/a;x/|/a/",
+            "/a.json/|/a.json/",
+            "/a%20b/|/a%20b/",
+            "/|/",
+            "/a%252Fb|/a%252Fb",
+            "/a%255Cb|/a%255Cb",
+        ]
+    )
+    fun aTrailingSeparatorIsKept(path: String, normalized: String) {
+        PathNormalizer.normalize(path).assert().isEqualTo(normalized)
+    }
+
     @ParameterizedTest
     @CsvSource(
         delimiter = '|',
@@ -83,6 +145,26 @@ class PathNormalizerTest {
     )
     fun safePathsLoseOnlyPathParameters(path: String, normalized: String) {
         PathNormalizer.normalize(path).assert().isEqualTo(normalized)
+    }
+
+    /** PIP-15, CTL-3: the one reading of a resource that checks and the control plane share with enforcement. */
+    @OptIn(InternalCoSecApi::class)
+    @Test
+    fun enforceableReadsAResourceAsEnforcementDoes() {
+        val path = Resource("http", "/orders;x/1", mapOf("k" to "v"))
+        val normalized = PathNormalizer.enforceable(path)!!
+        normalized.type.assert().isEqualTo("http")
+        normalized.id.assert().isEqualTo("/orders/1")
+        normalized.attributes.assert().isEqualTo(mapOf("k" to "v"))
+        val plain = Resource("http", "/orders/1", emptyMap())
+        PathNormalizer.enforceable(plain).assert().isSameAs(plain)
+        for (refused in listOf("/public/../admin", "//admin", "/admin%2F1", "/admin\\1", "/" + "a".repeat(257))) {
+            PathNormalizer.enforceable(Resource("http", refused, emptyMap())).assert().describedAs(refused).isNull()
+        }
+        // A typed id is not a path: held to the bounds only, read as written.
+        val typed = Resource("order", "a//b/../c", emptyMap())
+        PathNormalizer.enforceable(typed).assert().isSameAs(typed)
+        PathNormalizer.enforceable(Resource("order", "a".repeat(257), emptyMap())).assert().isNull()
     }
 
     @Test

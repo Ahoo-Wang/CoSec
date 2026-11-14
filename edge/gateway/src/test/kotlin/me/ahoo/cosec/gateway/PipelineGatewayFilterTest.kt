@@ -276,10 +276,20 @@ class PipelineGatewayFilterTest {
         sent(stripping, get("/orders").header(HttpHeaders.COOKIE, "authorization=t")).headers
             .containsHeader(HttpHeaders.COOKIE).assert().isFalse()
         // The rest of the URI stays as it came: escapes, a fragment, and characters no builder would accept unencoded.
-        val raw = sent(stripping, get("/a%2Fb?x=%E4%B8%AD&authorization=t&y=中#frag")).uri
-        raw.rawPath.assert().isEqualTo("/a%2Fb")
+        val raw = sent(stripping, get("/a%20b%3Bc?x=%E4%B8%AD&authorization=t&y=中#frag")).uri
+        raw.rawPath.assert().isEqualTo("/a%20b%3Bc")
         raw.rawQuery.assert().isEqualTo("x=%E4%B8%AD&y=中")
         raw.rawFragment.assert().isEqualTo("frag")
+        // An encoded separator is not an escape a backend may read either way (PIP-14): 400, and nothing is forwarded.
+        val separator = MockServerWebExchange.from(get("/a%2Fb?authorization=t"))
+        separator.attributes[GATEWAY_ROUTE_ATTR] = lb
+        var forwarded = false
+        stripping.filter(separator) {
+            forwarded = true
+            Mono.empty()
+        }.block(Duration.ofSeconds(5))
+        forwarded.assert().isFalse()
+        separator.response.statusCode?.value().assert().isEqualTo(400)
     }
 
     /**

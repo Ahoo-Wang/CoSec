@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "PIP-14"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "Decoding is single: %252F decodes to the text %2F, not to a separator, so the path is decided.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/*"
+            }
+          ]
+        },
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        },
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders%252Fx"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}
