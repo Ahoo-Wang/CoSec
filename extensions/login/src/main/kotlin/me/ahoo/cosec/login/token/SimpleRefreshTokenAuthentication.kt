@@ -16,7 +16,6 @@ package me.ahoo.cosec.login.token
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.LoginCredentials
-import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.TokenVerifier
 

@@ -14,15 +14,15 @@
 package me.ahoo.cosec.jwt
 
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.login.token.DefaultTokenRevoker
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
+import me.ahoo.cosec.login.token.SimpleCompositeToken
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
-import me.ahoo.cosec.login.token.DefaultTokenRevoker
-import me.ahoo.cosec.login.token.SimpleCompositeToken
-import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials

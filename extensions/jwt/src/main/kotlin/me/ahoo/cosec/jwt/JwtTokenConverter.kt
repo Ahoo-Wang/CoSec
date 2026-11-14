@@ -19,12 +19,12 @@ import com.auth0.jwt.JWTCreator
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.login.token.SimpleCompositeToken
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
-import me.ahoo.cosec.login.token.SimpleCompositeToken
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
