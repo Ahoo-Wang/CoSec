@@ -30,6 +30,7 @@ object GuardAllowlist {
             "architecture:OneDecisionPathTest#bridgesWriteOnlyEncodedProblems",
             "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike",
             "spring-boot:WebAdapterParityTest#the three adapters make the same decision event",
+            "spring-boot:RealServerParityTest#every server answers alike",
             "architecture:ScopeConstructionTest#onlyTheResolverConstructsScopes",
             "architecture:ScopeConstructionTest#scopeIsNotADataClass",
             "runtime:PolicyDocumentCodecTest#a scope is never decoded",

@@ -96,6 +96,7 @@
       "pending": null,
       "guards": [
         "spring-boot:WebAdapterParityTest#the three adapters hand on no client identity",
+        "spring-boot:RealServerParityTest#every server answers alike",
         "webflux:PipelineWebFilterTest#aPermitHandsOnNoClientIdentity",
         "webmvc:PipelineServletFilterTest#aPermitHandsOnNoClientIdentity",
         "runtime:IdentityForwardingTest#without an issuer a permit strips the client's identity and forwards none"

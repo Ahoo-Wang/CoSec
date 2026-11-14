@@ -55,6 +55,11 @@ jmh-generator-annprocess = { module = "org.openjdk.jmh:jmh-generator-annprocess"
 archunit-junit5 = { module = "com.tngtech.archunit:archunit-junit5", version.ref = "archunit" }
 blockhound = { module = "io.projectreactor.tools:blockhound", version.ref = "blockhound" }
 json-schema-validator = { module = "com.networknt:json-schema-validator", version.ref = "json-schema-validator" }
+# The real-server parity suite only (PIP-1, PIP-16): Spring Boot's own servers and their customizers, versioned by the
+# Spring Boot BOM above; never on a runtime classpath
+spring-boot-tomcat = { module = "org.springframework.boot:spring-boot-tomcat" }
+spring-boot-jetty = { module = "org.springframework.boot:spring-boot-jetty" }
+spring-boot-reactor-netty = { module = "org.springframework.boot:spring-boot-reactor-netty" }
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }

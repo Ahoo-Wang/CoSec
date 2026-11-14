@@ -11,6 +11,7 @@
         "architecture:OneDecisionPathTest#adaptersNeverSeeDecisions",
         "architecture:OneDecisionPathTest#bridgesWriteOnlyEncodedProblems",
         "spring-boot:WebAdapterParityTest#the three adapters answer byte for byte alike",
+        "spring-boot:RealServerParityTest#every server answers alike",
         "spring-boot:WebAdapterParityTest#the three adapters make the same decision event"
       ]
     },
