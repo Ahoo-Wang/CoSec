@@ -135,8 +135,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - **规则从不生效：** 被拒绝的请求不消耗许可，限流器失败的规则会被跳过（以 `WARN` 记录
   `Rate limiter unavailable: rule [<id>] is skipped.`），除非它是严格的。
 - **在 Redis Cluster 上没有一条规则生效**，且那条 `WARN` 带有 `CROSSSLOT Keys in request don't hash to the same slot`：
-  实例运行的版本的计数器没有 hash tag（8.0.0-alpha.2 及更早），每次调用都失败，带 `strictFailure` 的规则则让每个放行的请求
-  返回 `503`。升级它（[升级](./upgrading.md#from-8-0-0-alpha-2)）。自带 hash tag 的 `cosec.key-prefix`（如 `{cosec}`）
+  实例运行的版本的计数器跨两个 key 且没有 hash tag（8.0.0-alpha.2 及更早），每次调用都失败，带 `strictFailure` 的规则则让每个放行的请求
+  返回 `503`。升级它（[升级](./upgrading.md#from-8-0-0-alpha-2)）：现在一个桶就是一个 key。自带 hash tag 的 `cosec.key-prefix`（如 `{cosec}`）
   会把所有计数器放在同一个 slot 上：能用，但一个节点要为整个部署计数。
 
 ### `unavailable` {#unavailable}

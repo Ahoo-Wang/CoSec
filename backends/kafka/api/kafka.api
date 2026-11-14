@@ -18,8 +18,8 @@ public final class me/ahoo/cosec/kafka/KafkaChangeListener : me/ahoo/cosec/contr
 	public static final field Companion Lme/ahoo/cosec/kafka/KafkaChangeListener$Companion;
 	public static final field DEFAULT_TOPIC Ljava/lang/String;
 	public static final field NAME Ljava/lang/String;
-	public fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;Ljava/lang/String;I)V
-	public synthetic fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;Ljava/lang/String;IILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;Ljava/lang/String;IJILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public synthetic fun <init> (Lorg/springframework/kafka/core/KafkaOperations;Ljava/lang/String;Lme/ahoo/cosec/runtime/event/Delivery;Ljava/lang/String;IJLkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun destroy ()V
 	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
 	public fun getName ()Ljava/lang/String;

@@ -55,10 +55,13 @@ The rest of the cache policy stays the application's, through customizers and `c
 ([Precedence](./configuration.md#precedence) lists every field CoSec locks): on every cache the local cache's size and
 `expireAfterAccess`, and but for the snapshot store `local-max-age`; on every cache but the revocation tables
 `read-timeout`, after which a store of record's read fails closed; on the two revocation tables `absent-ttl`; on
-memberships `ttl` (never forever), `absent-ttl`, `lease-*`, `load-*` and `invalidate-failure`. None
-of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer `local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
+memberships `ttl` (never forever), `absent-ttl`, `degraded-local-max-age`, `lease-*`, `load-*` and `invalidate-failure`.
+None of these replaces what a cache holds, but some lengthen how long an instance acts on what it read. A longer
+`local-max-age` or `absent-ttl` on the revocation tables keeps a revoked token accepted that much longer
 when the revocation's invalidation message is lost (`cosec.authentication.revocation.cache.local-max-age`, 30 seconds, is the
-default bound), and a longer membership `ttl` keeps a removed role applied that long.
+default bound). On memberships, a longer `ttl` keeps a removed role applied that long; so does a longer `local-max-age`
+on an instance that missed the invalidation, and a longer `degraded-local-max-age` for memberships an instance loaded
+while Redis could not store them, which only it holds and no invalidation reaches.
 
 ### Redis keys
 
@@ -86,7 +89,7 @@ contain `:`, so a key names one document only.
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
 | `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
-| `<s>:rate-limiter:{<ruleId>:<bucket>}:<window>` | the Redis rate limiter | a counter of one window of one rule and bucket; expires after two windows. `{...}` is a hash tag: a bucket's two windows share a Redis Cluster slot, so the script that reads both runs on a cluster |
+| `<s>:rate-limiter:<ruleId>:<bucket>` | the Redis rate limiter | a hash of one rule's bucket: the window it counts in and that window's and the previous window's counts; expires two windows after its last count. One key per bucket value: a rule keyed on what a client chooses, with a long window, is memory the client controls ([Rate limiting](../policies/rate-limiting.md#counting-and-backends)) |
 | `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress; expires after 3 minutes |
 
 - When several deployments share one Redis, give each its own `cosec.key-prefix`: with different prefixes they share no
