@@ -140,7 +140,7 @@ class SourceRulesTest {
     }
 
     @Test
-    fun `backends never reach into runtime; into control and document only through what is listed`() {
+    fun `backends never reach into runtime, and into control and document only through what is listed`() {
         violations { project, target ->
             Projects.groupOf(project) == "backends" && listOf(
                 "me.ahoo.cosec.runtime.",
