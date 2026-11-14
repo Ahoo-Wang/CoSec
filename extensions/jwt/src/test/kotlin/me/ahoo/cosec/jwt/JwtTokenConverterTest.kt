@@ -93,6 +93,7 @@ internal class JwtTokenConverterTest {
                 "department" to "ops",
                 "groups" to listOf("a", mapOf("b" to listOf("c"))),
                 "org" to mapOf("unit" to "ops", "teams" to listOf("x")),
+                "site" to mapOf("region" to mapOf("code" to "eu")),
             )
         )
         val attributes = jwtTokenVerifier.verify(jwtTokenConverter.toToken(subject).accessToken).attributes
@@ -111,6 +112,11 @@ internal class JwtTokenConverterTest {
         val org = attributes["org"].mutable<MutableMap<String, Any>>()
         assertThrownBy<UnsupportedOperationException> { org["unit"] = "finance" }
         assertThrownBy<UnsupportedOperationException> { org["teams"].mutable<MutableList<Any>>().add("finance") }
+        assertThrownBy<UnsupportedOperationException> {
+            attributes["site"].mutable<MutableMap<String, Any>>()["region"] = "us"
+        }
+        val region = attributes["site"].mutable<Map<String, Any>>()["region"].mutable<MutableMap<String, Any>>()
+        assertThrownBy<UnsupportedOperationException> { region["code"] = "us" }
     }
 
     /** RC1-25: a token never carries an attribute CoSec sets for another credential, such as `apiKeyId`. */
