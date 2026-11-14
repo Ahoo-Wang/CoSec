@@ -319,6 +319,7 @@ PR-1 的登记表最初是 `conformance/src/test/resources/rules.json`，有 64 
 | R8 包名对齐（✅ #1348） | `me.ahoo.cosec.cache` → `cocache`、`me.ahoo.cosec.servlet` → `webmvc`、`me.ahoo.cosec.spring.boot.starter` → `spring.boot`；165 个文件只移动，46 个变异体补丁改路径，三个 ABI 转储只有改名 | 其余批次之后，ABI 冻结前 |
 | R9 GA 收尾（进行中） | ✅ 删除 `cosec-migrate cocache8`（#1351）；公共声明归类（方案已分诊，六个 PR，决定见 §9）；JWT 验证基准；`guava`；文档守卫词表；`MutationCheckTest` 支持 `git.exe`。打 GA tag 时、由维护者发话：最后一次 v7/v8 门禁后删除工作流，删除升级文档的 alpha 章节；路线图页 | GA tag 前 |
 | R10 结构拆分（维护者 2026-11-14："审查可维护性、扩展性，避免单个类、文件过大"；"守住架构质量"） | 主代码 447 个文件、6.1 万行，其中 12 个文件不少于 600 行：`SnapshotSource.kt` 1,640 行（一个类、96 个函数、31 个字段，六个共享外层状态的 `inner` 类；并发核心）、`FlatEvaluator.kt` 970（为零分配有意保持，需实测能否拆出非内循环部分）、`Changes.kt` 937、`Pipeline.kt` 928、`Converter.kt` 920、`Revisions.kt` 861、`ControlHttp.kt` 774、`ChangeAuthority.kt` 770、`PolicyDocumentCodec.kt` 668、`MigrateMain.kt` 643、`CoSecSnapshotAutoConfiguration.kt` 624、`ControlPlane.kt` 605。做法：先出设计说明（每个类今天的职责、切法、各自拥有的状态、如何证明行为不变、热路径代价），协调者读过后再动；不改行为；并发核心与请求路径各自一个 PR，带 BlockHound、性质测试、JMH A/B 与百万次性质压力；加防回退的守护（`test/architecture` 里按文件行数与类的函数数的只减不增清单，打开 detekt 目前关掉的三条规则） | 公共声明归类之后，RC 门禁之前（门禁要验证的是最终结构） |
+| R11 真实项目演练（维护者 2026-11-14："GA 前使用实际项目演练。关注易用性"） | 在一个真实的下游应用上接入 8.0：只按公开文档（快速开始、集成技能、升级指南）操作，像用户一样走完依赖、配置、策略文档、登录与令牌、控制面，逐条记录卡住的地方（文档缺口、缺失或难用的 API、读不懂的错误信息、名字）。该应用现在用的是 4.x，有自定义条件匹配器和自己的策略管理，所以也检验“没有 7.x 数据的老用户怎么上 8.0”。用 `main` 发布到本地 Maven 仓库的 `8.0.0-SNAPSHOT`，不发版。演练记录留在协调者笔记，不进本仓库；CoSec 一侧的修复照常走 PR | 公共声明归类合入之后、ABI 冻结之前（易用性发现可能改公共 API） |
 
 **未关闭 issue 的分批**（2026-11-08 按摘要分诊，都自述 P2/P3，没有放行类问题；每个修复先复现）：
 
