@@ -24,6 +24,7 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IndexKeys
+import java.util.Collections
 
 /**
  * A statement ready to evaluate (RFC 0005 §6.1). Only [PolicyCompiler] builds one, so every statement in the engine
@@ -75,9 +76,11 @@ class CompiledStatement internal constructor(
      */
     internal val eachPattern: Boolean = captures && resources.size > 1
 
-    val actionPatterns: List<ActionPattern> get() = actions.asList()
+    /** Read-only, made once: the statement is shared by every evaluation (round 2 review L4). */
+    val actionPatterns: List<ActionPattern> = Collections.unmodifiableList(actions.toList())
 
-    val resourcePatterns: List<ResourcePattern> get() = resources.asList()
+    /** Read-only, made once, as [actionPatterns]. */
+    val resourcePatterns: List<ResourcePattern> = Collections.unmodifiableList(resources.toList())
 
     internal fun keyAttribute(index: Int): Attribute = keyAttributes[index]
 
