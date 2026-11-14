@@ -184,6 +184,66 @@
         "cocache:CoCacheRevocationReaderTest#aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails",
         "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens"
       ]
+    },
+    {
+      "id": "IDN-15",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "Only a family's current generation refreshes: a refresh moves the family to its next generation with a conditional write of the record it read, so of two refreshes of one pair at most one issues, on one instance or many, and the pair it was given cannot refresh again.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#only the current generation refreshes",
+        "runtime:TokenFamiliesTest#refreshes of one pair racing issue once",
+        "cocache:CoCacheTokenFamilyStoreTest#refreshes of one pair racing on two instances issue once",
+        "jwt:RefreshTokenFamiliesJwtTest#only the current pair refreshes"
+      ]
+    },
+    {
+      "id": "IDN-16",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "An older generation presented for a refresh revokes the whole family and is refused, so a copied pair used after its owner refreshed ends the session. The pair that was current until less than cosec.jwt.session.rotation-leeway ago is refused without revoking the family: two tabs refreshing the same pair must not log the user out.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#reuse revokes the family",
+        "runtime:TokenFamiliesTest#the pair just refreshed is refused within the leeway without revoking the family"
+      ]
+    },
+    {
+      "id": "IDN-17",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "A family ends cosec.jwt.session.lifetime after its login, however often it was refreshed: a refresh after that is refused and the user signs in again, no pair outlives that end, and a tenant switch, which does not sign the user in again, keeps the login time.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#a family ends at its absolute lifetime",
+        "jwt:RefreshTokenFamiliesJwtTest#a pair never outlives its session",
+        "login:AbstractSwitchTenantAuthenticationTest#the new session keeps the login time of the token switched from"
+      ]
+    },
+    {
+      "id": "IDN-18",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "A logout ends the session: TokenRevoker revokes the family and the access token's id, from the access token while it is valid and from the pair (bound as a refresh requires) once it has expired, so no pair of the family refreshes afterwards, the pairs it was refreshed from included. The family is marked revoked, never deleted, until its end.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#logout ends every pair of the family",
+        "cocache:CoCacheTokenFamilyStoreTest#logout on one instance ends the family on the other",
+        "jwt:RefreshTokenFamiliesJwtTest#logout ends every pair of the session"
+      ]
+    },
+    {
+      "id": "IDN-19",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "A family record that cannot be read, or a write of it that cannot be confirmed, issues nothing: the refresh fails (503), never reads the family as absent or the write as done. A missing record refuses the refresh (401).",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#an unreadable family record issues nothing",
+        "cocache:CoCacheTokenFamilyStoreTest#an unreadable family record issues nothing",
+        "cocache:CoCacheTokenFamilyStoreTest#the family table reads a failure as unknown, and no layer changes that"
+      ]
     }
   ]
 }

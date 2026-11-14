@@ -219,9 +219,11 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         node.only(
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
-            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check", "refresh",
+            "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check", "refresh", "families",
         )
-        node.get("refresh")?.let { return ScenarioRefresh.refreshed(it, revocations(node.get("revocations"))) }
+        node.get("refresh")?.let {
+            return ScenarioRefresh.refreshed(it, revocations(node.get("revocations")), node.get("families"))
+        }
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")

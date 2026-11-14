@@ -10,6 +10,14 @@ public final class me/ahoo/cosec/cache/CoCacheMembershipProvider$Companion {
 	public final fun getDEFAULT_FILL_TIMEOUT-UwyO8pc ()J
 }
 
+public final class me/ahoo/cosec/cache/CoCacheTokenFamilyStore : me/ahoo/cosec/spi/token/TokenFamilyStore {
+	public fun <init> (Lme/ahoo/cocache/api/Store;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cocache/api/Store;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun create (Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun read (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun replace (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenFamily;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
 public final class me/ahoo/cosec/cache/CoCacheTokenStore : me/ahoo/cosec/spi/token/TokenStore {
 	public fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;)V
 	public fun <init> (Lme/ahoo/cosec/cache/RevokedTokenCache;Lme/ahoo/cosec/cache/RevokedSubjectCache;)V

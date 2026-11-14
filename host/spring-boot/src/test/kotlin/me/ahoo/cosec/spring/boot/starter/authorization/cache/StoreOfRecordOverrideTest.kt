@@ -90,9 +90,14 @@ class StoreOfRecordOverrideTest {
     fun aCustomizerCannotWeakenTheStoreOfRecord() {
         contextRunner.withBean(CacheSpecCustomizer::class.java, { weakening }).run { context ->
             assertThat(context).hasFailed()
-            // Whichever of CoSec's caches is created first refuses it: the snapshot store or a revocation table.
-            val locked =
-                setOf(snapshot, CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME)
+            // Whichever of CoSec's caches is created first refuses it: the snapshot store, a revocation table or the
+            // token families.
+            val locked = setOf(
+                snapshot,
+                CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME,
+                CoSecCacheSpecs.TOKEN_FAMILY_CACHE_NAME,
+            )
             generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
                 .any { message -> locked.any { it in message } && CoSecCacheSpecs.LOCKED_BY in message }.assert().isTrue()
         }

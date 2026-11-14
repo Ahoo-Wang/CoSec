@@ -20,7 +20,9 @@ import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenRevokedException
@@ -35,6 +37,12 @@ import java.time.Instant
 class SimpleRefreshTokenAuthenticationTest {
     var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private var jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
+    private val families = TokenFamilies(InMemoryTokenFamilyStore())
+
+    /** A pair as a login issues it: in a session of its own. */
+    private fun issue(subject: TokenSubject): CompositeToken = jwtTokenConverter.toToken(
+        subject.inSession(runBlocking { families.start(TenantId(subject.tenant ?: "(0)"), PrincipalId(subject.id)) })
+    )
 
     private fun credentials(access: CompositeToken, refresh: CompositeToken = access) = object : RefreshTokenCredentials {
         override val accessToken: String
@@ -47,10 +55,11 @@ class SimpleRefreshTokenAuthenticationTest {
     fun authenticate(): Unit = runBlocking {
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(
             jwtTokenVerifier,
-            TokenRevocation(RevocationReader.NONE)
+            TokenRevocation(RevocationReader.NONE),
+            families,
         )
         refreshTokenAuthentication.supportCredentials.assert().isEqualTo(RefreshTokenCredentials::class.java)
-        val oldToken: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", null))
+        val oldToken: CompositeToken = issue(TokenSubject("alice", null))
 
         val subject = refreshTokenAuthentication.authenticate(credentials(oldToken))
         subject.id.assert().isEqualTo(TokenSubject("alice", null).id)
@@ -59,9 +68,10 @@ class SimpleRefreshTokenAuthenticationTest {
 
     @Test
     fun `a refresh token of another token is refused`(): Unit = runBlocking {
-        val authentication = SimpleRefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE))
-        val alice = jwtTokenConverter.toToken(TokenSubject("alice", null))
-        val bob = jwtTokenConverter.toToken(TokenSubject("bob", null))
+        val authentication =
+            SimpleRefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families)
+        val alice = issue(TokenSubject("alice", null))
+        val bob = issue(TokenSubject("bob", null))
 
         assertThrows<TokenVerificationException> { authentication.authenticate(credentials(alice, bob)) }
     }
@@ -79,7 +89,7 @@ class SimpleRefreshTokenAuthenticationTest {
                 return jwtTokenVerifier.refresh(token)
             }
         }
-        val old = jwtTokenConverter.toToken(TokenSubject("alice", null))
+        val old = issue(TokenSubject("alice", null))
         val revoked = Jwts.decode(old.accessToken).id
         val revocations = object : RevocationReader {
             override suspend fun isRevoked(tokenId: String): Boolean = tokenId == revoked
@@ -88,7 +98,11 @@ class SimpleRefreshTokenAuthenticationTest {
         }
 
         assertThrows<TokenRevokedException> {
-            SimpleRefreshTokenAuthentication(verifier, TokenRevocation(revocations)).authenticate(credentials(old))
+            SimpleRefreshTokenAuthentication(
+                verifier,
+                TokenRevocation(revocations),
+                families
+            ).authenticate(credentials(old))
         }
         verifying.assert().isSameAs(Thread.currentThread())
     }
@@ -105,12 +119,13 @@ class SimpleRefreshTokenAuthenticationTest {
             override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? =
                 throw RevocationUnavailableException("down")
         }
-        val old = jwtTokenConverter.toToken(TokenSubject("alice", null))
+        val old = issue(TokenSubject("alice", null))
 
         assertThrows<RevocationUnavailableException> {
             SimpleRefreshTokenAuthentication(
                 jwtTokenVerifier,
-                TokenRevocation(unavailable)
+                TokenRevocation(unavailable),
+                families,
             ).authenticate(credentials(old))
         }
     }

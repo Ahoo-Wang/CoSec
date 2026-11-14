@@ -1,0 +1,46 @@
+{
+  "rules": [
+    "IDN-15"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The near miss: alice's family is at generation 2 and she presents her pair of generation 2: it is the current one, and refreshes.",
+  "refresh": {
+    "access": {
+      "jti": "a2",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 2
+      }
+    },
+    "refresh": {
+      "jti": "r2",
+      "sub": "a2",
+      "iat": 1793404800,
+      "claims": {
+        "cosec.token": "refresh",
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 2
+      }
+    }
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 2,
+      "rotatedAt": "2026-10-31T12:00:00Z"
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

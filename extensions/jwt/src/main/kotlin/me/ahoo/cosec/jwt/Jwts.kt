@@ -15,10 +15,13 @@ package me.ahoo.cosec.jwt
 import com.auth0.jwt.JWT
 import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.interfaces.DecodedJWT
+import me.ahoo.cosec.login.token.RefreshTokenMismatchException
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
+import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.VerifiedToken
+import java.time.Instant
 
 /**
  * What [JwtTokenVerifier] needs to read a token: decoding, which reads a token without checking its signature, and
@@ -37,6 +40,11 @@ internal object Jwts {
      */
     const val TOKEN_USE_CLAIM = "cosec.token"
     const val REFRESH_TOKEN = "refresh"
+
+    /** The session a pair belongs to (RFC 0009): OpenID Connect's `sid` and `auth_time`, and CoSec's generation. */
+    const val SESSION_CLAIM = "sid"
+    const val AUTH_TIME_CLAIM = "auth_time"
+    const val GENERATION_CLAIM = "cosec.generation"
     private val jwtParser = JWT()
 
     fun String.removeBearerPrefix(): String =
@@ -77,7 +85,28 @@ internal object Jwts {
             issuedAt = decodedAccessToken.issuedAtAsInstant,
             expiresAt = decodedAccessToken.expiresAtAsInstant,
             membershipMarker = membershipMarkerOf(decodedAccessToken),
+            session = sessionOf(decodedAccessToken),
         )
+    }
+
+    /**
+     * The session of [decoded] (`sid`, `auth_time`, `cosec.generation`), null when it carries none of the three. Some but
+     * not all, or one of the wrong type, is an invalid token: read as no session, it would only fail later.
+     */
+    fun sessionOf(decoded: DecodedJWT): TokenSession? {
+        val id = decoded.getClaim(SESSION_CLAIM)
+        val authTime = decoded.getClaim(AUTH_TIME_CLAIM)
+        val generation = decoded.getClaim(GENERATION_CLAIM)
+        if (id.isMissing && authTime.isMissing && generation.isMissing) {
+            return null
+        }
+        val sessionId = id.asString()
+        val loggedIn = authTime.asLong()
+        val number = generation.asLong()
+        if (sessionId == null || loggedIn == null || number == null) {
+            throw TokenVerificationException("The token's session claims are incomplete or malformed.")
+        }
+        return TokenSession(sessionId, Instant.ofEpochSecond(loggedIn), number)
     }
 
     /**
@@ -92,6 +121,13 @@ internal object Jwts {
         }
         if (decodedRefreshToken.issuedAtAsInstant == null) {
             throw TokenVerificationException("The refresh token has no iat.")
+        }
+    }
+
+    /** Both tokens of a pair carry the same session (RFC 0009): a refresh token of another session is not this pair's. */
+    fun requireSameSession(decodedRefreshToken: DecodedJWT, decodedAccessToken: DecodedJWT) {
+        if (sessionOf(decodedRefreshToken) != sessionOf(decodedAccessToken)) {
+            throw RefreshTokenMismatchException()
         }
     }
 

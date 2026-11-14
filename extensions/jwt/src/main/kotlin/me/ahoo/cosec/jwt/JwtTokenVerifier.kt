@@ -74,6 +74,7 @@ class JwtTokenVerifier(
         }
         verifyAccessTokenSignature(decodedAccessToken)
         Jwts.requireRefreshToken(decodedRefreshToken)
+        Jwts.requireSameSession(decodedRefreshToken, decodedAccessToken)
         // The converter issues the pair together: the refresh token's `sub` is the access token's `jti`, and both carry
         // the same `iat`.
         if (decodedRefreshToken.subject != decodedAccessToken.id ||
