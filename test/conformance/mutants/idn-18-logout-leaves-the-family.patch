@@ -1,0 +1,16 @@
+# Rule: IDN-18
+# Mutant: a logout revokes the access token only, so the pair it was refreshed from, or itself, refreshes again
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+index d38f7bef..88e7c749 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+@@ -141,6 +141,7 @@ class TokenFamilies @JvmOverloads constructor(
+      * The family is marked, not deleted, so it is told apart from one that expired until its end.
+      */
+     suspend fun end(id: String) {
++        if (id.isNotEmpty()) return
+         repeat(MAX_ATTEMPTS) {
+             val read = store.read(id) ?: return
+             if (read.family.revoked || revoke(read)) {

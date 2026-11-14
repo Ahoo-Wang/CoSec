@@ -17,10 +17,13 @@ package me.ahoo.cosec.spring.boot.starter.jwt
 
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cache.CoCacheTokenFamilyStore
 import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.CoSecCacheSpecs
 import me.ahoo.cosec.cache.RevokedSubjectCache
 import me.ahoo.cosec.cache.RevokedTokenCache
+import me.ahoo.cosec.cache.createLocked
+import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.CoSecProperties
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
@@ -58,6 +61,12 @@ internal class CoSecTokenRevocationCacheAutoConfiguration(
         const val REVOKED_TOKEN_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME
         const val REVOKED_SUBJECT_CACHE_BEAN_NAME = CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
     }
+
+    /** The refresh token families (RFC 0009), one Redis key per live session. */
+    @Bean
+    @ConditionalOnMissingBean
+    fun coCacheTokenFamilyStore(factory: CoCacheFactory): TokenFamilyStore =
+        CoCacheTokenFamilyStore(factory.createLocked(CoSecCacheSpecs.tokenFamily(cosecProperties.keyPrefix)))
 
     @Bean
     @ConditionalOnMissingBean

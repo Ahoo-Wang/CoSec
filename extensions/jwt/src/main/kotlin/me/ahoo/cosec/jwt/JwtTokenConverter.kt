@@ -81,7 +81,8 @@ class JwtTokenConverter(
         checkIssuable(subject)
         val accessTokenId = idGenerator.generate()
         val now = Date()
-        val accessTokenExp = Date(System.currentTimeMillis() + accessTokenValidity.toMillis())
+        // No token of the pair outlives its session (RFC 0009): the end of the family's absolute lifetime.
+        val accessTokenExp = capped(Date(System.currentTimeMillis() + accessTokenValidity.toMillis()), subject)
         val accessTokenBuilder =
             JWT
                 .create()
@@ -91,14 +92,15 @@ class JwtTokenConverter(
                 .withExpiresAt(accessTokenExp)
         subject.app?.let { accessTokenBuilder.withAudience(it) }
         writeMemberships(accessTokenBuilder, subject)
+        writeSession(accessTokenBuilder, subject)
         if (subject.attributes.isNotEmpty()) {
             accessTokenBuilder.withClaim(MembershipClaims.ATTRIBUTES_KEY, subject.attributes)
         }
         subject.tenant?.let { accessTokenBuilder.withClaim(MembershipClaims.TENANT_KEY, it) }
         val accessToken = accessTokenBuilder.sign(algorithm)
         val refreshTokenId = idGenerator.generate()
-        val refreshTokenExp = Date(System.currentTimeMillis() + refreshTokenValidity.toMillis())
-        val refreshToken =
+        val refreshTokenExp = capped(Date(System.currentTimeMillis() + refreshTokenValidity.toMillis()), subject)
+        val refreshTokenBuilder =
             JWT
                 .create()
                 .withJWTId(refreshTokenId)
@@ -106,7 +108,8 @@ class JwtTokenConverter(
                 .withIssuedAt(now)
                 .withExpiresAt(refreshTokenExp)
                 .withClaim(Jwts.TOKEN_USE_CLAIM, Jwts.REFRESH_TOKEN)
-                .sign(algorithm)
+        writeSession(refreshTokenBuilder, subject)
+        val refreshToken = refreshTokenBuilder.sign(algorithm)
         return SimpleCompositeToken(accessToken, refreshToken)
     }
 
@@ -160,6 +163,22 @@ class JwtTokenConverter(
         if (subject.roles.isNotEmpty()) {
             accessTokenBuilder.withClaim(MembershipClaims.ROLES_KEY, subject.roles.toList())
         }
+    }
+
+    /**
+     * The session's claims, on both tokens of the pair: `sid`, `auth_time` (seconds) and `cosec.generation`. A subject
+     * without a session gets none, and its pair is never refreshed.
+     */
+    private fun writeSession(builder: JWTCreator.Builder, subject: TokenSubject) {
+        val session = subject.session ?: return
+        builder.withClaim(Jwts.SESSION_CLAIM, session.id)
+            .withClaim(Jwts.AUTH_TIME_CLAIM, session.authTime.epochSecond)
+            .withClaim(Jwts.GENERATION_CLAIM, session.generation)
+    }
+
+    private fun capped(expiresAt: Date, subject: TokenSubject): Date {
+        val notAfter = subject.notAfter?.let(Date::from) ?: return expiresAt
+        return if (notAfter.before(expiresAt)) notAfter else expiresAt
     }
 
     /** Whether every string the token would carry of [subject] holds no unpaired surrogate. */

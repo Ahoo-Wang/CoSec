@@ -18,15 +18,24 @@ import me.ahoo.cosec.api.context.ForwardedIdentity
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.token.TokenSession
+import me.ahoo.cosec.spi.token.TokenVerificationException
+import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.time.Instant
 
 /** The documented extension point for switching tenants (`wiki/integration/authentication.md`). */
 class AbstractSwitchTenantAuthenticationTest {
     /** Lets a principal into the tenants it is a member of, with what it holds there, and nowhere else. */
-    private class Switching(private val members: Map<String, TenantMembership>) : AbstractSwitchTenantAuthentication() {
+    private class Switching(
+        private val members: Map<String, TenantMembership>,
+        verifier: TokenVerifier = Tokens,
+    ) : AbstractSwitchTenantAuthentication(verifier) {
         override suspend fun switchTenant(
             targetTenantId: String,
             previous: SecurityContext
@@ -38,7 +47,22 @@ class AbstractSwitchTenantAuthenticationTest {
     private class Credentials(
         override val targetTenantId: String,
         override val context: SecurityContext,
+        override val accessToken: String = "alice-in-acme",
     ) : SwitchTenantCredentials
+
+    /** The tokens the switch is presented with, by their text. */
+    private object Tokens : TokenVerifier {
+        val signedIn: Instant = Instant.parse("2026-11-01T08:00:00Z")
+
+        override fun verify(accessToken: String): VerifiedToken = when (accessToken) {
+            "alice-in-acme" -> VerifiedToken("t1", "alice", "acme", null, session = TokenSession("s1", signedIn, 3))
+            "bob-in-acme" -> VerifiedToken("t2", "bob", "acme", null, session = TokenSession("s2", signedIn, 1))
+            "alice-without-session" -> VerifiedToken("t3", "alice", "acme", null)
+            else -> throw TokenVerificationException("unknown token")
+        }
+
+        override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
+    }
 
     /** An administrator of the tenant it switches from, with a policy and an attribute of that tenant. */
     private fun context(app: String = "", authenticated: Boolean = true) = object : SecurityContext {
@@ -93,6 +117,23 @@ class AbstractSwitchTenantAuthenticationTest {
         val member = Switching(mapOf("globex" to TenantMembership()))
         member.authenticate(Credentials("globex", context(app = "order"))).app.assert().isEqualTo("order")
         member.authenticate(Credentials("globex", context())).app.assert().isNull()
+    }
+
+    /**
+     * RFC 0009: the user did not sign in again, so the new session keeps the login time of the one switched from, and
+     * ends when it would. The token presented is verified, and must be the request's principal's.
+     */
+    @Test
+    fun `the new session keeps the login time of the token switched from`() = runTest {
+        val member = Switching(mapOf("globex" to TenantMembership()))
+        val subject = member.authenticate(Credentials("globex", alice))
+        subject.authTime.assert().isEqualTo(Tokens.signedIn)
+        subject.session.assert().isNull()
+        assertThrows<TokenVerificationException> { member.authenticate(Credentials("globex", alice, "bob-in-acme")) }
+        assertThrows<TokenVerificationException> {
+            member.authenticate(Credentials("globex", alice, "alice-without-session"))
+        }
+        assertThrows<TokenVerificationException> { member.authenticate(Credentials("globex", alice, "forged")) }
     }
 
     @Test

@@ -344,15 +344,17 @@ public final class me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties : me/ahoo
 	public static final field Companion Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Companion;
 	public static final field PREFIX Ljava/lang/String;
 	public fun <init> ()V
-	public fun <init> (ZLme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;Ljava/lang/String;Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$TokenValidity;)V
-	public synthetic fun <init> (ZLme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;Ljava/lang/String;Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$TokenValidity;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (ZLme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;Ljava/lang/String;Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$TokenValidity;Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Session;)V
+	public synthetic fun <init> (ZLme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;Ljava/lang/String;Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$TokenValidity;Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Session;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun getAlgorithm ()Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;
 	public fun getEnabled ()Z
 	public final fun getSecret ()Ljava/lang/String;
+	public final fun getSession ()Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Session;
 	public final fun getTokenValidity ()Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$TokenValidity;
 	public final fun setAlgorithm (Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm;)V
 	public fun setEnabled (Z)V
 	public final fun setSecret (Ljava/lang/String;)V
+	public final fun setSession (Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Session;)V
 	public final fun setTokenValidity (Lme/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$TokenValidity;)V
 }
 
@@ -367,6 +369,16 @@ public final class me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Algorithm
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Companion {
+}
+
+public final class me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$Session {
+	public fun <init> ()V
+	public fun <init> (Ljava/time/Duration;Ljava/time/Duration;)V
+	public synthetic fun <init> (Ljava/time/Duration;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun getLifetime ()Ljava/time/Duration;
+	public final fun getRotationLeeway ()Ljava/time/Duration;
+	public final fun setLifetime (Ljava/time/Duration;)V
+	public final fun setRotationLeeway (Ljava/time/Duration;)V
 }
 
 public final class me/ahoo/cosec/spring/boot/starter/jwt/JwtProperties$TokenValidity {

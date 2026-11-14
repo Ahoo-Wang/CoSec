@@ -203,10 +203,12 @@ How windows work: [Testing changes](../policies/testing.md).
 | `cosec.jwt.secret` | string | none | **Required** while JWT is enabled; startup fails when it is blank or shorter than the algorithm needs: 32 bytes (UTF-8) for `hmac256`, 48 for `hmac384`, 64 for `hmac512` (RFC 7518 §3.2). Use a long random value from a secret store. |
 | `cosec.jwt.algorithm` | `hmac256`, `hmac384`, `hmac512` | `hmac256` | Signing algorithm. Issuers and verifiers must agree. |
 | `cosec.jwt.token-validity.access` | duration | `10m` | Access token lifetime. |
-| `cosec.jwt.token-validity.refresh` | duration | `7d` | Refresh token lifetime; a revocation is kept in Redis this long, plus one second. |
+| `cosec.jwt.token-validity.refresh` | duration | `7d` | Refresh token lifetime; a revocation is kept in Redis this long, plus one second. A refresh token never outlives its session. |
+| `cosec.jwt.session.lifetime` | duration | `30d` | How long a session lasts from its login, however often it is refreshed ([Sessions](../integration/authentication.md#sessions)); then the user signs in again. The latest a changed role carried in the token applies. |
+| `cosec.jwt.session.rotation-leeway` | duration | `30s` | How long after a refresh the pair it replaced is answered with a pair of the current generation instead of ending the session: the window a client has to retry a refresh whose response it lost, and in which two tabs refreshing at once both keep a pair. Cover your clients' timeout and one retry. A copy answered within it is caught at the next refresh after it. |
 
-With JWT enabled, startup fails unless revocations can be recorded and read: `cosec-cocache`, or a `TokenStore` and a
-`RevocationReader` bean of your own.
+With JWT enabled, startup fails unless revocations and sessions can be recorded and read: `cosec-cocache`, or a
+`TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own.
 
 ## API keys
 
@@ -380,6 +382,7 @@ constrained (step 7), so even `unlock` cannot change them:
 | `PolicySnapshotCache` and the control plane's and shadow window's stores of record (`RevisionRecordCache`, `RevisionIndexCache`, `ReferenceIndexCache`, `ControlLeaseCache`, `ControlListCache`, `ControlAppListCache`, `ChangeRequestCache`, `StageCache`, `CandidateCache`) | `ttl`, `unknown-read`; the snapshot store also `local-max-age` | `ttl` never expires, `unknown-read: throw` | Redis is the store of record ([Storage](./storage.md#redis-is-the-store-of-record)): an expiry or a failed read taken for "absent" would silently drop a document, and with it its DENY statements. As CoCache `Store`s, they never reclaim content they cannot read, and a failed delete throws instead of being retried later, when it could delete a newer write. |
 | `ShadowReportCache`, `ShadowReporterCache`, `InstanceStatusCache`, `InstanceIndexCache` | `unknown-read`, `ttl` | `unknown-read: throw`; `ttl` the declared 8 days (reports, reporters) or 2 minutes (statuses; the list of instances keeps the 8 days) | An outage must not read as "no samples" or "no instance", and an instance's samples must not expire from a window it reported in. |
 | `MembershipCache` | `read-failure`, `unknown-read` | `ttl` finite (one minute when `forever`), `ttl-jitter: 0s`, `read-failure` and `unknown-read: throw` | A failed read must never become "no memberships", and a lost invalidation must expire. |
+| `TokenFamilyCache` | `unknown-read` | `unknown-read: throw` | A session that cannot be read refuses a refresh (`503`), never reads as absent. Each entry carries its session's remaining lifetime, written with it. |
 | `RevokedTokenCache`, `RevokedSubjectCache` | `read-timeout`, `unknown-read` | `read-timeout`: the store's command timeout; `unknown-read: throw` | As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. A failed read is unknown, never "not revoked": absent would let a refresh issue a token on a read that failed (`IDN-14`). A read that times out is unavailable, which the pipeline's verification accepts, so no layer, `cocache.defaults.store.read-timeout` included, may time it out sooner. Whether verification accepts it is `cosec.authentication.revocation.fail-closed`. |
 | every CoSec cache | key prefix, namespace, key encoder, codec, key filter, `ttl` function, data source | — | The storage layout is CoSec's, where every instance and the control plane look for it. |
 

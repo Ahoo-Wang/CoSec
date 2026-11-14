@@ -13,6 +13,7 @@
 package me.ahoo.cosec.spring.boot.starter.jwt
 
 import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.spring.boot.starter.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
@@ -30,6 +31,7 @@ class JwtProperties(
     @DefaultValue("hmac256") var algorithm: Algorithm = Algorithm.HMAC256,
     @DefaultValue("") var secret: String = "",
     @NestedConfigurationProperty var tokenValidity: TokenValidity = TokenValidity(),
+    @NestedConfigurationProperty var session: Session = Session(),
 ) : EnabledCapable {
     companion object {
         const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
@@ -38,6 +40,17 @@ class JwtProperties(
     class TokenValidity(
         var access: Duration = Duration.ofMinutes(10),
         var refresh: Duration = Duration.ofDays(7)
+    )
+
+    /** `cosec.jwt.session.*`: the refresh token families (RFC 0009). */
+    class Session(
+        /** How long a session lasts from its login, however often it is refreshed; then the user signs in again. */
+        var lifetime: Duration = TokenFamilies.DEFAULT_LIFETIME,
+        /**
+         * How long after a refresh the pair it replaced is answered at the current generation: the window a client has to
+         * retry a refresh whose response it lost.
+         */
+        var rotationLeeway: Duration = TokenFamilies.DEFAULT_LEEWAY,
     )
 
     /**

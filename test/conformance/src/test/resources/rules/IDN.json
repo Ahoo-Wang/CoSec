@@ -187,6 +187,67 @@
       ]
     },
     {
+      "id": "IDN-15",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "Only a family's current generation moves it: a refresh of the current generation moves the family to its next generation with a conditional write of the record it read, so of concurrent refreshes of one pair exactly one moves it, on one instance or many. A refresh of any other generation never moves it.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#only the current generation refreshes",
+        "runtime:TokenFamiliesTest#refreshes of one pair racing move the family once",
+        "cocache:CoCacheTokenFamilyStoreTest#refreshes of one pair racing on two instances move the family once",
+        "jwt:RefreshTokenFamiliesJwtTest#a retried refresh heals, and only the current pair moves the session on"
+      ]
+    },
+    {
+      "id": "IDN-16",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "The generation the family just replaced, presented within cosec.jwt.session.rotation-leeway of the move, is answered with a pair of the current generation and moves nothing: a refresh whose response was lost can be retried, and two tabs refreshing one pair both keep a usable pair. The window opens at the move and does not slide. Any older generation, or the one just replaced after the leeway, revokes the whole family and is refused, so a copied pair, even one answered within the leeway, is caught at the next refresh after it.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#reuse revokes the family",
+        "runtime:TokenFamiliesTest#the pair just replaced is answered at the current generation within the leeway",
+        "runtime:TokenFamiliesTest#a copy answered within the leeway is caught at the next refresh"
+      ]
+    },
+    {
+      "id": "IDN-17",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "A family ends cosec.jwt.session.lifetime after its login, however often it was refreshed: a refresh after that is refused and the user signs in again, no pair outlives that end, and a tenant switch, which does not sign the user in again, keeps the login time.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#a family ends at its absolute lifetime",
+        "jwt:RefreshTokenFamiliesJwtTest#a pair never outlives its session",
+        "login:AbstractSwitchTenantAuthenticationTest#the new session keeps the login time of the token switched from"
+      ]
+    },
+    {
+      "id": "IDN-18",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "A logout ends the session: TokenRevoker revokes the family and the access token's id, from the access token while it is valid and from the pair (bound as a refresh requires) once it has expired, so no pair of the family refreshes afterwards, the pairs it was refreshed from included. The family is marked revoked, never deleted, until its end.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#logout ends every pair of the family",
+        "cocache:CoCacheTokenFamilyStoreTest#logout on one instance ends the family on the other",
+        "jwt:RefreshTokenFamiliesJwtTest#logout ends every pair of the session"
+      ]
+    },
+    {
+      "id": "IDN-19",
+      "source": "RFC 0009 (refresh token families, 2026-11-14 revision); round-2 review M2",
+      "statement": "A family record that cannot be read, or a write of it that cannot be confirmed, issues nothing: the refresh fails (503), never reads the family as absent or the write as done. A missing record refuses the refresh (401).",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "runtime:TokenFamiliesTest#an unreadable family record issues nothing",
+        "cocache:CoCacheTokenFamilyStoreTest#an unreadable family record issues nothing",
+        "cocache:CoCacheTokenFamilyStoreTest#the family table reads a failure as unknown, and no layer changes that"
+      ]
+    },
+    {
       "id": "IDN-20",
       "source": "Round-2 review M4 (2026-11-13)",
       "statement": "A social sign-in's callback is accepted only with a state CoSec issued, once, and only from the browser that started the sign-in: the state is taken from the SocialStateStore (removed atomically) before the provider is called, whatever follows, and the browser's binding must hash to the one recorded with the state. A callback whose state is unknown, expired, already used or issued to another browser is refused, and the provider is never called for it.",

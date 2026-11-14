@@ -805,10 +805,11 @@ public final class me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource$Compa
 }
 
 public final class me/ahoo/cosec/runtime/token/DefaultTokenRevoker : me/ahoo/cosec/spi/token/TokenRevoker {
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;)V
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;Ljava/time/Clock;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/time/Duration;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/runtime/token/TokenFamilies;Ljava/time/Duration;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/runtime/token/TokenFamilies;Ljava/time/Duration;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/runtime/token/TokenFamilies;Ljava/time/Duration;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun revoke (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun revoke (Lme/ahoo/cosec/api/token/CompositeToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
@@ -823,6 +824,32 @@ public final class me/ahoo/cosec/runtime/token/SimpleCompositeToken : me/ahoo/co
 	public fun getRefreshToken ()Ljava/lang/String;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/token/TokenFamilies {
+	public static final field Companion Lme/ahoo/cosec/runtime/token/TokenFamilies$Companion;
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenFamilyStore;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenFamilyStore;Ljava/time/Duration;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenFamilyStore;Ljava/time/Duration;Ljava/time/Duration;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenFamilyStore;Ljava/time/Duration;Ljava/time/Duration;Lme/ahoo/cosec/spi/id/IdGenerator;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenFamilyStore;Ljava/time/Duration;Ljava/time/Duration;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenFamilyStore;Ljava/time/Duration;Ljava/time/Duration;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public final fun end (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun getLifetime ()Ljava/time/Duration;
+	public final fun rotate (Lme/ahoo/cosec/spi/token/VerifiedToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public final fun start-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public static synthetic fun start-opWVSHk$default (Lme/ahoo/cosec/runtime/token/TokenFamilies;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/runtime/token/TokenFamilies$Companion {
+	public final fun getDEFAULT_LEEWAY ()Ljava/time/Duration;
+	public final fun getDEFAULT_LIFETIME ()Ljava/time/Duration;
+}
+
+public final class me/ahoo/cosec/runtime/token/TokenFamilies$Issue {
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;)V
+	public final fun getNotAfter ()Ljava/time/Instant;
+	public final fun getSession ()Lme/ahoo/cosec/spi/token/TokenSession;
 }
 
 public final class me/ahoo/cosec/runtime/token/TokenRevocation {

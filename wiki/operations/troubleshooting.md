@@ -112,10 +112,17 @@ The access token's lifetime is over. Refresh it ([Authentication](../integration
 clocks and [`cosec.jwt.token-validity.access`](./configuration.md#jwt). Behind a gateway, the forwarded identity can
 also be too old ([A service behind the gateway refuses requests](#a-service-behind-the-gateway-refuses-requests)).
 
+A refresh refused as `token-expired`: the session's lifetime is over ([`cosec.jwt.session.lifetime`](./configuration.md#jwt),
+30 days from the login). Sign in again.
+
 ### `token-revoked` {#token-revoked}
 
 The token was revoked by logout, or every token of its principal issued before a subject revocation was revoked
-([Authentication](../integration/authentication.md)). Sign in again. A token issued up to
+([Authentication](../integration/authentication.md)). Sign in again. A refresh refused as `token-revoked` also means its
+session ended: by a logout, or because an older pair of the session was presented after a newer one had been issued
+more than `cosec.jwt.session.rotation-leeway` (30 seconds) after it (reuse: a pair was copied, or a client kept an
+old pair or retried later than that). Look for two clients sharing one session's tokens, or a client whose retry
+outlasts the leeway. A token issued up to
 [`cosec.authentication.revocation.skew`](./configuration.md#authentication) (5 seconds) after a subject revocation is
 revoked too, so a sign-in right after one may need a few seconds. A refresh applies the same skew.
 
@@ -559,11 +566,12 @@ the snapshot documents are, then remove the old properties.
 ```text
 JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache or a TokenStore bean, or set cosec.jwt.enabled=false.
 Tokens are verified, but no revocation reader is available: add cosec-cocache or a RevocationReader bean, or set cosec.jwt.enabled=false.
+JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add cosec-cocache or a TokenFamilyStore bean, or set cosec.jwt.enabled=false.
 ```
 
 Token revocation is always on with JWT, and the starter never revokes into nothing. Add `cosec-cocache`, register a
-`TokenStore` and a `RevocationReader` bean of your own, or turn JWT off in a service that neither issues nor verifies
-tokens.
+`TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own, or turn JWT off in a service that neither
+issues nor verifies tokens.
 
 ### Startup fails with a JWT secret error
 

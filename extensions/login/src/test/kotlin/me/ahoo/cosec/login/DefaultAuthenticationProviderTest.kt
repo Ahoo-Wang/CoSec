@@ -16,7 +16,9 @@ package me.ahoo.cosec.login
 import io.mockk.mockk
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions.*
@@ -34,7 +36,8 @@ internal class DefaultAuthenticationProviderTest {
         }
         val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(
             mockk(),
-            TokenRevocation(RevocationReader.NONE)
+            TokenRevocation(RevocationReader.NONE),
+            TokenFamilies(InMemoryTokenFamilyStore()),
         )
         authenticationProvider.register(refreshTokenAuthentication)
         (
@@ -54,7 +57,11 @@ internal class DefaultAuthenticationProviderTest {
     @Test
     fun `a registration stays in its registry`() {
         authenticationProvider.register(
-            SimpleRefreshTokenAuthentication(mockk(), TokenRevocation(RevocationReader.NONE))
+            SimpleRefreshTokenAuthentication(
+                mockk(),
+                TokenRevocation(RevocationReader.NONE),
+                TokenFamilies(InMemoryTokenFamilyStore())
+            )
         )
 
         DefaultAuthenticationProvider()
@@ -65,7 +72,11 @@ internal class DefaultAuthenticationProviderTest {
     /** Round-2 review L3: credentials two registered authentications support are refused, never sent to either. */
     @Test
     fun `credentials more than one authentication supports are refused`() {
-        val refresh = SimpleRefreshTokenAuthentication(mockk(), TokenRevocation(RevocationReader.NONE))
+        val refresh = SimpleRefreshTokenAuthentication(
+            mockk(),
+            TokenRevocation(RevocationReader.NONE),
+            TokenFamilies(InMemoryTokenFamilyStore()),
+        )
         val social = object : Authentication<OtherCredentials> {
             override val supportCredentials: Class<OtherCredentials> = OtherCredentials::class.java
 

@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "IDN-18"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice logs out with her current pair (generation 2); her pair of generation 2, and any other of the session, no longer refreshes.",
+  "refresh": {
+    "logout": {
+      "access": {
+        "jti": "a2",
+        "sub": "alice",
+        "tenantId": "acme",
+        "iat": 1793404800,
+        "claims": {
+          "sid": "f1",
+          "auth_time": 1793404800,
+          "cosec.generation": 2
+        }
+      },
+      "refresh": {
+        "jti": "r2",
+        "sub": "a2",
+        "iat": 1793404800,
+        "claims": {
+          "cosec.token": "refresh",
+          "sid": "f1",
+          "auth_time": 1793404800,
+          "cosec.generation": 2
+        }
+      }
+    },
+    "pairs": [
+      {
+        "access": {
+          "jti": "a2",
+          "sub": "alice",
+          "tenantId": "acme",
+          "iat": 1793404800,
+          "claims": {
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 2
+          }
+        },
+        "refresh": {
+          "jti": "r2",
+          "sub": "a2",
+          "iat": 1793404800,
+          "claims": {
+            "cosec.token": "refresh",
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 2
+          }
+        }
+      }
+    ]
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 2,
+      "rotatedAt": "2026-10-31T12:00:00Z"
+    }
+  ],
+  "expect": {
+    "status": 401,
+    "type": "token-revoked"
+  }
+}

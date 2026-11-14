@@ -15,12 +15,14 @@ package me.ahoo.cosec.spring.boot.starter.jwt
 import io.mockk.mockk
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
+import me.ahoo.cosec.cache.CoCacheTokenFamilyStore
 import me.ahoo.cosec.cache.CoCacheTokenStore
 import me.ahoo.cosec.cache.RevokedSubjectCache
 import me.ahoo.cosec.cache.RevokedTokenCache
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.id.RandomIdGenerator
+import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.test.asserts.assert
@@ -75,6 +77,8 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
                     .hasBean(CoSecTokenRevocationCacheAutoConfiguration.REVOKED_SUBJECT_CACHE_BEAN_NAME)
                 val tokenStore = context.getBean(TokenStore::class.java)
                 tokenStore.assert().isInstanceOf(CoCacheTokenStore::class.java)
+                // The refresh token families (RFC 0009) live in Redis too, under the deployment's prefix.
+                context.getBean(TokenFamilyStore::class.java).assert().isInstanceOf(CoCacheTokenFamilyStore::class.java)
                 // the wired store records subject revocations (RFC 0004 §4.5.3) in Redis
                 val tenant = TenantId("tenant")
                 val principal = PrincipalId(RandomIdGenerator.generate())

@@ -38,6 +38,7 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.runtime.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.TokenFamily
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import java.time.Duration
@@ -65,6 +66,9 @@ object CoSecCacheSpecs {
 
     /** The principals whose tokens were revoked all at once (RFC 0004 §4.5.3). */
     const val REVOKED_SUBJECT_CACHE_NAME = "RevokedSubjectCache"
+
+    /** The refresh token families, one per live session (RFC 0009): read and written on refresh and logout only. */
+    const val TOKEN_FAMILY_CACHE_NAME = "TokenFamilyCache"
 
     /** The memberships a `MembershipLoader` answers for principals whose token asks the provider (RFC 0004 §4.5.2). */
     const val MEMBERSHIP_CACHE_NAME = "MembershipCache"
@@ -152,6 +156,7 @@ object CoSecCacheSpecs {
         REVOKED_TOKEN_CACHE_NAME to "token:revoked",
         // Not under token:revoked, whose keys are token ids.
         REVOKED_SUBJECT_CACHE_NAME to "token:subject:revoked",
+        TOKEN_FAMILY_CACHE_NAME to "token:family",
         POLICY_SNAPSHOT_CACHE_NAME to "snapshot",
         MEMBERSHIP_CACHE_NAME to "membership",
         REVISION_RECORD_CACHE_NAME to "control:revision",
@@ -278,6 +283,13 @@ object CoSecCacheSpecs {
                 constrain(PolicyField.READ_TIMEOUT) { COMMAND_TIMEOUT }
             }
 
+            TOKEN_FAMILY_CACHE_NAME -> {
+                verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
+                // A family that cannot be read is no answer, never "no family" (RFC 0009): refresh and logout fail.
+                lock(PolicyField.UNKNOWN_READ)
+                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
+            }
+
             MEMBERSHIP_CACHE_NAME -> {
                 verify {
                     require(it is CacheSpec<*, *> && it.externallySourced) {
@@ -371,6 +383,22 @@ object CoSecCacheSpecs {
      */
     fun revokedSubject(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Long> =
         revocation(REVOKED_SUBJECT_CACHE_NAME, keyPrefix, jacksonCodec<Long>(CoSecJson.mapper))
+
+    /**
+     * The refresh token families ([CoCacheTokenFamilyStore]): a `Store` read by conditional reads of Redis only, whose
+     * entries each carry the family's remaining lifetime, so a family leaves Redis at its end; a failed read throws
+     * ([locks]).
+     */
+    fun tokenFamily(keyPrefix: String = CoSec.COSEC): StoreSpec<String, TokenFamily> {
+        val layout = layout(keyPrefix, TOKEN_FAMILY_CACHE_NAME)
+        return StoreSpec.builder<String, TokenFamily>(TOKEN_FAMILY_CACHE_NAME)
+            .keyPrefix(layout.keyPrefix)
+            .namespace(layout.namespace)
+            .keyEncoder(KeyEncoder.ofToString())
+            .codec(TokenFamilyCodec)
+            .unknownRead(UnknownReadMode.THROW)
+            .build()
+    }
 
     /**
      * The memberships of principals whose token asks the provider ([CoCacheMembershipProvider]): an externally sourced

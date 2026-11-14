@@ -1,0 +1,74 @@
+{
+  "rules": [
+    "IDN-16"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice's family is at generation 3; a copy of her pair of generation 1 is presented: the family is revoked, so her own current pair of generation 3 is refused next.",
+  "refresh": {
+    "pairs": [
+      {
+        "access": {
+          "jti": "a1",
+          "sub": "alice",
+          "tenantId": "acme",
+          "iat": 1793404800,
+          "claims": {
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 1
+          }
+        },
+        "refresh": {
+          "jti": "r1",
+          "sub": "a1",
+          "iat": 1793404800,
+          "claims": {
+            "cosec.token": "refresh",
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 1
+          }
+        }
+      },
+      {
+        "access": {
+          "jti": "a3",
+          "sub": "alice",
+          "tenantId": "acme",
+          "iat": 1793404800,
+          "claims": {
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 3
+          }
+        },
+        "refresh": {
+          "jti": "r3",
+          "sub": "a3",
+          "iat": 1793404800,
+          "claims": {
+            "cosec.token": "refresh",
+            "sid": "f1",
+            "auth_time": 1793404800,
+            "cosec.generation": 3
+          }
+        }
+      }
+    ]
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 3,
+      "rotatedAt": "2026-10-31T12:00:00Z"
+    }
+  ],
+  "expect": {
+    "status": 401,
+    "type": "token-revoked"
+  }
+}

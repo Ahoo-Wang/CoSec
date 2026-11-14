@@ -18,7 +18,9 @@ import me.ahoo.cosec.cosid.CosIdIdGenerator
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.spi.id.IdGenerator
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenFamilyStore
 import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spring.boot.starter.NoTokenStore
 import me.ahoo.cosec.spring.boot.starter.UnknownProperties
@@ -124,6 +126,7 @@ class CoSecCosIdAutoConfigurationTest {
                 CoSecJwtAutoConfiguration::class.java,
             )
             .withBean(TokenStore::class.java, { NoTokenStore })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withPropertyValues(
                 *cosId,
