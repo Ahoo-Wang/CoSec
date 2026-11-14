@@ -285,17 +285,44 @@ fun currentUser(): Mono<String> =
 val securityContext = exchange.getSecurityContext()
 ```
 
-**Spring MVC**: from the thread-bound holder, or from the servlet request. The filter clears the holder when the
-request completes, so read it on the request thread, not on a thread you started yourself.
+**Spring MVC**: in a handler, declare a `SecurityContext` parameter. The starter registers its resolver
+(`SecurityContextArgumentResolver`), which reads the context from the request, so the parameter is the context of the
+handler's own request in every kind of handler: blocking, `suspend` and async. A nullable parameter is null where CoSec
+did not handle the request. The parameter's type is `SecurityContext` itself: a parameter of a subtype of your own is
+left to your resolver.
+
+```kotlin
+@GetMapping("/orders/{id}")
+suspend fun order(@PathVariable id: String, security: SecurityContext): Order = orders.find(security.tenantId, id)
+```
+
+Elsewhere, read it from the servlet request, or, in blocking code on the request thread, from the thread-bound holder:
 
 ```kotlin
 import me.ahoo.cosec.servlet.SecurityContextHolder
 import me.ahoo.cosec.servlet.ServletRequests.getSecurityContext
 
-val securityContext = SecurityContextHolder.requiredContext
-// or
 val securityContext = httpServletRequest.getSecurityContext()
+// blocking code on the request thread only
+val securityContext = SecurityContextHolder.requiredContext
 ```
+
+The holder is a thread-local, which the filter binds for the request's thread and clears when the request completes.
+A `suspend` handler is not blocking code: Spring runs it on `Dispatchers.Unconfined`, so after a suspension it goes on
+on whatever thread resumed it, which may serve another request (a shared `Mutex`, `Channel` or deferred value, a
+single-flight cache load). So the holder is:
+
+- **restored**, with Micrometer's `io.micrometer:context-propagation` on the classpath and
+  `spring.reactor.context-propagation=auto`: Spring restores it with its other thread-locals on every resumption;
+- **unbound** otherwise, before the handler runs (`PIP-22`): reading it fails at once, before or after any suspension,
+  and the message names the parameter. It stays unbound for whatever runs after the handler on that request's threads:
+  other interceptors' `postHandle` and `afterCompletion`, and filters once the chain returns. One case is left: a `suspend` handler resumed on the thread of a request whose
+  handler is blocking finds **that request's** context there, so code that reads the holder only after such a
+  resumption, and never before a suspension, reads another request's principal.
+
+The startup log says which a host has, in a line that starts `SecurityContextHolder in suspend handlers`. An async
+handler (`Callable`, `DeferredResult`) and a thread of your own find no holder, with the same message. In all of these,
+use the parameter or the request.
 
 The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else
 ([Checks in code](./checks.md)).

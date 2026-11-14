@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.starter.pipeline
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.model.AppId
@@ -23,10 +24,13 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.RequestGate
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.servlet.PipelineServletFilter
+import me.ahoo.cosec.servlet.SecurityContextArgumentResolver
 import me.ahoo.cosec.servlet.ServletXForwardedRemoteIpResolver
+import me.ahoo.cosec.servlet.SuspendingHandlerHolderInterceptor
 import me.ahoo.cosec.spring.boot.starter.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import org.springframework.beans.factory.ObjectProvider
+import org.springframework.beans.factory.SmartInitializingSingleton
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
@@ -37,6 +41,10 @@ import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
+import org.springframework.core.Ordered
+import org.springframework.web.method.support.HandlerMethodArgumentResolver
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
 
 /**
  * The web adapters over the [RequestGate]: the [Pipeline], or a service behind a gateway's `IdentityGate` (RFC 0006 §7.3): they translate the pipeline's outcome and never decide. A
@@ -69,6 +77,40 @@ internal class CoSecPipelineWebAutoConfiguration {
                     hostOf(properties),
                 )
             ).apply { order = SERVLET_FILTER_ORDER }
+
+        /** A handler's `SecurityContext` parameter, read from the request (round 2 M4). */
+        @Bean
+        @ConditionalOnMissingBean(SecurityContextArgumentResolver::class)
+        fun cosecSecurityContextArgumentResolver(): SecurityContextArgumentResolver = SecurityContextArgumentResolver()
+
+        /**
+         * The `SecurityContext` parameter, and the holder unbound in `suspend` handlers where Spring would not restore
+         * it (round 2 M4): last of the interceptors, so the others see it as the filter bound it.
+         */
+        @Bean
+        fun cosecSecurityContextArguments(resolver: SecurityContextArgumentResolver): WebMvcConfigurer =
+            object : WebMvcConfigurer {
+                override fun addArgumentResolvers(resolvers: MutableList<HandlerMethodArgumentResolver>) {
+                    resolvers += resolver
+                }
+
+                override fun addInterceptors(registry: InterceptorRegistry) {
+                    registry.addInterceptor(SuspendingHandlerHolderInterceptor()).order(Ordered.LOWEST_PRECEDENCE)
+                }
+            }
+
+        /** Which of the two this host has, once every singleton (Reactor's hooks included) is set up. */
+        @Bean
+        fun cosecSuspendingHandlerReport(): SmartInitializingSingleton = SmartInitializingSingleton {
+            log.info {
+                if (SuspendingHandlerHolderInterceptor.restored()) {
+                    "SecurityContextHolder in suspend handlers: restored by context propagation on each resumption."
+                } else {
+                    "SecurityContextHolder in suspend handlers: not bound (no context propagation with automatic " +
+                        "Reactor propagation); take SecurityContext as a handler parameter."
+                }
+            }
+        }
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -137,5 +179,7 @@ internal class CoSecPipelineWebAutoConfiguration {
             HostScope(properties.scope.appId?.takeIf { it.isNotBlank() }?.let(::AppId))
     }
 }
+
+private val log = KotlinLogging.logger {}
 
 internal const val GATEWAY_GLOBAL_FILTER = "org.springframework.cloud.gateway.filter.GlobalFilter"

@@ -16,6 +16,15 @@ observability. This page is the single home of migration steps. Release notes fo
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **A handler reads the security context from a `SecurityContext` parameter** (round 2 M4). The starter registers
+  `SecurityContextArgumentResolver`. `SecurityContextHolder` is for blocking code on the request thread: a `suspend`
+  handler that resumes on another request's thread read that request's context from it. With
+  `io.micrometer:context-propagation` and `spring.reactor.context-propagation=auto`, Spring now restores the holder too;
+  without them the holder is unbound in a `suspend` handler, so reading it there throws (`PIP-22`).
+- **Applications only read the security context** (round 2 L5). `SecurityContextHolder.setContext` and `remove`,
+  `ServletRequests.setSecurityContext`, `ServerWebExchanges.setSecurityContext`, and
+  `ReactiveSecurityContexts.setSecurityContext` and `writeSecurityContext` are internal API: only the adapters bind the
+  context. Code that bound a context of its own, which `AuthorizationChecker` already refused, no longer compiles.
 - **The context path is removed segment by segment** (`PIP-20`). On Jetty, which writes the context path canonically
   while the URI keeps the client's form, `/%61pp/orders/1` with the context path `/app` was decided as `/app/orders/1`,
   past every statement on `/orders`; it is now `/orders/1`. A URI that does not start with the context path is `400`.

@@ -242,6 +242,31 @@
         "spring-boot:RealServerContextPathTest#the context path is not decided on, however it is written"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-21",
+      "source": "RFC 0006 §7.3; round-2 review M4",
+      "statement": "On Spring MVC, a handler's `SecurityContext` parameter is the context of the handler's own request, read from the request, in blocking, `suspend` and async handlers alike, wherever the handler resumes. Where Spring restores its thread-locals through Micrometer's context propagation, it restores `SecurityContextHolder` with them.",
+      "level": "build",
+      "guards": [
+        "spring-boot:SuspendingHandlerContextTest#the SecurityContext parameter is the handler's own request's",
+        "spring-boot:SuspendingHandlerContextTest#with automatic context propagation the holder is the handler's own request's",
+        "webmvc:SecurityContextArgumentResolverTest#aContextParameterIsTheRequestsWhateverTheThreadHolds"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-22",
+      "source": "RFC 0006 §7.3; round-2 review M4 (coordinator's decision)",
+      "statement": "On Spring MVC, SecurityContextHolder is unbound before a suspending handler runs unless Spring restores it on every resumption (Micrometer's context propagation with Reactor's automatic propagation), so reading it there fails, naming the SecurityContext parameter, instead of answering another request's context. A blocking handler keeps it. Left, and documented: a suspending handler resumed on the thread of a blocking handler's request finds that request's context.",
+      "level": "build",
+      "guards": [
+        "spring-boot:SuspendingHandlerContextTest#without context propagation the holder fails loudly in a suspend handler",
+        "spring-boot:SuspendingHandlerContextTest#a blocking handler reads the holder",
+        "webmvc:SuspendingHandlerHolderInterceptorTest#aSuspendHandlerFindsTheHolderUnbound",
+        "webmvc:SuspendingHandlerHolderInterceptorTest#underAutomaticContextPropagationASuspendHandlerKeepsTheHolder"
+      ],
+      "pending": null
     }
   ]
 }

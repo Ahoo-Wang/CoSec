@@ -1,0 +1,17 @@
+# Rule: PIP-22
+# Mutant: the holder stays bound in a suspend handler without context propagation: resumed on another request's thread, it answers that request's principal without a sound
+# Tests: :webmvc:test --tests me.ahoo.cosec.servlet.SuspendingHandlerHolderInterceptorTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.starter.realserver.SuspendingHandlerContextTest
+
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/SuspendingHandlerHolderInterceptor.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/SuspendingHandlerHolderInterceptor.kt
+index a467e2ed..0380e8fa 100644
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/SuspendingHandlerHolderInterceptor.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/servlet/SuspendingHandlerHolderInterceptor.kt
+@@ -39,7 +39,7 @@ import reactor.core.publisher.Hooks
+ class SuspendingHandlerHolderInterceptor : HandlerInterceptor {
+     override fun preHandle(request: HttpServletRequest, response: HttpServletResponse, handler: Any): Boolean {
+         if (handler is HandlerMethod && KotlinDetector.isSuspendingFunction(handler.method) && !restored()) {
+-            SecurityContextHolder.remove()
++            Unit
+         }
+         return true
+     }

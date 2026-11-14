@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import reactor.core.publisher.Mono
 import reactor.util.context.Context
@@ -29,13 +30,14 @@ object ReactiveSecurityContexts {
         return getOrEmpty<SecurityContext>(SecurityContext.KEY).orElse(null)
     }
 
+    /** Only the adapter binds it (round 2 L5): applications read it with [getSecurityContext]. */
+    @InternalCoSecApi
     fun Context.setSecurityContext(securityContext: SecurityContext): Context {
         return this.put(SecurityContext.KEY, securityContext)
     }
 
-    /**
-     * Write Security Context.
-     */
+    /** Writes the context into the Reactor context of the chain: the adapter's, never an application's (round 2 L5). */
+    @InternalCoSecApi
     fun <T : Any> Mono<T>.writeSecurityContext(securityContext: SecurityContext): Mono<T> {
         return contextWrite {
             it.setSecurityContext(securityContext)

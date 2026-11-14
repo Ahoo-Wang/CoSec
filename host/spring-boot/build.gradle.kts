@@ -81,4 +81,6 @@ dependencies {
     testImplementation(libs.spring.boot.jetty)
     testImplementation(libs.spring.boot.reactor.netty)
     testImplementation(libs.spring.boot.webmvc)
+    // SuspendingHandlerContextTest: the holder under Spring's context propagation (round 2 M4).
+    testImplementation("io.micrometer:context-propagation")
 }
