@@ -137,7 +137,7 @@ internal class ConditionTranslator(
         in MatcherTranslator.BUILTIN_CONDITION_TYPES -> rejected(
             RejectionKind.CONDITION_NOT_TRANSLATED,
             location,
-            "a [$type] condition has no exact translation (RFC 0005 §7.1)",
+            "a [$type] condition has no exact translation: rewrite it with the conditions of the 8.0 policy language",
         )
 
         else -> rejected(

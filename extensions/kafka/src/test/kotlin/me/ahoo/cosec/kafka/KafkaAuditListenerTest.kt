@@ -60,6 +60,7 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.TraceContext
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -75,6 +76,7 @@ import org.springframework.beans.factory.config.BeanDefinitionCustomizer
 import org.springframework.context.annotation.AnnotationConfigApplicationContext
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.kafka.support.SendResult
+import tools.jackson.databind.node.ObjectNode
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CountDownLatch
@@ -82,6 +84,8 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.Supplier
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
@@ -116,14 +120,19 @@ class KafkaAuditListenerTest {
         listener: KafkaAuditListener,
         decision: Decision = permit,
         requiredTimeout: kotlin.time.Duration = kotlin.time.Duration.parse("1s"),
+        context: CoroutineContext = EmptyCoroutineContext,
     ): Outcome {
         val listeners = DecisionListeners(listOf(listener), requiredTimeout = requiredTimeout)
         opened += listeners
         opened += AutoCloseable { listener.destroy() }
-        return evaluate(listeners, decision)
+        return evaluate(listeners, decision, context)
     }
 
-    private fun evaluate(listeners: DecisionListeners, decision: Decision = permit): Outcome {
+    private fun evaluate(
+        listeners: DecisionListeners,
+        decision: Decision = permit,
+        context: CoroutineContext = EmptyCoroutineContext,
+    ): Outcome {
         val engine = object : FlatEngine {
             override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
                 FlatEvaluation(decision, null)
@@ -146,7 +155,7 @@ class KafkaAuditListenerTest {
             "10.0.0.1",
             HostScope(null)
         )
-        return runBlocking { pipeline.evaluate(facts) }
+        return runBlocking(context) { pipeline.evaluate(facts) }
     }
 
     @Test
@@ -160,6 +169,37 @@ class KafkaAuditListenerTest {
         evaluate(KafkaAuditListener(kafka, "audit", Delivery.REQUIRED)).status.assert().isEqualTo(200)
         key.captured.assert().isEqualTo("""["acme","alice"]""")
         CoSecJson.mapper.readTree(value.captured).get("principal").get("id").asString().assert().isEqualTo("alice")
+    }
+
+    /**
+     * #1404: the tracestate reaches the listener in the event's trace and goes no further: the record's trace is the
+     * trace id and the span id, and the record is what it is without one, but for what differs per request.
+     */
+    @Test
+    fun aTracestateIsNotInTheRecord() {
+        fun valueUnder(trace: TraceContext): ObjectNode {
+            val value = slot<String>()
+            val kafka = mockk<KafkaOperations<String, String>> {
+                every { send("audit", any<String>(), capture(value)) } returns
+                    CompletableFuture.completedFuture(mockk<SendResult<String, String>>())
+            }
+            evaluate(
+                KafkaAuditListener(kafka, "audit", Delivery.REQUIRED),
+                context = trace
+            ).status.assert().isEqualTo(200)
+            return (CoSecJson.mapper.readTree(value.captured) as ObjectNode).also {
+                // What differs between two requests, whatever their trace.
+                it.remove(listOf("eventId", "timestamp"))
+                (it.get("request") as ObjectNode).remove("id")
+                (it.get("authorization") as ObjectNode).remove("elapsedNanos")
+            }
+        }
+        val plain = valueUnder(TraceContext("trace-1", "span-1", true))
+        val withState = valueUnder(TraceContext("trace-1", "span-1", true, "vendor=opaque-value,other=x"))
+
+        withState.assert().isEqualTo(plain)
+        withState.get("trace").toString().assert().isEqualTo("""{"traceId":"trace-1","spanId":"span-1"}""")
+        withState.toString().assert().doesNotContain("opaque-value").doesNotContain("vendor")
     }
 
     @Test

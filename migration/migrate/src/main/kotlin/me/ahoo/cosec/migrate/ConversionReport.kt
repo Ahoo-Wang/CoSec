@@ -32,7 +32,9 @@ enum class RejectionKind(val advice: String) {
     UNDEFINED_PERMISSION("define the permission in the app permission, or remove it from the grant"),
 
     /** A policy or app permission that is not valid 7.x JSON, or names a matcher type no factory is registered for. */
-    UNDECODABLE("fix the stored JSON, or put the jar of the custom matcher factory on the classpath"),
+    UNDECODABLE(
+        "fix the stored JSON, or put the jar of the custom matcher factory on the classpath; data of a version older than 7.x: see the message"
+    ),
 
     /** A policy id starting with a prefix generated ids use (`perm:`, `g:`, `r:`, `cosec:`). */
     RESERVED_POLICY_ID("rename the policy and the attachments that name it"),
@@ -50,22 +52,22 @@ enum class RejectionKind(val advice: String) {
     OWNER_TENANT("set the policy's tenantId, or convert with --partition platform"),
 
     /** A built-in 7.x condition other than `all`: translated into the condition AST by RFC 0005 PR-6. */
-    CONDITION_NOT_TRANSLATED("not translated yet: RFC 0005 PR-6 adds the condition translation"),
+    CONDITION_NOT_TRANSLATED("rewrite the condition as the message says, in the conditions of the 8.0 policy language"),
 
     /** `spel` and `ognl`: no translation exists (RFC 0005 §7.1). */
     EXPRESSION_CONDITION("rewrite the expression as conditions of the 8.0 policy language"),
 
     /** A condition of a custom `ConditionMatcherFactory` (RFC 0008 Q4). */
-    CUSTOM_CONDITION("move the attribute it reads into an AttributeProvider (RFC 0006) and write a condition on it"),
+    CUSTOM_CONDITION("move the attribute it reads into an AttributeProvider and write a condition on it"),
 
     /** A 7.x action this version does not translate: a path template, a `separator` other than `/`, mixed methods. */
-    ACTION_NOT_TRANSLATED("see the message; path templates are translated by RFC 0005 PR-6"),
+    ACTION_NOT_TRANSLATED("see the message: a path template goes in a route map, a mixed action is split by method"),
 
     /** An action of a custom `ActionMatcherFactory` (RFC 0005 §7.2). */
     CUSTOM_ACTION("rewrite it as http paths and methods"),
 
     /** A translated statement does not compile, e.g. a path pattern outside the `HttpPathPattern` subset. */
-    DOES_NOT_COMPILE("see the message; RFC 0005 §5.2 lists the path patterns 8.0 accepts"),
+    DOES_NOT_COMPILE("see the message; the policy language page lists the path patterns 8.0 accepts"),
 }
 
 /** One refused piece of 7.x data, at [location]: a Redis key or an export file, then a JSON path. */
@@ -93,3 +95,9 @@ class ConversionReport(
 ) {
     val accepted: Boolean get() = rejections.isEmpty()
 }
+
+/** What to tell of data that is not in the 7.x format: an older version wrote it, and has its own section. */
+internal const val OLDER_VERSION =
+    "If it was written by a version older than 7.x, see \"From 4.x, 5.x and 6.x\" in the upgrading guide " +
+        "(https://cosec.ahoo.me/operations/upgrading#from-4-x-5-x-and-6-x): what it cannot read there is rewritten, " +
+        "or left out of the export."

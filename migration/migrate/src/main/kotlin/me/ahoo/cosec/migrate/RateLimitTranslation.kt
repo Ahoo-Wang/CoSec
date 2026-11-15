@@ -60,7 +60,7 @@ internal class RateLimitTranslation(
             reject(
                 RejectionKind.UNDECODABLE,
                 entry.location,
-                "rate limit rule [${entry.id}] cannot be decoded by 7.x: ${error.message}"
+                "rate limit rule [${entry.id}] is not in the 7.x format: ${error.message}. $OLDER_VERSION"
             )
             null
         } catch (error: LinkageError) {

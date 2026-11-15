@@ -837,7 +837,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         read()
     } catch (error: Exception) {
         val cause = generateSequence<Throwable>(error) { it.cause }.last()
-        reject(RejectionKind.UNDECODABLE, location, "$what cannot be decoded by 7.x: ${cause.message}")
+        reject(RejectionKind.UNDECODABLE, location, "$what is not in the 7.x format: ${cause.message}. $OLDER_VERSION")
         null
     } catch (error: LinkageError) {
         reject(

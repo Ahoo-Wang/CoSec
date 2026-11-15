@@ -76,6 +76,23 @@ internal class SemanticScan(private val record: (SemanticChange) -> Unit) {
         )
     }
 
+    /**
+     * An ALLOW of every 7.x action: it became `http:*` (`MIG-2`), every HTTP request. A route map takes each route it
+     * maps out of `http:*`: the route is decided as its business action, which this statement does not grant. Recorded at
+     * its action, by [StatementTranslator].
+     */
+    fun everyActionAllowed(location: String) {
+        record(
+            SemanticChange(
+                "C8",
+                location,
+                "ALLOW of every action: now http:* (every HTTP request). Once a route map maps a route, that route is " +
+                    "its business action, which this statement no longer grants: grant it with a policy of its own, or " +
+                    "it is refused (403) from the day the route map is added",
+            ),
+        )
+    }
+
     /** A policy or app condition other than `all`: evaluated only when one of its statements is a candidate. */
     fun policyCondition(condition: JsonNode?, location: String) {
         if (condition == null || condition.isNull || isAll(condition)) {
