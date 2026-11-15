@@ -29,7 +29,6 @@ import kotlin.io.path.isDirectory
 import kotlin.io.path.isRegularFile
 import kotlin.io.path.listDirectoryEntries
 import kotlin.io.path.name
-import kotlin.io.path.readText
 import kotlin.io.path.relativeTo
 
 /**
@@ -167,7 +166,7 @@ class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) 
         private fun documents(directory: Path, subdirectory: String, ids: Map<String, String>): Map<String, JsonNode> {
             val path = directory.resolve(subdirectory)
             if (!path.exists()) return emptyMap()
-            return path.listDirectoryEntries("*.$JSON").sortedBy { it.name }.associate { file ->
+            val owned = path.listDirectoryEntries("*.$JSON").sortedBy { it.name }.map { file ->
                 val relative = "$subdirectory/${file.name}"
                 val name = file.name.removeSuffix(".$JSON")
                 val id = ids[relative] ?: if (BOUNDED_SEPARATOR in name) {
@@ -179,8 +178,17 @@ class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) 
                 } else {
                     URLDecoder.decode(name, Charsets.UTF_8)
                 }
-                id to ScenarioJson.parse(file.readText())
+                Triple(id, relative, ScenarioJson.read(file))
             }
+            // Two files that decode to one id: the later would replace the earlier, and what failed to compile in it
+            // would never be compiled (#1407). Also an alias of a name (`%61cme` and `acme`) or an id the report records.
+            owned.groupBy { it.first }.values.firstOrNull { it.size > 1 }?.let { files ->
+                throw ScenarioFormatException(
+                    "${files.joinToString(" and ") { it.second }} both hold the document of [${files.first().first}]: " +
+                        "keep one, since only one would be compiled",
+                )
+            }
+            return owned.associate { (id, _, document) -> id to document }
         }
     }
 }
