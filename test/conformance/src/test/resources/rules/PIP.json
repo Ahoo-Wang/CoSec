@@ -284,6 +284,20 @@
         "cosid:CosIdIdGeneratorTest#a failing generator falls back to a random id"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-24",
+      "source": "RFC 0013 §4.3; #1383",
+      "statement": "A failed build holds nothing: Pipeline.builder checks everything that can refuse the configuration (options, snapshot options, prewarmed ids, listener settings) before it acquires anything, and a step that throws after that releases what the build acquired, the snapshot source's subscription and executors and the listeners' consumers; the caller sees that step's own exception.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:PipelineBuilderFailureTest#an invalid prewarmed id is refused before the source subscribes",
+        "runtime:PipelineBuilderFailureTest#an invalid snapshot option is refused before anything is acquired",
+        "runtime:PipelineBuilderFailureTest#an invalid listener setting is refused before the source subscribes",
+        "runtime:PipelineBuilderFailureTest#a subscription that fails releases the listeners, and the caller sees its own exception",
+        "runtime:SnapshotSourceConstructionTest#a periodic pass that cannot be scheduled releases the subscription the source took"
+      ]
     }
   ]
 }
