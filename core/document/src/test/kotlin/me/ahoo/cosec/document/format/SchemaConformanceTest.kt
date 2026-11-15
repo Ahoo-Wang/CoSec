@@ -295,6 +295,28 @@ class SchemaConformanceTest {
         }
     }
 
+    /** `auth.capped` is `true` when present (RFC 0009 §4.2): the schema says so as the codec does, never `false`. */
+    @Test
+    fun aCappedCredentialIsTrueOrAbsent() {
+        val file = DocumentFormats.identitySchema
+        val identity = CoSecJson.mapper.readTree(
+            """{"v":1,"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],""" +
+                """"auth":{"method":"api-key","jti":"k1","exp":2},"iat":1,"rid":"r1"}"""
+        )
+        fun withCapped(value: JsonNode?): JsonNode = (identity.deepCopy() as ObjectNode).also {
+            value?.let { capped -> (it.get("auth") as ObjectNode).set("capped", capped) }
+        }
+        val nodes = JsonNodeFactory.instance
+        listOf(null, nodes.booleanNode(true)).forEach {
+            schemaErrors(file, withCapped(it)).assert().describedAs("schema, capped=$it").isEmpty()
+            codecError(file, withCapped(it)).assert().describedAs("codec, capped=$it").isNull()
+        }
+        listOf(nodes.booleanNode(false), nodes.numberNode(1), nodes.stringNode("true")).forEach {
+            schemaErrors(file, withCapped(it)).assert().describedAs("schema, capped=$it").isNotEmpty()
+            codecError(file, withCapped(it)).assert().describedAs("codec, capped=$it").isNotNull()
+        }
+    }
+
     @Test
     fun repositoryDocumentsGetTheSameVerdict() {
         val documents = RepositoryDocuments.find(File(checkNotNull(System.getProperty("cosec.repository.root"))))
