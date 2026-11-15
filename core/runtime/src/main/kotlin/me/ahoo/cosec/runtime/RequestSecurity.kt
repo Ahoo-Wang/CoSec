@@ -17,10 +17,7 @@ package me.ahoo.cosec.runtime
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.context.ForwardedIdentity
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.context.SecurityScope
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.engine.flat.AbsentAttributes
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
@@ -107,30 +104,4 @@ class RequestSecurity internal constructor(
          */
         fun of(context: SecurityContext?): RequestSecurity? = (context as? PipelineSecurityContext)?.security
     }
-}
-
-/** [RequestSecurity] as the `SecurityContext` of `cosec-api`, with [scope] (RFC 0004 X6). */
-internal class PipelineSecurityContext(val security: RequestSecurity) : SecurityContext {
-    override val tenantId: String = security.scope.tenant.value
-
-    override val principal: CoSecPrincipal = object : CoSecPrincipal {
-        override val id: String = security.request.subject.id
-        override val authenticated: Boolean = security.request.subject.authenticated
-        override val attributes: Map<String, Any> = security.principal?.attributes.orEmpty()
-
-        override fun toString(): String = "CoSecPrincipal(id=$id, authenticated=$authenticated)"
-    }
-
-    override val scope: SecurityScope = object : SecurityScope {
-        override val appId: String = security.scope.app.value
-        override val spaceId: String = security.scope.space.value
-        override val roles: List<String> = security.scope.roles.map { it.value }
-
-        override fun toString(): String = "SecurityScope(app=$appId, space=$spaceId, roles=$roles)"
-    }
-
-    override val forwardedIdentity: ForwardedIdentity? =
-        security.identity?.let { ForwardedIdentity(it.requestId, it.credential.id) }
-
-    override fun toString(): String = "PipelineSecurityContext(${security.requestId}, ${principal.id}@$tenantId)"
 }

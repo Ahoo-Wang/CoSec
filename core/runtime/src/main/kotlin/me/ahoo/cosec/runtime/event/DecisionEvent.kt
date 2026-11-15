@@ -19,8 +19,6 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.AttributeStatus
 import me.ahoo.cosec.engine.ViewVersion
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
@@ -31,8 +29,6 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.ProblemType
 import me.ahoo.cosec.spi.authn.AuthnResult
-import kotlin.coroutines.AbstractCoroutineContextElement
-import kotlin.coroutines.CoroutineContext
 
 /**
  * What one request through the pipeline came to (RFC 0006 §9.2): every outcome has one, a 400, an unavailable
@@ -181,27 +177,4 @@ class RequestSummary internal constructor(
      * as `request.attributes.cosec.audit.routeId`); null for other adapters.
      */
     val routeId: String? = null,
-)
-
-/**
- * The trace the request belongs to, as the adapter's bridge captured it (RFC 0006 §7.5): put into the coroutine
- * context by a [BridgeContextContributor], read by the pipeline for events and problem bodies.
- */
-class TraceContext(val traceId: String, val spanId: String, val sampled: Boolean) :
-    AbstractCoroutineContextElement(Key) {
-    companion object Key : CoroutineContext.Key<TraceContext>
-
-    override fun toString(): String = "TraceContext($traceId/$spanId)"
-}
-
-/**
- * What a shadow listener needs to evaluate the request again (RFC 0006 §9.5.4): the request, the view and the external
- * attributes already fetched. It keeps the view reachable, so the pipeline creates one only when a shadow listener
- * sampled the request ([sampledBy]).
- */
-@InternalCoSecApi
-class ReplayHandle internal constructor(
-    internal val request: FlatRequest,
-    internal val view: SnapshotView,
-    internal val sampledBy: Set<String>,
 )

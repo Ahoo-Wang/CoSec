@@ -83,25 +83,3 @@ abstract class XForwardedRemoteIpResolver<R>(
 
     abstract fun extractXForwardedHeaderValues(request: R): List<String>?
 }
-
-/** How a client address is written in CoSec: as the address alone, whatever a proxy or a server added around it. */
-@InternalCoSecApi
-object ClientAddress {
-    /**
-     * [text] trimmed, without a port, brackets or a zone: `192.0.2.1:8080` is `192.0.2.1`, `[2001:db8::1]:443` and
-     * `[2001:db8::1]` are `2001:db8::1`, `fe80::1%en0` is `fe80::1`. Anything else as it is.
-     */
-    fun of(text: String): String {
-        var address = text.trim()
-        if (address.startsWith('[')) {
-            val end = address.indexOf(']')
-            if (end > 0) address = address.substring(1, end)
-        } else if (address.count { it == ':' } == 1) {
-            address = address.substringBefore(':')
-        }
-        if (':' in address) {
-            address = address.substringBefore('%')
-        }
-        return address
-    }
-}
