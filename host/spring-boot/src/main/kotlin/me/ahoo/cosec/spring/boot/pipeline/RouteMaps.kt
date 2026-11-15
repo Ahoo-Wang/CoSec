@@ -22,14 +22,13 @@ import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.document.route.RouteMapCodec
 import org.springframework.core.io.ResourceLoader
 
-// The category the object's messages had in `CoSecPipelineAutoConfiguration.kt`, kept as it was.
-private val log = KotlinLogging.logger("me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfigurationKt")
-
 /**
  * Loads the route maps of a comma-separated list of resource locations, all or nothing, and says what it loaded: which
  * action a request has decides which statements apply to it, so a host's log must show where its routes came from.
  */
 internal object RouteMaps {
+    private val log = KotlinLogging.logger {}
+
     private const val LOCATION_KEY = "${RuntimeAuthorizationProperties.PREFIX}.routes.location"
     private const val DEFAULT_LOCATION = RuntimeAuthorizationProperties.Routes.DEFAULT_LOCATION
 
