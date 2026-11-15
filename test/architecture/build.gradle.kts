@@ -52,6 +52,8 @@ tasks.named<Test>("test") {
         include(
             "settings.gradle.kts", "**/build.gradle.kts", "gradle/libs.versions.toml", ".github/**/*.yml",
             "scripts/ci/**", "codecov.yml", "wiki/architecture/extending.md", "*/*/api/*.api",
+            // The structure guards (RFC 0013 §8.1) read every library project's main sources, cosec-migrate's too.
+            "*/*/src/main/**",
         )
         exclude("**/build/**", "**/node_modules/**")
     })

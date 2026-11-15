@@ -33,6 +33,8 @@ internal class HttpPathPatternParser(private val pattern: String, private val ca
 
     private val variableNames = ArrayList<String>()
 
+    // stays: a grammar; the depth follows its productions
+    @Suppress("NestedBlockDepth")
     fun parse(): Parsed {
         checkLength()
         val elements = ArrayList<PathElement>()
@@ -300,7 +302,8 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
      * so after a mismatch only the last run needs to take one more code point: an earlier run taking more can only
      * leave the tokens after it a later start, which the last run already reaches.
      */
-    @Suppress("ReturnCount")
+    // stays: a grammar; the depth follows its productions
+    @Suppress("NestedBlockDepth", "ReturnCount")
     fun accepts(value: String): Boolean {
         var token = 0
         var position = 0

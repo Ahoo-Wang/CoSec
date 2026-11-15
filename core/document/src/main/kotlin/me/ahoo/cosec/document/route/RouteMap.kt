@@ -73,6 +73,8 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
         return resolved
     }
 
+    // B7: the candidate match extracts into a function of its own
+    @Suppress("NestedBlockDepth")
     private fun resolveExactly(method: String, path: String): RouteResolution {
         val candidates = routes[method] ?: return RouteResolution.Unmapped
         val parsed = try {

@@ -70,6 +70,8 @@ import java.time.Instant
  * Every read is a conditional read without a digest, so it answers from Redis, not from a local copy, and a failed
  * read throws (a `Store`'s conditional read always does). Nothing here blocks the caller: it awaits CoCache's async view.
  */
+// stays: one method per store operation of ControlStore
+@Suppress("TooManyFunctions")
 @ExperimentalCoSecApi
 class CoCacheControlStore internal constructor(
     private val heads: Store<SnapshotKey, SnapshotDocument>,

@@ -104,6 +104,8 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  * binding there is not a break-glass binding, or still grants after the revoke, naming the state of the caller's change
  * (`BRK-11`).
  */
+// B4: the HTTP layer becomes a route table with one handler per route
+@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class ControlHttp(private val plane: ControlPlane) {
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
@@ -607,6 +609,8 @@ class ControlHttp(private val plane: ControlPlane) {
         set("decision", decision(explanation.decision, explanation.trace))
     }
 
+    // B4: the decision view moves to its own writer
+    @Suppress("NestedBlockDepth")
     private fun decision(decision: DecisionView, trace: TraceView?): ObjectNode = factory.objectNode().apply {
         put("decision", decision.decision)
         decision.by?.let { set("by", statement(it)) }

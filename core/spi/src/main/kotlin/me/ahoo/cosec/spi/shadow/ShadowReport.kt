@@ -115,7 +115,6 @@ class ShadowReport(
 
     /** These values with some replaced: for CoSec's own use. */
     @InternalCoSecApi
-    @Suppress("LongParameterList")
     fun copy(
         window: String = this.window,
         instance: String = this.instance,

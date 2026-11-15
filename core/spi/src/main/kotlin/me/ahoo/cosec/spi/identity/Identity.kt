@@ -61,6 +61,7 @@ class Identity(
 
     /** These values with some replaced: for CoSec's own use. */
     @InternalCoSecApi
+    // stays: a copy of the identity takes each of its fields
     @Suppress("LongParameterList")
     fun copy(
         tenant: String = this.tenant,
@@ -107,7 +108,6 @@ class Identity(
 
         /** These values with some replaced: for CoSec's own use. */
         @InternalCoSecApi
-        @Suppress("LongParameterList")
         fun copy(
             method: Method = this.method,
             id: String = this.id,

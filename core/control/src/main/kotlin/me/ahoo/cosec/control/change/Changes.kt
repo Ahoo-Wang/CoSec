@@ -76,6 +76,8 @@ class ChangeRejectedException(
  *   against; [shadowed] closes the window from their reports, and [publish] needs the publisher to acknowledge the
  *   numbers whenever anything changed or the evidence was insufficient.
  */
+// B4: the change flow becomes a transition table
+@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class Changes(
     private val store: ControlStore,
