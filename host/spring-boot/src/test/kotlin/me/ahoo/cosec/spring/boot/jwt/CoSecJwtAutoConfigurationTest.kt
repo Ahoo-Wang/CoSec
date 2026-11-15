@@ -19,7 +19,7 @@ import com.auth0.jwt.JWT
 import com.auth0.jwt.algorithms.Algorithm
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.jwt.JwtTokenVerifier
-import me.ahoo.cosec.login.token.DefaultTokenRevoker
+import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenFamilies
@@ -178,7 +178,7 @@ class CoSecJwtAutoConfigurationTest {
                     .assert()
                     .isInstanceOf(JwtTokenVerifier::class.java)
                 val revoker = context.getBean(TokenRevoker::class.java)
-                revoker.assert().isInstanceOf(DefaultTokenRevoker::class.java)
+                revoker.assert().isInstanceOf(StoreTokenRevoker::class.java)
                 ReflectionTestUtils.getField(revoker, "revocationTtl").assert().isEqualTo(refreshValidity)
             }
     }

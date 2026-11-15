@@ -23,7 +23,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.jwt.JwtTokenVerifier
-import me.ahoo.cosec.login.token.DefaultTokenRevoker
+import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.TokenFamilies
@@ -115,7 +115,7 @@ internal object ScenarioRefresh {
         val attempts = node.get("pairs")?.values()?.toList()?.onEach { it.only("access", "refresh") } ?: listOf(node)
         return runBlocking {
             node.get("logout")?.let { logout ->
-                val revoker = DefaultTokenRevoker(
+                val revoker = StoreTokenRevoker(
                     ScenarioJwt.VERIFIER,
                     NO_TOKEN_STORE,
                     TokenRevocation(revocations),

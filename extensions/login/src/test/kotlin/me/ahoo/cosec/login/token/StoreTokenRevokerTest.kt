@@ -32,12 +32,12 @@ import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.time.Instant
 
-class DefaultTokenRevokerTest {
+class StoreTokenRevokerTest {
 
     private val tokenVerifier = mockk<TokenVerifier>()
     private val tokenStore = InMemoryTokenStore()
     private val revocationTtl = Duration.ofDays(7)
-    private val tokenRevoker = DefaultTokenRevoker(
+    private val tokenRevoker = StoreTokenRevoker(
         tokenVerifier,
         tokenStore,
         TokenRevocation(tokenStore),
@@ -88,7 +88,7 @@ class DefaultTokenRevokerTest {
             override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
         }
 
-        DefaultTokenRevoker(
+        StoreTokenRevoker(
             tokenVerifier,
             tokenStore,
             TokenRevocation(unavailable),

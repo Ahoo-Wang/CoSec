@@ -98,6 +98,9 @@ and have to be provisioned again.
   `CompositeToken(credentials.accessToken, credentials.refreshToken)`.
 - **`SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication`**, in the same package and with the same
   constructor: the only one there is needs no prefix. Rename the class where you declare its bean.
+- **`DefaultTokenRevoker` is `StoreTokenRevoker`**: it revokes through the `TokenStore`, which the name now says.
+  Same package (`me.ahoo.cosec.login.token`) and constructor; the starter's bean is still `cosecTokenRevoker`, and
+  `TokenRevoker` is still the SPI. Rename the class where you construct it.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

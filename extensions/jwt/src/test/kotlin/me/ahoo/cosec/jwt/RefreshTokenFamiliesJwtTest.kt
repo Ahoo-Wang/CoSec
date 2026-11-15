@@ -21,7 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
-import me.ahoo.cosec.login.token.DefaultTokenRevoker
+import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
@@ -68,7 +68,7 @@ class RefreshTokenFamiliesJwtTest {
     private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
     private val refresh = RefreshTokenAuthentication(verifier, TokenRevocation(revoked), families)
-    private val revoker = DefaultTokenRevoker(verifier, revoked, TokenRevocation(revoked), families, Duration.ofDays(7))
+    private val revoker = StoreTokenRevoker(verifier, revoked, TokenRevocation(revoked), families, Duration.ofDays(7))
     private val tokens = TokenCompositeAuthentication(
         CompositeAuthentication(DefaultAuthenticationProvider().apply { register(refresh) }),
         converter,

@@ -20,15 +20,6 @@ public abstract class me/ahoo/cosec/login/token/AbstractSwitchTenantAuthenticati
 	protected abstract fun switchTenant (Ljava/lang/String;Lme/ahoo/cosec/api/context/SecurityContext;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
-public final class me/ahoo/cosec/login/token/DefaultTokenRevoker : me/ahoo/cosec/spi/token/TokenRevoker {
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/time/Duration;)V
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/time/Duration;Ljava/time/Clock;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/time/Duration;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun revoke (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun revoke (Lme/ahoo/cosec/api/token/CompositeToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
 public final class me/ahoo/cosec/login/token/RefreshTokenAuthentication : me/ahoo/cosec/login/Authentication {
 	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;)V
 	public synthetic fun authenticate (Lme/ahoo/cosec/login/LoginCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
@@ -43,6 +34,15 @@ public abstract interface class me/ahoo/cosec/login/token/RefreshTokenCredential
 
 public final class me/ahoo/cosec/login/token/RefreshTokenMismatchException : me/ahoo/cosec/spi/token/TokenVerificationException {
 	public fun <init> ()V
+}
+
+public final class me/ahoo/cosec/login/token/StoreTokenRevoker : me/ahoo/cosec/spi/token/TokenRevoker {
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/time/Duration;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/time/Duration;Ljava/time/Clock;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/time/Duration;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun revoke (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun revoke (Lme/ahoo/cosec/api/token/CompositeToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public abstract interface class me/ahoo/cosec/login/token/SwitchTenantCredentials : me/ahoo/cosec/login/LoginCredentials {

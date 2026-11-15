@@ -69,6 +69,7 @@ const TERMS = [
   // A3 (RFC 0013 §7.3): names that went.
   { term: 'SimpleCompositeToken', hint: 'removed in 8.0 (A3): `CompositeToken` (`cosec-api`) is a final class' },
   { term: 'SimpleRefreshTokenAuthentication', hint: 'renamed in 8.0 (A3): `RefreshTokenAuthentication` (`cosec-login`)' },
+  { term: 'DefaultTokenRevoker', hint: 'renamed in 8.0 (A3): `StoreTokenRevoker` (`cosec-login`)' },
 ]
 
 const EXEMPT_SECTIONS = [
@@ -99,7 +100,7 @@ const ALLOWED = [
   },
   {
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
-    terms: ['SimpleCompositeToken', 'SimpleRefreshTokenAuthentication'],
+    terms: ['SimpleCompositeToken', 'SimpleRefreshTokenAuthentication', 'DefaultTokenRevoker'],
     reason: 'the A3 upgrade entries, and the earlier preview entries, name the old classes',
   },
   {
