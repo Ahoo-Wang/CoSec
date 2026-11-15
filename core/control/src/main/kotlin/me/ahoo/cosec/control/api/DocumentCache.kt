@@ -115,32 +115,35 @@ internal class DocumentCache(
         /** Its policies by id as `analyze` matches them, the first of an id: each one's patterns parsed once (RC1-41). */
         val analyzed: Map<String, AnalyzedPolicy> by lazy(LazyThreadSafetyMode.PUBLICATION) {
             val policies = LinkedHashMap<String, AnalyzedPolicy>()
-            effective.policies.forEach { policies.putIfAbsent(it.id.value, AnalyzedPolicy(it, this)) }
+            effective.policies.forEach { policies.putIfAbsent(it.id.value, AnalyzedPolicy(it) { parsed(it) }) }
             policies
+        }
+
+        /**
+         * [definition]'s statements parsed. A pattern this version cannot parse is a stored value it cannot read (review
+         * L8 of #1240): a [SnapshotFormatException] naming the document, which the control API answers 500 and logs,
+         * never the caller's 400.
+         */
+        private fun parsed(definition: PolicyDefinition): List<AnalyzedStatement> = try {
+            definition.statements.mapIndexed { index, statement -> AnalyzedStatement(index, statement) }
+        } catch (e: IllegalArgumentException) {
+            throw SnapshotFormatException(
+                "The stored document [$key] revision ${document.revision} has a pattern in policy " +
+                    "[${definition.id.value}] this version cannot parse: ${e.message}",
+                e
+            )
         }
     }
 
     /**
-     * A policy, its statements' action and resource patterns parsed when `analyze` first reaches it. A pattern this
-     * version cannot parse is a stored value it cannot read (review L8 of #1240): a [SnapshotFormatException] naming the
-     * document, which the control API answers 500 and logs, never the caller's 400.
+     * A policy, its statements' action and resource patterns parsed ([parse]) when `analyze` first reaches it: a stored
+     * document's by its entry, which names the document when one does not parse; a built-in's ([BUILTIN]) as written.
      */
     class AnalyzedPolicy internal constructor(
         val definition: PolicyDefinition,
-        /** The document that defines it; null for a built-in policy ([BUILTIN]), which no document can define. */
-        private val entry: DocumentCache.Entry?,
+        parse: () -> List<AnalyzedStatement>,
     ) {
-        val statements: List<AnalyzedStatement> by lazy(LazyThreadSafetyMode.PUBLICATION) {
-            try {
-                definition.statements.mapIndexed { index, statement -> AnalyzedStatement(index, statement) }
-            } catch (e: IllegalArgumentException) {
-                val where = entry?.let { "The stored document [${it.key}] revision ${it.document.revision}" } ?: "CoSec"
-                throw SnapshotFormatException(
-                    "$where has a pattern in policy [${definition.id.value}] this version cannot parse: ${e.message}",
-                    e
-                )
-            }
-        }
+        val statements: List<AnalyzedStatement> by lazy(LazyThreadSafetyMode.PUBLICATION, parse)
     }
 
     class AnalyzedStatement(val index: Int, val source: StatementSource) {
@@ -232,7 +235,10 @@ internal class DocumentCache(
          * statements ([BuiltinPolicies.CONTROL]), read the way any policy is, since no document can define them.
          */
         internal val BUILTIN: Map<String, AnalyzedPolicy> = BuiltinPolicies.CONTROL.entries.associate { (id, statements) ->
-            id.value to AnalyzedPolicy(PolicyDefinition(id, attachable = false, condition = null, statements = statements), null)
+            val definition = PolicyDefinition(id, attachable = false, condition = null, statements = statements)
+            id.value to AnalyzedPolicy(definition) {
+                statements.mapIndexed { index, statement -> AnalyzedStatement(index, statement) }
+            }
         }
 
         /** Compiled forms kept per document: the current platform's, and the previous one's while a change propagates. */
