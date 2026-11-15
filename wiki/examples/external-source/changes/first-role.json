@@ -1,0 +1,19 @@
+{
+  "document": "tenant:acme",
+  "base": 0,
+  "note": "role-01HQ7Z projected for the first time (event 5521)",
+  "operations": [
+    {
+      "op": "putRole",
+      "role": {
+        "id": "role-01HQ7Z",
+        "app": "wms",
+        "name": "Receiving",
+        "permissions": [
+          "warehouse.read",
+          "inbound.ship"
+        ]
+      }
+    }
+  ]
+}
