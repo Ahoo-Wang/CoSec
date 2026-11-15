@@ -35,7 +35,6 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -70,16 +69,12 @@ class PipelineWebFilterTest {
     )
 
     private fun pipeline(decision: Decision, authenticator: Authenticator = Authenticator { AuthnResult.Anonymous }) =
-        Pipeline(
-            PipelineComponents(
-                authenticator,
-                SuspendingSnapshotSource(Views),
-                engine = object : FlatEngine {
-                    override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
-                        FlatEvaluation(decision, null)
-                },
-            )
-        )
+        Pipeline.builder(authenticator, SuspendingSnapshotSource(Views))
+            .engine(object : FlatEngine {
+                override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
+                    FlatEvaluation(decision, null)
+            })
+            .build()
 
     @Test
     fun aPermitProceedsWithItsSecurityContextAndRequestId() {

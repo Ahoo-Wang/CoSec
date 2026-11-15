@@ -42,7 +42,6 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
@@ -277,19 +276,18 @@ class WebAdapterParityTest {
      * Only the deadline scenario runs under the short [timeout]: under it, a cold JVM's first request could miss the
      * deadline, become a 503 the REQUIRED recorder never hears, and fail a scenario that has nothing to do with it.
      */
-    private fun pipeline(listeners: DecisionListeners, timeout: kotlin.time.Duration = 30.seconds) = Pipeline(
-        PipelineComponents(
-            authenticator = authenticator,
-            snapshots = SuspendingSnapshotSource(views),
-            membershipProvider = { _, _ -> error("The directory is down") },
-            engine = engine,
-            idGenerator = { "parity-request" },
-            options = PipelineOptions(timeout = timeout, authenticationTimeout = 1.seconds),
-            attributes = attributes,
-            listeners = listeners,
-            rateLimiter = rateLimiter,
-        )
+    private fun pipeline(listeners: DecisionListeners, timeout: kotlin.time.Duration = 30.seconds) = Pipeline.builder(
+        authenticator,
+        SuspendingSnapshotSource(views),
     )
+        .memberships({ _, _ -> error("The directory is down") })
+        .engine(engine)
+        .ids({ "parity-request" })
+        .options(PipelineOptions(timeout = timeout, authenticationTimeout = 1.seconds))
+        .attributes(attributes)
+        .listeners(listeners)
+        .rateLimiter(rateLimiter)
+        .build()
 
     private val pipelines = mapOf(
         "default" to pipeline(defaultListeners),

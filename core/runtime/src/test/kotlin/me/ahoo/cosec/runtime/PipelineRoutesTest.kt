@@ -43,7 +43,7 @@ class PipelineRoutesTest {
         val engine = StubEngine(PERMIT)
         pipeline(
             engine = engine
-        ) { it.copy(routes = routes) }.evaluate(facts("/orders/42")).status.assert().isEqualTo(200)
+        ) { routes(routes) }.evaluate(facts("/orders/42")).status.assert().isEqualTo(200)
         val request = engine.requests.single().request
         request.action.namespace.assert().isEqualTo("order")
         request.action.verb.assert().isEqualTo("read")
@@ -54,7 +54,7 @@ class PipelineRoutesTest {
     @Test
     fun `an unmapped request stays in the http namespace`() = runTest {
         val engine = StubEngine(PERMIT)
-        pipeline(engine = engine) { it.copy(routes = routes) }.evaluate(facts("/customers/7"))
+        pipeline(engine = engine) { routes(routes) }.evaluate(facts("/customers/7"))
         val request = engine.requests.single().request
         request.action.namespace.assert().isEqualTo("http")
         request.action.verb.assert().isEqualTo("GET")
@@ -65,7 +65,7 @@ class PipelineRoutesTest {
     @Test
     fun `a capture holding a slash is refused, never read as another resource`() = runTest {
         val engine = StubEngine(PERMIT)
-        val outcome = pipeline(engine = engine) { it.copy(routes = routes) }.evaluate(facts("/orders/a%2Fb"))
+        val outcome = pipeline(engine = engine) { routes(routes) }.evaluate(facts("/orders/a%2Fb"))
         outcome.status.assert().isEqualTo(400)
         outcome.problem!!.type.assert().isEqualTo(ProblemType.INVALID_REQUEST)
         engine.requests.assert().isEmpty()

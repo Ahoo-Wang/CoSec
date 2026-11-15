@@ -18,6 +18,7 @@ package me.ahoo.cosec.spring.boot.pipeline
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * The source's options. A `revalidate-interval` out of bounds fails startup naming the property (`SNP-6`, RC1-50): the
@@ -29,6 +30,10 @@ internal fun RuntimeAuthorizationProperties.Snapshot.toOptions(): SnapshotOption
     }
     return options()
 }
+
+/** The documents loaded before the instance takes traffic: the platform's, then the configured apps and tenants. */
+internal fun RuntimeAuthorizationProperties.Snapshot.prewarmKeys(): List<SnapshotKey> =
+    listOf(SnapshotKey.Platform) + prewarmApps.map { SnapshotKey.App(it) } + prewarmTenants.map { SnapshotKey.Tenant(it) }
 
 internal const val REVALIDATE_INTERVAL_PROPERTY = "cosec.authorization.snapshot.revalidate-interval"
 

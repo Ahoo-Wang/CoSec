@@ -48,7 +48,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
+import me.ahoo.cosec.runtime.PipelineBuilder
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
@@ -257,28 +257,33 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val listeners = listeners(node.get("listeners"), node.get("options") ?: EMPTY)
         val authentication = node.get("authentication") ?: EMPTY
         val provider = node.get("membershipProvider")?.let { provider(authentication, it) { reach("memberships") } }
-        val pipeline = Pipeline(
-            PipelineComponents(
-                authenticator = authenticator(authentication, node.get("revocations")) { reach("authentication") },
-                snapshots = SuspendingSnapshotSource(
-                    snapshots(snapshot, documents, node.get("snapshot"), attributes) { reach("snapshot") }
-                ),
-                membershipProvider = provider,
-                idGenerator = IdGenerator { REQUEST_ID },
-                options = options(node.get("options") ?: EMPTY),
-                attributes = attributes,
-                listeners = listeners,
-                rateLimiter = rateLimiter(node.get("rateLimiter")),
-                routes = routes,
-                identity = node.get("identity")?.let(::issuer),
-            )
+        val pipeline = Pipeline.builder(
+            authenticator(authentication, node.get("revocations")) { reach("authentication") },
+            SuspendingSnapshotSource(
+                snapshots(snapshot, documents, node.get("snapshot"), attributes) { reach("snapshot") }
+            ),
         )
+            .ids(IdGenerator { REQUEST_ID })
+            .options(options(node.get("options") ?: EMPTY))
+            .attributes(attributes)
+            .listeners(listeners)
+            .routes(routes)
+            .named(provider, rateLimiter(node.get("rateLimiter")), node.get("identity")?.let(::issuer))
+            .build()
         try {
             return answer(node, pipeline, cancelAt, reached)
         } finally {
             listeners.cancel()
         }
     }
+
+    /** The parts a scenario may leave out, each set only when the scenario names it. */
+    private fun PipelineBuilder.named(provider: MembershipProvider?, limiter: RateLimiter?, issuer: IdentityIssuer?) =
+        apply {
+            provider?.let(::memberships)
+            limiter?.let(::rateLimiter)
+            issuer?.let(::identity)
+        }
 
     /** The scenario's request through [pipeline]: cancelled at [cancelAt], through a gateway's filters, or plainly. */
     private fun answer(

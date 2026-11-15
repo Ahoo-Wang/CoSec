@@ -35,7 +35,6 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -66,16 +65,15 @@ class PipelineServletFilterTest {
         StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("g"), DocumentKind.PLATFORM))
     )
 
-    private fun pipeline(decision: Decision) = Pipeline(
-        PipelineComponents(
-            Authenticator { AuthnResult.Anonymous },
-            SuspendingSnapshotSource(Views),
-            engine = object : FlatEngine {
-                override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
-                    FlatEvaluation(decision, null)
-            },
-        )
+    private fun pipeline(decision: Decision) = Pipeline.builder(
+        Authenticator { AuthnResult.Anonymous },
+        SuspendingSnapshotSource(Views),
     )
+        .engine(object : FlatEngine {
+            override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
+                FlatEvaluation(decision, null)
+        })
+        .build()
 
     @Test
     fun aPermitProceedsBoundToTheHolderUntilTheRequestCompletes() {

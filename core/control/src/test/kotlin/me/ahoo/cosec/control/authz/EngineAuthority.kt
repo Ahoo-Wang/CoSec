@@ -35,7 +35,6 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -64,15 +63,14 @@ class EngineAuthority(
     views: SnapshotViews = HeadViews(revisions),
 ) {
     private val checker = AuthorizationChecker(
-        Pipeline(
-            PipelineComponents(
-                authenticator = Authenticator {
-                    AuthnResult.Anonymous
-                },
-                snapshots = SuspendingSnapshotSource(views),
-                membershipProvider = membershipProvider,
-            )
-        ),
+        Pipeline.builder(
+            Authenticator {
+                AuthnResult.Anonymous
+            },
+            SuspendingSnapshotSource(views),
+        )
+            .apply { membershipProvider?.let(::memberships) }
+            .build(),
     )
 
     var confirmation: DocumentConfirmation = DocumentConfirmation.CURRENT
@@ -112,14 +110,13 @@ class EngineAuthority(
     )
 
     private fun security(principal: AuthenticatedPrincipal): me.ahoo.cosec.runtime.http.RequestSecurity {
-        val host = Pipeline(
-            PipelineComponents(
-                authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },
-                snapshots = SuspendingSnapshotSource(HOST_VIEWS),
-                membershipProvider = membershipProvider,
-                engine = PERMITTING,
-            )
+        val host = Pipeline.builder(
+            Authenticator { AuthnResult.Authenticated(principal, "test") },
+            SuspendingSnapshotSource(HOST_VIEWS),
         )
+            .apply { membershipProvider?.let(::memberships) }
+            .engine(PERMITTING)
+            .build()
         val outcome = runBlocking { host.evaluate(FACTS) }
         check(outcome.proceed) { "The host pipeline did not permit the control API: ${outcome.status}" }
         return outcome.security!!

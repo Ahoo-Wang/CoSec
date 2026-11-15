@@ -114,7 +114,7 @@ class ListenerIsolationTest {
         PipelineFixtures.pipeline(
             authenticator,
             StubEngine(decision)
-        ) { it.copy(listeners = listeners) }.evaluate(facts(path))
+        ) { listeners(listeners) }.evaluate(facts(path))
     }
 
     private val Outcome.cause: Cause
@@ -183,7 +183,7 @@ class ListenerIsolationTest {
             PipelineFixtures.pipeline(
                 authenticator(authenticated()),
                 StubEngine(PERMIT)
-            ) { it.copy(listeners = listeners) }
+            ) { listeners(listeners) }
         val (outcome, finishedOn) = startOn(eventLoop, EmptyCoroutineContext) { pipeline.evaluate(facts()) }
         outcome.proceed.assert().isTrue()
         finishedOn.name.assert().isEqualTo(EVENT_LOOP)
@@ -269,7 +269,7 @@ class ListenerIsolationTest {
             PipelineFixtures.pipeline(
                 authenticator,
                 StubEngine(decision)
-            ) { it.copy(options = options, listeners = listeners) }
+            ) { options(options).listeners(listeners) }
                 .evaluate(facts())
         }
         evaluate(Decision.Deny(null), Authenticator { AuthnResult.Anonymous }).status.assert().isEqualTo(401)
@@ -307,7 +307,7 @@ class ListenerIsolationTest {
         evaluate(listeners, authenticator = Authenticator { AuthnResult.Unavailable(IllegalStateException("down")) })
         runBlocking {
             PipelineFixtures.pipeline(authenticator(authenticated()), StubEngine { error("a defect") }) {
-                it.copy(listeners = listeners)
+                listeners(listeners)
             }.evaluate(facts())
         }.status.assert().isEqualTo(500)
         evaluate(listeners, decision = Decision.Deny(null), authenticator = Authenticator { AuthnResult.Anonymous })
@@ -333,7 +333,7 @@ class ListenerIsolationTest {
             reached.complete(Unit)
             awaitCancellation()
         }
-        val pipeline = PipelineFixtures.pipeline(hanging, StubEngine(PERMIT)) { it.copy(listeners = listeners) }
+        val pipeline = PipelineFixtures.pipeline(hanging, StubEngine(PERMIT)) { listeners(listeners) }
         var outcome: Outcome? = null
         val caller = launch { outcome = pipeline.evaluate(facts()) }
         reached.await()
@@ -353,7 +353,7 @@ class ListenerIsolationTest {
             PipelineFixtures.pipeline(
                 authenticator(authenticated()),
                 StubEngine(PERMIT)
-            ) { it.copy(listeners = listeners) }
+            ) { listeners(listeners) }
                 .evaluate(
                     facts(
                         headers = mapOf("Authorization" to listOf("Bearer secret-token"), "X-Secret" to listOf("hush"))

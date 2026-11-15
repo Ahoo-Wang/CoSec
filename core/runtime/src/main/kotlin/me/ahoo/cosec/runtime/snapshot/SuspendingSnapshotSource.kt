@@ -16,15 +16,12 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import kotlinx.coroutines.future.await
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.Scope
-import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -99,7 +96,7 @@ interface SnapshotViews {
  * RFC 0006 §5.5.1: the installed view without suspending, else the loaded one. When the tenant's document needs the
  * app's although the scope has no roles ([ViewKey.withAppFor], RC1-17), the view with it, the same way.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class SuspendingSnapshotSource @InternalCoSecApi constructor(
     private val views: SnapshotViews,
     private val closeable: AutoCloseable? = null,
@@ -127,27 +124,8 @@ class SuspendingSnapshotSource @InternalCoSecApi constructor(
         return views.peek(withApp) ?: views.load(withApp).await()
     }
 
-    /** Stops what [of] started; a no-op for a source built around views the host owns. */
+    /** Closes what it was given to close; a no-op for a source built around views the host owns and closes. */
     override fun close() {
         closeable?.close()
-    }
-
-    companion object {
-        /**
-         * The source of a host without Spring Boot: the documents [store] holds, compiled and installed in memory as a
-         * Spring host's are, with the external attributes of [attributes] declared. Close it with the host.
-         */
-        fun of(
-            store: SnapshotDocumentStore,
-            attributes: AttributeProviders = AttributeProviders.NONE,
-            options: SnapshotOptions = SnapshotOptions(),
-        ): SuspendingSnapshotSource {
-            val compiler = PlatformCompiler(attributes.catalog)
-            val source = DocumentSnapshots.source(store, compiler, options)
-            compiler.bind(source)
-            // The platform first, so that no instance document compiles against the default limits (PlatformCompiler).
-            source.load()
-            return SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true), source)
-        }
     }
 }

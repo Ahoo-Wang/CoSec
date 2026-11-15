@@ -112,7 +112,8 @@ class CheckAttributesTest {
             engine = CoSecFlatEngine,
             views = Views(PolicyDocumentCompiler(attributes.catalog), attributes.declares(RISK)),
         ) {
-            it.copy(options = PipelineOptions(attributeTimeout = 50.milliseconds), attributes = attributes)
+            options(PipelineOptions(attributeTimeout = 50.milliseconds))
+            attributes(attributes)
         }
         val checker = AuthorizationChecker(pipeline)
 

@@ -206,7 +206,8 @@ class PipelineTest {
         val listeners = me.ahoo.cosec.runtime.event.DecisionListeners(listOf(listener))
         try {
             val pipeline = pipeline(engine = StubEngine(IMPLICIT_DENY)) {
-                it.copy(idGenerator = { throw IllegalStateException("Clock moved backwards") }, listeners = listeners)
+                ids({ throw IllegalStateException("Clock moved backwards") })
+                listeners(listeners)
             }
             val outcome = pipeline.evaluate(facts())
             outcome.problem.assert().isNotNull()
@@ -335,7 +336,7 @@ class PipelineTest {
     @Test
     fun pipelineDeadlineIs503() = runTest {
         val options = PipelineOptions(timeout = 100.milliseconds, authenticationTimeout = 10.seconds)
-        val outcome = pipeline(Authenticator { awaitCancellation() }) { it.copy(options = options) }.evaluate(facts())
+        val outcome = pipeline(Authenticator { awaitCancellation() }) { options(options) }.evaluate(facts())
         outcome.assertProblem(ProblemType.UNAVAILABLE)
         outcome.unavailability().assert().isEqualTo(Unavailability.DeadlineExceeded)
     }
@@ -360,7 +361,7 @@ class PipelineTest {
         pipeline(
             authenticator(authenticated(null)),
             engine
-        ) { it.copy(membershipProvider = provider) }.evaluate(facts())
+        ) { memberships(provider) }.evaluate(facts())
             .proceed.assert().isTrue()
         engine.requests.single().memberships.assert().isSameAs(provided)
     }
@@ -385,7 +386,7 @@ class PipelineTest {
             val outcome = pipeline(
                 authenticator(authenticated(null)),
                 engine
-            ) { it.copy(membershipProvider = provider) }
+            ) { memberships(provider) }
                 .evaluate(facts())
             outcome.assertProblem(ProblemType.UNAVAILABLE)
             ((outcome.unavailability() as Unavailability.Indeterminate).cause).assert()
@@ -417,7 +418,7 @@ class PipelineTest {
             MembershipProvider { _, _ -> MembershipAnswer.Known(inactive) },
         ).forEach { provider ->
             val engine = StubEngine(IMPLICIT_DENY)
-            val outcome = pipeline(authenticator(keyOf()), engine) { it.copy(membershipProvider = provider) }
+            val outcome = pipeline(authenticator(keyOf()), engine) { memberships(provider) }
                 .evaluate(facts())
             outcome.assertProblem(ProblemType.TOKEN_INVALID)
             val request = engine.requests.single()
@@ -431,7 +432,7 @@ class PipelineTest {
     fun aTokenOfAnUnknownPrincipalIsRefused() = runTest {
         val engine = StubEngine(IMPLICIT_DENY)
         pipeline(authenticator(authenticated(null)), engine) {
-            it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Unknown })
+            memberships(MembershipProvider { _, _ -> MembershipAnswer.Unknown })
         }.evaluate(facts()).assertProblem(ProblemType.TOKEN_INVALID)
         engine.requests.single().request.subject.authenticated.assert().isFalse()
     }
@@ -441,7 +442,7 @@ class PipelineTest {
     fun aRefusedKeyMayStillDoWhatAnonymousCallersMay() = runTest {
         val engine = StubEngine(PERMIT)
         val outcome = pipeline(authenticator(keyOf()), engine) {
-            it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Unknown })
+            memberships(MembershipProvider { _, _ -> MembershipAnswer.Unknown })
         }.evaluate(facts())
         outcome.proceed.assert().isTrue()
         outcome.security!!.principal.assert().isNull()
@@ -457,7 +458,7 @@ class PipelineTest {
         )
         val engine = StubEngine(PERMIT)
         val outcome = pipeline(authenticator(keyOf(MembershipSource.Provider.capped(listOf("viewer")))), engine) {
-            it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Known(provided) })
+            memberships(MembershipProvider { _, _ -> MembershipAnswer.Known(provided) })
         }.evaluate(facts())
         outcome.proceed.assert().isTrue()
         val request = engine.requests.single()
@@ -471,7 +472,7 @@ class PipelineTest {
     @Test
     fun aKeyWhoseProviderFailsIs503() = runTest {
         pipeline(authenticator(keyOf())) {
-            it.copy(membershipProvider = MembershipProvider { _, _ -> throw IllegalStateException("down") })
+            memberships(MembershipProvider { _, _ -> throw IllegalStateException("down") })
         }.evaluate(facts()).assertProblem(ProblemType.UNAVAILABLE)
     }
 
@@ -491,7 +492,7 @@ class PipelineTest {
         val outcome = pipeline(
             authenticator(unusable),
             engine
-        ) { it.copy(membershipProvider = provider) }.evaluate(facts())
+        ) { memberships(provider) }.evaluate(facts())
         outcome.assertProblem(ProblemType.UNAVAILABLE)
         ((outcome.unavailability() as Unavailability.Indeterminate).cause).assert()
             .isInstanceOf(Cause.MembershipUnavailable::class.java)
@@ -566,13 +567,13 @@ class PipelineTest {
         val cookie = mapOf("authorization" to listOf("cookie"))
         val allowed = PipelineOptions(allowQueryToken = true, allowCookieToken = true)
         pipeline(recording).evaluate(facts())
-        pipeline(recording) { it.copy(options = allowed) }.evaluate(
+        pipeline(recording) { options(allowed) }.evaluate(
             facts(headers = mapOf("Authorization" to listOf("header")), cookies = cookie)
         )
         pipeline(
             recording
-        ) { it.copy(options = allowed) }.evaluate(facts(query = "authorization=query", cookies = cookie))
-        pipeline(recording) { it.copy(options = allowed) }.evaluate(facts(cookies = cookie))
+        ) { options(allowed) }.evaluate(facts(query = "authorization=query", cookies = cookie))
+        pipeline(recording) { options(allowed) }.evaluate(facts(cookies = cookie))
         pipeline(recording).evaluate(facts(query = "authorization=query"))
         pipeline(recording).evaluate(facts(headers = mapOf("x-api-key" to listOf("key"))))
 
@@ -594,10 +595,10 @@ class PipelineTest {
         pipeline(recording).evaluate(facts(cookies = cookie))
         pipeline(
             recording
-        ) { it.copy(options = PipelineOptions(allowQueryToken = true)) }.evaluate(facts(cookies = cookie))
+        ) { options(PipelineOptions(allowQueryToken = true)) }.evaluate(facts(cookies = cookie))
         pipeline(
             recording
-        ) { it.copy(options = PipelineOptions(allowCookieToken = true)) }.evaluate(facts(cookies = cookie))
+        ) { options(PipelineOptions(allowCookieToken = true)) }.evaluate(facts(cookies = cookie))
 
         seen.map { it.token }.assert().containsExactly(null, null, "cookie")
     }

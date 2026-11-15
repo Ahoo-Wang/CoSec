@@ -79,7 +79,7 @@ class ShadowOutcomeTest {
         )
         val listeners = DecisionListeners(listOf(shadow)).also { opened += it }
         val pipeline = PipelineFixtures.pipeline(engine = StubEngine(enforced), views = Views()) {
-            it.copy(listeners = listeners)
+            listeners(listeners)
         }
         return runBlocking {
             pipeline.evaluate(PipelineFixtures.facts())

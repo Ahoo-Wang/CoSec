@@ -50,7 +50,6 @@ import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -135,23 +134,22 @@ class ShadowWindowTest {
                 )
             ),
         ).also { opened += it }
-        private val pipeline = Pipeline(
-            PipelineComponents(
-                authenticator = Authenticator {
-                    AuthnResult.Authenticated(
-                        AuthenticatedPrincipal(
-                            PrincipalId("bob"),
-                            TenantId("acme"),
-                            NO_MEMBERSHIPS,
-                            app = PipelineControlAuthorizer.CONTROL_APP
-                        ),
-                        "token"
-                    )
-                },
-                snapshots = SuspendingSnapshotSource(HeadViews()),
-                listeners = listeners,
-            )
+        private val pipeline = Pipeline.builder(
+            Authenticator {
+                AuthnResult.Authenticated(
+                    AuthenticatedPrincipal(
+                        PrincipalId("bob"),
+                        TenantId("acme"),
+                        NO_MEMBERSHIPS,
+                        app = PipelineControlAuthorizer.CONTROL_APP
+                    ),
+                    "token"
+                )
+            },
+            SuspendingSnapshotSource(HeadViews()),
         )
+            .listeners(listeners)
+            .build()
         val reporter = ShadowReporter(recorder, reports, { installed() }, clock)
 
         fun get(path: String): Int = runBlocking { pipeline.evaluate(facts(path)).status }

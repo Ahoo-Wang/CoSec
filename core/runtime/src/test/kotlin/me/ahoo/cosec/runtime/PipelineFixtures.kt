@@ -140,18 +140,15 @@ object PipelineFixtures {
         }
     }
 
-    /** A pipeline of [authenticator], [engine] and [views] fixed ids; [configure] sets any other component. */
+    /** A pipeline of [authenticator], [engine] and [views] fixed ids; [configure] sets any other part. */
     fun pipeline(
         authenticator: Authenticator = ANONYMOUS,
         engine: FlatEngine = StubEngine(PERMIT),
         views: SnapshotViews = InstalledViews(),
-        configure: (PipelineComponents) -> PipelineComponents = { it },
-    ): Pipeline = Pipeline(
-        PipelineComponents(
-            authenticator = authenticator,
-            snapshots = SuspendingSnapshotSource(views),
-            engine = engine,
-            idGenerator = ids,
-        ).let(configure)
-    )
+        configure: PipelineBuilder.() -> Unit = {},
+    ): Pipeline = Pipeline.builder(authenticator, SuspendingSnapshotSource(views))
+        .engine(engine)
+        .ids(ids)
+        .apply(configure)
+        .build()
 }

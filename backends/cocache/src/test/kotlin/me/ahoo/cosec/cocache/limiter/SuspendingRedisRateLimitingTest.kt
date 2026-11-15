@@ -68,13 +68,12 @@ class SuspendingRedisRateLimitingTest {
             org.springframework.data.redis.core.ReactiveStringRedisTemplate(factory),
             "cosec:test:rate:${java.util.UUID.randomUUID()}",
         )
-        val pipeline = me.ahoo.cosec.runtime.Pipeline(
-            me.ahoo.cosec.runtime.PipelineComponents(
-                { me.ahoo.cosec.spi.authn.AuthnResult.Anonymous },
-                me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource(views),
-                rateLimiter = limiter,
-            )
+        val pipeline = me.ahoo.cosec.runtime.Pipeline.builder(
+            { me.ahoo.cosec.spi.authn.AuthnResult.Anonymous },
+            me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource(views),
         )
+            .rateLimiter(limiter)
+            .build()
         val facts = me.ahoo.cosec.runtime.http.HttpFacts(
             "GET",
             "/orders",

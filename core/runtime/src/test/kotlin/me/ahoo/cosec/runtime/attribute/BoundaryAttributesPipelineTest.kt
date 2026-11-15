@@ -109,7 +109,8 @@ class BoundaryAttributesPipelineTest {
             engine = CoSecFlatEngine,
             views = Views(PolicyDocumentCompiler(attributes.catalog), fenceOnMissing, tenantBoundary),
         ) {
-            it.copy(options = PipelineOptions(attributeTimeout = 50.milliseconds), attributes = attributes)
+            options(PipelineOptions(attributeTimeout = 50.milliseconds))
+            attributes(attributes)
         }
         return runBlocking { pipeline.evaluate(PipelineFixtures.facts()) }
     }

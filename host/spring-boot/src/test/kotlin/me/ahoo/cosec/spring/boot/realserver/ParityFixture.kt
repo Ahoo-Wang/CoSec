@@ -26,7 +26,6 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
@@ -118,15 +117,11 @@ internal class ParityFixture(
         RateLimitResult(allowed, 10, if (allowed) 9 else 0, Duration.ofSeconds(3))
     }
 
-    val pipeline = Pipeline(
-        PipelineComponents(
-            authenticator,
-            SuspendingSnapshotSource(views),
-            idGenerator = ids,
-            rateLimiter = rateLimiter,
-            listeners = listeners,
-        )
-    )
+    val pipeline = Pipeline.builder(authenticator, SuspendingSnapshotSource(views))
+        .ids(ids)
+        .rateLimiter(rateLimiter)
+        .listeners(listeners)
+        .build()
 
     /** What [stack]'s adapter calls: the pipeline, on every stack. */
     fun gate(@Suppress("UNUSED_PARAMETER") stack: Stack): RequestGate = pipeline

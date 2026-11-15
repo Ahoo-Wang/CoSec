@@ -58,6 +58,30 @@ and have to be provisioned again.
   | `me.ahoo.cosec.runtime.event.ShadowListener` | `me.ahoo.cosec.runtime.shadow.ShadowListener` |
   | `me.ahoo.cosec.runtime.shadow.Candidates` | `me.ahoo.cosec.runtime.shadow.CachingCandidateSource` |
   | `me.ahoo.cosec.runtime.shadow.ShadowRecorder` | `me.ahoo.cosec.runtime.shadow.ShadowReporter` |
+- **A pipeline without Spring is built with `Pipeline.builder`.** `Pipeline.builder(authenticator, store)` compiles and
+  installs the documents of a `SnapshotDocumentStore` as the starter does. `memberships`, `attributes`, `listener`,
+  `rateLimiter`, `routes`, `ids`, `clock` and `forwardIdentity { … }` set the other parts; `options { … }`,
+  `snapshots { … }` and `listeners { … }` set what the parameters of `PipelineOptions`, `SnapshotOptions` and
+  `DecisionListeners` set, with the same names and defaults. `snapshots { prewarmApps = …; prewarmTenants = … }` names
+  the documents loaded at build, as `cosec.authorization.snapshot.prewarm-apps` and `prewarm-tenants` do for the starter;
+  `awaitDocuments()` waits until they have been read and answers those not installed, an empty set when ready. `close()`
+  delivers the listeners' queued events, then closes the documents. A service behind a CoSec gateway gets its gate from
+  `Pipeline.behindGateway { … }`. `Pipeline`'s constructor, `PipelineComponents` and `SuspendingSnapshotSource.of` are
+  gone; `PipelineOptions`, `SnapshotOptions`, `SuspendingSnapshotSource`, `AttributeProviders`, `DecisionListeners`,
+  `IdentityIssuer`, `IdentityGate` and `CoSecParameters.read` are now `@InternalCoSecApi`, which applications never opt in
+  to. No status code, header, body or `cosec.*` property changes. One change in the safe direction for a pipeline
+  assembled by hand: its documents now compile as the starter's do, so a condition or rate limit key on the API key
+  header it reads (`options { apiKeyHeader = … }`) does not compile (`CND-5`). Such a document is installed as failed
+  and its requests are a 503, where `SuspendingSnapshotSource.of(store)` installed it. A builder given two forms of one
+  input (`listener` and `DecisionListeners`, for instance) refuses to build rather than drop one.
+
+  ```kotlin
+  val pipeline = Pipeline.builder(authenticator, store)
+      .snapshots { prewarmTenants = setOf("acme") }
+      .memberships(memberships)
+      .build()
+  check(pipeline.awaitDocuments().isEmpty()) // before the first request
+  ```
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

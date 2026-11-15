@@ -160,7 +160,7 @@ class UnpairedSurrogatePipelineTest {
                 )
             },
             engine,
-        ) { it.copy(membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Known(answer) }) }
+        ) { memberships(MembershipProvider { _, _ -> MembershipAnswer.Known(answer) }) }
             .evaluate(facts())
         outcome.status.assert().isEqualTo(ProblemType.UNAVAILABLE.status)
         engine.requests.assert().isEmpty()

@@ -24,7 +24,6 @@ import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
@@ -205,13 +204,9 @@ class CoSecPipelineAutoConfiguration {
         identity: ObjectProvider<IdentityIssuer>,
         pipelineProperties: PipelineProperties,
         authorizationProperties: RuntimeAuthorizationProperties,
-    ): Pipeline = Pipeline(
-        PipelineComponents(
-            authenticator = authenticator,
-            snapshots = snapshots,
-            membershipProvider = membershipProvider.ifAvailable,
-            idGenerator = idGenerator.getIfAvailable { RandomIdGenerator },
-            options = PipelineOptions(
+    ): Pipeline = Pipeline.builder(authenticator, snapshots)
+        .options(
+            PipelineOptions(
                 timeout = pipelineProperties.timeout.toKotlinDuration(),
                 authenticationTimeout = pipelineProperties.authenticationTimeout.toKotlinDuration(),
                 membershipTimeout = authorizationProperties.membership.timeout.toKotlinDuration(),
@@ -222,13 +217,17 @@ class CoSecPipelineAutoConfiguration {
                 apiKeyHeader = pipelineProperties.apiKeyHeader,
                 traceLevel = pipelineProperties.traceLevel,
             ),
-            attributes = attributes,
-            listeners = listeners,
-            rateLimiter = rateLimiter.ifAvailable,
-            routes = routes,
-            identity = identity.ifAvailable,
-        ),
-    )
+        )
+        .attributes(attributes)
+        .listeners(listeners)
+        .routes(routes)
+        .ids(idGenerator.getIfAvailable { RandomIdGenerator })
+        .apply {
+            membershipProvider.ifAvailable?.let(::memberships)
+            rateLimiter.ifAvailable?.let(::rateLimiter)
+            identity.ifAvailable?.let(::identity)
+        }
+        .build()
 
     /**
      * At a gateway: forwards the identity it verified to the services behind it (`CoSec-Identity`) and strips the

@@ -16,8 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.snapshot.DocumentState
-import me.ahoo.cosec.runtime.snapshot.SnapshotSource
+import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import org.springframework.boot.availability.ApplicationAvailability
 import org.springframework.boot.availability.AvailabilityChangeEvent
 import org.springframework.boot.availability.ReadinessState
@@ -35,7 +34,7 @@ import java.util.concurrent.TimeUnit
  */
 @InternalCoSecApi
 class SnapshotReadiness(
-    private val source: SnapshotSource<*, *>,
+    private val readiness: DocumentReadiness,
     private val publisher: ApplicationEventPublisher,
     /**
      * The state Spring holds. Listeners of one event run in an order this cannot choose, so a refusal can land before
@@ -62,8 +61,8 @@ class SnapshotReadiness(
         timer.scheduleWithFixedDelay(::check, 0, interval.toMillis(), TimeUnit.MILLISECONDS)
     }
 
-    /** The platform document is installed, and every prewarmed document. */
-    val isReady: Boolean get() = source.isPrewarmed && source.peek()?.policies is DocumentState.Present<*>
+    /** The platform document is installed, and every prewarmed document ([DocumentReadiness.missing] is empty). */
+    val isReady: Boolean get() = readiness.missing().isEmpty()
 
     override fun onApplicationEvent(event: AvailabilityChangeEvent<ReadinessState>) {
         if (event.source === this || event.state != ReadinessState.ACCEPTING_TRAFFIC) {

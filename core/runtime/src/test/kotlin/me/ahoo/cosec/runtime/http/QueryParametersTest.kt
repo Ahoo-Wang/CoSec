@@ -45,7 +45,7 @@ class QueryParametersTest {
     @Test
     fun `the pipeline names the headers and the query parameter it reads credentials from`() {
         val pipeline = PipelineFixtures.pipeline {
-            it.copy(options = PipelineOptions(apiKeyHeader = "X-Service-Key"))
+            options(PipelineOptions(apiKeyHeader = "X-Service-Key"))
         }
         pipeline.credentialHeaders.assert().containsExactlyInAnyOrder("authorization", "X-Service-Key")
         pipeline.withoutQueryToken("authorization=t&page=2").assert().isEqualTo("page=2")

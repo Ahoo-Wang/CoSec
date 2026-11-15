@@ -13,10 +13,11 @@ decision.
 ## Extension points
 
 With the starter you extend CoSec by declaring a Spring bean. Some extension points collect every bean of their type;
-the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, assemble a
-`Pipeline` from `PipelineComponents`, with the documents from `SuspendingSnapshotSource.of(store)`, and pass your
-implementation to the class that uses it. That assembly is `@ExperimentalCoSecApi` ([Stability levels](#stability-levels));
-tests get a real pipeline from `PipelineFixture` (`cosec-testkit`).
+the others are single beans that replace the starter's default (`@ConditionalOnMissingBean`). Without Spring, build the
+pipeline over your document store with `Pipeline.builder(authenticator, store)`, pass your implementations to the
+builder (`memberships`, `attributes`, `listener`, `rateLimiter`, `ids`), and call `awaitDocuments()` before the first
+request. The builder is `@ExperimentalCoSecApi` ([Stability levels](#stability-levels)); tests get a real pipeline from
+`PipelineFixture` (`cosec-testkit`).
 
 | Extension point | Module, package | Implement it to | The starter takes |
 |---|---|---|---|
@@ -66,7 +67,7 @@ Every public declaration of a published module is in one of four levels. The mar
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
 | `@CoSecSpi` | An interface applications implement, not only call: the extension points above, and the capabilities a principal declares (`ExpiresAtCapable`, `IssuedAtCapable`, `MembershipMarkerCapable`). Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
-| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `AttributeRequests`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline`'s constructor and `evaluate`, `RequestGate`, `PipelineComponents`, `PipelineOptions`, `SnapshotOptions`, `SuspendingSnapshotSource`, `AttributeProviders`, `DecisionListeners`, `IdentityIssuer`, `IdentityGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `RequestSecurity`, `CoSecParameters.read`); the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`); and the control plane's store and shadow window ports with their records ([Control store](#control-store)). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
+| `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `AttributeRequests`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline.builder`, `PipelineBuilder` and its settings `PipelineSettings`, `SnapshotSettings`, `ListenerSettings` and `IdentityForwardingSettings`, `Pipeline.behindGateway` with `GatewayIdentitySettings`, `Pipeline.evaluate` and `awaitDocuments`, `RequestGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `RequestSecurity`); the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`); and the control plane's store and shadow window ports with their records ([Control store](#control-store)). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
 | `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
 
 The build keeps these promises. Every published library module stores its public ABI in a dump file,
@@ -460,8 +461,8 @@ fun cosecIdGenerator(ids: MyIds): IdGenerator = IdGenerator { ids.next() }
 ```
 
 Pick a generator that never waits for its store, such as a Snowflake one, since `generate` runs on the event loop.
-Without Spring, pass it as `PipelineComponents(idGenerator = …)`, `IdentityGate(idGenerator = …)` (both experimental)
-and the first argument of `JwtTokenConverter`.
+Without Spring, pass it to `Pipeline.builder(…).ids(…)` and `Pipeline.behindGateway { ids = … }` (both experimental),
+and as the first argument of `JwtTokenConverter`.
 
 ## Bridge context
 

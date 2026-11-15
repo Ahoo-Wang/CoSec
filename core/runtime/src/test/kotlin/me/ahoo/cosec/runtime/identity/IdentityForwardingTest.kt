@@ -80,7 +80,7 @@ class IdentityForwardingTest {
         attributes: Map<String, String> = routed,
     ): Outcome = runBlocking {
         PipelineFixtures.pipeline(PipelineFixtures.authenticator(authn), PipelineFixtures.StubEngine(decision)) {
-            it.copy(identity = issuer)
+            identity(issuer)
         }.evaluate(facts(attributes))
     }
 

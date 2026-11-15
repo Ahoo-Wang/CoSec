@@ -16,6 +16,7 @@
 package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import org.springframework.boot.health.contributor.Health
@@ -23,10 +24,14 @@ import org.springframework.boot.health.contributor.HealthIndicator
 
 /**
  * `cosecSnapshot`: UP once the platform document and the prewarmed apps and tenants are installed ([SnapshotReadiness]
- * gates readiness on the same), DOWN before, with what is missing. Add it to the readiness group for its details.
+ * gates readiness on the same [DocumentReadiness]), DOWN before, with what is missing. Add it to the readiness group for
+ * its details.
  */
 @InternalCoSecApi
-class SnapshotHealthIndicator(private val source: SnapshotSource<*, *>) : HealthIndicator {
+class SnapshotHealthIndicator(
+    private val source: SnapshotSource<*, *>,
+    private val readiness: DocumentReadiness,
+) : HealthIndicator {
     override fun health(): Health {
         val platform = when (source.peek()?.policies) {
             is DocumentState.Present<*> -> "installed"
@@ -34,7 +39,11 @@ class SnapshotHealthIndicator(private val source: SnapshotSource<*, *>) : Health
             DocumentState.Absent -> "absent"
             null -> "loading"
         }
-        val builder = if (source.isPrewarmed && platform == "installed") Health.up() else Health.down()
-        return builder.withDetail("platform", platform).withDetail("prewarmed", source.isPrewarmed).build()
+        val missing = readiness.missing()
+        val builder = if (missing.isEmpty()) Health.up() else Health.down()
+        return builder.withDetail("platform", platform)
+            .withDetail("prewarmed", source.isPrewarmed)
+            .withDetail("missing", missing.map { it.toString() })
+            .build()
     }
 }

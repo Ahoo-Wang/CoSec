@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Duration
 
@@ -25,7 +24,7 @@ import java.time.Duration
  */
 // stays: one parameter per option of a value set by name
 @Suppress("LongParameterList")
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class SnapshotOptions(
     /**
      * How often a pass starts that revalidates every installed document with a conditional read; while the previous
@@ -92,6 +91,7 @@ class SnapshotOptions(
         }
     }
 
+    @InternalCoSecApi
     companion object {
         /**
          * The longest [revalidateInterval] (RC1-50): the passes that install a change whose invalidation was lost start

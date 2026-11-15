@@ -43,7 +43,8 @@ class TraceLevelEventTest {
         try {
             runBlocking {
                 PipelineFixtures.pipeline(engine = CoSecFlatEngine) {
-                    it.copy(listeners = listeners, options = PipelineOptions(traceLevel = level))
+                    listeners(listeners)
+                    options(PipelineOptions(traceLevel = level))
                 }.evaluate(PipelineFixtures.facts())
             }
         } finally {

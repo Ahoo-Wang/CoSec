@@ -23,7 +23,6 @@ import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -71,21 +70,20 @@ class GeoBlockDecisionTest {
         ),
     )
 
-    private fun pipeline(document: CompiledDocument) = Pipeline(
-        PipelineComponents(
-            Authenticator { AuthnResult.Anonymous },
-            SuspendingSnapshotSource(object : SnapshotViews {
-                override fun peek(key: ViewKey) = SnapshotView(
-                    document,
-                    null,
-                    key.tenant?.let { CompiledDocument.tenant(it, emptyList(), emptyList()) },
-                )
+    private fun pipeline(document: CompiledDocument) = Pipeline.builder(
+        Authenticator { AuthnResult.Anonymous },
+        SuspendingSnapshotSource(object : SnapshotViews {
+            override fun peek(key: ViewKey) = SnapshotView(
+                document,
+                null,
+                key.tenant?.let { CompiledDocument.tenant(it, emptyList(), emptyList()) },
+            )
 
-                override fun load(key: ViewKey) = CompletableFuture.completedFuture(peek(key))
-            }),
-            attributes = providers,
-        )
+            override fun load(key: ViewKey) = CompletableFuture.completedFuture(peek(key))
+        }),
     )
+        .attributes(providers)
+        .build()
 
     private fun Pipeline.status(remote: String): Int = runBlocking {
         evaluate(HttpFacts("GET", "/page", null, Headers.EMPTY, Cookies.EMPTY, remote, HostScope(null))).status

@@ -33,7 +33,6 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -83,13 +82,12 @@ class CookieTokenPropertyTest {
             )
     }
 
-    private val pipeline = Pipeline(
-        PipelineComponents(
-            Authenticator { AuthnResult.Anonymous },
-            SuspendingSnapshotSource(Views),
-            engine = permit
-        )
+    private val pipeline = Pipeline.builder(
+        Authenticator { AuthnResult.Anonymous },
+        SuspendingSnapshotSource(Views),
     )
+        .engine(permit)
+        .build()
     private val filter = PipelineGatewayFilter(pipeline)
     private val route = Route.async().id("r").uri(URI.create("lb://orders")).predicate { true }.build()
 

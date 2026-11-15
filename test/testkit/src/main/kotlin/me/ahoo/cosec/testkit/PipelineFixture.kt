@@ -15,6 +15,9 @@
 
 package me.ahoo.cosec.testkit
 
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
@@ -28,18 +31,11 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.event.DecisionListener
-import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
-import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
-import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
-import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
-import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
-import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -49,8 +45,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
 import java.nio.file.Path
 import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import kotlin.time.Duration.Companion.seconds
 
 /**
  * A real [Pipeline] for an application's tests, built from its own policy documents: the same compiler, snapshot
@@ -149,7 +145,7 @@ class PipelineFixture private constructor(
     companion object {
         private const val BEARER = "Bearer "
         private const val REMOTE_ADDRESS = "10.0.0.1"
-        private const val PREWARM_SECONDS = 30L
+        private val PREWARM_TIMEOUT = 30.seconds
 
         /**
          * The documents in [directory], laid out as [PolicyTestKit.load] reads them, with the route map [routes] and the
@@ -193,32 +189,27 @@ class PipelineFixture private constructor(
             documents.apps.forEach { (id, body) -> store.put(SnapshotKey.App(id), published(body)) }
             documents.tenants.forEach { (id, body) -> store.put(SnapshotKey.Tenant(id), published(body)) }
 
-            val compiler = PlatformCompiler()
-            val source = DocumentSnapshots.source(store, compiler, SnapshotOptions())
-            compiler.bind(source)
-            val keys = listOf<SnapshotKey>(SnapshotKey.Platform) +
-                documents.apps.keys.map { SnapshotKey.App(it) } +
-                documents.tenants.keys.map { SnapshotKey.Tenant(it) }
-            // Installed before the first evaluate, so a test's first request is decided as any later one.
-            source.prewarm(keys).get(PREWARM_SECONDS, TimeUnit.SECONDS)
             val principals = ConcurrentHashMap<String, Principal>()
-            val decisionListeners = if (listeners.isEmpty()) DecisionListeners.NONE else DecisionListeners(listeners)
-            val pipeline = Pipeline(
-                PipelineComponents(
-                    authenticator = fixtureAuthenticator(principals),
-                    snapshots = SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true)),
-                    listeners = decisionListeners,
-                    routes = routes,
-                ),
-            )
-            return PipelineFixture(pipeline, principals) {
-                try {
-                    // NONE is shared: only the fixture's own listeners are drained, and so closed.
-                    if (decisionListeners !== DecisionListeners.NONE) decisionListeners.drain()
-                } finally {
-                    source.close()
+            val pipeline = Pipeline.builder(fixtureAuthenticator(principals), store)
+                .snapshots {
+                    prewarmApps = documents.apps.keys
+                    prewarmTenants = documents.tenants.keys
                 }
+                .routes(routes)
+                .apply { listeners.forEach(::listener) }
+                .build()
+            // Installed before the first evaluate, so a test's first request is decided as any later one.
+            val missing = try {
+                runBlocking { withTimeout(PREWARM_TIMEOUT) { pipeline.awaitDocuments() } }
+            } catch (e: TimeoutCancellationException) {
+                pipeline.close()
+                throw IllegalStateException("The scenario documents were not installed within $PREWARM_TIMEOUT.", e)
             }
+            if (missing.isNotEmpty()) {
+                pipeline.close()
+                error("The scenario documents $missing cannot be installed: see the log for why.")
+            }
+            return PipelineFixture(pipeline, principals, pipeline::close)
         }
 
         /** Answers the token a [request] wrote; a request with any other token is anonymous, never authenticated. */

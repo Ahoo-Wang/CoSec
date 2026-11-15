@@ -82,7 +82,7 @@ class AuditEventsTest {
         val listeners = DecisionListeners(listOf(capture))
         try {
             runBlocking(TraceContext("trace-1", "span-1", true)) {
-                PipelineFixtures.pipeline(authenticator, StubEngine(decision)) { it.copy(listeners = listeners) }
+                PipelineFixtures.pipeline(authenticator, StubEngine(decision)) { listeners(listeners) }
                     .evaluate(facts(path).withRequestAttributes(requestAttributes))
             }
         } finally {
@@ -111,10 +111,8 @@ class AuditEventsTest {
         try {
             runBlocking {
                 PipelineFixtures.pipeline(authenticator(key), StubEngine(Decision.Deny(null))) {
-                    it.copy(
-                        listeners = listeners,
-                        membershipProvider = MembershipProvider { _, _ -> MembershipAnswer.Unknown }
-                    )
+                    listeners(listeners)
+                    memberships(MembershipProvider { _, _ -> MembershipAnswer.Unknown })
                 }.evaluate(facts("/orders"))
             }
         } finally {

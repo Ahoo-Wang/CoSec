@@ -93,7 +93,7 @@ class ShadowAppDocumentTest {
             authenticator = PipelineFixtures.authenticator(PipelineFixtures.authenticated(app = "order")),
             engine = CoSecFlatEngine,
             views = viewsOf,
-        ) { it.copy(listeners = registered) }
+        ) { listeners(registered) }
         return runBlocking {
             pipeline.evaluate(PipelineFixtures.facts(host = HostScope(AppId("order")))).status
         }

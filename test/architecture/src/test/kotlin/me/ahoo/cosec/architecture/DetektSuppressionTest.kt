@@ -27,7 +27,7 @@ class DetektSuppressionTest {
         val RECORDED: Map<String, Int> = mapOf(
             "TooManyFunctions" to 19,
             "NestedBlockDepth" to 12,
-            "LongParameterList" to 8,
+            "LongParameterList" to 7,
         )
 
         private val SUPPRESS = Regex("""@(?:file:)?Suppress\(([^)]*)\)""")
