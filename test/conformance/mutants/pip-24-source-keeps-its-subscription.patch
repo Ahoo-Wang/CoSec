@@ -1,0 +1,17 @@
+# Rule: PIP-24
+# Mutant: a source whose periodic pass cannot be scheduled keeps its subscription
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceConstructionTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index bb47675e..64f9b425 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -179,7 +179,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+     // #1383: a step that throws releases what the constructor took before it, so a source that fails to build holds nothing.
+     private val subscription: AutoCloseable = undoing({}) { store.subscribe(ChangeListener()) }
+     private val passes = PeriodicPasses()
+-    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { schedulePeriodic() }
++    private val periodic: ScheduledFuture<*> = undoing({}) { schedulePeriodic() }
+ 
+     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
+     val isPrewarmed: Boolean get() = prewarmed
