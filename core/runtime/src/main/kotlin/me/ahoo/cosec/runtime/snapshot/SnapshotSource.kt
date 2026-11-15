@@ -282,10 +282,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     }
 
     /**
-     * Completes once the shared document and each of [keys] has been read: installed, or failed. Unlike [loadAll] it does
-     * not give up at [SnapshotOptions.coldLoadTimeout], and it reads again only a document that is missing or failed.
-     * Each call gets its own future, so cancelling it leaves the loads running. It completes exceptionally only when
-     * this source is closed.
+     * Completes once the shared document and then each of [keys] has been read: installed, or failed. The shared document
+     * comes first, so that no app or tenant document this starts compiles against default limits. Unlike [loadAll] it
+     * does not give up at [SnapshotOptions.coldLoadTimeout], and it reads again only a document that is missing or
+     * failed. Each call gets its own future, so cancelling it leaves the loads running. It completes exceptionally only
+     * when this source is closed.
      *
      * @throws IllegalArgumentException when a key belongs to no family of this source.
      */
@@ -293,9 +294,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     fun settled(keys: Collection<SnapshotKey>): CompletableFuture<Void> {
         keys.forEach(::familyOf)
         val settled = CompletableFuture<Void>()
-        val loads = if (closed) emptyList() else (listOf(sharedKey) + keys).map(::usableOf)
-        CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
-            if (closed) settled.completeExceptionally(closedError()) else settled.complete(null)
+        val shared = if (closed) CompletableFuture.completedFuture(null) else usableOf(sharedKey)
+        shared.whenComplete { _, _ ->
+            val loads = if (closed) emptyList() else keys.map(::usableOf)
+            CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
+                if (closed) settled.completeExceptionally(closedError()) else settled.complete(null)
+            }
         }
         return settled
     }
