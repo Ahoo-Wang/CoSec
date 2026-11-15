@@ -3,14 +3,14 @@
 # Tests: :architecture:test --tests me.ahoo.cosec.architecture.SnapshotDocumentMakersTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/StagingSlots.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/StagingSlots.kt
-index b8605cc3..3fc6a230 100644
+index 15bba475..ea310515 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/StagingSlots.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/StagingSlots.kt
-@@ -47,7 +47,12 @@ internal class StagingSlots(
+@@ -46,7 +46,12 @@ internal class StagingSlots(
      /** The candidate [change] stages for its window [state]; 503 when it cannot be made. Nothing is reserved yet. */
      @Suppress("TooGenericExceptionCaught")
      fun candidate(change: ChangeRequest, state: ShadowState, applied: () -> PolicyDocument): StoredCandidate = try {
--        val document = SnapshotDocuments.of(at(applied(), change.base.revision + 1, state.startedAt))
+-        val document = SnapshotDocuments.of(applied().at(change.base.revision + 1, state.startedAt))
 +        val document = me.ahoo.cosec.spi.snapshot.SnapshotDocument(
 +            me.ahoo.cosec.document.PolicyDocumentCodec.SCHEMA,
 +            change.base.revision + 1,
