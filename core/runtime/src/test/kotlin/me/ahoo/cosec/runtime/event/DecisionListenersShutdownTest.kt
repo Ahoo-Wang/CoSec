@@ -91,7 +91,11 @@ class DecisionListenersShutdownTest {
             logged.await(5, TimeUnit.SECONDS).assert().isTrue()
 
             val started = System.nanoTime()
-            val status = runBlocking { withContext(loop.asCoroutineDispatcher()) { pipeline.evaluate(PipelineFixtures.facts()).status } }
+            val status = runBlocking {
+                withContext(
+                    loop.asCoroutineDispatcher()
+                ) { pipeline.evaluate(PipelineFixtures.facts()).status }
+            }
 
             status.assert().isEqualTo(200)
             ((System.nanoTime() - started) / 1_000_000).assert().describedAs("ms on the request").isLessThan(200)

@@ -1,0 +1,26 @@
+# Rule: PIP-24
+# Mutant: prewarmed ids are read after the source subscribed
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineBuilderFailureTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineBuilder.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineBuilder.kt
+index ec0a7e7f..3249d678 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineBuilder.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineBuilder.kt
+@@ -160,7 +160,7 @@ class PipelineBuilder internal constructor(
+         val options = options ?: settings.toOptions()
+         val attributes = attributeProviders ?: AttributeProviders(providers.toList())
+         // Refused here, before anything is acquired: an option out of range, a prewarmed id that names no document.
+-        val snapshotOptions = store?.let { snapshotSettings.toOptions() to snapshotSettings.prewarmKeys() }
++        val snapshotOptions = store?.let { snapshotSettings.toOptions() to emptyList() }
+         val owned = ArrayList<AutoCloseable>()
+         try {
+             // Its own checks run before it starts a consumer.
+@@ -173,7 +173,7 @@ class PipelineBuilder internal constructor(
+             val source = DocumentSnapshots.source(store, compiler, sourceOptions, clock)
+             owned += source
+             compiler.bind(source)
+-            val readiness = DocumentReadiness(source, prewarm).also { it.start() }
++            val readiness = DocumentReadiness(source, prewarm + snapshotSettings.prewarmKeys()).also { it.start() }
+             val views = SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true))
+             return assemble(views, options, attributes, listeners, issuer, owned, readiness)
+         } catch (e: Throwable) {

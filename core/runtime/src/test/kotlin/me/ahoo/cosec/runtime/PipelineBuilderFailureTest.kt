@@ -61,7 +61,10 @@ class PipelineBuilderFailureTest {
     @Test
     fun `an invalid prewarmed id is refused before the source subscribes`() {
         assertThrows<IllegalArgumentException> {
-            Pipeline.builder(authenticator, store).listener(listener).snapshots { prewarmTenants = setOf("invalid:tenant") }
+            Pipeline.builder(
+                authenticator,
+                store
+            ).listener(listener).snapshots { prewarmTenants = setOf("invalid:tenant") }
                 .build()
         }
         subscribed.assert().isEqualTo(0)
@@ -89,7 +92,10 @@ class PipelineBuilderFailureTest {
     fun `a subscription that fails releases the listeners, and the caller sees its own exception`() {
         val down = IllegalStateException("the store is down")
         failSubscribe = down
-        val thrown = assertThrows<IllegalStateException> { Pipeline.builder(authenticator, store).listener(listener).build() }
+        val thrown = assertThrows<IllegalStateException> { Pipeline.builder(
+            authenticator,
+            store
+        ).listener(listener).build() }
         thrown.assert().isSameAs(down)
         active.assert().isEqualTo(0)
     }
