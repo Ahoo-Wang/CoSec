@@ -113,14 +113,15 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
             return rejected(
                 RejectionKind.ACTION_NOT_TRANSLATED,
                 "$location.$OPTIONS.$SEPARATOR",
-                "path separator [$separator]: 8.0 paths are separated by `/` (RFC 0005 §5.2)",
+                "path separator [$separator]: 8.0 paths are separated by `/`: rewrite the pattern with `/` as its separator",
             )
         }
         patterns.firstOrNull { it.contains(TEMPLATE) }?.let { template ->
             return rejected(
                 RejectionKind.ACTION_NOT_TRANSLATED,
                 location,
-                "path template [$template]: translated into a capture and a condition by RFC 0005 PR-6",
+                "path template [$template]: 8.0 does not translate a #{...} template in an action. Name the resource in a route map " +
+                    "and compare it with the principal in a condition (\"Path templates in actions\" in the upgrading guide)",
             )
         }
         val caseSensitive = options?.get(CASE_SENSITIVE)?.asBoolean() ?: true

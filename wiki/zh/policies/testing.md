@@ -39,6 +39,8 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、撤销绑定（[安全模型](../guide/security-model.md#break-glass)）。撤销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
 
+路径参数（`{key}`、`{id}`、`{revision}`、`{bindingId}`）在路径划分为段之后做一次百分号解码：`tenant:acme%20west` 是租户 `acme west`，`tenant%3Aacme` 是 `tenant:acme`，编码的 `/`（`%2F`）是值的一部分，从不成为另一个段，`+` 仍是 `+`，编码两次的 `%25`（`%2520`）解码为 `%20` 而不是空格。畸形的转义（`%zz`、孤立的 `%`、不是 UTF-8 的字节）是 `400`。路由自己的词（`documents`、`revisions`、`:apply`）按原样匹配。
+
 错误为 `application/problem+json`。`400`、`409`、`410`、`412`、`422` 或 `428` 在 `detail` 中解释你自己的请求；`401`、`403`、`404`、`500` 或 `503` 不带详情，因此拒绝永远不会透露某个文档或变更是否存在。`400` 的 `detail` 是控制面自己的某项检查，或者点名解析不了的字段（`[mode] is not one of MERGE, REPLACE.`），从不带异常消息。路径、查询或请求体中任何位置的字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就是 `400`（`IDN-10`）：Redis key 会把它写成 `?`，指向另一个 id。存储的文档或记录解码失败（例如滚动升级期间较新版本写入的）是 `500`。背后没有主体的请求（包括管道匿名放行的请求），在读取请求体之前就是 `401`。只服务路由的确切路径：末尾带 `/` 的路径是 `404`，含空段的路径在到达之前就被管道以 `400` 拒绝。记录解码失败的变更（包括属于不能作为应用 id 的应用的变更），对每个调用方都是不带详情的 `503`（`SCP-10`）。原因由控制面所在的主机以 `INFO` 记入日志，带有问题响应中的 `requestId`（[故障排查](../operations/troubleshooting.md#control-plane-errors)）。
 
 ## 校验策略 {#validating-policies}
@@ -109,7 +111,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 ## 用 explain 调试决策 {#debugging-a-decision-with-explain}
 
-`explain` 接受同样的 `request`（与 `simulate` 一样授权和检查），以及可选的 `at`：某个决策所用的文档修订，取自其审计事件的记录（`{"platform": 12, "app": 3, "tenant": 4}`）。只要这些修订仍被保留，它就在这些修订上求值，并返回决策及其追踪，让你看到过去的请求为什么被这样决策。是否读取了应用文档，按执行时的方式、用所记录修订的租户文档来决定；它回答的修订就是它读取的修订：没有读取应用文档时没有 `app`。其字段以及如何找到该请求，见[代码中的检查](../integration/checks.md)。
+`explain` 接受同样的 `request`（与 `simulate` 一样授权和检查），以及可选的 `at`：某个决策所用的文档修订，取自其审计事件的记录（`{"platform": 12, "app": 3, "tenant": 4}`）。只要这些修订仍被保留，它就在这些修订上求值，并返回决策及其追踪，让你看到过去的请求为什么被这样决策。是否读取了应用文档，按执行时的方式、用所记录修订的租户文档来决定；它回答的修订就是它读取的修订：没有读取应用文档时没有 `app` 成员，绝不是 `null`。`explain` 回答的 `version` 可以原样作为 `at` 再发回去。其字段以及如何找到该请求，见[代码中的检查](../integration/checks.md)。
 
 ## 变更 {#changes}
 
