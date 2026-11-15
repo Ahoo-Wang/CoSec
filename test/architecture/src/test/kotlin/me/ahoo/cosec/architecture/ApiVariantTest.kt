@@ -67,6 +67,25 @@ class ApiVariantTest {
         violations.assert().isEmpty()
     }
 
+    /**
+     * Any library a public signature names, not only Jackson: a consumer that adds the module alone cannot compile a call
+     * to an entry whose signature names a type its API variant does not carry (#1389). What the module's own class path
+     * holds, being the implementation's, says nothing about that.
+     */
+    @Test
+    fun `the API variant carries every library a public signature names`() {
+        val missing = LIBRARIES.flatMap { project ->
+            val exported = facts(project, "module").map(::jar).toSet()
+            PublicSignatures.libraryTypes(PublicSignatures.classes { it == project })
+                .filter { (_, library) -> jar(library) !in exported }
+                .map { (where, library) -> "$project: $where, in $library, which its API variant does not carry" }
+        }
+        missing.assert().isEmpty()
+    }
+
+    /** `kotlinx-coroutines-core` is `-jvm` in the jar the class path holds and the variant names the other. */
+    private fun jar(module: String) = module.removeSuffix("-jvm")
+
     /** The core and the contracts carry no Jackson (`JacksonSignatureTest`); a module that does must export it. */
     @Test
     fun `the API variant carries Jackson where a public signature names it`() {

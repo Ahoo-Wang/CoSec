@@ -18,6 +18,7 @@ import com.tngtech.archunit.core.domain.JavaCodeUnit
 import com.tngtech.archunit.core.domain.JavaField
 import com.tngtech.archunit.core.domain.JavaMember
 import com.tngtech.archunit.core.domain.JavaModifier
+import com.tngtech.archunit.core.domain.JavaType
 import java.lang.reflect.Executable
 import java.lang.reflect.Method
 import kotlin.reflect.KVisibility
@@ -55,6 +56,40 @@ object PublicSignatures {
             .map(::signature)
             .filter { type.containsMatchIn(it) }
         supertypes + members
+    }
+
+    /**
+     * Every library type a public signature of [classes] names, as `<where> names <type>` to the `group:artifact` of the
+     * library that holds the type: the supertypes, and the parameter, return and field types of the public members, type
+     * arguments and bounds included. A type of the JDK or of CoSec's own modules is left out, and so is one whose class
+     * is not in a library jar of the Gradle cache.
+     */
+    fun libraryTypes(classes: List<JavaClass>): List<Pair<String, String>> = classes.flatMap { javaClass ->
+        val supertypes = listOfNotNull(javaClass.superclass.orElse(null)) + javaClass.interfaces
+        val members = (javaClass.methods + javaClass.constructors + javaClass.fields).filter(
+            ::isPublic
+        ).flatMap { member ->
+            val types: List<JavaType> = when (member) {
+                is JavaCodeUnit -> member.parameterTypes + listOfNotNull(
+                    (member as? com.tngtech.archunit.core.domain.JavaMethod)?.returnType,
+                )
+                is JavaField -> listOf(member.type)
+                else -> emptyList()
+            }
+            types.map { member.fullName to it }
+        }
+        (supertypes.map { javaClass.name to it } + members).flatMap { (where, type) ->
+            type.allInvolvedRawTypes.mapNotNull { raw ->
+                libraryOf(raw)?.let { library -> "$where names ${raw.name}" to library }
+            }
+        }
+    }.distinct()
+
+    /** `group:artifact` of the Gradle-cache jar that holds [type], else null. */
+    private fun libraryOf(type: JavaClass): String? {
+        val uri = type.source.orElse(null)?.uri?.toString() ?: return null
+        val match = Regex("""/files-2\.1/([^/]+)/([^/]+)/[^/]+/[^/]+/[^/!]+\.jar""").find(uri) ?: return null
+        return "${match.groupValues[1]}:${match.groupValues[2]}"
     }
 
     private fun isPublicKotlin(javaClass: JavaClass): Boolean {
