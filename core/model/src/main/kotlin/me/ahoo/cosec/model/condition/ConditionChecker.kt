@@ -18,47 +18,6 @@ package me.ahoo.cosec.model.condition
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
- * The cost bounds of a condition (RFC 0005 §3.5, Q9). The defaults are the values decided in Q9. The platform
- * document's `limits` section sets them for every document (RFC 0007 §3.1 N3), so the control plane and every
- * instance compile against the same bounds.
- */
-@InternalCoSecApi
-class ConditionLimits(
-    val maxNodes: Int = 64,
-    val maxDepth: Int = 8,
-    val maxInValues: Int = 1024,
-    val maxCidrBlocks: Int = 256,
-    /** In UTF-8 bytes. */
-    val maxLiteralBytes: Int = 1024,
-    /** The sum of the node weights ([CheckedCondition.Weights]). */
-    val maxCost: Int = 256,
-) {
-    init {
-        val limits = intArrayOf(maxNodes, maxDepth, maxInValues, maxCidrBlocks, maxLiteralBytes, maxCost)
-        require(limits.all { it > 0 }) { "Condition limits must be positive." }
-    }
-
-    @InternalCoSecApi
-    companion object {
-        val DEFAULT: ConditionLimits = ConditionLimits()
-    }
-}
-
-/** A reason a condition does not compile, at a JSON [path] relative to the condition, e.g. `$.and[1].eq[0]`. */
-@InternalCoSecApi
-data class ConditionError(val path: String, val message: String)
-
-@InternalCoSecApi
-sealed interface CheckResult {
-    @InternalCoSecApi
-    class Valid(val condition: CheckedCondition) : CheckResult
-
-    /** At least one error. */
-    @InternalCoSecApi
-    class Invalid(val errors: List<ConditionError>) : CheckResult
-}
-
-/**
  * Type-checks a [Condition] and bounds its cost (RFC 0005 §3.2, §3.5). Errors name the JSON path; a condition with
  * any error does not compile.
  *

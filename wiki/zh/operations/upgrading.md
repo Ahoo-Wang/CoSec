@@ -130,7 +130,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 #### 报告中的语义改动 {#semantic-changes-in-the-report}
 
 `semanticChanges` 按 7.x 数据中的位置，列出 8.0 有意做出不同决策的形态。`change` 是[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
-中的规则 id（`C1a`–`C7`、`D1`–`D3`）之一，或者：
+中的规则 id（`C1a`–`C8`、`D1`–`D3`）之一，或者：
 
 - `ASCII-CASE`：带 `ignoreCase` 的 ALLOW 条件。8.0 只折叠 ASCII 字母，所以这条 ALLOW 匹配的写法更少。DENY 条件的值含 ASCII 以外的字母时，
   这个条件改为被拒绝。
@@ -333,7 +333,7 @@ spec:
 
 **什么需要你来判断。**每一项都以一条说明要改写什么的信息被拒绝；在导出的数据里修正，然后重新转换：带 `#{...}` 模板的路径（`ACTION_NOT_TRANSLATED`：[动作中的路径模板](#path-templates-in-actions)）；由不同方法组成的复合动作（`ACTION_NOT_TRANSLATED`：按方法拆开）；对客户端地址的 `eq`、`contains`、`endsWith`、模式不是字面量的 `regular`、对 `request.path` 之外的部分的 `path`，以及 DENY 里的 `regular`（`CONDITION_NOT_TRANSLATED`）。
 
-**什么不能转换。**`spel` 和 `ognl` 条件（`EXPRESSION_CONDITION`）、自定义的动作和条件类型（`CUSTOM_ACTION`、`CUSTOM_CONDITION`），以及 4.x 的 `rateLimiter` 和 `groupedRateLimiter` 条件：它们以 `UNDECODABLE` 加 `CUSTOM_CONDITION` 被拒绝，因为 7.x 没有这种条件，它们的 `UNDECODABLE` 信息说的是 7.x，而不是你的版本。请改写为[限流规则](../policies/rate-limiting.md)。策略历史不会被转换。
+**什么不能转换。**`spel` 和 `ognl` 条件（`EXPRESSION_CONDITION`）、自定义的动作和条件类型（`CUSTOM_ACTION`、`CUSTOM_CONDITION`），以及 4.x 的 `rateLimiter` 和 `groupedRateLimiter` 条件：它们以 `UNDECODABLE` 加 `CUSTOM_CONDITION` 被拒绝，因为 7.x 没有这种条件，它们的 `UNDECODABLE` 信息说明输入不是 7.x 格式，并指向本节。请改写为[限流规则](../policies/rate-limiting.md)。策略历史不会被转换。
 
 **工具无法决定的事**，需要你在发布之前决定：
 
@@ -360,6 +360,7 @@ spec:
 | **C5**（`BND-2`） | 主体只能附加自己租户文档或平台层中可附加的策略。 | 任何主体都能附加任何策略。 | 主体策略，仅在 `--partition by-owner` 时。默认分区保持 7.x 的行为。 |
 | **C6** | 引用了所属应用未定义权限的角色授权，被 `convert` 拒绝。 | 到达它的请求为 `500`。 | 带有过时权限 id 的授权。 |
 | **C7**（`MIG-2`） | 针对所有动作（`*`）的 DENY，对它匹配的请求，也拒绝代码中的检查和控制面的动作（`cosec:*`）。 | 只决策 HTTP 请求。 | 针对所有动作的 DENY 语句（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
+| **C8**（`MIG-2`） | 针对所有动作的 ALLOW 是 `http:*`，即所有 HTTP 请求，而[路由映射](../policies/language.md#route-maps)会把它映射的每条路由从中拿走：被映射的路由是它的业务动作，转换后的策略并不授予它。 | 该路由就是一个 HTTP 请求。 | 针对所有动作的 ALLOW 语句，报告在它们的动作处记录。加入路由映射后，请用各自的策略授予被映射的动作（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
 | **D1** | ALLOW 中的 `inRole: r` 只匹配在请求空间中生效的角色；ALLOW 中的 `inRole: r@s` 只在请求处于空间 `s` 时匹配；DENY 中的 `inRole: r` 匹配在任意空间持有的该角色。 | 按字面匹配角色，裸角色也匹配 `r@<请求的空间>`。 | `inRole` 条件。DENY 只会变宽，ALLOW 只会变窄。 |
 | **D2**（`CND-1`） | 不存在的属性不等于任何值，也不等于空串。 | 不存在的 part 读作 `""`。 | 与 `#{principal.id}`、`#{principal.attributes['k']}` 或 `#{tenant.tenantId}` 比较的 `eq`。ALLOW 中，不存在的 part 不再匹配空的属性（变窄）。DENY 中，`convert` 补上 7.x 的情形，保持 7.x 的读法。 |
 | **D3** | 没有正则表达式，所以也没有正则超时。 | `RegexTimeoutException` 按默认拒绝处理。 | `regular` 条件；只有字面量、字面量前缀和字面量选择的模式能翻译。 |
@@ -387,7 +388,7 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 针对所有动作的 DENY 仍是 `"action": "*"`：它继续拒绝它拒绝过的请求，现在也经由代码中的检查和控制面拒绝，报告把它记为 C7。如果这样的 DENY
 可能匹配管理员自己的请求，它也会拒绝管理员使用控制面。
 
-`http:*` 上的语句永远不匹配[路由映射](../policies/language.md#route-maps)映射过的请求。加入路由映射之后，用单独的策略授予它命名的动作。
+`http:*` 上的语句永远不匹配[路由映射](../policies/language.md#route-maps)映射过的请求。加入路由映射之后，用单独的策略授予它命名的动作。报告把每条针对所有动作的 ALLOW 记为 C8，位置在它的动作处，这样加入路由映射那天不再被允许的路由有一行可查。
 
 #### 动作中的路径模板 {#path-templates-in-actions}
 

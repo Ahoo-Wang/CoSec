@@ -220,7 +220,7 @@ class ControlHttp(private val plane: ControlPlane) {
         if (verb != null && segments.size != 1) {
             return notFound()
         }
-        val key = documentKey(keyText)
+        val key = documentKey(unescaped(keyText))
         return when (verb) {
             null -> revisions(operator, request, key, segments.drop(1))
             "apply" -> post(request) {
@@ -268,10 +268,10 @@ class ControlHttp(private val plane: ControlPlane) {
                     )
                 )
                 rest.size == 2 && rest[0] == "revisions" -> document(
-                    plane.read(operator, key, revisionOf("revision", rest[1]))
+                    plane.read(operator, key, revisionOf("revision", unescaped(rest[1])))
                 )
                 rest.size == 3 && rest[0] == "revisions" && rest[2] == "propagation" -> {
-                    val propagation = plane.propagation(operator, key, revisionOf("revision", rest[1]))
+                    val propagation = plane.propagation(operator, key, revisionOf("revision", unescaped(rest[1])))
                     json(
                         factory.objectNode().put(
                             "revision",
@@ -353,7 +353,7 @@ class ControlHttp(private val plane: ControlPlane) {
 
         segments.size == 1 && request.method == DELETE -> {
             val reason = request.query["reason"] ?: throw InvalidControlRequestException("Revoking break-glass needs a reason.")
-            val binding = field("binding", "a binding id") { BindingId(segments[0]) }
+            val binding = field("binding", "a binding id") { BindingId(unescaped(segments[0])) }
             val change = plane.breakGlass.revoke(operator, binding, reason)
             // An emergency revoke that did not take effect never answers as one that did (R4-1), whoever removed it.
             if (plane.breakGlass.grants(binding)) {
@@ -552,7 +552,7 @@ class ControlHttp(private val plane: ControlPlane) {
         throw InvalidControlRequestException("That names no document: platform, app:<id> or tenant:<id>.", e)
     }
 
-    private fun changeIdOf(text: String): ChangeId = field("change", "a change id") { ChangeId(text) }
+    private fun changeIdOf(text: String): ChangeId = field("change", "a change id") { ChangeId(unescaped(text)) }
 
     private fun ControlHttpRequest.revision(name: String): Long =
         query[name]?.let { revisionOf(name, it) } ?: throw InvalidControlRequestException("[$name] is a revision number.")
@@ -600,12 +600,12 @@ class ControlHttp(private val plane: ControlPlane) {
     }
 
     private fun explanation(explanation: Explanation): ObjectNode = factory.objectNode().apply {
-        putObject(
-            "version"
-        ).put(
-            "platform",
-            explanation.version.platform
-        ).put("app", explanation.version.app).put("tenant", explanation.version.tenant)
+        // A document the decision did not read has no version: absent, as `at` takes it, never `null` (#1391).
+        putObject("version").apply {
+            put("platform", explanation.version.platform)
+            explanation.version.app?.let { put("app", it) }
+            explanation.version.tenant?.let { put("tenant", it) }
+        }
         set("decision", decision(explanation.decision, explanation.trace))
     }
 
