@@ -7,6 +7,11 @@
     "auth": {
       "additionalProperties": false,
       "properties": {
+        "capped": {
+          "const": true,
+          "description": "`true` for a credential with a role cap (an API key with `roles`): the roles above are capped by it. Absent for every other credential, never `false`.",
+          "type": "boolean"
+        },
         "exp": {
           "description": "When the credential expires.",
           "minimum": 0,
