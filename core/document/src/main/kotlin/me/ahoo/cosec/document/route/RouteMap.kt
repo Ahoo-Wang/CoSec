@@ -17,6 +17,7 @@ package me.ahoo.cosec.document.route
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.pattern.ActionPattern
+import me.ahoo.cosec.engine.pattern.Captures
 import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.engine.pattern.InvalidPatternException
@@ -73,8 +74,6 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
         return resolved
     }
 
-    // B7: the candidate match extracts into a function of its own
-    @Suppress("NestedBlockDepth")
     private fun resolveExactly(method: String, path: String): RouteResolution {
         val candidates = routes[method] ?: return RouteResolution.Unmapped
         val parsed = try {
@@ -84,32 +83,37 @@ class RouteMap private constructor(private val routes: Map<String, List<Compiled
         }
         for (compiled in candidates) {
             val captures = compiled.pattern.match(parsed) ?: continue
-            val id = StringBuilder()
-            for ((index, segment) in compiled.segments.withIndex()) {
-                if (index > 0) {
-                    id.append(ID_SEPARATOR)
-                }
-                when (segment) {
-                    is Segment.Literal -> id.append(segment.text)
-                    is Segment.Variable -> {
-                        val value = captures[segment.name].orEmpty()
-                        if (value.isEmpty() || ID_SEPARATOR in value) {
-                            return RouteResolution.Invalid(
-                                "route ${compiled.route.method} ${compiled.route.path} captured [$value] for " +
-                                    "{${segment.name}}, which cannot be a segment of a resource id",
-                            )
-                        }
-                        id.append(value)
-                    }
-                }
-            }
-            return RouteResolution.Mapped(
-                compiled.route,
-                compiled.action,
-                Resource(compiled.type, id.toString(), emptyMap())
-            )
+            return mapped(compiled, captures)
         }
         return RouteResolution.Unmapped
+    }
+
+    /** The route [compiled] maps a request it matched to, with the resource id its [captures] make. */
+    private fun mapped(compiled: Compiled, captures: Captures): RouteResolution {
+        val id = StringBuilder()
+        for ((index, segment) in compiled.segments.withIndex()) {
+            if (index > 0) {
+                id.append(ID_SEPARATOR)
+            }
+            when (segment) {
+                is Segment.Literal -> id.append(segment.text)
+                is Segment.Variable -> {
+                    val value = captures[segment.name].orEmpty()
+                    if (value.isEmpty() || ID_SEPARATOR in value) {
+                        return RouteResolution.Invalid(
+                            "route ${compiled.route.method} ${compiled.route.path} captured [$value] for " +
+                                "{${segment.name}}, which cannot be a segment of a resource id",
+                        )
+                    }
+                    id.append(value)
+                }
+            }
+        }
+        return RouteResolution.Mapped(
+            compiled.route,
+            compiled.action,
+            Resource(compiled.type, id.toString(), emptyMap())
+        )
     }
 
     companion object {
