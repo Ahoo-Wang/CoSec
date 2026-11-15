@@ -17,9 +17,11 @@ import com.tngtech.archunit.core.domain.JavaClass
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.lang.reflect.Modifier
+import kotlin.enums.EnumEntries
 import kotlin.reflect.KCallable
 import kotlin.reflect.KClass
 import kotlin.reflect.KFunction
+import kotlin.reflect.KMutableProperty
 import kotlin.reflect.KProperty
 import kotlin.reflect.KType
 import kotlin.reflect.KVisibility
@@ -27,6 +29,7 @@ import kotlin.reflect.full.allSupertypes
 import kotlin.reflect.jvm.javaConstructor
 import kotlin.reflect.jvm.javaGetter
 import kotlin.reflect.jvm.javaMethod
+import kotlin.reflect.jvm.javaSetter
 import kotlin.reflect.jvm.kotlinFunction
 import kotlin.reflect.jvm.kotlinProperty
 
@@ -47,12 +50,19 @@ class KotlinTimeSignatureTest {
         offenders.assert()
             .describedAs("public signatures naming kotlin.time; use java.time (RFC 0013 §7.3)")
             .isEmpty()
-        // Only a type naming an optional dependency this classpath lacks may go unread; nothing else is skipped.
-        unread.filterNot { it.startsWith(CLASS_NOT_FOUND) }.assert().isEmpty()
+        // What could not be read is reported, never skipped: only a type naming an optional dependency this classpath
+        // lacks (springdoc's) may go unread.
+        unread.filterNot { it.startsWith(CLASS_NOT_FOUND) }.assert()
+            .describedAs("declarations reflection could not read; read them, or name why they may go unread")
+            .isEmpty()
+        read.assert().isGreaterThan(classes.size / 2)
     }
 
     /** Why a type could not be read: it names a class of an optional dependency that is not on this classpath. */
     private val unread = mutableListOf<String>()
+
+    /** The classes and file facades whose declarations were read. */
+    private var read = 0
 
     // Kotlin reflection reports a class it cannot load as an Error (KotlinReflectionInternalError); `unread` keeps it.
     @Suppress("TooGenericExceptionCaught")
@@ -72,19 +82,50 @@ class KotlinTimeSignatureTest {
         val metadata = type.getAnnotation(Metadata::class.java) ?: return emptyList()
         val callables: List<KCallable<*>> = when (metadata.kind) {
             // A class: its own members and constructors, and what its supertypes say of it.
-            CLASS -> kotlinClass(type)?.takeIf { visible(type) }?.let { kClass ->
+            CLASS -> {
+                if (!visible(type)) {
+                    return emptyList()
+                }
+                val kClass = reading(null) { type.kotlin.also { it.members } } ?: return emptyList()
+                read += 1
                 val supertypes = reading(emptyList()) {
                     kClass.allSupertypes.filter { names(it) }.map { "${kClass.qualifiedName} : $it" }
                 }
-                return supertypes + callablesOf(kClass).filter { exposed(it, opted) }.flatMap { described(kClass.qualifiedName, it) }
-            } ?: emptyList()
+                val members = reading(emptyList()) { kClass.members.toList() + kClass.constructors }
+                return supertypes + members.filter { exposed(it, opted) }.flatMap { described(kClass.qualifiedName, it) }
+            }
             // A file of top-level declarations.
-            FILE, MULTIFILE_PART -> type.declaredMethods.filter { Modifier.isPublic(it.modifiers) }
-                .mapNotNull { runCatching { it.kotlinFunction }.getOrNull() } +
-                type.declaredFields.mapNotNull { runCatching { it.kotlinProperty }.getOrNull() }
+            FILE, MULTIFILE_PART -> {
+                read += 1
+                topLevel(type)
+            }
+            // Lambdas and other synthetic classes declare nothing an application calls.
             else -> emptyList()
         }
         return callables.filter { exposed(it, opted) }.flatMap { described(type.name, it) }
+    }
+
+    /**
+     * The public top-level functions and properties of a file facade. Synthetic members (default-argument bridges, the
+     * `$$delegatedProperties` array) are left out by what they are; every other public method must map to a Kotlin
+     * function or be an accessor of a property found through its field, and one that does neither is recorded.
+     */
+    private fun topLevel(type: Class<*>): List<KCallable<*>> {
+        val properties = type.declaredFields.filterNot { it.isSynthetic }
+            .mapNotNull { field -> reading(null) { field.kotlinProperty } }
+        val accessors = properties.flatMap {
+            listOfNotNull(
+                it.javaGetter?.name,
+                (it as? KMutableProperty<*>)?.javaSetter?.name
+            )
+        }
+            .toSet()
+        val functions = type.declaredMethods
+            .filter { Modifier.isPublic(it.modifiers) && !it.isSynthetic && !it.isBridge && it.name !in accessors }
+            .mapNotNull { method ->
+                reading(null) { method.kotlinFunction ?: error("$NO_DECLARATION${type.name}.${method.name}") }
+            }
+        return properties + functions
     }
 
     /** Public to Kotlin, with every class it is nested in: an `internal` class is public in the bytecode. */
@@ -92,11 +133,6 @@ class KotlinTimeSignatureTest {
         val own = reading(false) { type.kotlin.visibility == KVisibility.PUBLIC }
         return own && (type.enclosingClass?.let(::visible) ?: true)
     }
-
-    private fun kotlinClass(type: Class<*>): KClass<*>? = runCatching { type.kotlin.also { it.members } }.getOrNull()
-
-    private fun callablesOf(kClass: KClass<*>): List<KCallable<*>> =
-        runCatching { kClass.members.toList() + kClass.constructors }.getOrDefault(emptyList())
 
     /**
      * The members of [javaClass] marked `@InternalCoSecApi`, by JVM name and parameter types. The marker's retention is
@@ -113,11 +149,16 @@ class KotlinTimeSignatureTest {
     /** Public or protected, and not opted out with `@InternalCoSecApi` ([opted]). */
     private fun exposed(callable: KCallable<*>, opted: Set<String>): Boolean = reading(false) {
         val visible = callable.visibility == KVisibility.PUBLIC || callable.visibility == KVisibility.PROTECTED
-        // A member whose JVM form reflection cannot name (an enum's static `entries`) is not opted out: the stricter answer.
-        visible && runCatching { jvmKey(callable) }.getOrNull()?.let { it in opted } != true
+        visible && jvmKey(callable)?.let { it in opted } != true
     }
 
-    private fun jvmKey(callable: KCallable<*>): String? = when (callable) {
+    /** An enum's `entries` has a static accessor reflection does not map, and nothing can mark it: never opted out. */
+    private fun jvmKey(callable: KCallable<*>): String? = when {
+        callable is KProperty<*> && callable.name == ENTRIES && callable.returnType.classifier == EnumEntries::class -> null
+        else -> jvmKeyOf(callable)
+    }
+
+    private fun jvmKeyOf(callable: KCallable<*>): String? = when (callable) {
         is KProperty<*> -> callable.javaGetter?.let { key(it.name, emptyList()) }
         is KFunction<*> -> callable.javaMethod?.let { method -> key(method.name, method.parameterTypes.map { it.name }) }
             ?: callable.javaConstructor?.let { constructor -> key("<init>", constructor.parameterTypes.map { it.name }) }
@@ -138,6 +179,8 @@ class KotlinTimeSignatureTest {
         const val INTERNAL_API = "me.ahoo.cosec.annotations.InternalCoSecApi"
         const val KOTLIN_TIME = "kotlin.time."
         const val CLASS_NOT_FOUND = "Class not found: "
+        const val NO_DECLARATION = "No Kotlin declaration for "
+        const val ENTRIES = "entries"
         const val ANNOTATIONS = "\$annotations"
         const val CLASS = 1
         const val FILE = 2
