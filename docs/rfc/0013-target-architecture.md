@@ -370,9 +370,14 @@ snapshot/
 
 - **`CompositeToken` 是一个普通的 final 类，不是数据类。** 它装着访问令牌与刷新令牌；数据类生成的 `toString` 会把两者原样打印，今天的 `SimpleCompositeToken` 就是这样。
   `cosec-spi` 的 `Credentials` 早已脱敏，这里照做：按值的 `equals` 与 `hashCode`，不带令牌的 `toString`，没有 `copy` 与 `componentN`；它的 JSON 形状不变并有测试钉住。
-- **`engine.flat` → `engine` 属于 A3，单独一个 PR，放在最后。** A 档的定义是“改公共名字的”，真实项目演练在 A 档的结果上进行；单独成 PR 是纯移动，B3 此后不改任何公共名字，它的 JMH 对比只比较拆分本身。
-- `TenantSwitch` 作为新的 `@CoSecSpi`，签名与今天的抽象方法完全一致。`problem` 格式描述符保持原样，由 `ProblemSchemaTest` 守着与 `ProblemType` 一致。
-- A3 分三个 PR：时长类型与守护规则；登录与 `cosec-api` 的名字（每个名字一个提交）；引擎包改名。
+- **`engine.flat` → `engine` 是 B3 的第一个 PR，不属于 A3。** 我先把它放进了 A3，理由是 A 档就是改公共名字的；实现方逐个核对后发现 `engine.flat` 里的类型全部是 `@InternalCoSecApi`，不在任何 ABI 清单里，这次改名不改任何公共签名，前提不成立。
+  它是一次纯移动（约 175 个 Kotlin 文件、38 个变异体），名字定为 `Engine`、`EngineRequest`、`Evaluator`、`TracingEvaluator`、`Evaluation`、`AttributePlanner`、`CoSecEngine`；`docs/perf/` 里记录的结果保留旧名。
+- **`TenantSwitch` 的签名按真实用法重定（演练，路线图 R11）。** 原定“与今天的抽象方法完全一致”，即 `switchTenant(targetTenantId, previous)`。演练的应用是一个身份系统：每次登录分两步，第一步签出不带租户、不带应用的令牌，第二步选择租户和应用；角色按应用存放。
+  那个签名表达不了它：没有目标应用进来，也没有应用出去，final 类照抄上一个令牌的应用。4.x 时它就已经绕开了这个钩子。定下的是 `fun interface TenantSwitch<C : SwitchTenantCredentials> { suspend fun switchTenant(credentials: C): TenantMembership }`：
+  钩子拿到应用自己的凭据类；`SwitchTenantCredentials.targetAppId` 可选；**新令牌的应用只取自钩子的回答（`TenantMembership.app`，空则沿用上一个令牌的），绝不取自请求**。直接采用请求里的应用，会让只检查了租户的实现把任意应用的令牌发给点名它的用户。规则 `SCP-12`。
+- **刷新是受支持的扩展，而不是让应用抄实现。** `RefreshTokenAuthentication` 自己按固定顺序做验证、撤销检查、钩子、会话轮转与会话延续；应用只经 `MembershipRefresh` 回答“这个用户现在持有什么”。此前文档让应用自己写一个认证，漏掉撤销检查不会报错。
+- `TokenCompositeAuthentication.of(…)`：一个公开类不能只有内部类型才满足得了的构造器；`ConstructibleApiTest` 守着这一条。`problem` 格式描述符保持原样，由 `ProblemSchemaTest` 守着与 `ProblemType` 一致。
+- A3 是两个 PR，都已合入（2026-11-15）：时长类型与守护规则（#1388）；登录与 `cosec-api` 的名字，连同租户切换、刷新钩子与登录组合类的工厂（#1398）。A 档至此完成。
 
 **2026-11-15 增加（审查构建器时发现）。** 两件冻结后改不了的事并入 A3：
 
