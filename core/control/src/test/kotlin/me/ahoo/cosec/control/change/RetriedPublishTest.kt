@@ -15,10 +15,9 @@
 
 package me.ahoo.cosec.control.change
 
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -82,7 +81,17 @@ class RetriedPublishTest {
     @Volatile
     private var failRelease = false
 
+    /** Reads of the staging slot that wait at [atSlot] after they read it: two calls that both saw it held. */
+    private val heldReads = java.util.concurrent.atomic.AtomicInteger()
+    private val atSlot = java.util.concurrent.CyclicBarrier(2)
+
     private val store = object : ControlStore by memory {
+        override suspend fun stage(key: SnapshotKey) = memory.stage(key).also {
+            if (heldReads.getAndDecrement() > 0) {
+                atSlot.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
+
         override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean {
             if (failRelease && slot.holder == null) {
                 failRelease = false
@@ -217,23 +226,35 @@ class RetriedPublishTest {
         listeners.cancel()
     }
 
-    /** #1386: two retries at once settle it as one does: one revision, the slot free, the publish recorded once. */
+    /**
+     * #1386: two retries that both read the slot as still held, held at that point until both have: one revision, the
+     * slot free, both answer `PUBLISHED`, and the publish is recorded once, by the one that freed the slot. A publish
+     * after that, of the settled change, is 409.
+     */
     @Test
-    fun `two retries at once of a publish whose slot release failed settle it once`() = runBlocking<Unit> {
+    fun `two retries that both saw the slot held settle it once`() = runBlocking<Unit> {
         val change = changes.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("reads"))), "reads")
         changes.skipShadow(PLATO, change.id, "test")
         failRelease = true
         assertThrows<ChangeRejectedException> { changes.publish(PLATO, change.id) }
+        listeners.awaitDelivered()
         events.clear()
+        heldReads.set(2)
 
-        val retries = (1..2).map { async(Dispatchers.Default) { changes.publish(PLATO, change.id) } }.awaitAll()
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        val retries = try {
+            val on = pool.asCoroutineDispatcher()
+            (1..2).map { async(on) { changes.publish(PLATO, change.id) } }.awaitAll()
+        } finally {
+            pool.shutdown()
+        }
 
         retries.forEach { it.state.assert().isEqualTo(ChangeState.PUBLISHED) }
         store.stage(ACME)?.value?.holder.assert().isNull()
         revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
-        delivered(ChangeEvent.Kind.PUBLISHED)
-        delay(200)
+        listeners.awaitDelivered()
         events.count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
+        refused { changes.publish(PLATO, change.id) }.assert().isEqualTo(409)
         listeners.cancel()
     }
 

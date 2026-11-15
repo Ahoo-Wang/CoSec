@@ -130,6 +130,12 @@ internal class StagingSlots(
      * #1386: [published] is `PUBLISHED` and still holds its slot, so the release after its head write failed. Releases
      * it; the call that frees it runs [record], the record of the publish the first call did not reach. Writes no
      * revision.
+     *
+     * The release is the one step after the transition to `PUBLISHED` that can fail, so it is the one a retry settles,
+     * and the record follows it. Recording first would not make the record safer: `PUBLISHED` is not a gated kind, so
+     * its record is handed to the listeners off the caller and a refusal is only logged; it never fails the publish.
+     * What a publish must have recorded is recorded before its head is written (the gated `PUBLISHING`), and the
+     * revision record is the durable record of what was published (RFC 0007 Q21). Keep this order.
      */
     suspend fun released(published: ChangeRequest, record: suspend () -> Unit): ChangeRequest {
         if (release(published)) {

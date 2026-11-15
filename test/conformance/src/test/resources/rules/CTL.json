@@ -271,7 +271,7 @@
         "control:RetriedPublishTest#a revoke settles a published holder and takes its slot",
         "control:RetriedPublishTest#a publish and its retry record it once",
         "control:RetriedPublishTest#a publish whose slot release failed is settled by publishing it again, adding no revision",
-        "control:RetriedPublishTest#two retries at once of a publish whose slot release failed settle it once",
+        "control:RetriedPublishTest#two retries that both saw the slot held settle it once",
         "control:PreemptionRaceTest#a head write that meets the preempting change's head records the failure"
       ]
     },
