@@ -168,7 +168,7 @@ they are dropped).
 #### Semantic changes in the report
 
 `semanticChanges` lists, for each place in the 7.x data, the shape whose decision 8.0 makes differently by design.
-`change` is one of the rule ids in [What 8.0 decides differently](#what-8-0-decides-differently) (`C1a`–`C7`,
+`change` is one of the rule ids in [What 8.0 decides differently](#what-8-0-decides-differently) (`C1a`–`C8`,
 `D1`–`D3`), or:
 
 - `ASCII-CASE`: an ALLOW condition with `ignoreCase`. 8.0 folds ASCII letters only, so the ALLOW matches fewer
@@ -448,8 +448,8 @@ address, `contains`, `endsWith`, a `regular` that is not a literal, `path` on a 
 
 **What does not convert.** `spel` and `ognl` conditions (`EXPRESSION_CONDITION`), custom action and condition types
 (`CUSTOM_ACTION`, `CUSTOM_CONDITION`), and 4.x's `rateLimiter` and `groupedRateLimiter` conditions: they are rejected as
-`UNDECODABLE` with `CUSTOM_CONDITION`, because 7.x had no such condition, and their `UNDECODABLE` message names 7.x, not
-your version. Rewrite them as [rate limit rules](../policies/rate-limiting.md). The policy history is not converted.
+`UNDECODABLE` with `CUSTOM_CONDITION`, because 7.x had no such condition, and their `UNDECODABLE` message says the input is not in the 7.x
+format and points to this section. Rewrite them as [rate limit rules](../policies/rate-limiting.md). The policy history is not converted.
 
 **What the tool cannot decide**, and you do, before you publish:
 
@@ -484,6 +484,7 @@ In 8.0 these are the rules; each has an id in the conformance suite. Without err
 | **C5** (`BND-2`) | A principal attaches only attachable policies of its own tenant's document or of the platform. | Any principal could attach any policy. | Principal policies, with `--partition by-owner` only. The default partition keeps 7.x's behavior. |
 | **C6** | A role grant that names a permission its app does not define is rejected by `convert`. | `500` on the request that reached it. | Grants with stale permission ids. |
 | **C7** (`MIG-2`) | A DENY of every action (`*`) also refuses checks in code and the control plane's actions (`cosec:*`) for the requests it matches. | Only HTTP requests were decided. | DENY statements on every action ([Every action is every HTTP request](#every-action-is-every-http-request)). |
+| **C8** (`MIG-2`) | An ALLOW of every action is `http:*`, every HTTP request, and a [route map](../policies/language.md#route-maps) takes each route it maps out of it: a mapped route is its business action, which the converted policy does not grant. | The route was an HTTP request. | ALLOW statements on every action, which the report records at their action. After a route map is added, grant the mapped actions with policies of their own ([Every action is every HTTP request](#every-action-is-every-http-request)). |
 | **D1** | `inRole: r` in an ALLOW matches only a role in effect in the requested space; `inRole: r@s` in an ALLOW matches only while the request is in space `s`; `inRole: r` in a DENY matches the role held in any space. | Literal role match, a bare role also matching `r@<requested space>`. | `inRole` conditions. A DENY never narrows and an ALLOW never widens. |
 | **D2** (`CND-1`) | An absent attribute equals no value, not the empty string. | An absent part read as `""`. | `eq` against `#{principal.id}`, `#{principal.attributes['k']}` or `#{tenant.tenantId}`. In an ALLOW, an absent part no longer matches an empty attribute (narrower). In a DENY, `convert` keeps 7.x's reading by adding the 7.x cases. |
 | **D3** | No regular expressions, so no regex timeouts. | A `RegexTimeoutException` was an implicit deny. | `regular` conditions; only literal, literal-prefix and choice-of-literals patterns translate. |
@@ -518,7 +519,8 @@ or the control plane, and the report records it as C7. Where such a DENY can mat
 it refuses them the control plane too.
 
 A statement on `http:*` never matches a request a [route map](../policies/language.md#route-maps) maps. After you add
-a route map, grant the actions it names with policies of their own.
+a route map, grant the actions it names with policies of their own. The report records each ALLOW of every action as
+C8, at its action, so that a route that stops being allowed on the day the route map is added has a line to be found by.
 
 #### Path templates in actions
 
