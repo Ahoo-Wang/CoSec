@@ -57,6 +57,12 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 | `POST /break-glass`, `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | Request break-glass, approve a request, revoke a binding ([Security model](../guide/security-model.md#break-glass)). A revoke answers `200` only once the binding no longer grants, `404` when the platform document has no binding of that id, and `409` otherwise, an ordinary binding of that id included ([Taking a busy slot](#taking-a-busy-slot)). |
 | `POST /simulate`, `POST /explain`, `POST /analyze` | Decide or analyze without changing anything. |
 
+A path parameter (`{key}`, `{id}`, `{revision}`, `{bindingId}`) is percent-decoded once, after the path is split into
+segments: `tenant:acme%20west` is the tenant `acme west`, `tenant%3Aacme` is `tenant:acme`, an encoded `/` (`%2F`) is part
+of a value and never a second segment, `+` stays `+`, and a `%25` that was encoded twice (`%2520`) decodes to `%20`, not to
+a space. A malformed escape (`%zz`, a lone `%`, bytes that are not UTF-8) is a `400`. The route's own words (`documents`,
+`revisions`, `:apply`) are matched as written.
+
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
 exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is
@@ -254,6 +260,11 @@ out; the candidate never affects a real decision. A candidate is compared only o
 only by an instance that has installed the candidate's base revision. A tenant candidate is compared on the documents a
 request would read once it is published: one that binds an app's permission policy to `Anyone` or a principal brings in
 that app's installed document where the request read none, and one that removes the last such binding leaves it out.
+So does the failure of a document: one the candidate stops reading takes its failure with it, so a candidate that drops
+an app document that cannot be read or does not compile is `WIDENED` where the request is now 503, and one it starts
+reading brings its failure in. A candidate of a document that does not compile replaces it, failure and all; one of a
+document an instance cannot read is not compared there (`BASE_MISMATCH`: the instance does not know the revision it
+would replace), so read the window again once the store answers.
 
 | Outcome | Means |
 |---|---|

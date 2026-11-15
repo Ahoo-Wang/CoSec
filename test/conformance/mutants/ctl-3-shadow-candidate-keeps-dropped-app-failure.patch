@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: a tenant candidate that no longer reads an app document keeps that document's failure, and reports SAME (#1410)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ShadowDocumentFailureTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
+index 94642039..2a4ff08f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
+@@ -195,7 +195,7 @@ class ShadowListener(
+         val appFailed = view.unresolved.any(::ofApp)
+         return when {
+             app == null && view.app == null && !appFailed -> view
+-            app == null -> withApp(view, null, view.unresolved.filterNot(::ofApp))
++            app == null -> withApp(view, null, view.unresolved)
+             view.app != null || appFailed -> view
+             else -> {
+                 val source = views ?: return null

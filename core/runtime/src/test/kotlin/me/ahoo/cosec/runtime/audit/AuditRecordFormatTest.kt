@@ -76,7 +76,7 @@ class AuditRecordFormatTest {
         (ScopeResolver.resolve(subject, "space-1", HostScope(null)) as ScopeResolution.Resolved).scope
     }
 
-    private val event = DecisionEvent(
+    private fun eventWith(trace: TraceContext) = DecisionEvent(
         id = "event-1",
         requestId = "request-1",
         time = Instant.parse("2026-08-18T00:00:00Z").toEpochMilli(),
@@ -100,16 +100,26 @@ class AuditRecordFormatTest {
         resource = Resource("http", "/orders/1", emptyMap()),
         request = RequestSummary("GET", "/orders/1", "127.0.0.1", "device-1", "orders"),
         attributes = mapOf("ext.directory.department" to AttributeStatus.PRESENT),
-        trace = TraceContext("trace-1", "span-1", true),
+        trace = trace,
         requiredFailures = emptyList(),
         replay = null,
     )
+
+    private val event = eventWith(TraceContext("trace-1", "span-1", true))
 
     private val pinned = checkNotNull(javaClass.getResource("/stored-format/audit-record.json")).readText().trim()
 
     @Test
     fun `the audit record of a decision event is pinned`() {
         CoSecJson.mapper.writeValueAsString(AuditEvents.from(event)).assert().isEqualTo(pinned)
+    }
+
+    /** #1404: a tracestate is vendor data for the span's parent; the record is what it was without one. */
+    @Test
+    fun `a tracestate is in no audit record, line or log message`() {
+        val withState = eventWith(TraceContext("trace-1", "span-1", true, "vendor=opaque-value,other=x"))
+        CoSecJson.mapper.writeValueAsString(AuditEvents.from(withState)).assert().isEqualTo(pinned)
+        withState.trace.toString().assert().isEqualTo("TraceContext(trace-1/span-1)")
     }
 
     @Test

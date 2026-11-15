@@ -18,6 +18,9 @@ package me.ahoo.cosec.runtime.snapshot
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newCompileExecutor
+import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newHousekeeping
+import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newScheduler
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -32,19 +35,15 @@ import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
-import java.util.concurrent.ArrayBlockingQueue
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
-import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ScheduledThreadPoolExecutor
-import java.util.concurrent.ThreadFactory
 import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -177,9 +176,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     @Volatile
     internal var afterSlotLookup: ((SnapshotKey) -> Unit)? = null
 
-    private val subscription: AutoCloseable = store.subscribe(ChangeListener())
+    // #1383: a step that throws releases what the constructor took before it, so a source that fails to build holds nothing.
+    private val subscription: AutoCloseable = undoing({}) { store.subscribe(ChangeListener()) }
     private val passes = PeriodicPasses()
-    private val periodic: ScheduledFuture<*> = schedulePeriodic()
+    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { schedulePeriodic() }
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
     val isPrewarmed: Boolean get() = prewarmed
@@ -415,6 +415,17 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         { if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown() },
         ::awaitOwnedThreads,
     )
+
+    /** Runs the constructor's [step]; when it throws, [undo] and the executors this source made are released first. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun <T> undoing(undo: () -> Unit, step: () -> T): T = try {
+        step()
+    } catch (e: Throwable) {
+        listOf(undo, { if (ownsScheduler) scheduler.shutdownNow() }, housekeeping::shutdown, {
+            if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown()
+        }).forEach { release -> attemptClosing(release, e) }
+        throw e
+    }
 
     /** Runs [step]; what it throws becomes the failure, or is kept with the [failure] there already. */
     @Suppress("TooGenericExceptionCaught")
@@ -1612,9 +1623,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal companion object {
         private val log = KotlinLogging.logger {}
 
-        /** Queued housekeeping beyond this runs in place rather than piling up without bound. */
-        const val HOUSEKEEPING_QUEUE = 4096
-
         /** A [Pass]'s count of reads once it is abandoned: no read can start any more. */
         private const val ABANDONED = -1
 
@@ -1631,42 +1639,5 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         /** How long [close] waits for this source's threads to finish what was queued. */
         val CLOSE_TIMEOUT: Duration = Duration.ofSeconds(5)
-
-        fun newCompileExecutor(options: SnapshotOptions, marker: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(
-            options.compileThreads,
-            options.compileThreads,
-            1,
-            TimeUnit.MINUTES,
-            ArrayBlockingQueue(options.compileQueueCapacity),
-            daemonThreads("cosec-snapshot-compile", marker),
-            ThreadPoolExecutor.AbortPolicy(),
-        ).apply { allowCoreThreadTimeOut(true) }
-
-        fun newScheduler(marker: ThreadLocal<Boolean>): ScheduledThreadPoolExecutor =
-            ScheduledThreadPoolExecutor(1, daemonThreads("cosec-snapshot-scheduler", marker)).apply {
-                removeOnCancelPolicy = true
-            }
-
-        fun newHousekeeping(marker: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(
-            1,
-            1,
-            1,
-            TimeUnit.MINUTES,
-            LinkedBlockingQueue(HOUSEKEEPING_QUEUE),
-            daemonThreads("cosec-snapshot-housekeeping", marker),
-            ThreadPoolExecutor.AbortPolicy(),
-        ).apply { allowCoreThreadTimeOut(true) }
-
-        /** Daemon threads named [prefix]-n, each marked through [marker] as the source's own. */
-        fun daemonThreads(prefix: String, marker: ThreadLocal<Boolean>): ThreadFactory {
-            val counter = AtomicInteger()
-            return ThreadFactory { runnable ->
-                val marked = Runnable {
-                    marker.set(true)
-                    runnable.run()
-                }
-                Thread(marked, "$prefix-${counter.incrementAndGet()}").apply { isDaemon = true }
-            }
-        }
     }
 }

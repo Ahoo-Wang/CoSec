@@ -185,6 +185,12 @@ object DocumentFormats {
                                     "Absent when the credential does not say.",
                             ),
                             Field(
+                                "capped",
+                                BooleanType(const = true),
+                                description = "`true` for a credential with a role cap (an API key with `roles`): " +
+                                    "the roles above are capped by it. Absent for every other credential, never `false`.",
+                            ),
+                            Field(
                                 "session",
                                 ObjectType(
                                     listOf(
