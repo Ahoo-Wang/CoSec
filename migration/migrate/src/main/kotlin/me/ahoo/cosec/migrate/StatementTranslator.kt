@@ -32,6 +32,8 @@ import tools.jackson.databind.node.JsonNodeFactory
 internal class StatementTranslator(
     private val actions: MatcherTranslator,
     private val conditions: ConditionTranslator,
+    /** Where a statement's decisions change by design: here, a DENY of every action (C7). */
+    private val scan: SemanticScan,
     private val reject: (RejectionKind, String, String) -> Unit,
 ) {
     /** A statement translated: [Kept] as an 8.0 statement, or [Dropped], since no 8.0 request could match it. */
@@ -64,7 +66,8 @@ internal class StatementTranslator(
             reject(RejectionKind.UNDECODABLE, location, "a statement needs an action")
             return null
         }
-        val action = actions.action(actionNode, "$location.$ACTION")?.let { head(it, deny, "$location.$ACTION") }
+        val action = actions.action(actionNode, "$location.$ACTION", deny)?.let { head(it, deny, "$location.$ACTION") }
+        everyActionDenied(action, deny, rateLimit = direction != null, "$location.$ACTION")
         val conditionNode = node.get(CONDITION)
         // A path condition on request.path is the resource when the action names none (RFC 0005 §7.1). A 7.x path
         // condition captures nothing, so where the rest reads path variables (`""` in 7.x) a resource that captured
@@ -84,6 +87,18 @@ internal class StatementTranslator(
             return null
         }
         return assembled(name, deny, action, resources ?: action.resources, condition, location)
+    }
+
+    /** A DENY of every action stays `*` and refuses more than 7.x could (C7); a rate limit rule only limits. */
+    private fun everyActionDenied(
+        action: MatcherTranslator.Action?,
+        deny: Boolean,
+        rateLimit: Boolean,
+        location: String
+    ) {
+        if (deny && !rateLimit && action?.isAll == true) {
+            scan.everyActionDenied(location)
+        }
     }
 
     /**

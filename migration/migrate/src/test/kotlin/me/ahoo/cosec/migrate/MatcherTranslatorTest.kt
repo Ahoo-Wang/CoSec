@@ -21,23 +21,28 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
+import org.junit.jupiter.params.provider.MethodSource
 
 class MatcherTranslatorTest {
     private val rejections = ArrayList<Rejection>()
     private val translator =
         MatcherTranslator { kind, location, message -> rejections += Rejection(kind, location, message) }
 
-    private fun action(json: String) = translator.action(CoSecJson.mapper.readTree(json), "a")
+    private fun action(json: String, deny: Boolean = false) = translator.action(
+        CoSecJson.mapper.readTree(json),
+        "a",
+        deny
+    )
 
     @ParameterizedTest
     @CsvSource(
         delimiter = '|',
         value = [
-            """"*"|*|""",
-            """["/a","*"]|*|""",
-            """{"all":"*"}|*|""",
-            """{"path":["*"]}|*|""",
-            """{"composite":["/a","*"]}|*|""",
+            """"*"|http:*|""",
+            """["/a","*"]|http:*|""",
+            """{"all":"*"}|http:*|""",
+            """{"path":["*"]}|http:*|""",
+            """{"composite":["/a","*"]}|http:*|""",
             """"/orders/**"|http:*|http:path:/orders/**""",
             """{"path":"/orders"}|http:*|http:path:/orders""",
             """{"path":["/a","/b"]}|http:*|http:path:/a http:path:/b""",
@@ -51,6 +56,24 @@ class MatcherTranslatorTest {
         rejections.assert().isEmpty()
         action.actions.joinToString(" ").assert().isEqualTo(actions)
         action.resources.joinToString(" ") { it.pattern }.assert().isEqualTo(resources.orEmpty())
+        // A DENY translates the same, except every action, which stays `*` (MIG-2).
+        val denied = action(json, deny = true)!!
+        denied.actions.joinToString(
+            " "
+        ).assert().isEqualTo(if (actions == "http:*" && resources == null) "*" else actions)
+        denied.resources.joinToString(" ") { it.pattern }.assert().isEqualTo(resources.orEmpty())
+    }
+
+    /**
+     * MIG-2: 7.x decided HTTP requests only, so every action of an ALLOW is every HTTP request; `*` would also grant the
+     * control plane's actions and those of checks in code. Every action of a DENY stays `*`.
+     */
+    @ParameterizedTest
+    @MethodSource("everyAction")
+    fun `every action is http star in an ALLOW and star in a DENY`(json: String) {
+        action(json)!!.assert().isEqualTo(MatcherTranslator.HTTP_ACTION)
+        action(json, deny = true)!!.assert().isEqualTo(MatcherTranslator.ALL_ACTION)
+        rejections.assert().isEmpty()
     }
 
     @Test
@@ -94,5 +117,19 @@ class MatcherTranslatorTest {
         action(json).assert().isNull()
         rejections.last().kind.assert().isEqualTo(kind)
         rejections.last().location.assert().isEqualTo(location)
+    }
+
+    companion object {
+        /** Every 7.x form of every action: the pattern, `all`, a `path` array, arrays and composites holding one. */
+        @JvmStatic
+        fun everyAction(): List<String> = listOf(
+            "\"*\"",
+            """{"all":{}}""",
+            """{"all":"*"}""",
+            """["/a","*"]""",
+            """{"path":["/a","*"]}""",
+            """{"composite":[{"all":{}},"/orders/**"]}""",
+            """[{"composite":["/a",{"path":["*"]}]}]""",
+        )
     }
 }

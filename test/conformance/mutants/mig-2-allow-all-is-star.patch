@@ -1,0 +1,17 @@
+# Rule: MIG-2
+# Mutant: the direction is lost, so an ALLOW of every 7.x action converts to `*` and grants every control-plane action and every check in code (8.0 drill, entry 7)
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.AllActionReachTest --tests me.ahoo.cosec.migrate.ConvertedReachPropertyTest --tests me.ahoo.cosec.migrate.MatcherTranslatorTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MatcherTranslator.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MatcherTranslator.kt
+index 3139caf8..bbaa09c8 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MatcherTranslator.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MatcherTranslator.kt
+@@ -42,7 +42,7 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
+      * `{ "<type>": config }`. Every action is `*` in a DENY and `http:*` in an ALLOW (`MIG-2`).
+      */
+     fun action(node: JsonNode, location: String, deny: Boolean): Action? =
+-        translated(node, location)?.let { if (it.isAll && !deny) HTTP_ACTION else it }
++        translated(node, location)?.let { it }
+ 
+     /** [action], with every action as [ALL_ACTION] whatever the direction: what [merge] tells apart. */
+     private fun translated(node: JsonNode, location: String): Action? = when {

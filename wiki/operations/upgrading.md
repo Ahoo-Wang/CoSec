@@ -167,7 +167,7 @@ they are dropped).
 #### Semantic changes in the report
 
 `semanticChanges` lists, for each place in the 7.x data, the shape whose decision 8.0 makes differently by design.
-`change` is one of the rule ids in [What 8.0 decides differently](#what-8-0-decides-differently) (`C1a`–`C6`,
+`change` is one of the rule ids in [What 8.0 decides differently](#what-8-0-decides-differently) (`C1a`–`C7`,
 `D1`–`D3`), or:
 
 - `ASCII-CASE`: an ALLOW condition with `ignoreCase`. 8.0 folds ASCII letters only, so the ALLOW matches fewer
@@ -390,6 +390,7 @@ In 8.0 these are the rules; each has an id in the conformance suite. Without err
 | **C4** (`SCP-2`) | With `cosec.authorization.scope.app-id` set, a request declaring another app is denied (`scope-rejected`); without a declaration the host's app applies. | The declared app always applied. | Hosts that serve one app. |
 | **C5** (`BND-2`) | A principal attaches only attachable policies of its own tenant's document or of the platform. | Any principal could attach any policy. | Principal policies, with `--partition by-owner` only. The default partition keeps 7.x's behavior. |
 | **C6** | A role grant that names a permission its app does not define is rejected by `convert`. | `500` on the request that reached it. | Grants with stale permission ids. |
+| **C7** (`MIG-2`) | A DENY of every action (`*`) also refuses checks in code and the control plane's actions (`cosec:*`) for the requests it matches. | Only HTTP requests were decided. | DENY statements on every action ([Every action is every HTTP request](#every-action-is-every-http-request)). |
 | **D1** | `inRole: r` in an ALLOW matches only a role in effect in the requested space; `inRole: r@s` in an ALLOW matches only while the request is in space `s`; `inRole: r` in a DENY matches the role held in any space. | Literal role match, a bare role also matching `r@<requested space>`. | `inRole` conditions. A DENY never narrows and an ALLOW never widens. |
 | **D2** (`CND-1`) | An absent attribute equals no value, not the empty string. | An absent part read as `""`. | `eq` against `#{principal.id}`, `#{principal.attributes['k']}` or `#{tenant.tenantId}`. In an ALLOW, an absent part no longer matches an empty attribute (narrower). In a DENY, `convert` keeps 7.x's reading by adding the 7.x cases. |
 | **D3** | No regular expressions, so no regex timeouts. | A `RegexTimeoutException` was an implicit deny. | `regular` conditions; only literal, literal-prefix and choice-of-literals patterns translate. |
@@ -410,6 +411,21 @@ bounded in time (at most 24 hours, `cosec.control.break-glass.max-duration`, def
 `OBS-2`). Request one through the control plane when you need it, where two people take part. `cosec-migrate` writes
 no break-glass binding: `convert` does not convert 7.x root, and `--root-enabled`, `--root-id`, `--root-expires-at` and
 `publish --break-glass-max-duration` are gone (passing one is a usage error that says so).
+
+#### Every action is every HTTP request
+
+7.x decided HTTP requests and nothing else, so its every-action forms meant every HTTP request: the pattern `*`, `all`
+without methods, a `path` array holding `*`, and an array or composite holding one of them. In 8.0, `*` also matches
+the control plane's actions (`cosec:*`) and those of [checks in code](../integration/checks.md), which 7.x never
+granted. So `convert` writes an ALLOW of every action as `"action": "http:*"` (`MIG-2`), and the decisions on HTTP
+requests are those of 7.x.
+
+A DENY of every action stays `"action": "*"`: it keeps refusing what it refused, now also through a check in code
+or the control plane, and the report records it as C7. Where such a DENY can match the administrator's own requests,
+it refuses them the control plane too.
+
+A statement on `http:*` never matches a request a [route map](../policies/language.md#route-maps) maps. After you add
+a route map, grant the actions it names with policies of their own.
 
 #### Path templates in actions
 
@@ -997,10 +1013,35 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 
 ### From 8.0.0-alpha.4 {#from-8-0-0-alpha-4}
 
-8.0.0-alpha.4 is a preview with no compatibility promise. **Every token issued before this version declares no app, so a
+**If you published documents `cosec-migrate convert` wrote with any preview, check their ALLOW statements** (the first
+entry below): a converted 7.x "every action" granted the control plane. 8.0.0-alpha.4 is a preview with no
+compatibility promise. **Every token issued before this version declares no app, so a
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **Security: a converted 7.x "every action" no longer grants the control plane.** From 8.0.0-alpha.1 to
+  8.0.0-alpha.4, `convert` wrote an ALLOW of every 7.x action as `"action": "*"`, which also matches every
+  control-plane action (`cosec:*`) and every action of a check in code. A converted global policy such as "signed-in
+  users may do anything" gave every authenticated principal every control-plane action on its own tenant's document,
+  and a principal of `(platform)` on the platform's and the app documents. An attachable one did the same for every
+  token that lists it. Such a principal could write and grant in that document, and another holding the same grant
+  could approve it. `convert` now writes `"action": "http:*"`
+  ([Every action is every HTTP request](#every-action-is-every-http-request)); a DENY of every action stays `*`.
+  If you published converted documents:
+  1. Find the ALLOW statements on `*` in each document (`platform`, `app:<id>`, `tenant:<id>`). An administrator
+     reads the head through the control API ([Revisions, history and rollback](./storage.md#revisions-history-and-rollback)):
+
+     ```bash
+     curl -s "$CONTROL/documents/platform" -H "$AUTH" \
+       | jq -r '.policies[] | select(any(.statements[]; .effect == "allow" and ([.action] | flatten | index("*")))) | .id'
+     ```
+
+     The ones `convert` wrote are in the conversion's `platform.json`, `apps/` and `tenants/`, and its
+     `provenance.json` names the 7.x policy of each. A statement on `*` you wrote yourself after the upgrade is yours
+     to keep.
+  2. Change each converted one to `http:*` through the control plane: a change that puts the policy again with
+     `"action": "http:*"`. If a document has not changed since `publish`, `apply` the file a new `convert` writes for
+     it instead; the change it proposes is exactly those statements.
 - **Three packages follow their modules' names.** `me.ahoo.cosec.cache` (`cosec-cocache`) is now
   `me.ahoo.cosec.cocache`, `me.ahoo.cosec.servlet` (`cosec-webmvc`) is `me.ahoo.cosec.webmvc`, and
   `me.ahoo.cosec.spring.boot.starter` (`cosec-spring-boot`) is `me.ahoo.cosec.spring.boot`. Sub-packages keep their

@@ -1,0 +1,17 @@
+# Rule: MIG-2
+# Mutant: the report no longer records a DENY of every 7.x action (C7), so an operator is not told that it now also refuses the control plane
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.AllActionReachTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
+index 576256c7..7e9c395a 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
+@@ -97,7 +97,7 @@ internal class StatementTranslator(
+         location: String
+     ) {
+         if (deny && !rateLimit && action?.isAll == true) {
+-            scan.everyActionDenied(location)
++            Unit
+         }
+     }
+ 

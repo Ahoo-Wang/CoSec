@@ -19,6 +19,24 @@
         "migrate:Round2ConversionTest#an ALLOW against a template on a part only 7x filled is recorded as never holding",
         "migrate:Round2ConversionTest#a DENY with no action is rejected, an ALLOW with none is dropped"
       ]
+    },
+    {
+      "id": "MIG-2",
+      "source": "RFC 0005 §7.2 (8.0 drill, entry 7)",
+      "statement": "A conversion grants only the actions 7.x decided: an ALLOW of every 7.x action (the pattern `*`, `all` without methods, a `path` array holding `*`, or an array or composite holding one of them) is `http:*`, never `*`, so no converted ALLOW reaches a control-plane action (`cosec:*`) or the action of a check in code; a DENY of every 7.x action stays `*`, and the report records it (C7).",
+      "level": "build",
+      "pending": null,
+      "properties": [
+        "migrate:ConvertedReachPropertyTest#no converted deployment permits an action outside http"
+      ],
+      "guards": [
+        "migrate:AllActionReachTest#a global allow of every action converts to no control-plane action",
+        "migrate:AllActionReachTest#an attachable allow of every action converts to no control-plane action",
+        "migrate:AllActionReachTest#a global allow of every action gives the platform tenant no control of the platform",
+        "migrate:AllActionReachTest#a DENY of every action still refuses everything, and is recorded",
+        "migrate:AllActionReachTest#a converted allow of every action publishes nothing through the control plane",
+        "migrate:MatcherTranslatorTest#every action is http star in an ALLOW and star in a DENY"
+      ]
     }
   ]
 }
