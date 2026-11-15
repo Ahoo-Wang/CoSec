@@ -127,6 +127,10 @@ class DecisionListeners(
     @Volatile
     private var stopped = false
 
+    /** Tests only: runs in a stop between [stopped] and emptying the queues, to let a consumer poll in that gap. */
+    @Volatile
+    internal var afterStopped: (() -> Unit)? = null
+
     /** Tests only: runs between a publish's check of the queue and its offer, to close the listeners in that gap. */
     @Volatile
     internal var beforeOffer: (() -> Unit)? = null
@@ -405,6 +409,7 @@ class DecisionListeners(
 
     private fun stop(): Long {
         stopped = true
+        afterStopped?.invoke()
         val discarded = bestEffort.sumOf(::discard)
         scope.cancel()
         return discarded

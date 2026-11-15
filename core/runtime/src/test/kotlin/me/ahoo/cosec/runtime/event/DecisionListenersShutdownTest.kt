@@ -129,6 +129,29 @@ class DecisionListenersShutdownTest {
         listeners.stats.single().dropped.assert().isEqualTo(2)
     }
 
+    /**
+     * The consumer's own check: a call in flight that returns once the stop is set, before the queues are emptied,
+     * polls the next event and drops it rather than starting a call for it.
+     */
+    @Test
+    fun `a consumer that polls after the stop starts no call`() {
+        val listener = Stuck()
+        val listeners = DecisionListeners(listOf(listener), drainTimeout = 50.milliseconds)
+        val pipeline = pipeline(listeners)
+        pipeline.request()
+        listener.started.await(5, TimeUnit.SECONDS).assert().isTrue()
+        pipeline.request()
+        listeners.afterStopped = {
+            listener.release.countDown()
+            Thread.sleep(200)
+        }
+
+        listeners.drain().assert().isFalse()
+
+        listener.completed.get().assert().describedAs("calls finished: only the one in flight").isEqualTo(1)
+        listeners.stats.single().dropped.assert().isEqualTo(1)
+    }
+
     @Test
     fun `a cancelled consumer leaves nothing queued, and what it leaves is counted`() {
         val listener = Stuck(cooperative = true)

@@ -92,10 +92,12 @@ class PipelineBuilderFailureTest {
     fun `a subscription that fails releases the listeners, and the caller sees its own exception`() {
         val down = IllegalStateException("the store is down")
         failSubscribe = down
-        val thrown = assertThrows<IllegalStateException> { Pipeline.builder(
-            authenticator,
-            store
-        ).listener(listener).build() }
+        val thrown = assertThrows<IllegalStateException> {
+            Pipeline.builder(
+                authenticator,
+                store
+            ).listener(listener).build()
+        }
         thrown.assert().isSameAs(down)
         active.assert().isEqualTo(0)
     }

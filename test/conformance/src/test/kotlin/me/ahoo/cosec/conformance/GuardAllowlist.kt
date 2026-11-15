@@ -27,6 +27,7 @@ object GuardAllowlist {
             "runtime:DecisionListenersShutdownTest#a full queue drops without waiting on the log, which is written off the request's thread",
             "runtime:DecisionListenersShutdownTest#after a drain gives up, only the call in flight finishes and the queued events are dropped",
             "runtime:DecisionListenersShutdownTest#a cancelled consumer leaves nothing queued, and what it leaves is counted",
+            "runtime:DecisionListenersShutdownTest#a consumer that polls after the stop starts no call",
             "runtime:DecisionListenersShutdownTest#an event offered after the listeners stopped is dropped and counted, not left queued",
             "runtime:DecisionListenersShutdownTest#events published while the listeners drain are each delivered or dropped, once",
             "runtime:PipelineBuilderFailureTest#an invalid prewarmed id is refused before the source subscribes",
