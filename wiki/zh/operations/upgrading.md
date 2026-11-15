@@ -608,7 +608,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `cache-support` | `cosec-cocache`，同时添加 `spring-boot-data-redis` 和 `cocache-spring-boot-starter` |
 | `oauth-support` | `cosec-social` |
 | `opentelemetry-support`、`ip2region-support` | `cosec-opentelemetry`、`cosec-ip2region` |
-| `micrometer-support` | `cosec-micrometer`，同时添加 `micrometer-core` |
+| `micrometer-support` | `cosec-micrometer`，它自带 `micrometer-core` |
 | `openapi-support` | `cosec-openapi`，同时添加 `spring-boot-starter-actuator` 和 `springdoc-openapi-starter-common` |
 | `kafka-support` | `cosec-kafka`，同时添加 `spring-boot-starter-kafka` |
 | （8.0 新增） | `cosec-control`，即控制面，同时添加 `cosec-cocache` |

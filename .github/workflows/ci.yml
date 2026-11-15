@@ -43,10 +43,11 @@ jobs:
         id: plan
         run: python3 -I scripts/ci/plan.py --github-output "$GITHUB_OUTPUT"
 
-      - name: Test the JMH comparison scripts
+      - name: Test the CI scripts
         run: |
           python3 -I -m unittest discover -s scripts/jmh-ab
           python3 -I -m unittest discover -s scripts/jmh-v7-v8
+          python3 -I -m unittest discover -s scripts/ci
 
   test:
     name: Test ${{ matrix.name }}

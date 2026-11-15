@@ -270,9 +270,13 @@ class CoSecSnapshotAutoConfiguration {
         ): ShadowReporting {
             val clock = Clock.systemUTC()
             val installed = { installedDocuments(source.entries(), clock.instant()) }
+            val interval = properties.shadow.reportInterval
+            require(interval >= ShadowReporter.MIN_INTERVAL) {
+                "cosec.authorization.shadow.report-interval is at least one millisecond, not $interval."
+            }
             val store = (candidates as? CachingCandidateSource)?.store ?: stores.ifUnique
             return ShadowReporting(
-                ShadowReporter(recorder, sink, installed, clock, properties.shadow.reportInterval, candidates = store)
+                ShadowReporter(recorder, sink, installed, clock, interval, candidates = store)
             )
         }
 

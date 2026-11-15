@@ -60,7 +60,11 @@ jobs:
             sleep 15
           done
           filter=$(cat <<'JQ'
-          def checks: [.statusCheckRollup[] | select((.name // .context) as $n | $required | index($n))];
+          # Each required check is judged by its latest entry: a run a newer one superseded (a retitle cancels the old
+          # `Semantic PR Title`) stays in the rollup as CANCELLED beside the run that replaced it. An entry that has not
+          # started has no time yet, and counts as the newest.
+          def checks: [.statusCheckRollup[] | select((.name // .context) as $n | $required | index($n))]
+            | group_by(.name // .context) | map(max_by(.startedAt // .completedAt // "9999"));
           def running: [checks[] | select((.status // "COMPLETED") != "COMPLETED" or .state == "PENDING")] | length > 0;
           def failed: [checks[] | select((.conclusion // .state) | IN("FAILURE", "ERROR", "TIMED_OUT", "CANCELLED"))] | length > 0;
           if any(.[]; .mergeStateStatus != "BEHIND" and running) then empty

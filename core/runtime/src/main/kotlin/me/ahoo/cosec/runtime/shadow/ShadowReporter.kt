@@ -54,7 +54,8 @@ class ShadowReporter(
     val candidates: CandidateStore? = null,
 ) {
     init {
-        require(!interval.isNegative && !interval.isZero) { "The report interval is positive." }
+        // `delay` takes whole milliseconds: a shorter interval would be 0, a loop that never suspends (#1397).
+        require(interval >= MIN_INTERVAL) { "The report interval is at least one millisecond, not $interval." }
     }
 
     /** One cycle: every window's report, then the status. Failures are logged and skipped. */
@@ -117,5 +118,11 @@ class ShadowReporter(
     } catch (e: Exception) {
         log.warn(e) { "Writing $what failed; the next cycle writes it again." }
         false
+    }
+
+    @InternalCoSecApi
+    companion object {
+        /** The shortest interval: the coroutine delay is in whole milliseconds. */
+        val MIN_INTERVAL: Duration = Duration.ofMillis(1)
     }
 }
