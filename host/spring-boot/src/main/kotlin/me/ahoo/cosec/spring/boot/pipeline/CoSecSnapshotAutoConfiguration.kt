@@ -31,6 +31,7 @@ import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.shadow.ShadowListener
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.shadow.ShadowReporter
+import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.DocumentState
@@ -319,20 +320,29 @@ class CoSecSnapshotAutoConfiguration {
         val snapshot = properties.snapshot
         val source = DocumentSnapshots.source(store, compiler, snapshot.toOptions())
         compiler.bind(source)
-        val prewarm = listOf(SnapshotKey.Platform) + snapshot.prewarmApps.map { SnapshotKey.App(it) } +
-            snapshot.prewarmTenants.map { SnapshotKey.Tenant(it) }
-        source.load().whenComplete { _, _ -> source.prewarm(prewarm) }
+        DocumentReadiness(source, snapshot.prewarmKeys()).start()
         return source
     }
+
+    /**
+     * Whether the platform document and the prewarmed apps and tenants are installed: the question readiness and health
+     * ask, and the one `Pipeline.awaitDocuments` answers, asked of the same code.
+     */
+    @Bean
+    @ConditionalOnMissingBean
+    fun cosecDocumentReadiness(
+        source: SnapshotSource<CompiledDocument, CompiledDocument>,
+        properties: RuntimeAuthorizationProperties,
+    ): DocumentReadiness = DocumentReadiness(source, properties.snapshot.prewarmKeys())
 
     /** Readiness refuses traffic until the snapshot is ready ([SnapshotReadiness]); liveness is not touched. */
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
     fun cosecSnapshotReadiness(
-        source: SnapshotSource<CompiledDocument, CompiledDocument>,
+        readiness: DocumentReadiness,
         publisher: ApplicationEventPublisher,
         availability: ObjectProvider<ApplicationAvailability>,
-    ): SnapshotReadiness = SnapshotReadiness(source, publisher, availability.ifAvailable)
+    ): SnapshotReadiness = SnapshotReadiness(readiness, publisher, availability.ifAvailable)
 
     /** `cosecSnapshot` in the health endpoint, when the host has actuator. */
     @Configuration(proxyBeanMethods = false)
@@ -343,7 +353,8 @@ class CoSecSnapshotAutoConfiguration {
         @ConditionalOnMissingBean(name = ["cosecSnapshotHealthIndicator"])
         fun cosecSnapshotHealthIndicator(
             source: SnapshotSource<CompiledDocument, CompiledDocument>,
-        ): SnapshotHealthIndicator = SnapshotHealthIndicator(source)
+            readiness: DocumentReadiness,
+        ): SnapshotHealthIndicator = SnapshotHealthIndicator(source, readiness)
     }
 
     @Bean

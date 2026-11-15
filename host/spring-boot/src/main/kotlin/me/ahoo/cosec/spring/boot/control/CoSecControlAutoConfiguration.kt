@@ -47,7 +47,6 @@ import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
@@ -164,15 +163,13 @@ internal class CoSecControlAutoConfiguration {
         membershipProvider: ObjectProvider<MembershipProvider>,
         properties: ControlProperties,
     ): ControlAuthorizer {
-        val pipeline = Pipeline(
-            PipelineComponents(
-                authenticator = authenticator,
-                snapshots = SuspendingSnapshotSource(DocumentSnapshotViews(snapshot.source, platformRequired = true)),
-                // The application's: an approver whose memberships come from it is checked again at publish (RC1-13).
-                membershipProvider = membershipProvider.ifAvailable,
-                attributes = attributes,
-            ),
-        )
+        val pipeline = Pipeline.builder(
+            authenticator,
+            SuspendingSnapshotSource(DocumentSnapshotViews(snapshot.source, platformRequired = true)),
+        ).attributes(attributes).apply {
+            // The application's: an approver whose memberships come from it is checked again at publish (RC1-13).
+            membershipProvider.ifAvailable?.let(::memberships)
+        }.build()
         return PipelineControlAuthorizer(
             AuthorizationChecker(pipeline),
             SourceConfirmation(snapshot.source, snapshot.clock),
