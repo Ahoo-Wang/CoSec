@@ -39,7 +39,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
    阅读 `report.json` 中的语义改动。
 4. **更新依赖和代码**：把构建和运行环境换到 JDK 21，用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
 5. **更新配置**：改名或删除每一个 [7.x key](#removed-and-renamed-properties)，并对新属性做出决定。8.0 不读取的 `cosec.*` key 会让启动
-   失败，并给出替代它的配置。另外三种常见情况也会让启动失败：
+   失败：错误信息列出所有这样的 key，并链接到[已删除和改名的 key 对照表](#removed-and-renamed-properties)，请在表中查找各自的替代项。另外三种常见情况也会让启动失败：
    `classpath:cosec-routes.json` 存在而 `cosec.authorization.routes.location` 没有指明它（把这个配置项设为它，或设为空）；
    使用 JWT 却既没有 `cosec-cocache` 也没有自己的吊销存储（[令牌吊销始终开启](#token-revocation-is-always-on)）；Redis 的驱逐策略不是
    `noeviction` 或读不到（[读不到 Redis 的驱逐策略时启动失败](#startup-fails-when-redis-s-eviction-policy-cannot-be-read)）。
@@ -552,6 +552,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey`（`cosec-spi`） | `ApiKey`、`ApiKeyReader`、`InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit`（`cosec-spi`） | `RateLimit`、`RateLimitResult`、`RateLimiter`（[见下文](#removed-and-replaced-apis)） |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model`（`cosec-model`） | `CoSecException` |
+| `me.ahoo.cosec.spring.boot.starter` 及其子包 | `me.ahoo.cosec.spring.boot` 及相同的子包（`cosec-spring-boot`） | starter 的类，例如 `jwt.JwtProperties`：`me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties` 现在是 `me.ahoo.cosec.spring.boot.jwt.JwtProperties`，并且与其他 `*Properties` 类一样是 `@InternalCoSecApi`（[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)）：请用 `@Value` 或 `Environment` 读取 `cosec.jwt.*`，不要复用它的嵌套类型 |
 
 8.0 的 SPI 也在这些地方：`MembershipProvider` 和 `MembershipClaims` 在 `me.ahoo.cosec.spi.membership`，`SnapshotDocumentStore` 和 `InMemorySnapshotDocumentStore` 在 `me.ahoo.cosec.spi.snapshot`，`AttributeProvider` 在 `me.ahoo.cosec.spi.attribute`，`Authenticator` 在 `me.ahoo.cosec.spi.authn`；`SnapshotSource` 在 `me.ahoo.cosec.runtime.snapshot`，文档编解码器和编译器在 `me.ahoo.cosec.document`（`cosec-document`），路由映射在 `me.ahoo.cosec.document.route`（[扩展 CoSec](../architecture/extending.md#extension-points)）。
 

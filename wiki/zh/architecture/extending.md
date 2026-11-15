@@ -53,7 +53,7 @@ gate 会成为第二条决策路径。编译器守住这一点：实现 `Request
 | 标记 | 承诺什么 | 你该怎么做 |
 |---|---|---|
 | 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
-| `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点，以及主体声明的能力（`ExpiresAtCapable`、`IssuedAtCapable`、`MembershipMarkerCapable`）。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
+| `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
 | `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API（`PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常）；不使用 Spring 组装管道（`Pipeline.builder`、`PipelineBuilder` 及其设置 `PipelineSettings`、`SnapshotSettings`、`ListenerSettings` 和 `IdentityForwardingSettings`、`Pipeline.behindGateway` 与 `GatewayIdentitySettings`、`Pipeline.evaluate` 和 `awaitDocuments`、`RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`RequestSecurity`）；评估轨迹（`DecisionEvent.evaluationTrace`、`me.ahoo.cosec.engine.trace`）；以及控制面的存储和影子窗口端口及其记录（[控制面存储](#control-store)）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
 | `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
 
@@ -214,6 +214,7 @@ class DirectoryAttributeProviderTest {
     private val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
 
     @Test
+    // <Unit>：JUnit 会悄悄跳过返回值的测试方法
     fun `reads the department of the principal`() = runBlocking<Unit> {
         val request = AttributeRequests.of(Action("order", "read"), Resource("order", "7", emptyMap()), alice)
         val values = provider.fetch(request, setOf("ext.directory.department"))

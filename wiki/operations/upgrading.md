@@ -53,7 +53,8 @@ What is different, in short:
    ([Modules, artifacts and packages](#modules-artifacts-and-packages)), remove the uses of
    [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension beans instead.
 5. **Update the configuration**: rename or remove every [7.x key](#removed-and-renamed-properties), and decide on the
-   new ones. A `cosec.*` key 8.0 does not read fails startup and names its replacement. Startup also fails in three
+   new ones. A `cosec.*` key 8.0 does not read fails startup: the message lists every such key and links the
+   [table of removed and renamed keys](#removed-and-renamed-properties), where you look up each replacement. Startup also fails in three
    common cases: a `classpath:cosec-routes.json` that `cosec.authorization.routes.location` does not name (set the
    property to it, or to empty), JWT without `cosec-cocache` and without a
    revocation store of your own ([Token revocation is always on](#token-revocation-is-always-on)), and a Redis whose
@@ -742,6 +743,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey` (`cosec-spi`) | `ApiKey`, `ApiKeyReader`, `InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit` (`cosec-spi`) | `RateLimit`, `RateLimitResult`, `RateLimiter` ([below](#removed-and-replaced-apis)) |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model` (`cosec-model`) | `CoSecException` |
+| `me.ahoo.cosec.spring.boot.starter` and its sub-packages | `me.ahoo.cosec.spring.boot` and the same sub-packages (`cosec-spring-boot`) | The starter's classes, such as `jwt.JwtProperties`: `me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties` is now `me.ahoo.cosec.spring.boot.jwt.JwtProperties`, and, like the other `*Properties` classes, `@InternalCoSecApi` ([From 8.0.0-alpha.4](#from-8-0-0-alpha-4)): read `cosec.jwt.*` with `@Value` or the `Environment`, and do not reuse its nested types |
 
 The 8.0 SPIs live in the same places: `MembershipProvider` and `MembershipClaims` in `me.ahoo.cosec.spi.membership`,
 `SnapshotDocumentStore` and `InMemorySnapshotDocumentStore` in `me.ahoo.cosec.spi.snapshot`, `AttributeProvider` in
