@@ -7,7 +7,7 @@ diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParame
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/CoSecParameters.kt
 @@ -36,7 +36,7 @@
          /** The parameters of [facts], or null when one of them is ambiguous. Header names match ignoring case. */
-         @ExperimentalCoSecApi
+         @InternalCoSecApi
          fun read(facts: HttpFacts): CoSecParameters? {
 -            val spaceId = single(facts.headers.values(SPACE_ID)) ?: return null
 +            val spaceId = single(facts.headers.values(SPACE_ID) + QueryParameters.values(facts.rawQuery, setOf(SPACE_ID))?.get(SPACE_ID).orEmpty()) ?: return null

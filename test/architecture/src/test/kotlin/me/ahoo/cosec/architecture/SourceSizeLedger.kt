@@ -31,7 +31,7 @@ object SourceSizeLedger {
     val ENTRIES: List<Entry> = listOf(
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt",
-            1646,
+            1665,
             Disposition.Debt(Batch.B2a),
         ),
         Entry(
@@ -46,7 +46,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt",
-            947,
+            1009,
             Disposition.Debt(Batch.B1),
         ),
         Entry(
