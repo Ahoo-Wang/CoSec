@@ -27,6 +27,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.asCompletableFuture
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
@@ -59,8 +60,13 @@ private val log = KotlinLogging.logger {}
  *   for more, and only a consumer with nothing queued waits for a wake-up. A queue half full wakes it at once.
  *
  * [close] stops taking events; the consumers finish what is queued. [drain] does that for at most [drainTimeout], then
- * drops the rest: what a host calls on shutdown (`cosec.observability.listener.drain-timeout`). Failures and drops are
- * counted in [stats] and logged at most once per [warnInterval] per listener.
+ * stops: no listener call starts any more, and what is left is dropped and counted. [cancel] stops at once. That is
+ * what a host calls on shutdown (`cosec.observability.listener.drain-timeout`). Every published event is delivered,
+ * dropped or still queued, and counted once.
+ *
+ * The request's thread never logs (#1392): a drop only counts and signals a reporter, which logs on [dispatcher] how
+ * many each listener dropped since its last line, at most once per [warnInterval]. A failure is counted and logged on
+ * the listener's consumer, at most once per [warnInterval] per listener.
  */
 @InternalCoSecApi
 class DecisionListeners(
@@ -78,6 +84,9 @@ class DecisionListeners(
     @InternalCoSecApi
     class Stats internal constructor(val listener: String, val delivery: Delivery) {
         internal val droppedCount = AtomicLong()
+
+        /** Of [droppedCount], those a closed queue dropped: the reporter says which. */
+        internal val closedDrops = AtomicLong()
         internal val failureCount = AtomicLong()
         internal val lastWarning = AtomicLong(Long.MIN_VALUE)
 
@@ -114,6 +123,13 @@ class DecisionListeners(
     @Volatile
     private var closed = false
 
+    /** Set by [drain] once it gives up, and by [cancel]: no listener call starts any more (#1393). */
+    @Volatile
+    private var stopped = false
+
+    /** Conflated: a burst of drops wakes the reporter once, and the request's thread never waits on it. */
+    private val drops = Channel<Unit>(Channel.CONFLATED)
+
     /**
      * The BEST_EFFORT listeners, in registration order: the pipeline asks the shadow listeners among them before it
      * makes the event (§9.5.4).
@@ -143,6 +159,9 @@ class DecisionListeners(
             Queued(listener, Stats(listener.name, Delivery.BEST_EFFORT), queueCapacity)
         }
         consumers = bestEffort.map { queued -> scope.launch { consume(queued) } }
+        if (bestEffort.isNotEmpty()) {
+            scope.launch { reportDrops() }
+        }
         bestEffortListeners = bestEffort.map { it.listener }
         stats = requiredStats + bestEffort.map { it.stats }
         if (required.isEmpty() && listeners.isNotEmpty()) {
@@ -196,24 +215,93 @@ class DecisionListeners(
         log.error { "REQUIRED decision listeners $failed failed on request [${event.requestId}], answered ${event.outcome}." }
     }
 
-    /** Offers [event] to every BEST_EFFORT listener's queue without suspending; a full or closed queue drops it. */
+    /**
+     * Offers [event] to every BEST_EFFORT listener's queue without suspending, on the request's thread: a full or closed
+     * queue drops it, counts it and signals the reporter, and nothing here logs or locks.
+     *
+     * A queue closed between the check and the offer may have lost its consumer already, so after the offer this call
+     * takes its own event back out and counts it as dropped, unless a consumer took it first. That is a scan of at most
+     * the queue's capacity, once per such call, only while the listeners close: keep it lock-free, it is the cost of an
+     * exact count, not a slow path to optimise.
+     */
     internal fun publish(event: DecisionEvent) {
         for (queued in bestEffort) {
             val size = queued.size.incrementAndGet()
             if (closed || size > queued.capacity) {
                 queued.size.decrementAndGet()
-                queued.stats.droppedCount.incrementAndGet()
-                warn(
-                    queued.stats
-                ) { "Dropping decision events: the queue of listener [${queued.listener.name}] is full." }
+                dropped(queued, closed)
                 continue
             }
             queued.events.offer(event)
+            if (closed) {
+                if (queued.events.remove(event)) {
+                    queued.size.decrementAndGet()
+                    dropped(queued, true)
+                }
+                continue
+            }
             // After the offer: a consumer that parked before it either sees the event or is seen parked here.
             if (queued.parked || size == queued.halfFull) {
                 queued.wake.trySend(Unit)
             }
         }
+    }
+
+    private fun dropped(queued: Queued, closed: Boolean) {
+        queued.stats.droppedCount.incrementAndGet()
+        if (closed) {
+            queued.stats.closedDrops.incrementAndGet()
+        }
+        drops.trySend(Unit)
+    }
+
+    /** Logs, for each listener that dropped events since its last line, how many and why; then waits [warnInterval]. */
+    private suspend fun reportDrops() {
+        val reported = LongArray(bestEffort.size)
+        val reportedClosed = LongArray(bestEffort.size)
+        while (true) {
+            drops.receive()
+            bestEffort.forEachIndexed { index, queued ->
+                val all = queued.stats.droppedCount.get()
+                val closedDrops = queued.stats.closedDrops.get()
+                val full = all - reported[index] - (closedDrops - reportedClosed[index])
+                val afterClose = closedDrops - reportedClosed[index]
+                reported[index] = all
+                reportedClosed[index] = closedDrops
+                if (full > 0) {
+                    logDrops {
+                        "Dropping decision events: the queue of listener [${queued.listener.name}] is full; $full dropped since the last report."
+                    }
+                }
+                if (afterClose > 0) {
+                    logDrops {
+                        "Dropping decision events: the queue of listener [${queued.listener.name}] is closed; $afterClose dropped since the last report."
+                    }
+                }
+            }
+            delay(warnInterval)
+        }
+    }
+
+    /** A failing appender must not end the reporter: its exception, and only that, is swallowed. */
+    @Suppress("TooGenericExceptionCaught", "SwallowedException")
+    private fun logDrops(message: () -> String) {
+        try {
+            log.warn(message)
+        } catch (_: RuntimeException) {
+            // The appender failed; the drops stay counted in stats.
+        }
+    }
+
+    /** Removes what is left in [queued] and counts it as dropped: no listener call is started for it. */
+    private fun discard(queued: Queued): Long {
+        var discarded = 0L
+        while (queued.events.poll() != null) {
+            queued.size.decrementAndGet()
+            dropped(queued, true)
+            discarded++
+        }
+        return discarded
     }
 
     private suspend fun consume(queued: Queued) {
@@ -238,6 +326,12 @@ class DecisionListeners(
         while (true) {
             val event = queued.events.poll() ?: return
             queued.size.decrementAndGet()
+            if (stopped) {
+                // Polled after a stop: dropped, never delivered, and the rest goes with it.
+                dropped(queued, true)
+                discard(queued)
+                return
+            }
             try {
                 queued.listener.onDecision(event)
             } catch (e: CancellationException) {
@@ -272,8 +366,9 @@ class DecisionListeners(
     }
 
     /**
-     * Stops taking events and lets the consumers deliver what is queued for up to [drainTimeout]; whatever is left then is
-     * dropped. True when everything queued was delivered. A blocking call, for a host's shutdown, never for a request.
+     * Stops taking events and lets the consumers deliver what is queued for up to [drainTimeout]; then stops: a call
+     * already running is not interrupted, but no other starts, and whatever is left is dropped and counted. True when
+     * everything queued was delivered. A blocking call, for a host's shutdown, never for a request.
      */
     fun drain(): Boolean {
         close()
@@ -282,20 +377,32 @@ class DecisionListeners(
                 .get(drainTimeout.inWholeMilliseconds, TimeUnit.MILLISECONDS)
             true
         } catch (_: TimeoutException) {
-            log.warn { "Decision listeners did not deliver every queued event within $drainTimeout; the rest is dropped." }
             false
         } catch (_: InterruptedException) {
             Thread.currentThread().interrupt()
             false
         }
-        scope.cancel()
+        val discarded = stop()
+        if (!drained) {
+            log.warn {
+                "Decision listeners did not deliver every queued event within $drainTimeout; $discarded were dropped, " +
+                    "and no listener call starts any more."
+            }
+        }
         return drained
     }
 
-    /** Stops at once: queued events are dropped. */
+    /** Stops at once: no listener call starts any more, and queued events are dropped and counted. */
     fun cancel() {
         close()
+        stop()
+    }
+
+    private fun stop(): Long {
+        stopped = true
+        val discarded = bestEffort.sumOf(::discard)
         scope.cancel()
+        return discarded
     }
 
     @InternalCoSecApi

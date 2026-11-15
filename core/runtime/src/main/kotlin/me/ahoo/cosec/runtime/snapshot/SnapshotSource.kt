@@ -176,9 +176,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     @Volatile
     internal var afterSlotLookup: ((SnapshotKey) -> Unit)? = null
 
-    private val subscription: AutoCloseable = store.subscribe(ChangeListener())
+    // #1383: a step that throws releases what the constructor took before it, so a source that fails to build holds nothing.
+    private val subscription: AutoCloseable = undoing({}) { store.subscribe(ChangeListener()) }
     private val passes = PeriodicPasses()
-    private val periodic: ScheduledFuture<*> = schedulePeriodic()
+    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { schedulePeriodic() }
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
     val isPrewarmed: Boolean get() = prewarmed
@@ -414,6 +415,17 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         { if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown() },
         ::awaitOwnedThreads,
     )
+
+    /** Runs the constructor's [step]; when it throws, [undo] and the executors this source made are released first. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun <T> undoing(undo: () -> Unit, step: () -> T): T = try {
+        step()
+    } catch (e: Throwable) {
+        listOf(undo, { if (ownsScheduler) scheduler.shutdownNow() }, housekeeping::shutdown, {
+            if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown()
+        }).forEach { release -> attemptClosing(release, e) }
+        throw e
+    }
 
     /** Runs [step]; what it throws becomes the failure, or is kept with the [failure] there already. */
     @Suppress("TooGenericExceptionCaught")
