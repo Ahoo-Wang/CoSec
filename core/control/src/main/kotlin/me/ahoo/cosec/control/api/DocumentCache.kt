@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.api
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
+import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.engine.pattern.ActionPattern
@@ -126,15 +127,16 @@ internal class DocumentCache(
      */
     class AnalyzedPolicy internal constructor(
         val definition: PolicyDefinition,
-        private val entry: DocumentCache.Entry
+        /** The document that defines it; null for a built-in policy ([BUILTIN]), which no document can define. */
+        private val entry: DocumentCache.Entry?,
     ) {
         val statements: List<AnalyzedStatement> by lazy(LazyThreadSafetyMode.PUBLICATION) {
             try {
                 definition.statements.mapIndexed { index, statement -> AnalyzedStatement(index, statement) }
             } catch (e: IllegalArgumentException) {
+                val where = entry?.let { "The stored document [${it.key}] revision ${it.document.revision}" } ?: "CoSec"
                 throw SnapshotFormatException(
-                    "The stored document [${entry.key}] revision ${entry.document.revision} has a pattern in policy " +
-                        "[${definition.id.value}] this version cannot parse: ${e.message}",
+                    "$where has a pattern in policy [${definition.id.value}] this version cannot parse: ${e.message}",
                     e
                 )
             }
@@ -224,6 +226,14 @@ internal class DocumentCache(
 
         /** What one derived binding would take stored, written out. */
         const val DERIVED_BINDING_BYTES: Long = 160
+
+        /**
+         * The built-in control-plane policies (RFC 0007 §7.3) as `analyze` matches them (#1401): the engine's own
+         * statements ([BuiltinPolicies.CONTROL]), read the way any policy is, since no document can define them.
+         */
+        internal val BUILTIN: Map<String, AnalyzedPolicy> = BuiltinPolicies.CONTROL.entries.associate { (id, statements) ->
+            id.value to AnalyzedPolicy(PolicyDefinition(id, attachable = false, condition = null, statements = statements), null)
+        }
 
         /** Compiled forms kept per document: the current platform's, and the previous one's while a change propagates. */
         private const val VARIANTS = 2
