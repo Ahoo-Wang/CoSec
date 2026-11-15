@@ -96,6 +96,8 @@ and have to be provisioned again.
 
   Code that passed it where a `CompositeToken` is expected (`TokenRevoker.revoke`) builds one,
   `CompositeToken(credentials.accessToken, credentials.refreshToken)`.
+- **`SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication`**, in the same package and with the same
+  constructor: the only one there is needs no prefix. Rename the class where you declare its bean.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests
@@ -1769,7 +1771,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `Policy`, `Statement`, `PermissionVerifier`, `ActionMatcher`, `ConditionMatcher`, `AppPermission`, `AppRolePermission`, `RolePermission` and the rest of `cosec-api`'s policy and permission model | Documents ([policy language](../policies/language.md)). A `Statement` that overrode `verify` has no counterpart. |
 | `ActionMatcherFactory`, `ConditionMatcherFactory`, `MatcherFactoryRegistry`, the built-in matchers, OGNL and SpEL | Built-in actions and conditions only. A value a custom condition read comes from an `AttributeProvider` ([Extending](../architecture/extending.md)). |
 | `AuthenticationProvider`, `DefaultAuthenticationProvider` | Declare `Authentication` beans: the starter registers them. |
-| `AbstractRefreshTokenAuthentication` | `SimpleRefreshTokenAuthentication`, or an `Authentication<RefreshTokenCredentials>` of your own. |
+| `AbstractRefreshTokenAuthentication` | `RefreshTokenAuthentication`, or an `Authentication<RefreshTokenCredentials>` of your own. |
 | `ApiKeyStore` | `ApiKeyReader` to look keys up; the `InMemoryApiKeyStore` or `RedisApiKeyStore` bean to manage them. |
 | `BlockingAware` | None: no condition runs code. Blocking lookups go into an `AttributeProvider`, which suspends. |
 | `RootPrincipalMatcher`, `CoSecPrincipal.isRoot`, `root-enabled` | Break-glass bindings ([Root becomes break-glass](#root-becomes-break-glass)). |

@@ -270,7 +270,7 @@ A failed check throws a `TokenVerificationException`; a refresh token that was i
 throws its subclass `RefreshTokenMismatchException`. Refreshing a [delegation token](#tokens) (one with an `act` claim)
 fails too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
 
-`SimpleRefreshTokenAuthentication` refreshes as an `Authentication`, so with it declared as a bean, a refresh is a login
+`RefreshTokenAuthentication` refreshes as an `Authentication`, so with it declared as a bean, a refresh is a login
 with credentials that implement `RefreshTokenCredentials`. It verifies the pair on the caller's thread, which is pure
 computation; checks through `TokenRevocation` that the access token was not revoked, and neither were its principal's
 tokens; and rotates the session through `TokenFamilies` ([Sessions](#sessions)). The new pair says what the old access
@@ -282,7 +282,7 @@ fun refreshTokenAuthentication(
     tokenVerifier: TokenVerifier,
     tokenRevocation: TokenRevocation,
     tokenFamilies: TokenFamilies,
-) = SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -334,7 +334,7 @@ Every authenticated request checks revocation, without blocking. Three propertie
   10 seconds.
 - **A refresh fails while Redis cannot be read.** A token is never issued on a revocation read that failed (`IDN-14`):
   issued then, it would be named by no revocation, neither the old token's nor its principal's, and outlive both.
-  `SimpleRefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`.
+  `RefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`.
 - **Any other error fails the request.** A revocation entry that Redis returns but CoSec cannot decode, or an error
   a custom `RevocationReader` throws, is `503`, never an accepted token.
 

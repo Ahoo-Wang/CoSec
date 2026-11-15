@@ -16,7 +16,7 @@ package me.ahoo.cosec.jwt
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
-import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
@@ -34,7 +34,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 
-class SimpleRefreshTokenAuthenticationTest {
+class RefreshTokenAuthenticationTest {
     var jwtTokenConverter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private var jwtTokenVerifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
@@ -53,7 +53,7 @@ class SimpleRefreshTokenAuthenticationTest {
 
     @Test
     fun authenticate(): Unit = runBlocking {
-        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(
+        val refreshTokenAuthentication = RefreshTokenAuthentication(
             jwtTokenVerifier,
             TokenRevocation(RevocationReader.NONE),
             families,
@@ -69,7 +69,7 @@ class SimpleRefreshTokenAuthenticationTest {
     @Test
     fun `a refresh token of another token is refused`(): Unit = runBlocking {
         val authentication =
-            SimpleRefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families)
+            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families)
         val alice = issue(TokenSubject("alice", null))
         val bob = issue(TokenSubject("bob", null))
 
@@ -98,7 +98,7 @@ class SimpleRefreshTokenAuthenticationTest {
         }
 
         assertThrows<TokenRevokedException> {
-            SimpleRefreshTokenAuthentication(
+            RefreshTokenAuthentication(
                 verifier,
                 TokenRevocation(revocations),
                 families
@@ -122,7 +122,7 @@ class SimpleRefreshTokenAuthenticationTest {
         val old = issue(TokenSubject("alice", null))
 
         assertThrows<RevocationUnavailableException> {
-            SimpleRefreshTokenAuthentication(
+            RefreshTokenAuthentication(
                 jwtTokenVerifier,
                 TokenRevocation(unavailable),
                 families,

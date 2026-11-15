@@ -1,10 +1,10 @@
 # Rule: IDN-14
 # Mutant: refresh reads a revocation store it cannot read as "not revoked", and issues a token on that read
-# Tests: :jwt:test --tests me.ahoo.cosec.jwt.SimpleRefreshTokenAuthenticationTest
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenAuthenticationTest
 
-diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
---- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
-+++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
 @@ -41,7 +41,10 @@
  
      override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {

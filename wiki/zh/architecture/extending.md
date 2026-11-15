@@ -138,7 +138,7 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 
 自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`roles`、`policies`、`attributes`、时间和成员关系标记。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
 
-按契约，`TokenVerifier` 是纯计算：不做 I/O，不做任何阻塞的事，因为流水线在请求的线程上调用它。令牌是否被吊销不由它回答：`TokenAuthenticator`、刷新（`SimpleRefreshTokenAuthentication`）和 `TokenRevoker` 都通过挂起式的 `RevocationReader` 读取，并共用同一个判断 `TokenRevocation`。只有 CoSec 自己的校验器签发的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
+按契约，`TokenVerifier` 是纯计算：不做 I/O，不做任何阻塞的事，因为流水线在请求的线程上调用它。令牌是否被吊销不由它回答：`TokenAuthenticator`、刷新（`RefreshTokenAuthentication`）和 `TokenRevoker` 都通过挂起式的 `RevocationReader` 读取，并共用同一个判断 `TokenRevocation`。只有 CoSec 自己的校验器签发的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
 
 ## 凭证与吊销 {#credentials-and-revocation}
 

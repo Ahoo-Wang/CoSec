@@ -181,7 +181,7 @@
       "level": "pipeline",
       "pending": null,
       "guards": [
-        "jwt:SimpleRefreshTokenAuthenticationTest#a refresh is refused when the revocations cannot be read",
+        "jwt:RefreshTokenAuthenticationTest#a refresh is refused when the revocations cannot be read",
         "cocache:CoCacheRevocationReaderTest#aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails",
         "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens"
       ]

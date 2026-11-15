@@ -211,7 +211,7 @@ verifier read them.
 
 A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the
 request's thread. Whether a token was revoked is not its question: `TokenAuthenticator`, refresh
-(`SimpleRefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one
+(`RefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one
 judgement, `TokenRevocation`. Only CoSec's own verifier's tokens may use break-glass. A token with an `act` claim must never become a principal
 (`IDN-4`): a `TokenVerifier` of your own throws `DelegationUnsupportedException` for it, which `TokenAuthenticator`
 turns into a `token-invalid` refusal, and an `Authenticator` of your own that reads tokens itself returns

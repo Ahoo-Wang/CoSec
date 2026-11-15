@@ -31,7 +31,7 @@ import me.ahoo.cosec.spi.token.TokenVerifier
  * refresh to read it as "not revoked", the new token would carry neither a revoked id nor an `iat` before a principal's
  * revocation, and would outlive both.
  */
-class SimpleRefreshTokenAuthentication(
+class RefreshTokenAuthentication(
     private val tokenVerifier: TokenVerifier,
     private val revocation: TokenRevocation,
     private val families: TokenFamilies,

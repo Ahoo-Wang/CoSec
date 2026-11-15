@@ -17,7 +17,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.DefaultTokenRevoker
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
-import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
@@ -74,7 +74,7 @@ class SubjectRevocationJwtTest {
     private val revocation = TokenRevocation(tokenStore, Duration.ZERO)
     private val authenticator = TokenAuthenticator(verifier, tokenStore, revocationSkew = Duration.ZERO)
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
-    private val refresh = SimpleRefreshTokenAuthentication(verifier, revocation, families)
+    private val refresh = RefreshTokenAuthentication(verifier, revocation, families)
     private val revoker = DefaultTokenRevoker(verifier, tokenStore, revocation, families, Duration.ofDays(7))
     private val tenant = TenantId("tenant")
 

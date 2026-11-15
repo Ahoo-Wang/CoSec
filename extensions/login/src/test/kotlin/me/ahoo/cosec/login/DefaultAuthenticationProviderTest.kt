@@ -18,7 +18,7 @@ package me.ahoo.cosec.login
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
-import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
@@ -33,24 +33,24 @@ internal class DefaultAuthenticationProviderTest {
     @Test
     fun register() {
         assertThrows(IllegalArgumentException::class.java) {
-            authenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication>(
                 RefreshTokenCredentials::class.java,
             )
         }
-        val refreshTokenAuthentication = SimpleRefreshTokenAuthentication(
+        val refreshTokenAuthentication = RefreshTokenAuthentication(
             mockk(),
             TokenRevocation(RevocationReader.NONE),
             TokenFamilies(InMemoryTokenFamilyStore()),
         )
         authenticationProvider.register(refreshTokenAuthentication)
         (
-            authenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication>(
                 RefreshTokenCredentials::class.java,
             )
             ).assert().isEqualTo(refreshTokenAuthentication)
 
         (
-            authenticationProvider.getRequired<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication>(
                 MockRefreshTokenCredentials::class.java,
             )
             ).assert().isEqualTo(refreshTokenAuthentication)
@@ -60,7 +60,7 @@ internal class DefaultAuthenticationProviderTest {
     @Test
     fun `a registration stays in its registry`() {
         authenticationProvider.register(
-            SimpleRefreshTokenAuthentication(
+            RefreshTokenAuthentication(
                 mockk(),
                 TokenRevocation(RevocationReader.NONE),
                 TokenFamilies(InMemoryTokenFamilyStore())
@@ -68,14 +68,14 @@ internal class DefaultAuthenticationProviderTest {
         )
 
         DefaultAuthenticationProvider()
-            .get<RefreshTokenCredentials, SimpleRefreshTokenAuthentication>(RefreshTokenCredentials::class.java)
+            .get<RefreshTokenCredentials, RefreshTokenAuthentication>(RefreshTokenCredentials::class.java)
             .assert().isNull()
     }
 
     /** Round-2 review L3: credentials two registered authentications support are refused, never sent to either. */
     @Test
     fun `credentials more than one authentication supports are refused`() {
-        val refresh = SimpleRefreshTokenAuthentication(
+        val refresh = RefreshTokenAuthentication(
             mockk(),
             TokenRevocation(RevocationReader.NONE),
             TokenFamilies(InMemoryTokenFamilyStore()),
