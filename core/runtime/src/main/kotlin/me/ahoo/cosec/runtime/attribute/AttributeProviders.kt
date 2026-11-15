@@ -30,7 +30,7 @@ import me.ahoo.cosec.spi.attribute.AttributeProvider
  * Every path is an `ext.<provider>.<name>` path of an external type, declared once across all providers; the blacklist
  * attributes ([BlacklistAttributeProvider.ATTRIBUTES]) only in stage A.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class AttributeProviders(providers: List<AttributeProvider>) {
     /** One provider and what it declares in one [stage]. */
     internal class Registered(
@@ -93,6 +93,7 @@ class AttributeProviders(providers: List<AttributeProvider>) {
 
     override fun toString(): String = "AttributeProviders${byPath.keys}"
 
+    @InternalCoSecApi
     companion object {
         val NONE: AttributeProviders = AttributeProviders(emptyList())
     }

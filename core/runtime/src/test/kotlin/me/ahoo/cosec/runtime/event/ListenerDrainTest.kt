@@ -40,7 +40,7 @@ class ListenerDrainTest {
     }
 
     private fun publish(listeners: DecisionListeners, count: Int) = runBlocking {
-        val pipeline = PipelineFixtures.pipeline { it.copy(listeners = listeners) }
+        val pipeline = PipelineFixtures.pipeline { listeners(listeners) }
         repeat(count) { pipeline.evaluate(PipelineFixtures.facts()) }
     }
 

@@ -100,7 +100,10 @@ class RateLimitObligationTest {
             authenticator = PipelineFixtures.authenticator(PipelineFixtures.authenticated()),
             engine = CoSecFlatEngine,
             views = Views(platform(rules)),
-        ) { it.copy(options = PipelineOptions(rateLimitTimeout = 50.milliseconds), rateLimiter = limiter) }
+        ) {
+            options(PipelineOptions(rateLimitTimeout = 50.milliseconds))
+            limiter?.let(::rateLimiter)
+        }
         val facts = PipelineFixtures.facts("/orders/1").let {
             me.ahoo.cosec.runtime.http.HttpFacts(
                 method,

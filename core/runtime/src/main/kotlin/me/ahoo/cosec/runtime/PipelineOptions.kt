@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.runtime
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -23,7 +23,7 @@ import kotlin.time.Duration.Companion.seconds
  * How the [Pipeline] bounds and reads a request. The defaults are RFC 0006 Q25's; the starter sets them from the
  * `cosec.pipeline.*` properties.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class PipelineOptions(
     /** The whole evaluation (`cosec.pipeline.timeout`): an upper bound, not the sum of the stages. Then 503. */
     val timeout: Duration = 5.seconds,

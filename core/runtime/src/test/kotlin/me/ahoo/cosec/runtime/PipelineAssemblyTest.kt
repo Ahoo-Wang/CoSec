@@ -21,7 +21,6 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
@@ -62,8 +61,8 @@ class PipelineAssemblyTest {
                     """"bindings":[{"id":"public","subject":"*","app":"*","space":"*","policy":"public"}]""",
             ),
         )
-        SuspendingSnapshotSource.of(store).use { snapshots ->
-            val pipeline = Pipeline(PipelineComponents(Authenticator { AuthnResult.Anonymous }, snapshots))
+        Pipeline.builder(Authenticator { AuthnResult.Anonymous }, store).build().use { pipeline ->
+            pipeline.awaitDocuments().assert().isEmpty()
             pipeline.evaluate(request("/public/x")).proceed.assert().isTrue()
             pipeline.evaluate(request("/orders/1")).status.assert().isEqualTo(401)
         }

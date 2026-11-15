@@ -128,7 +128,7 @@ class BreakGlassAndShadowTest {
             authenticator = operator,
             engine = CoSecFlatEngine,
             views = Views(document),
-        ) { it.copy(listeners = registered) }
+        ) { listeners(registered) }
         return runBlocking { pipeline.evaluate(PipelineFixtures.facts()) }
     }
 
@@ -191,7 +191,7 @@ class BreakGlassAndShadowTest {
             authenticator = operator,
             engine = CoSecFlatEngine,
             views = Views(breakGlass),
-        ) { it.copy(listeners = registered) }
+        ) { listeners(registered) }
         val outcome = runBlocking { pipeline.evaluate(PipelineFixtures.facts()) }
         outcome.status.assert().isEqualTo(200)
         audit.events.size.assert().isEqualTo(1)

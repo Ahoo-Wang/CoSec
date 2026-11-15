@@ -149,11 +149,9 @@ class ExternalAttributesPipelineTest {
             engine = me.ahoo.cosec.engine.flat.CoSecFlatEngine,
             views = views,
         ) {
-            it.copy(
-                membershipProvider = membershipProvider,
-                options = PipelineOptions(attributeTimeout = 50.milliseconds),
-                attributes = attributes,
-            )
+            membershipProvider?.let(::memberships)
+            options(PipelineOptions(attributeTimeout = 50.milliseconds))
+            attributes(attributes)
         }
         return pipeline to views
     }

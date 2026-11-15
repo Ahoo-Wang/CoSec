@@ -282,6 +282,25 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     }
 
     /**
+     * Completes once the shared document and each of [keys] has been read: installed, or failed. Unlike [loadAll] it does
+     * not give up at [SnapshotOptions.coldLoadTimeout], and it reads again only a document that is missing or failed.
+     * Each call gets its own future, so cancelling it leaves the loads running. It completes exceptionally only when
+     * this source is closed.
+     *
+     * @throws IllegalArgumentException when a key belongs to no family of this source.
+     */
+    @InternalCoSecApi
+    fun settled(keys: Collection<SnapshotKey>): CompletableFuture<Void> {
+        keys.forEach(::familyOf)
+        val settled = CompletableFuture<Void>()
+        val loads = if (closed) emptyList() else (listOf(sharedKey) + keys).map(::usableOf)
+        CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
+            if (closed) settled.completeExceptionally(closedError()) else settled.complete(null)
+        }
+        return settled
+    }
+
+    /**
      * Loads [keys] and completes once every one of them is installed and not failed, retrying with backoff from
      * [SnapshotOptions.prewarmInitialBackoff] up to [SnapshotOptions.prewarmMaxBackoff]. [isPrewarmed] turns true then.
      */

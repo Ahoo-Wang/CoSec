@@ -1,0 +1,190 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
+
+package me.ahoo.cosec.runtime
+
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.PipelineFixtures.TENANT
+import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
+import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
+import me.ahoo.cosec.runtime.PipelineFixtures.facts
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
+import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
+import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
+import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
+import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
+import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotRead
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
+import java.time.Duration
+import java.time.Instant
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.atomic.AtomicInteger
+
+/** The two forms of [Pipeline.builder]: what `awaitDocuments` answers, and what `close` closes. */
+class PipelineBuilderTest {
+    private val tenant = SnapshotKey.Tenant(TENANT.value)
+
+    /**
+     * The documents of [inner]; a read of a held key waits for [release], a read of a broken key fails. [coldReads]
+     * counts the full reads of each key, which a load starts; a revalidation is a `readIfChanged`.
+     */
+    private class HeldStore : SnapshotDocumentStore {
+        val inner = InMemorySnapshotDocumentStore()
+        val held = ConcurrentHashMap<SnapshotKey, CompletableFuture<Unit>>()
+        val broken: MutableSet<SnapshotKey> = ConcurrentHashMap.newKeySet()
+        val coldReads = ConcurrentHashMap<SnapshotKey, AtomicInteger>()
+
+        fun hold(key: SnapshotKey) {
+            held[key] = CompletableFuture()
+        }
+
+        fun release(key: SnapshotKey) {
+            held.getValue(key).complete(Unit)
+        }
+
+        private fun answer(key: SnapshotKey, read: () -> CompletableFuture<SnapshotRead>): CompletableFuture<SnapshotRead> {
+            if (key in broken) {
+                return CompletableFuture.failedFuture(IllegalStateException("unreadable"))
+            }
+            return held[key]?.thenCompose { read() } ?: read()
+        }
+
+        override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> {
+            coldReads.computeIfAbsent(key) { AtomicInteger() }.incrementAndGet()
+            return answer(key) { inner.read(key) }
+        }
+
+        override fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?) =
+            answer(key) { inner.readIfChanged(key, known) }
+
+        override fun subscribe(listener: SnapshotChangeListener): AutoCloseable = inner.subscribe(listener)
+    }
+
+    private fun document(body: String = ""): SnapshotDocument {
+        val publishedAt = Instant.parse("2026-11-01T00:00:00Z")
+        return SnapshotDocument(
+            2,
+            1,
+            publishedAt,
+            """{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray(),
+        )
+    }
+
+    private fun store() = HeldStore().apply {
+        inner.put(SnapshotKey.Platform, document(ALLOW_EVERYONE))
+        inner.put(tenant, document())
+    }
+
+    private fun pipeline(store: SnapshotDocumentStore, listener: DecisionListener? = null) =
+        Pipeline.builder(authenticator(authenticated()), store)
+            .snapshots {
+                coldLoadTimeout = Duration.ofMillis(50)
+                prewarmTenants = setOf(TENANT.value)
+            }
+            .apply { listener?.let(::listener) }
+            .build()
+
+    @Test
+    fun `before awaitDocuments a tenant not yet loaded is a 503, after it the request is decided`() = runBlocking<Unit> {
+        val store = store().apply { hold(tenant) }
+        pipeline(store).use { pipeline ->
+            pipeline.evaluate(facts()).status.assert().isEqualTo(503)
+            store.release(tenant)
+            pipeline.awaitDocuments().assert().isEmpty()
+            pipeline.evaluate(facts()).status.assert().isEqualTo(200)
+        }
+    }
+
+    @Test
+    fun `a prewarmed document that cannot be read is missing, and its requests stay 503`() = runBlocking<Unit> {
+        val store = store().apply { broken += tenant }
+        pipeline(store).use { pipeline ->
+            pipeline.awaitDocuments().assert().containsExactly(tenant)
+            pipeline.evaluate(facts()).status.assert().isEqualTo(503)
+        }
+    }
+
+    @Test
+    fun `cancelling awaitDocuments cancels nothing of the load`() = runBlocking<Unit> {
+        val store = store().apply { hold(tenant) }
+        pipeline(store).use { pipeline ->
+            val waiting = async(start = CoroutineStart.UNDISPATCHED) { pipeline.awaitDocuments() }
+            waiting.cancelAndJoin()
+            store.release(tenant)
+            pipeline.awaitDocuments().assert().isEmpty()
+            // The load the cancelled wait started went on and installed the document: no second load read it again.
+            store.coldReads.getValue(tenant).get().assert().isEqualTo(1)
+            pipeline.evaluate(facts()).status.assert().isEqualTo(200)
+        }
+    }
+
+    @Test
+    fun `closing a pipeline over a store delivers the queued events, then closes the documents`() = runBlocking<Unit> {
+        val events = CopyOnWriteArrayList<DecisionEvent>()
+        val listener = object : DecisionListener {
+            override val name = "recording"
+
+            override suspend fun onDecision(event: DecisionEvent) {
+                events += event
+            }
+        }
+        val pipeline = pipeline(store(), listener)
+        pipeline.awaitDocuments().assert().isEmpty()
+        pipeline.evaluate(facts()).status.assert().isEqualTo(200)
+        pipeline.close()
+        events.size.assert().isEqualTo(1)
+        pipeline.evaluate(facts()).status.assert().isEqualTo(503)
+    }
+
+    @Test
+    fun `a pipeline over a source its owner keeps closes nothing of it and answers no readiness`() = runBlocking<Unit> {
+        val store = store()
+        val compiler = PlatformCompiler()
+        DocumentSnapshots.source(store, compiler, SnapshotOptions()).also(compiler::bind).use { source ->
+            source.load().join()
+            val pipeline = Pipeline.builder(
+                authenticator(authenticated()),
+                SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true)),
+            ).build()
+            assertThrows<IllegalStateException> { runBlocking { pipeline.awaitDocuments() } }
+            pipeline.evaluate(facts()).status.assert().isEqualTo(200)
+            pipeline.close()
+            source.peek().assert().isNotNull()
+            pipeline.evaluate(facts()).status.assert().isEqualTo(200)
+        }
+    }
+
+    private companion object {
+        const val ALLOW_EVERYONE = ""","policies":[{"id":"p","statements":[{"effect":"allow","action":"*"}]}],""" +
+            """"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"p"}]"""
+    }
+}

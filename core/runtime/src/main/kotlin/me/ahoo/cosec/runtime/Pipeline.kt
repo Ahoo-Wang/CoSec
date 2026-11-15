@@ -71,9 +71,12 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.http.StatusMapping
 import me.ahoo.cosec.runtime.http.TraceContext
 import me.ahoo.cosec.runtime.http.Unavailability
+import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
 import me.ahoo.cosec.runtime.shadow.ShadowListener
+import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
+import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
@@ -85,6 +88,8 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
+import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
@@ -106,9 +111,15 @@ private val log = KotlinLogging.logger {}
  * finishes on its calling thread without a dispatch (§7.2).
  */
 // B1: the request path becomes named stages over one request state
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 @OptIn(InternalCoSecApi::class)
-class Pipeline @ExperimentalCoSecApi constructor(components: PipelineComponents) : RequestGate {
+class Pipeline internal constructor(
+    components: PipelineComponents,
+    /** What [close] closes, in order: what the builder created for this pipeline. */
+    private val owned: List<AutoCloseable> = emptyList(),
+    /** The documents this pipeline loaded at build; null when its snapshot source is its owner's. */
+    private val readiness: DocumentReadiness? = null,
+) : RequestGate, AutoCloseable {
     private val authenticator = components.authenticator
     private val snapshots = components.snapshots
     private val engine = components.engine
@@ -935,13 +946,64 @@ class Pipeline @ExperimentalCoSecApi constructor(components: PipelineComponents)
         class Failed(val error: Throwable) : Fetched<Nothing>
     }
 
-    private companion object {
-        val PROVIDER_FAILURE_INTERVAL: java.time.Duration = java.time.Duration.ofSeconds(10)
-        const val HTTP = "http"
-        const val AUTHORIZATION = "authorization"
-        val AUTHORIZATION_NAMES = setOf(AUTHORIZATION)
-        val NO_CREDENTIALS = Credentials(null, null)
-        val NO_MEMBERSHIPS: Fetched<Memberships> =
+    /**
+     * Changes no decision: a request for a document that is not installed is a 503 whether or not anyone waits here.
+     * Suspends until the platform document and the prewarmed ones ([SnapshotSettings.prewarmApps],
+     * [SnapshotSettings.prewarmTenants]) have been read once, and answers those that are not installed: an empty set
+     * means ready. Cancellable; the loads go on. A host's readiness probe asks it, under a timeout of its own.
+     *
+     * @throws IllegalStateException for a pipeline over a snapshot source its owner keeps: the owner decides readiness.
+     */
+    @ExperimentalCoSecApi
+    suspend fun awaitDocuments(): Set<SnapshotKey> = checkNotNull(readiness) {
+        "This pipeline reads a snapshot source its owner keeps; the owner of the source decides readiness."
+    }.await()
+
+    /** Closes what the builder created for this pipeline: drains the listeners' queues, then closes the documents. */
+    @Suppress("TooGenericExceptionCaught")
+    override fun close() {
+        var failure: Exception? = null
+        for (closeable in owned) {
+            try {
+                closeable.close()
+            } catch (e: Exception) {
+                failure?.addSuppressed(e) ?: run { failure = e }
+            }
+        }
+        failure?.let { throw it }
+    }
+
+    companion object {
+        private val PROVIDER_FAILURE_INTERVAL: java.time.Duration = java.time.Duration.ofSeconds(10)
+        private const val HTTP = "http"
+        private const val AUTHORIZATION = "authorization"
+        private val AUTHORIZATION_NAMES = setOf(AUTHORIZATION)
+        private val NO_CREDENTIALS = Credentials(null, null)
+        private val NO_MEMBERSHIPS: Fetched<Memberships> =
             Fetched.Value(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()))
+
+        /**
+         * A pipeline over the documents [documentStore] holds (RFC 0013 §4.3): it compiles and installs them as a Spring
+         * host does, and [close] closes them. Load the ones a host needs before it takes traffic with
+         * [PipelineBuilder.snapshots], and wait for them with [awaitDocuments].
+         */
+        @ExperimentalCoSecApi
+        fun builder(authenticator: Authenticator, documentStore: SnapshotDocumentStore): PipelineBuilder =
+            PipelineBuilder(authenticator, documentStore, null)
+
+        /** A pipeline over [snapshots], which its owner keeps, loads and closes: for CoSec's own hosts. */
+        @InternalCoSecApi
+        fun builder(authenticator: Authenticator, snapshots: SuspendingSnapshotSource): PipelineBuilder =
+            PipelineBuilder(authenticator, null, snapshots)
+
+        /**
+         * The gate of a service behind a CoSec gateway (RFC 0009 §5): it runs no pipeline and accepts the identity the
+         * gateway verified and forwarded, as [settings] bound it.
+         */
+        @ExperimentalCoSecApi
+        fun behindGateway(settings: GatewayIdentitySettings.() -> Unit = {}): RequestGate {
+            val identity = GatewayIdentitySettings().apply(settings)
+            return IdentityGate(identity.maxBytes, identity.maxAge, identity.skew, identity.clock, identity.ids)
+        }
     }
 }

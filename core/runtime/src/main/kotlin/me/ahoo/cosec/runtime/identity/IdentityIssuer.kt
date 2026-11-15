@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.identity
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.runtime.http.RequestSecurity
@@ -30,7 +29,7 @@ import java.time.Clock
  * An anonymous permit forwards nothing, so a service has exactly one way to be anonymous: no header. Nor does a
  * principal whose authenticator names no credential. An identity larger than [maxBytes] fails the request closed.
  */
-@ExperimentalCoSecApi
+@InternalCoSecApi
 class IdentityIssuer(
     /** `cosec.gateway.identity.claims`: the token claims forwarded, strings, numbers and booleans only. */
     private val claims: Set<String> = emptySet(),
@@ -56,6 +55,7 @@ class IdentityIssuer(
         return IdentityCodec.encode(identity, maxBytes)
     }
 
+    @InternalCoSecApi
     companion object {
         /**
          * A request attribute the gateway sets on every routed request: `true` for a route that receives the identity
