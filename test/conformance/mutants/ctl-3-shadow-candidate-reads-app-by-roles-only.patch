@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ShadowAppDocumentTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
-index 4b46c81d..ffc8faa5 100644
+index 81d57c6d..33059c6b 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
-@@ -160,7 +160,7 @@ class ShadowListener(
+@@ -181,7 +181,7 @@ class ShadowListener(
              return view
          }
          val scope = replay.request.scope
 -        val app = ViewDocuments.appOf(scope) { document.needsApp(it) }
 +        val app = ViewDocuments.appOf(scope) { false }
+         // The live view read the app document and could not: the candidate reads it the same way.
+         val appFailed = view.unresolved.any(::ofApp)
          return when {
-             app == null -> if (view.app == null) view else withApp(view, null)
-             view.app != null -> view
