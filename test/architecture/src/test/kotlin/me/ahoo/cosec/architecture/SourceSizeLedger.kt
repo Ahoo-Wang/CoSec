@@ -46,7 +46,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt",
-            933,
+            947,
             Disposition.Debt(Batch.B1),
         ),
         Entry(

@@ -102,7 +102,7 @@ object TypeLedger {
         "core/model/src/main/kotlin/me/ahoo/cosec/model/decision/Decision.kt" to family(SEALED, "a decision, its causes and obligations"),
         "core/model/src/main/kotlin/me/ahoo/cosec/model/decision/StatementRef.kt" to Disposition.Debt(Batch.B7),
         "core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt" to Disposition.Debt(Batch.B7),
-        "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Outcome.kt" to family(RECORD, "an outcome, its basis and why it is unavailable"),
+        "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Outcome.kt" to family(RECORD, "an outcome, its basis and why it is unavailable"),
         "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistSource.kt" to family(PORT, "BlacklistSource and the kinds it is asked about"),
         "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEventData.kt" to family(RECORD, "the audit record's implementation"),
         "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionEvent.kt" to family(RECORD, "a decision event and its summaries"),

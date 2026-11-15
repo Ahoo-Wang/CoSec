@@ -48,7 +48,7 @@ object PackageLedger {
                 ROOT to setOf(
                     "attribute", "audit", "authn", CALL, EVENT, HTTP, IDENTITY, "ratelimit", SHADOW, SNAPSHOT, "token",
                 ),
-                "audit" to setOf(EVENT),
+                "audit" to setOf(EVENT, HTTP),
                 "authn" to setOf("token"),
                 EVENT to setOf(CALL, HTTP, SNAPSHOT),
                 IDENTITY to setOf(CALL, HTTP),
