@@ -126,6 +126,18 @@ internal class StagingSlots(
         }
     }
 
+    /**
+     * #1386: [published] is `PUBLISHED` and still holds its slot, so the release after its head write failed. Releases
+     * it; the call that frees it runs [record], the record of the publish the first call did not reach. Writes no
+     * revision.
+     */
+    suspend fun released(published: ChangeRequest, record: suspend () -> Unit): ChangeRequest {
+        if (release(published)) {
+            record()
+        }
+        return published
+    }
+
     /** Releases the slot [change] holds, and withdraws its candidate. True when this call freed the slot. */
     suspend fun release(change: ChangeRequest): Boolean {
         withdraw(change)

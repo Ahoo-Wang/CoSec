@@ -151,7 +151,7 @@ class Changes(
         val breakGlass = BreakGlassRules.touches(operations, head?.document, clock.instant())
         val glass = breakGlass || kind == ProvenanceKind.BREAK_GLASS
         authority.authorize(author, key, operations, kind, glass, head?.document)
-        requireAudit(breakGlass)
+        PublishRules.requireAudit(breakGlass, listeners.hasRequired)
         if ((head?.revision ?: 0) != base) {
             throw ChangeRejectedException(CONFLICT, "[$key] is at revision ${head?.revision ?: 0}, not $base")
         }
@@ -432,7 +432,7 @@ class Changes(
         authority.requireApprovable(operator, change, candidate)
         val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
         if (breakGlass) {
-            requireAudit(true)
+            PublishRules.requireAudit(true, listeners.hasRequired)
             audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)
         }
         return transition(id, setOf(ChangeState.AWAITING_APPROVAL)) { current ->
@@ -504,7 +504,7 @@ class Changes(
         val breakGlass = current.kind == ProvenanceKind.BREAK_GLASS
         if (breakGlass) {
             PublishRules.requireState(current, OPEN)
-            requireAudit(true)
+            PublishRules.requireAudit(true, listeners.hasRequired)
             audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
         }
         val change = transition(id, OPEN) { it.copy(state = ChangeState.ABANDONED) }
@@ -544,7 +544,10 @@ class Changes(
         val change = visible(publisher, id)
         authority.require(publisher, change.key, PublishRules.publishing(change))
         if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
-            return releasedAfterHead(change, publisher, again)
+            val recorded = change.publishedAgain(publisher, again)
+            return afterHead(change, checkNotNull(change.publishedRevision)) {
+                slots.released(change) { audit(PublishRules.outcomeOf(change, change), recorded, publisher.actor) }
+            }
         }
         PublishRules.requireState(change, setOf(ChangeState.READY))
         PublishRules.acknowledged(change, ack)
@@ -572,7 +575,10 @@ class Changes(
             }
         }
         val candidate = candidates.applied(change, head?.document).first!!
-        requireAudit(BreakGlassRules.touches(change.operations, head?.document, clock.instant()))
+        PublishRules.requireAudit(
+            BreakGlassRules.touches(change.operations, head?.document, clock.instant()),
+            listeners.hasRequired
+        )
         // Another change took the slot since this one was READY (RC1-12): it publishes nothing (review M3). Read here,
         // before the PUBLISHING record, and again right before the head write (review L2): what is left is one store
         // round trip between that read and the write, plus any pause of this instance between them (a GC, say); the
@@ -705,19 +711,6 @@ class Changes(
         return settled
     }
 
-    /**
-     * #1386: [change] is `PUBLISHED` and still holds its slot, so the release after its head write failed: what
-     * [afterHead]'s answer promised a publish again settles. The slot is released and, by the call that released it,
-     * the outcome recorded that the first call did not reach; no revision is written.
-     */
-    private suspend fun releasedAfterHead(change: ChangeRequest, publisher: Operator, again: String?): ChangeRequest =
-        afterHead(change, checkNotNull(change.publishedRevision)) {
-            if (slots.release(change)) {
-                audit(PublishRules.outcomeOf(change, change), change.publishedAgain(publisher, again), publisher.actor)
-            }
-            change
-        }
-
     /** What moved under [published] while it was written, as an event of its own ([MovedHeads], RC1-33). */
     private suspend fun recordMoved(
         published: ChangeRequest,
@@ -759,19 +752,6 @@ class Changes(
                 }
             }
         }
-
-    /**
-     * Creating or altering break-glass ([breakGlass], [BreakGlassRules.touches]) needs a REQUIRED change listener to
-     * record it (RFC 0007 §8): without one, a 503, whatever the change's kind.
-     */
-    private fun requireAudit(breakGlass: Boolean) {
-        if (breakGlass && !listeners.hasRequired) {
-            throw ChangeRejectedException(
-                UNAVAILABLE,
-                "break-glass needs a REQUIRED change listener, and none is configured"
-            )
-        }
-    }
 
     /**
      * The candidate [id] would publish on the current head (RFC 0007 §10.3 `simulate`), or null when its operations no
