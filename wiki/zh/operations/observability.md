@@ -116,6 +116,7 @@ JSON 数组 `[tenantId, principalId]`。它与审计日志并存，而不是替�
 kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管道的耗时生成，挂在适配器收到请求时的当前 span 之下；没有
 当前 span 时它是根 span。因此追踪从不拖慢请求，也不会使请求失败。管道为请求发起的调用（Redis、成员关系提供者）是
 `cosec.authorize` 的兄弟 span，挂在同一个父 span 下。tracer 来自 `GlobalOpenTelemetry`。
+该 span 像 SDK 自己的子 span 一样继承父 span 的 `tracestate`。事件的 trace 以 W3C 头部形式的不透明字符串携带它：它是厂商数据，CoSec 只把它写到该 span 的父上下文上，不写入审计记录、Kafka 记录、日志或指标标签，你自己的决策监听器也不应记录它。SDK 拒绝的值，或超过 512 个字符的值，视为没有 tracestate：span 仍会生成，父 span 不变。
 
 | 属性 | 值 |
 |---|---|
