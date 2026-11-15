@@ -239,6 +239,18 @@ val gate: RequestGate = CoSecPipeline.builder(authenticator, documentStore)   //
 - 选项一律经配置块设置（一个可变的设置对象，在 `build()` 时定格），公开的构建器里没有按位置传的参数组；`PipelineOptions` 与 `SnapshotOptions` 转为内部。这是 §4.3 原有的决定，这里重申：十七个参数的构造器无法兼容地加第十八个，设置对象可以加属性。
 - 退出 ABI 清单：`PipelineComponents`、`Pipeline` 的构造器、`PipelineOptions`、`SnapshotOptions`、`AttributeProviders`、`DecisionListeners`、`IdentityIssuer`、`IdentityGate`、`SuspendingSnapshotSource`、`CoSecParameters.read`。三个适配器不变。
 
+**构建器落地时补上的（#1379，2026-11-15）。**
+
+- **就绪。** 公开形式在 `build()` 之后异步加载文档，宿主原先无从知道管道何时不再对未加载的文档回 503；starter 靠自己的就绪 bean 解决，公开 API 里没有对应物。
+  现在快照设置里有 `prewarmApps`、`prewarmTenants`（与 `cosec.authorization.snapshot.prewarm-*` 同名同默认值，平台文档总是最先），`Pipeline.awaitDocuments(): Set<SnapshotKey>` 返回尚未安装的键，空集合表示就绪。
+  它不改变任何决定：未安装的文档，等不等都是 503。没有超时参数，调用方自带；可取消，取消不影响加载。在内部形式上它抛出 `IllegalStateException`：那里文档不归管道所有，一个没有意义的“成功”比拒绝更糟。
+  就绪只有一处定义，`DocumentReadiness`，`awaitDocuments`、starter 的就绪探针与健康检查都问它。
+- **设置对象。** 五个，都以 `Settings` 结尾：`PipelineSettings`、`SnapshotSettings`、`ListenerSettings`、`IdentityForwardingSettings`、`GatewayIdentitySettings`；时长一律是 `java.time.Duration`。
+  Kotlin 的 `Duration` 是值类，访问器在字节码里带哈希后缀（`setTimeout-LRDsOJo`），会把写不出来的名字冻结进 ABI。
+- **相互矛盾的输入在 `build()` 时报错**，不悄悄丢掉其中一个：`listener(…)` 与内部的 `listeners(DecisionListeners)` 并用时，被丢掉的可能是一个 REQUIRED 监听器。
+- **公开形式的编译器拒绝文档读取宿主的 API key 请求头（CND-5）。** 被它取代的 `SuspendingSnapshotSource.of` 没有这样做；这是手工装配的一处行为变化，方向更严，升级文档有记录。
+- 构建器的时钟传给它创建的快照源；`close()` 先排空它创建的监听器队列，再关闭快照源。
+
 **PR 顺序。** 纯移动（B1 的十二个多类型文件、契约进 `runtime.http`、三条反向引用）；构建器（A2，所有调用方切换，`PipelineComponents` 删除，文档同步）；阶段与 `RequestState`（`StageOrderTest`、写入者测试、16 个指向 `Pipeline.kt` 的变异体全部重写并跑过、JMH A/B）。
 
 ## 5. 快照源
@@ -347,6 +359,12 @@ snapshot/
 会增长的封闭集合（`Cause`、`Obligation`、`StatementRef`、`AuthnResult`、`MembershipAnswer`）已由 RFC 0010 定过，不重开。
 
 这修订了 R9 的 D6：它改了 `Credentials` 的名字，但留下了上面两个登录类的名字。
+
+**2026-11-15 增加（审查构建器时发现）。** 两件冻结后改不了的事并入 A3：
+
+- **公共与 SPI 签名里只有一种时长类型，`java.time.Duration`。** `TokenStore`、`RateLimiter` 与构建器的设置已经如此；例外是 `AttributeProvider.timeout`（`kotlin.time.Duration?`）与 `cosec-cocache` 的一个默认值常量。
+- **明说扩展点用 Kotlin 实现。** id（`TenantId`、`AppId`、`PrincipalId`）是值类，凡签名里有它们的方法在字节码里都带哈希后缀（`memberships-hPxUw84`），Java 写不出这样的方法名；数据面的 SPI 又都是挂起函数。
+  id 用值类是模型的决定，不改；`wiki/architecture/extending.md` 把这句话写出来，而不是让实现者自己撞上。
 
 ### 7.4 增长点
 

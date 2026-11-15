@@ -154,8 +154,14 @@ the adapters, snapshots or the control plane. The parts that take several files 
     through. A format's descriptor and its codec live here together.
   - `cosec-runtime` (`core/runtime/`) is the coroutine `Pipeline` and what every host needs around the engine:
     `SnapshotSource` (`runtime/snapshot/`), token verification, API key and token authenticators, identity forwarding,
-    decision events, audit and shadow recording, over the documents of `cosec-document`. Coroutines stay in `runtime/`
-    and the adapters: `RuntimeBoundaryTest` fails when `runtime/`, `document/`, `engine/` or `model/` code references
+    decision events, audit and shadow recording, over the documents of `cosec-document`. A pipeline is built with
+    `Pipeline.builder`: over a `SnapshotDocumentStore` for applications (experimental; options through settings blocks,
+    `awaitDocuments()` answers the documents not yet installed), over a `SuspendingSnapshotSource` for CoSec's own hosts
+    (`@InternalCoSecApi`). Both forms assemble in one place, and `PipelineComponents` is internal. `DocumentReadiness`
+    is the one readiness question, asked by `awaitDocuments`, the starter's readiness probe and its health indicator.
+    The adapter contract (`RequestGate`, `HttpFacts`, `Outcome`, `Problem`, `ProblemType`, `RequestSecurity`, with
+    `StatusMapping`) is one package, `runtime/http/`; inside the module a package uses only what `PackageLedger` allows.
+    Coroutines stay in `runtime/` and the adapters: `RuntimeBoundaryTest` fails when `runtime/`, `document/`, `engine/` or `model/` code references
     `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` or `document/` references
     Spring, the Servlet API, `kotlinx.coroutines.reactor`, `runBlocking`, `GlobalScope` or `Dispatchers.IO`, or when
     it uses `runCatching` (it swallows cancellation).
