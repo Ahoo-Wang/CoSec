@@ -8,7 +8,7 @@ diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRe
 @@ -41,7 +41,10 @@
  
      override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
-         val token = tokenVerifier.refresh(credentials)
+         val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
 -        revocation.check(token)
 +        try {
 +            revocation.check(token)

@@ -66,6 +66,8 @@ const TERMS = [
   // A1 (RFC 0013 §3): packages that moved to cosec-document.
   { term: 'me.ahoo.cosec.runtime.document', hint: 'moved in 8.0 (A1): `me.ahoo.cosec.document` (`cosec-document`)' },
   { term: 'me.ahoo.cosec.runtime.route', hint: 'moved in 8.0 (A1): `me.ahoo.cosec.document.route` (`cosec-document`)' },
+  // A3 (RFC 0013 §7.3): names that went.
+  { term: 'SimpleCompositeToken', hint: 'removed in 8.0 (A3): `CompositeToken` (`cosec-api`) is a final class' },
 ]
 
 const EXEMPT_SECTIONS = [
@@ -93,6 +95,11 @@ const ALLOWED = [
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
     terms: ['me.ahoo.cosec.runtime.document', 'me.ahoo.cosec.runtime.route'],
     reason: 'the upgrade entry that moves them to cosec-document names the old packages',
+  },
+  {
+    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    terms: ['SimpleCompositeToken'],
+    reason: 'the A3 upgrade entries, and the earlier preview entry that moved it, name the old class',
   },
   {
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],

@@ -20,6 +20,7 @@ import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.token.DefaultTokenRevoker
@@ -122,7 +123,7 @@ internal object ScenarioRefresh {
                     Duration.ofDays(7),
                     clock,
                 )
-                revoker.revoke(pair(logout))
+                revoker.revoke(pair(logout).let { CompositeToken(it.accessToken, it.refreshToken) })
             }
             attempts.dropLast(1).forEach { runCatching { authentication.authenticate(pair(it)) } }
             outcome { authentication.authenticate(pair(attempts.last())) }

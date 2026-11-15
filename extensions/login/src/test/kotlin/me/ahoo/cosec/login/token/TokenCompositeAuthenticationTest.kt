@@ -27,6 +27,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
@@ -37,7 +38,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 class TokenCompositeAuthenticationTest {
-    private val compositeToken = SimpleCompositeToken("accessToken", "refreshToken")
+    private val compositeToken = CompositeToken("accessToken", "refreshToken")
     private val tokenConverter = mockk<TokenConverter> {
         every { toToken(any()) } returns compositeToken
     }

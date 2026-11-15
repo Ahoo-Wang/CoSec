@@ -82,6 +82,20 @@ and have to be provisioned again.
       .build()
   check(pipeline.awaitDocuments().isEmpty()) // before the first request
   ```
+- **`CompositeToken` is a final class in `cosec-api`, and `SimpleCompositeToken` is removed.** Build one with
+  `CompositeToken(accessToken, refreshToken)`. It is equal by value and has no `copy` or `componentN`. Logging a token no
+  longer prints it: its string is `CompositeToken(accessToken=***, refreshToken=***)`. The JSON a login or refresh
+  endpoint answers is unchanged (`{"accessToken":…,"refreshToken":…}`). `RefreshTokenCredentials` declares `accessToken`
+  and `refreshToken` itself and no longer is a `CompositeToken`: a credential an application implements does not
+  inherit from a value. Your refresh credentials class overrides the two, as it did:
+
+  ```kotlin
+  data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
+      RefreshTokenCredentials
+  ```
+
+  Code that passed it where a `CompositeToken` is expected (`TokenRevoker.revoke`) builds one,
+  `CompositeToken(credentials.accessToken, credentials.refreshToken)`.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

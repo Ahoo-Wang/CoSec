@@ -24,7 +24,6 @@ import me.ahoo.cosec.login.DefaultAuthenticationProvider
 import me.ahoo.cosec.login.token.DefaultTokenRevoker
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
-import me.ahoo.cosec.login.token.SimpleCompositeToken
 import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenFamilies
@@ -149,7 +148,7 @@ class RefreshTokenFamiliesJwtTest {
         assertThrows<TokenRevokedException> { refreshed(old) }
         // The pair must be bound, as a refresh requires.
         assertThrows<RefreshTokenMismatchException> {
-            revoker.revoke(SimpleCompositeToken(old.accessToken, first.refreshToken))
+            revoker.revoke(CompositeToken(old.accessToken, first.refreshToken))
         }
     }
 
@@ -160,7 +159,7 @@ class RefreshTokenFamiliesJwtTest {
         val one = login()
         val other = login()
         assertThrows<TokenVerificationException> {
-            refreshed(SimpleCompositeToken(one.accessToken, other.refreshToken))
+            refreshed(CompositeToken(one.accessToken, other.refreshToken))
         }
     }
 }

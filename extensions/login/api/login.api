@@ -29,24 +29,13 @@ public final class me/ahoo/cosec/login/token/DefaultTokenRevoker : me/ahoo/cosec
 	public fun revokeSubject-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
-public abstract interface class me/ahoo/cosec/login/token/RefreshTokenCredentials : me/ahoo/cosec/api/token/CompositeToken, me/ahoo/cosec/login/LoginCredentials {
+public abstract interface class me/ahoo/cosec/login/token/RefreshTokenCredentials : me/ahoo/cosec/login/LoginCredentials {
+	public abstract fun getAccessToken ()Ljava/lang/String;
+	public abstract fun getRefreshToken ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/login/token/RefreshTokenMismatchException : me/ahoo/cosec/spi/token/TokenVerificationException {
 	public fun <init> ()V
-}
-
-public final class me/ahoo/cosec/login/token/SimpleCompositeToken : me/ahoo/cosec/api/token/CompositeToken {
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
-	public final fun component1 ()Ljava/lang/String;
-	public final fun component2 ()Ljava/lang/String;
-	public final fun copy (Ljava/lang/String;Ljava/lang/String;)Lme/ahoo/cosec/login/token/SimpleCompositeToken;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/login/token/SimpleCompositeToken;Ljava/lang/String;Ljava/lang/String;ILjava/lang/Object;)Lme/ahoo/cosec/login/token/SimpleCompositeToken;
-	public fun equals (Ljava/lang/Object;)Z
-	public fun getAccessToken ()Ljava/lang/String;
-	public fun getRefreshToken ()Ljava/lang/String;
-	public fun hashCode ()I
-	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication : me/ahoo/cosec/login/Authentication {

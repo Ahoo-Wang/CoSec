@@ -39,10 +39,14 @@ class SimpleRefreshTokenAuthentication(
     override val credentialsType: Class<RefreshTokenCredentials> = RefreshTokenCredentials::class.java
 
     override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
-        val token = tokenVerifier.refresh(credentials)
+        val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
         revocation.check(token)
         return TokenSubject.of(token, families.rotate(token))
     }
 }
 
-interface RefreshTokenCredentials : LoginCredentials, CompositeToken
+/** What a refresh presents: the [accessToken] it renews and the [refreshToken] that renews it. */
+interface RefreshTokenCredentials : LoginCredentials {
+    val accessToken: String
+    val refreshToken: String
+}
