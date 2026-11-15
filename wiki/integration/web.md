@@ -272,6 +272,8 @@ pipeline's outcome. A refused request never reaches your handler. Its `principal
 | `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). Behind a gateway: the forwarded `claims`. |
 | `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the principal's roles there. |
 | `forwardedIdentity` | Behind a gateway, the gateway's request id and the id of the caller's credential; otherwise null. |
+| `requestId` | The request's id as CoSec used it in audit records, spans and problem responses: the client's `CoSec-Request-Id` when it sent an acceptable one, else the one CoSec generated, which no request header holds. |
+| `deviceId` | The device the client declared in `CoSec-Device-Id`, empty when none. Declared by the client: CoSec checks its form only (one value, else `400`), so it is not proof of a device. |
 
 The context is read-only: nothing an application could set reaches a decision.
 
@@ -537,7 +539,7 @@ does not compile.
 | `tenant`, `sub` | The tenant and principal the gateway verified. |
 | `scope` | `{app, space}`, as the gateway resolved them. |
 | `roles` | The principal's roles in that space: those the decision used. |
-| `auth` | `{method, jti, exp, capped}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, and the credential's expiry; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
+| `auth` | `{method, jti, exp, iat, capped, session}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, the credential's expiry, and when it was issued (`iat`, absent when the credential does not say, never after `exp`); `session` only for CoSec's own token (`jwt`): its `sid`, `auth_time` (when the user signed in) and `generation`, so that a service behind the gateway knows the login time and a [tenant switch](./authentication.md#switching-tenant-and-app) there can issue from it; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |
 | `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim; an API key gives only `apiKeyId`): strings, booleans and numbers. A `Byte`, `Short`, `Int`, `Long`, or `BigInteger` within a `Long` travels as an integer; a finite `Float` or `Double`, or a `BigDecimal` a `Double` holds exactly, as a number. |
@@ -607,6 +609,14 @@ The [security context](#accessing-the-security-context) of a request that procee
 | `principal.attributes` | `claims`. |
 | `scope.appId`, `scope.spaceId` | `scope.app` and `scope.space`. |
 | `forwardedIdentity.gatewayRequestId`, `forwardedIdentity.credentialId` | The gateway's request id and the credential's id (`auth.jti`). |
+| `requestId` | This service's request id: the gateway's, which it sends as `CoSec-Request-Id`. |
+| `deviceId` | The request's `CoSec-Device-Id`, read under the same rule as in front of the gateway (one value, else `400`). |
+
+The session and the issue time of CoSec's token (`auth.session`, `auth.iat`) are the principal's here, as at the
+gateway: a tenant switch issues from that session, only while it is live (`IDN-22`). An identity without them, an API
+key's or one from a gateway of an earlier version, reads as before and cannot be switched from. A service reads the
+identity strictly, so one older than its gateway refuses these members (`400`): upgrade the services behind a gateway
+before the gateway.
 
 The forwarded identity is the credential here, and its app is what it declares: on a service with an app, an identity
 that names another app, or none, is refused (`400` `invalid-request`).
