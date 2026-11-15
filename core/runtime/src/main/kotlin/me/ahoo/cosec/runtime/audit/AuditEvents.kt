@@ -26,10 +26,7 @@ import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.event.DecisionEvent
-import me.ahoo.cosec.runtime.event.DecisionListener
-import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.OutcomeSummary.Reason
-import me.ahoo.cosec.spi.audit.AuditEventSink
 import me.ahoo.cosec.spi.authn.AuthnResult
 import java.time.Instant
 
@@ -165,49 +162,5 @@ object AuditEvents {
         }
         is StatementRef.Boundary -> "boundary:${by.tenant.value}"
         is StatementRef.ScopeRejected, null -> null
-    }
-}
-
-/**
- * A [DecisionListener] over an [AuditEventSink] (RFC 0006 §9.5.3): maps each event with [AuditEvents.from], so a sink
- * receives the stable audit record and needs no knowledge of the engine's types.
- *
- * Always BEST_EFFORT: `AuditEventSink.publish` returns before anything is written and reports no failure, so it can
- * never acknowledge a write. As a REQUIRED listener it would always "succeed", and a break-glass permit would proceed
- * with no audit record (§9.4.1, §9.4.3). A REQUIRED audit awaits its store, as `KafkaAuditListener` does, or is a
- * [DecisionListener] of its own.
- */
-class AuditListener private constructor(
-    override val name: String,
-    private val sink: AuditEventSink,
-) : DecisionListener {
-    override val delivery: Delivery get() = Delivery.BEST_EFFORT
-
-    override suspend fun onDecision(event: DecisionEvent) {
-        sink.publish(AuditEvents.from(event))
-    }
-
-    override fun toString(): String = "AuditListener($name)"
-
-    companion object {
-        fun of(sink: AuditEventSink, name: String): AuditListener = AuditListener(name, sink)
-    }
-}
-
-/**
- * The audit log (RFC 0006 §9.5.3): what `LoggingAuditEventSink` writes, as a listener. BEST_EFFORT only: an asynchronous
- * appender drops silently, so a REQUIRED log would be a false guarantee (§9.4.1).
- */
-class LoggingAuditListener(private val sink: LoggingAuditEventSink = LoggingAuditEventSink()) : DecisionListener {
-    override val name: String get() = NAME
-
-    override val delivery: Delivery get() = Delivery.BEST_EFFORT
-
-    override suspend fun onDecision(event: DecisionEvent) {
-        sink.publish(AuditEvents.from(event))
-    }
-
-    companion object {
-        const val NAME = "logging-audit"
     }
 }

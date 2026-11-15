@@ -14,7 +14,6 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import java.io.ByteArrayOutputStream
 
 /**
  * The path every request is authorized on (RFC 0006 §5.3.1), by the rules below and without Spring's `UriUtils`.
@@ -129,52 +128,5 @@ object PathNormalizer {
             }
         }
         return true
-    }
-}
-
-/** Percent-decoding as UTF-8 (RFC 3986 §2.1). */
-internal object PercentDecoder {
-    private const val RADIX = 16
-    private const val DECIMAL = 10
-
-    /** [encoded] decoded, or null when it holds a `%` not followed by two hex digits. */
-    fun decode(encoded: String, plusIsSpace: Boolean): String? {
-        if ('%' !in encoded && !(plusIsSpace && '+' in encoded)) {
-            return encoded
-        }
-        val decoded = StringBuilder(encoded.length)
-        val bytes = ByteArrayOutputStream()
-        var i = 0
-        while (i < encoded.length) {
-            val char = encoded[i]
-            if (char == '%') {
-                val high = hex(encoded.getOrNull(i + 1)) ?: return null
-                val low = hex(encoded.getOrNull(i + 2)) ?: return null
-                bytes.write(high * RADIX + low)
-                i += 3
-                continue
-            }
-            flush(bytes, decoded)
-            decoded.append(if (plusIsSpace && char == '+') ' ' else char)
-            i++
-        }
-        flush(bytes, decoded)
-        return decoded.toString()
-    }
-
-    /** ASCII hex digits only: `Char.digitToInt` also takes other scripts' digits, which no host decodes. */
-    private fun hex(char: Char?): Int? = when {
-        char == null -> null
-        char in '0'..'9' -> char - '0'
-        char in 'a'..'f' -> char - 'a' + DECIMAL
-        char in 'A'..'F' -> char - 'A' + DECIMAL
-        else -> null
-    }
-
-    private fun flush(bytes: ByteArrayOutputStream, decoded: StringBuilder) {
-        if (bytes.size() > 0) {
-            decoded.append(bytes.toString(Charsets.UTF_8))
-            bytes.reset()
-        }
     }
 }

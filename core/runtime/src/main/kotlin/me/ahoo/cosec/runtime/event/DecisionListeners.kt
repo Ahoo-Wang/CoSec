@@ -34,8 +34,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.resumeOffIo
-import me.ahoo.cosec.runtime.withLazyTimeoutOrNull
+import me.ahoo.cosec.runtime.call.resumeOffIo
+import me.ahoo.cosec.runtime.call.withLazyTimeoutOrNull
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
@@ -114,8 +114,11 @@ class DecisionListeners(
     @Volatile
     private var closed = false
 
-    /** The shadow listeners, asked whether they sample a request before its event is made (§9.5.4). */
-    internal val shadows: List<ShadowListener>
+    /**
+     * The BEST_EFFORT listeners, in registration order: the pipeline asks the shadow listeners among them before it
+     * makes the event (§9.5.4).
+     */
+    internal val bestEffortListeners: List<DecisionListener>
 
     val stats: List<Stats>
 
@@ -140,7 +143,7 @@ class DecisionListeners(
             Queued(listener, Stats(listener.name, Delivery.BEST_EFFORT), queueCapacity)
         }
         consumers = bestEffort.map { queued -> scope.launch { consume(queued) } }
-        shadows = listeners.filterIsInstance<ShadowListener>().filter { it.delivery == Delivery.BEST_EFFORT }
+        bestEffortListeners = bestEffort.map { it.listener }
         stats = requiredStats + bestEffort.map { it.stats }
         if (required.isEmpty() && listeners.isNotEmpty()) {
             log.warn { "No REQUIRED decision listener is registered: break-glass bindings cannot permit (RFC 0006 §9.4.3)." }

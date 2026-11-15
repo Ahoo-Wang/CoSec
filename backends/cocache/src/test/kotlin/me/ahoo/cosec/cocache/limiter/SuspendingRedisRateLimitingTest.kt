@@ -84,11 +84,11 @@ class SuspendingRedisRateLimitingTest {
             "10.0.0.1",
             me.ahoo.cosec.model.scope.HostScope(null),
         )
-        val done = java.util.concurrent.CompletableFuture<Pair<me.ahoo.cosec.runtime.Outcome, Thread>>()
+        val done = java.util.concurrent.CompletableFuture<Pair<me.ahoo.cosec.runtime.http.Outcome, Thread>>()
         eventLoop.execute {
-            val call: suspend () -> me.ahoo.cosec.runtime.Outcome = { pipeline.evaluate(facts) }
+            val call: suspend () -> me.ahoo.cosec.runtime.http.Outcome = { pipeline.evaluate(facts) }
             val context = kotlinx.coroutines.Dispatchers.Unconfined +
-                me.ahoo.cosec.runtime.ResumeDispatcher(kotlinx.coroutines.Dispatchers.Default)
+                me.ahoo.cosec.runtime.call.ResumeDispatcher(kotlinx.coroutines.Dispatchers.Default)
             call.startCoroutine(
                 kotlin.coroutines.Continuation(context) { result ->
                     result.fold({ done.complete(it to Thread.currentThread()) }, done::completeExceptionally)

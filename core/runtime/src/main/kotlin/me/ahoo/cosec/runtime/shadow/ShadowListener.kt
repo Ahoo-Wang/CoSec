@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.event
+package me.ahoo.cosec.runtime.shadow
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.future.await
@@ -29,9 +29,10 @@ import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.runtime.shadow.Candidate
-import me.ahoo.cosec.runtime.shadow.CandidateSource
-import me.ahoo.cosec.runtime.shadow.ShadowRecorder
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.runtime.snapshot.ViewKey

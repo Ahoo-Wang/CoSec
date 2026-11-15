@@ -54,7 +54,7 @@ The starter collects these beans:
 
 Declare them as ordinary `@Bean`s. There is no `META-INF/services` registration for these SPIs.
 
-Not an extension point: `RequestGate` (`me.ahoo.cosec.runtime`), what the web adapters call. `Pipeline` is one;
+Not an extension point: `RequestGate` (`me.ahoo.cosec.runtime.http`), what the web adapters call. `Pipeline` is one;
 `IdentityGate` is the other, for a service behind a CoSec gateway (`cosec.pipeline.mode=gateway`). Both build every
 outcome through `StatusMapping`; do not write a third.
 

@@ -99,7 +99,7 @@ class EngineAuthority(
         roles: List<String> = emptyList(),
         policies: List<String> = emptyList(),
         attributes: Map<String, Any> = emptyMap(),
-    ): me.ahoo.cosec.runtime.RequestSecurity = security(
+    ): me.ahoo.cosec.runtime.http.RequestSecurity = security(
         AuthenticatedPrincipal(
             PrincipalId(id),
             tenant,
@@ -111,7 +111,7 @@ class EngineAuthority(
         )
     )
 
-    private fun security(principal: AuthenticatedPrincipal): me.ahoo.cosec.runtime.RequestSecurity {
+    private fun security(principal: AuthenticatedPrincipal): me.ahoo.cosec.runtime.http.RequestSecurity {
         val host = Pipeline(
             PipelineComponents(
                 authenticator = Authenticator { AuthnResult.Authenticated(principal, "test") },

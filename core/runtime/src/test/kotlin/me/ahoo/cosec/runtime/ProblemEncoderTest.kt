@@ -16,6 +16,9 @@
 package me.ahoo.cosec.runtime
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.runtime.http.Problem
+import me.ahoo.cosec.runtime.http.ProblemEncoder
+import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 

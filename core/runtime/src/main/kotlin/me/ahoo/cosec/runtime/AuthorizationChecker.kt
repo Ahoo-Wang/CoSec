@@ -29,6 +29,8 @@ import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.http.Enforceable
+import me.ahoo.cosec.runtime.http.PipelineSecurityContext
+import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException

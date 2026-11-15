@@ -13,10 +13,7 @@
 
 package me.ahoo.cosec.runtime.event
 
-import kotlinx.coroutines.slf4j.MDCContext
 import me.ahoo.cosec.annotations.CoSecSpi
-import kotlin.coroutines.CoroutineContext
-import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * SPI (RFC 0006 §9.1): observes every [DecisionEvent]. It cannot change the decision: a [Delivery.REQUIRED] listener
@@ -49,30 +46,4 @@ enum class Delivery {
      * drops the event. It sees the final outcome.
      */
     BEST_EFFORT,
-}
-
-/**
- * Adds to the coroutine context the adapters build when they bridge a request (RFC 0006 §7.5): called once per request,
- * on the thread that received it. It lets the bridge stay in the adapters while they depend on neither OpenTelemetry
- * nor SLF4J (K16).
- */
-@CoSecSpi
-fun interface BridgeContextContributor {
-    fun capture(): CoroutineContext
-
-    companion object {
-        /** Everything [contributors] capture, in order. */
-        fun capture(contributors: List<BridgeContextContributor>): CoroutineContext {
-            var context: CoroutineContext = EmptyCoroutineContext
-            for (contributor in contributors) {
-                context += contributor.capture()
-            }
-            return context
-        }
-    }
-}
-
-/** Restores the MDC of the bridging thread whenever the pipeline resumes (RFC 0006 §7.5). CoSec writes no MDC key. */
-object MdcContextContributor : BridgeContextContributor {
-    override fun capture(): CoroutineContext = MDCContext()
 }

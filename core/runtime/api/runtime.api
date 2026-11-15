@@ -4,18 +4,7 @@ public final class me/ahoo/cosec/runtime/AuthorizationChecker {
 	public final fun decide (Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
-public final class me/ahoo/cosec/runtime/Outcome {
-	public final fun getForward ()Ljava/util/Map;
-	public final fun getHeaders ()Ljava/util/Map;
-	public final fun getProblem ()Lme/ahoo/cosec/runtime/Problem;
-	public final fun getProceed ()Z
-	public final fun getRequestId ()Ljava/lang/String;
-	public final fun getSecurity ()Lme/ahoo/cosec/runtime/RequestSecurity;
-	public final fun getStatus ()I
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/Pipeline : me/ahoo/cosec/runtime/RequestGate {
+public final class me/ahoo/cosec/runtime/Pipeline : me/ahoo/cosec/runtime/http/RequestGate {
 	public fun <init> (Lme/ahoo/cosec/runtime/PipelineComponents;)V
 	public fun evaluate (Lme/ahoo/cosec/runtime/http/HttpFacts;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
@@ -49,65 +38,6 @@ public final class me/ahoo/cosec/runtime/PipelineOptions {
 	public final fun getRateLimitTimeout-UwyO8pc ()J
 	public final fun getTimeout-UwyO8pc ()J
 	public final fun getTraceLevel ()Lme/ahoo/cosec/engine/TraceLevel;
-}
-
-public final class me/ahoo/cosec/runtime/Problem {
-	public final fun getRequestId ()Ljava/lang/String;
-	public final fun getStatus ()I
-	public final fun getTraceId ()Ljava/lang/String;
-	public final fun getType ()Lme/ahoo/cosec/runtime/ProblemType;
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/ProblemEncoder {
-	public static final field INSTANCE Lme/ahoo/cosec/runtime/ProblemEncoder;
-	public static final field MEDIA_TYPE Ljava/lang/String;
-	public final fun encode (Lme/ahoo/cosec/runtime/Problem;)[B
-}
-
-public final class me/ahoo/cosec/runtime/ProblemType : java/lang/Enum {
-	public static final field Companion Lme/ahoo/cosec/runtime/ProblemType$Companion;
-	public static final field FORBIDDEN Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field INTERNAL_ERROR Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field INVALID_REQUEST Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field SCOPE_REJECTED Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field TOKEN_EXPIRED Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field TOKEN_INVALID Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field TOKEN_REVOKED Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field TOO_MANY_REQUESTS Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field TYPE_PREFIX Ljava/lang/String;
-	public static final field UNAUTHORIZED Lme/ahoo/cosec/runtime/ProblemType;
-	public static final field UNAVAILABLE Lme/ahoo/cosec/runtime/ProblemType;
-	public final fun getCode ()Ljava/lang/String;
-	public static fun getEntries ()Lkotlin/enums/EnumEntries;
-	public final fun getSlug ()Ljava/lang/String;
-	public final fun getStatus ()I
-	public final fun getTitle ()Ljava/lang/String;
-	public final fun getUri ()Ljava/lang/String;
-	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/runtime/ProblemType;
-	public static fun values ()[Lme/ahoo/cosec/runtime/ProblemType;
-}
-
-public final class me/ahoo/cosec/runtime/ProblemType$Companion {
-}
-
-public abstract interface class me/ahoo/cosec/runtime/RequestGate {
-	public abstract fun evaluate (Lme/ahoo/cosec/runtime/http/HttpFacts;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
-public final class me/ahoo/cosec/runtime/RequestSecurity {
-	public static final field Companion Lme/ahoo/cosec/runtime/RequestSecurity$Companion;
-	public final fun getIdentity ()Lme/ahoo/cosec/spi/identity/Identity;
-	public final fun getMemberships ()Lme/ahoo/cosec/model/Memberships;
-	public final fun getPrincipal ()Lme/ahoo/cosec/spi/authn/AuthenticatedPrincipal;
-	public final fun getRequestId ()Ljava/lang/String;
-	public final fun getScope ()Lme/ahoo/cosec/model/scope/Scope;
-	public final fun getSecurityContext ()Lme/ahoo/cosec/api/context/SecurityContext;
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/RequestSecurity$Companion {
-	public final fun of (Lme/ahoo/cosec/api/context/SecurityContext;)Lme/ahoo/cosec/runtime/RequestSecurity;
 }
 
 public final class me/ahoo/cosec/runtime/attribute/AttributeProviders {
@@ -269,7 +199,7 @@ public final class me/ahoo/cosec/runtime/event/DecisionEvent {
 	public final fun getSnapshotVersion ()Lme/ahoo/cosec/engine/ViewVersion;
 	public final fun getSubject ()Lme/ahoo/cosec/runtime/event/SubjectSummary;
 	public final fun getTime ()J
-	public final fun getTrace ()Lme/ahoo/cosec/runtime/event/TraceContext;
+	public final fun getTrace ()Lme/ahoo/cosec/runtime/http/TraceContext;
 	public final fun getVia ()Lme/ahoo/cosec/model/decision/BindingRef;
 	public fun toString ()Ljava/lang/String;
 }
@@ -337,7 +267,7 @@ public final class me/ahoo/cosec/runtime/event/MdcContextContributor : me/ahoo/c
 
 public final class me/ahoo/cosec/runtime/event/OutcomeSummary {
 	public final fun getCause ()Lme/ahoo/cosec/model/decision/Cause;
-	public final fun getProblem ()Lme/ahoo/cosec/runtime/ProblemType;
+	public final fun getProblem ()Lme/ahoo/cosec/runtime/http/ProblemType;
 	public final fun getProceed ()Z
 	public final fun getReason ()Lme/ahoo/cosec/runtime/event/OutcomeSummary$Reason;
 	public final fun getStatus ()I
@@ -378,18 +308,6 @@ public final class me/ahoo/cosec/runtime/event/SubjectSummary {
 	public final fun getRejected ()Lme/ahoo/cosec/spi/authn/AuthnResult$RejectReason;
 	public final fun getTenant ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/event/TraceContext : kotlin/coroutines/AbstractCoroutineContextElement {
-	public static final field Key Lme/ahoo/cosec/runtime/event/TraceContext$Key;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Z)V
-	public final fun getSampled ()Z
-	public final fun getSpanId ()Ljava/lang/String;
-	public final fun getTraceId ()Ljava/lang/String;
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/event/TraceContext$Key : kotlin/coroutines/CoroutineContext$Key {
 }
 
 public final class me/ahoo/cosec/runtime/http/CoSecParameters {
@@ -439,7 +357,89 @@ public final class me/ahoo/cosec/runtime/http/HttpFacts {
 	public final fun getRouteApp ()Ljava/lang/Object;
 }
 
-public final class me/ahoo/cosec/runtime/identity/IdentityGate : me/ahoo/cosec/runtime/RequestGate {
+public final class me/ahoo/cosec/runtime/http/Outcome {
+	public final fun getForward ()Ljava/util/Map;
+	public final fun getHeaders ()Ljava/util/Map;
+	public final fun getProblem ()Lme/ahoo/cosec/runtime/http/Problem;
+	public final fun getProceed ()Z
+	public final fun getRequestId ()Ljava/lang/String;
+	public final fun getSecurity ()Lme/ahoo/cosec/runtime/http/RequestSecurity;
+	public final fun getStatus ()I
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/http/Problem {
+	public final fun getRequestId ()Ljava/lang/String;
+	public final fun getStatus ()I
+	public final fun getTraceId ()Ljava/lang/String;
+	public final fun getType ()Lme/ahoo/cosec/runtime/http/ProblemType;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/http/ProblemEncoder {
+	public static final field INSTANCE Lme/ahoo/cosec/runtime/http/ProblemEncoder;
+	public static final field MEDIA_TYPE Ljava/lang/String;
+	public final fun encode (Lme/ahoo/cosec/runtime/http/Problem;)[B
+}
+
+public final class me/ahoo/cosec/runtime/http/ProblemType : java/lang/Enum {
+	public static final field Companion Lme/ahoo/cosec/runtime/http/ProblemType$Companion;
+	public static final field FORBIDDEN Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field INTERNAL_ERROR Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field INVALID_REQUEST Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field SCOPE_REJECTED Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field TOKEN_EXPIRED Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field TOKEN_INVALID Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field TOKEN_REVOKED Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field TOO_MANY_REQUESTS Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field TYPE_PREFIX Ljava/lang/String;
+	public static final field UNAUTHORIZED Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static final field UNAVAILABLE Lme/ahoo/cosec/runtime/http/ProblemType;
+	public final fun getCode ()Ljava/lang/String;
+	public static fun getEntries ()Lkotlin/enums/EnumEntries;
+	public final fun getSlug ()Ljava/lang/String;
+	public final fun getStatus ()I
+	public final fun getTitle ()Ljava/lang/String;
+	public final fun getUri ()Ljava/lang/String;
+	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/runtime/http/ProblemType;
+	public static fun values ()[Lme/ahoo/cosec/runtime/http/ProblemType;
+}
+
+public final class me/ahoo/cosec/runtime/http/ProblemType$Companion {
+}
+
+public abstract interface class me/ahoo/cosec/runtime/http/RequestGate {
+	public abstract fun evaluate (Lme/ahoo/cosec/runtime/http/HttpFacts;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/runtime/http/RequestSecurity {
+	public static final field Companion Lme/ahoo/cosec/runtime/http/RequestSecurity$Companion;
+	public final fun getIdentity ()Lme/ahoo/cosec/spi/identity/Identity;
+	public final fun getMemberships ()Lme/ahoo/cosec/model/Memberships;
+	public final fun getPrincipal ()Lme/ahoo/cosec/spi/authn/AuthenticatedPrincipal;
+	public final fun getRequestId ()Ljava/lang/String;
+	public final fun getScope ()Lme/ahoo/cosec/model/scope/Scope;
+	public final fun getSecurityContext ()Lme/ahoo/cosec/api/context/SecurityContext;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/http/RequestSecurity$Companion {
+	public final fun of (Lme/ahoo/cosec/api/context/SecurityContext;)Lme/ahoo/cosec/runtime/http/RequestSecurity;
+}
+
+public final class me/ahoo/cosec/runtime/http/TraceContext : kotlin/coroutines/AbstractCoroutineContextElement {
+	public static final field Key Lme/ahoo/cosec/runtime/http/TraceContext$Key;
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Z)V
+	public final fun getSampled ()Z
+	public final fun getSpanId ()Ljava/lang/String;
+	public final fun getTraceId ()Ljava/lang/String;
+	public fun toString ()Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/runtime/http/TraceContext$Key : kotlin/coroutines/CoroutineContext$Key {
+}
+
+public final class me/ahoo/cosec/runtime/identity/IdentityGate : me/ahoo/cosec/runtime/http/RequestGate {
 	public static final field Companion Lme/ahoo/cosec/runtime/identity/IdentityGate$Companion;
 	public fun <init> ()V
 	public fun <init> (ILjava/time/Duration;Ljava/time/Duration;Ljava/time/Clock;Lme/ahoo/cosec/spi/id/IdGenerator;)V
@@ -458,7 +458,7 @@ public final class me/ahoo/cosec/runtime/identity/IdentityIssuer {
 	public fun <init> ()V
 	public fun <init> (Ljava/util/Set;ILjava/time/Clock;)V
 	public synthetic fun <init> (Ljava/util/Set;ILjava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun issue (Lme/ahoo/cosec/runtime/RequestSecurity;)Ljava/lang/String;
+	public final fun issue (Lme/ahoo/cosec/runtime/http/RequestSecurity;)Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/runtime/identity/IdentityIssuer$Companion {

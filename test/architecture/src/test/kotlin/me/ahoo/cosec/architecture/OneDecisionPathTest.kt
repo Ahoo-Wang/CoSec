@@ -24,8 +24,8 @@ import com.tngtech.archunit.junit.ArchTest
 import com.tngtech.archunit.lang.ArchRule
 import com.tngtech.archunit.lang.syntax.ArchRuleDefinition.noClasses
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
-import me.ahoo.cosec.runtime.Outcome
-import me.ahoo.cosec.runtime.Problem
+import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.Problem
 
 /**
  * One decision path (RFC 0006 §6.3; `PIP-1`): `StatusMapping` is the only constructor of [Outcome] and [Problem] in
@@ -60,7 +60,7 @@ class OneDecisionPathTest {
 
     private companion object {
         /** `internal` to `cosec-runtime`, so loaded by name: a rename fails here rather than passing vacuously. */
-        val STATUS_MAPPING: Class<*> = Class.forName("me.ahoo.cosec.runtime.StatusMapping")
+        val STATUS_MAPPING: Class<*> = Class.forName("me.ahoo.cosec.runtime.http.StatusMapping")
 
         val ADAPTERS = arrayOf("me.ahoo.cosec.webflux..", "me.ahoo.cosec.webmvc..", "me.ahoo.cosec.gateway..")
 

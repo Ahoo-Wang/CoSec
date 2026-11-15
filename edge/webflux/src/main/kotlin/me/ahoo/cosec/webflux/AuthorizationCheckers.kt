@@ -22,7 +22,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.AuthorizationChecker
-import me.ahoo.cosec.runtime.ResumeDispatcher
+import me.ahoo.cosec.runtime.call.ResumeDispatcher
 import reactor.core.publisher.Mono
 
 /** [AuthorizationChecker.check] for reactive callers (RFC 0006 §7.6): resumes off the caller's I/O thread. */

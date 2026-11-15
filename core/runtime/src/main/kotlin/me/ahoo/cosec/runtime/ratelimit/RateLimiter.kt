@@ -13,8 +13,6 @@
 
 package me.ahoo.cosec.runtime.ratelimit
 
-import io.github.oshai.kotlinlogging.KotlinLogging
-import me.ahoo.cosec.model.decision.Obligation
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.ratelimit.RateLimit
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
@@ -269,30 +267,5 @@ class LocalRateLimiter(
 
         /** Buckets one request visits at most when it advances a sweep: measured at 20 to 75 microseconds. */
         internal const val SWEEP_CHUNK = 1_024
-    }
-}
-
-/** Logs rate limiter failures at most once per [interval]: under an outage every request would log one. */
-internal class RateLimitFailures(private val interval: Duration = Duration.ofSeconds(10)) {
-    private val last = AtomicLong(Long.MIN_VALUE)
-
-    fun report(obligation: Obligation.RateLimit, failure: Throwable) {
-        val now = System.nanoTime()
-        val previous = last.get()
-        if (previous != Long.MIN_VALUE && now - previous < interval.toNanos()) {
-            return
-        }
-        if (!last.compareAndSet(previous, now)) {
-            return
-        }
-        if (obligation.strictFailure) {
-            log.error(failure) { "Rate limiter unavailable: rule [${obligation.ruleId}] refuses the request." }
-        } else {
-            log.warn(failure) { "Rate limiter unavailable: rule [${obligation.ruleId}] is skipped." }
-        }
-    }
-
-    private companion object {
-        val log = KotlinLogging.logger {}
     }
 }

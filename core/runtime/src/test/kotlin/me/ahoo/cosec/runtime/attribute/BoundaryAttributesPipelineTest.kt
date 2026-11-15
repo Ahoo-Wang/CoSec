@@ -24,13 +24,13 @@ import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
-import me.ahoo.cosec.runtime.Basis
-import me.ahoo.cosec.runtime.Outcome
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineOptions
-import me.ahoo.cosec.runtime.Unavailability
+import me.ahoo.cosec.runtime.http.Basis
+import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration

@@ -31,6 +31,7 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
+import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.test.asserts.assert

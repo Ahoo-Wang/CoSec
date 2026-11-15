@@ -34,6 +34,7 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
 import me.ahoo.cosec.runtime.shadow.Candidate
+import me.ahoo.cosec.runtime.shadow.ShadowListener
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey

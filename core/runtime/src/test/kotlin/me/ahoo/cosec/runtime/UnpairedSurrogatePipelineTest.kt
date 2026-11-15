@@ -31,6 +31,7 @@ import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
 import me.ahoo.cosec.runtime.PipelineFixtures.viewFor
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
+import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal

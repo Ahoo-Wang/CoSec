@@ -44,6 +44,20 @@ and have to be provisioned again.
   `me.ahoo.cosec.runtime.token` to `me.ahoo.cosec.login.token`, with their names; `me.ahoo.cosec.runtime.token` keeps
   what verifying a request's token needs (`TokenRevocation`, `CoSecTokenVerifier`). In an application, change the
   imports; the starter and `cosec-jwt` bring `cosec-login`, so no dependency changes.
+- **The adapter contract is one package, `me.ahoo.cosec.runtime.http`.** `RequestGate`, `Outcome`, `Problem`,
+  `ProblemType`, `ProblemEncoder` and `RequestSecurity` move from `me.ahoo.cosec.runtime`, and `TraceContext` from
+  `me.ahoo.cosec.runtime.event`, beside `HttpFacts`, `Headers` and `Cookies`; the classes keep their names. In an
+  application, change the imports: an adapter of your own, a handler that reads `RequestSecurity`, a test that reads
+  an `Outcome`. No status code, header, body or property changes. Five loggers are named after the class that now
+  logs on its own, so a logging configuration that sets their level uses the new name:
+
+  | Before | After |
+  |---|---|
+  | `me.ahoo.cosec.runtime.FallbackIds` | `me.ahoo.cosec.runtime.call.FallbackIds` |
+  | `me.ahoo.cosec.runtime.attribute.AttributeProviders` | `me.ahoo.cosec.runtime.attribute.FetchedAttributes` |
+  | `me.ahoo.cosec.runtime.event.ShadowListener` | `me.ahoo.cosec.runtime.shadow.ShadowListener` |
+  | `me.ahoo.cosec.runtime.shadow.Candidates` | `me.ahoo.cosec.runtime.shadow.CachingCandidateSource` |
+  | `me.ahoo.cosec.runtime.shadow.ShadowRecorder` | `me.ahoo.cosec.runtime.shadow.ShadowReporter` |
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests
