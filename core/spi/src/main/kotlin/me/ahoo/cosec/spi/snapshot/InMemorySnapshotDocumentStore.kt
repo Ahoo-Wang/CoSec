@@ -25,12 +25,13 @@ import java.util.concurrent.CopyOnWriteArrayList
  *
  * A subscriber that throws does not undo the write or keep the others from being told: the write has happened and
  * returns normally, and every other subscriber is notified, as the Redis store of `cosec-cocache` does. The failure
- * is handed to the writer thread's uncaught-exception handler, which this module, with no logging, has in place of a
- * log. Only a VM error (an [OutOfMemoryError] say) goes through.
+ * is logged at WARNING through the JDK's own `System.Logger` (whatever the application binds it to), which keeps this
+ * module free of a logging library. Only a VM error (an [OutOfMemoryError] say) goes through.
  */
 class InMemorySnapshotDocumentStore : SnapshotDocumentStore {
     private class Stored(val document: SnapshotDocument, val digest: SnapshotDigest)
 
+    private val log = System.getLogger(InMemorySnapshotDocumentStore::class.java.name)
     private val documents = ConcurrentHashMap<SnapshotKey, Stored>()
     private val listeners = CopyOnWriteArrayList<SnapshotChangeListener>()
 
@@ -90,9 +91,11 @@ class InMemorySnapshotDocumentStore : SnapshotDocumentStore {
         } catch (error: VirtualMachineError) {
             throw error
         } catch (error: Throwable) {
-            val thread = Thread.currentThread()
-            (thread.uncaughtExceptionHandler ?: Thread.getDefaultUncaughtExceptionHandler())
-                ?.uncaughtException(thread, error)
+            log.log(
+                System.Logger.Level.WARNING,
+                "A snapshot subscriber failed; the write is stored and the other subscribers were told.",
+                error,
+            )
         }
     }
 
