@@ -57,7 +57,6 @@ import org.springframework.context.annotation.Import
 import org.springframework.core.io.ResourceLoader
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 import org.springframework.kafka.core.KafkaOperations
-import kotlin.time.toKotlinDuration
 
 private val log = KotlinLogging.logger {}
 
@@ -157,7 +156,7 @@ class CoSecPipelineIntegrationAutoConfiguration {
             kafkaOperations,
             environment.getProperty(KafkaAuditProperties.PREFIX + ".topic", KafkaAuditProperties.DEFAULT_TOPIC),
             kafkaAuditDelivery(environment),
-            drainTimeout = listenerProperties.drainTimeout.toKotlinDuration(),
+            drainTimeout = listenerProperties.drainTimeout,
         )
     }
 
