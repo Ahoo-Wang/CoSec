@@ -48,9 +48,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
-import org.junit.jupiter.api.assertThrows
 
 /**
  * Review item 13: a publish whose head write went through but whose reply was lost is recognised when it is retried,
@@ -73,6 +73,7 @@ class RetriedPublishTest {
     /** What runs once right before the next head write: another call meanwhile. */
     @Volatile
     private var beforeHead: (suspend () -> Unit)? = null
+
     /** Whether the next release of a staging slot fails, once: a transient store failure after the head write. */
     @Volatile
     private var failRelease = false
