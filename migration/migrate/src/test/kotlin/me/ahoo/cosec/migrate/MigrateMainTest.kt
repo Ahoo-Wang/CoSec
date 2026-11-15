@@ -107,12 +107,38 @@ class MigrateMainTest {
             "api-keys --redis redis://localhost:6379 --out x --cluster",
             "partition plan --out x",
             "api-keys --out x",
+            // A value left out is not the next option (#1399).
+            "convert --from-files --out x",
+            "convert --from-files a --out",
+            "api-keys --redis redis://localhost:6379 --out x --role-prefix --dry-run",
+            "convert --from-files a --out x --partition --partition",
+            // A flag takes no value.
+            "api-keys --redis redis://localhost:6379 --out x --dry-run=false",
         ],
     )
     fun `usage errors exit with 2`(args: String) {
         val (code, output) = run(args)
         code.assert().describedAs(output).isEqualTo(MigrateMain.USAGE)
         output.assert().contains("Usage:")
+    }
+
+    @Test
+    fun `a missing value says which option lacks it and how to give a value that starts with two dashes`() {
+        val (code, output) = run("convert --from-files a --out --partition platform")
+
+        code.assert().isEqualTo(MigrateMain.USAGE)
+        output.assert().contains("--out needs a value").contains("--out=value")
+    }
+
+    /** `--name=value` takes whatever follows the `=`, so a value may start with `--`; the command then judges it. */
+    @Test
+    fun `an attached value is a value, even one that starts with two dashes`() {
+        val (code, output) = run("convert --from-files a --out x --partition=--platform")
+
+        code.assert().isEqualTo(MigrateMain.USAGE)
+        output.assert().contains("--partition is platform or by-owner, not [--platform]")
+        run("convert --from-files=a --out x --partition=by-owner").second.assert().doesNotContain("needs a value")
+        run("convert --from-files a --out x --out=y").second.assert().contains("--out is given twice")
     }
 
     @Test
