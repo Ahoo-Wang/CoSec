@@ -137,6 +137,20 @@
         "spring-boot:ShadowReportingWiringTest#a staged platform candidate leaves what the instance compiles with as it was"
       ],
       "pending": null
+    },
+    {
+      "id": "SNP-11",
+      "source": "RFC 0003 §4.3 (8.0 drill, entry 26)",
+      "statement": "A stored document that does not compile on an instance is reported as such: a request that needs it is Indeterminate with Cause.DocumentInvalid at the stored revision, never SourceUnavailable, which says the store could not be read; the client's 503 is the same as for any unavailability, with nothing of the compiler's message; the instance logs it once per revision, digest and inputs it compiled against, and once more when a revision compiles; and its health names the document and revision as invalid.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:DocumentInvalidTest#a document that does not compile is logged once per revision, and its recovery once",
+        "runtime:DocumentInvalidTest#a decision event says the document is invalid, at the revision its view carries",
+        "runtime:DocumentInvalidTest#the client's answer is the same as for an unavailable source",
+        "runtime:DocumentSnapshotViewsTest#missing documents are empty, failed ones are unresolved",
+        "spring-boot:SnapshotHealthIndicatorTest#health names a document that does not compile, by its revision"
+      ]
     }
   ]
 }

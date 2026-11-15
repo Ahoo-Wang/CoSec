@@ -59,8 +59,21 @@ sealed interface Cause {
      */
     data class AmbiguousPolicy(val policyIds: Set<PolicyId>) : Cause
 
-    /** Reading a snapshot document failed, for example a Redis timeout or a document that does not compile. */
+    /**
+     * A snapshot document could not be read: the store failed or timed out, a document is not confirmed fresh enough, or
+     * one compiled against inputs that changed has not been compiled again yet. A document that is stored and does not
+     * compile is [DocumentInvalid].
+     */
     data class SourceUnavailable(val document: DocumentKind, val error: Throwable) : Cause
+
+    /**
+     * A snapshot document the request needs is stored but does not compile on this instance: written by a newer CoSec
+     * during a rolling upgrade, written to the store directly, or compiled against platform limits and attributes it
+     * breaks. [revision] is the stored revision, which the decision event's view version also carries; [error] names
+     * what does not compile. Every request that needs the document fails closed, 503, because this instance cannot
+     * decide with it, not because a retry would help: publishing a revision that compiles ends it.
+     */
+    data class DocumentInvalid(val document: DocumentKind, val revision: Long, val error: Throwable) : Cause
 
     /** A document the request needs was not given to the engine. */
     data class NotLoaded(val document: DocumentKind) : Cause
