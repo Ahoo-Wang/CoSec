@@ -25,7 +25,6 @@ import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import java.time.Clock
-import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -47,31 +46,11 @@ internal class StagingSlots(
     /** The candidate [change] stages for its window [state]; 503 when it cannot be made. Nothing is reserved yet. */
     @Suppress("TooGenericExceptionCaught")
     fun candidate(change: ChangeRequest, state: ShadowState, applied: () -> PolicyDocument): StoredCandidate = try {
-        val document = SnapshotDocuments.of(at(applied(), change.base.revision + 1, state.startedAt))
+        val document = SnapshotDocuments.of(applied().at(change.base.revision + 1, state.startedAt))
         StoredCandidate(state.window, change.base.revision, document)
     } catch (e: Exception) {
         throw ChangeRejectedException(UNAVAILABLE, "the candidate of [${change.key}] could not be staged", e)
     }
-
-    /**
-     * [document] as the candidate states it (SNP-12): the revision it would publish at, from the window's start, so the
-     * header read from its body is the one the window compares on.
-     */
-    private fun at(document: PolicyDocument, revision: Long, publishedAt: Instant): PolicyDocument = PolicyDocument(
-        kind = document.kind,
-        owner = document.owner,
-        revision = revision,
-        publishedAt = publishedAt,
-        policies = document.policies,
-        bindings = document.bindings,
-        catalog = document.catalog,
-        boundary = document.boundary,
-        provenance = document.provenance,
-        limits = document.limits,
-        attributes = document.attributes,
-        rateLimits = document.rateLimits,
-        roles = document.roles,
-    )
 
     /**
      * Writes [candidate] for the change [shadowing] reserved. A write that fails or is cancelled gives the reservation
