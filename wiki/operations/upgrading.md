@@ -824,7 +824,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `cache-support` | `cosec-cocache`, with `spring-boot-data-redis` and `cocache-spring-boot-starter` |
 | `oauth-support` | `cosec-social` |
 | `opentelemetry-support`, `ip2region-support` | `cosec-opentelemetry`, `cosec-ip2region` |
-| `micrometer-support` | `cosec-micrometer`, with `micrometer-core` |
+| `micrometer-support` | `cosec-micrometer`, which brings `micrometer-core` |
 | `openapi-support` | `cosec-openapi`, with `spring-boot-starter-actuator` and `springdoc-openapi-starter-common` |
 | `kafka-support` | `cosec-kafka`, with `spring-boot-starter-kafka` |
 | (new in 8.0) | `cosec-control`, the control plane, with `cosec-cocache` |

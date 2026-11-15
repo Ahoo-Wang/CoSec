@@ -208,4 +208,36 @@ class ApiKeysCommandTest {
         documents.boundRole(RoleId("clerk")).assert().isTrue()
         documents.boundRole(RoleId("api-key.k1")).assert().isFalse()
     }
+
+    /** `--role-prefix --dry-run` once read the flag as the prefix's value, and converted the keys for real (#1399). */
+    @Test
+    fun `a forgotten value is a usage error before anything is read or written`() {
+        val legacy = """{"id":"k1","principalId":"svc","tenantId":"acme","roles":[],"policies":[],"attributes":{},"enabled":true}"""
+        redis.set("$apiKeyPrefix:h1", legacy)
+
+        val (code, output) = apiKeys(temp.resolve("forgotten"), "--role-prefix", "--dry-run")
+
+        code.assert().describedAs(output).isEqualTo(MigrateMain.USAGE)
+        output.assert().contains("--role-prefix needs a value")
+        redis.get("$apiKeyPrefix:h1").assert().isEqualTo(legacy)
+        Files.exists(temp.resolve("forgotten")).assert().isFalse()
+
+        // The control: with the value, the same dry run succeeds and leaves Redis alone.
+        val (ok, okOutput) = apiKeys(temp.resolve("with-value"), "--role-prefix", "api-key.", "--dry-run")
+        ok.assert().describedAs(okOutput).isEqualTo(MigrateMain.OK)
+        okOutput.assert().contains("No key was written")
+        redis.get("$apiKeyPrefix:h1").assert().isEqualTo(legacy)
+    }
+
+    @Test
+    fun `an attached value that starts with two dashes keeps the dry run a dry run`() {
+        val legacy = """{"id":"k1","principalId":"svc","tenantId":"acme","roles":[],"policies":[],"attributes":{},"enabled":true}"""
+        redis.set("$apiKeyPrefix:h1", legacy)
+
+        val (code, output) = apiKeys(temp.resolve("attached"), "--role-prefix=--x.", "--dry-run")
+
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+        output.assert().contains("No key was written")
+        redis.get("$apiKeyPrefix:h1").assert().isEqualTo(legacy)
+    }
 }

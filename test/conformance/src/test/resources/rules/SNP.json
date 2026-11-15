@@ -139,6 +139,20 @@
       "pending": null
     },
     {
+      "id": "SNP-11",
+      "source": "RFC 0003 §4.3 (8.0 drill, entry 26)",
+      "statement": "A stored document that does not compile on an instance is reported as such: a request that needs it is Indeterminate with Cause.DocumentInvalid at the stored revision, never SourceUnavailable, which says the store could not be read; the client's 503 is the same as for any unavailability, with nothing of the compiler's message; the instance logs it once per revision, digest and inputs it compiled against, and once more when a revision compiles; and its health names the document and revision as invalid.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:DocumentInvalidTest#a document that does not compile is logged once per revision, and its recovery once",
+        "runtime:DocumentInvalidTest#a decision event says the document is invalid, at the revision its view carries",
+        "runtime:DocumentInvalidTest#the client's answer is the same as for an unavailable source",
+        "runtime:DocumentSnapshotViewsTest#missing documents are empty, failed ones are unresolved",
+        "spring-boot:SnapshotHealthIndicatorTest#health names a document that does not compile, by its revision"
+      ]
+    },
+    {
       "id": "SNP-12",
       "source": "RFC 0003 §3.3 (8.0 drill, entry 3)",
       "statement": "A snapshot document's header is read from its body: the stored bytes are the whole document, and the only way to make a SnapshotDocument is SnapshotDocuments, which reads schema, revision and publishedAt from them (read) or from the document it encodes (of). No main code of any module calls the constructor, so no store, candidate or test kit can state a revision its bytes contradict, and the revision an instance reports installed is the revision of the content it enforces. A shadow candidate's record holds its window, its base revision and its document only; a record that states the header beside the document is refused as an unreadable candidate.",

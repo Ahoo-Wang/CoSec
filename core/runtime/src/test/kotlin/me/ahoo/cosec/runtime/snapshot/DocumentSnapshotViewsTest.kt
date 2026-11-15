@@ -155,8 +155,12 @@ class DocumentSnapshotViewsTest {
             val broken = scope("broken")
             val view = views.load(ViewKey.of(broken, blocked = false)).join()
             view.tenant.assert().isNull()
-            (view.unresolved.single() as Cause.SourceUnavailable).document.assert().isEqualTo(DocumentKind.TENANT)
-            decide(view, broken).assert().isInstanceOf(Decision.Indeterminate::class.java)
+            // Stored and not compiling: invalid at its revision, which a decision event names (drill entry 26).
+            val invalid = view.unresolved.single() as Cause.DocumentInvalid
+            invalid.document.assert().isEqualTo(DocumentKind.TENANT)
+            invalid.revision.assert().isEqualTo(revisions.getValue(SnapshotKey.Tenant("broken")))
+            view.version!!.tenant.assert().isEqualTo(invalid.revision)
+            decide(view, broken).assert().isEqualTo(Decision.Indeterminate(invalid))
         }
     }
 
@@ -196,7 +200,9 @@ class DocumentSnapshotViewsTest {
             val views = DocumentSnapshotViews(source)
             val view = views.load(ViewKey.BLOCKED).join()
             view.platform.kind.assert().isEqualTo(DocumentKind.PLATFORM)
-            (view.unresolved.single() as Cause.SourceUnavailable).document.assert().isEqualTo(DocumentKind.PLATFORM)
+            val invalid = view.unresolved.single() as Cause.DocumentInvalid
+            invalid.document.assert().isEqualTo(DocumentKind.PLATFORM)
+            invalid.revision.assert().isEqualTo(revisions.getValue(SnapshotKey.Platform))
         }
     }
 
