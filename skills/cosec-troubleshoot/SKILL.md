@@ -189,8 +189,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `INFO`: allow `+info`, or set `warn` when the operator has set `noeviction`, under which it is `UP` with
   `eviction: unknown`. https://cosec.ahoo.me/operations/troubleshooting#cosecsnapshoteviction-is-down
 - A document the request needs does not compile: its new revision is installed as failed, the decision's cause is
-  `DocumentInvalid` at that revision (metric `cause=document_invalid`, health `invalid: ["<doc>@<n>"]`), and every
-  request that needs it fails closed; the previous revision is not kept. The log says it once per revision at `ERROR`:
+  `DocumentInvalid` at that revision (metric `cause=document_invalid`, health `invalid` (the count) and
+  `invalidFirst: ["<doc>@<n>", …]` (the first ten)), and every request that needs it fails closed; the previous revision is not kept. The log says it once per revision at `ERROR`:
   `Snapshot document [<doc>] revision <n> does not compile against ...`, caused by a `DocumentCompileException` listing
   JSON paths. Usually a document a newer CoSec wrote during a rolling upgrade, or a direct write to the store. Compile the stored
   document yourself (see "Reproduce narrowly") to see the errors. Documents compile against the platform's `limits` and

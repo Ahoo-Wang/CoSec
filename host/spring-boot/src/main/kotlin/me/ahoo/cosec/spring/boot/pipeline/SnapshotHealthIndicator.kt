@@ -48,8 +48,18 @@ class SnapshotHealthIndicator(
             .withDetail("prewarmed", source.isPrewarmed)
             .withDetail("missing", missing.map { it.toString() })
         if (invalid.isNotEmpty()) {
-            builder.withDetail("invalid", invalid.map { "${it.key}@${it.revision}" })
+            // A platform revision can stop thousands of documents compiling at once: the count, and a bounded sample in
+            // a stable order, so two probes of the same state answer the same body.
+            val named = invalid.sortedWith(compareBy({ it.key != SnapshotKey.Platform }, { it.key.toString() }))
+                .take(NAMED_INVALID)
+                .map { "${it.key}@${it.revision}" }
+            builder.withDetail("invalid", invalid.size).withDetail("invalidFirst", named)
         }
         return builder.build()
+    }
+
+    private companion object {
+        /** How many documents that do not compile the health body names. */
+        const val NAMED_INVALID = 10
     }
 }

@@ -179,8 +179,8 @@ CoSec registers no meters for the documents an instance holds. To see whether in
 - **Health.** With Spring Boot Actuator, the `cosecSnapshot` health indicator is `UP` once the platform document and
   every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `invalid` when it is
   stored and does not compile, `failed`, `absent` or `loading`), `prewarmed`, `missing`, and, when any document does
-  not compile, `invalid`: each such document with its stored revision (`["tenant:acme@7"]`), never the compiler's
-  message. Readiness follows the same condition
+  not compile, `invalid`, how many do not, and `invalidFirst`, the first ten of them with their stored revisions,
+  the platform first and then by key (`["tenant:acme@7"]`), never the compiler's message. Readiness follows the same condition
   ([Readiness](./deployment.md#readiness)).
 - **Eviction.** On Redis, the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict the snapshot,
   with an `eviction` detail that says why. It reports what the instance read last: every node's `maxmemory-policy`,

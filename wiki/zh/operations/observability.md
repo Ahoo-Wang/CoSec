@@ -163,7 +163,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了文档：
 
 - **健康。** 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在平台文档和每个预热文档安装后为 `UP`，之前为
-  `DOWN`，细节为 `platform`（`installed`；已存储但无法编译时为 `invalid`；`failed`、`absent` 或 `loading`）、`prewarmed`、`missing`，以及在有文档无法编译时的 `invalid`：每个这样的文档及其存储的修订（`["tenant:acme@7"]`），从不包含编译器的消息。就绪状态遵循同样的条件
+  `DOWN`，细节为 `platform`（`installed`；已存储但无法编译时为 `invalid`；`failed`、`absent` 或 `loading`）、`prewarmed`、`missing`，以及在有文档无法编译时的 `invalid`（无法编译的文档数）和 `invalidFirst`（其中的前十个及其存储的修订，平台文档在前，其余按键排序，如 `["tenant:acme@7"]`），从不包含编译器的消息。就绪状态遵循同样的条件
   （[就绪](./deployment.md#readiness)）。
 - **驱逐。** 在 Redis 上，Redis 可能驱逐快照时 `cosecSnapshotEviction` 健康指示器为 `DOWN`，并带说明原因的 `eviction`
   细节。它报告实例最近一次读到的结果：每个 `revalidate-interval` 在自己的线程上读取的每个节点的 `maxmemory-policy`，
