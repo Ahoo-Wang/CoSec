@@ -126,7 +126,7 @@ object TypeLedger {
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotExceptions.kt" to Disposition.Debt(Batch.B7),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotKey.kt" to family(OWN_EXCEPTION, "the snapshot key"),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/RevocationReader.kt" to family(PORT, "RevocationReader and the subject revocation it reads"),
-        "core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/TokenFamilyStore.kt" to Disposition.Debt(Batch.B7),
+        "core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/TokenFamilyStore.kt" to family(PORT, "TokenFamilyStore and the session family it keeps"),
         "edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/IdentityGuard.kt" to Disposition.Debt(Batch.B7),
         "edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt" to family(OWN_EXCEPTION, "the OpenAPI generator"),
         "edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt" to Disposition.Debt(Batch.B7),
