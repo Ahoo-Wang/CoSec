@@ -119,7 +119,12 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
   extension point `wiki/architecture/extending.md` lists, and on nothing else), `ApiVariantTest` (a library's Gradle API
   variant, usage `java-api`, carries the CoSec module whose type a public class extends or implements, and Jackson
-  where a public signature names it: a consumer cannot compile against the class otherwise), `EnginePurityTest`,
+  where a public signature names it: a consumer cannot compile against the class otherwise), `PublishedMetadataTest`
+  (the POM and Gradle metadata each published module generates: no imported platform, a version on every dependency,
+  no test or build tool, a POM that brings at run time only what `runtimeElements` brings, no `cosec-runtime` from a
+  backend's POM, and a `cosec-bom` that is exactly the modules an application depends on), `KotlinTimeSignatureTest`
+  and `ConstructibleApiTest` (no `kotlin.time` type in a public or SPI signature; what an application must construct
+  is constructible from stable API), `EnginePurityTest`,
   `RuntimeBoundaryTest`, `ControlBoundaryTest`, the project list in `ProjectListTest` and the catalog. The root
   build writes each project's dependency facts for them with `architectureFacts`. Adding a project means adding it
   there, in `settings.gradle.kts`, the labeler and the bug report template; CI picks it up from `settings.gradle.kts`
@@ -253,6 +258,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Extension points (SPIs; ports live in `cosec-spi` unless their signature needs a layer's types) | `@CoSecSpi` on the interface, `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | A public signature (a line of a module's `api/<project>.api`) | the dump (`updateKotlinAbi`); after GA, `!` in the PR title when a line is removed or changed |
 | A file over 400 lines, a second top-level type in a file, a new package edge inside `runtime`, `control` or `document`, a structure suppression | an entry in `test/architecture`'s ledgers (`SourceSizeLedger`, `TypeLedger`, `PackageLedger`, `DetektSuppressionTest.RECORDED`) with its batch or its reason, reviewed |
+| What a published module brings into a build (a library dependency, `compileOnlyApi`, the BOM) | nothing to register: `PublishedMetadataTest` reads the generated metadata; `:dependencies` is CoSec's internal platform and is not published; `wiki/guide/introduction.md#what-cosec-needs-from-your-build` when a minimum moves (`CatalogTest`) |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
 | A module the starter wires (a new one, or a feature that needs one) | `CoSecModuleCheckAutoConfiguration` (STA-1), `wiki/guide/introduction.md#modules` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |

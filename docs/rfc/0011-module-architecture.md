@@ -18,6 +18,10 @@
 
 > **2026-11-09 修订（#1307）**：`cosec-model` 依赖 `cosec-annotations`，否则带标记的类型可以不声明 opt-in 就被使用。
 
+> **2026-11-15 修订（#1408，真实项目演练的发现）**：`cosec-dependencies` 不再发布。此前每个库模块发布的元数据都导入这个平台，而它导入 Spring Boot、CoCache 等的 BOM 并管着测试与构建工具：
+> 一个应用加入一个 CoSec 模块，整个构建的版本就被抬高。现在库模块用一个不进入任何发布变体的配置取得平台，发布时写出它实际解析到的版本（“至少这个版本”）；
+> POM 把仅编译期的 API 依赖（`compileOnlyApi`）写成 `provided`，否则 Maven 使用方加入 `cosec-cocache` 就把 `cosec-control` 与 `cosec-runtime` 带到运行时。`PublishedMetadataTest` 读生成的 POM 与 Gradle 元数据守着这些。
+>
 > **2026-11-14 修订（[RFC 0013](0013-target-architecture.md) §3，#1369、#1370、#1372）**：`runtime` 只留请求路径。
 > 新增模块 `cosec-document`（`core/document/`）：策略文档、路由映射、`CoSec-Identity` 与影子窗口的编解码、格式描述符、唯一的 Jackson mapper；
 > 它只依赖 `engine`、`spi` 与 Jackson。这推翻了 10 月 28 日“文档留在 `runtime`，用包划分”的做法（理由见 RFC 0013 §3.2）。
@@ -109,7 +113,8 @@ flowchart BT
 | `migration/migrate/` | `:migrate` | `cosec-migrate` | 7.x 数据迁移 |
 | `test/testkit/` | `:testkit` | `cosec-testkit` | 用户的策略测试工具 |
 | `test/conformance/`、`test/architecture/`、`test/e2e/`、`test/code-coverage-report/` | | 不发布 | 规范一致性、架构规则、端到端、覆盖率 |
-| `bom/bom/`、`bom/dependencies/` | `:bom`、`:dependencies` | `cosec-bom`、`cosec-dependencies` | 版本平台 |
+| `bom/bom/` | `:bom` | `cosec-bom` | 只对齐 CoSec 自己的、作为依赖使用的模块（不含 `cosec-migrate`），不导入任何第三方平台 |
+| `bom/dependencies/` | `:dependencies` | 不发布（2026-11-15 起，#1408） | CoSec 自己构建与测试所用版本的内部平台；任何发布的模块都不提它 |
 | `platform/gateway-server/` | `:gateway-server` | Docker 镜像（不发布到 Maven） | 给用户直接部署的网关服务；也是端到端、AOT 与压测的对象（D5） |
 
 根目录保留 `config/`、`docs/`、`gradle/`、`k8s/`、`schema/`、`scripts/`、`skills/`、`wiki/`。
@@ -153,6 +158,8 @@ flowchart BT
 | `platform/*` | 是 CoSec 模块的应用：只依赖发布的模块，像用户一样使用它们；上面各组的规则不适用于它 |
 
 再加一条：`core/*` 的公共签名中不得出现 `tools.jackson.*`（D3）。
+
+发布出去的东西也有守卫（2026-11-15，#1408）：`PublishedMetadataTest` 读每个发布模块与 BOM 生成的 POM 和 Gradle 模块元数据，不得有平台导入、没有版本的依赖、测试或构建工具；POM 带进运行时的不得多于 Gradle 的运行时变体；后端的 POM 不带 `cosec-runtime`；BOM 恰好是作为依赖的那些模块。
 
 PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增一条就是一次评审过的改动）：
 
