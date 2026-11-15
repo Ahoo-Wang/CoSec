@@ -43,6 +43,8 @@ class SnapshotHealthIndicatorTest {
         state: DocumentState<Any>?,
         prewarmed: Boolean,
         tenant: DocumentState<Any>? = null,
+        /** The platform's stored revision that does not compile, if it is one. */
+        invalidPlatform: Long? = null,
     ): SnapshotSource<Any, Any> {
         val snapshot = state?.let { policies -> mockk<Snapshot<Any, Any>> { every { this@mockk.policies } returns policies } }
         val entries = listOfNotNull(
@@ -50,8 +52,16 @@ class SnapshotHealthIndicatorTest {
                 mockk<SnapshotEntry<Any>> {
                     every { key } returns SnapshotKey.Tenant(TENANT)
                     every { this@mockk.state } returns tenantState
+                    every { invalid } returns false
                 }
-            }
+            },
+            invalidPlatform?.let { revision ->
+                mockk<SnapshotEntry<Any>> {
+                    every { key } returns SnapshotKey.Platform
+                    every { this@mockk.revision } returns revision
+                    every { invalid } returns true
+                }
+            },
         )
         return mockk {
             every { peek(any()) } returns snapshot
@@ -95,6 +105,24 @@ class SnapshotHealthIndicatorTest {
             status.assert().isEqualTo(Status.UP)
             details["missing"].assert().isEqualTo(emptyList<String>())
         }
+    }
+
+    /**
+     * Drill entry 26: a stored document that does not compile is named invalid, with its revision, not "failed" as an
+     * unreadable store is; never with the compiler's message.
+     */
+    @Test
+    fun `health names a document that does not compile, by its revision`() {
+        val failed = DocumentState.Failed(IllegalStateException("\$.policies[0]: secret policy content"))
+        val source = source(failed, prewarmed = true, invalidPlatform = 7)
+        SnapshotHealthIndicator(source, readiness(source)).health().apply {
+            status.assert().isEqualTo(Status.DOWN)
+            details["platform"].assert().isEqualTo("invalid")
+            details["invalid"].assert().isEqualTo(listOf("platform@7"))
+            details.toString().assert().doesNotContain("secret")
+        }
+        // Without one, the body says nothing of it.
+        health(failed, true).details.containsKey("invalid").assert().isFalse()
     }
 
     /**

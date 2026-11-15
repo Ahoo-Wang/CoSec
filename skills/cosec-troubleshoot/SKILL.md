@@ -179,8 +179,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - No platform document is published yet (the first one comes from `cosec-migrate publish`; `cosec-migrate bootstrap`
   writes only the `(platform)` tenant's document), or it was lost (evicted): an absent platform fails every request
   closed. Readiness refuses traffic until the platform document and every `prewarm-apps`/`prewarm-tenants` document is
-  installed; the `cosecSnapshot` health indicator shows `platform` (`installed`, `failed`, `absent`, `loading`) and
-  `prewarmed`, and only it belongs in the readiness group. Beside it, `cosecSnapshotEviction` is `DOWN` with an
+  installed; the `cosecSnapshot` health indicator shows `platform` (`installed`, `invalid`, `failed`, `absent`,
+  `loading`), `prewarmed` and `invalid`, and only it belongs in the readiness group. Beside it, `cosecSnapshotEviction` is `DOWN` with an
   `eviction` detail while Redis may evict the snapshot (each instance reads `maxmemory-policy` every
   `revalidate-interval` on its own thread, and logs `ERROR` from `EvictionPolicyMonitor` when that starts): an alert,
   never a readiness signal (it also turns the aggregate `/actuator/health` DOWN, so load balancers poll the readiness
@@ -188,9 +188,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   evicted. `Cannot tell whether Redis may evict` there is `eviction-check=fail` on a Redis that denies or times out
   `INFO`: allow `+info`, or set `warn` when the operator has set `noeviction`, under which it is `UP` with
   `eviction: unknown`. https://cosec.ahoo.me/operations/troubleshooting#cosecsnapshoteviction-is-down
-- A document the request needs does not decode or compile: its new revision is installed as failed
-  (`SnapshotUnavailableException: ... revision <n> cannot be compiled`, caused by a `DocumentCompileException` listing
-  JSON paths), and every request that needs it fails closed; the previous revision is not kept. Compile the stored
+- A document the request needs does not compile: its new revision is installed as failed, the decision's cause is
+  `DocumentInvalid` at that revision (metric `cause=document_invalid`, health `invalid: ["<doc>@<n>"]`), and every
+  request that needs it fails closed; the previous revision is not kept. The log says it once per revision at `ERROR`:
+  `Snapshot document [<doc>] revision <n> does not compile against ...`, caused by a `DocumentCompileException` listing
+  JSON paths. Usually a document a newer CoSec wrote during a rolling upgrade, or a direct write to the store. Compile the stored
   document yourself (see "Reproduce narrowly") to see the errors. Documents compile against the platform's `limits` and
   `attributes`, so a platform change can make an app or tenant document stop compiling.
 - Redis is unreachable for a document not yet held locally (`cold-load-timeout`, default 2s), or the snapshot lags
