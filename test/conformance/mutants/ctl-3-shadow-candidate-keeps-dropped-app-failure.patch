@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ShadowDocumentFailureTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
-index 81d57c6d..b37afb2f 100644
+index 94642039..2a4ff08f 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
-@@ -186,7 +186,7 @@ class ShadowListener(
+@@ -195,7 +195,7 @@ class ShadowListener(
          val appFailed = view.unresolved.any(::ofApp)
          return when {
              app == null && view.app == null && !appFailed -> view
