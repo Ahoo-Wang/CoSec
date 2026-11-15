@@ -23,6 +23,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.Snapshot
+import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -38,12 +39,24 @@ import java.time.Duration
 
 /** The states of [SnapshotHealthIndicator] and [SnapshotReadiness] the starter test does not reach. */
 class SnapshotHealthIndicatorTest {
-    private fun source(state: DocumentState<Any>?, prewarmed: Boolean): SnapshotSource<Any, Any> {
+    private fun source(
+        state: DocumentState<Any>?,
+        prewarmed: Boolean,
+        tenant: DocumentState<Any>? = null,
+    ): SnapshotSource<Any, Any> {
         val snapshot = state?.let { policies -> mockk<Snapshot<Any, Any>> { every { this@mockk.policies } returns policies } }
+        val entries = listOfNotNull(
+            tenant?.let { tenantState ->
+                mockk<SnapshotEntry<Any>> {
+                    every { key } returns SnapshotKey.Tenant(TENANT)
+                    every { this@mockk.state } returns tenantState
+                }
+            }
+        )
         return mockk {
             every { peek(any()) } returns snapshot
             every { isPrewarmed } returns prewarmed
-            every { entries() } returns emptyList()
+            every { entries() } returns entries
         }
     }
 
@@ -82,6 +95,19 @@ class SnapshotHealthIndicatorTest {
             status.assert().isEqualTo(Status.UP)
             details["missing"].assert().isEqualTo(emptyList<String>())
         }
+    }
+
+    /**
+     * Where readiness no longer waits for the prewarm's future (it was `isPrewarmed && platform present`): once each
+     * prewarmed document has an entry that is not failed, the instance is ready, before the prewarm attempt completes.
+     */
+    @Test
+    fun `every prewarmed document installed is ready before the prewarm completes, a failed one is not`() {
+        val present = DocumentState.Present(Any())
+        readiness(source(present, prewarmed = false, tenant = present)).missing().assert().isEmpty()
+        readiness(source(present, prewarmed = false, tenant = DocumentState.Absent)).missing().assert().isEmpty()
+        readiness(source(present, prewarmed = false, tenant = DocumentState.Failed(IllegalStateException("down"))))
+            .missing().assert().containsExactly(SnapshotKey.Tenant(TENANT))
     }
 
     @Test

@@ -320,6 +320,8 @@ class CoSecSnapshotAutoConfiguration {
         val snapshot = properties.snapshot
         val source = DocumentSnapshots.source(store, compiler, snapshot.toOptions())
         compiler.bind(source)
+        // The loads start where the source is made, not in cosecDocumentReadiness: an application may replace that
+        // bean, and a lazily initialized context makes it late. Both instances ask of the same keys (prewarmKeys).
         DocumentReadiness(source, snapshot.prewarmKeys()).start()
         return source
     }

@@ -69,7 +69,11 @@ and have to be provisioned again.
   `Pipeline.behindGateway { … }`. `Pipeline`'s constructor, `PipelineComponents` and `SuspendingSnapshotSource.of` are
   gone; `PipelineOptions`, `SnapshotOptions`, `SuspendingSnapshotSource`, `AttributeProviders`, `DecisionListeners`,
   `IdentityIssuer`, `IdentityGate` and `CoSecParameters.read` are now `@InternalCoSecApi`, which applications never opt in
-  to. No status code, header, body or `cosec.*` property changes.
+  to. No status code, header, body or `cosec.*` property changes. One change in the safe direction for a pipeline
+  assembled by hand: its documents now compile as the starter's do, so a condition or rate limit key on the API key
+  header it reads (`options { apiKeyHeader = … }`) does not compile (`CND-5`). Such a document is installed as failed
+  and its requests are a 503, where `SuspendingSnapshotSource.of(store)` installed it. A builder given two forms of one
+  input (`listener` and `DecisionListeners`, for instance) refuses to build rather than drop one.
 
   ```kotlin
   val pipeline = Pipeline.builder(authenticator, store)
