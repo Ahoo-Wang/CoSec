@@ -195,7 +195,9 @@ class Pipeline internal constructor(
 
     /**
      * The request path, in order, written here only (`StageOrderTest` reads it): each stage ends the request with an
-     * outcome or lets the next one run, and [Respond] always answers.
+     * outcome or lets the next one run, and [Respond] always answers. A chain over fields of the stages' own types, not
+     * a loop over an array of [Stage]s: the loop's interface calls cost the shortest path (`anonymous`) about 6 % of
+     * its throughput in two JMH runs, and the chain none (#1381).
      */
     private suspend fun runStages(state: RequestState): Outcome =
         readRequest.run(state)
