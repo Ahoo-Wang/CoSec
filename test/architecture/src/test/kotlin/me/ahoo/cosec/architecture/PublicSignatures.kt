@@ -59,12 +59,17 @@ object PublicSignatures {
     }
 
     /**
-     * Every library type a public signature of [classes] names, as `<where> names <type>` to the `group:artifact` of the
-     * library that holds the type: the supertypes, and the parameter, return and field types of the public members, type
-     * arguments and bounds included. A type of the JDK or of CoSec's own modules is left out, and so is one whose class
-     * is not in a library jar of the Gradle cache.
+     * A type a public signature names, and where it comes from: [library] is the `group:artifact` of the Gradle-cache jar
+     * that holds it, or null when the type is neither the JDK's nor CoSec's and no library can be told for it. A type
+     * the rule cannot place is one it cannot vouch for, so the caller fails on it instead of skipping it.
      */
-    fun libraryTypes(classes: List<JavaClass>): List<Pair<String, String>> = classes.flatMap { javaClass ->
+    class LibraryType(val where: String, val type: String, val library: String?)
+
+    /**
+     * Every type outside the JDK and CoSec's own modules that a public signature of [classes] names: the supertypes, and
+     * the parameter, return and field types of the public members, type arguments and bounds included.
+     */
+    fun libraryTypes(classes: List<JavaClass>): List<LibraryType> = classes.flatMap { javaClass ->
         val supertypes = listOfNotNull(javaClass.superclass.orElse(null)) + javaClass.interfaces
         val members = (javaClass.methods + javaClass.constructors + javaClass.fields).filter(
             ::isPublic
@@ -79,17 +84,37 @@ object PublicSignatures {
             types.map { member.fullName to it }
         }
         (supertypes.map { javaClass.name to it } + members).flatMap { (where, type) ->
-            type.allInvolvedRawTypes.mapNotNull { raw ->
-                libraryOf(raw)?.let { library -> "$where names ${raw.name}" to library }
-            }
+            type.allInvolvedRawTypes.filterNot(
+                ::isJdkOrCoSec
+            ).map { raw -> LibraryType(where, raw.name, libraryOf(raw)) }
         }
-    }.distinct()
+    }.distinctBy { Triple(it.where, it.type, it.library) }
 
-    /** `group:artifact` of the Gradle-cache jar that holds [type], else null. */
+    private val PRIMITIVES = setOf("boolean", "byte", "char", "short", "int", "long", "float", "double", "void")
+
+    private fun isJdkOrCoSec(type: JavaClass): Boolean {
+        val name = type.name
+        return name in PRIMITIVES || name.startsWith("me.ahoo.cosec.") ||
+            listOf("java.", "javax.", "jdk.", "sun.").any(name::startsWith) ||
+            type.source.orElse(null)?.uri?.scheme == "jrt"
+    }
+
+    /**
+     * `group:artifact` of the Gradle-cache jar that holds [type], else null. ArchUnit knows the jar of a type it imported;
+     * for one it only resolved (a class a signature names, outside the imported modules) the loaded class says where it
+     * comes from.
+     */
     private fun libraryOf(type: JavaClass): String? {
-        val uri = type.source.orElse(null)?.uri?.toString() ?: return null
-        val match = Regex("""/files-2\.1/([^/]+)/([^/]+)/[^/]+/[^/]+/[^/!]+\.jar""").find(uri) ?: return null
-        return "${match.groupValues[1]}:${match.groupValues[2]}"
+        val uri = type.source.orElse(null)?.uri?.toString()
+            ?: runCatching { type.reflect().protectionDomain.codeSource?.location?.toString() }.getOrNull()
+            ?: return null
+        // Gradle's cache keeps `files-2.1/<group>/<artifact>/<version>/<hash>/<file>.jar`; a local Maven repository
+        // (`mavenLocal()`, which the build lists first) `<group as a path>/<artifact>/<version>/<file>.jar`.
+        Regex("""/files-2\.1/([^/]+)/([^/]+)/[^/]+/[^/]+/[^/!]+\.jar""").find(uri)?.let {
+            return "${it.groupValues[1]}:${it.groupValues[2]}"
+        }
+        return Regex("""/repository/(.+)/([^/]+)/[^/]+/[^/!]+\.jar""").find(uri)
+            ?.let { "${it.groupValues[1].replace('/', '.')}:${it.groupValues[2]}" }
     }
 
     private fun isPublicKotlin(javaClass: JavaClass): Boolean {

@@ -74,11 +74,30 @@ class ApiVariantTest {
      */
     @Test
     fun `the API variant carries every library a public signature names`() {
-        val missing = LIBRARIES.flatMap { project ->
+        val seen = LIBRARIES.associateWith { project ->
+            PublicSignatures.libraryTypes(
+                PublicSignatures.classes {
+                    it == project
+                }
+            )
+        }
+
+        // A type the rule cannot place is one it cannot vouch for: fail on it, naming it, instead of skipping it.
+        val unplaced = seen.flatMap { (project, types) ->
+            types.filter { it.library == null }.map { "$project: ${it.where} names ${it.type}, whose library cannot be told" }
+        }
+        unplaced.assert().isEmpty()
+
+        // And it must have looked: these libraries are in these modules' public signatures for certain, so a run that
+        // found none of them found nothing at all (another cache layout, a type ArchUnit did not resolve).
+        // MetricsListener takes a MeterRegistry; the test kit's `tests` returns JUnit's DynamicTest, in its API by design.
+        seen.getValue("micrometer").map { it.library }.assert().contains("io.micrometer:micrometer-core")
+        seen.getValue("testkit").map { it.library }.assert().contains("org.junit.jupiter:junit-jupiter-api")
+
+        val missing = seen.flatMap { (project, types) ->
             val exported = facts(project, "module").map(::jar).toSet()
-            PublicSignatures.libraryTypes(PublicSignatures.classes { it == project })
-                .filter { (_, library) -> jar(library) !in exported }
-                .map { (where, library) -> "$project: $where, in $library, which its API variant does not carry" }
+            types.filter { jar(it.library!!) !in exported }
+                .map { "$project: ${it.where} names ${it.type}, in ${it.library}, which its API variant does not carry" }
         }
         missing.assert().isEmpty()
     }
