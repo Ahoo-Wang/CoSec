@@ -121,6 +121,10 @@ and have to be provisioned again.
   null by default; `TenantMembership` gains `app`. The new token is for the app your switch answers, else the previous
   token's (`SCP-12`): a switch that answers none behaves as before, and a user never gets an app by naming it.
   See [Switching tenant and app](../integration/authentication.md#switching-tenant-and-app).
+- **A refresh can re-read the user.** `RefreshTokenAuthentication` takes an optional `MembershipRefresh`, which
+  answers what the user holds now; the class keeps the verification, the revocation check, the rotation and the session.
+  Where you wrote an `Authentication` of your own to re-read the user on refresh, pass a `MembershipRefresh` instead.
+  Without one, a refresh keeps the token's claims, as before.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

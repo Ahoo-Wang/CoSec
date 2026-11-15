@@ -297,9 +297,27 @@ presented), `token-expired` when the session's lifetime is over, `token-invalid`
 before sessions existed, or outside one). It throws anything else, a store that cannot be read above all: answer
 `503`, and nothing was issued.
 
-A refresh does not re-read the user: the new token carries the claims of the old one. To pick up changed roles on
-refresh, write your own `Authentication` for refresh credentials that verifies them with `TokenVerifier.refresh`,
-rotates the session with `TokenFamilies.rotate` and then loads the user.
+By default a refresh does not re-read the user: the new token carries the claims of the old one. To pick up changed
+roles on refresh, give `RefreshTokenAuthentication` a `MembershipRefresh`. It answers what the user holds now, looked up
+again, and throws when the user may no longer sign in:
+
+```kotlin
+@Bean
+fun refreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    tokenRevocation: TokenRevocation,
+    tokenFamilies: TokenFamilies,
+    users: Users,
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token ->
+    val user = users.active(token.principal) ?: throw IllegalStateException("User [${token.principal}] is disabled.")
+    TenantMembership(roles = user.rolesIn(token.tenant, token.app))
+}
+```
+
+The class keeps every step a refresh needs, in order: it verifies the pair, refuses a revoked token, asks your
+`MembershipRefresh`, moves the session to its next generation, and issues in that session. The new token is for the
+old one's principal, tenant and app, with what your answer says. An answer of null keeps the old claims; an answer for
+another app is refused, since a refresh never changes the app a token is for. A refused refresh spends no generation.
 
 ## Logout and revocation
 

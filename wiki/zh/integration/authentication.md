@@ -173,7 +173,22 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 
 会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。其他情况，尤其是存储无法读取时，它会抛出异常：请应答 `503`，此时没有签发任何东西。
 
-刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，请为刷新凭证编写自己的 `Authentication`：先用 `TokenVerifier.refresh` 校验，再用 `TokenFamilies.rotate` 轮换会话，然后加载用户。
+默认情况下，刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个 `MembershipRefresh`。它回答用户现在拥有什么（重新查询），并在用户不能再登录时抛出异常：
+
+```kotlin
+@Bean
+fun refreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    tokenRevocation: TokenRevocation,
+    tokenFamilies: TokenFamilies,
+    users: Users,
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token ->
+    val user = users.active(token.principal) ?: throw IllegalStateException("User [${token.principal}] is disabled.")
+    TenantMembership(roles = user.rolesIn(token.tenant, token.app))
+}
+```
+
+这个类按顺序保留刷新需要的每一步：校验令牌对，拒绝已吊销的令牌，询问你的 `MembershipRefresh`，把会话移到下一代，并在该会话中签发。新令牌属于旧令牌的主体、租户和应用，持有你的回答所说的内容。回答 null 时保留旧声明；回答另一个应用时拒绝，因为刷新从不改变令牌所属的应用。被拒绝的刷新不消耗任何一代。
 
 ## 登出与吊销 {#logout-and-revocation}
 

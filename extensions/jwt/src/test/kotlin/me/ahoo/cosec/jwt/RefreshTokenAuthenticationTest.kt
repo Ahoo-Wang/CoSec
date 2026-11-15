@@ -15,8 +15,10 @@ package me.ahoo.cosec.jwt
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.login.token.MembershipRefresh
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
+import me.ahoo.cosec.login.token.TenantMembership
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
@@ -64,6 +66,66 @@ class RefreshTokenAuthenticationTest {
         val subject = refreshTokenAuthentication.authenticate(credentials(oldToken))
         subject.id.assert().isEqualTo(TokenSubject("alice", null).id)
         subject.tenant.assert().isEqualTo(TokenSubject("alice", null).tenant)
+    }
+
+    /** The application re-reads the user: the new token says what the user holds now, for the token's own principal. */
+    @Test
+    fun `a membership refresh decides what the new token holds, and nothing else`(): Unit = runBlocking {
+        val asked = mutableListOf<String>()
+        val now = MembershipRefresh { token ->
+            asked += token.principal
+            TenantMembership(roles = setOf("auditor"), attributes = mapOf("department" to "audit"))
+        }
+        val authentication =
+            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families, now)
+        val old = issue(TokenSubject("alice", "order", tenant = "acme", roles = setOf("clerk")))
+
+        val subject = authentication.authenticate(credentials(old))
+        asked.assert().containsExactly("alice")
+        subject.id.assert().isEqualTo("alice")
+        subject.tenant.assert().isEqualTo("acme")
+        subject.app.assert().isEqualTo("order")
+        subject.roles.assert().containsExactly("auditor")
+        subject.attributes.assert().isEqualTo(mapOf("department" to "audit"))
+        subject.session.assert().isNotNull()
+        // Without an answer, the token's claims are kept.
+        val kept = RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families)
+            .authenticate(credentials(jwtTokenConverter.toToken(subject)))
+        kept.roles.assert().containsExactly("auditor")
+    }
+
+    /** A refresh never changes the app, and a refused refresh spends no generation: the same pair refreshes after. */
+    @Test
+    fun `a membership refresh for another app is refused before the session moves`(): Unit = runBlocking {
+        val old = issue(TokenSubject("alice", "order", tenant = "acme"))
+        assertThrows<IllegalArgumentException> {
+            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families) {
+                TenantMembership(app = "billing")
+            }.authenticate(credentials(old))
+        }
+        RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families) {
+            TenantMembership(app = "order")
+        }.authenticate(credentials(old)).app.assert().isEqualTo("order")
+    }
+
+    /** The revocation check comes before the application is asked: a revoked token never reaches it. */
+    @Test
+    fun `a revoked token is refused before the membership refresh is asked`(): Unit = runBlocking {
+        val old = issue(TokenSubject("alice", null))
+        val revoked = Jwts.decode(old.accessToken).id
+        val revocations = object : RevocationReader {
+            override suspend fun isRevoked(tokenId: String): Boolean = tokenId == revoked
+
+            override suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant? = null
+        }
+        var asked = false
+        assertThrows<TokenRevokedException> {
+            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(revocations), families) {
+                asked = true
+                null
+            }.authenticate(credentials(old))
+        }
+        asked.assert().isFalse()
     }
 
     @Test

@@ -1,0 +1,17 @@
+# Rule: IDN-17
+# Mutant: a refreshed subject is in no session, so issuing it starts a new one and no session reaches its lifetime
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenFamiliesJwtTest :conformance:test
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
+index 2b8b1dd0..baa5b9e0 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
+@@ -49,7 +49,7 @@ class RefreshTokenAuthentication(
+         val now = memberships.refresh(token)
+         require(now?.app == null || now.app == token.app) { "A refresh never changes the app a token is for." }
+         val issue = families.rotate(token)
+-        return if (now == null) TokenSubject.of(token, issue) else current(token, now).inSession(issue)
++        return if (now == null) TokenSubject.of(token) else current(token, now)
+     }
+ 
+     /** The token's principal, tenant and app, with what its user holds now. */
