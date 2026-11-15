@@ -27,54 +27,53 @@ import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Instant
 import java.time.format.DateTimeParseException
 
-internal val factory = JsonNodeFactory.instance
-private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+/**
+ * The helpers the stored-JSON decoders of this package share, imported by each decoder: their names are not names of
+ * the package.
+ */
+internal object StoredJson {
+    val factory = JsonNodeFactory.instance
+    private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
-internal fun read(bytes: ByteArray, what: String): JsonNode = try {
-    reader.readTree(bytes) ?: throw SnapshotFormatException("The $what is empty.")
-} catch (error: JacksonException) {
-    throw SnapshotFormatException(
-        "The $what is not JSON: ${SnapshotKeyText.printable(error.originalMessage.orEmpty())}",
-        error
+    fun read(bytes: ByteArray, what: String): JsonNode = try {
+        reader.readTree(bytes) ?: throw SnapshotFormatException("The $what is empty.")
+    } catch (error: JacksonException) {
+        throw SnapshotFormatException(
+            "The $what is not JSON: ${SnapshotKeyText.printable(error.originalMessage.orEmpty())}",
+            error
+        )
+    }
+
+    /** Stored content quoted in [reason] has its control characters escaped: the message reaches log lines (RC1-15). */
+    fun malformed(what: String, reason: String): Nothing = throw SnapshotFormatException(
+        "The $what is malformed: ${SnapshotKeyText.printable(reason)}."
     )
-}
 
-/** Stored content quoted in [reason] has its control characters escaped: the message reaches log lines (RC1-15). */
-internal fun malformed(what: String, reason: String): Nothing = throw SnapshotFormatException(
-    "The $what is malformed: ${SnapshotKeyText.printable(reason)}."
-)
+    fun JsonNode.field(name: String, what: String): JsonNode = get(name) ?: malformed(what, "[$name] is missing")
 
-internal fun JsonNode.field(name: String, what: String): JsonNode = get(name) ?: malformed(what, "[$name] is missing")
+    fun JsonNode.text(what: String): String = if (isString) asString() else malformed(what, "$this is not a string")
 
-internal fun JsonNode.text(what: String): String = if (isString) {
-    asString()
-} else {
-    malformed(
-        what,
-        "$this is not a string"
-    )
-}
+    fun JsonNode.instant(what: String): Instant = try {
+        Instant.parse(text(what))
+    } catch (_: DateTimeParseException) {
+        malformed(what, "$this is not an instant")
+    }
 
-internal fun JsonNode.instant(what: String): Instant = try {
-    Instant.parse(text(what))
-} catch (_: DateTimeParseException) {
-    malformed(what, "$this is not an instant")
-}
+    fun JsonNode.long(what: String): Long =
+        if (isIntegralNumber && canConvertToLong()) asLong() else malformed(what, "$this is not an integer")
 
-internal fun JsonNode.long(what: String): Long =
-    if (isIntegralNumber && canConvertToLong()) asLong() else malformed(what, "$this is not an integer")
+    fun JsonNode.items(what: String): List<JsonNode> = if (isArray) {
+        values().toList()
+    } else {
+        malformed(
+            what,
+            "$this is not an array"
+        )
+    }
 
-internal fun JsonNode.items(what: String): List<JsonNode> = if (isArray) {
-    values().toList()
-} else {
-    malformed(
-        what,
-        "$this is not an array"
-    )
-}
-
-internal fun JsonNode.only(what: String, vararg names: String) {
-    if (!isObject) malformed(what, "$this is not an object")
-    val unknown = properties().map { it.key }.toSet() - names.toSet()
-    if (unknown.isNotEmpty()) malformed(what, "unknown fields $unknown")
+    fun JsonNode.only(what: String, vararg names: String) {
+        if (!isObject) malformed(what, "$this is not an object")
+        val unknown = properties().map { it.key }.toSet() - names.toSet()
+        if (unknown.isNotEmpty()) malformed(what, "unknown fields $unknown")
+    }
 }
