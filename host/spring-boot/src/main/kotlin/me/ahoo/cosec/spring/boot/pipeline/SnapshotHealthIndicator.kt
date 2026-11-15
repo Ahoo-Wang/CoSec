@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import org.springframework.boot.health.contributor.Health
 import org.springframework.boot.health.contributor.HealthIndicator
 
@@ -33,17 +34,32 @@ class SnapshotHealthIndicator(
     private val readiness: DocumentReadiness,
 ) : HealthIndicator {
     override fun health(): Health {
+        // Stored documents that do not compile here, by key and revision: never the compiler's message.
+        val invalid = source.entries().filter { it.invalid }
         val platform = when (source.peek()?.policies) {
             is DocumentState.Present<*> -> "installed"
-            is DocumentState.Failed -> "failed"
+            is DocumentState.Failed -> if (invalid.any { it.key == SnapshotKey.Platform }) "invalid" else "failed"
             DocumentState.Absent -> "absent"
             null -> "loading"
         }
         val missing = readiness.missing()
         val builder = if (missing.isEmpty()) Health.up() else Health.down()
-        return builder.withDetail("platform", platform)
+        builder.withDetail("platform", platform)
             .withDetail("prewarmed", source.isPrewarmed)
             .withDetail("missing", missing.map { it.toString() })
-            .build()
+        if (invalid.isNotEmpty()) {
+            // A platform revision can stop thousands of documents compiling at once: the count, and a bounded sample in
+            // a stable order, so two probes of the same state answer the same body.
+            val named = invalid.sortedWith(compareBy({ it.key != SnapshotKey.Platform }, { it.key.toString() }))
+                .take(NAMED_INVALID)
+                .map { "${it.key}@${it.revision}" }
+            builder.withDetail("invalid", invalid.size).withDetail("invalidFirst", named)
+        }
+        return builder.build()
+    }
+
+    private companion object {
+        /** How many documents that do not compile the health body names. */
+        const val NAMED_INVALID = 10
     }
 }
