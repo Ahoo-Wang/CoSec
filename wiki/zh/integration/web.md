@@ -191,6 +191,8 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | `principal.attributes` | 凭证的属性（令牌的 `attributes` 声明；API key 则有 `apiKeyId`）。在网关之后：转发来的 `claims`。 |
 | `scope.appId`、`scope.spaceId`、`scope.roles` | `ScopeResolver` 校验后的作用域：应用、空间（默认空间为空）以及该空间中的角色。 |
 | `forwardedIdentity` | 在网关后面时为网关的请求 id 和调用方凭证的 id；否则为 null。 |
+| `requestId` | CoSec 在审计记录、span 和 problem 响应中使用的请求 id：客户端发送了可接受的 `CoSec-Request-Id` 时就是它，否则是 CoSec 生成的 id，任何请求头里都没有。 |
+| `deviceId` | 客户端在 `CoSec-Device-Id` 中声明的设备，未声明时为空。由客户端声明：CoSec 只检查其形式（只能有一个值，否则 `400`），所以它不能证明是哪台设备。 |
 
 上下文是只读的：应用设置的任何内容都不会影响决策。
 
@@ -374,7 +376,7 @@ spring:
 | `tenant`、`sub` | 网关校验的租户和主体。 |
 | `scope` | `{app, space}`，即网关解析出的应用和空间。 |
 | `roles` | 主体在该空间中的角色：决策所用的角色。 |
-| `auth` | `{method, jti, exp, capped}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id，以及凭证的过期时间；`capped: true` 只出现在带角色上限的凭证上，此时在网关之后，主体绑定和附加策略同样不授予它任何东西（它们的 DENY 照样生效）。只有 `jwt` 能得到 break-glass，网关只为 CoSec 自己的令牌转发它。绝不包含凭证本身。 |
+| `auth` | `{method, jti, exp, iat, capped, session}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id、凭证的过期时间，以及凭证的签发时间（`iat`，凭证不说明时没有，且绝不晚于 `exp`）；`session` 只出现在 CoSec 自己的令牌（`jwt`）上：它的 `sid`、`auth_time`（用户登录的时间）和 `generation`，使网关之后的服务知道登录时间，并让那里的[租户切换](./authentication.md#switching-tenant-and-app)可以从它签发；`capped: true` 只出现在带角色上限的凭证上，此时在网关之后，主体绑定和附加策略同样不授予它任何东西（它们的 DENY 照样生效）。只有 `jwt` 能得到 break-glass，网关只为 CoSec 自己的令牌转发它。绝不包含凭证本身。 |
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |
 | `claims` | 只包含 `cosec.gateway.identity.claims` 中列出的主体属性（令牌的 `attributes` 声明；API key 只提供 `apiKeyId`）：字符串、布尔值和数字。`Byte`、`Short`、`Int`、`Long`，以及 `Long` 范围内的 `BigInteger` 作为整数传递；有限的 `Float` 或 `Double`，以及 `Double` 能精确表示的 `BigDecimal` 作为数字传递。 |
@@ -416,6 +418,10 @@ cosec:
 | `principal.attributes` | `claims`。 |
 | `scope.appId`、`scope.spaceId` | `scope.app` 和 `scope.space`。 |
 | `forwardedIdentity.gatewayRequestId`、`forwardedIdentity.credentialId` | 网关的请求 id 和凭证的 id（`auth.jti`）。 |
+| `requestId` | 本服务的请求 id：即网关的请求 id，网关以 `CoSec-Request-Id` 发送它。 |
+| `deviceId` | 请求的 `CoSec-Device-Id`，按与网关之前相同的规则读取（只能有一个值，否则 `400`）。 |
+
+CoSec 令牌的会话和签发时间（`auth.session`、`auth.iat`）在这里与在网关上一样属于该主体：租户切换从这个会话签发，且只在它仍然有效时签发（`IDN-22`）。没有它们的身份（API key 的，或来自更早版本网关的）照旧读取，但不能从它切换。服务严格读取身份，因此比网关旧的服务会拒绝这些成员（`400`）：请先升级网关之后的服务，再升级网关。
 
 转发的身份在这里就是凭证，它的应用就是它声明的应用：配置了应用的服务会拒绝声明其他应用或未声明应用的身份（`400` `invalid-request`）。
 

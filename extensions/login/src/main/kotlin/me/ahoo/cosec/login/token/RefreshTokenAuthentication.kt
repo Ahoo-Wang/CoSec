@@ -36,20 +36,20 @@ import me.ahoo.cosec.spi.token.VerifiedToken
  * refresh to read it as "not revoked", the new token would carry neither a revoked id nor an `iat` before a principal's
  * revocation, and would outlive both.
  */
-class RefreshTokenAuthentication(
+class RefreshTokenAuthentication<C : RefreshTokenCredentials>(
     private val tokenVerifier: TokenVerifier,
     revocation: TokenRevocation,
     families: TokenFamilies,
-    private val memberships: MembershipRefresh = MembershipRefresh.CLAIMS,
-) : Authentication<RefreshTokenCredentials> {
-    override val credentialsType: Class<RefreshTokenCredentials> = RefreshTokenCredentials::class.java
-
+    /** The application's refresh credentials class, by which a login finds this authentication. */
+    override val credentialsType: Class<C>,
+    private val memberships: MembershipRefresh<C>,
+) : Authentication<C> {
     private val sessions = LiveSessions(revocation, families)
 
-    override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
+    override suspend fun authenticate(credentials: C): TokenSubject {
         val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
         val live = sessions.of(token)
-        val now = memberships.refresh(token)
+        val now = memberships.refresh(token, credentials)
         require(now?.app == null || now.app == token.app) { "A refresh never changes the app a token is for." }
         val issue = live.next(token)
         return if (now == null) TokenSubject.of(token, issue) else current(token, now).inSession(issue)
@@ -66,6 +66,19 @@ class RefreshTokenAuthentication(
         membershipMarker = if (now.fromProvider) MembershipClaims.PROVIDER else null,
     )
 }
+
+/**
+ * The refresh of [RefreshTokenCredentials], whatever class the application's carry them in: the usual one. With
+ * [memberships], the user is read again on every refresh from the token alone; a hook that reads the application's own
+ * credentials takes their class, through the constructor.
+ */
+fun RefreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    revocation: TokenRevocation,
+    families: TokenFamilies,
+    memberships: MembershipRefresh<RefreshTokenCredentials> = MembershipRefresh.CLAIMS,
+): RefreshTokenAuthentication<RefreshTokenCredentials> =
+    RefreshTokenAuthentication(tokenVerifier, revocation, families, RefreshTokenCredentials::class.java, memberships)
 
 /** What a refresh presents: the [accessToken] it renews and the [refreshToken] that renews it. */
 interface RefreshTokenCredentials : LoginCredentials {

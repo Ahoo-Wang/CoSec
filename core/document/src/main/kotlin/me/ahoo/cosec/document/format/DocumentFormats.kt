@@ -178,6 +178,39 @@ object DocumentFormats {
                                 description = "The token or API key id."
                             ),
                             Field("exp", epochSeconds, required = true, description = "When the credential expires."),
+                            Field(
+                                "iat",
+                                epochSeconds,
+                                description = "When the credential was issued, a token's iat: never after exp. " +
+                                    "Absent when the credential does not say.",
+                            ),
+                            Field(
+                                "session",
+                                ObjectType(
+                                    listOf(
+                                        Field(
+                                            "sid",
+                                            id("0TEC5Hw00001zR0"),
+                                            required = true,
+                                            description = "The session id."
+                                        ),
+                                        Field(
+                                            "auth_time",
+                                            epochSeconds,
+                                            required = true,
+                                            description = "When the user signed in, by the session's clock.",
+                                        ),
+                                        Field(
+                                            "generation",
+                                            IntegerType(minimum = 1),
+                                            required = true,
+                                            description = "Which generation of the session the token is.",
+                                        ),
+                                    ),
+                                ),
+                                description = "The session of CoSec's own token (method jwt, with iat), which a tenant " +
+                                    "switch behind the gateway issues from. Absent for any other credential.",
+                            ),
                         ),
                     ),
                     required = true,

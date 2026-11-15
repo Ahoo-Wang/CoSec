@@ -199,10 +199,35 @@ fun refreshTokenAuthentication(
     tokenRevocation: TokenRevocation,
     tokenFamilies: TokenFamilies,
     users: Users,
-) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token ->
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token, _ ->
     val user = users.active(token.principal) ?: throw IllegalStateException("User [${token.principal}] is disabled.")
     TenantMembership(roles = user.rolesIn(token.tenant, token.app))
 }
+```
+
+这个钩子还会拿到刷新的凭证。当它的检查需要读取令牌对之外的请求内容时（例如受信设备检查要比较的设备），把它放进你自己的凭证类，并把这个类交给认证：钩子读取它不需要强制转换，就像[租户切换](#switching-tenant-and-app)的 `TenantSwitch` 读取 `SelectTenant` 一样，登录也按这个类找到这个认证：
+
+```kotlin
+data class Renew(
+    override val accessToken: String,
+    override val refreshToken: String,
+    val deviceId: String,
+) : RefreshTokenCredentials
+
+@Bean
+fun refreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    tokenRevocation: TokenRevocation,
+    tokenFamilies: TokenFamilies,
+    devices: TrustedDevices,
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies, Renew::class.java) { token, renew ->
+    require(devices.trusts(token.principal, renew.deviceId)) { "Sign in again on this device." }
+    null
+}
+
+@PostMapping("/auth/refresh")
+suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext): CompositeToken =
+    authentication.authenticateAsToken(Renew(pair.accessToken, pair.refreshToken, security.deviceId))
 ```
 
 这个类按顺序保留刷新需要的每一步：校验令牌对，拒绝已吊销的令牌，询问你的 `MembershipRefresh`，把会话移到下一代，并在该会话中签发。新令牌属于旧令牌的主体、租户和应用，持有你的回答所说的内容。回答 null 时保留旧声明；回答另一个应用时拒绝，因为刷新从不改变令牌所属的应用。被拒绝的刷新不消耗任何一代。
@@ -325,7 +350,7 @@ suspend fun select(
 - 重新严格读取其令牌的吊销记录：吊销存储无法读取时，切换回答 503，即使请求本身已被放行（PIP-7，[登出与吊销](#logout-and-revocation)）；
 - 它的会话仍属于该主体且没有被结束：登出，或刷新之后再次出示旧的令牌对（[刷新令牌](#refreshing-tokens)），都会结束会话，此后该会话的访问令牌虽然在过期前仍然有效，却切换不出任何令牌（`token-revoked`）；超过生命周期的会话为 `token-expired`。
 
-凭证不是 CoSec 令牌的请求（例如 API key）没有会话，不能切换（`token-invalid`）。被切换离开的会话保持原样：登出结束的是交给它的令牌对，而不是它切换自的那个。要结束一个用户的所有会话，请[吊销该主体](#revoking-every-token-of-a-principal)。网关之后的服务暂时还不能切换：网关转发的身份不携带会话。
+凭证不是 CoSec 令牌的请求（例如 API key）没有会话，不能切换（`token-invalid`）。被切换离开的会话保持原样：登出结束的是交给它的令牌对，而不是它切换自的那个。要结束一个用户的所有会话，请[吊销该主体](#revoking-every-token-of-a-principal)。在网关之后，切换从网关验证并随身份转发的会话签发（[网关之后的服务](./web.md#services-behind-the-gateway)）。
 
 **测试切换。** 切换需要管道为一个携带有效会话令牌的请求构造的上下文，所以测试不能手工构造它。`PermittedRequest.withToken`（`cosec-testkit`）提供这个上下文：用你自己的登录、基于内存中的令牌族签发一个令牌，测试工具会让它经过 CoSec 自己的令牌认证器。切换使用同一组令牌族：
 

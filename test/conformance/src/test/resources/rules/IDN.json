@@ -284,7 +284,9 @@
         "login:SwitchLiveSessionTest#a switch from a session of no family, or of another principal's, issues nothing",
         "login:SwitchLiveSessionTest#a switch whose family cannot be read issues nothing",
         "jwt:SwitchFromReplayedPairTest#a replayed pair revokes the session, and the thief's access token switches into nothing",
-        "login:LiveSessionsGuardTest#only the live-session check rotates a family or starts one at an earlier login"
+        "login:LiveSessionsGuardTest#only the live-session check rotates a family or starts one at an earlier login",
+        "jwt:SwitchBehindGatewayTest#behind the gateway, a switch from a revoked session issues nothing",
+        "architecture:LiveSessionCallersTest#only the live-session check rotates, forks or checks a token family"
       ]
     }
   ]

@@ -33,7 +33,7 @@ internal class DefaultAuthenticationProviderTest {
     @Test
     fun register() {
         assertThrows(IllegalArgumentException::class.java) {
-            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication<RefreshTokenCredentials>>(
                 RefreshTokenCredentials::class.java,
             )
         }
@@ -44,13 +44,13 @@ internal class DefaultAuthenticationProviderTest {
         )
         authenticationProvider.register(refreshTokenAuthentication)
         (
-            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication<RefreshTokenCredentials>>(
                 RefreshTokenCredentials::class.java,
             )
             ).assert().isEqualTo(refreshTokenAuthentication)
 
         (
-            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication>(
+            authenticationProvider.getRequired<RefreshTokenCredentials, RefreshTokenAuthentication<RefreshTokenCredentials>>(
                 MockRefreshTokenCredentials::class.java,
             )
             ).assert().isEqualTo(refreshTokenAuthentication)
@@ -68,7 +68,9 @@ internal class DefaultAuthenticationProviderTest {
         )
 
         DefaultAuthenticationProvider()
-            .get<RefreshTokenCredentials, RefreshTokenAuthentication>(RefreshTokenCredentials::class.java)
+            .get<RefreshTokenCredentials, RefreshTokenAuthentication<RefreshTokenCredentials>>(
+                RefreshTokenCredentials::class.java
+            )
             .assert().isNull()
     }
 

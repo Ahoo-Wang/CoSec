@@ -45,5 +45,9 @@ internal class PipelineSecurityContext(val security: RequestSecurity) : Security
     override val forwardedIdentity: ForwardedIdentity? =
         security.identity?.let { ForwardedIdentity(it.requestId, it.credential.id) }
 
+    override val requestId: String get() = security.requestId
+
+    override val deviceId: String get() = security.request.environment.deviceId
+
     override fun toString(): String = "PipelineSecurityContext(${security.requestId}, ${principal.id}@$tenantId)"
 }

@@ -1271,12 +1271,26 @@ and have to be provisioned again.
   new token is for the app your switch answers, else the previous token's (`SCP-12`): a switch that answers none behaves
   as before, and a user never gets an app by naming it. `TokenSubject.authTime` is removed, and `TokenFamilies.rotate`
   and `TokenFamilies.startAt` (the former `start(…, authTime)`) are CoSec's own (`@InternalCoSecApi`): an issue from an
-  earlier login goes through the check of a live session. A service behind a gateway cannot switch until the identity
-  it is forwarded carries the session. See [Switching tenant and app](../integration/authentication.md#switching-tenant-and-app).
+  earlier login goes through the check of a live session. See [Switching tenant and app](../integration/authentication.md#switching-tenant-and-app).
+- **The forwarded identity carries the session and the issue time of CoSec's token** (`auth.session`: `sid`,
+  `auth_time`, `generation`; `auth.iat`), so that a service behind the gateway knows when the user signed in and a
+  tenant switch there issues from that session (`IDN-22`). The format stays version 1, and a service reads it strictly:
+  one older than its gateway refuses the new members with `400`. **Upgrade the services behind a gateway before the
+  gateway.** An identity without them (an API key's, or one an older gateway sent) reads as before and cannot be
+  switched from. `Identity.Credential` gains `issuedAt` and `session`, both optional.
+- **`SecurityContext` gains `requestId` and `deviceId`.** `requestId` is the id CoSec used for the request (the
+  client's `CoSec-Request-Id`, or the one CoSec generated, which no header holds); `deviceId` the client's
+  `CoSec-Device-Id`, empty when none, which CoSec checks for form only and which proves no device. Read them there
+  instead of the headers. A `SecurityContext` of your own still compiles: both default to `""`. Behind a gateway the
+  service now reads `CoSec-Device-Id` under the rule the gateway reads it with (one value, else `400`), so
+  `environment.device` in a check in code sees it there too; before, it saw no device behind a gateway.
 - **A refresh can re-read the user.** `RefreshTokenAuthentication` takes an optional `MembershipRefresh`, which
   answers what the user holds now; the class keeps the verification, the revocation check, the rotation and the session.
   Where you wrote an `Authentication` of your own to re-read the user on refresh, pass a `MembershipRefresh` instead.
-  Without one, a refresh keeps the token's claims, as before.
+  Without one, a refresh keeps the token's claims, as before. The hook is given the token and the refresh's
+  credentials (`{ token, credentials -> … }`); to read facts of your own there, a device say, pass your credentials class
+  too, `RefreshTokenAuthentication(verifier, revocation, families, YourCredentials::class.java) { token, yours -> … }`,
+  as a tenant switch takes its own. `RefreshTokenAuthentication(verifier, revocation, families)` is written as it was.
 - **`TokenCompositeAuthentication` is built with `TokenCompositeAuthentication.of(authentications, tokenConverter,
   families)`.** Its constructor took two types no application could build (`CompositeAuthentication`,
   `DefaultAuthenticationProvider`) and is now `@InternalCoSecApi`. The starter's bean is unchanged; a login assembled

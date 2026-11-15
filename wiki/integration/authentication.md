@@ -333,10 +333,38 @@ fun refreshTokenAuthentication(
     tokenRevocation: TokenRevocation,
     tokenFamilies: TokenFamilies,
     users: Users,
-) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token ->
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token, _ ->
     val user = users.active(token.principal) ?: throw IllegalStateException("User [${token.principal}] is disabled.")
     TenantMembership(roles = user.rolesIn(token.tenant, token.app))
 }
+```
+
+The hook is also given the refresh's credentials. When its check reads more of the request than the pair, a device a
+trusted-device check compares say, carry it in your own credentials class and give the authentication that class: the
+hook reads it without a cast, as a [tenant switch](#switching-tenant-and-app)'s `TenantSwitch` reads `SelectTenant`,
+and the login finds the authentication by it:
+
+```kotlin
+data class Renew(
+    override val accessToken: String,
+    override val refreshToken: String,
+    val deviceId: String,
+) : RefreshTokenCredentials
+
+@Bean
+fun refreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    tokenRevocation: TokenRevocation,
+    tokenFamilies: TokenFamilies,
+    devices: TrustedDevices,
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies, Renew::class.java) { token, renew ->
+    require(devices.trusts(token.principal, renew.deviceId)) { "Sign in again on this device." }
+    null
+}
+
+@PostMapping("/auth/refresh")
+suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext): CompositeToken =
+    authentication.authenticateAsToken(Renew(pair.accessToken, pair.refreshToken, security.deviceId))
 ```
 
 The class keeps every step a refresh needs, in order: it verifies the pair, refuses a revoked token, asks your
@@ -565,8 +593,9 @@ sign in again (`IDN-17`). It issues only while that session is live (`IDN-22`), 
 
 A request whose credential is not CoSec's token, an API key say, has no session and cannot switch (`token-invalid`).
 The session switched from is left as it is: a logout ends the pair it is given, not the one it was switched from. To
-end every session of a user, [revoke the principal](#revoking-every-token-of-a-principal). A service behind a gateway
-cannot switch yet: the identity the gateway forwards carries no session.
+end every session of a user, [revoke the principal](#revoking-every-token-of-a-principal). Behind a gateway, the
+switch issues from the session the gateway verified and forwarded with the identity
+([Services behind the gateway](./web.md#services-behind-the-gateway)).
 
 **Testing a switch.** A switch needs the context the pipeline made for a request with a token of a live session, so a
 test cannot build one by hand. `PermittedRequest.withToken` (`cosec-testkit`) answers it: issue a token with your own

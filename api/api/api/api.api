@@ -136,15 +136,24 @@ public final class me/ahoo/cosec/api/context/ForwardedIdentity {
 
 public abstract interface class me/ahoo/cosec/api/context/SecurityContext {
 	public static final field Companion Lme/ahoo/cosec/api/context/SecurityContext$Companion;
+	public static final field DEFAULT_TENANT_ID Ljava/lang/String;
 	public static final field KEY Ljava/lang/String;
+	public fun getDeviceId ()Ljava/lang/String;
 	public abstract fun getForwardedIdentity ()Lme/ahoo/cosec/api/context/ForwardedIdentity;
 	public abstract fun getPrincipal ()Lme/ahoo/cosec/api/principal/CoSecPrincipal;
+	public fun getRequestId ()Ljava/lang/String;
 	public abstract fun getScope ()Lme/ahoo/cosec/api/context/SecurityScope;
 	public abstract fun getTenantId ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/api/context/SecurityContext$Companion {
+	public static final field DEFAULT_TENANT_ID Ljava/lang/String;
 	public static final field KEY Ljava/lang/String;
+}
+
+public final class me/ahoo/cosec/api/context/SecurityContext$DefaultImpls {
+	public static fun getDeviceId (Lme/ahoo/cosec/api/context/SecurityContext;)Ljava/lang/String;
+	public static fun getRequestId (Lme/ahoo/cosec/api/context/SecurityContext;)Ljava/lang/String;
 }
 
 public abstract interface class me/ahoo/cosec/api/context/SecurityScope {
