@@ -65,7 +65,6 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
@@ -179,7 +178,9 @@ class WebAdapterParityTest {
 
     private fun compile(key: SnapshotKey, body: String): CompiledDocument = compiler.compile(
         key,
-        SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()),
+        SnapshotDocuments.read(
+            """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()
+        ),
     )
 
     private val platform = compile(

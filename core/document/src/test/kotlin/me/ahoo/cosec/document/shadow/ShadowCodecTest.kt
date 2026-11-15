@@ -24,7 +24,6 @@ import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowSample
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -37,7 +36,9 @@ import java.time.Instant
 class ShadowCodecTest {
     private val now: Instant = Instant.parse("2026-11-01T00:00:00Z")
     private val acme: SnapshotKey = SnapshotKey.Tenant("acme")
-    private val document = SnapshotDocuments.read("""{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray())
+    private val document = SnapshotDocuments.read(
+        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray()
+    )
 
     @Test
     fun `candidates, reports and statuses read back as they were written`() {

@@ -18,13 +18,11 @@ package me.ahoo.cosec.document
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.time.Instant
 
 /** RFC 0006 §8.1: rate limit rules are a section of every document, read, written and compiled with it. */
 class RateLimitDocumentTest {

@@ -25,17 +25,17 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Instant
 
 /** The documented assembly of a host without Spring Boot: only stable API, the documents from a store. */
 class PipelineAssemblyTest {
     private val publishedAt = "2026-10-26T00:00:00Z"
 
-    private fun document(body: String) = SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray())
+    private fun document(body: String) = SnapshotDocuments.read(
+        """{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray()
+    )
 
     private fun request(path: String) = HttpFacts(
         method = "GET",

@@ -35,7 +35,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -53,14 +52,16 @@ import kotlin.time.Duration.Companion.milliseconds
 class RateLimitObligationTest {
     private fun platform(rules: String): CompiledDocument = PolicyDocumentCompiler().compile(
         SnapshotKey.Platform,
-        SnapshotDocuments.read((
+        SnapshotDocuments.read(
+            (
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
                     """{"id":"no-delete","statements":[{"effect":"deny","action":"http:DELETE","resource":"http:path:/orders/**"}]}],""" +
                     """"bindings":[{"id":"g:read","subject":"*","app":"*","space":"*","policy":"read"},""" +
                     """{"id":"g:no-delete","subject":"*","app":"*","space":"*","policy":"no-delete"}],""" +
                     """"rateLimits":[$rules]}"""
-                ).encodeToByteArray()),
+                ).encodeToByteArray()
+        ),
     )
 
     private class Views(val platform: CompiledDocument) : SnapshotViews {

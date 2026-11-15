@@ -26,7 +26,6 @@ import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
@@ -40,7 +39,6 @@ import org.springframework.boot.data.redis.autoconfigure.DataRedisReactiveAutoCo
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
-import java.time.Instant
 import java.util.UUID
 
 /**
@@ -110,7 +108,9 @@ class ShadowReportingWiringTest {
         val staged = StoredCandidate(
             "w",
             1,
-            SnapshotDocuments.read("""{"schema":2,"revision":2,"publishedAt":"2026-11-01T00:00:00Z","limits":{"maxNodes":7}}""".encodeToByteArray()),
+            SnapshotDocuments.read(
+                """{"schema":2,"revision":2,"publishedAt":"2026-11-01T00:00:00Z","limits":{"maxNodes":7}}""".encodeToByteArray()
+            ),
         )
         runner
             .withBean(

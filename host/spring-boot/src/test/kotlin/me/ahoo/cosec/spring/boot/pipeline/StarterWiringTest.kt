@@ -71,7 +71,6 @@ import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
@@ -97,7 +96,6 @@ import org.springframework.context.ApplicationContext
 import org.springframework.core.annotation.Order
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.test.util.ReflectionTestUtils
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
@@ -111,7 +109,9 @@ class StarterWiringTest {
     private val documents = InMemorySnapshotDocumentStore().apply {
         put(
             SnapshotKey.Platform,
-            SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$PLATFORM}""".encodeToByteArray()),
+            SnapshotDocuments.read(
+                """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$PLATFORM}""".encodeToByteArray()
+            ),
         )
     }
 
@@ -385,7 +385,9 @@ class StarterWiringTest {
         mapOf(SnapshotKey.Platform to "", SnapshotKey.Tenant(TENANT) to CLERKS).forEach { (key, body) ->
             cache.put(
                 key,
-                SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray()),
+                SnapshotDocuments.read(
+                    """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray()
+                ),
             )
             documents.notifyChanged(key)
         }

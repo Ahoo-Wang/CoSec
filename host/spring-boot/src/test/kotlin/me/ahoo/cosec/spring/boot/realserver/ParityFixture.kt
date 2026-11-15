@@ -38,10 +38,8 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -131,7 +129,9 @@ internal class ParityFixture(
 
     private fun compile(key: SnapshotKey, body: String): CompiledDocument = PolicyDocumentCompiler().compile(
         key,
-        SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"2026-11-13T00:00:00Z"$body}""".encodeToByteArray()),
+        SnapshotDocuments.read(
+            """{"schema":2,"revision":1,"publishedAt":"2026-11-13T00:00:00Z"$body}""".encodeToByteArray()
+        ),
     )
 
     companion object {

@@ -39,12 +39,14 @@ class SuspendingRedisRateLimitingTest {
 
     private val platform = me.ahoo.cosec.document.PolicyDocumentCompiler().compile(
         me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform,
-        SnapshotDocuments.read((
+        SnapshotDocuments.read(
+            (
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"open","statements":[{"effect":"allow","action":"*"}]}],""" +
                     """"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"open"}],""" +
                     """"rateLimits":[{"id":"per-ip","action":"*","key":"environment.ip","permitsPerSecond":100}]}"""
-                ).encodeToByteArray()),
+                ).encodeToByteArray()
+        ),
     )
 
     private val views = object : me.ahoo.cosec.runtime.snapshot.SnapshotViews {

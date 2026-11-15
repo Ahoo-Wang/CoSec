@@ -52,13 +52,11 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -66,7 +64,8 @@ import kotlin.coroutines.cancellation.CancellationException
 class AuthorizationCheckerTest {
     private val platform = PolicyDocumentCompiler().compile(
         SnapshotKey.Platform,
-        SnapshotDocuments.read((
+        SnapshotDocuments.read(
+            (
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
                     """{"id":"order","statements":[{"effect":"allow","action":"order:read","resource":"order/{id}"}]},""" +
@@ -81,7 +80,8 @@ class AuthorizationCheckerTest {
                     """{"id":"g:no-read","subject":"*","app":"*","space":"*","policy":"no-read"},""" +
                     """{"id":"g:control","subject":"*","app":"cosec-control","space":"","policy":"control"},""" +
                     """{"id":"g:rank","subject":"*","app":"cosec-control","space":"","policy":"rank"}]}"""
-                ).encodeToByteArray()),
+                ).encodeToByteArray()
+        ),
     )
 
     /** Installed, except after [fail] is set. */

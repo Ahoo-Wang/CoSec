@@ -20,10 +20,8 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.BindingId
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert

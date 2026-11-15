@@ -27,7 +27,6 @@ object GuardAllowlist {
             "architecture:SnapshotDocumentMakersTest#only SnapshotDocuments makes a snapshot document",
             "document:SnapshotDocumentsTest#theHeaderIsTheBodys",
             "document:SnapshotDocumentsTest#aPolicyDocumentStatesItsOwnHeader",
-            "document:SnapshotDocumentsTest#rejectsWhatTheCompilerWouldReject",
             "runtime:CandidateRecordShapeTest#a candidate record in the shape of 8_0_0-alpha_4 is not compared, and the request is answered as without it",
             "migrate:ConditionTranslatorTest#no row widens access against what enforcement fills",
             "migrate:ConditionTranslatorTest#every row agrees with 7x on adversarial requests, never widening",

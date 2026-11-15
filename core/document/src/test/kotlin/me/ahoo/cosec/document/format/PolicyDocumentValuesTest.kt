@@ -20,12 +20,10 @@ import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Instant
 
 /**
  * The 8.0 half of the counter-example check (`SchemaConformanceTest` decodes 8.0 documents but cannot compile random

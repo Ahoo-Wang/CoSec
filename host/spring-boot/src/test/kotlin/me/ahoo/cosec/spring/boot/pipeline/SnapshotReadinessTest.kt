@@ -26,7 +26,6 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
@@ -48,7 +47,6 @@ import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.context.ApplicationContext
 import org.springframework.test.util.ReflectionTestUtils
-import java.time.Instant
 
 /** RFC 0003 X6 and RFC 0006 X8: readiness follows the snapshot, and listeners drain on shutdown. */
 class SnapshotReadinessTest {
@@ -101,8 +99,10 @@ class SnapshotReadinessTest {
 
             documents.put(
                 SnapshotKey.Platform,
-                SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z","policies":[],"bindings":[]}"""
-                        .encodeToByteArray()),
+                SnapshotDocuments.read(
+                    """{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z","policies":[],"bindings":[]}"""
+                        .encodeToByteArray()
+                ),
             )
             waitFor { availability.readinessState == ReadinessState.ACCEPTING_TRAFFIC }
             availability.readinessState.assert().isEqualTo(ReadinessState.ACCEPTING_TRAFFIC)

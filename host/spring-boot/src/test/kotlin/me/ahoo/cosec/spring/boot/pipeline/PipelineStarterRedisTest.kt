@@ -40,7 +40,6 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration

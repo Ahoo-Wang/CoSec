@@ -75,7 +75,9 @@ class CoCacheControlStoreTest {
 
     private val key = SnapshotKey.Tenant("acme")
 
-    private fun document(revision: Long) = SnapshotDocuments.read("""{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray())
+    private fun document(revision: Long) = SnapshotDocuments.read(
+        """{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()
+    )
 
     private fun store(
         node: SnapshotNode,

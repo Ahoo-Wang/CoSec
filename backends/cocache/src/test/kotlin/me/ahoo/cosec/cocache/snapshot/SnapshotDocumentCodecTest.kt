@@ -32,6 +32,10 @@ class SnapshotDocumentCodecTest {
 
     @Test
     fun refusesWhatTheReaderRefuses() {
-        assertThrows<SnapshotFormatException> { SnapshotDocumentCodec.decode("""{"policies":[]}""".encodeToByteArray()) }
+        assertThrows<SnapshotFormatException> {
+            SnapshotDocumentCodec.decode(
+                """{"policies":[]}""".encodeToByteArray()
+            )
+        }
     }
 }

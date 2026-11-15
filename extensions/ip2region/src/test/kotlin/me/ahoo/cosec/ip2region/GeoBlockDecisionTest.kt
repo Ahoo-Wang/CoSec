@@ -33,11 +33,9 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -50,7 +48,8 @@ class GeoBlockDecisionTest {
 
     private fun document(onMissing: String?): CompiledDocument = PolicyDocumentCompiler(providers.catalog).compile(
         SnapshotKey.Platform,
-        SnapshotDocuments.read((
+        SnapshotDocuments.read(
+            (
                 """{"schema":2,"revision":1,"publishedAt":"2026-11-14T00:00:00Z","policies":[""" +
                     """{"id":"open","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/**"}]},""" +
                     """{"id":"geo-block","statements":[{"effect":"deny","action":"*","resource":"http:path:/**",""" +
@@ -63,7 +62,8 @@ class GeoBlockDecisionTest {
                     """"condition":{"in":["ext.ip2region.country",["中国"]]}}]}],""" +
                     """"bindings":[{"id":"b1","subject":"*","app":"*","space":"*","policy":"open"},""" +
                     """{"id":"b2","subject":"*","app":"*","space":"*","policy":"geo-block"}]}"""
-                ).encodeToByteArray()),
+                ).encodeToByteArray()
+        ),
     )
 
     private fun pipeline(document: CompiledDocument) = Pipeline.builder(

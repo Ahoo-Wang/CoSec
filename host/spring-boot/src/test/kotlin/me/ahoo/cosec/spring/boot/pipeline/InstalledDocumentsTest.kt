@@ -21,7 +21,6 @@ import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -46,7 +45,10 @@ class InstalledDocumentsTest {
     })
 
     private fun publish(key: SnapshotKey, revision: Long) {
-        store.put(key, SnapshotDocuments.read("""{"schema":2,"revision":$revision,"publishedAt":"$now"}""".encodeToByteArray()))
+        store.put(
+            key,
+            SnapshotDocuments.read("""{"schema":2,"revision":$revision,"publishedAt":"$now"}""".encodeToByteArray())
+        )
     }
 
     private fun installed() = CoSecSnapshotAutoConfiguration.Shadow.installedDocuments(source.entries(), now)

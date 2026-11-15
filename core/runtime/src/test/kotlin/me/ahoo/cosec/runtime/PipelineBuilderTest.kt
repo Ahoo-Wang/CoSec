@@ -113,7 +113,9 @@ class PipelineBuilderTest {
 
     private fun document(body: String = ""): SnapshotDocument {
         val publishedAt = Instant.parse("2026-11-01T00:00:00Z")
-        return SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray())
+        return SnapshotDocuments.read(
+            """{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray()
+        )
     }
 
     private fun store() = HeldStore().apply {

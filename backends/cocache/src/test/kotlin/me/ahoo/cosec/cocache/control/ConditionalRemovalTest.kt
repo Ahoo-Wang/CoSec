@@ -29,13 +29,11 @@ import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -126,7 +124,9 @@ class ConditionalRemovalTest {
     }
 
     private val acme: SnapshotKey = SnapshotKey.Tenant("acme")
-    private val document = SnapshotDocuments.read("""{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray())
+    private val document = SnapshotDocuments.read(
+        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray()
+    )
 
     @Test
     fun `a candidate another change staged after the withdrawal read it stays - #1227`() {

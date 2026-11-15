@@ -38,11 +38,9 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -65,7 +63,9 @@ class HostAttributesPipelineTest {
 
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(peek(key))
 
-        private fun document(body: String) = SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray())
+        private fun document(body: String) = SnapshotDocuments.read(
+            """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()
+        )
     }
 
     private val pipeline = PipelineFixtures.pipeline(

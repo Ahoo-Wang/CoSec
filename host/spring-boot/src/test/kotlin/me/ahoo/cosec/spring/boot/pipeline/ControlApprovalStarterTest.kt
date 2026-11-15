@@ -47,7 +47,6 @@ import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenRevoker
@@ -113,7 +112,9 @@ class ControlApprovalStarterTest {
         ).forEach { (key, body) ->
             cache.put(
                 key,
-                SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray()),
+                SnapshotDocuments.read(
+                    """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray()
+                ),
             )
             documents.notifyChanged(key)
         }

@@ -28,7 +28,6 @@ import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -55,7 +54,9 @@ class ShadowRetentionTest {
     }
 
     private val clock = MovableClock()
-    private val document = SnapshotDocuments.read("""{"schema":2,"revision":5,"publishedAt":"2026-01-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray())
+    private val document = SnapshotDocuments.read(
+        """{"schema":2,"revision":5,"publishedAt":"2026-01-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray()
+    )
 
     /** The `candidate:` namespace as the control plane leaves it. */
     private val staged = HashMap<SnapshotKey, StoredCandidate>()
