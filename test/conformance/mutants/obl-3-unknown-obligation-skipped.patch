@@ -2,11 +2,11 @@
 # Mutant: the pipeline skips an obligation kind it does not handle instead of dispatching exhaustively
 # Tests: :architecture:test --tests me.ahoo.cosec.architecture.ObligationDispatchTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index aaa9996d..925fcd4b 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -336,9 +336,10 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+index be74a3e2..c05416a5 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/RunObligations.kt
+@@ -44,9 +44,10 @@ internal class RunObligations(private val rateLimiter: RateLimiter?, private val
          for (next in permit.obligations) {
              // Exhaustive, with no else (OBL-3): a new kind of obligation does not compile until it is handled here, and
              // a newer model beside this pipeline throws NoWhenBranchMatchedException, which `evaluate` answers 500.

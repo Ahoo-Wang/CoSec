@@ -101,8 +101,8 @@ The rules behind the picture:
 - **`cosec-runtime`** (directory `core/runtime/`) is the data plane: the coroutine `Pipeline`, `StatusMapping`,
   `AuthorizationChecker`, `SnapshotSource`, token verification, the built-in authenticators and the logging audit
   sink, over the documents of `cosec-document`. Inside it, the adapter contract (`RequestGate`, `HttpFacts`,
-  `Outcome`, `Problem`, `RequestSecurity`) is one package, `runtime.http`, at the bottom, and the assembly
-  (`Pipeline`, `AuthorizationChecker`) is the root package, at the top; `PackageDependencyTest` holds every package to
+  `Outcome`, `Problem`, `RequestSecurity`) is one package, `runtime.http`, at the bottom, the request path's stages
+  are `runtime.stage`, and the assembly (`Pipeline`, `AuthorizationChecker`) is the root package, at the top; `PackageDependencyTest` holds every package to
   its table in `PackageLedger`. Coroutines stay in this module and the adapters, Reactor only at the adapter bridges:
   `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `document/`, `engine/` or `model/` references
   `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` or `document/` references
@@ -168,7 +168,12 @@ on, a removed or changed line of a dump is a breaking change.
 
 `Pipeline.evaluate` in
 [`Pipeline.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt)
-is one suspend function from the request's facts to an `Outcome`. The adapters (`PipelineWebFilter`,
+is one suspend function from the request's facts to an `Outcome`. Within its deadline it runs the stages of
+`runtime.stage` in order, each a class over one `RequestState`: `ReadRequest`, `Authenticate`, `ResolveMembers`,
+`ResolveScope`, `LoadView`, `FetchAttributes`, `Evaluate`, `RunObligations` and `Respond`. A stage either ends the
+request with an outcome or lets the next one run (`StageOrderTest`), and writes only its own fields of the state
+(`RequestStateWriterTest`). On the outcome it then forwards the identity at a gateway, and delivers the event to the
+REQUIRED listeners, then to the BEST_EFFORT ones. The adapters (`PipelineWebFilter`,
 `PipelineServletFilter`, `PipelineGatewayFilter`) only read the request into `HttpFacts`, call it, and write what it
 returns. They depend on `RequestGate`, the interface `Pipeline` implements. The other `RequestGate` is `IdentityGate`,
 which a service behind a CoSec gateway uses instead (`cosec.pipeline.mode=gateway`): it reads the caller from the

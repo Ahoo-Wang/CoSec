@@ -22,6 +22,10 @@ import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures
+import me.ahoo.cosec.runtime.event.DecisionEvent
+import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -35,6 +39,7 @@ import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * `PIP-10`: a gateway forwards the identity it verified to the services behind it, and only that: the outcome always
@@ -159,6 +164,35 @@ class IdentityForwardingTest {
         val outcome = evaluate(alice, issuer = tiny)
         outcome.status.assert().isEqualTo(500)
         outcome.proceed.assert().isFalse()
+    }
+
+    /**
+     * The identity is forwarded before the REQUIRED listeners hear of the request: what they record is what the client
+     * got. With the order the other way round, an audit would record a permit the overflow then turned into a 500.
+     */
+    @Test
+    fun `a REQUIRED listener records the 500 of an identity too large to forward, not the permit`() {
+        val heard = CopyOnWriteArrayList<DecisionEvent>()
+        val audit = object : DecisionListener {
+            override val name = "audit"
+            override val delivery = Delivery.REQUIRED
+
+            override suspend fun onDecision(event: DecisionEvent) {
+                heard += event
+            }
+        }
+        val tiny = IdentityIssuer(maxBytes = 32, clock = Clock.fixed(now, ZoneOffset.UTC))
+        DecisionListeners(listOf(audit)).use { listeners ->
+            val outcome = runBlocking {
+                PipelineFixtures.pipeline(PipelineFixtures.authenticator(alice)) {
+                    identity(tiny)
+                    listeners(listeners)
+                }.evaluate(facts(routed))
+            }
+            outcome.status.assert().isEqualTo(500)
+            heard.single().outcome.status.assert().isEqualTo(500)
+            heard.single().kind.assert().isEqualTo(DecisionEvent.Kind.ERROR)
+        }
     }
 
     /** #1228: a custom authenticator's numbers of any standard type are forwarded; one the header cannot hold is a 500. */

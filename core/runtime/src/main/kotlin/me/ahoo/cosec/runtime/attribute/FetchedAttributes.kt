@@ -43,6 +43,7 @@ internal class FetchedAttributes {
 
     /** Records what [registered] answered for [names]; null when it failed or did not answer in time. */
     fun record(registered: AttributeProviders.Registered, names: Set<String>, answer: Map<String, Any>?) {
+        check(this !== NONE) { "A pipeline without attribute providers fetches nothing." }
         asked += names
         if (answer == null) {
             return
@@ -73,5 +74,10 @@ internal class FetchedAttributes {
             it in values -> AttributeStatus.PRESENT
             else -> AttributeStatus.ABSENT
         }
+    }
+
+    companion object {
+        /** A pipeline's with no providers: nothing is asked, so nothing is ever recorded in it. */
+        val NONE = FetchedAttributes()
     }
 }

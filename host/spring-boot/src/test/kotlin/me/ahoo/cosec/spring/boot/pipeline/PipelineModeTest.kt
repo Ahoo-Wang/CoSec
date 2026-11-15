@@ -123,7 +123,8 @@ class PipelineModeTest {
             context.getBeansOfType(IdentityGate::class.java).assert().isEmpty()
             val issuer = context.getBean(IdentityIssuer::class.java)
             ReflectionTestUtils.getField(issuer, "claims").assert().isEqualTo(setOf("name", "email"))
-            ReflectionTestUtils.getField(context.getBean(Pipeline::class.java), "identity").assert().isSameAs(issuer)
+            val forwarding = ReflectionTestUtils.getField(context.getBean(Pipeline::class.java), "forwardIdentity")!!
+            ReflectionTestUtils.getField(forwarding, "issuer").assert().isSameAs(issuer)
         }
         enforcing.withPropertyValues("cosec.gateway.identity.enabled=false").run { context ->
             context.getBeansOfType(IdentityIssuer::class.java).assert().isEmpty()

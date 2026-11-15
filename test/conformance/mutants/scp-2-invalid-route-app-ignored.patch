@@ -2,11 +2,11 @@
 # Mutant: a route's cosec-app-id that cannot be an app id is dropped, so the client picks the app
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.RouteAppTest :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 8b2bf7cc..0549faa5 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -307,7 +307,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
+index 2e80c496..d080bbe2 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
+@@ -81,7 +81,7 @@ internal class ReadRequest(private val routes: RouteMap) : Stage {
      private fun routed(facts: HttpFacts): HttpFacts {
          val app = facts.routeApp ?: return facts
          if (app !is String || !ScopeResolver.isValidAppId(app)) {

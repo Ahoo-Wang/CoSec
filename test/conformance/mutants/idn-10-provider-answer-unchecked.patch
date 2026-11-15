@@ -2,10 +2,10 @@
 # Mutant: a membership provider's answer may hold a space, role or policy id with an unpaired surrogate
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.MembershipResolverTest --tests me.ahoo.cosec.runtime.UnpairedSurrogatePipelineTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt
 index 1cb7f568..06ec5452 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/MembershipResolver.kt
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/MembershipResolver.kt
 @@ -111,7 +111,6 @@ class MembershipResolver(
          val unusable = when {
              memberships.source != Memberships.Source.PROVIDER -> "memberships from [${memberships.source}]"

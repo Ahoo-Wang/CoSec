@@ -3,15 +3,15 @@
 # Tests: :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 8695757e..f838acb6 100644
+index d9e29b82..4b0a8fd6 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -132,7 +132,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
-      * this pipeline reads a token there (`cosec.pipeline.allow-cookie-token`), a backend might.
-      */
+@@ -147,7 +147,7 @@ class Pipeline internal constructor(
      @InternalCoSecApi
--    fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
-+    fun withoutCookieToken(cookieHeader: String): String? = cookieHeader
+     fun withoutCookieToken(
+         cookieHeader: String
+-    ): String? = CookieHeaders.without(cookieHeader, Authenticate.AUTHORIZATION)
++    ): String? = cookieHeader
  
      /**
       * Whether [cookieHeader], one `Cookie` header value, has an `authorization` cookie [withoutCookieToken] removes:
