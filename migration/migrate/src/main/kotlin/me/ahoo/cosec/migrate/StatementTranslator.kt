@@ -89,15 +89,23 @@ internal class StatementTranslator(
         return assembled(name, deny, action, resources ?: action.resources, condition, location)
     }
 
-    /** A DENY of every action stays `*` and refuses more than 7.x could (C7); a rate limit rule only limits. */
+    /**
+     * A DENY of every action stays `*` and refuses more than 7.x could (C7); an ALLOW of every action is `http:*`, which
+     * a route map's routes leave (C8); a rate limit rule only limits.
+     */
     private fun everyActionDenied(
         action: MatcherTranslator.Action?,
         deny: Boolean,
         rateLimit: Boolean,
         location: String
     ) {
-        if (deny && !rateLimit && action?.isAll == true) {
+        if (rateLimit) {
+            return
+        }
+        if (deny && action?.isAll == true) {
             scan.everyActionDenied(location)
+        } else if (!deny && action == MatcherTranslator.HTTP_ACTION) {
+            scan.everyActionAllowed(location)
         }
     }
 

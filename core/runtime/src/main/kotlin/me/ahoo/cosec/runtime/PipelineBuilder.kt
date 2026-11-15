@@ -36,7 +36,6 @@ import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import kotlin.time.toKotlinDuration
 
@@ -134,10 +133,19 @@ class PipelineBuilder internal constructor(
     @InternalCoSecApi
     fun engine(engine: FlatEngine): PipelineBuilder = apply { this.engine = engine }
 
+    /** The identity issuer the host gave, or the one [forwardIdentity] configures; none without either. */
+    private val issuer: IdentityIssuer?
+        get() = identity ?: forwarding?.let { IdentityIssuer(it.claims, it.maxBytes, clock) }
+
     /**
      * The pipeline. Throws [IllegalStateException] when two inputs say the same thing differently, so that neither is
      * dropped: a listener given with [listener] beside the host's [DecisionListeners] would never hear a decision.
+     *
+     * Everything that can refuse the configuration is checked before anything is acquired; a step that throws after
+     * that releases what the build acquired (the listeners' consumers, the snapshot source and its subscription) and the
+     * caller sees that step's exception: a failed build holds nothing (#1383).
      */
+    @Suppress("TooGenericExceptionCaught")
     fun build(): Pipeline {
         check(options == null || !settingsSet) { "Set the options either with options { } or as PipelineOptions." }
         check(attributeProviders == null || providers.isEmpty()) {
@@ -151,21 +159,27 @@ class PipelineBuilder internal constructor(
         ) { "Forward the identity either with forwardIdentity { } or an issuer." }
         val options = options ?: settings.toOptions()
         val attributes = attributeProviders ?: AttributeProviders(providers.toList())
+        // Refused here, before anything is acquired: an option out of range, a prewarmed id that names no document.
+        val snapshotOptions = store?.let { snapshotSettings.toOptions() to snapshotSettings.prewarmKeys() }
         val owned = ArrayList<AutoCloseable>()
-        val listeners = decisionListeners ?: ownedListeners(owned)
-        val issuer = identity ?: forwarding?.let { IdentityIssuer(it.claims, it.maxBytes, clock) }
-        if (store == null) {
-            return assemble(checkNotNull(snapshots), options, attributes, listeners, issuer, owned, null)
+        try {
+            // Its own checks run before it starts a consumer.
+            val listeners = decisionListeners ?: ownedListeners(owned)
+            if (store == null) {
+                return assemble(checkNotNull(snapshots), options, attributes, listeners, issuer, owned, null)
+            }
+            val compiler = PlatformCompiler(attributes.catalog, credentialHeaders = setOf(options.apiKeyHeader))
+            val (sourceOptions, prewarm) = checkNotNull(snapshotOptions)
+            val source = DocumentSnapshots.source(store, compiler, sourceOptions, clock)
+            owned += source
+            compiler.bind(source)
+            val readiness = DocumentReadiness(source, prewarm).also { it.start() }
+            val views = SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true))
+            return assemble(views, options, attributes, listeners, issuer, owned, readiness)
+        } catch (e: Throwable) {
+            release(owned, e)
+            throw e
         }
-        val compiler = PlatformCompiler(attributes.catalog, credentialHeaders = setOf(options.apiKeyHeader))
-        val source = DocumentSnapshots.source(store, compiler, snapshotSettings.toOptions(), clock)
-        compiler.bind(source)
-        owned += source
-        val prewarm = snapshotSettings.prewarmApps.map { SnapshotKey.App(it) } +
-            snapshotSettings.prewarmTenants.map { SnapshotKey.Tenant(it) }
-        val readiness = DocumentReadiness(source, prewarm).also { it.start() }
-        val views = SuspendingSnapshotSource(DocumentSnapshotViews(source, platformRequired = true))
-        return assemble(views, options, attributes, listeners, issuer, owned, readiness)
     }
 
     private fun ownedListeners(owned: MutableList<AutoCloseable>): DecisionListeners {
@@ -210,4 +224,16 @@ class PipelineBuilder internal constructor(
         owned,
         readiness,
     )
+}
+
+/** Releases [owned], last acquired first; a failure to release is suppressed in [cause], which the caller sees. */
+@Suppress("TooGenericExceptionCaught")
+private fun release(owned: List<AutoCloseable>, cause: Throwable) {
+    for (closeable in owned.asReversed()) {
+        try {
+            closeable.close()
+        } catch (e: Exception) {
+            cause.addSuppressed(e)
+        }
+    }
 }

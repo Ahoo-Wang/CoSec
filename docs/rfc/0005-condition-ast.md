@@ -516,7 +516,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | 7.x | 翻译 |
 |---|---|
 | `path` 模式在 `HttpPathPattern` 子集内 | §5.2 的表 |
-| 所有动作：模式 `*`、不带方法的 `all`、含 `*` 的 `path` 数组、含其中之一的数组或 composite | **ALLOW**：`"action": "http:*"`；**DENY**：`"action": "*"`，在转换报告里记为 C7；都省略 `resource`（`MIG-2`，2026-11-15）。限流规则保持 `*`：义务只限制，不授予 |
+| 所有动作：模式 `*`、不带方法的 `all`、含 `*` 的 `path` 数组、含其中之一的数组或 composite | **ALLOW**：`"action": "http:*"`，在转换报告里记为 C8（路由映射会把已映射的路由从中拿走，RFC 0004 §5.3）；**DENY**：`"action": "*"`，在转换报告里记为 C7；都省略 `resource`（`MIG-2`，2026-11-15）。限流规则保持 `*`：义务只限制，不授予 |
 | `path` 模式含 `{x:regex}` 或自定义 `separator` | 拒绝 |
 | 路径模板 `/users/#{principal.id}/**` | 资源 `http:path:/users/{__t0}/**` + 条件 `eq(resource.var.__t0, {"attr": "subject.id"})`。代入的值只参与相等比较，不改变模式（§2 J9） |
 | 路径模板出现在一段的中间（`/a/x-#{principal.id}`） | 拒绝（段内模板没有对应的捕获语法） |
