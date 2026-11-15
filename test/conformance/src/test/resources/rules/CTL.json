@@ -48,6 +48,8 @@
       "runtime:ShadowDocumentFailureTest#the failure of a document the candidate still reads is kept",
       "runtime:ShadowDocumentFailureTest#a platform candidate that compiles replaces the failure of the platform that does not",
       "runtime:ShadowDocumentFailureTest#an app candidate replaces an app document that does not compile, and is not compared on one that cannot be read",
+      "runtime:ShadowDocumentFailureTest#a tenant candidate replaces a tenant document that does not compile, and is not compared on one that cannot be read",
+      "runtime:FailedDocumentTest#a document that cannot be read or does not compile is named, any other cause names none",
         "spring-boot:PipelineStarterRedisTest#a tenant candidate that makes a roleless request read an app document widens its window",
         "control:ControlPlaneTest#a header the view reads sent with different values is refused as enforcement refuses it",
         "control:SimulatorTest#a repeated header a document reads is refused",

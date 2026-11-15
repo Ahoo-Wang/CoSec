@@ -162,14 +162,18 @@ class ShadowListener(
      */
     private fun documents(replay: ReplayHandle): List<Pair<SnapshotKey, Long?>> = buildList {
         val view = replay.view
-        val version = view.version
+        add(SnapshotKey.Platform to view.version?.platform)
+        view.app?.let { add(SnapshotKey.App(it.owner) to view.version?.app) }
+        view.tenant?.let { add(SnapshotKey.Tenant(it.owner) to view.version?.tenant) }
+        val version = view.version ?: return@buildList
+        val failed = view.unresolved.mapNotNullTo(HashSet()) { it.failedDocument() }
         val scope = replay.request.scope
-        add(SnapshotKey.Platform to version?.platform)
-        val app = view.app?.owner ?: scope.app.value.takeIf { version?.app != null && view.unresolved.any(::ofApp) }
-        app?.let { add(SnapshotKey.App(it) to version?.app) }
-        val tenant = view.tenant?.owner
-            ?: scope.tenant.value.takeIf { version?.tenant != null && view.unresolved.any { failed(it, DocumentKind.TENANT) } }
-        tenant?.let { add(SnapshotKey.Tenant(it) to version?.tenant) }
+        if (view.app == null && DocumentKind.APP in failed && version.app != null) {
+            add(SnapshotKey.App(scope.app.value) to version.app)
+        }
+        if (view.tenant == null && DocumentKind.TENANT in failed && version.tenant != null) {
+            add(SnapshotKey.Tenant(scope.tenant.value) to version.tenant)
+        }
     }
 
     /**
@@ -210,14 +214,7 @@ class ShadowListener(
         SnapshotView(view.platform, app, view.tenant, unresolved, view.version)
 
     /** Whether [cause] is the app document's: it could not be read, or does not compile. */
-    private fun ofApp(cause: Cause): Boolean = failed(cause, DocumentKind.APP)
-
-    /** Whether [cause] is a document of [kind]'s: it could not be read, or does not compile. */
-    private fun failed(cause: Cause, kind: DocumentKind): Boolean = when (cause) {
-        is Cause.SourceUnavailable -> cause.document == kind
-        is Cause.DocumentInvalid -> cause.document == kind
-        else -> false
-    }
+    private fun ofApp(cause: Cause): Boolean = cause.failedDocument() == DocumentKind.APP
 
     /** A new view: [view] with [key]'s document replaced. The enforced view is never changed. */
     private fun replaced(view: SnapshotView, key: SnapshotKey, document: CompiledDocument): SnapshotView {
@@ -294,4 +291,11 @@ class ShadowListener(
     }
 
     override fun toString(): String = "ShadowListener($name, sampleRate=$sampleRate)"
+}
+
+/** The document this cause says could not be read, or does not compile; null for any other cause. */
+internal fun Cause.failedDocument(): DocumentKind? = when (this) {
+    is Cause.SourceUnavailable -> document
+    is Cause.DocumentInvalid -> document
+    else -> null
 }

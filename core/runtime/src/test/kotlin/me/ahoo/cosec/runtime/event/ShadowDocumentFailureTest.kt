@@ -71,7 +71,9 @@ class ShadowDocumentFailureTest {
     }
 
     private val store = InMemorySnapshotDocumentStore()
-    private var unreadable = false
+
+    /** The documents whose reads fail. */
+    private val unreadable: MutableSet<SnapshotKey> = java.util.concurrent.ConcurrentHashMap.newKeySet()
     private val reading = object : SnapshotDocumentStore by store {
         override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> = failing(key) ?: store.read(key)
 
@@ -79,9 +81,9 @@ class ShadowDocumentFailureTest {
             failing(key) ?: store.readIfChanged(key, known)
     }
 
-    /** A failed read of order's document while it is [unreadable]; null otherwise. */
+    /** A failed read of a document that is [unreadable]; null otherwise. */
     private fun failing(key: SnapshotKey): CompletableFuture<SnapshotRead>? {
-        if (!unreadable || key != ORDER) {
+        if (key !in unreadable) {
             return null
         }
         return CompletableFuture.failedFuture(IllegalStateException("down"))
@@ -111,7 +113,7 @@ class ShadowDocumentFailureTest {
         store.put(SnapshotKey.Platform, document(""))
         val invalid = if (app == Failure.INVALID) ""","unknown":1""" else ""
         store.put(ORDER, document(""","policies":[$READ]$invalid"""))
-        unreadable = app == Failure.UNREADABLE
+        if (app == Failure.UNREADABLE) unreadable += ORDER
         store.put(TENANT, tenant(*tenantBindings))
     }
 
@@ -229,6 +231,27 @@ class ShadowDocumentFailureTest {
     ) {
         install(failure, GRANT)
         evaluate(replacing(ORDER, ""","policies":[$READ]""")).assert().isEqualTo(503)
+        val expected = if (failure == Failure.INVALID) ShadowOutcome.WIDENED else ShadowOutcome.BASE_MISMATCH
+        counts().assert().isEqualTo(mapOf(expected to 1L))
+    }
+
+    /**
+     * A tenant candidate of the tenant document the request reads: it replaces one that does not compile (`WIDENED`),
+     * and is not compared on one that cannot be read (`BASE_MISMATCH`), as for the app document.
+     */
+    @ParameterizedTest
+    @EnumSource(Failure::class)
+    fun `a tenant candidate replaces a tenant document that does not compile, and is not compared on one that cannot be read`(
+        failure: Failure,
+    ) {
+        install(null)
+        if (failure == Failure.INVALID) {
+            store.put(TENANT, document(""","policies":[$OWN],"bindings":[$SELF],"unknown":1"""))
+        } else {
+            unreadable += TENANT
+        }
+        source.reload(TENANT).join()
+        evaluate(candidate(SELF)).assert().isEqualTo(503)
         val expected = if (failure == Failure.INVALID) ShadowOutcome.WIDENED else ShadowOutcome.BASE_MISMATCH
         counts().assert().isEqualTo(mapOf(expected to 1L))
     }
