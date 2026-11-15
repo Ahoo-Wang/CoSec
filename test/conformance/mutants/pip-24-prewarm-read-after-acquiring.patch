@@ -3,7 +3,7 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.PipelineBuilderFailureTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineBuilder.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineBuilder.kt
-index ec0a7e7f..3249d678 100644
+index ec0a7e7f..1d4bbd1d 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineBuilder.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/PipelineBuilder.kt
 @@ -160,7 +160,7 @@ class PipelineBuilder internal constructor(
@@ -11,7 +11,7 @@ index ec0a7e7f..3249d678 100644
          val attributes = attributeProviders ?: AttributeProviders(providers.toList())
          // Refused here, before anything is acquired: an option out of range, a prewarmed id that names no document.
 -        val snapshotOptions = store?.let { snapshotSettings.toOptions() to snapshotSettings.prewarmKeys() }
-+        val snapshotOptions = store?.let { snapshotSettings.toOptions() to emptyList() }
++        val snapshotOptions = store?.let { snapshotSettings.toOptions() to emptyList<me.ahoo.cosec.spi.snapshot.SnapshotKey>() }
          val owned = ArrayList<AutoCloseable>()
          try {
              // Its own checks run before it starts a consumer.
