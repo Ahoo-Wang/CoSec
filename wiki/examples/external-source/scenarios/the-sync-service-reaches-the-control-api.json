@@ -1,0 +1,18 @@
+{
+  "description": "The sync service's principal, a principal of (platform) holding a token for the control app, reaches the control API's path: the control plane then authorizes each step itself.",
+  "credential": {
+    "tenant": "(platform)",
+    "id": "sync-service",
+    "app": "cosec-control"
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/cosec/control/v1/changes"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}
