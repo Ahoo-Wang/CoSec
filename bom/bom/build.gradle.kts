@@ -13,9 +13,10 @@
 @Suppress("UNCHECKED_CAST")
 val libraryProjects = rootProject.ext.get("libraryProjects") as Iterable<Project>
 
+// CoSec's own modules, and nothing else: no third-party version. cosec-migrate is a command-line tool, not a dependency.
 dependencies {
     constraints {
-        libraryProjects.forEach {
+        libraryProjects.filter { it.path != ":migrate" }.forEach {
             api(it)
         }
     }

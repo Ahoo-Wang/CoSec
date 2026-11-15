@@ -112,10 +112,9 @@ record for policy snapshots and revoked tokens.
 | The client's region as an external attribute | `cosec-ip2region` | |
 | Request, token and change ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
-The "With" column is what the starter's auto-configuration for that module needs besides the module itself. With
-Gradle, the CoSec modules bring the platform that gives these libraries their versions, CosId's aside: no CoSec platform
-sets it, so the application gives its version; with Maven, which does not
-pass a platform on, import `me.ahoo.cosec:cosec-dependencies` or give the versions yourself.
+The "With" column is what the starter's auto-configuration for that module needs besides the module itself. Give each
+one its version, as for any library of your build: CoSec does not manage it (see
+[What CoSec needs from your build](#what-cosec-needs-from-your-build)).
 
 A module that a feature you turned on needs is checked at startup (STA-1): the application does not start, and the
 message names the artifact to add, when a Spring MVC host lacks `cosec-webmvc`, a WebFlux host lacks `cosec-webflux`,
@@ -125,8 +124,9 @@ lacks `cosec-cocache`, `cosec.audit.kafka.delivery=required` lacks `cosec-kafka`
 
 The starter always brings `cosec-runtime` (the coroutine request pipeline, snapshots and token verification),
 `cosec-document` (the policy documents, route maps and their formats), `cosec-spi` (the extension points),
-`cosec-engine` and `cosec-model` (the pure decision engine), `cosec-api` (the public contracts), `cosec-login` (login
-and token issuing) and `cosec-jwt` (JWT tokens). `cosec-bom` aligns the versions of every published module.
+`cosec-engine` and `cosec-model` (the pure decision engine), `cosec-api` (the public contracts), `cosec-annotations`
+(the stability markers every `@OptIn(ExperimentalCoSecApi::class)` imports), `cosec-login` (login and token issuing)
+and `cosec-jwt` (JWT tokens). `cosec-bom` aligns the versions of the CoSec modules an application can depend on.
 
 `cosec-testkit` is a test dependency: it runs scenarios against your own policy documents in JUnit 5, the way
 CoSec's conformance suite does ([Testing policies](../policies/testing.md)).
@@ -142,6 +142,41 @@ Without Spring Boot, build a `Pipeline` over your document store with `Pipeline.
 call it from your own transport. The builder is `@ExperimentalCoSecApi`: it gains a method with every new port, and may
 change in a minor release. To test your code against a real pipeline, use `PipelineFixture` (`cosec-testkit`). See
 [Extending CoSec](../architecture/extending.md) and [Testing policies](../policies/testing.md#testing-your-code-against-a-real-pipeline).
+
+## What CoSec needs from your build
+
+This is the one place that says what an application's build has to provide for CoSec, and what adding CoSec changes in it.
+
+- **JDK 21 or later.**
+- **Spring Boot 4.1.** CoSec is built and tested on one patch release of 4.1. Each module that uses Spring or Spring
+  Boot names the versions of that release in its own metadata, as the minimum it needs (a `requires` in its Gradle module
+  metadata, a plain version in its POM); the exact numbers are there, not on this page. Use that release or a newer one.
+  An application on an older 4.1.x gets, with Gradle's own platform support (a `platform(...)` of the Spring Boot BOM),
+  the Spring and Spring Boot modules CoSec uses raised to that release, and the others left as they are. With Maven, and
+  with Spring's dependency management plugin, the Spring Boot BOM the application imports sets the versions, so it
+  keeps its own.
+- **Kotlin 2.** CoSec is written in Kotlin 2, and `kotlin-stdlib` is raised to the version it was built with, as with
+  every library.
+- **CoCache 8, only with `cosec-cocache`.** CoCache 8 has the Maven coordinates of CoCache 4
+  (`me.ahoo.cocache:cocache-core`) and other packages (`me.ahoo.cocache`, not `me.ahoo.cache`), so the two cannot share a
+  classpath. An application whose own code or framework is on CoCache 4 cannot add `cosec-cocache`. The other modules
+  need no CoCache.
+
+What the modules do to your build:
+
+- **No CoSec module imports a platform.** Its POM and its Gradle module metadata name the libraries it needs, each with
+  a version, and nothing else: no Spring Boot, Spring Cloud or CoCache BOM, and no test or build tool. Adding
+  `cosec-login` changes the versions of what `cosec-login` needs, and of nothing else in your build.
+- **A version a module names is a minimum, never strict.** An application that has a newer one keeps it.
+- **`cosec-bom` aligns CoSec's own modules and nothing else.** It lists the CoSec modules an application can depend on
+  (`cosec-migrate`, a command-line tool, is not one) and manages no third-party version. Import it to give every CoSec
+  module the same version, or give each the same version yourself.
+- **A dependency only needed to compile is not brought along.** `cosec-cocache` and `cosec-kafka` have `cosec-control` in
+  their API, for the control plane's ports; their POMs mark it `provided`, so Maven does not bring `cosec-control`, or
+  through it `cosec-runtime`, to run time with either. An application that uses the control plane adds
+  `cosec-control` itself.
+
+`cosec-dependencies`, the platform CoSec's own build compiles against, is not published from 8.0 on ([Upgrading](../operations/upgrading.md#from-8-0-0-alpha-4)).
 
 ## Where to go next
 

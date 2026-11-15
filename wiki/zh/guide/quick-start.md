@@ -9,7 +9,7 @@ description: "用 CoSec 保护一个 Spring Boot 服务：从添加依赖到看�
 
 ## 前提条件 {#prerequisites}
 
-- JDK 21 或更高版本，以及一个用 Gradle 构建的 Spring Boot 4 项目。
+- JDK 21 或更高版本，以及一个用 Gradle 构建的 Spring Boot 4.1 项目。本快速入门使用的 `cosec-cocache` 需要 CoCache 8：把它加入基于 CoCache 4 的项目之前，请先看[CoSec 对构建的要求](./introduction.md#what-cosec-needs-from-your-build)。
 - 一个位于 `localhost:6379`、`maxmemory-policy` 为 `noeviction`（Redis 的默认值）的 Redis。CoSec 把策略文档保存在 Redis 中，Redis 可能淘汰它们时拒绝启动。例如：
 
   ```bash

@@ -84,11 +84,11 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 把客户端所在地区作为外部属性 | `cosec-ip2region` | |
 | 来自 CosId 5 的请求 id、令牌 id 和变更 id | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
-“同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。使用 Gradle 时，CoSec 模块会带上为这些库提供版本的 platform，CosId 除外：CoSec 的 platform 不设定它的版本，由应用自己给出；Maven 不会传递 platform，需要导入 `me.ahoo.cosec:cosec-dependencies`，或自己写明版本。
+“同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。请像构建里的其他库一样给出它们的版本：CoSec 不管理它们（见[CoSec 对构建的要求](#what-cosec-needs-from-your-build)）。
 
 已开启的功能所需的模块会在启动时检查（STA-1）：以下情况应用无法启动，报错信息会给出要添加的制品——Spring MVC 宿主缺少 `cosec-webmvc`；WebFlux 宿主缺少 `cosec-webflux`；Spring Cloud Gateway 宿主缺少 `cosec-gateway`（即使 `cosec.enabled=false`）；`cosec.api-key.store=redis` 缺少 `cosec-cocache`；`cosec.audit.kafka.delivery=required` 缺少 `cosec-kafka`；`cosec.cosid.generator` 缺少 `cosec-cosid`（[故障排查](../operations/troubleshooting.md#startup-fails-on-a-missing-module)）。
 
-starter 始终引入 `cosec-runtime`（协程请求 Pipeline、快照与令牌校验）、`cosec-document`（策略文档、路由映射及其格式）、`cosec-spi`（扩展点）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）、`cosec-login`（登录与签发令牌）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐所有已发布模块的版本。
+starter 始终引入 `cosec-runtime`（协程请求 Pipeline、快照与令牌校验）、`cosec-document`（策略文档、路由映射及其格式）、`cosec-spi`（扩展点）、`cosec-engine` 和 `cosec-model`（纯函数决策引擎）、`cosec-api`（公共契约）、`cosec-annotations`（每个 `@OptIn(ExperimentalCoSecApi::class)` 导入的稳定性标记）、`cosec-login`（登录与签发令牌）以及 `cosec-jwt`（JWT 令牌）。`cosec-bom` 用于对齐应用可以依赖的 CoSec 模块的版本。
 
 `cosec-testkit` 是测试依赖：它用 JUnit 5 针对你自己的策略文档运行场景，方式与 CoSec 的一致性测试套件相同（[策略测试](../policies/testing.md)）。
 
@@ -98,6 +98,24 @@ starter 始终引入 `cosec-runtime`（协程请求 Pipeline、快照与令牌�
 - `cosec-gateway-server` 是由这些模块构建的、开箱即用的网关：直接部署它，不要依赖它（见[部署](../operations/deployment.md)）。
 
 不使用 Spring Boot 时，用 `Pipeline.builder(authenticator, store)` 在你的文档存储之上构建一个 `Pipeline`，在你自己的传输层中调用它。构建器是 `@ExperimentalCoSecApi`：每加一个端口它就多一个方法，可能在次版本中改变。要用真实管道测试你的代码，请使用 `PipelineFixture`（`cosec-testkit`）。见[扩展 CoSec](../architecture/extending.md)和[测试策略](../policies/testing.md#testing-your-code-against-a-real-pipeline)。
+
+## CoSec 对构建的要求 {#what-cosec-needs-from-your-build}
+
+这里是唯一说明应用的构建要为 CoSec 提供什么、加入 CoSec 会改变构建中什么的地方。
+
+- **JDK 21 或更高版本。**
+- **Spring Boot 4.1。** CoSec 在 4.1 的某一个补丁版本上构建和测试。每个使用 Spring 或 Spring Boot 的模块都在自己的元数据里写明该版本的各个版本号，作为它需要的最低版本（Gradle 模块元数据里是 `requires`，POM 里是普通版本）；确切的数字在那里，不在本页。请使用该版本或更新的版本。使用较旧 4.1.x 的应用，在 Gradle 自带的 platform 支持下（Spring Boot BOM 的 `platform(...)`），CoSec 用到的 Spring 和 Spring Boot 模块会被提升到该版本，其余的保持不变。使用 Maven，或 Spring 的依赖管理插件时，由应用导入的 Spring Boot BOM 决定版本，所以保持应用自己的版本。
+- **Kotlin 2。** CoSec 用 Kotlin 2 编写，`kotlin-stdlib` 会像任何库一样被提升到它构建时的版本。
+- **CoCache 8，仅在使用 `cosec-cocache` 时。** CoCache 8 与 CoCache 4 的 Maven 坐标相同（`me.ahoo.cocache:cocache-core`），包名却不同（`me.ahoo.cocache`，而不是 `me.ahoo.cache`），所以两者不能共存于同一个类路径。应用自身代码或所用框架基于 CoCache 4 时，不能添加 `cosec-cocache`。其他模块不需要 CoCache。
+
+模块对你的构建做什么：
+
+- **没有任何 CoSec 模块导入 platform。** 它的 POM 和 Gradle 模块元数据只写明它需要的库及各自的版本，别无其他：没有 Spring Boot、Spring Cloud 或 CoCache 的 BOM，也没有测试或构建工具。加入 `cosec-login` 只会改变 `cosec-login` 所需之物的版本，构建中的其他东西都不变。
+- **模块写明的版本是最低版本，绝不是严格版本。** 应用有更新的版本时保持它。
+- **`cosec-bom` 只对齐 CoSec 自己的模块。** 它列出应用可以依赖的 CoSec 模块（命令行工具 `cosec-migrate` 不是），不管理任何第三方版本。导入它可以让每个 CoSec 模块使用同一个版本，也可以自己给每个模块写同一个版本。
+- **只用于编译的依赖不会被带上。** `cosec-cocache` 和 `cosec-kafka` 的 API 中有 `cosec-control`，用于控制面的端口；它们的 POM 把它标为 `provided`，所以 Maven 不会因这两个模块而把 `cosec-control`（以及经由它的 `cosec-runtime`）带到运行时。使用控制面的应用自己添加 `cosec-control`。
+
+CoSec 自己的构建所依据的 platform `cosec-dependencies` 从 8.0 起不再发布（[升级](../operations/upgrading.md#from-8-0-0-alpha-4)）。
 
 ## 下一步 {#where-to-go-next}
 
