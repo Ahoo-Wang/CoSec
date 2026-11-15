@@ -19,6 +19,12 @@ builder (`memberships`, `attributes`, `listener`, `rateLimiter`, `ids`), and cal
 request. The builder is `@ExperimentalCoSecApi` ([Stability levels](#stability-levels)); tests get a real pipeline from
 `PipelineFixture` (`cosec-testkit`).
 
+Extension points are implemented in Kotlin. The data plane's ports are `suspend` functions, and the ids (`TenantId`,
+`AppId`, `PrincipalId`) are value classes, so a method with one in its signature has a mangled JVM name
+(`memberships-hPxUw84`) that Java cannot declare. A Java application configures the starter or calls the builder, and
+writes its implementations of CoSec's ports in Kotlin. Durations, instants and clocks in public and SPI signatures are
+`java.time`'s, never `kotlin.time`'s (`KotlinTimeSignatureTest`).
+
 | Extension point | Module, package | Implement it to | The starter takes |
 |---|---|---|---|
 | `Authenticator` | `cosec-spi`, `spi.authn` | Accept another kind of credential, or replace token and API key authentication. | one bean, replacing the built-in one |
@@ -280,7 +286,7 @@ score, the client's region) comes from an `AttributeProvider`:
 class DirectoryAttributeProvider(private val directory: DirectoryClient) : AttributeProvider {
     override val attributes = listOf(AttributeDeclaration("ext.directory.department", AttributeType.STRING))
 
-    override val timeout: Duration = 200.milliseconds // kotlin.time; null uses cosec.authorization.attributes.timeout
+    override val timeout: Duration = Duration.ofMillis(200) // java.time; null uses cosec.authorization.attributes.timeout
 
     override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
         if (!request.subject.authenticated) {

@@ -26,7 +26,9 @@ import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
-import kotlin.time.Duration
+import java.time.Duration
+import kotlin.time.toJavaDuration
+import kotlin.time.toKotlinDuration
 
 /**
  * Writes each decision event to [topic] as its audit record (RFC 0006 §9.5.3): the key is `[tenantId, principalId]`
@@ -51,7 +53,7 @@ class KafkaAuditListener(
     override val name: String = NAME,
     queueCapacity: Int = DEFAULT_QUEUE_CAPACITY,
     /** `cosec.observability.listener.drain-timeout`: how long [destroy] waits for the sends this listener holds. */
-    private val drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT,
+    private val drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT.toJavaDuration(),
 ) : DecisionListener,
     DisposableBean {
     init {
@@ -62,7 +64,7 @@ class KafkaAuditListener(
         "Kafka audit queue of [$topic]",
         THREAD_NAME,
         queueCapacity,
-        drainTimeout,
+        drainTimeout.toKotlinDuration(),
     )
 
     override suspend fun onDecision(event: DecisionEvent) {

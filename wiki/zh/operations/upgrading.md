@@ -35,6 +35,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
       .build()
   check(pipeline.awaitDocuments().isEmpty()) // 在第一个请求之前
   ```
+- **公共与 SPI 签名中的时长都是 `java.time.Duration`。** `AttributeProvider.timeout` 是 `java.time.Duration?`：自己的提供方原来写 `200.milliseconds` 的地方，改为使用 `java.time.Duration` 的 `override val timeout: Duration? = Duration.ofMillis(200)`。`CoCacheMembershipProvider.DEFAULT_FILL_TIMEOUT`，以及 `KafkaAuditListener` 和 `KafkaChangeListener` 的 `drainTimeout`，同样使用 `java.time.Duration`；原来传入 `kotlin.time.Duration` 的代码用 `toJavaDuration()` 转换。属性、默认值和行为都不变。
 - **`CompositeToken` 是 `cosec-api` 中的 final 类，`SimpleCompositeToken` 已删除。** 用 `CompositeToken(accessToken, refreshToken)` 构造。它按值相等，没有 `copy` 或 `componentN`。记录令牌的日志不再打印令牌：它的字符串是 `CompositeToken(accessToken=***, refreshToken=***)`。登录或刷新端点返回的 JSON 不变（`{"accessToken":…,"refreshToken":…}`）。`RefreshTokenCredentials` 自己声明 `accessToken` 和 `refreshToken`，不再是 `CompositeToken`：应用实现的凭证不继承一个值。你的刷新凭证类像以前一样覆盖这两个属性：
 
   ```kotlin

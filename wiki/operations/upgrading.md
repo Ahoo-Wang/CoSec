@@ -82,6 +82,11 @@ and have to be provisioned again.
       .build()
   check(pipeline.awaitDocuments().isEmpty()) // before the first request
   ```
+- **Durations in public and SPI signatures are `java.time.Duration`.** `AttributeProvider.timeout` is a
+  `java.time.Duration?`: a provider of your own writes `override val timeout: Duration? = Duration.ofMillis(200)` with
+  `java.time.Duration`, where it wrote `200.milliseconds`. `CoCacheMembershipProvider.DEFAULT_FILL_TIMEOUT` and the
+  `drainTimeout` of `KafkaAuditListener` and `KafkaChangeListener` take a `java.time.Duration` too; code that passed a
+  `kotlin.time.Duration` converts it with `toJavaDuration()`. No property, default or behaviour changes.
 - **`CompositeToken` is a final class in `cosec-api`, and `SimpleCompositeToken` is removed.** Build one with
   `CompositeToken(accessToken, refreshToken)`. It is equal by value and has no `copy` or `componentN`. Logging a token no
   longer prints it: its string is `CompositeToken(accessToken=***, refreshToken=***)`. The JSON a login or refresh

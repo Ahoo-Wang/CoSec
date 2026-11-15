@@ -116,7 +116,7 @@ public final class me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider : 
 	public fun <init> (Lme/ahoo/cosec/runtime/attribute/BlacklistSource;)V
 	public fun fetch (Lme/ahoo/cosec/spi/attribute/AttributeRequest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getAttributes ()Ljava/util/List;
-	public fun getTimeout-FghU774 ()Lkotlin/time/Duration;
+	public fun getTimeout ()Ljava/time/Duration;
 	public fun toString ()Ljava/lang/String;
 }
 

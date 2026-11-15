@@ -74,7 +74,7 @@ class ExternalAttributesPipelineTest {
             AttributeDeclaration(IN_FENCE, AttributeType.BOOL),
             AttributeDeclaration(ZONE, AttributeType.STRING),
         )
-        override val timeout = 50.milliseconds
+        override val timeout: java.time.Duration = java.time.Duration.ofMillis(50)
 
         override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
             calls.incrementAndGet()
