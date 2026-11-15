@@ -486,8 +486,8 @@ isolate between tenants is in [Tenant isolation](../guide/security-model.md#tena
 Many identity services sign a user in in two steps. The first proves the user (a password, a code sent by SMS or mail)
 and issues a token for no tenant and no app: nobody has chosen either yet. The second presents that token and names the
 tenant, and the app, to work in; its answer is the token every later request carries. Changing tenant later, or app
-within a tenant, is the same call. `SwitchTenantAuthentication` is that second step. You give it the `TokenVerifier`
-bean, your credentials class, and a `TenantSwitch`: it checks that the user belongs to the target tenant and has the app
+within a tenant, is the same call. `SwitchTenantAuthentication` is that second step. You give it the `TokenFamilies`
+and `TokenRevocation` beans, your credentials class, and a `TenantSwitch`: it checks that the user belongs to the target tenant and has the app
 there (throw to refuse), and answers what the user holds there, looked up for that tenant and app. That is a
 `TenantMembership` of the user's roles, policies and attributes, or `TenantMembership.fromProvider()` when your
 `MembershipProvider` answers for the tenant. Your credentials class implements `SwitchTenantCredentials` and carries
@@ -499,13 +499,12 @@ class SelectTenant(
     override val targetTenantId: String,
     override val targetAppId: String?,
     override val context: SecurityContext,
-    override val accessToken: String,
     val deviceId: String,
 ) : SwitchTenantCredentials
 
 @Bean
-fun selectTenantAuthentication(tokenVerifier: TokenVerifier, members: Members) =
-    SwitchTenantAuthentication(tokenVerifier, SelectTenant::class.java) { credentials ->
+fun selectTenantAuthentication(families: TokenFamilies, revocation: TokenRevocation, members: Members) =
+    SwitchTenantAuthentication(families, revocation, SelectTenant::class.java) { credentials ->
         val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
         val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
             "Not a member of this tenant's $app."
@@ -517,12 +516,9 @@ fun selectTenantAuthentication(tokenVerifier: TokenVerifier, members: Members) =
 suspend fun select(
     @PathVariable tenant: String,
     @PathVariable app: String,
-    @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
     @RequestHeader("CoSec-Device-Id") deviceId: String,
     security: SecurityContext,
-): CompositeToken = authentication.authenticateAsToken(
-    SelectTenant(tenant, app, security, authorization.removePrefix("Bearer "), deviceId),
-)
+): CompositeToken = authentication.authenticateAsToken(SelectTenant(tenant, app, security, deviceId))
 ```
 
 The new token has the previous principal's id, the target tenant and only that membership: roles belong to a tenant,
@@ -530,9 +526,61 @@ so none of the previous token's roles, policies or attributes reach the new one 
 one of another). **Its app is the one your `TenantSwitch` answers** (`TenantMembership.app`), which must be one a
 token's `aud` can carry; without one it keeps the previous token's app (`SCP-12`). `targetAppId` is what the user asks
 for, and reaches the token only through your answer: a user cannot get a token for an app by naming it, only when your
-code has checked that the user has it. The switch reads `auth_time` from `SwitchTenantCredentials.accessToken`, the
-token of the request asking, which must be the request's principal's: the new token starts a session of its own, which
-keeps that login time, so it ends when the previous one would. The user did not sign in again.
+code has checked that the user has it.
+
+**The switch issues from the request's session**, as CoSec's token proved it to the pipeline: the `context` must be the
+one the pipeline made for the request, and nothing in your credentials names the session. The new token starts a
+session of its own, which keeps that session's login time, so it ends when the previous one would: the user did not
+sign in again (`IDN-17`). It issues only while that session is live (`IDN-22`), and checks that before it asks your
+`TenantSwitch`:
+
+- its token's revocations are read again, strictly: while the revocation store cannot be read, the switch answers 503,
+  even though the request itself was let through (PIP-7, [Logout and revocation](#logout-and-revocation));
+- its session is still the principal's and was not ended: a logout, or a pair presented again after a refresh
+  ([Refreshing tokens](#refreshing-tokens)), ends it, and an access token of it then switches into nothing, though it is
+  still valid until it expires (`token-revoked`); a session past its lifetime is `token-expired`.
+
+A request whose credential is not CoSec's token, an API key say, has no session and cannot switch (`token-invalid`).
+The session switched from is left as it is: a logout ends the pair it is given, not the one it was switched from. To
+end every session of a user, [revoke the principal](#revoking-every-token-of-a-principal). A service behind a gateway
+cannot switch yet: the identity the gateway forwards carries no session.
+
+**Testing a switch.** A switch needs the context the pipeline made for a request with a token of a live session, so a
+test cannot build one by hand. `PermittedRequest.withToken` (`cosec-testkit`) answers it: issue a token with your own
+login, over in-memory token families, and the kit runs it through CoSec's own token authenticator. Use the same
+families for the switch:
+
+```kotlin
+class SelectTenantTest {
+    private val algorithm = Algorithm.HMAC256("test-secret")
+    private val verifier = JwtTokenVerifier(algorithm)
+    private val families = TokenFamilies(InMemoryTokenFamilyStore())
+    private val revocation = TokenRevocation(RevocationReader.NONE)
+    private val members = testMembers() // your own directory, alice a clerk of globex's order
+    private val login = TokenCompositeAuthentication.of(
+        listOf(passwordAuthentication, SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members)),
+        JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, algorithm),
+        families,
+    )
+
+    @Test
+    fun `a member of globex switches into it with the app she has there`() = runTest {
+        val pair = login.authenticateAsToken(PasswordCredentials("alice", "secret"))
+        val request = PermittedRequest.withToken(pair.accessToken, verifier)
+
+        val switched = login.authenticateAsToken(SelectTenant("globex", "order", request, deviceId = "phone"))
+
+        val token = verifier.verify(switched.accessToken)
+        token.tenant.assert().isEqualTo("globex")
+        token.app.assert().isEqualTo("order")
+    }
+}
+```
+
+`withToken` throws when the verifier refuses the token, and reads revocations from the `RevocationReader` you pass
+(none revoked by default). A session you end in the test (`families.end`) gives a context from which the switch issues
+nothing, as in production. The kit only makes the context: to test what a request is allowed, use `PipelineFixture` and
+[`PolicyTestKit`](../policies/testing.md).
 
 ## Apps
 

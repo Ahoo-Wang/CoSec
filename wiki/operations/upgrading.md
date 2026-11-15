@@ -1019,6 +1019,17 @@ compatibility promise. **Every token issued before this version declares no app,
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **Security: a tenant switch no longer issues from a revoked or ended session.** From 8.0.0-alpha.1 to
+  8.0.0-alpha.4, a switch read no revocation itself: while the revocation store could not be read, which the request
+  path then read as "not revoked", a logged-out token, or one of a revoked principal, could be switched into a new token
+  that no revocation names. Sessions came after 8.0.0-alpha.4, and until this change a switch also started a live
+  session from a token whose own session was revoked: by a pair presented again after a refresh (`IDN-16`), whose access
+  tokens stay valid for up to `cosec.jwt.token-validity.access` (10 minutes), or by a logout. Whoever copied a pair and
+  refreshed first could so hold a session until the user's would have ended, up to `cosec.jwt.session.lifetime`. That
+  was in no preview. A switch now issues only from a live session and reads revocations strictly, in the one check a
+  refresh makes too (`IDN-22`, `IDN-14`): from a dead session it answers `token-revoked` or `token-expired`, and 503
+  while a store cannot be read. A token a preview's switch issued during an outage of the revocation store is not
+  revoked by the revocation it escaped; if one may have been, [revoke the principal](../integration/authentication.md#revoking-every-token-of-a-principal).
 - **Security: a converted 7.x "every action" no longer grants the control plane.** From 8.0.0-alpha.1 to
   8.0.0-alpha.4, `convert` wrote an ALLOW of every 7.x action as `"action": "*"`, which also matches every
   control-plane action (`cosec:*`) and every action of a check in code. A converted global policy such as "signed-in
@@ -1141,12 +1152,17 @@ and have to be provisioned again.
 - **A tenant switch is `SwitchTenantAuthentication` with a `TenantSwitch`, and it can set the app.**
   `AbstractSwitchTenantAuthentication` is removed. Where you extended it and implemented
   `switchTenant(targetTenantId, previous)`, declare
-  `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java) { credentials -> … }` as a bean: the switch
-  gets your own credentials class (`credentials.targetTenantId`, `credentials.context`, and anything else it carries),
-  and answers a `TenantMembership` as before. `SwitchTenantCredentials` gains `targetAppId`, the app the user asks for,
-  null by default; `TenantMembership` gains `app`. The new token is for the app your switch answers, else the previous
-  token's (`SCP-12`): a switch that answers none behaves as before, and a user never gets an app by naming it.
-  See [Switching tenant and app](../integration/authentication.md#switching-tenant-and-app).
+  `SwitchTenantAuthentication(families, revocation, YourCredentials::class.java) { credentials -> … }` as a bean, with
+  the starter's `TokenFamilies` and `TokenRevocation` beans: the switch gets your own credentials class
+  (`credentials.targetTenantId`, `credentials.context`, and anything else it carries), and answers a `TenantMembership`
+  as before. `SwitchTenantCredentials` gains `targetAppId`, the app the user asks for, null by default, and loses
+  `accessToken`: the switch issues from the session of the request, which the `context` the pipeline made carries
+  (`IDN-22`), so stop passing the token text (and parsing `Authorization` for it). `TenantMembership` gains `app`. The
+  new token is for the app your switch answers, else the previous token's (`SCP-12`): a switch that answers none behaves
+  as before, and a user never gets an app by naming it. `TokenSubject.authTime` is removed, and `TokenFamilies.rotate`
+  and `TokenFamilies.startAt` (the former `start(…, authTime)`) are CoSec's own (`@InternalCoSecApi`): an issue from an
+  earlier login goes through the check of a live session. A service behind a gateway cannot switch until the identity
+  it is forwarded carries the session. See [Switching tenant and app](../integration/authentication.md#switching-tenant-and-app).
 - **A refresh can re-read the user.** `RefreshTokenAuthentication` takes an optional `MembershipRefresh`, which
   answers what the user holds now; the class keeps the verification, the revocation check, the rotation and the session.
   Where you wrote an `Authentication` of your own to re-read the user on refresh, pass a `MembershipRefresh` instead.
