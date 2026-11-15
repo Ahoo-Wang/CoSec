@@ -33,7 +33,9 @@ import kotlin.time.Duration
  * queueing without bound. A send whose caller stopped waiting (it timed out) before its turn is dropped, not sent.
  *
  * [close] stops taking sends and waits up to [drainTimeout] for those queued, then for the broker's answers to those
- * made; at the bound the queued sends are dropped and the one in progress is interrupted, and it says so.
+ * made; at the bound the queued sends are dropped and the one in progress is interrupted, and it says so. A dropped
+ * send ends: its answer fails, saying the sender was closed, so whoever waits for it and its failure callback get an
+ * outcome and it leaves the unanswered. One already handed to the broker is not undone.
  */
 internal class BoundedSender(
     /** How messages name it: `Kafka audit queue of [<topic>]`. */
@@ -49,14 +51,18 @@ internal class BoundedSender(
     /** The sends the broker has not answered yet: what [close] waits for once the queue is empty. */
     private val inFlight: MutableSet<CompletableFuture<*>> = ConcurrentHashMap.newKeySet()
 
+    /** How many sends are unanswered, for the tests. */
+    internal val unanswered: Int get() = inFlight.size
+
     /**
      * Queues [send] and returns its answer, without waiting for it.
      *
      * @throws IllegalStateException when the queue is full
      */
     fun send(send: () -> CompletableFuture<*>): Queued {
-        val queued = try {
-            CompletableFuture.supplyAsync(send, executor)
+        val queued = CompletableFuture<CompletableFuture<*>>()
+        try {
+            executor.execute(Task(queued, send))
         } catch (e: RejectedExecutionException) {
             throw IllegalStateException("The $queue is full.", e)
         }
@@ -64,6 +70,30 @@ internal class BoundedSender(
         inFlight += sent
         sent.whenComplete { _, _ -> inFlight -= sent }
         return Queued(queued, sent)
+    }
+
+    /**
+     * A queued send, tied to its [queued] result: the executor hands back this task when it drops it, so [drop] can end
+     * the result the task will never complete.
+     */
+    private class Task(
+        private val queued: CompletableFuture<CompletableFuture<*>>,
+        private val send: () -> CompletableFuture<*>,
+    ) : Runnable {
+        @Suppress("TooGenericExceptionCaught")
+        override fun run() {
+            // A caller that stopped waiting cancelled it: the send is not made.
+            if (queued.isDone) return
+            try {
+                queued.complete(send())
+            } catch (e: Throwable) {
+                queued.completeExceptionally(e)
+            }
+        }
+
+        fun drop(queue: String) {
+            queued.completeExceptionally(IllegalStateException("The $queue was closed before this record was sent."))
+        }
     }
 
     /** One send: [sent] completes with the broker's answer. */
@@ -83,7 +113,9 @@ internal class BoundedSender(
     fun close() {
         executor.shutdown()
         if (!drained()) {
-            val dropped = executor.shutdownNow().size
+            val tasks = executor.shutdownNow()
+            tasks.forEach { (it as? Task)?.drop(queue) }
+            val dropped = tasks.size
             log.warn {
                 "The $queue did not drain within $drainTimeout: $dropped queued records are dropped and " +
                     "${inFlight.size} sends are unanswered."

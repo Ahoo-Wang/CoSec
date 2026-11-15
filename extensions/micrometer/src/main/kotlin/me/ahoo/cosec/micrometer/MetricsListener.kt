@@ -88,6 +88,7 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
         Reason.DEADLINE_EXCEEDED -> "deadline"
         else -> when (event.outcome.cause) {
             is Cause.SourceUnavailable, is Cause.NotLoaded -> "source_unavailable"
+            is Cause.DocumentInvalid -> "document_invalid"
             is Cause.MissingPolicies, is Cause.AmbiguousPolicy -> "missing_policies"
             is Cause.MembershipUnavailable -> "membership"
             is Cause.AttributeUnavailable -> "attribute"

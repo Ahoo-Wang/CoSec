@@ -1,0 +1,19 @@
+# Rule: MIG-2
+# Mutant: the report no longer records an ALLOW of every 7.x action (C8), so an operator is not told that a route map takes its routes out of http:*
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.ReportMessagesTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
+index a9643525..c4ae7c47 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
+@@ -103,9 +103,9 @@ internal class StatementTranslator(
+             return
+         }
+         if (deny && action?.isAll == true) {
+             scan.everyActionDenied(location)
+         } else if (!deny && action == MatcherTranslator.HTTP_ACTION) {
+-            scan.everyActionAllowed(location)
++            Unit
+         }
+     }
+ 

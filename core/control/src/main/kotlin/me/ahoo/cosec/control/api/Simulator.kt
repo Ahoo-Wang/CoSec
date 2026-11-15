@@ -329,11 +329,11 @@ private fun comparable(decision: Decision): Any = when (decision) {
     is Decision.Indeterminate -> when (val cause = decision.cause) {
         is Cause.MatcherFailed -> listOf(cause::class, cause.at, cause.guard, failure(cause.error))
         is Cause.SourceUnavailable -> listOf(cause::class, cause.document, failure(cause.error))
+        is Cause.DocumentInvalid -> listOf(cause::class, cause.document, cause.revision, failure(cause.error))
         is Cause.BoundaryUnavailable -> listOf(cause::class, cause.boundary, failure(cause.error))
         is Cause.MembershipUnavailable -> listOf(cause::class, failure(cause.error))
         else -> cause
     }
-
     else -> decision
 }
 

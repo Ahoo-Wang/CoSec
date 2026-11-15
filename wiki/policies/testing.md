@@ -170,7 +170,7 @@ tenant to bound what such a document costs. To bound what one caller's calls cos
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
 kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
 document was read is decided as enforcement decided it, with the tenant document at its recorded revision, and the
-revisions it answers with are those it read: no `app` when it read no app document. Its fields and how to find the
+revisions it answers with are those it read: no `app` member when it read no app document, never a `null`. The `version` an `explain` answers with can be sent back as `at`. Its fields and how to find the
 request are in [Checks in code](../integration/checks.md).
 
 ## Changes

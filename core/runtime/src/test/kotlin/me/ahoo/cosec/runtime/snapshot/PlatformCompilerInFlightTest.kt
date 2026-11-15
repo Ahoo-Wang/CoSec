@@ -110,7 +110,8 @@ class PlatformCompilerInFlightTest {
         while (true) {
             val view = views.load(key).join()
             if (view.tenant == null) {
-                (view.unresolved.single() as Cause.SourceUnavailable).document.assert().isEqualTo(DocumentKind.TENANT)
+                // Stored and not compiling against the platform it now has: invalid, not unavailable.
+                (view.unresolved.single() as Cause.DocumentInvalid).document.assert().isEqualTo(DocumentKind.TENANT)
                 return
             }
             check(System.nanoTime() < deadline) { "The recompiled tenant document was not installed." }
