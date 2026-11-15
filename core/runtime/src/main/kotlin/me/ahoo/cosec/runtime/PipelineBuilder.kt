@@ -38,6 +38,7 @@ import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
+import kotlin.time.toKotlinDuration
 
 /**
  * Assembles a [Pipeline] (RFC 0013 §4.3), from [Pipeline.builder]. Every part has a default but the authenticator and
@@ -51,9 +52,11 @@ class PipelineBuilder internal constructor(
     private val snapshots: SuspendingSnapshotSource?,
 ) {
     private val settings = PipelineSettings()
+    private var settingsSet = false
     private var options: PipelineOptions? = null
     private val snapshotSettings = SnapshotSettings()
     private val listenerSettings = ListenerSettings()
+    private var listenerSettingsSet = false
     private var membershipProvider: MembershipProvider? = null
     private val providers = ArrayList<AttributeProvider>()
     private var attributeProviders: AttributeProviders? = null
@@ -68,7 +71,10 @@ class PipelineBuilder internal constructor(
     private var engine: FlatEngine = CoSecFlatEngine
 
     /** The pipeline's timeouts and how it reads credentials. */
-    fun options(block: PipelineSettings.() -> Unit): PipelineBuilder = apply { settings.block() }
+    fun options(block: PipelineSettings.() -> Unit): PipelineBuilder = apply {
+        settings.block()
+        settingsSet = true
+    }
 
     /** How the documents of the store are kept and which are loaded at build. Only for a pipeline over a store. */
     fun snapshots(block: SnapshotSettings.() -> Unit): PipelineBuilder = apply {
@@ -86,7 +92,10 @@ class PipelineBuilder internal constructor(
     fun listener(listener: DecisionListener): PipelineBuilder = apply { listeners += listener }
 
     /** How the listeners given with [listener] are run. */
-    fun listeners(block: ListenerSettings.() -> Unit): PipelineBuilder = apply { listenerSettings.block() }
+    fun listeners(block: ListenerSettings.() -> Unit): PipelineBuilder = apply {
+        listenerSettings.block()
+        listenerSettingsSet = true
+    }
 
     /** Counts the permits of rate limit rules; without one a strict rule refuses (503) and any other is skipped. */
     fun rateLimiter(limiter: RateLimiter): PipelineBuilder = apply { rateLimiter = limiter }
@@ -97,6 +106,7 @@ class PipelineBuilder internal constructor(
     /** The ids of requests without a plain `CoSec-Request-Id` header, and of decision events. */
     fun ids(generator: IdGenerator): PipelineBuilder = apply { ids = generator }
 
+    /** The clock of the pipeline, of its identity issuer and, over a store, of its snapshot source. */
     fun clock(clock: Clock): PipelineBuilder = apply { this.clock = clock }
 
     /** At a gateway: forwards the verified identity in `CoSec-Identity` and strips the client's (RFC 0009 §5). */
@@ -124,7 +134,21 @@ class PipelineBuilder internal constructor(
     @InternalCoSecApi
     fun engine(engine: FlatEngine): PipelineBuilder = apply { this.engine = engine }
 
+    /**
+     * The pipeline. Throws [IllegalStateException] when two inputs say the same thing differently, so that neither is
+     * dropped: a listener given with [listener] beside the host's [DecisionListeners] would never hear a decision.
+     */
     fun build(): Pipeline {
+        check(options == null || !settingsSet) { "Set the options either with options { } or as PipelineOptions." }
+        check(attributeProviders == null || providers.isEmpty()) {
+            "Give the attribute providers either one by one or as AttributeProviders."
+        }
+        check(decisionListeners == null || (listeners.isEmpty() && !listenerSettingsSet)) {
+            "Give the decision listeners either with listener and listeners { } or as DecisionListeners."
+        }
+        check(
+            identity == null || forwarding == null
+        ) { "Forward the identity either with forwardIdentity { } or an issuer." }
         val options = options ?: settings.toOptions()
         val attributes = attributeProviders ?: AttributeProviders(providers.toList())
         val owned = ArrayList<AutoCloseable>()
@@ -134,7 +158,7 @@ class PipelineBuilder internal constructor(
             return assemble(checkNotNull(snapshots), options, attributes, listeners, issuer, owned, null)
         }
         val compiler = PlatformCompiler(attributes.catalog, credentialHeaders = setOf(options.apiKeyHeader))
-        val source = DocumentSnapshots.source(store, compiler, snapshotSettings.toOptions())
+        val source = DocumentSnapshots.source(store, compiler, snapshotSettings.toOptions(), clock)
         compiler.bind(source)
         owned += source
         val prewarm = snapshotSettings.prewarmApps.map { SnapshotKey.App(it) } +
@@ -150,9 +174,9 @@ class PipelineBuilder internal constructor(
         }
         val created = DecisionListeners(
             listeners.toList(),
-            requiredTimeout = listenerSettings.requiredTimeout,
+            requiredTimeout = listenerSettings.requiredTimeout.toKotlinDuration(),
             queueCapacity = listenerSettings.queueCapacity,
-            drainTimeout = listenerSettings.drainTimeout,
+            drainTimeout = listenerSettings.drainTimeout.toKotlinDuration(),
         )
         // Drained before the source closes: the queued events are delivered while their documents are still there.
         owned += AutoCloseable { created.drain() }
