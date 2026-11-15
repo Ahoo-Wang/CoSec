@@ -127,6 +127,10 @@ class DecisionListeners(
     @Volatile
     private var stopped = false
 
+    /** Tests only: runs between a publish's check of the queue and its offer, to close the listeners in that gap. */
+    @Volatile
+    internal var beforeOffer: (() -> Unit)? = null
+
     /** Conflated: a burst of drops wakes the reporter once, and the request's thread never waits on it. */
     private val drops = Channel<Unit>(Channel.CONFLATED)
 
@@ -232,6 +236,7 @@ class DecisionListeners(
                 dropped(queued, closed)
                 continue
             }
+            beforeOffer?.invoke()
             queued.events.offer(event)
             if (closed) {
                 if (queued.events.remove(event)) {

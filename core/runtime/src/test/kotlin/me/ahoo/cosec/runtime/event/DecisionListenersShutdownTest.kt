@@ -142,10 +142,34 @@ class DecisionListenersShutdownTest {
     }
 
     /**
-     * Requests published while the listeners close: every event is delivered or dropped, once. Without the check after
-     * the offer, an event offered as the consumer leaves stays queued, neither delivered nor counted.
+     * The gap the check after the offer closes: a publish that found the queue open offers only after the listeners
+     * stopped and emptied their queues. Its event is dropped and counted, never left queued for no one.
      */
-    @RepeatedTest(50)
+    @Test
+    fun `an event offered after the listeners stopped is dropped and counted, not left queued`() {
+        val delivered = AtomicInteger()
+        val listener = object : DecisionListener {
+            override val name = "counting"
+
+            override suspend fun onDecision(event: DecisionEvent) {
+                delivered.incrementAndGet()
+            }
+        }
+        val listeners = DecisionListeners(listOf(listener))
+        val pipeline = pipeline(listeners)
+        listeners.beforeOffer = {
+            listeners.beforeOffer = null
+            listeners.cancel()
+        }
+
+        pipeline.request()
+
+        delivered.get().assert().isEqualTo(0)
+        listeners.stats.single().dropped.assert().describedAs("the event offered after the stop").isEqualTo(1)
+    }
+
+    /** Requests published while the listeners drain, at full speed: every event is delivered or dropped, once. */
+    @RepeatedTest(20)
     fun `events published while the listeners drain are each delivered or dropped, once`() {
         val delivered = AtomicInteger()
         val listener = object : DecisionListener {
