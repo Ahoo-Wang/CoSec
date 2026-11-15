@@ -4,31 +4,65 @@ public final class me/ahoo/cosec/runtime/AuthorizationChecker {
 	public final fun decide (Lme/ahoo/cosec/api/context/SecurityContext;Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
-public final class me/ahoo/cosec/runtime/Pipeline : me/ahoo/cosec/runtime/http/RequestGate {
-	public fun <init> (Lme/ahoo/cosec/runtime/PipelineComponents;)V
+public final class me/ahoo/cosec/runtime/GatewayIdentitySettings {
+	public final fun getClock ()Ljava/time/Clock;
+	public final fun getIds ()Lme/ahoo/cosec/spi/id/IdGenerator;
+	public final fun getMaxAge ()Ljava/time/Duration;
+	public final fun getMaxBytes ()I
+	public final fun getSkew ()Ljava/time/Duration;
+	public final fun setClock (Ljava/time/Clock;)V
+	public final fun setIds (Lme/ahoo/cosec/spi/id/IdGenerator;)V
+	public final fun setMaxAge (Ljava/time/Duration;)V
+	public final fun setMaxBytes (I)V
+	public final fun setSkew (Ljava/time/Duration;)V
+}
+
+public final class me/ahoo/cosec/runtime/IdentityForwardingSettings {
+	public final fun getClaims ()Ljava/util/Set;
+	public final fun getMaxBytes ()I
+	public final fun setClaims (Ljava/util/Set;)V
+	public final fun setMaxBytes (I)V
+}
+
+public final class me/ahoo/cosec/runtime/ListenerSettings {
+	public final fun getDrainTimeout-UwyO8pc ()J
+	public final fun getQueueCapacity ()I
+	public final fun getRequiredTimeout-UwyO8pc ()J
+	public final fun setDrainTimeout-LRDsOJo (J)V
+	public final fun setQueueCapacity (I)V
+	public final fun setRequiredTimeout-LRDsOJo (J)V
+}
+
+public final class me/ahoo/cosec/runtime/Pipeline : java/lang/AutoCloseable, me/ahoo/cosec/runtime/http/RequestGate {
+	public static final field Companion Lme/ahoo/cosec/runtime/Pipeline$Companion;
+	public final fun awaitDocuments (Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public fun close ()V
 	public fun evaluate (Lme/ahoo/cosec/runtime/http/HttpFacts;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
-public final class me/ahoo/cosec/runtime/PipelineComponents {
-	public fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/document/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;Lme/ahoo/cosec/spi/membership/MembershipProvider;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;Lme/ahoo/cosec/runtime/PipelineOptions;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/event/DecisionListeners;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;Lme/ahoo/cosec/document/route/RouteMap;Lme/ahoo/cosec/runtime/identity/IdentityIssuer;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getAttributes ()Lme/ahoo/cosec/runtime/attribute/AttributeProviders;
-	public final fun getAuthenticator ()Lme/ahoo/cosec/spi/authn/Authenticator;
-	public final fun getClock ()Ljava/time/Clock;
-	public final fun getIdGenerator ()Lme/ahoo/cosec/spi/id/IdGenerator;
-	public final fun getIdentity ()Lme/ahoo/cosec/runtime/identity/IdentityIssuer;
-	public final fun getListeners ()Lme/ahoo/cosec/runtime/event/DecisionListeners;
-	public final fun getMembershipProvider ()Lme/ahoo/cosec/spi/membership/MembershipProvider;
-	public final fun getOptions ()Lme/ahoo/cosec/runtime/PipelineOptions;
-	public final fun getRateLimiter ()Lme/ahoo/cosec/spi/ratelimit/RateLimiter;
-	public final fun getRoutes ()Lme/ahoo/cosec/document/route/RouteMap;
-	public final fun getSnapshots ()Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;
+public final class me/ahoo/cosec/runtime/Pipeline$Companion {
+	public final fun behindGateway (Lkotlin/jvm/functions/Function1;)Lme/ahoo/cosec/runtime/http/RequestGate;
+	public static synthetic fun behindGateway$default (Lme/ahoo/cosec/runtime/Pipeline$Companion;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/http/RequestGate;
+	public final fun builder (Lme/ahoo/cosec/spi/authn/Authenticator;Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;)Lme/ahoo/cosec/runtime/PipelineBuilder;
 }
 
-public final class me/ahoo/cosec/runtime/PipelineOptions {
-	public fun <init> ()V
-	public synthetic fun <init> (JJJJJZZLjava/lang/String;Lme/ahoo/cosec/engine/TraceLevel;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (JJJJJZZLjava/lang/String;Lme/ahoo/cosec/engine/TraceLevel;Lkotlin/jvm/internal/DefaultConstructorMarker;)V
+public final class me/ahoo/cosec/runtime/PipelineBuilder {
+	public final fun attributes ([Lme/ahoo/cosec/spi/attribute/AttributeProvider;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun build ()Lme/ahoo/cosec/runtime/Pipeline;
+	public final fun clock (Ljava/time/Clock;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun forwardIdentity (Lkotlin/jvm/functions/Function1;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public static synthetic fun forwardIdentity$default (Lme/ahoo/cosec/runtime/PipelineBuilder;Lkotlin/jvm/functions/Function1;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun ids (Lme/ahoo/cosec/spi/id/IdGenerator;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun listener (Lme/ahoo/cosec/runtime/event/DecisionListener;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun listeners (Lkotlin/jvm/functions/Function1;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun memberships (Lme/ahoo/cosec/spi/membership/MembershipProvider;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun options (Lkotlin/jvm/functions/Function1;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun rateLimiter (Lme/ahoo/cosec/spi/ratelimit/RateLimiter;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun routes (Lme/ahoo/cosec/document/route/RouteMap;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+	public final fun snapshots (Lkotlin/jvm/functions/Function1;)Lme/ahoo/cosec/runtime/PipelineBuilder;
+}
+
+public final class me/ahoo/cosec/runtime/PipelineSettings {
 	public final fun getAllowCookieToken ()Z
 	public final fun getAllowQueryToken ()Z
 	public final fun getApiKeyHeader ()Ljava/lang/String;
@@ -38,18 +72,40 @@ public final class me/ahoo/cosec/runtime/PipelineOptions {
 	public final fun getRateLimitTimeout-UwyO8pc ()J
 	public final fun getTimeout-UwyO8pc ()J
 	public final fun getTraceLevel ()Lme/ahoo/cosec/engine/TraceLevel;
+	public final fun setAllowCookieToken (Z)V
+	public final fun setAllowQueryToken (Z)V
+	public final fun setApiKeyHeader (Ljava/lang/String;)V
+	public final fun setAttributeTimeout-LRDsOJo (J)V
+	public final fun setAuthenticationTimeout-LRDsOJo (J)V
+	public final fun setMembershipTimeout-LRDsOJo (J)V
+	public final fun setRateLimitTimeout-LRDsOJo (J)V
+	public final fun setTimeout-LRDsOJo (J)V
+	public final fun setTraceLevel (Lme/ahoo/cosec/engine/TraceLevel;)V
 }
 
-public final class me/ahoo/cosec/runtime/attribute/AttributeProviders {
-	public static final field Companion Lme/ahoo/cosec/runtime/attribute/AttributeProviders$Companion;
-	public fun <init> (Ljava/util/List;)V
-	public final fun declares (Ljava/lang/String;)Z
-	public final fun isEmpty ()Z
-	public fun toString ()Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/attribute/AttributeProviders$Companion {
-	public final fun getNONE ()Lme/ahoo/cosec/runtime/attribute/AttributeProviders;
+public final class me/ahoo/cosec/runtime/SnapshotSettings {
+	public final fun getColdLoadTimeout ()Ljava/time/Duration;
+	public final fun getCompileThreads ()I
+	public final fun getFailClosedMaxLag ()Ljava/time/Duration;
+	public final fun getFailClosedTenants ()Ljava/util/Set;
+	public final fun getLagEscalate ()Ljava/time/Duration;
+	public final fun getLagWarn ()Ljava/time/Duration;
+	public final fun getMaxApps ()I
+	public final fun getMaxTenants ()I
+	public final fun getPrewarmApps ()Ljava/util/Set;
+	public final fun getPrewarmTenants ()Ljava/util/Set;
+	public final fun getRevalidateInterval ()Ljava/time/Duration;
+	public final fun setColdLoadTimeout (Ljava/time/Duration;)V
+	public final fun setCompileThreads (I)V
+	public final fun setFailClosedMaxLag (Ljava/time/Duration;)V
+	public final fun setFailClosedTenants (Ljava/util/Set;)V
+	public final fun setLagEscalate (Ljava/time/Duration;)V
+	public final fun setLagWarn (Ljava/time/Duration;)V
+	public final fun setMaxApps (I)V
+	public final fun setMaxTenants (I)V
+	public final fun setPrewarmApps (Ljava/util/Set;)V
+	public final fun setPrewarmTenants (Ljava/util/Set;)V
+	public final fun setRevalidateInterval (Ljava/time/Duration;)V
 }
 
 public final class me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider : me/ahoo/cosec/spi/attribute/AttributeProvider {
@@ -225,33 +281,6 @@ public final class me/ahoo/cosec/runtime/event/DecisionListener$DefaultImpls {
 	public static fun getDelivery (Lme/ahoo/cosec/runtime/event/DecisionListener;)Lme/ahoo/cosec/runtime/event/Delivery;
 }
 
-public final class me/ahoo/cosec/runtime/event/DecisionListeners : java/lang/AutoCloseable {
-	public static final field Companion Lme/ahoo/cosec/runtime/event/DecisionListeners$Companion;
-	public static final field DEFAULT_QUEUE_CAPACITY I
-	public synthetic fun <init> (Ljava/util/List;JILkotlinx/coroutines/CoroutineDispatcher;JJILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public synthetic fun <init> (Ljava/util/List;JILkotlinx/coroutines/CoroutineDispatcher;JJLkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun cancel ()V
-	public fun close ()V
-	public final fun drain ()Z
-	public final fun getHasBestEffort ()Z
-	public final fun getRequiredFailuresOnNonPermits ()J
-	public final fun getRequiredTimeout-UwyO8pc ()J
-	public final fun getStats ()Ljava/util/List;
-	public final fun isEmpty ()Z
-}
-
-public final class me/ahoo/cosec/runtime/event/DecisionListeners$Companion {
-	public final fun getDEFAULT_DRAIN_TIMEOUT-UwyO8pc ()J
-	public final fun getNONE ()Lme/ahoo/cosec/runtime/event/DecisionListeners;
-}
-
-public final class me/ahoo/cosec/runtime/event/DecisionListeners$Stats {
-	public final fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
-	public final fun getDropped ()J
-	public final fun getFailures ()J
-	public final fun getListener ()Ljava/lang/String;
-}
-
 public final class me/ahoo/cosec/runtime/event/Delivery : java/lang/Enum {
 	public static final field BEST_EFFORT Lme/ahoo/cosec/runtime/event/Delivery;
 	public static final field REQUIRED Lme/ahoo/cosec/runtime/event/Delivery;
@@ -320,7 +349,6 @@ public final class me/ahoo/cosec/runtime/http/CoSecParameters {
 }
 
 public final class me/ahoo/cosec/runtime/http/CoSecParameters$Companion {
-	public final fun read (Lme/ahoo/cosec/runtime/http/HttpFacts;)Lme/ahoo/cosec/runtime/http/CoSecParameters;
 }
 
 public abstract interface class me/ahoo/cosec/runtime/http/Cookies {
@@ -439,31 +467,6 @@ public final class me/ahoo/cosec/runtime/http/TraceContext : kotlin/coroutines/A
 public final class me/ahoo/cosec/runtime/http/TraceContext$Key : kotlin/coroutines/CoroutineContext$Key {
 }
 
-public final class me/ahoo/cosec/runtime/identity/IdentityGate : me/ahoo/cosec/runtime/http/RequestGate {
-	public static final field Companion Lme/ahoo/cosec/runtime/identity/IdentityGate$Companion;
-	public fun <init> ()V
-	public fun <init> (ILjava/time/Duration;Ljava/time/Duration;Ljava/time/Clock;Lme/ahoo/cosec/spi/id/IdGenerator;)V
-	public synthetic fun <init> (ILjava/time/Duration;Ljava/time/Duration;Ljava/time/Clock;Lme/ahoo/cosec/spi/id/IdGenerator;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public fun evaluate (Lme/ahoo/cosec/runtime/http/HttpFacts;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-}
-
-public final class me/ahoo/cosec/runtime/identity/IdentityGate$Companion {
-	public final fun getDEFAULT_MAX_AGE ()Ljava/time/Duration;
-	public final fun getDEFAULT_SKEW ()Ljava/time/Duration;
-}
-
-public final class me/ahoo/cosec/runtime/identity/IdentityIssuer {
-	public static final field Companion Lme/ahoo/cosec/runtime/identity/IdentityIssuer$Companion;
-	public static final field FORWARD_ATTRIBUTE Ljava/lang/String;
-	public fun <init> ()V
-	public fun <init> (Ljava/util/Set;ILjava/time/Clock;)V
-	public synthetic fun <init> (Ljava/util/Set;ILjava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun issue (Lme/ahoo/cosec/runtime/http/RequestSecurity;)Ljava/lang/String;
-}
-
-public final class me/ahoo/cosec/runtime/identity/IdentityIssuer$Companion {
-}
-
 public final class me/ahoo/cosec/runtime/ratelimit/LocalRateLimiter : me/ahoo/cosec/spi/ratelimit/RateLimiter {
 	public static final field Companion Lme/ahoo/cosec/runtime/ratelimit/LocalRateLimiter$Companion;
 	public static final field DEFAULT_MAXIMUM_BUCKETS J
@@ -475,46 +478,6 @@ public final class me/ahoo/cosec/runtime/ratelimit/LocalRateLimiter : me/ahoo/co
 
 public final class me/ahoo/cosec/runtime/ratelimit/LocalRateLimiter$Companion {
 	public final fun getDEFAULT_EXPIRE_AFTER_ACCESS ()Ljava/time/Duration;
-}
-
-public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions {
-	public static final field Companion Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions$Companion;
-	public static final field DEFAULT_MAX_ABSENT I
-	public fun <init> ()V
-	public fun <init> (Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/util/Set;Ljava/time/Duration;Ljava/time/Duration;IIIIIILjava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;)V
-	public synthetic fun <init> (Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/util/Set;Ljava/time/Duration;Ljava/time/Duration;IIIIIILjava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;Ljava/time/Duration;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
-	public final fun getColdLoadTimeout ()Ljava/time/Duration;
-	public final fun getCompileQueueCapacity ()I
-	public final fun getCompileThreads ()I
-	public final fun getFailClosedMaxLag ()Ljava/time/Duration;
-	public final fun getFailClosedTenants ()Ljava/util/Set;
-	public final fun getLagEscalate ()Ljava/time/Duration;
-	public final fun getLagLogInterval ()Ljava/time/Duration;
-	public final fun getLagWarn ()Ljava/time/Duration;
-	public final fun getMaxAbsent ()I
-	public final fun getMaxApps ()I
-	public final fun getMaxTenants ()I
-	public final fun getPrewarmInitialBackoff ()Ljava/time/Duration;
-	public final fun getPrewarmMaxBackoff ()Ljava/time/Duration;
-	public final fun getRejectedReloadRetry ()Ljava/time/Duration;
-	public final fun getReloadConcurrency ()I
-	public final fun getRevalidateInterval ()Ljava/time/Duration;
-	public final fun getStoreReadTimeout ()Ljava/time/Duration;
-}
-
-public final class me/ahoo/cosec/runtime/snapshot/SnapshotOptions$Companion {
-	public final fun getMAX_REVALIDATE_INTERVAL ()Ljava/time/Duration;
-	public final fun getMIN_REVALIDATE_INTERVAL ()Ljava/time/Duration;
-}
-
-public final class me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource : java/lang/AutoCloseable {
-	public static final field Companion Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource$Companion;
-	public fun close ()V
-}
-
-public final class me/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource$Companion {
-	public final fun of (Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions;)Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;
-	public static synthetic fun of$default (Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource$Companion;Lme/ahoo/cosec/spi/snapshot/SnapshotDocumentStore;Lme/ahoo/cosec/runtime/attribute/AttributeProviders;Lme/ahoo/cosec/runtime/snapshot/SnapshotOptions;ILjava/lang/Object;)Lme/ahoo/cosec/runtime/snapshot/SuspendingSnapshotSource;
 }
 
 public final class me/ahoo/cosec/runtime/token/TokenRevocation {
