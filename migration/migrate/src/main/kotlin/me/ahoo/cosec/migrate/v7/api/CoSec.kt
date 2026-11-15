@@ -10,18 +10,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.api.token.CompositeToken
+package me.ahoo.cosec.migrate.v7.api
 
-/**
- * Simple implementation of [CompositeToken].
- *
- * @param accessToken The access token value
- * @param refreshToken The refresh token value
- * @see CompositeToken
- */
-data class SimpleCompositeToken(
-    override val accessToken: String,
-    override val refreshToken: String
-) : CompositeToken
+/** 7.x `me.ahoo.cosec.api.CoSec`, mirrored for the 7.x model this tool reads: its constants as they were. */
+internal object CoSec {
+    const val COSEC = "cosec"
+    const val COSEC_PREFIX = "$COSEC."
+
+    const val DEFAULT = "(0)"
+}

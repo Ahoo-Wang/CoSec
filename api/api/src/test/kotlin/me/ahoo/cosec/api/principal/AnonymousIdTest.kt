@@ -10,21 +10,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.api
+
+package me.ahoo.cosec.api.principal
 
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
-/**
- * CoSecTest .
- *
- * @author ahoo wang
- */
-internal class CoSecTest {
+/** The anonymous principal's id is a stored and audited value: it does not change. */
+class AnonymousIdTest {
     @Test
-    fun test() {
-        CoSec.COSEC.assert().isEqualTo("cosec")
-        CoSec.COSEC_PREFIX.assert().isEqualTo("cosec.")
-        CoSec.DEFAULT.assert().isEqualTo("(0)")
+    fun `the anonymous principal is (0)`() {
+        CoSecPrincipal.ANONYMOUS_ID.assert().isEqualTo("(0)")
     }
 }

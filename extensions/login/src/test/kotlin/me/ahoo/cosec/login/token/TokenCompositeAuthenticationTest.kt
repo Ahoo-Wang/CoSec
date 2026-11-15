@@ -27,6 +27,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
@@ -37,7 +38,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 
 class TokenCompositeAuthenticationTest {
-    private val compositeToken = SimpleCompositeToken("accessToken", "refreshToken")
+    private val compositeToken = CompositeToken("accessToken", "refreshToken")
     private val tokenConverter = mockk<TokenConverter> {
         every { toToken(any()) } returns compositeToken
     }
@@ -65,6 +66,41 @@ class TokenCompositeAuthenticationTest {
         val authenticationProvider = DefaultAuthenticationProvider()
         authenticationProvider.register(credentials.javaClass, authentication)
         return TokenCompositeAuthentication(CompositeAuthentication(authenticationProvider), tokenConverter, families)
+    }
+
+    private class Password(val user: String) : LoginCredentials
+
+    private class Code(val user: String) : LoginCredentials
+
+    /** Entry 12 of the 8.0 drill: a login is assembled from its authentications, without the starter. */
+    @Test
+    fun `a login is built from its authentications and finds each by its credentials`() = runTest {
+        fun authentication(
+            type: Class<out LoginCredentials>,
+            tenant: String
+        ) = object : Authentication<LoginCredentials> {
+            @Suppress("UNCHECKED_CAST")
+            override val credentialsType = type as Class<LoginCredentials>
+
+            override suspend fun authenticate(credentials: LoginCredentials) = TokenSubject(
+                "alice",
+                null,
+                tenant = tenant
+            )
+        }
+        val issued = mutableListOf<String?>()
+        every { tokenConverter.toToken(any()) } answers {
+            issued += firstArg<TokenSubject>().tenant
+            compositeToken
+        }
+        val login = TokenCompositeAuthentication.of(
+            listOf(authentication(Password::class.java, "by-password"), authentication(Code::class.java, "by-code")),
+            tokenConverter,
+            families,
+        )
+        login.authenticateAsToken(Code("alice")).assert().isEqualTo(compositeToken)
+        login.authenticateAsToken(Password("alice"))
+        issued.assert().containsExactly("by-code", "by-password")
     }
 
     @Test

@@ -15,9 +15,11 @@ package me.ahoo.cosec.login.token
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
+import me.ahoo.cosec.login.DefaultAuthenticationProvider
 import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -26,8 +28,10 @@ import me.ahoo.cosec.model.TenantId
  * Turns credentials into a token: the [Authentication] for their type answers the subject, and [tokenConverter] issues
  * its pair. A subject without a session (a login, a tenant switch) starts a family in [families], signed in at
  * [TokenSubject.authTime] or now; a refresh's subject is already in its session's next generation.
+ *
+ * Build one with [of], from the authentications of your logins; the starter makes one from its `Authentication` beans.
  */
-class TokenCompositeAuthentication(
+class TokenCompositeAuthentication @InternalCoSecApi constructor(
     private val compositeAuthentication: CompositeAuthentication,
     private val tokenConverter: TokenConverter,
     private val families: TokenFamilies,
@@ -65,5 +69,26 @@ class TokenCompositeAuthentication(
             )
         )
         return tokenConverter.toToken(issued)
+    }
+
+    companion object {
+        /**
+         * A login over [authentications], each found by the credentials type it supports (a type it is assignable to
+         * when none is registered for the exact one; two candidates fail rather than pick by order), issuing its pair
+         * with [tokenConverter] in a session of [families].
+         */
+        @OptIn(InternalCoSecApi::class)
+        fun of(
+            authentications: List<Authentication<*>>,
+            tokenConverter: TokenConverter,
+            families: TokenFamilies,
+        ): TokenCompositeAuthentication {
+            val provider = DefaultAuthenticationProvider()
+            authentications.forEach {
+                @Suppress("UNCHECKED_CAST")
+                provider.register(it as Authentication<LoginCredentials>)
+            }
+            return TokenCompositeAuthentication(CompositeAuthentication(provider), tokenConverter, families)
+        }
     }
 }

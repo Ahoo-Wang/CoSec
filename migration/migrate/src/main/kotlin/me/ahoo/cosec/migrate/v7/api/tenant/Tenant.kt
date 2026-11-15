@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.migrate.v7.api.tenant
 
-import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.migrate.v7.api.CoSec
 
 /**
  * Tenant for splitting customer boundaries horizontally.

@@ -14,8 +14,8 @@
 package me.ahoo.cosec.spring.boot.control
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.spring.boot.CoSecProperties
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.util.unit.DataSize
 import java.time.Duration
@@ -108,7 +108,7 @@ class ControlProperties {
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "control"
+        const val PREFIX = CoSecProperties.PREFIX + ".control"
         const val KAFKA_AUDIT_PREFIX = "$PREFIX.audit.kafka"
     }
 }

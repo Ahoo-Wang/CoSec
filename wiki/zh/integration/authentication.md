@@ -129,7 +129,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 `authenticate` 通过抛出异常来拒绝登录：它没有“空”的回答，登录失败或调用方已离开时都不会签发令牌。它运行在调用方的线程上，在 WebFlux 中就是事件循环，因此基于阻塞客户端（例如 JDBC 用户表）的实现要用 `runInterruptible(myDispatcher) { ... }` 把调用移到自己的有界调度器上。Spring 在 WebFlux 和 Spring MVC 中都能运行 `suspend` 控制器函数。MVC 需要类路径上有 `kotlinx-coroutines-reactor`；没有时，请在请求线程上调用 `runBlocking { ... }`。
 
-这里的 `LoginCredentials` 和 `Authentication` 是 `me.ahoo.cosec.login` 中的登录类型（`TokenCompositeAuthentication` 和 `TokenConverter` 在 `me.ahoo.cosec.login.token` 中），来自 starter 自带的 `cosec-login`；它们不是管道的 `Credentials` 和 `Authenticator`（`me.ahoo.cosec.spi.authn`）。`cosec.authentication.login.enabled`（默认开启）只开关这些登录 Bean，包括 `TokenCompositeAuthentication` 和社交登录；无论它如何设置，请求都由管道认证。登录路径必须允许匿名调用方访问，因此需要一个放行它的 `Anyone` 绑定，如[快速开始](../guide/quick-start.md#write-a-first-policy)所示。`authenticateAsToken` 会为主体开始一个[会话](#sessions)。单独调用 `TokenConverter.toToken(subject)` 签发的令牌对不属于任何会话，永远不能刷新：要自己签发可刷新的令牌对，请先开始它的会话：`converter.toToken(subject.inSession(tokenFamilies.start(tenant, principal)))`。
+这里的 `LoginCredentials` 和 `Authentication` 是 `me.ahoo.cosec.login` 中的登录类型（`TokenCompositeAuthentication` 和 `TokenConverter` 在 `me.ahoo.cosec.login.token` 中），来自 starter 自带的 `cosec-login`；它们不是管道的 `Credentials` 和 `Authenticator`（`me.ahoo.cosec.spi.authn`）。不使用 starter 时（例如在测试中），用你的认证构建登录：`TokenCompositeAuthentication.of(listOf(passwordAuthentication), tokenConverter, tokenFamilies)`。`cosec.authentication.login.enabled`（默认开启）只开关这些登录 Bean，包括 `TokenCompositeAuthentication` 和社交登录；无论它如何设置，请求都由管道认证。登录路径必须允许匿名调用方访问，因此需要一个放行它的 `Anyone` 绑定，如[快速开始](../guide/quick-start.md#write-a-first-policy)所示。`authenticateAsToken` 会为主体开始一个[会话](#sessions)。单独调用 `TokenConverter.toToken(subject)` 签发的令牌对不属于任何会话，永远不能刷新：要自己签发可刷新的令牌对，请先开始它的会话：`converter.toToken(subject.inSession(tokenFamilies.start(tenant, principal)))`。
 
 ## 会话 {#sessions}
 
@@ -153,7 +153,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。starter 不注册刷新端点。
 
-`SimpleRefreshTokenAuthentication` 以 `Authentication` 的形式完成刷新，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算）；通过 `TokenRevocation` 检查访问令牌未被吊销、其主体的令牌也未被吊销；再通过 `TokenFamilies` 轮换会话（[会话](#sessions)）。新的一对令牌说的是旧访问令牌说的内容，属于下一代。全程没有阻塞：
+`RefreshTokenAuthentication` 以 `Authentication` 的形式完成刷新，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算）；通过 `TokenRevocation` 检查访问令牌未被吊销、其主体的令牌也未被吊销；再通过 `TokenFamilies` 轮换会话（[会话](#sessions)）。新的一对令牌说的是旧访问令牌说的内容，属于下一代。全程没有阻塞：
 
 ```kotlin
 @Bean
@@ -161,7 +161,7 @@ fun refreshTokenAuthentication(
     tokenVerifier: TokenVerifier,
     tokenRevocation: TokenRevocation,
     tokenFamilies: TokenFamilies,
-) = SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -173,7 +173,22 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 
 会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。其他情况，尤其是存储无法读取时，它会抛出异常：请应答 `503`，此时没有签发任何东西。
 
-刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，请为刷新凭证编写自己的 `Authentication`：先用 `TokenVerifier.refresh` 校验，再用 `TokenFamilies.rotate` 轮换会话，然后加载用户。
+默认情况下，刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个 `MembershipRefresh`。它回答用户现在拥有什么（重新查询），并在用户不能再登录时抛出异常：
+
+```kotlin
+@Bean
+fun refreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    tokenRevocation: TokenRevocation,
+    tokenFamilies: TokenFamilies,
+    users: Users,
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token ->
+    val user = users.active(token.principal) ?: throw IllegalStateException("User [${token.principal}] is disabled.")
+    TenantMembership(roles = user.rolesIn(token.tenant, token.app))
+}
+```
+
+这个类按顺序保留刷新需要的每一步：校验令牌对，拒绝已吊销的令牌，询问你的 `MembershipRefresh`，把会话移到下一代，并在该会话中签发。新令牌属于旧令牌的主体、租户和应用，持有你的回答所说的内容。回答 null 时保留旧声明；回答另一个应用时拒绝，因为刷新从不改变令牌所属的应用。被拒绝的刷新不消耗任何一代。
 
 ## 登出与吊销 {#logout-and-revocation}
 
@@ -185,7 +200,7 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 
 - **“未吊销”在本地缓存 30 秒**（`cosec.authentication.revocation.cache.*`）。通过 `TokenRevoker` 吊销会让所有实例上的这个答案立即失效。如果失效消息丢失，或吊销记录通过其他方式写入 Redis，某个实例可能在之后最多 30 秒内仍接受该令牌。
 - **Redis 无法读取时，请求的令牌被接受。** 吊销读取器报告无法读取（`RevocationUnavailableException`），流水线在校验令牌时放行它。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小，或设置 `cosec.authentication.revocation.fail-closed: true` 改为应答 `503`。每个这样被接受的令牌都会计数（`cosec.revocation.unchecked`，[指标](../operations/observability.md#metrics)），并以 `WARN` 记录日志，最多每 10 秒一次。
-- **Redis 无法读取时，刷新失败。** 绝不在一次失败的吊销读取上签发令牌（`IDN-14`）：此时签发的令牌不在任何吊销记录中，既不受旧令牌的吊销约束，也不受其主体的吊销约束，会比两者都活得久。`SimpleRefreshTokenAuthentication` 抛出 `RevocationUnavailableException`，请以 `503` 应答。
+- **Redis 无法读取时，刷新失败。** 绝不在一次失败的吊销读取上签发令牌（`IDN-14`）：此时签发的令牌不在任何吊销记录中，既不受旧令牌的吊销约束，也不受其主体的吊销约束，会比两者都活得久。`RefreshTokenAuthentication` 抛出 `RevocationUnavailableException`，请以 `503` 应答。
 - **其他任何错误都会让请求失败。** Redis 返回但 CoSec 无法解码的吊销记录，或自定义 `RevocationReader` 抛出的错误，结果都是 `503`，绝不会接受令牌。
 
 ### 吊销主体的全部令牌 {#revoking-every-token-of-a-principal}
@@ -255,7 +270,42 @@ cosec:
 
 主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空、不是字符串（数字、`null`、对象），或不能作为租户 id（空白、`*`、含 `:` 或控制字符、超过 128 个字符）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为这样的租户签发令牌。租户不能作为租户 id 的 API key 加载失败（`503`）。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
-要让用户切换租户，继承 `AbstractSwitchTenantAuthentication`（把 `TokenVerifier` Bean 传给它）并实现 `switchTenant(targetTenantId, previous)`（`previous` 是发起切换的请求的 `SecurityContext`）：检查用户是否属于目标租户（不属于时抛出异常以拒绝），并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。它保留原令牌的应用：切换租户不会改变令牌所属的应用。切换从 `SwitchTenantCredentials.accessToken`（发起切换的请求的令牌，必须属于该请求的主体）读取 `auth_time`：新令牌开始一个自己的会话，保留这个登录时间，因此会在先前的会话结束时结束。用户并没有重新登录。
+### 切换租户和应用 {#switching-tenant-and-app}
+
+很多身份服务分两步让用户登录。第一步证明用户（密码、短信或邮件中的验证码），签发一个不属于任何租户和应用的令牌：此时谁也没有选择这两者。第二步出示这个令牌，指明要工作的租户和应用；它的回答就是之后每个请求携带的令牌。之后切换租户，或在同一租户内切换应用，都是同一个调用。`SwitchTenantAuthentication` 就是这第二步。你给它 `TokenVerifier` Bean、你的凭证类，以及一个 `TenantSwitch`：它检查用户属于目标租户并在那里拥有该应用（不满足时抛出异常以拒绝），并回答用户在那里拥有什么，按该租户和应用查询：一个包含用户角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。你的凭证类实现 `SwitchTenantCredentials`，并携带你的检查还要读取的内容，例如设备；切换读取它不需要强制转换。把这个认证声明为 Bean，登录按那个类找到它：
+
+```kotlin
+class SelectTenant(
+    override val targetTenantId: String,
+    override val targetAppId: String?,
+    override val context: SecurityContext,
+    override val accessToken: String,
+    val deviceId: String,
+) : SwitchTenantCredentials
+
+@Bean
+fun selectTenantAuthentication(tokenVerifier: TokenVerifier, members: Members) =
+    SwitchTenantAuthentication(tokenVerifier, SelectTenant::class.java) { credentials ->
+        val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
+        val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
+            "Not a member of this tenant's $app."
+        }
+        TenantMembership(roles = member.rolesIn(app), app = app)
+    }
+
+@PostMapping("/auth/select/{tenant}/{app}")
+suspend fun select(
+    @PathVariable tenant: String,
+    @PathVariable app: String,
+    @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
+    @RequestHeader("CoSec-Device-Id") deviceId: String,
+    security: SecurityContext,
+): CompositeToken = authentication.authenticateAsToken(
+    SelectTenant(tenant, app, security, authorization.removePrefix("Bearer "), deviceId),
+)
+```
+
+新令牌只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。**它的应用是你的 `TenantSwitch` 回答的应用**（`TenantMembership.app`），必须是令牌的 `aud` 能携带的应用 id；没有回答应用时，保留先前令牌的应用（`SCP-12`）。`targetAppId` 是用户请求的应用，只能经由你的回答进入令牌：用户不能靠指名得到某个应用的令牌，只有在你的代码检查过用户拥有它之后才行。切换从 `SwitchTenantCredentials.accessToken`（发起切换的请求的令牌，必须属于该请求的主体）读取 `auth_time`：新令牌开始一个自己的会话，保留这个登录时间，因此会在先前的会话结束时结束。用户并没有重新登录。
 
 ## 应用 {#apps}
 

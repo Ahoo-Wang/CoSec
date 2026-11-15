@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.api.principal
 
-import me.ahoo.cosec.api.CoSec
 import java.security.Principal
 
 /**
@@ -36,8 +35,9 @@ interface CoSecPrincipal : Principal {
     companion object {
         /**
          * The id of an anonymous principal. No credential can claim it: an id beginning with `(` is CoSec's, and a token
-         * with such a subject is invalid (`IDN-12`).
+         * with such a subject is invalid (`IDN-12`). The default tenant's id, `TenantId.DEFAULT`, is spelled the same
+         * and is another id.
          */
-        const val ANONYMOUS_ID = CoSec.DEFAULT
+        const val ANONYMOUS_ID = "(0)"
     }
 }

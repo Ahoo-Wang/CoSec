@@ -10,9 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot
 
-import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 
 /**
@@ -23,6 +25,6 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 @ConditionalOnProperty(value = [ConditionalOnCoSecEnabled.ENABLED_KEY], matchIfMissing = true, havingValue = "true")
 internal annotation class ConditionalOnCoSecEnabled {
     companion object {
-        const val ENABLED_KEY = CoSec.COSEC + ENABLED_SUFFIX_KEY
+        const val ENABLED_KEY = CoSecProperties.PREFIX + ENABLED_SUFFIX_KEY
     }
 }

@@ -1,19 +1,20 @@
 # Rule: IDN-14
 # Mutant: refresh reads a revocation store it cannot read as "not revoked", and issues a token on that read
-# Tests: :jwt:test --tests me.ahoo.cosec.jwt.SimpleRefreshTokenAuthenticationTest
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenAuthenticationTest
 
-diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
---- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
-+++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SimpleRefreshTokenAuthentication.kt
-@@ -41,7 +41,10 @@
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
+index 2b8b1dd0..8004cb83 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
+@@ -45,7 +45,10 @@ class RefreshTokenAuthentication(
  
      override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
-         val token = tokenVerifier.refresh(credentials)
+         val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
 -        revocation.check(token)
 +        try {
 +            revocation.check(token)
 +        } catch (_: me.ahoo.cosec.spi.token.RevocationUnavailableException) {
 +        }
-         return TokenSubject.of(token, families.rotate(token))
-     }
- }
+         val now = memberships.refresh(token)
+         require(now?.app == null || now.app == token.app) { "A refresh never changes the app a token is for." }
+         val issue = families.rotate(token)

@@ -13,8 +13,8 @@
 package me.ahoo.cosec.spring.boot.jwt
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.login.token.TokenFamilies
+import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
@@ -37,7 +37,7 @@ class JwtProperties(
 ) : EnabledCapable {
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "jwt"
+        const val PREFIX = CoSecProperties.PREFIX + ".jwt"
     }
 
     @InternalCoSecApi

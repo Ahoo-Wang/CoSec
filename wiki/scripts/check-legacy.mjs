@@ -60,12 +60,21 @@ const TERMS = [
   { term: 'ApiKeyStore', hint: 'removed in 8.0 (R9): read keys through `ApiKeyReader`; manage them with `InMemoryApiKeyStore` or `RedisApiKeyStore`' },
   { term: 'FlatTrace', hint: 'renamed in 8.0 (R9): `EvaluationTrace` (`me.ahoo.cosec.engine.trace`)' },
   { term: 'supportCredentials', hint: 'renamed in 8.0 (R9): `Authentication.credentialsType`' },
-  { term: 'AbstractRefreshTokenAuthentication', hint: 'removed in 8.0 (R9): `SimpleRefreshTokenAuthentication` implements `Authentication` itself' },
+  { term: 'AbstractRefreshTokenAuthentication', hint: 'removed in 8.0 (R9): `RefreshTokenAuthentication` implements `Authentication` itself' },
   { term: 'PipelineWebFilterKt', hint: 'renamed in 8.0 (R9): `checkMono` is in `AuthorizationCheckers` (`cosec-webflux`)' },
   { term: 'PipelineServletFilterKt', hint: 'renamed in 8.0 (R9): `checkBlocking` is in `AuthorizationCheckers` (`cosec-webmvc`)' },
   // A1 (RFC 0013 §3): packages that moved to cosec-document.
   { term: 'me.ahoo.cosec.runtime.document', hint: 'moved in 8.0 (A1): `me.ahoo.cosec.document` (`cosec-document`)' },
   { term: 'me.ahoo.cosec.runtime.route', hint: 'moved in 8.0 (A1): `me.ahoo.cosec.document.route` (`cosec-document`)' },
+  // A3 (RFC 0013 §7.3): names that went.
+  { term: 'SimpleCompositeToken', hint: 'removed in 8.0 (A3): `CompositeToken` (`cosec-api`) is a final class' },
+  { term: 'SimpleRefreshTokenAuthentication', hint: 'renamed in 8.0 (A3): `RefreshTokenAuthentication` (`cosec-login`)' },
+  { term: 'DefaultTokenRevoker', hint: 'renamed in 8.0 (A3): `StoreTokenRevoker` (`cosec-login`)' },
+  { term: 'AbstractSwitchTenantAuthentication', hint: 'removed in 8.0 (A3): `SwitchTenantAuthentication` with a `TenantSwitch` (integration/authentication.md)' },
+  { term: 'me.ahoo.cosec.api.CoSec', hint: 'removed in 8.0 (A3): each value has a name where it means something (operations/upgrading.md)' },
+  { term: 'CoSec.COSEC', hint: 'removed in 8.0 (A3): the property prefix is `cosec`, the default key prefix `cosec` (`cosec.key-prefix`)' },
+  { term: 'CoSec.COSEC_PREFIX', hint: 'removed in 8.0 (A3): write the `cosec.` prefix of a property or attribute out' },
+  { term: 'CoSec.DEFAULT', hint: 'removed in 8.0 (A3): `CoSecPrincipal.ANONYMOUS_ID` or `TenantId.DEFAULT`, two ids spelled `(0)`' },
 ]
 
 const EXEMPT_SECTIONS = [
@@ -93,6 +102,15 @@ const ALLOWED = [
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
     terms: ['me.ahoo.cosec.runtime.document', 'me.ahoo.cosec.runtime.route'],
     reason: 'the upgrade entry that moves them to cosec-document names the old packages',
+  },
+  {
+    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    terms: [
+      'SimpleCompositeToken', 'SimpleRefreshTokenAuthentication', 'DefaultTokenRevoker', 'CoSec.COSEC',
+      'AbstractSwitchTenantAuthentication',
+      'CoSec.COSEC_PREFIX', 'CoSec.DEFAULT',
+    ],
+    reason: 'the A3 upgrade entries, and the earlier preview entries, name the old classes',
   },
   {
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],

@@ -13,7 +13,7 @@
 package me.ahoo.cosec.spring.boot.ip2region
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
@@ -33,6 +33,6 @@ class Ip2RegionProperties(
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "ip2region"
+        const val PREFIX = CoSecProperties.PREFIX + ".ip2region"
     }
 }

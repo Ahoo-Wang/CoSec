@@ -27,7 +27,7 @@ value class TenantId(val value: String) {
         /** The platform tenant. */
         val PLATFORM = TenantId("(platform)")
 
-        /** Same as `CoSec.DEFAULT`: the tenant of anonymous principals. */
+        /** The tenant of anonymous principals. The anonymous principal's id is spelled the same, and is another id. */
         val DEFAULT = TenantId("(0)")
     }
 }

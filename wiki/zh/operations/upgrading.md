@@ -582,7 +582,7 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `Policy`、`Statement`、`PermissionVerifier`、`ActionMatcher`、`ConditionMatcher`、`AppPermission`、`AppRolePermission`、`RolePermission` 以及 `cosec-api` 中其余的策略与权限模型 | 文档（[策略语言](../policies/language.md)）。覆写了 `verify` 的 `Statement` 没有对应物。 |
 | `ActionMatcherFactory`、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、内置匹配器、OGNL 与 SpEL | 只有内置的动作和条件。自定义条件读取的值改由 `AttributeProvider` 提供（[扩展](../architecture/extending.md)）。 |
 | `AuthenticationProvider`、`DefaultAuthenticationProvider` | 声明 `Authentication` Bean：starter 会注册它们。 |
-| `AbstractRefreshTokenAuthentication` | `SimpleRefreshTokenAuthentication`，或你自己的 `Authentication<RefreshTokenCredentials>`。 |
+| `AbstractRefreshTokenAuthentication` | `RefreshTokenAuthentication`，或你自己的 `Authentication<RefreshTokenCredentials>`。 |
 | `ApiKeyStore` | 查找 key 用 `ApiKeyReader`；管理 key 用 `InMemoryApiKeyStore` 或 `RedisApiKeyStore` Bean。 |
 | `BlockingAware` | 无：没有条件会执行代码。阻塞的查询放进会挂起的 `AttributeProvider`。 |
 | `RootPrincipalMatcher`、`CoSecPrincipal.isRoot`、`root-enabled` | break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）。 |
@@ -788,6 +788,20 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
   check(pipeline.awaitDocuments().isEmpty()) // 在第一个请求之前
   ```
 - **公共与 SPI 签名中的时长都是 `java.time.Duration`。** `AttributeProvider.timeout` 是 `java.time.Duration?`：自己的提供方原来写 `200.milliseconds` 的地方，改为使用 `java.time.Duration` 的 `override val timeout: Duration? = Duration.ofMillis(200)`。`CoCacheMembershipProvider.DEFAULT_FILL_TIMEOUT`，以及 `KafkaAuditListener` 和 `KafkaChangeListener` 的 `drainTimeout`，同样使用 `java.time.Duration`；原来传入 `kotlin.time.Duration` 的代码用 `toJavaDuration()` 转换。属性、默认值和行为都不变。
+- **`CompositeToken` 是 `cosec-api` 中的 final 类，`SimpleCompositeToken` 已删除。** 用 `CompositeToken(accessToken, refreshToken)` 构造。它按值相等，没有 `copy` 或 `componentN`。记录令牌的日志不再打印令牌：它的字符串是 `CompositeToken(accessToken=***, refreshToken=***)`。登录或刷新端点返回的 JSON 不变（`{"accessToken":…,"refreshToken":…}`）。`RefreshTokenCredentials` 自己声明 `accessToken` 和 `refreshToken`，不再是 `CompositeToken`：应用实现的凭证不继承一个值。你的刷新凭证类像以前一样覆盖这两个属性：
+
+  ```kotlin
+  data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
+      RefreshTokenCredentials
+  ```
+
+  在需要 `CompositeToken` 的地方（`TokenRevoker.revoke`）传入它的代码，要构造一个：`CompositeToken(credentials.accessToken, credentials.refreshToken)`。
+- **`SimpleRefreshTokenAuthentication` 更名为 `RefreshTokenAuthentication`**，包和构造参数不变：唯一的实现不需要前缀。在声明它的 bean 的地方改类名。
+- **`DefaultTokenRevoker` 更名为 `StoreTokenRevoker`**：它经由 `TokenStore` 吊销，名字现在说出了这一点。包（`me.ahoo.cosec.login.token`）和构造参数不变；starter 的 bean 仍是 `cosecTokenRevoker`，`TokenRevoker` 仍是 SPI。在构造它的地方改类名。
+- **`api.CoSec` 已删除。** 它的值拼写不变，在有含义的地方各有名字：匿名主体是 `CoSecPrincipal.ANONYMOUS_ID`，默认租户是 `TenantId.DEFAULT`，两个都拼作 `(0)` 的不同 id；`cosec.*` 属性和 Redis key 的默认前缀（`cosec.key-prefix`，`cosec`）不变，span 属性（`cosec.tenant_id` 等）和 OpenAPI 方案 `cosec.BearerAuth` 也不变。读取 `CoSec.COSEC`、`CoSec.COSEC_PREFIX` 或 `CoSec.DEFAULT` 的代码，改为写出它所指的值。key、属性和 span 属性都不变。
+- **租户切换是带 `TenantSwitch` 的 `SwitchTenantAuthentication`，它可以设定应用。** `AbstractSwitchTenantAuthentication` 已删除。原来继承它并实现 `switchTenant(targetTenantId, previous)` 的地方，改为把 `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java) { credentials -> … }` 声明为 bean：切换拿到的是你自己的凭证类（`credentials.targetTenantId`、`credentials.context`，以及它携带的其他内容），像以前一样回答 `TenantMembership`。`SwitchTenantCredentials` 新增 `targetAppId`（用户请求的应用，默认为 null）；`TenantMembership` 新增 `app`。新令牌属于你的切换回答的应用，否则属于先前令牌的应用（`SCP-12`）：不回答应用的切换行为不变，用户也永远不能靠指名得到一个应用。见[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)。
+- **刷新可以重新读取用户。** `RefreshTokenAuthentication` 接受一个可选的 `MembershipRefresh`，回答用户现在拥有什么；校验、吊销检查、轮换和会话仍由这个类完成。原来为在刷新时重新读取用户而编写自己的 `Authentication` 的地方，改为传入 `MembershipRefresh`。不传时，刷新照旧保留令牌的声明。
+- **`TokenCompositeAuthentication` 用 `TokenCompositeAuthentication.of(authentications, tokenConverter, families)` 构建。** 它的构造器需要两个应用无法构建的类型（`CompositeAuthentication`、`DefaultAuthenticationProvider`），现在是 `@InternalCoSecApi`。starter 的 bean 不变；手工组装的登录（例如在测试中）把它的 `Authentication` 传给 `of`。
 - **任何请求都不可能有的 `http` 动作不能编译**（`DOC-8`）。`http:HEAD`（自 `PIP-18` 起按 `http:GET` 判定）或动词含小写字母（`http:get`）的语句或限流规则不匹配任何请求，这样的 DENY 什么也拒绝不了。现在这样的文档被拒绝：已存储的会被装载为失败，其请求失败即拒绝（`503`），控制面也拒绝会产生这种文档的变更。升级之前，请在控制面列出的文档中查找它们（`"http:HEAD"`，或冒号后含小写字母的 `"http:` 动作），改为 `http:GET` 或大写的方法后重新发布。
 - **`cosec-migrate cocache8` 已删除。** 它把 8.0.0-alpha.2 的数据从 CoCache 6 迁移到 CoCache 8（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）：仍保存这种数据的部署，请在升级之前用 8.0.0-alpha.4 的 `cosec-migrate` 迁移。`<p>:meta:cocache8` 存在时，`publish` 拒绝执行，不写入任何内容：这个标记由一次在删除文档之后中断的升级留下，那些文档在它的导出目录里，不在 Redis 中。请用 8.0.0-alpha.4 的 `cosec-migrate` 完成那次升级（`publish --resume`，`--in` 指向消息给出的导出目录），或者确认标记列出的每份文档都已发布，再删除这个 key。
 - **`cosec-migrate api-keys --app` 可用了**（第 2 轮 M3）。自 #1302 起这一步无法运行：#1302 把 `--app` 加进了代码和本页，却没有加进该命令接受的选项，命令因此把 `--app` 当作它不接受的选项而拒绝。对配置了应用的服务必须接受的 key，请带上 `--app <id>` 重新运行。

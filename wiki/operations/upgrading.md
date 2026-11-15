@@ -788,7 +788,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `Policy`, `Statement`, `PermissionVerifier`, `ActionMatcher`, `ConditionMatcher`, `AppPermission`, `AppRolePermission`, `RolePermission` and the rest of `cosec-api`'s policy and permission model | Documents ([policy language](../policies/language.md)). A `Statement` that overrode `verify` has no counterpart. |
 | `ActionMatcherFactory`, `ConditionMatcherFactory`, `MatcherFactoryRegistry`, the built-in matchers, OGNL and SpEL | Built-in actions and conditions only. A value a custom condition read comes from an `AttributeProvider` ([Extending](../architecture/extending.md)). |
 | `AuthenticationProvider`, `DefaultAuthenticationProvider` | Declare `Authentication` beans: the starter registers them. |
-| `AbstractRefreshTokenAuthentication` | `SimpleRefreshTokenAuthentication`, or an `Authentication<RefreshTokenCredentials>` of your own. |
+| `AbstractRefreshTokenAuthentication` | `RefreshTokenAuthentication`, or an `Authentication<RefreshTokenCredentials>` of your own. |
 | `ApiKeyStore` | `ApiKeyReader` to look keys up; the `InMemoryApiKeyStore` or `RedisApiKeyStore` bean to manage them. |
 | `BlockingAware` | None: no condition runs code. Blocking lookups go into an `AttributeProvider`, which suspends. |
 | `RootPrincipalMatcher`, `CoSecPrincipal.isRoot`, `root-enabled` | Break-glass bindings ([Root becomes break-glass](#root-becomes-break-glass)). |
@@ -1070,6 +1070,48 @@ and have to be provisioned again.
   `java.time.Duration`, where it wrote `200.milliseconds`. `CoCacheMembershipProvider.DEFAULT_FILL_TIMEOUT` and the
   `drainTimeout` of `KafkaAuditListener` and `KafkaChangeListener` take a `java.time.Duration` too; code that passed a
   `kotlin.time.Duration` converts it with `toJavaDuration()`. No property, default or behaviour changes.
+- **`CompositeToken` is a final class in `cosec-api`, and `SimpleCompositeToken` is removed.** Build one with
+  `CompositeToken(accessToken, refreshToken)`. It is equal by value and has no `copy` or `componentN`. Logging a token no
+  longer prints it: its string is `CompositeToken(accessToken=***, refreshToken=***)`. The JSON a login or refresh
+  endpoint answers is unchanged (`{"accessToken":…,"refreshToken":…}`). `RefreshTokenCredentials` declares `accessToken`
+  and `refreshToken` itself and no longer is a `CompositeToken`: a credential an application implements does not
+  inherit from a value. Your refresh credentials class overrides the two, as it did:
+
+  ```kotlin
+  data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
+      RefreshTokenCredentials
+  ```
+
+  Code that passed it where a `CompositeToken` is expected (`TokenRevoker.revoke`) builds one,
+  `CompositeToken(credentials.accessToken, credentials.refreshToken)`.
+- **`SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication`**, in the same package and with the same
+  constructor: the only one there is needs no prefix. Rename the class where you declare its bean.
+- **`DefaultTokenRevoker` is `StoreTokenRevoker`**: it revokes through the `TokenStore`, which the name now says.
+  Same package (`me.ahoo.cosec.login.token`) and constructor; the starter's bean is still `cosecTokenRevoker`, and
+  `TokenRevoker` is still the SPI. Rename the class where you construct it.
+- **`api.CoSec` is removed.** Its values keep their spelling and gain names where they mean something: the anonymous
+  principal is `CoSecPrincipal.ANONYMOUS_ID` and the default tenant `TenantId.DEFAULT`, two different ids both spelled
+  `(0)`; the `cosec.*` properties and the default Redis key prefix (`cosec.key-prefix`, `cosec`) are as before, and so
+  are the span attributes (`cosec.tenant_id`, …) and the OpenAPI scheme `cosec.BearerAuth`. Code that read
+  `CoSec.COSEC`, `CoSec.COSEC_PREFIX` or `CoSec.DEFAULT` writes the value it meant. No key, property or attribute
+  changes.
+- **A tenant switch is `SwitchTenantAuthentication` with a `TenantSwitch`, and it can set the app.**
+  `AbstractSwitchTenantAuthentication` is removed. Where you extended it and implemented
+  `switchTenant(targetTenantId, previous)`, declare
+  `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java) { credentials -> … }` as a bean: the switch
+  gets your own credentials class (`credentials.targetTenantId`, `credentials.context`, and anything else it carries),
+  and answers a `TenantMembership` as before. `SwitchTenantCredentials` gains `targetAppId`, the app the user asks for,
+  null by default; `TenantMembership` gains `app`. The new token is for the app your switch answers, else the previous
+  token's (`SCP-12`): a switch that answers none behaves as before, and a user never gets an app by naming it.
+  See [Switching tenant and app](../integration/authentication.md#switching-tenant-and-app).
+- **A refresh can re-read the user.** `RefreshTokenAuthentication` takes an optional `MembershipRefresh`, which
+  answers what the user holds now; the class keeps the verification, the revocation check, the rotation and the session.
+  Where you wrote an `Authentication` of your own to re-read the user on refresh, pass a `MembershipRefresh` instead.
+  Without one, a refresh keeps the token's claims, as before.
+- **`TokenCompositeAuthentication` is built with `TokenCompositeAuthentication.of(authentications, tokenConverter,
+  families)`.** Its constructor took two types no application could build (`CompositeAuthentication`,
+  `DefaultAuthenticationProvider`) and is now `@InternalCoSecApi`. The starter's bean is unchanged; a login assembled
+  by hand, in a test say, passes its `Authentication`s to `of`.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

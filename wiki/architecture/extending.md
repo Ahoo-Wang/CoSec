@@ -38,6 +38,8 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
 | `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |
 | `Authentication` | `cosec-login`, `login` | Check another kind of login credential and say what its token holds. Throw to refuse. | every bean, by the credential type it supports |
+| `TenantSwitch` | `cosec-login`, `login.token` | Say what a user holds in the tenant, and the app, it switches to, and which app the new token is for ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). Throw to refuse. | none: declare `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java, yourSwitch)` as an `Authentication` bean |
+| `MembershipRefresh` | `cosec-login`, `login.token` | Say what a user holds now when its token is refreshed, so changed roles apply ([Refreshing tokens](../integration/authentication.md#refreshing-tokens)). Throw to refuse; null keeps the claims. | none: pass it to `RefreshTokenAuthentication` |
 | `TokenConverter` | `cosec-login`, `login.token` | Issue tokens in another format. | one bean, replacing `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`, `social` | Turn a provider's user into your principal. | one bean, replacing `DirectSocialUserPrincipalConverter` |
 | `SocialStateStore` | `cosec-social`, `social` | Keep the OAuth states social login issues somewhere other than Redis: `put` a state with its binding's hash, and `take` removes it atomically, so a state is used once. Both suspend: over a blocking client, make the calls on a dispatcher of your own. Throw when the store fails. | one bean, replacing `RedisSocialStateStore` |
@@ -217,7 +219,7 @@ verifier read them.
 
 A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the
 request's thread. Whether a token was revoked is not its question: `TokenAuthenticator`, refresh
-(`SimpleRefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one
+(`RefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one
 judgement, `TokenRevocation`. Only CoSec's own verifier's tokens may use break-glass. A token with an `act` claim must never become a principal
 (`IDN-4`): a `TokenVerifier` of your own throws `DelegationUnsupportedException` for it, which `TokenAuthenticator`
 turns into a `token-invalid` refusal, and an `Authenticator` of your own that reads tokens itself returns

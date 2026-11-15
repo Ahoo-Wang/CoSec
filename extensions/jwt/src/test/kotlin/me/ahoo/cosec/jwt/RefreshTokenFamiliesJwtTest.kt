@@ -21,11 +21,10 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
-import me.ahoo.cosec.login.token.DefaultTokenRevoker
+import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
-import me.ahoo.cosec.login.token.SimpleCompositeToken
-import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
@@ -68,8 +67,8 @@ class RefreshTokenFamiliesJwtTest {
     private val revoked = Revoked()
     private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
-    private val refresh = SimpleRefreshTokenAuthentication(verifier, TokenRevocation(revoked), families)
-    private val revoker = DefaultTokenRevoker(verifier, revoked, TokenRevocation(revoked), families, Duration.ofDays(7))
+    private val refresh = RefreshTokenAuthentication(verifier, TokenRevocation(revoked), families)
+    private val revoker = StoreTokenRevoker(verifier, revoked, TokenRevocation(revoked), families, Duration.ofDays(7))
     private val tokens = TokenCompositeAuthentication(
         CompositeAuthentication(DefaultAuthenticationProvider().apply { register(refresh) }),
         converter,
@@ -149,7 +148,7 @@ class RefreshTokenFamiliesJwtTest {
         assertThrows<TokenRevokedException> { refreshed(old) }
         // The pair must be bound, as a refresh requires.
         assertThrows<RefreshTokenMismatchException> {
-            revoker.revoke(SimpleCompositeToken(old.accessToken, first.refreshToken))
+            revoker.revoke(CompositeToken(old.accessToken, first.refreshToken))
         }
     }
 
@@ -160,7 +159,7 @@ class RefreshTokenFamiliesJwtTest {
         val one = login()
         val other = login()
         assertThrows<TokenVerificationException> {
-            refreshed(SimpleCompositeToken(one.accessToken, other.refreshToken))
+            refreshed(CompositeToken(one.accessToken, other.refreshToken))
         }
     }
 }

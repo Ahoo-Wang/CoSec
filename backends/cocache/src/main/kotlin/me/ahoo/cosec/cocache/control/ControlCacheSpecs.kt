@@ -21,9 +21,9 @@ import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.codec.StringCodec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.CoSecCacheSpecs.storeOfRecord
+import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
@@ -77,7 +77,7 @@ internal data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
  * encoded explicitly, without reflection.
  */
 internal object ControlCacheSpecs {
-    fun revisionRecord(keyPrefix: String = CoSec.COSEC): StoreSpec<RevisionRecordKey, SnapshotDocument> =
+    fun revisionRecord(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<RevisionRecordKey, SnapshotDocument> =
         storeOfRecord(
             CoSecCacheSpecs.REVISION_RECORD_CACHE_NAME,
             keyPrefix,
@@ -85,7 +85,7 @@ internal object ControlCacheSpecs {
             SnapshotDocumentCodec,
         ).build()
 
-    fun revisionIndex(keyPrefix: String = CoSec.COSEC): StoreSpec<SnapshotKey, RevisionIndex> =
+    fun revisionIndex(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<SnapshotKey, RevisionIndex> =
         storeOfRecord(
             CoSecCacheSpecs.REVISION_INDEX_CACHE_NAME,
             keyPrefix,
@@ -93,7 +93,7 @@ internal object ControlCacheSpecs {
             RevisionIndexCodec
         ).build()
 
-    fun referenceIndex(keyPrefix: String = CoSec.COSEC): StoreSpec<ReferenceKey, Map<SnapshotKey, Long>> =
+    fun referenceIndex(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<ReferenceKey, Map<SnapshotKey, Long>> =
         storeOfRecord(
             CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
             keyPrefix,
@@ -101,7 +101,7 @@ internal object ControlCacheSpecs {
             ReferrersCodec,
         ).build()
 
-    fun changeRequest(keyPrefix: String = CoSec.COSEC): StoreSpec<ChangeId, ChangeRequest> =
+    fun changeRequest(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<ChangeId, ChangeRequest> =
         storeOfRecord(
             CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME,
             keyPrefix,
@@ -109,11 +109,11 @@ internal object ControlCacheSpecs {
             ChangeRequestCacheCodec,
         ).build()
 
-    fun stage(keyPrefix: String = CoSec.COSEC): StoreSpec<SnapshotKey, StageSlot> =
+    fun stage(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<SnapshotKey, StageSlot> =
         storeOfRecord(CoSecCacheSpecs.STAGE_CACHE_NAME, keyPrefix, SnapshotKeyEncoder, StageSlotCodec).build()
 
     /** What [CoCacheControlStore.documents] and [CoCacheControlStore.openChanges] read: each entry with when it was listed. */
-    fun list(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Map<String, Instant>> =
+    fun list(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Map<String, Instant>> =
         storeOfRecord(
             CoSecCacheSpecs.CONTROL_LIST_CACHE_NAME,
             keyPrefix,
@@ -122,7 +122,7 @@ internal object ControlCacheSpecs {
         ).build()
 
     /** What [CoCacheControlStore.apps] reads: one value, under the key [CoCacheControlStore]'s `APP_LIST`. */
-    fun appList(keyPrefix: String = CoSec.COSEC): StoreSpec<String, AppList> =
+    fun appList(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, AppList> =
         storeOfRecord(
             CoSecCacheSpecs.CONTROL_APP_LIST_CACHE_NAME,
             keyPrefix,
@@ -130,7 +130,7 @@ internal object ControlCacheSpecs {
             AppListCodec
         ).build()
 
-    fun lease(keyPrefix: String = CoSec.COSEC): StoreSpec<String, String> =
+    fun lease(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, String> =
         storeOfRecord(
             CoSecCacheSpecs.CONTROL_LEASE_CACHE_NAME,
             keyPrefix,
