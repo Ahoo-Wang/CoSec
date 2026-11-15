@@ -23,9 +23,21 @@ import kotlin.coroutines.CoroutineContext
 /**
  * The trace the request belongs to, as the adapter's bridge captured it (RFC 0006 §7.5): put into the coroutine
  * context by a [BridgeContextContributor], read by the pipeline for events and problem bodies.
+ *
+ * [traceState] is the parent span's `tracestate` in its W3C header form (`vendor=value,other=value`), kept opaque so
+ * that a span made afterwards can be a child of the right parent, tracestate and all (#1404); empty for none. It is
+ * vendor data: CoSec writes it onto that span's parent and nowhere else (not into audit records, Kafka records, logs or
+ * metric tags), and a [me.ahoo.cosec.runtime.event.DecisionListener] that receives it with the event must not log it.
  */
-class TraceContext(val traceId: String, val spanId: String, val sampled: Boolean) :
-    AbstractCoroutineContextElement(Key) {
+class TraceContext(
+    val traceId: String,
+    val spanId: String,
+    val sampled: Boolean,
+    val traceState: String,
+) : AbstractCoroutineContextElement(Key) {
+    /** A trace without a tracestate. */
+    constructor(traceId: String, spanId: String, sampled: Boolean) : this(traceId, spanId, sampled, "")
+
     companion object Key : CoroutineContext.Key<TraceContext>
 
     override fun toString(): String = "TraceContext($traceId/$spanId)"

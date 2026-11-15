@@ -3,15 +3,17 @@
 # Tests: :migrate:test --tests me.ahoo.cosec.migrate.AllActionReachTest
 
 diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
-index 576256c7..7e9c395a 100644
+index a9643525..c4ae7c47 100644
 --- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
 +++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/StatementTranslator.kt
-@@ -97,7 +97,7 @@ internal class StatementTranslator(
-         location: String
-     ) {
-         if (deny && !rateLimit && action?.isAll == true) {
+@@ -103,9 +103,9 @@ internal class StatementTranslator(
+             return
+         }
+         if (deny && action?.isAll == true) {
 -            scan.everyActionDenied(location)
 +            Unit
+         } else if (!deny && action == MatcherTranslator.HTTP_ACTION) {
+             scan.everyActionAllowed(location)
          }
      }
  
