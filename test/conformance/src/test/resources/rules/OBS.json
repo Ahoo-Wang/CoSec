@@ -19,6 +19,29 @@
         "runtime:BreakGlassAndShadowTest"
       ],
       "pending": null
+    },
+    {
+      "id": "OBS-3",
+      "source": "RFC 0006 §9.3; #1392",
+      "statement": "A BEST_EFFORT event's hand-off never blocks or logs on the request's thread: a full or closed queue drops the event and counts it, and a reporter on the listeners' own dispatcher logs how many each listener dropped since its last line, at most once per warning interval, through a conflated signal (no unbounded hand-off).",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:DecisionListenersShutdownTest#a full queue drops without waiting on the log, which is written off the request's thread"
+      ]
+    },
+    {
+      "id": "OBS-4",
+      "source": "RFC 0006 §9.3, X8; #1393",
+      "statement": "After a drain that timed out, or a cancel, no listener call starts: a call already running is not interrupted, every event still queued is dropped and counted, and an event offered as the listeners close is delivered or dropped, once, so delivered plus dropped is what was published.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:DecisionListenersShutdownTest#after a drain gives up, only the call in flight finishes and the queued events are dropped",
+        "runtime:DecisionListenersShutdownTest#a cancelled consumer leaves nothing queued, and what it leaves is counted",
+        "runtime:DecisionListenersShutdownTest#an event offered after the listeners stopped is dropped and counted, not left queued",
+        "runtime:DecisionListenersShutdownTest#events published while the listeners drain are each delivered or dropped, once"
+      ]
     }
   ]
 }

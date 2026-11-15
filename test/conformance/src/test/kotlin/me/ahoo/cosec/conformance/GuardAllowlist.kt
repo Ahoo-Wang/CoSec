@@ -24,6 +24,16 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "runtime:DecisionListenersShutdownTest#a full queue drops without waiting on the log, which is written off the request's thread",
+            "runtime:DecisionListenersShutdownTest#after a drain gives up, only the call in flight finishes and the queued events are dropped",
+            "runtime:DecisionListenersShutdownTest#a cancelled consumer leaves nothing queued, and what it leaves is counted",
+            "runtime:DecisionListenersShutdownTest#an event offered after the listeners stopped is dropped and counted, not left queued",
+            "runtime:DecisionListenersShutdownTest#events published while the listeners drain are each delivered or dropped, once",
+            "runtime:PipelineBuilderFailureTest#an invalid prewarmed id is refused before the source subscribes",
+            "runtime:PipelineBuilderFailureTest#an invalid snapshot option is refused before anything is acquired",
+            "runtime:PipelineBuilderFailureTest#an invalid listener setting is refused before the source subscribes",
+            "runtime:PipelineBuilderFailureTest#a subscription that fails releases the listeners, and the caller sees its own exception",
+            "runtime:SnapshotSourceConstructionTest#a periodic pass that cannot be scheduled releases the subscription the source took",
             "migrate:ConditionTranslatorTest#no row widens access against what enforcement fills",
             "migrate:ConditionTranslatorTest#every row agrees with 7x on adversarial requests, never widening",
             "migrate:ConditionTranslatorTest#a template on a part only 7x filled never holds as enforced, and is recorded",
