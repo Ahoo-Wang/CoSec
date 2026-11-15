@@ -21,16 +21,20 @@ import me.ahoo.cosec.spi.token.VerifiedToken
  * changed roles apply to the new token, never copied from the old one by default. The refresh has verified the pair
  * and checked its revocation before it asks, and rotates the session only after this answers.
  *
+ * It is given the application's own refresh credentials, [C], as a tenant switch's `TenantSwitch` is given its
+ * credentials: what else of the request the check reads (the device a trusted-device check compares, say) the
+ * application's endpoint puts there, and the hook reads it without a cast.
+ *
  * An exception refuses the refresh: throw when the user may no longer sign in. Answer null to keep what the refreshed
  * token claimed. The answer's [TenantMembership.app] is null or the token's own: a refresh never changes the app a
  * token is for.
  */
 @CoSecSpi
-fun interface MembershipRefresh {
-    suspend fun refresh(token: VerifiedToken): TenantMembership?
+fun interface MembershipRefresh<in C : RefreshTokenCredentials> {
+    suspend fun refresh(token: VerifiedToken, credentials: C): TenantMembership?
 
     companion object {
-        /** Keeps what the refreshed token claimed: the default. */
-        val CLAIMS: MembershipRefresh = MembershipRefresh { null }
+        /** Keeps what the refreshed token claimed: the default, for any credentials class. */
+        val CLAIMS: MembershipRefresh<RefreshTokenCredentials> = MembershipRefresh { _, _ -> null }
     }
 }

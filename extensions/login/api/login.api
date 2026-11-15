@@ -14,7 +14,7 @@ public abstract interface class me/ahoo/cosec/login/LoginCredentials {
 
 public abstract interface class me/ahoo/cosec/login/token/MembershipRefresh {
 	public static final field Companion Lme/ahoo/cosec/login/token/MembershipRefresh$Companion;
-	public abstract fun refresh (Lme/ahoo/cosec/spi/token/VerifiedToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+	public abstract fun refresh (Lme/ahoo/cosec/spi/token/VerifiedToken;Lme/ahoo/cosec/login/token/RefreshTokenCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/login/token/MembershipRefresh$Companion {
@@ -22,11 +22,15 @@ public final class me/ahoo/cosec/login/token/MembershipRefresh$Companion {
 }
 
 public final class me/ahoo/cosec/login/token/RefreshTokenAuthentication : me/ahoo/cosec/login/Authentication {
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Lme/ahoo/cosec/login/token/MembershipRefresh;)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Lme/ahoo/cosec/login/token/MembershipRefresh;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/lang/Class;Lme/ahoo/cosec/login/token/MembershipRefresh;)V
 	public synthetic fun authenticate (Lme/ahoo/cosec/login/LoginCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun authenticate (Lme/ahoo/cosec/login/token/RefreshTokenCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getCredentialsType ()Ljava/lang/Class;
+}
+
+public final class me/ahoo/cosec/login/token/RefreshTokenAuthenticationKt {
+	public static final fun RefreshTokenAuthentication (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Lme/ahoo/cosec/login/token/MembershipRefresh;)Lme/ahoo/cosec/login/token/RefreshTokenAuthentication;
+	public static synthetic fun RefreshTokenAuthentication$default (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Lme/ahoo/cosec/login/token/MembershipRefresh;ILjava/lang/Object;)Lme/ahoo/cosec/login/token/RefreshTokenAuthentication;
 }
 
 public abstract interface class me/ahoo/cosec/login/token/RefreshTokenCredentials : me/ahoo/cosec/login/LoginCredentials {
