@@ -40,6 +40,7 @@ import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.coroutines.startCoroutine
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.toJavaDuration
 
 /**
  * RFC 0006 §5.5.2, `MEM-2`: the memberships cache is not the store of record, so its entries expire, but nothing that
@@ -201,7 +202,7 @@ class MembershipCacheFailureTest {
     @Test
     fun aLoaderThatNeverAnswersFailsItsFillAndTheNextRequestRetries() = runBlocking<Unit> {
         val hang = java.util.concurrent.atomic.AtomicBoolean(true)
-        val provider = CoCacheMembershipProvider(instanceA.membershipCache, 100.milliseconds) { _, _ ->
+        val provider = CoCacheMembershipProvider(instanceA.membershipCache, 100.milliseconds.toJavaDuration()) { _, _ ->
             if (hang.get()) awaitCancellation()
             loads.incrementAndGet()
             MembershipAnswer.Known(stored)

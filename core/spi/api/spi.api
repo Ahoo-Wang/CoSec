@@ -53,11 +53,11 @@ public final class me/ahoo/cosec/spi/attribute/AttributeDeclaration$Stage : java
 public abstract interface class me/ahoo/cosec/spi/attribute/AttributeProvider {
 	public abstract fun fetch (Lme/ahoo/cosec/spi/attribute/AttributeRequest;Ljava/util/Set;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public abstract fun getAttributes ()Ljava/util/List;
-	public fun getTimeout-FghU774 ()Lkotlin/time/Duration;
+	public fun getTimeout ()Ljava/time/Duration;
 }
 
 public final class me/ahoo/cosec/spi/attribute/AttributeProvider$DefaultImpls {
-	public static fun getTimeout-FghU774 (Lme/ahoo/cosec/spi/attribute/AttributeProvider;)Lkotlin/time/Duration;
+	public static fun getTimeout (Lme/ahoo/cosec/spi/attribute/AttributeProvider;)Ljava/time/Duration;
 }
 
 public final class me/ahoo/cosec/spi/attribute/AttributeRequest {

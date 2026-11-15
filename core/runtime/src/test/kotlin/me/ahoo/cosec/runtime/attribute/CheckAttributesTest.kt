@@ -59,7 +59,7 @@ class CheckAttributesTest {
         val requests = CopyOnWriteArrayList<Pair<AttributeRequest, Set<String>>>()
 
         override val attributes = values.keys.map { AttributeDeclaration(it, AttributeType.BOOL, stage) }
-        override val timeout = 50.milliseconds
+        override val timeout: java.time.Duration = java.time.Duration.ofMillis(50)
 
         override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
             requests += request to names

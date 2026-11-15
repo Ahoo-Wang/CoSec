@@ -20,7 +20,7 @@ import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.scope.Scope
-import kotlin.time.Duration
+import java.time.Duration
 
 /**
  * SPI (RFC 0006 §5.4.1): fetches the values of a set of external attributes, `ext.<provider>.<name>`.
@@ -37,7 +37,10 @@ interface AttributeProvider {
     /** Registered in the attribute catalog at startup; a policy reading any other `ext.` path does not compile. */
     val attributes: List<AttributeDeclaration>
 
-    /** How long one [fetch] may take; null for `PipelineOptions.attributeTimeout`. Then its attributes are unavailable. */
+    /**
+     * How long one [fetch] may take; null for the pipeline's attribute timeout (`cosec.authorization.attributes.timeout`).
+     * Past it, its attributes are unavailable.
+     */
     val timeout: Duration? get() = null
 
     /**

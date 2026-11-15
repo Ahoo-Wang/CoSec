@@ -1065,6 +1065,11 @@ and have to be provisioned again.
       .build()
   check(pipeline.awaitDocuments().isEmpty()) // before the first request
   ```
+- **Durations in public and SPI signatures are `java.time.Duration`.** `AttributeProvider.timeout` is a
+  `java.time.Duration?`: a provider of your own writes `override val timeout: Duration? = Duration.ofMillis(200)` with
+  `java.time.Duration`, where it wrote `200.milliseconds`. `CoCacheMembershipProvider.DEFAULT_FILL_TIMEOUT` and the
+  `drainTimeout` of `KafkaAuditListener` and `KafkaChangeListener` take a `java.time.Duration` too; code that passed a
+  `kotlin.time.Duration` converts it with `toJavaDuration()`. No property, default or behaviour changes.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

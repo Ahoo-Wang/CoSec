@@ -32,6 +32,7 @@ import me.ahoo.cosec.runtime.call.callPort
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeRequest
 import java.time.Duration
+import kotlin.time.toKotlinDuration
 import kotlin.time.Duration as KotlinDuration
 
 /**
@@ -172,7 +173,7 @@ internal class AttributeFetching(
         names: Set<String>,
         request: AttributeRequest,
     ): Map<String, Any>? {
-        val within = registered.provider.timeout ?: timeout
+        val within = registered.provider.timeout?.toKotlinDuration() ?: timeout
         return when (val answer = callPort(within) { registered.provider.fetch(request, names) }) {
             is Answer.Value -> answer.value
             is Answer.Failed -> {

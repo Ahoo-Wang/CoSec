@@ -236,7 +236,7 @@ internal class CoSecControlAutoConfiguration {
         ): KafkaChangeListener = with(properties.audit.kafka) {
             // Drains on shutdown as the decision listeners do (cosec.observability.listener.drain-timeout).
             val drainTimeout = listenerProperties.getIfAvailable { ListenerProperties() }.drainTimeout
-            KafkaChangeListener(kafkaOperations, topic, delivery, drainTimeout = drainTimeout.toKotlinDuration())
+            KafkaChangeListener(kafkaOperations, topic, delivery, drainTimeout = drainTimeout)
         }
     }
 

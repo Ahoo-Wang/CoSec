@@ -24,7 +24,9 @@ import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import org.springframework.beans.factory.DisposableBean
 import org.springframework.kafka.core.KafkaOperations
-import kotlin.time.Duration
+import java.time.Duration
+import kotlin.time.toJavaDuration
+import kotlin.time.toKotlinDuration
 
 /**
  * Writes each control-plane change event to [topic] (RFC 0007 §10.5, default `cosec-control-audit`): the key is the
@@ -47,14 +49,19 @@ class KafkaChangeListener(
     override val name: String = NAME,
     queueCapacity: Int = KafkaAuditListener.DEFAULT_QUEUE_CAPACITY,
     /** `cosec.observability.listener.drain-timeout`: how long [destroy] waits for the sends this listener holds. */
-    drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT,
+    drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT.toJavaDuration(),
 ) : ChangeListener,
     DisposableBean {
     init {
         require(topic.isNotBlank()) { "topic must not be blank." }
     }
 
-    private val sender = BoundedSender("Kafka change audit queue of [$topic]", THREAD_NAME, queueCapacity, drainTimeout)
+    private val sender = BoundedSender(
+        "Kafka change audit queue of [$topic]",
+        THREAD_NAME,
+        queueCapacity,
+        drainTimeout.toKotlinDuration()
+    )
 
     override suspend fun onChange(event: ChangeEvent) {
         val key = event.document.toString()

@@ -11,6 +11,8 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 
 使用 starter 时，声明一个 Spring bean 就能扩展 CoSec。有些扩展点收集该类型的所有 bean；其余的是单个 bean，替换 starter 的默认实现（`@ConditionalOnMissingBean`）。不使用 Spring 时，用 `Pipeline.builder(authenticator, store)` 在你的文档存储之上构建管道，把实现交给构建器（`memberships`、`attributes`、`listener`、`rateLimiter`、`ids`），并在第一个请求之前调用 `awaitDocuments()`。构建器是 `@ExperimentalCoSecApi`（[稳定性等级](#stability-levels)）；测试用 `PipelineFixture`（`cosec-testkit`）获得真实管道。
 
+扩展点用 Kotlin 实现。数据面的端口是 `suspend` 函数，id（`TenantId`、`AppId`、`PrincipalId`）是值类，所以签名中带有它们的方法在 JVM 中有一个哈希后缀的名字（`memberships-hPxUw84`），Java 无法声明这样的方法。Java 应用配置 starter 或调用构建器，用 Kotlin 编写对 CoSec 端口的实现。公共与 SPI 签名中的时长、时刻和时钟都是 `java.time` 的，从不是 `kotlin.time` 的（`KotlinTimeSignatureTest`）。
+
 | 扩展点 | 模块、包 | 实现它来 | starter 接收 |
 |---|---|---|---|
 | `Authenticator` | `cosec-spi`，`spi.authn` | 接受另一种凭证，或替换令牌与 API key 认证。 | 一个 bean，替换内置实现 |
@@ -179,7 +181,7 @@ fun interface MembershipProvider {
 class DirectoryAttributeProvider(private val directory: DirectoryClient) : AttributeProvider {
     override val attributes = listOf(AttributeDeclaration("ext.directory.department", AttributeType.STRING))
 
-    override val timeout: Duration = 200.milliseconds // kotlin.time；null 表示使用 cosec.authorization.attributes.timeout
+    override val timeout: Duration = Duration.ofMillis(200) // java.time；null 表示使用 cosec.authorization.attributes.timeout
 
     override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
         if (!request.subject.authenticated) {
