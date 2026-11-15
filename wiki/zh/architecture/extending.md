@@ -35,7 +35,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `DecisionListener` | `cosec-runtime`，`runtime.event` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
 | `ChangeListener` | `cosec-control`，`control.audit` | 观察或把关控制面变更。 | 所有 bean，使用 `cosec-control` 时 |
-| `ControlStore` | `cosec-control`，`control.store` | 把控制面的记录保存在 Redis 以外的地方。实验性的，连同它的记录和影子窗口端口。 | 一个 bean，使用 `cosec-control` 时 |
+| `ControlStore` | `cosec-control`，`control.store` | 把控制面的记录（修订、变更请求、暂存槽）保存在 `CoCacheControlStore` 以外的地方。控制面本身只在有 `cosec-cocache` 时启动，已发布的文档保存在它的 Redis 存储里：这个端口不改变这一点。实验性的，连同它的记录和影子窗口端口。 | 一个 bean，使用 `cosec-control` 和 `cosec-cocache` 时 |
 | 路由映射 | `cosec-document`，`document.route` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
 
 包名都在 `me.ahoo.cosec` 之下。签名只需要模型和契约的端口放在 `cosec-spi`，连同它们的值类型和内存实现（`InMemorySnapshotDocumentStore`、`InMemoryMembershipProvider`、`InMemoryApiKeyStore`）；它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，所以实现其中一个端口不需要 CoSec 的其他东西。影子窗口端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`，在 `spi.shadow` 中）也在其中：它们的候选与报告都是普通的值。签名带有某一层自身类型的端口留在那一层：`DecisionListener` 接收 runtime 的 `DecisionEvent`，`ControlStore` 和 `ChangeListener` 接收控制面的记录与事件。

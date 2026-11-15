@@ -228,6 +228,29 @@ the subject. `TokenConverter.toToken(subject)` alone issues a pair outside any s
 a refreshable pair yourself, start its session first,
 `converter.toToken(subject.inSession(tokenFamilies.start(tenant, principal)))`.
 
+### A service that only issues tokens
+
+A service that logs users in and issues the tokens, and decides nothing about requests (what 4.x's
+`cosec.authorization.enabled: false` gave), needs login and enforcement apart, and the switches that look like it are not:
+
+| Setting | What the service gets |
+|---|---|
+| `cosec.enabled=false` | Every CoSec bean is off, login too: there is no `TokenConverter`, `TokenVerifier` or `TokenCompositeAuthentication`, and a login controller fails startup on the missing bean. |
+| `cosec.jwt.enabled=false` | The same for issuing: `TokenConverter` is part of what `cosec.jwt.enabled` switches ("issuing, verifying and revoking", [Configuration](../operations/configuration.md)). |
+| `cosec.pipeline.mode=gateway` with `cosec.jwt.enabled=true` | Login and token issuing work; the service decides nothing with policies and needs no document. It **believes any `CoSec-Identity` header**, so it is for a service that nothing but a CoSec gateway can reach ([Services behind the gateway](./web.md#services-behind-the-gateway)). |
+| The default (`enforce`) with a platform document that permits every request | Login and issuing work, and the service verifies the tokens it receives. Every request is permitted: below. It needs Redis and a published document (`503` until there is one). |
+
+Both ways that work need the token stores that revocation reads and writes, `cosec-cocache` or beans of your own
+([Logout and revocation](#logout-and-revocation)). The second way, for a service that anyone can reach, is one document:
+
+<<< @/examples/token-issuer/documents/platform.json [documents/platform.json]
+
+Publish it as the first platform document ([Quick start](../guide/quick-start.md#publish-the-platform-document)). It
+permits the control API's path as well, but the control plane authorizes every step of it again, as the caller, so an
+anonymous caller is `401` there; leave `cosec-control` out of a service that only issues tokens. The scenarios in
+[`wiki/examples/token-issuer`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/token-issuer/scenarios) check
+that an anonymous request and a request with a token are both permitted.
+
 ## Sessions
 
 A login starts a **session**, a family of token pairs: an id (`sid`), the time its user signed in (`auth_time`) and a
