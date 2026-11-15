@@ -100,11 +100,14 @@ The rules behind the picture:
   Jackson type appears in a public signature of `api/` or `core/` (`JacksonSignatureTest`).
 - **`cosec-runtime`** (directory `core/runtime/`) is the data plane: the coroutine `Pipeline`, `StatusMapping`,
   `AuthorizationChecker`, `SnapshotSource`, token verification, the built-in authenticators and the logging audit
-  sink, over the documents of `cosec-document`. Coroutines stay in this module and the adapters, Reactor only at the
-  adapter bridges: `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `document/`, `engine/` or `model/`
-  references `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` or `document/`
-  references Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`),
-  `GlobalScope` or `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
+  sink, over the documents of `cosec-document`. Inside it, the adapter contract (`RequestGate`, `HttpFacts`,
+  `Outcome`, `Problem`, `RequestSecurity`) is one package, `runtime.http`, at the bottom, and the assembly
+  (`Pipeline`, `AuthorizationChecker`) is the root package, at the top; `PackageDependencyTest` holds every package to
+  its table in `PackageLedger`. Coroutines stay in this module and the adapters, Reactor only at the adapter bridges:
+  `RuntimeBoundaryTest` (ArchUnit) fails when code in `runtime/`, `document/`, `engine/` or `model/` references
+  `reactor.*`, when a data-plane SPI signature carries a Reactor type, when `runtime/` or `document/` references
+  Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or
+  `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
 - **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
   approvals, break-glass, simulation and analysis. It is a library that a host wires in. `ControlBoundaryTest`
   (ArchUnit) imports the module's own compiled classes and fails when one of them is outside `me.ahoo.cosec.control`,

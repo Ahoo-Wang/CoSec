@@ -44,6 +44,12 @@ and have to be provisioned again.
   `me.ahoo.cosec.runtime.token` to `me.ahoo.cosec.login.token`, with their names; `me.ahoo.cosec.runtime.token` keeps
   what verifying a request's token needs (`TokenRevocation`, `CoSecTokenVerifier`). In an application, change the
   imports; the starter and `cosec-jwt` bring `cosec-login`, so no dependency changes.
+- **The adapter contract is one package, `me.ahoo.cosec.runtime.http`.** `RequestGate`, `Outcome`, `Problem`,
+  `ProblemType`, `ProblemEncoder` and `RequestSecurity` move from `me.ahoo.cosec.runtime`, and `TraceContext` from
+  `me.ahoo.cosec.runtime.event`, beside `HttpFacts`, `Headers` and `Cookies`; the classes keep their names. In an
+  application, change the imports: an adapter of your own, a handler that reads `RequestSecurity`, a test that reads
+  an `Outcome`. A logging configuration that names the logger of one of the moved classes, or of `ShadowListener`
+  (now in `me.ahoo.cosec.runtime.shadow`), names its new package. No status code, header, body or property changes.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests
