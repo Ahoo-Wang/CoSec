@@ -260,6 +260,11 @@ out; the candidate never affects a real decision. A candidate is compared only o
 only by an instance that has installed the candidate's base revision. A tenant candidate is compared on the documents a
 request would read once it is published: one that binds an app's permission policy to `Anyone` or a principal brings in
 that app's installed document where the request read none, and one that removes the last such binding leaves it out.
+So does the failure of a document: one the candidate stops reading takes its failure with it, so a candidate that drops
+an app document that cannot be read or does not compile is `WIDENED` where the request is now 503, and one it starts
+reading brings its failure in. A candidate of a document that does not compile replaces it, failure and all; one of a
+document an instance cannot read is not compared there (`BASE_MISMATCH`: the instance does not know the revision it
+would replace), so read the window again once the store answers.
 
 | Outcome | Means |
 |---|---|
