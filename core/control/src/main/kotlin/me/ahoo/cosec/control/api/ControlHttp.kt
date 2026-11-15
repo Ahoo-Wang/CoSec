@@ -600,12 +600,12 @@ class ControlHttp(private val plane: ControlPlane) {
     }
 
     private fun explanation(explanation: Explanation): ObjectNode = factory.objectNode().apply {
-        putObject(
-            "version"
-        ).put(
-            "platform",
-            explanation.version.platform
-        ).put("app", explanation.version.app).put("tenant", explanation.version.tenant)
+        // A document the decision did not read has no version: absent, as `at` takes it, never `null` (#1391).
+        putObject("version").apply {
+            put("platform", explanation.version.platform)
+            explanation.version.app?.let { put("app", it) }
+            explanation.version.tenant?.let { put("tenant", it) }
+        }
         set("decision", decision(explanation.decision, explanation.trace))
     }
 
