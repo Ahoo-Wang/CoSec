@@ -70,6 +70,11 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   time. Full checks and stress runs belong on CI. Never run `./gradlew --stop`. Run `pnpm build` once, with no
   parallel builds.
 - Detekt runs with `autoCorrect = true`: `check` and `detekt` **rewrite source files**. Review and commit them.
+- The structure guards (`SourceSizeTest`, `TypesPerFileTest`, `PackageDependencyTest`, `DetektSuppressionTest`, in
+  `:architecture:check`; RFC 0013 §8.1) fail when a main source file grows past its cap or 400 lines, gains a second
+  top-level type, adds a package edge its module's table does not allow, or adds a structure suppression. Split the
+  code, or add a reviewed entry. They also fail when the code improves and the ledger does not follow: lower the cap,
+  remove the entry or the edge, lower `DetektSuppressionTest.RECORDED`.
 - Codecov requires ≥ 80 % coverage on changed lines.
 - The samples of the wiki's `scenarios/` pages are files under `wiki/examples/<scenario>/`, included by both languages.
   `:conformance:test` (`DocumentationExamplesTest`) compiles their documents, runs their scenarios, decodes their change
@@ -241,6 +246,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A new reader of what a document grants (its policies or bindings, the data plane or the control plane) | read it through `RoleExpansion.effective`, or a role grants through a path nothing analyzed (RFC 0012 §6) |
 | Extension points (SPIs; ports live in `cosec-spi` unless their signature needs a layer's types) | `@CoSecSpi` on the interface, `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | A public signature (a line of a module's `api/<project>.api`) | the dump (`updateKotlinAbi`); after GA, `!` in the PR title when a line is removed or changed |
+| A file over 400 lines, a second top-level type in a file, a new package edge inside `runtime`, `control` or `document`, a structure suppression | an entry in `test/architecture`'s ledgers (`SourceSizeLedger`, `TypeLedger`, `PackageLedger`, `DetektSuppressionTest.RECORDED`) with its batch or its reason, reviewed |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
 | A module the starter wires (a new one, or a feature that needs one) | `CoSecModuleCheckAutoConfiguration` (STA-1), `wiki/guide/introduction.md#modules` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
@@ -257,6 +263,15 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 - Kotlin with `-Xjsr305=strict`. Data-plane SPIs are `suspend` functions; `Mono<T>` appears only at the WebFlux and
   Gateway bridges and in their convenience extensions.
 - Comments explain *why*, only where it isn't obvious.
+- Structure (RFC 0013 §8.1): a main source file has at most 400 lines and one non-private top-level type, or one
+  family (a record and the parts only it is made of; a port and the values its own signature carries; a type and the
+  exception or enum only it uses; a sealed type and its subtypes). detekt reports at its threshold: a class, object or
+  interface has fewer than 20 functions, a function fewer than 8 parameters (a constructor fewer than 14), a block a
+  depth under 4. What does not fit today is in `test/architecture`'s ledgers (`SourceSizeLedger`, `TypeLedger`,
+  `PackageLedger`) or suppressed at the declaration with `// B<n>: …` (the RFC 0013 batch that removes it) or
+  `// stays: …` (the reason) on the line above the `@Suppress`. An entry or a suppression without a batch or a reason
+  does not pass review; a port and an implementation of it, or a class and a helper class with behaviour, are not a
+  family.
 - Tests: JUnit 5, MockK, FluentAssert (`me.ahoo.test.asserts.assert`), Reactor Test. For caching and
   concurrency, use real implementations (CoCache's in-memory backend, real Redis) rather than mocks; mocks hide the
   races these tests exist to catch.

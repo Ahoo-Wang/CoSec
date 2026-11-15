@@ -4,7 +4,7 @@
 > "目标架构设计说明由你亲自写"，冻结前必须做的那一档"默认按你推荐"） · 上位文档：[RFC 0001](0001-target-architecture.md) ·
 > 修订：[RFC 0011](0011-module-architecture.md) §3、[RFC 0010](0010-ga-extension-points.md) 2026-11-14 修订的 D1 与 D6 ·
 > 基线：`main` @ `75ca0604` · 交付：§8 的 A、B 两档在 8.0 RC 之前，C 档在 GA 之后 ·
-> 回写：2026-11-14，A1 开工前的半页修正了 §3.1（见 §3.4）
+> 回写：2026-11-14，A1 开工前的半页修正了 §3.1（见 §3.4）；2026-11-15，B0 开工前的半页修正了 §8（见 §8.3），A2 与 B1 开工前的半页修正了 §3.3 与 §4（见 §4.4）
 
 ## 0. 结论先行
 
@@ -115,11 +115,18 @@ annotations ← api ← model ← engine ← spi ← document ← runtime ← co
 
 | 包 | 职责 | 可以依赖 |
 |---|---|---|
-| `runtime`（根） | 对外的面：`Pipeline`、构建器、`AuthorizationChecker`、`Outcome`、`ProblemType` | 下面所有 |
-| `runtime.stage` | 请求路径的各个阶段（§4），全部内部 | `http`、`authn`、`attribute`、`snapshot` 的读接口、`event`、`ratelimit`、`identity` |
-| `runtime.snapshot` | 快照源（§5） | `document`（模块）、`attribute` 的目录 |
-| `runtime.shadow` | 影子记录（端口已在 `spi`） | `snapshot` 的读接口、`event` |
-| `http`、`authn`、`token`、`attribute`、`identity`、`ratelimit`、`event`、`audit` | 各管一件事 | 只有现有的方向，不得成环 |
+| `runtime`（根） | 装配：`Pipeline`、构建器、`AuthorizationChecker` | 下面所有 |
+| `runtime.stage` | 请求路径的各个阶段与每请求的状态（§4），全部内部 | `http`、`call`、`attribute`、`event`、`identity`、`ratelimit`、`shadow`、`snapshot` |
+| `runtime.http` | 适配器契约：进来的（`HttpFacts`、`Headers`、`Cookies`）与出去的（`RequestGate`、`Outcome`、`Problem`、`ProblemType`、`ProblemEncoder`、`RequestSecurity`），以及唯一构造 `Outcome` 的 `StatusMapping` | 无（叶子） |
+| `runtime.call` | 运行时包在一次端口调用外面的东西：时限、恢复所在的线程、失败日志的节流、id 生成器失败时的后备；内部 | 无（叶子） |
+| `runtime.event` | 决策事件与监听器 | `http`、`call`、`snapshot` |
+| `runtime.shadow` | 影子记录（端口已在 `spi`） | `event`、`snapshot` |
+| `runtime.identity` | 身份的签发与网关之后的校验 | `http`、`call` |
+| `runtime.snapshot` | 快照源（§5） | `attribute`（以及模块 `document`） |
+| `audit`、`authn` | 审计监听器；内置认证器 | `audit → event`，`authn → token` |
+| `attribute`、`ratelimit`、`token` | 各管一件事 | 无 |
+
+（2026-11-15 按 §4.4 改过：原表把 `Outcome`、`ProblemType` 放在根包，阶段包就会反过来依赖根包。）
 
 `test/architecture` 增加包依赖规则，把这张表写成断言；今天 `event → shadow`、`event → 根包` 这样的反向引用要先理顺。
 
@@ -199,6 +206,40 @@ val gate: RequestGate = CoSecPipeline.builder(authenticator, documentStore)   //
 选项不作为公开的值类型：`SnapshotOptions` 有十七个构造参数而且会继续长，按 RFC 0010 的 C4 它不该是稳定的值，所以由构建器的配置块设置。
 
 **稳定性的时点。** 契约在 RC 期间保持 `@ExperimentalCoSecApi`，GA 时去掉标记，条件是真实项目演练（路线图 R11）与两个内部使用者都没有逼出签名改动。标成实验性的原因（构造器会长）到那时已经不存在。
+
+### 4.4 开工前的修正（A2 与 B1，2026-11-15）
+
+实现方读完 `Pipeline.kt`（931 行）后交的半页与一份补充确认了 §4.2 的做法，并在下面几处修正了它；定下的结果如下，§3.3 的表已按它改。
+
+**分层：契约在下，阶段在中，装配在上。** 阶段要返回 `Outcome`、调用 `StatusMapping`、填写 `RequestSecurity`，这些原先都在根包，而根包里的 `Pipeline` 又要运行阶段：照原表做会成环。
+定下的做法是把整个适配器契约放进 `runtime.http`（那里已经有 `HttpFacts`），连同唯一构造 `Outcome` 的 `StatusMapping`；写适配器的人在一个包里找得到要用的全部类型。
+这是实验性公共类型的包移动，放在冻结之前。根包剩下装配。`ProblemType` 随 `Problem` 走；它没有进 `cosec-api`（`cosec-document` 里 `problem` 格式描述符重复了它的行，这要有一个两者之下的家才能消除，留给 A3 看）。
+
+**阶段。** 九个，顺序是一个固定数组，`StageOrderTest` 按名字断言：`ReadRequest`、`Authenticate`、`ResolveMembers`、`ResolveScope`、`LoadView`、`FetchAttributes`、`Evaluate`、`RunObligations`、`Respond`。
+
+- `FetchAttributes` 与 `Evaluate` 分开：引擎无 I/O 是不变量，一个会等待属性提供者的 `Evaluate` 会把它弄模糊；分开之后 `Evaluate` 不挂起。
+- 被拒凭据的重试（今天是 `authorize` 调用自己）成为 `ResolveMembers` 内部的循环，顺序保持线性。
+- 时限之外的三步（转发身份、REQUIRED 监听器、BEST_EFFORT 监听器）签名各不相同，不做成第二个数组：在 `evaluate` 里依次调用三次，顺序由行为测试守护，每一种调换都要有一个因此失败的测试。
+- `Pipeline.evaluate` 保留外框：请求 id、时限（503）、游离的取消与未建模的异常（500，PIP-2）、外部取消不产生结果（PIP-3）。
+
+**`RequestState`。** 一个内部对象，并入今天的 `RequestRecord`。三条规则：
+
+1. 没有任何字段带着“看起来像答案”的默认值。决定结果的字段（认证结果、租户、主体、成员关系、作用域、视图、请求、决定）非空且 `lateinit`：在它的阶段运行之前读取会抛出，外框回 500。
+   主体不存成“空即匿名”的可空字段：未设置读成匿名并不安全，绑定到具体主体的 DENY 不匹配匿名，绑定到 `Anyone` 的 ALLOW 却匹配。阶段 A 的属性同理（黑名单从它读出），“什么都没取”是一个值。
+   只有“未设置”与“没有”导致相同或更严的结果的字段才可空。
+2. “哪个阶段写哪个字段”是一个测试：从编译后的类读出每个 setter 的调用者，与表一致。
+3. 分配：没有监听器的场景多出这一个对象（约 130 B，约 2.4%）可以接受，条件是九个场景的吞吐比都不低于 0.97，且有监听器的场景每请求字节数不上升（那里它顶替 `RequestRecord`）。
+
+**构建器。**
+
+- 返回 `Pipeline`（final，`RequestGate` 且 `AutoCloseable`，构造器内部），不另起 `CoSecPipeline` 这个名字：`AuthorizationChecker` 与网关过滤器要的是 `Pipeline` 自己的方法。
+- 两种形式。公开的 `Pipeline.builder(authenticator, documentStore)` 自己创建并拥有快照源，`close()` 时关闭它。内部的（`@InternalCoSecApi`）接收现成的快照源：starter 的快照源是一个 bean，就绪检查、健康检查、影子视图与控制面的第二条管道都读它，不能归某一条管道所有。
+  两种形式走同一条私有的装配路径，默认值不可能不同；各自的 `close()` 有定义并有测试；公开形式在合入当天就有使用者（`cosec-testkit` 的 `PipelineFixture`、e2e 的基准、wiki 的手工装配示例）。
+- 网关之后的服务不运行管道，它的入口是 `Pipeline.behindGateway { … }: RequestGate`；§4.3 草图里的 `behindGateway(keys)` 没有依据，`IdentityGate` 校验的是大小、时效与时钟偏移。
+- 选项一律经配置块设置（一个可变的设置对象，在 `build()` 时定格），公开的构建器里没有按位置传的参数组；`PipelineOptions` 与 `SnapshotOptions` 转为内部。这是 §4.3 原有的决定，这里重申：十七个参数的构造器无法兼容地加第十八个，设置对象可以加属性。
+- 退出 ABI 清单：`PipelineComponents`、`Pipeline` 的构造器、`PipelineOptions`、`SnapshotOptions`、`AttributeProviders`、`DecisionListeners`、`IdentityIssuer`、`IdentityGate`、`SuspendingSnapshotSource`、`CoSecParameters.read`。三个适配器不变。
+
+**PR 顺序。** 纯移动（B1 的十二个多类型文件、契约进 `runtime.http`、三条反向引用）；构建器（A2，所有调用方切换，`PipelineComponents` 删除，文档同步）；阶段与 `RequestState`（`StageOrderTest`、写入者测试、16 个指向 `Pipeline.kt` 的变异体全部重写并跑过、JMH A/B）。
 
 ## 5. 快照源
 
@@ -341,9 +382,31 @@ snapshot/
 
 **B：RC 门禁之前（内部结构；门禁要验证的是最终结构）。** B0 防回退的规则；B1 请求路径的阶段；B2a 快照源的结构；B3 求值器（看那次测量）与 `flat` 改名；B4 控制面；B5 编解码器按节拆；B6 迁移工具的命令各自成文件；B2b 快照源的迁移函数（最后，按 §5.4 的条件）。
 
+**B7（2026-11-15 增加）。** 没有任何其他批次会碰到的文件：一个文件一个类型的机械拆分，只需要抽取的几个大文件（`CoSecControlAutoConfiguration`、`CoSecCacheSpecs`、`CoCacheControlStore` 的比较并交换辅助函数），以及只需要抽出一个函数的过深嵌套。纯移动与抽取，不改逻辑。
+拆分带有公共顶层函数或属性的文件会改变 ABI 清单里它们的 `…Kt` 类名，所以它必须在冻结之前合入，并在 PR 里列出这些行。
+
 **C：GA 之后。** B2b 如果没有达到放行条件；`DocumentSection`；义务运行器的表（等第二种义务出现）。
 
 顺序：A1 最先（它移动的文件最多，A3 的令牌改动落在它造出的位置上）；B0 紧随其后；A2 与 B1 一起（同一批文件）；A3；其余 B 项各自独立，真实项目演练（R11）可以穿插在 A 档合入之后。每一项一个 PR。
+
+### 8.3 开工前的修正（B0，2026-11-15）
+
+实现方在 A1 之后的 `main` 上实测（库项目的主代码，479 个文件），§8.1 的数字按它改：
+
+| 规则 | 实测 | 定下的 |
+|---|---|---|
+| 文件超过 400 行 | 25 个 | 每条例外要么写明留下的理由，要么写明消掉它的批次（B1–B7）；两者都没有的条目测试不接受。留下的：`Converter`、`PartTranslation`（一次性迁移代码）、`HttpPathPatternParser`（文法）、`ConditionChecker`（检查器）。`PolicyDocumentFormats` 归 B5：一张表有节，就不是“只能在一起”的理由 |
+| detekt | 半页：`TooManyFunctions` 18 处（控制面 10）、`NestedBlockDepth` 12 处（引擎 6）、`LongParameterList` 3 处。落地（#1375）是 39 处抑制，19、12、8：规则关闭期间写下的旧抑制遮住了 6 处，它们同样补了理由 | 阈值按 detekt 自己的语义：达到阈值即报告，所以读作“少于 20 个函数”“少于 8 个参数”；RFC、配置、AGENTS.md 用同一个数。现有违规在声明处 `@Suppress`，上一行写 `// B<n>:` 或 `// stays:`；每条规则的抑制数记在 `test/architecture`，只能与实际相等。不用基线文件：它把债藏在读代码的人看不到的地方，并且按签名定位，一移动就失效 |
+| 一个文件多个顶层类型 | 166 个文件（非私有的顶层类型；§8.1 的 118 是较早、范围较小的一次计数）。落地：42 个族，38 个 7.x 的镜像，86 个待拆 | 全部进清单，`family`（带理由）或 `debt`（带批次）；不做“封闭类型族”的自动识别，只有一种机制 |
+| 模块内的包依赖 | `runtime` 一个环（根包、`event`、`identity`），`control` 一个环（`change`、`store`、`authz`、`audit`），`document` 无环 | `runtime` 的四条反向引用进 B1 的只减清单，`control` 的三条进 B4 的；`document` 的表直接断言 |
+
+**“族”的判据**（写进清单的注释，对 166 个文件一视同仁）。算一个族：一条记录和只属于它的组成部分；一个端口和它自己签名里的值；一个类型和只有它用的异常或枚举；一个封闭类型和它的子类型。
+不算：一个端口和它的某个实现（内存实现单独成文件）；一个类和带行为的编解码器或辅助类；两个被装配在一起的类。
+`migrate` 里照搬 7.x 源文件的 `migrate.v7` 文件留下，理由是“7.x 的模型，逐文件对应”；`migrate` 自己的代码归 B6 或按上面的判据算族。
+
+`ControlStore`、它的两个实现的函数数量留下：一个存储操作一个方法。
+
+**批次与条目闭环。** `Batch` 记着已经合入的批次；清单条目与抑制理由都不得指向已合入的批次。每个批次的最后一个 PR 把自己加进去，协调者在那个 PR 里核对这一批做完了。
 
 ## 9. 风险、分歧与未核实
 
