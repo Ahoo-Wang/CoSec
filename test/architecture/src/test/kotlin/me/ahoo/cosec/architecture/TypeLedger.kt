@@ -194,7 +194,6 @@ object TypeLedger {
         "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/v7/serialization/JsonRateLimitRuleSerializer.kt" to MIRROR_7X,
         "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/v7/serialization/JsonStatementSerializer.kt" to MIRROR_7X,
         "test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/DocumentSnapshotCompiler.kt" to Disposition.Debt(Batch.B7),
-        "test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/EngineScenarios.kt" to Disposition.Debt(Batch.B7),
         "test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/ScenarioJson.kt" to family(OWN_EXCEPTION, "the scenario reader"),
     )
 }
