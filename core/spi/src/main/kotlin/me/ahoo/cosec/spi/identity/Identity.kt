@@ -116,9 +116,8 @@ class Identity(
             require(issuedAt == null || expiresAt == null || !issuedAt.isAfter(expiresAt)) {
                 "A credential cannot be issued after it expires: issued $issuedAt, expires $expiresAt."
             }
-            require(session == null || (issuedAt != null && !session.authTime.isAfter(issuedAt))) {
-                "A session's token says when it was issued, which is not before the user signed in."
-            }
+            // Not compared with the session's login time: two clocks wrote them (the family's, the issuer's).
+            require(session == null || issuedAt != null) { "A session's token says when it was issued." }
         }
 
         private fun fields(): List<Any?> = listOf(method, id, expiresAt, capped, issuedAt, session)

@@ -198,7 +198,7 @@ object DocumentFormats {
                                             "auth_time",
                                             epochSeconds,
                                             required = true,
-                                            description = "When the user signed in: not after auth.iat.",
+                                            description = "When the user signed in, by the session's clock.",
                                         ),
                                         Field(
                                             "generation",

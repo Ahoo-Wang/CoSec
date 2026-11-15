@@ -76,8 +76,9 @@ interface SecurityContext {
 
         /**
          * The [tenantId] of the default tenant, the one a principal without a tenant is in, and an anonymous caller's.
-         * Spelled like `CoSecPrincipal.ANONYMOUS_ID` and another id; `TenantId.DEFAULT` of `cosec-model` is the same
-         * value as a value class.
+         * It is spelled the same as the anonymous principal's id, `CoSecPrincipal.ANONYMOUS_ID`, and does not collide
+         * with it: one names a tenant, the other a principal, and they are never compared. `TenantId.DEFAULT` of
+         * `cosec-model` is this value.
          */
         const val DEFAULT_TENANT_ID: String = "(0)"
     }

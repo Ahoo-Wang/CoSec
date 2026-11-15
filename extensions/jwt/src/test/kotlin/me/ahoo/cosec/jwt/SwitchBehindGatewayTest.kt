@@ -58,6 +58,8 @@ import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import java.time.Clock
+import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 
@@ -70,7 +72,8 @@ class SwitchBehindGatewayTest {
     private class Select(override val targetTenantId: String, override val context: SecurityContext) :
         SwitchTenantCredentials
 
-    private val families = TokenFamilies(InMemoryTokenFamilyStore())
+    private val store = InMemoryTokenFamilyStore()
+    private val families = TokenFamilies(store)
     private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
     private val switching = SwitchTenantAuthentication(
@@ -136,6 +139,25 @@ class SwitchBehindGatewayTest {
         val token = verifier.verify(switched.accessToken)
         token.tenant.assert().isEqualTo("globex")
         token.session!!.authTime.assert().isEqualTo(verifier.verify(pair.accessToken).session!!.authTime)
+    }
+
+    /**
+     * The login time and the token's issue time come from two clocks: the family's, on the instance that took the login,
+     * and the issuing instance's, which for a refresh or a switch can be another one, or run behind. A token whose
+     * login is after its issue is forwarded, read behind the gateway, and switched from: no rule rests on their order.
+     */
+    @Test
+    fun `a token whose login is after its issue, by two clocks, is forwarded and switched from`() = runBlocking<Unit> {
+        val ahead = TokenFamilies(store, clock = Clock.offset(Clock.systemUTC(), Duration.ofSeconds(2)))
+        val pair = converter.toToken(
+            TokenSubject("alice", null, tenant = "acme").inSession(ahead.start(TenantId("acme"), PrincipalId("alice")))
+        )
+        val token = verifier.verify(pair.accessToken)
+        token.session!!.authTime.isAfter(token.issuedAt!!).assert().describedAs("auth_time after iat").isTrue()
+
+        val switched = tokens.authenticateAsToken(Select("globex", behindTheGateway(pair.accessToken)))
+
+        verifier.verify(switched.accessToken).session!!.authTime.assert().isEqualTo(token.session!!.authTime)
     }
 
     @Test

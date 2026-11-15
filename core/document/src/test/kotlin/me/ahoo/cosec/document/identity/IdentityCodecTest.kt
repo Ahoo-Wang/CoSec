@@ -204,6 +204,10 @@ class IdentityCodecTest {
         val good = """{"sid":"s1","auth_time":1,"generation":1}"""
         IdentityCodec.decode(with("""{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":$good}"""))
             .credential.session!!.generation.assert().isEqualTo(1L)
+        // A login a second after the token's issue: two clocks wrote them (the family's, the issuer's), and it is read.
+        IdentityCodec.decode(
+            with("""{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":3,"generation":1}}"""),
+        ).credential.session!!.authTime.epochSecond.assert().isEqualTo(3L)
         val refused = listOf(
             // No auth_time, no sid, no generation.
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","generation":1}}""",
@@ -213,10 +217,9 @@ class IdentityCodecTest {
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":-1}}""",
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":0}}""",
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":1.5}}""",
-            // An empty session id, an unknown member, a login after the token's issue.
+            // An empty session id, an unknown member.
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"","auth_time":1,"generation":1}}""",
             """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":1,"x":1}}""",
-            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":3,"generation":1}}""",
             // A session without the token's issue time, or of another credential than CoSec's token.
             """{"method":"jwt","jti":"t1","exp":9,"session":$good}""",
             """{"method":"api-key","jti":"k1","exp":9,"iat":2,"session":$good}""",

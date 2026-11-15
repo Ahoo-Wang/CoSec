@@ -16,6 +16,7 @@
 package me.ahoo.cosec.model
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.context.SecurityContext
 
 /**
  * The identifiers of the unified model (RFC 0004 §4.1). They appear on API boundaries only: compiled structures keep
@@ -27,8 +28,8 @@ value class TenantId(val value: String) {
         /** The platform tenant. */
         val PLATFORM = TenantId("(platform)")
 
-        /** The tenant of anonymous principals. The anonymous principal's id is spelled the same, and is another id. */
-        val DEFAULT = TenantId("(0)")
+        /** The default tenant, the anonymous principals' among others: `SecurityContext.DEFAULT_TENANT_ID`, one definition. */
+        val DEFAULT = TenantId(SecurityContext.DEFAULT_TENANT_ID)
     }
 }
 

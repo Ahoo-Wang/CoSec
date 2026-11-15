@@ -204,8 +204,7 @@ class SchemaConformanceTest {
      * Makes ids unique where a codec rejects duplicates, and has an app document's principals name their tenant, which
      * the shared binding schema cannot require of one kind of document only ([FormatPatterns]). An identity's
      * credential is made to hold together as the codec requires and a schema cannot say across members: a session is
-     * CoSec's own token's (`method` `jwt`) and comes with the token's `iat`, which is not after `exp`, and the user signed
-     * in (`auth_time`) no later than that.
+     * CoSec's own token's (`method` `jwt`) and comes with the token's `iat`, which is not after `exp`.
      */
     private fun selfConsistent(file: SchemaFile, document: JsonNode): JsonNode {
         if (file.name == DocumentFormats.IDENTITY) {
@@ -228,11 +227,9 @@ class SchemaConformanceTest {
     private fun consistentCredential(auth: ObjectNode) {
         val expiresAt = auth.get("exp").longValue()
         auth.get("iat")?.takeIf { it.longValue() > expiresAt }?.let { auth.put("iat", expiresAt) }
-        val session = auth.get("session") as? ObjectNode ?: return
+        if (!auth.has("session")) return
         auth.put("method", "jwt")
         if (!auth.has("iat")) auth.put("iat", expiresAt)
-        val issuedAt = auth.get("iat").longValue()
-        if (session.get("auth_time").longValue() > issuedAt) session.put("auth_time", issuedAt)
     }
 
     /**

@@ -47,8 +47,9 @@ import java.util.Base64
  * `auth.capped` is `true` for a credential with a role cap (an API key with `roles`, RFC 0009 §4.2), and absent
  * otherwise: the service behind then applies no principal binding either. `auth.iat` is when the credential was issued,
  * absent when it does not say, and never after `auth.exp`. `auth.session` is the session of CoSec's own token
- * (`method` `jwt` only, and only with `auth.iat`): `sid`, `auth_time` (when the user signed in, not after `auth.iat`) and
- * a positive `generation`, all three required. A service behind the gateway reads the user's login time from it, and a
+ * (`method` `jwt` only, and only with `auth.iat`): `sid`, `auth_time` (when the user signed in) and a positive
+ * `generation`, all three required. `auth_time` and `auth.iat` are not compared: the family's clock wrote the one, the
+ * issuing instance's the other, and no rule rests on their order. A service behind the gateway reads the user's login time from it, and a
  * tenant switch issues from it (`IDN-22`); without it, everything else reads as before.
  *
  * Times are epoch seconds, from 0 to the end of year 9999. `claims` may be absent; `auth.exp` may not: a gateway
@@ -174,7 +175,6 @@ object IdentityCodec {
         if (method != Identity.Method.JWT.value) throw malformed("$.auth.session is CoSec's own token's only")
         issuedAt ?: throw malformed("$.auth.session needs $.auth.iat")
         val authTime = node.need("auth_time").seconds("$.auth.session.auth_time")
-        if (authTime.isAfter(issuedAt)) throw malformed("$.auth.session.auth_time is after $.auth.iat")
         val generation = node.need("generation")
         if (!generation.isIntegralNumber || !generation.canConvertToLong() || generation.longValue() < 1) {
             throw malformed("$.auth.session.generation is not a positive integer")

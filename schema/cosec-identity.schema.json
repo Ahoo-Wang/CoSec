@@ -39,7 +39,7 @@
           "description": "The session of CoSec's own token (method jwt, with iat), which a tenant switch behind the gateway issues from. Absent for any other credential.",
           "properties": {
             "auth_time": {
-              "description": "When the user signed in: not after auth.iat.",
+              "description": "When the user signed in, by the session's clock.",
               "minimum": 0,
               "type": "integer"
             },
