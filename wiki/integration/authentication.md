@@ -217,7 +217,9 @@ thread.
 
 `LoginCredentials` and `Authentication` here are the login types of `me.ahoo.cosec.login` (`TokenCompositeAuthentication`
 and `TokenConverter` are in `me.ahoo.cosec.login.token`), from `cosec-login`, which the starter brings; they are not
-the pipeline's `Credentials` and `Authenticator` (`me.ahoo.cosec.spi.authn`).
+the pipeline's `Credentials` and `Authenticator` (`me.ahoo.cosec.spi.authn`). Without the starter, in a test say, build
+the login from your authentications: `TokenCompositeAuthentication.of(listOf(passwordAuthentication), tokenConverter,
+tokenFamilies)`.
 `cosec.authentication.login.enabled` (on by default) switches only these login beans, `TokenCompositeAuthentication`
 and social login included; requests are authenticated by the pipeline either way. The login path must be reachable by
 anonymous callers, so it needs an `Anyone` binding that permits it, as in the

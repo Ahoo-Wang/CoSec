@@ -68,6 +68,41 @@ class TokenCompositeAuthenticationTest {
         return TokenCompositeAuthentication(CompositeAuthentication(authenticationProvider), tokenConverter, families)
     }
 
+    private class Password(val user: String) : LoginCredentials
+
+    private class Code(val user: String) : LoginCredentials
+
+    /** Entry 12 of the 8.0 drill: a login is assembled from its authentications, without the starter. */
+    @Test
+    fun `a login is built from its authentications and finds each by its credentials`() = runTest {
+        fun authentication(
+            type: Class<out LoginCredentials>,
+            tenant: String
+        ) = object : Authentication<LoginCredentials> {
+            @Suppress("UNCHECKED_CAST")
+            override val credentialsType = type as Class<LoginCredentials>
+
+            override suspend fun authenticate(credentials: LoginCredentials) = TokenSubject(
+                "alice",
+                null,
+                tenant = tenant
+            )
+        }
+        val issued = mutableListOf<String?>()
+        every { tokenConverter.toToken(any()) } answers {
+            issued += firstArg<TokenSubject>().tenant
+            compositeToken
+        }
+        val login = TokenCompositeAuthentication.of(
+            listOf(authentication(Password::class.java, "by-password"), authentication(Code::class.java, "by-code")),
+            tokenConverter,
+            families,
+        )
+        login.authenticateAsToken(Code("alice")).assert().isEqualTo(compositeToken)
+        login.authenticateAsToken(Password("alice"))
+        issued.assert().containsExactly("by-code", "by-password")
+    }
+
     @Test
     fun authenticateAsToken() = runTest {
         val tokens = tokensBy(
