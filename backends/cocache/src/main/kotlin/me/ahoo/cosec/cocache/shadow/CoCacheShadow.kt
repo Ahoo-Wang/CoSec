@@ -29,8 +29,8 @@ import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.document.json.CoSecJson
@@ -82,7 +82,7 @@ internal object ShadowCacheSpecs {
      */
     val INDEX_EXPIRY: Duration = Duration.ofHours(3)
 
-    fun candidate(keyPrefix: String = CoSec.COSEC): StoreSpec<SnapshotKey, StoredCandidate> =
+    fun candidate(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<SnapshotKey, StoredCandidate> =
         CoSecCacheSpecs.storeOfRecord(
             CoSecCacheSpecs.CANDIDATE_CACHE_NAME,
             keyPrefix,
@@ -91,21 +91,21 @@ internal object ShadowCacheSpecs {
         )
             .build()
 
-    fun reports(keyPrefix: String = CoSec.COSEC): StoreSpec<String, ShadowReport> =
+    fun reports(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, ShadowReport> =
         observation(CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME, keyPrefix, ShadowReportCodec, REPORT_TTL)
 
-    fun reporters(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Set<String>> =
+    fun reporters(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Set<String>> =
         observation(CoSecCacheSpecs.SHADOW_REPORTER_CACHE_NAME, keyPrefix, ReportersCodec, REPORT_TTL)
 
     /** The key of [instance]'s report of [window], under the reports' namespace. */
     fun reportKey(window: String, instance: String): String = "$window:$instance"
 
     /** One instance's status under its id ([ShadowReport.isInstanceId]). */
-    fun statuses(keyPrefix: String = CoSec.COSEC): StoreSpec<String, InstanceStatus> =
+    fun statuses(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, InstanceStatus> =
         observation(CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, keyPrefix, InstanceStatusCodec, STATUS_TTL)
 
     /** The instances that have a status to read, by when each last listed itself, under [INDEX_KEY]. */
-    fun instances(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Map<String, Instant>> =
+    fun instances(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Map<String, Instant>> =
         observation(CoSecCacheSpecs.INSTANCE_INDEX_CACHE_NAME, keyPrefix, InstanceIndexCodec, REPORT_TTL)
 
     /** A `Store` whose entries expire [ttl] after their last write; a failed read throws ([CoSecCacheSpecs.locks]). */
@@ -190,7 +190,7 @@ class CoCacheCandidateStore(private val candidates: Store<SnapshotKey, StoredCan
 
     @InternalCoSecApi
     companion object {
-        fun create(factory: CoCacheFactory, keyPrefix: String = CoSec.COSEC): CoCacheCandidateStore =
+        fun create(factory: CoCacheFactory, keyPrefix: String = DEFAULT_KEY_PREFIX): CoCacheCandidateStore =
             CoCacheCandidateStore(factory.createLocked(ShadowCacheSpecs.candidate(keyPrefix)))
     }
 }
@@ -357,7 +357,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         @InternalCoSecApi
         fun create(
             factory: CoCacheFactory,
-            keyPrefix: String = CoSec.COSEC,
+            keyPrefix: String = DEFAULT_KEY_PREFIX,
             clock: Clock = Clock.systemUTC()
         ): CoCacheShadowReports =
             CoCacheShadowReports(

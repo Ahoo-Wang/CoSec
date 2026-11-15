@@ -65,7 +65,7 @@ class SubjectRevocationTest {
     private val revocation = TokenRevocation(tokenStore, Duration.ZERO)
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
     private val revoker =
-        DefaultTokenRevoker(
+        StoreTokenRevoker(
             verifier,
             tokenStore,
             revocation,
@@ -113,7 +113,7 @@ class SubjectRevocationTest {
     @Test
     fun issuedBeforeDefaultsToNow() = runTest {
         val before = Instant.now()
-        DefaultTokenRevoker(verifier, tokenStore, revocation, families, refreshValidity).revokeSubject(tenant, alice)
+        StoreTokenRevoker(verifier, tokenStore, revocation, families, refreshValidity).revokeSubject(tenant, alice)
 
         tokenStore.subjectRevokedBefore(tenant, alice)!!.isBefore(before).assert().isFalse()
     }
@@ -123,7 +123,7 @@ class SubjectRevocationTest {
         val writesTokensOnly = object : TokenStore {
             override suspend fun revoke(tokenId: String, ttl: Duration) = Unit
         }
-        val revoker = DefaultTokenRevoker(verifier, writesTokensOnly, revocation, families, refreshValidity)
+        val revoker = StoreTokenRevoker(verifier, writesTokensOnly, revocation, families, refreshValidity)
 
         assertThrows<UnsupportedOperationException> { revoker.revokeSubject(tenant, alice, now) }
     }

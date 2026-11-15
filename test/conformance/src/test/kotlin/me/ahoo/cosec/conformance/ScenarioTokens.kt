@@ -20,11 +20,12 @@ import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.jwt.JwtTokenVerifier
-import me.ahoo.cosec.login.token.DefaultTokenRevoker
+import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
-import me.ahoo.cosec.login.token.SimpleRefreshTokenAuthentication
+import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -96,7 +97,7 @@ internal class ScenarioJwt(node: JsonNode) {
 
 /**
  * A scenario's `"refresh"` (PipelineRunner): the pairs it signs, refreshed in turn through
- * [SimpleRefreshTokenAuthentication], over the scenario's revocations and token families, at [NOW]. `"refresh"` is one
+ * [RefreshTokenAuthentication], over the scenario's revocations and token families, at [NOW]. `"refresh"` is one
  * pair or a list of them; the outcome is the last one's. `"logout"`, a pair, is logged out first (`TokenRevoker`).
  */
 internal object ScenarioRefresh {
@@ -109,12 +110,12 @@ internal object ScenarioRefresh {
         val store = familyStore(families)
         val tokenFamilies = TokenFamilies(store, LIFETIME, LEEWAY, clock = clock)
         val authentication =
-            SimpleRefreshTokenAuthentication(ScenarioJwt.VERIFIER, TokenRevocation(revocations), tokenFamilies)
+            RefreshTokenAuthentication(ScenarioJwt.VERIFIER, TokenRevocation(revocations), tokenFamilies)
         node.only("access", "refresh", "pairs", "logout")
         val attempts = node.get("pairs")?.values()?.toList()?.onEach { it.only("access", "refresh") } ?: listOf(node)
         return runBlocking {
             node.get("logout")?.let { logout ->
-                val revoker = DefaultTokenRevoker(
+                val revoker = StoreTokenRevoker(
                     ScenarioJwt.VERIFIER,
                     NO_TOKEN_STORE,
                     TokenRevocation(revocations),
@@ -122,7 +123,7 @@ internal object ScenarioRefresh {
                     Duration.ofDays(7),
                     clock,
                 )
-                revoker.revoke(pair(logout))
+                revoker.revoke(pair(logout).let { CompositeToken(it.accessToken, it.refreshToken) })
             }
             attempts.dropLast(1).forEach { runCatching { authentication.authenticate(pair(it)) } }
             outcome { authentication.authenticate(pair(attempts.last())) }

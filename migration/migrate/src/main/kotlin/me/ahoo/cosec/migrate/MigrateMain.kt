@@ -27,9 +27,9 @@ import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cocache.ApiKeyCodec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.document.json.CoSecJson
@@ -258,7 +258,7 @@ object MigrateMain {
         val partition = partitionOf(options)
         val outDirectory = Path.of(options.required("out"))
         val read = if (fromRedis != null) {
-            readRedis(fromRedis, options.value("key-prefix") ?: CoSec.COSEC)
+            readRedis(fromRedis, options.value("key-prefix") ?: DEFAULT_KEY_PREFIX)
         } else {
             ExportDirectory.read(Path.of(fromFiles!!))
         }
@@ -324,7 +324,7 @@ object MigrateMain {
 
     private fun publish(options: Options, out: PrintStream): Int {
         val uri = options.required("to-redis")
-        val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
+        val keyPrefix = options.value("key-prefix") ?: DEFAULT_KEY_PREFIX
         val cluster = options.flag("cluster")
         val input = Path.of(options.required("in"))
         val documents = ConvertedDirectory.read(input)
@@ -431,7 +431,7 @@ object MigrateMain {
         val source = if (fromRedis != null) {
             readRedis(
                 fromRedis,
-                options.value("key-prefix") ?: CoSec.COSEC
+                options.value("key-prefix") ?: DEFAULT_KEY_PREFIX
             )
         } else {
             ExportDirectory.read(Path.of(fromFiles!!))
@@ -462,7 +462,7 @@ object MigrateMain {
      */
     private fun apiKeys(options: Options, out: PrintStream): Int {
         val uri = options.required("redis")
-        val keyPrefix = options.value("key-prefix") ?: CoSec.COSEC
+        val keyPrefix = options.value("key-prefix") ?: DEFAULT_KEY_PREFIX
         val apiKeyPrefix = CoSecCacheSpecs.apiKeyPrefix(keyPrefix)
         val outDirectory = Path.of(options.required("out"))
         val dryRun = options.flag("dry-run")
@@ -616,7 +616,7 @@ object MigrateMain {
     private fun <T> controlStore(options: Options, block: (CoCacheControlStore) -> T): T =
         controlStore(
             options.required("to-redis"),
-            options.value("key-prefix") ?: CoSec.COSEC,
+            options.value("key-prefix") ?: DEFAULT_KEY_PREFIX,
             options.flag("cluster"),
             block
         )

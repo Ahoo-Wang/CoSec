@@ -39,7 +39,7 @@ import java.time.Instant
  * expires before the bound refresh token does: the starter wires it from `cosec.jwt.token-validity.refresh`
  * @param clock the time [revokeSubject] measures a future `issuedBefore` from
  */
-class DefaultTokenRevoker @JvmOverloads constructor(
+class StoreTokenRevoker @JvmOverloads constructor(
     private val tokenVerifier: TokenVerifier,
     private val tokenStore: TokenStore,
     private val revocation: TokenRevocation,

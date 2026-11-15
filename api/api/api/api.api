@@ -1,10 +1,3 @@
-public final class me/ahoo/cosec/api/CoSec {
-	public static final field COSEC Ljava/lang/String;
-	public static final field COSEC_PREFIX Ljava/lang/String;
-	public static final field DEFAULT Ljava/lang/String;
-	public static final field INSTANCE Lme/ahoo/cosec/api/CoSec;
-}
-
 public abstract interface class me/ahoo/cosec/api/audit/AuditAuthorization {
 	public abstract fun getDecision ()Lme/ahoo/cosec/api/audit/AuditDecision;
 	public abstract fun getElapsedNanos ()J
@@ -177,8 +170,12 @@ public final class me/ahoo/cosec/api/principal/CoSecPrincipal$DefaultImpls {
 	public static fun getName (Lme/ahoo/cosec/api/principal/CoSecPrincipal;)Ljava/lang/String;
 }
 
-public abstract interface class me/ahoo/cosec/api/token/CompositeToken {
-	public abstract fun getAccessToken ()Ljava/lang/String;
-	public abstract fun getRefreshToken ()Ljava/lang/String;
+public final class me/ahoo/cosec/api/token/CompositeToken {
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getAccessToken ()Ljava/lang/String;
+	public final fun getRefreshToken ()Ljava/lang/String;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
 }
 

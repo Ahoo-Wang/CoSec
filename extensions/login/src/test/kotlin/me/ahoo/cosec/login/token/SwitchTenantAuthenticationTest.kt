@@ -29,26 +29,27 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 
-/** The documented extension point for switching tenants (`wiki/integration/authentication.md`). */
-class AbstractSwitchTenantAuthenticationTest {
-    /** Lets a principal into the tenants it is a member of, with what it holds there, and nowhere else. */
-    private class Switching(
-        private val members: Map<String, TenantMembership>,
-        verifier: TokenVerifier = Tokens,
-    ) : AbstractSwitchTenantAuthentication(verifier) {
-        override suspend fun switchTenant(
-            targetTenantId: String,
-            previous: SecurityContext
-        ): TenantMembership = requireNotNull(members[targetTenantId]) {
-            "[${previous.principal.id}] may not enter [$targetTenantId]."
-        }
-    }
-
+/** The documented extension point for switching tenant and app (`wiki/integration/authentication.md`). */
+class SwitchTenantAuthenticationTest {
+    /** An application's own credentials: what CoSec asks for, and a device id its switch reads. */
     private class Credentials(
         override val targetTenantId: String,
         override val context: SecurityContext,
         override val accessToken: String = "alice-in-acme",
+        override val targetAppId: String? = null,
+        val deviceId: String = "phone",
     ) : SwitchTenantCredentials
+
+    /** Lets a principal into the tenants it is a member of, with what it holds there, and nowhere else. */
+    @Suppress("FunctionName")
+    private fun Switching(
+        members: Map<String, TenantMembership>,
+        verifier: TokenVerifier = Tokens,
+    ) = SwitchTenantAuthentication(verifier, Credentials::class.java) { credentials ->
+        requireNotNull(members[credentials.targetTenantId]) {
+            "[${credentials.context.principal.id}] may not enter [${credentials.targetTenantId}]."
+        }
+    }
 
     /** The tokens the switch is presented with, by their text. */
     private object Tokens : TokenVerifier {
@@ -82,9 +83,19 @@ class AbstractSwitchTenantAuthenticationTest {
 
     private val alice = context()
 
+    /** A login finds the switch by the application's own credentials class (`TokenCompositeAuthentication`). */
     @Test
-    fun `it supports switch-tenant credentials`() {
-        Switching(emptyMap()).credentialsType.assert().isEqualTo(SwitchTenantCredentials::class.java)
+    fun `it supports the application's credentials class`() {
+        Switching(emptyMap()).credentialsType.assert().isEqualTo(Credentials::class.java)
+    }
+
+    @Test
+    fun `the switch reads the application's own credentials without a cast`() = runTest {
+        val byDevice = SwitchTenantAuthentication(Tokens, Credentials::class.java) { credentials ->
+            TenantMembership(attributes = mapOf("device" to credentials.deviceId))
+        }
+        byDevice.authenticate(Credentials("globex", alice, deviceId = "tablet")).attributes
+            .assert().isEqualTo(mapOf("device" to "tablet"))
     }
 
     /** RC1-23: the new token holds the target tenant's memberships only, never the previous tenant's. */
@@ -111,12 +122,41 @@ class AbstractSwitchTenantAuthenticationTest {
         subject.membershipMarker.assert().isEqualTo(MembershipClaims.PROVIDER)
     }
 
-    /** `SCP-11`: a user cannot change the app of a token by switching tenant, and a token for no app stays so. */
+    /** `SCP-11`, `SCP-12`: without an app in the answer, the new token keeps the previous one's, or none. */
     @Test
     fun `the new token keeps the app of the previous one`() = runTest {
         val member = Switching(mapOf("globex" to TenantMembership()))
         member.authenticate(Credentials("globex", context(app = "order"))).app.assert().isEqualTo("order")
         member.authenticate(Credentials("globex", context())).app.assert().isNull()
+    }
+
+    /** `SCP-12`: the app is the issuer's decision, so the switch's answer names it, from a token that had none too. */
+    @Test
+    fun `a switch that answers an app issues the token for it`() = runTest {
+        val clerk = Switching(mapOf("globex" to TenantMembership(roles = setOf("clerk"), app = "order")))
+        clerk.authenticate(Credentials("globex", context(), targetAppId = "order")).app.assert().isEqualTo("order")
+        clerk.authenticate(Credentials("globex", context(app = "billing"))).app.assert().isEqualTo("order")
+        val provided = Switching(mapOf("globex" to TenantMembership.fromProvider(app = "order")))
+        provided.authenticate(Credentials("globex", context())).app.assert().isEqualTo("order")
+    }
+
+    /** `SCP-12`: an app the request names reaches the token only through the answer, never as named. */
+    @Test
+    fun `an app the credentials name and the answer does not return is never issued`() = runTest {
+        val member = Switching(mapOf("globex" to TenantMembership()))
+        member.authenticate(Credentials("globex", context(), targetAppId = "order")).app.assert().isNull()
+        member.authenticate(Credentials("globex", context(app = "billing"), targetAppId = "order"))
+            .app.assert().isEqualTo("billing")
+    }
+
+    /** `SCP-10`: the answered app becomes the token's `aud`, so it must be one a token can carry. */
+    @Test
+    fun `an answered app that cannot be an app id refuses the switch`() = runTest {
+        listOf("", "*", "a:b").forEach { app ->
+            assertThrows<IllegalArgumentException> {
+                Switching(mapOf("globex" to TenantMembership(app = app))).authenticate(Credentials("globex", alice))
+            }
+        }
     }
 
     /**

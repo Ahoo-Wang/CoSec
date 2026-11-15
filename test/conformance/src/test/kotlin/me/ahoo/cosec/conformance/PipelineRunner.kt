@@ -172,7 +172,7 @@ import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
  * "revocations":        { "tokens": ["t1"], "subjects": [{ "tenant": "acme", "principal": "alice", "issuedBefore": "..." }] }
  *                       | { "fails": "message" }                        // the check reports an error
  *                       | { "unavailable": "message" },                 // the store cannot be read
- * // Instead of a request: a refresh (SimpleRefreshTokenAuthentication over the real JwtTokenVerifier and the scenario's
+ * // Instead of a request: a refresh (RefreshTokenAuthentication over the real JwtTokenVerifier and the scenario's
  * // revocations) of the pair signed from these claims, as "jwt" signs one ("iat": epoch seconds). The outcome is
  * // { "status": 200, "proceed": true } when a token would be issued, 401 with the token-* type of the refusal, or
  * // { "status": 503, "type": "unavailable" } when the revocations cannot be read.
@@ -221,10 +221,12 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "\$comment", "rules", "polarity", "level", "description", "documents", "http", "authentication",
             "membershipProvider", "snapshot", "options", "cancel", "expect", "revocations", "attributeProviders",
             "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check", "refresh", "families",
+            "switch",
         )
         node.get("refresh")?.let {
             return ScenarioRefresh.refreshed(it, revocations(node.get("revocations")), node.get("families"))
         }
+        node.get("switch")?.let { return ScenarioSwitch.switched(it) }
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
