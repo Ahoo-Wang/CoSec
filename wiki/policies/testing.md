@@ -651,7 +651,7 @@ class OrderPermissionsTest {
     private val reader = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
 
     @Test
-    fun `a reader may read`() = runBlocking {
+    fun `a reader may read`() = runBlocking<Unit> {
         PipelineFixture.load(Path.of("src/test/resources/policies/documents")).use { fixture ->
             val request = fixture.request("GET", "/orders/1", reader)
             check(fixture.evaluate(request).status == 200)
@@ -662,6 +662,10 @@ class OrderPermissionsTest {
     }
 }
 ```
+
+`runBlocking<Unit>` is deliberate. JUnit does not run a test method that returns a value, and reports nothing: a block
+whose last call returns one, as an assertion library's usually does, would make the method return it, and the build stays
+green with the test skipped. Write every test that is a `runBlocking` expression this way.
 
 `PipelineFixture.of(platform, apps, tenants)` takes documents as JSON text. A document that does not compile fails when
 the fixture is built. `Principal` says who a request is, as a token would: `tenant`, `roles` (`role` or `role@space`),

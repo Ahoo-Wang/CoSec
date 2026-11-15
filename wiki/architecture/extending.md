@@ -72,7 +72,7 @@ Every public declaration of a published module is in one of four levels. The mar
 | Marker | What it promises | What you do |
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
-| `@CoSecSpi` | An interface applications implement, not only call: the extension points above, and the capabilities a principal declares (`ExpiresAtCapable`, `IssuedAtCapable`, `MembershipMarkerCapable`). Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
+| `@CoSecSpi` | An interface applications implement, not only call: the extension points above. Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
 | `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `AttributeRequests`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline.builder`, `PipelineBuilder` and its settings `PipelineSettings`, `SnapshotSettings`, `ListenerSettings` and `IdentityForwardingSettings`, `Pipeline.behindGateway` with `GatewayIdentitySettings`, `Pipeline.evaluate` and `awaitDocuments`, `RequestGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `RequestSecurity`); the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`); and the control plane's store and shadow window ports with their records ([Control store](#control-store)). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
 | `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
 
@@ -333,6 +333,7 @@ class DirectoryAttributeProviderTest {
     private val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
 
     @Test
+    // <Unit>: JUnit skips, without a word, a test method that returns a value
     fun `reads the department of the principal`() = runBlocking<Unit> {
         val request = AttributeRequests.of(Action("order", "read"), Resource("order", "7", emptyMap()), alice)
         val values = provider.fetch(request, setOf("ext.directory.department"))
