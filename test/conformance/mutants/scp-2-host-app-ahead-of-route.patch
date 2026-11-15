@@ -2,11 +2,11 @@
 # Mutant: the configured host app wins over the route's cosec-app-id
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.RouteAppTest :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 8b2bf7cc..4837efe9 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -305,7 +305,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
+index 2e80c496..0306c9fc 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
+@@ -79,7 +79,7 @@ internal class ReadRequest(private val routes: RouteMap) : Stage {
       * app `0123`.
       */
      private fun routed(facts: HttpFacts): HttpFacts {

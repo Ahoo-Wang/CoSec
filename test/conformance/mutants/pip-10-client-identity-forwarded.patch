@@ -2,14 +2,14 @@
 # Mutant: a gateway forwards nothing about a request it has no identity for, so the client's CoSec-Identity is not stripped
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityForwardingTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index d6cb7d9f..19b8b401 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -452,7 +452,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
-     private fun forward(issuer: IdentityIssuer, outcome: Outcome, facts: HttpFacts, traceId: String?): Outcome {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ForwardIdentity.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ForwardIdentity.kt
+index 536e1888..7c696f86 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ForwardIdentity.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ForwardIdentity.kt
+@@ -33,7 +33,7 @@ internal class ForwardIdentity(private val issuer: IdentityIssuer) {
          val security = outcome.security
-         if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] != "true") {
+         val routed = state.input.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] == "true"
+         if (!outcome.proceed || security == null || !routed) {
 -            return StatusMapping.forwarding(outcome, null)
 +            return outcome
          }

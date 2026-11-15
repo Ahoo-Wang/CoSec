@@ -2,16 +2,16 @@
 # Mutant: the pipeline forwards the identity unless a route opts out, so a request no route marks receives it
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityForwardingTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index d6cb7d9f..1f029223 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -451,7 +451,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
-      */
-     private fun forward(issuer: IdentityIssuer, outcome: Outcome, facts: HttpFacts, traceId: String?): Outcome {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ForwardIdentity.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ForwardIdentity.kt
+index 536e1888..99dc8b72 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ForwardIdentity.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ForwardIdentity.kt
+@@ -31,7 +31,7 @@ import me.ahoo.cosec.spi.identity.IdentityOverflowException
+ internal class ForwardIdentity(private val issuer: IdentityIssuer) {
+     fun run(state: RequestState, outcome: Outcome): Outcome {
          val security = outcome.security
--        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] != "true") {
-+        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] == "false") {
+-        val routed = state.input.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] == "true"
++        val routed = state.input.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] != "false"
+         if (!outcome.proceed || security == null || !routed) {
              return StatusMapping.forwarding(outcome, null)
          }
-         return try {

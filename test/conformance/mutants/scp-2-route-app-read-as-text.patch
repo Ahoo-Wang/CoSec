@@ -2,11 +2,11 @@
 # Mutant: the pipeline reads a route app that is not a string as its text, so [billing] becomes a host app no document has
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.RouteAppTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 8b2bf7cc..d6fa411b 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -305,7 +305,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
+index 2e80c496..4d11ce62 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/ReadRequest.kt
+@@ -79,7 +79,7 @@ internal class ReadRequest(private val routes: RouteMap) : Stage {
       * app `0123`.
       */
      private fun routed(facts: HttpFacts): HttpFacts {

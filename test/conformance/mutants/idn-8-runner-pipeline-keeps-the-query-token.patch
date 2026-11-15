@@ -3,14 +3,14 @@
 # Tests: :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index 3a6059ab..e1595716 100644
+index d9e29b82..8df29351 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -124,7 +124,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+@@ -137,7 +137,7 @@ class Pipeline internal constructor(
       * (`cosec.pipeline.allow-query-token`), a backend might.
       */
      @InternalCoSecApi
--    fun withoutQueryToken(rawQuery: String?): String? = QueryParameters.without(rawQuery, AUTHORIZATION)
+-    fun withoutQueryToken(rawQuery: String?): String? = QueryParameters.without(rawQuery, Authenticate.AUTHORIZATION)
 +    fun withoutQueryToken(rawQuery: String?): String? = rawQuery
  
      /**
