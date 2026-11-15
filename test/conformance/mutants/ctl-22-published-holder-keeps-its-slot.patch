@@ -3,15 +3,18 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RetriedPublishTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 1380455d..b4045175 100644
+index 3a1cb325..f76a92b5 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -543,9 +543,6 @@ class Changes(
+@@ -543,12 +543,6 @@ class Changes(
      ): ChangeRequest {
          val change = visible(publisher, id)
          authority.require(publisher, change.key, PublishRules.publishing(change))
 -        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
--            return releasedAfterHead(change, publisher, again)
+-            val recorded = change.publishedAgain(publisher, again)
+-            return afterHead(change, checkNotNull(change.publishedRevision)) {
+-                slots.released(change) { audit(PublishRules.outcomeOf(change, change), recorded, publisher.actor) }
+-            }
 -        }
          PublishRules.requireState(change, setOf(ChangeState.READY))
          PublishRules.acknowledged(change, ack)
