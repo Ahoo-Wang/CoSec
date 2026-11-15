@@ -161,6 +161,7 @@ jobs:
           RESULTS: ${{ runner.temp }}/results
           SCRIPTS: ${{ runner.temp }}/scripts
         run: |
+          set -o pipefail
           export JAVA25="$JAVA_HOME_25_X64/bin/java"
           "$SCRIPTS/run.sh" estimate 2> "$RESULTS/estimate.err" | tee -a "$GITHUB_STEP_SUMMARY"
           minutes=$(sed -n 's/^minutes=//p' "$RESULTS/estimate.err")
@@ -180,7 +181,10 @@ jobs:
           "$SCRIPTS/run.sh" run
 
       - name: Summarize
-        run: python3 -I "$RUNNER_TEMP/scripts/compare.py" "$RUNNER_TEMP/results" --threshold "$THRESHOLD" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          python3 -I "$RUNNER_TEMP/scripts/compare.py" "$RUNNER_TEMP/results" --threshold "$THRESHOLD" \
+            --rounds "$ROUNDS" --expected "$RUNNER_TEMP/results/expected.txt" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload raw JMH JSON
         if: always()
