@@ -167,8 +167,9 @@ class ShadowListener(
      * The view [document], the candidate of [key], is evaluated on, as enforcement would read it once the candidate is
      * published: the replay's view with [key]'s document replaced and, for a tenant candidate, with the app document the
      * one rule ([ViewDocuments.appOf]) makes the request read with that tenant document. One it needs and the view lacks
-     * is read from the installed documents ([views]); one it no longer needs is left out. Null when one is needed and
-     * there is no [views].
+     * is read from the installed documents ([views]), with the failure to read or compile it; one it no longer needs is
+     * left out, and so is its failure (#1410): the candidate would not be indeterminate for a document it does not read.
+     * Every other failure is kept. Null when one is needed and there is no [views].
      */
     private suspend fun candidateView(
         replay: ReplayHandle,
@@ -181,19 +182,30 @@ class ShadowListener(
         }
         val scope = replay.request.scope
         val app = ViewDocuments.appOf(scope) { document.needsApp(it) }
+        // The live view read the app document and could not: the candidate reads it the same way.
+        val appFailed = view.unresolved.any(::ofApp)
         return when {
-            app == null -> if (view.app == null) view else withApp(view, null)
-            view.app != null -> view
+            app == null && view.app == null && !appFailed -> view
+            app == null -> withApp(view, null, view.unresolved.filterNot(::ofApp))
+            view.app != null || appFailed -> view
             else -> {
                 val source = views ?: return null
                 val withApp = ViewKey.of(scope.tenant, app)
-                withApp(view, (source.peek(withApp) ?: source.load(withApp).await()).app)
+                val read = source.peek(withApp) ?: source.load(withApp).await()
+                withApp(view, read.app, view.unresolved + read.unresolved.filter(::ofApp))
             }
         }
     }
 
-    private fun withApp(view: SnapshotView, app: CompiledDocument?): SnapshotView =
-        SnapshotView(view.platform, app, view.tenant, view.unresolved, view.version)
+    private fun withApp(view: SnapshotView, app: CompiledDocument?, unresolved: List<Cause>): SnapshotView =
+        SnapshotView(view.platform, app, view.tenant, unresolved, view.version)
+
+    /** Whether [cause] is the app document's: it could not be read, or does not compile. */
+    private fun ofApp(cause: Cause): Boolean = when (cause) {
+        is Cause.SourceUnavailable -> cause.document == DocumentKind.APP
+        is Cause.DocumentInvalid -> cause.document == DocumentKind.APP
+        else -> false
+    }
 
     /** A new view: [view] with [key]'s document replaced. The enforced view is never changed. */
     private fun replaced(view: SnapshotView, key: SnapshotKey, document: CompiledDocument): SnapshotView {
