@@ -2,6 +2,7 @@
 # Mutant: the generated routes take the path item's servers, never the operation's own
 # Tests: :openapi:test --tests me.ahoo.cosec.openapi.generator.ServerPrefixTest
 
+diff --git a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
 index 568d09ba..b5e15de4 100644
 --- a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
 +++ b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
