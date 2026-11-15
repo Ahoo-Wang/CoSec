@@ -26,7 +26,9 @@ import io.opentelemetry.api.trace.StatusCode
 import io.opentelemetry.api.trace.TraceFlags
 import io.opentelemetry.api.trace.TraceState
 import io.opentelemetry.api.trace.Tracer
+import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.context.Context
+import io.opentelemetry.context.propagation.TextMapGetter
 import io.opentelemetry.extension.kotlin.asContextElement
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.BindingRef
@@ -96,11 +98,47 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
         trace ?: return Context.root()
         val flags = if (trace.sampled) TraceFlags.getSampled() else TraceFlags.getDefault()
         val parent = SpanContext.create(trace.traceId, trace.spanId, flags, TraceState.getDefault())
-        return if (parent.isValid) Context.root().with(Span.wrap(parent)) else Context.root()
+        if (!parent.isValid) {
+            return Context.root()
+        }
+        if (trace.traceState.isEmpty()) {
+            return Context.root().with(Span.wrap(parent))
+        }
+        val inherited = SpanContext.create(trace.traceId, trace.spanId, flags, traceStateOf(trace))
+        return Context.root().with(Span.wrap(inherited))
+    }
+
+    /**
+     * The parent's tracestate (#1404), read as the SDK reads a `tracestate` header: a value it refuses (more than 32
+     * members, a malformed member), or one longer than the 512 characters W3C asks a hop to carry, is no tracestate,
+     * never an error and never a lost span.
+     */
+    private fun traceStateOf(trace: TraceContext): TraceState {
+        if (trace.traceState.length > MAX_TRACE_STATE_LENGTH) {
+            return TraceState.getDefault()
+        }
+        val flags = if (trace.sampled) SAMPLED_FLAGS else UNSAMPLED_FLAGS
+        val carrier = mapOf(
+            TRACE_PARENT to "00-${trace.traceId}-${trace.spanId}-$flags",
+            TRACE_STATE to trace.traceState,
+        )
+        val extracted = W3CTraceContextPropagator.getInstance().extract(Context.root(), carrier, MapGetter)
+        return Span.fromContext(extracted).spanContext.traceState
+    }
+
+    private object MapGetter : TextMapGetter<Map<String, String>> {
+        override fun keys(carrier: Map<String, String>): Iterable<String> = carrier.keys
+
+        override fun get(carrier: Map<String, String>?, key: String): String? = carrier?.get(key)
     }
 
     companion object {
         const val NAME = "tracing"
+        private const val TRACE_PARENT = "traceparent"
+        private const val TRACE_STATE = "tracestate"
+        private const val SAMPLED_FLAGS = "01"
+        private const val UNSAMPLED_FLAGS = "00"
+        private const val MAX_TRACE_STATE_LENGTH = 512
         const val SPAN_NAME = "cosec.authorize"
         private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
         private val INSTRUMENTATION_VERSION =
@@ -139,6 +177,28 @@ object OpenTelemetryContextContributor : BridgeContextContributor {
         val context = Context.current()
         val element = context.asContextElement()
         val span = Span.fromContext(context).spanContext
-        return if (span.isValid) element + TraceContext(span.traceId, span.spanId, span.isSampled) else element
+        return if (span.isValid) {
+            element + TraceContext(span.traceId, span.spanId, span.isSampled, headerOf(span.traceState))
+        } else {
+            element
+        }
+    }
+
+    /**
+     * The tracestate in its W3C header form, the SDK's own order. Most requests have none, and for those it is the empty
+     * string and nothing is allocated (#1404); with one, it is the one `String` (and the builder that makes it).
+     */
+    private fun headerOf(state: TraceState): String {
+        if (state.isEmpty) {
+            return ""
+        }
+        val header = StringBuilder()
+        state.forEach { key, value ->
+            if (header.isNotEmpty()) {
+                header.append(',')
+            }
+            header.append(key).append('=').append(value)
+        }
+        return header.toString()
     }
 }

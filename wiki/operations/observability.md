@@ -128,6 +128,10 @@ With `cosec-opentelemetry`, each decision event becomes a span named `cosec.auth
 pipeline's duration, under the span that was current when the adapter received the request; without one, it is a root
 span. Tracing therefore never delays or fails a request. Calls the pipeline makes for the request (Redis, a membership
 provider) are siblings of `cosec.authorize`, under the same parent. The tracer comes from `GlobalOpenTelemetry`.
+The span inherits the parent's `tracestate` as the SDK's own child spans do. The event's trace carries it as an opaque
+string in its W3C header form: vendor data that CoSec writes onto the span's parent and nowhere else (not into audit
+records, Kafka records, logs or metric tags), and that a decision listener of yours must not log. A value the SDK
+refuses, or one longer than 512 characters, is no tracestate: the span is still made, under the same parent.
 
 | Attribute | Value |
 |---|---|
