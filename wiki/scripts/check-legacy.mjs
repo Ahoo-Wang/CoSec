@@ -70,6 +70,7 @@ const TERMS = [
   { term: 'SimpleCompositeToken', hint: 'removed in 8.0 (A3): `CompositeToken` (`cosec-api`) is a final class' },
   { term: 'SimpleRefreshTokenAuthentication', hint: 'renamed in 8.0 (A3): `RefreshTokenAuthentication` (`cosec-login`)' },
   { term: 'DefaultTokenRevoker', hint: 'renamed in 8.0 (A3): `StoreTokenRevoker` (`cosec-login`)' },
+  { term: 'AbstractSwitchTenantAuthentication', hint: 'removed in 8.0 (A3): `SwitchTenantAuthentication` with a `TenantSwitch` (integration/authentication.md)' },
   { term: 'me.ahoo.cosec.api.CoSec', hint: 'removed in 8.0 (A3): each value has a name where it means something (operations/upgrading.md)' },
   { term: 'CoSec.COSEC', hint: 'removed in 8.0 (A3): the property prefix is `cosec`, the default key prefix `cosec` (`cosec.key-prefix`)' },
   { term: 'CoSec.COSEC_PREFIX', hint: 'removed in 8.0 (A3): write the `cosec.` prefix of a property or attribute out' },
@@ -106,6 +107,7 @@ const ALLOWED = [
     files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
     terms: [
       'SimpleCompositeToken', 'SimpleRefreshTokenAuthentication', 'DefaultTokenRevoker', 'CoSec.COSEC',
+      'AbstractSwitchTenantAuthentication',
       'CoSec.COSEC_PREFIX', 'CoSec.DEFAULT',
     ],
     reason: 'the A3 upgrade entries, and the earlier preview entries, name the old classes',

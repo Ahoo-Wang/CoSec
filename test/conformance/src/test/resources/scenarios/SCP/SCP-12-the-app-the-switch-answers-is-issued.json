@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "SCP-12"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "From a token for no tenant and no app, the TenantSwitch answers the app order for globex: the new token is for order. The issuer decides the app.",
+  "switch": {
+    "access": {
+      "jti": "a2",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f2",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "targetTenantId": "globex",
+    "targetAppId": "order",
+    "answer": {
+      "roles": [
+        "clerk"
+      ],
+      "app": "order"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "issued": {
+      "tenant": "globex",
+      "app": "order"
+    }
+  }
+}

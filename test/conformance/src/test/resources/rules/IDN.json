@@ -220,7 +220,7 @@
       "guards": [
         "login:TokenFamiliesTest#a family ends at its absolute lifetime",
         "jwt:RefreshTokenFamiliesJwtTest#a pair never outlives its session",
-        "login:AbstractSwitchTenantAuthenticationTest#the new session keeps the login time of the token switched from"
+        "login:SwitchTenantAuthenticationTest#the new session keeps the login time of the token switched from"
       ]
     },
     {

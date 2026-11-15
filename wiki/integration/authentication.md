@@ -461,16 +461,58 @@ tenant cannot be one fails to load (`503`). The tenant decides which tenant
 document a request reads, and conditions read it as `subject.tenant` or `scope.tenant`. What CoSec does and does not
 isolate between tenants is in [Tenant isolation](../guide/security-model.md#tenant-isolation).
 
-To let a user switch tenants, extend `AbstractSwitchTenantAuthentication`, passing it the `TokenVerifier` bean, and implement
-`switchTenant(targetTenantId, previous)`, with `previous` the `SecurityContext` of the request asking: check that the user belongs to the target tenant (throw to refuse), and answer what it
-holds there, looked up for that tenant: a `TenantMembership` of its roles, policies and attributes in the target
-tenant, or `TenantMembership.fromProvider()` when your `MembershipProvider` answers for it. Then issue a new token for
-the `TokenSubject` `authenticate` returns. It has the previous principal's id, the target tenant and only that
-membership: roles belong to a tenant, so none of the previous token's roles, policies or attributes reach the new one
-(an administrator of one tenant is not one of another). It keeps the previous token's app: switching tenant never
-changes the app a token is for. The switch reads `auth_time` from `SwitchTenantCredentials.accessToken`, the token of the
-request asking, which must be the request's principal's: the new token starts a session of its own, which keeps that
-login time, so it ends when the previous one would. The user did not sign in again.
+### Switching tenant and app
+
+Many identity services sign a user in in two steps. The first proves the user (a password, a code sent by SMS or mail)
+and issues a token for no tenant and no app: nobody has chosen either yet. The second presents that token and names the
+tenant, and the app, to work in; its answer is the token every later request carries. Changing tenant later, or app
+within a tenant, is the same call. `SwitchTenantAuthentication` is that second step. You give it the `TokenVerifier`
+bean, your credentials class, and a `TenantSwitch`: it checks that the user belongs to the target tenant and has the app
+there (throw to refuse), and answers what the user holds there, looked up for that tenant and app. That is a
+`TenantMembership` of the user's roles, policies and attributes, or `TenantMembership.fromProvider()` when your
+`MembershipProvider` answers for the tenant. Your credentials class implements `SwitchTenantCredentials` and carries
+what else your check reads, such as the device; the switch reads it without a cast. Declare the authentication as a
+bean, and the login finds it by that class:
+
+```kotlin
+class SelectTenant(
+    override val targetTenantId: String,
+    override val targetAppId: String?,
+    override val context: SecurityContext,
+    override val accessToken: String,
+    val deviceId: String,
+) : SwitchTenantCredentials
+
+@Bean
+fun selectTenantAuthentication(tokenVerifier: TokenVerifier, members: Members) =
+    SwitchTenantAuthentication(tokenVerifier, SelectTenant::class.java) { credentials ->
+        val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
+        val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
+            "Not a member of this tenant's $app."
+        }
+        TenantMembership(roles = member.rolesIn(app), app = app)
+    }
+
+@PostMapping("/auth/select/{tenant}/{app}")
+suspend fun select(
+    @PathVariable tenant: String,
+    @PathVariable app: String,
+    @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
+    @RequestHeader("CoSec-Device-Id") deviceId: String,
+    security: SecurityContext,
+): CompositeToken = authentication.authenticateAsToken(
+    SelectTenant(tenant, app, security, authorization.removePrefix("Bearer "), deviceId),
+)
+```
+
+The new token has the previous principal's id, the target tenant and only that membership: roles belong to a tenant,
+so none of the previous token's roles, policies or attributes reach the new one (an administrator of one tenant is not
+one of another). **Its app is the one your `TenantSwitch` answers** (`TenantMembership.app`), which must be one a
+token's `aud` can carry; without one it keeps the previous token's app (`SCP-12`). `targetAppId` is what the user asks
+for, and reaches the token only through your answer: a user cannot get a token for an app by naming it, only when your
+code has checked that the user has it. The switch reads `auth_time` from `SwitchTenantCredentials.accessToken`, the
+token of the request asking, which must be the request's principal's: the new token starts a session of its own, which
+keeps that login time, so it ends when the previous one would. The user did not sign in again.
 
 ## Apps
 

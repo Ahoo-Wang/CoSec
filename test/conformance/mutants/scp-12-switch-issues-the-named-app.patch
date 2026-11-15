@@ -1,0 +1,19 @@
+# Rule: SCP-12
+# Mutant: a tenant switch issues the token for the app the credentials name, not the one its TenantSwitch answers
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchTenantAuthenticationTest :conformance:test
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
+index 4a496742..feda1150 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/SwitchTenantAuthentication.kt
+@@ -51,7 +51,9 @@ class SwitchTenantAuthentication<C : SwitchTenantCredentials>(
+         val previous = credentials.context
+         check(previous.principal.authenticated) { "An anonymous request has no tenant to switch from." }
+         val authTime = authTimeOf(credentials.accessToken, previous)
+-        return inTarget(previous, credentials.targetTenantId, tenantSwitch.switchTenant(credentials), authTime)
++        val answer = tenantSwitch.switchTenant(credentials)
++        val asked = credentials.targetAppId?.let { TenantMembership(answer.roles, answer.policies, answer.attributes, it) }
++        return inTarget(previous, credentials.targetTenantId, asked ?: answer, authTime)
+     }
+ 
+     /** When the user signed in, from the token they switch from, which must be the context's principal's. */

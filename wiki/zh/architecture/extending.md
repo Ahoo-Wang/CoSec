@@ -26,6 +26,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `SnapshotDocumentStore` | `cosec-spi`，`spi.snapshot` | 把策略文档存放在 Redis 以外的地方。 | 一个 bean，不使用 `cosec-cocache` 时 |
 | `IdGenerator` | `cosec-spi`，`spi.id` | 让请求 id、令牌 id 和变更 id 使用你自己的格式。`cosec-cosid` 基于 CosId 5 实现了它。 | 一个 bean，替换 `RandomIdGenerator` |
 | `Authentication` | `cosec-login`，`login` | 校验另一种登录凭证，并说明其令牌的内容。通过抛出异常拒绝。 | 所有 bean，按其支持的凭证类型注册 |
+| `TenantSwitch` | `cosec-login`，`login.token` | 说明用户在要切换到的租户和应用中拥有什么，以及新令牌属于哪个应用（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。通过抛出异常拒绝。 | 无：把 `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java, yourSwitch)` 声明为 `Authentication` bean |
 | `TokenConverter` | `cosec-login`，`login.token` | 以其他格式签发令牌。 | 一个 bean，替换 `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`，`social` | 把提供方的用户转换成你的主体。 | 一个 bean，替换 `DirectSocialUserPrincipalConverter` |
 | `SocialStateStore` | `cosec-social`，`social` | 把社交登录签发的 OAuth state 存在 Redis 以外的地方：`put` 记下一个 state 及其绑定值的哈希，`take` 原子地取走它，因此一个 state 只能用一次。两者都是挂起函数：基于阻塞客户端实现时，在你自己的调度器上调用它。存储失败时抛出异常。 | 一个 bean，替换 `RedisSocialStateStore` |

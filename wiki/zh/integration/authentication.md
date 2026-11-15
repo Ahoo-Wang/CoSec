@@ -255,7 +255,42 @@ cosec:
 
 主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空、不是字符串（数字、`null`、对象），或不能作为租户 id（空白、`*`、含 `:` 或控制字符、超过 128 个字符）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为这样的租户签发令牌。租户不能作为租户 id 的 API key 加载失败（`503`）。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
-要让用户切换租户，继承 `AbstractSwitchTenantAuthentication`（把 `TokenVerifier` Bean 传给它）并实现 `switchTenant(targetTenantId, previous)`（`previous` 是发起切换的请求的 `SecurityContext`）：检查用户是否属于目标租户（不属于时抛出异常以拒绝），并回答它在那里拥有什么，按目标租户查询：一个包含它在目标租户中的角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。然后为 `authenticate` 返回的主体签发新令牌。这个主体只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。它保留原令牌的应用：切换租户不会改变令牌所属的应用。切换从 `SwitchTenantCredentials.accessToken`（发起切换的请求的令牌，必须属于该请求的主体）读取 `auth_time`：新令牌开始一个自己的会话，保留这个登录时间，因此会在先前的会话结束时结束。用户并没有重新登录。
+### 切换租户和应用 {#switching-tenant-and-app}
+
+很多身份服务分两步让用户登录。第一步证明用户（密码、短信或邮件中的验证码），签发一个不属于任何租户和应用的令牌：此时谁也没有选择这两者。第二步出示这个令牌，指明要工作的租户和应用；它的回答就是之后每个请求携带的令牌。之后切换租户，或在同一租户内切换应用，都是同一个调用。`SwitchTenantAuthentication` 就是这第二步。你给它 `TokenVerifier` Bean、你的凭证类，以及一个 `TenantSwitch`：它检查用户属于目标租户并在那里拥有该应用（不满足时抛出异常以拒绝），并回答用户在那里拥有什么，按该租户和应用查询：一个包含用户角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。你的凭证类实现 `SwitchTenantCredentials`，并携带你的检查还要读取的内容，例如设备；切换读取它不需要强制转换。把这个认证声明为 Bean，登录按那个类找到它：
+
+```kotlin
+class SelectTenant(
+    override val targetTenantId: String,
+    override val targetAppId: String?,
+    override val context: SecurityContext,
+    override val accessToken: String,
+    val deviceId: String,
+) : SwitchTenantCredentials
+
+@Bean
+fun selectTenantAuthentication(tokenVerifier: TokenVerifier, members: Members) =
+    SwitchTenantAuthentication(tokenVerifier, SelectTenant::class.java) { credentials ->
+        val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
+        val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
+            "Not a member of this tenant's $app."
+        }
+        TenantMembership(roles = member.rolesIn(app), app = app)
+    }
+
+@PostMapping("/auth/select/{tenant}/{app}")
+suspend fun select(
+    @PathVariable tenant: String,
+    @PathVariable app: String,
+    @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
+    @RequestHeader("CoSec-Device-Id") deviceId: String,
+    security: SecurityContext,
+): CompositeToken = authentication.authenticateAsToken(
+    SelectTenant(tenant, app, security, authorization.removePrefix("Bearer "), deviceId),
+)
+```
+
+新令牌只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。**它的应用是你的 `TenantSwitch` 回答的应用**（`TenantMembership.app`），必须是令牌的 `aud` 能携带的应用 id；没有回答应用时，保留先前令牌的应用（`SCP-12`）。`targetAppId` 是用户请求的应用，只能经由你的回答进入令牌：用户不能靠指名得到某个应用的令牌，只有在你的代码检查过用户拥有它之后才行。切换从 `SwitchTenantCredentials.accessToken`（发起切换的请求的令牌，必须属于该请求的主体）读取 `auth_time`：新令牌开始一个自己的会话，保留这个登录时间，因此会在先前的会话结束时结束。用户并没有重新登录。
 
 ## 应用 {#apps}
 

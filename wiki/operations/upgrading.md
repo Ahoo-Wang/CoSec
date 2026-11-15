@@ -112,6 +112,15 @@ and have to be provisioned again.
   are the span attributes (`cosec.tenant_id`, …) and the OpenAPI scheme `cosec.BearerAuth`. Code that read
   `CoSec.COSEC`, `CoSec.COSEC_PREFIX` or `CoSec.DEFAULT` writes the value it meant. No key, property or attribute
   changes.
+- **A tenant switch is `SwitchTenantAuthentication` with a `TenantSwitch`, and it can set the app.**
+  `AbstractSwitchTenantAuthentication` is removed. Where you extended it and implemented
+  `switchTenant(targetTenantId, previous)`, declare
+  `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java) { credentials -> … }` as a bean: the switch
+  gets your own credentials class (`credentials.targetTenantId`, `credentials.context`, and anything else it carries),
+  and answers a `TenantMembership` as before. `SwitchTenantCredentials` gains `targetAppId`, the app the user asks for,
+  null by default; `TenantMembership` gains `app`. The new token is for the app your switch answers, else the previous
+  token's (`SCP-12`): a switch that answers none behaves as before, and a user never gets an app by naming it.
+  See [Switching tenant and app](../integration/authentication.md#switching-tenant-and-app).
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests
