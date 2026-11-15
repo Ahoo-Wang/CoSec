@@ -45,6 +45,7 @@ object AttributeRequests {
     private const val REQUEST_ID = "testkit"
 
     /** A stage-B request: the scope resolved. Throws [IllegalArgumentException] when the pipeline would reject it. */
+    // stays: a stage-B request names each fact a scenario can set
     @Suppress("LongParameterList")
     fun of(
         action: Action,

@@ -100,6 +100,7 @@ class PipelineComponents private constructor(
 
     /** These components with some replaced: for CoSec's own tests. A host assembles what it needs with the constructor. */
     @InternalCoSecApi
+    // B1: the pipeline builder (A2, with B1) replaces PipelineComponents and its copy
     @Suppress("LongParameterList")
     fun copy(
         authenticator: Authenticator = this.authenticator,

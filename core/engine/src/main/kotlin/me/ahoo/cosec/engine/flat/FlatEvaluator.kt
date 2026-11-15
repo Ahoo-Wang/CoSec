@@ -64,6 +64,7 @@ import java.util.IdentityHashMap
  */
 // Large by design: the evaluator is its own visitor, condition input, index lookup and scratch source, so that an
 // evaluation allocates nothing for them; splitting it would add an object, or a call, per request.
+// B3: the evaluator splits into its parts, its one allocation unchanged (RFC 0013 §6)
 @Suppress("TooManyFunctions", "LargeClass")
 internal open class FlatEvaluator(protected val request: FlatRequest, protected val view: SnapshotView) :
     CandidateVisitor,

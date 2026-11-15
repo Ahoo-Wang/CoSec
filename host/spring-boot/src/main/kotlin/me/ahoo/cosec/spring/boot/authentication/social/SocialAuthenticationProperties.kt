@@ -36,6 +36,7 @@ class SocialAuthenticationProperties(
         const val PREFIX = LoginProperties.PREFIX + ".social"
     }
 
+    // stays: Spring binds one constructor parameter per property
     @Suppress("LongParameterList")
     @InternalCoSecApi
     class Provider(

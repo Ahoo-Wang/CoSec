@@ -9,18 +9,18 @@ complexity:
     constructorThreshold: 14
     # Spring injects a @Bean method's parameters.
     ignoreAnnotated: ['Bean']
-    excludes: ['**/test/**', '**/jmh/**']
+    excludes: ['**/src/test/**', '**/src/jmh/**']
   NestedBlockDepth:
     active: true
     threshold: 4
-    excludes: ['**/test/**', '**/jmh/**']
+    excludes: ['**/src/test/**', '**/src/jmh/**']
   TooManyFunctions:
     active: true
     thresholdInClasses: 20
     thresholdInFiles: 25
     thresholdInInterfaces: 20
     thresholdInObjects: 20
-    excludes: ['**/test/**', '**/jmh/**']
+    excludes: ['**/src/test/**', '**/src/jmh/**']
 style:
   # G2 (RFC 0008 §4.6.2): main code explains what it does now, not how it got here. A reference to an RFC section is
   # fine; one to a PR, to "the switch" or to code that is gone is not. cosec-migrate is about 7.x by nature.
