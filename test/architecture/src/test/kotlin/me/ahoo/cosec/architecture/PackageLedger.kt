@@ -39,6 +39,7 @@ object PackageLedger {
     private const val CHANGE = "change"
     private const val CALL = "call"
     private const val HTTP = "http"
+    private const val STAGE = "stage"
 
     val MODULES: List<Module> = listOf(
         Module(
@@ -46,8 +47,10 @@ object PackageLedger {
             "me.ahoo.cosec.runtime",
             mapOf(
                 ROOT to setOf(
-                    "attribute", "audit", "authn", CALL, EVENT, HTTP, IDENTITY, "ratelimit", SHADOW, SNAPSHOT, "token",
+                    "attribute", "audit", "authn", CALL, EVENT, HTTP, IDENTITY, "ratelimit", SHADOW, SNAPSHOT, STAGE,
+                    "token",
                 ),
+                STAGE to setOf("attribute", CALL, EVENT, HTTP, IDENTITY, "ratelimit", SHADOW, SNAPSHOT),
                 "audit" to setOf(EVENT, HTTP),
                 "authn" to setOf("token"),
                 EVENT to setOf(CALL, HTTP, SNAPSHOT),

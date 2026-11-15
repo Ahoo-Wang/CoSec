@@ -25,9 +25,9 @@ class DetektSuppressionTest {
     companion object {
         /** The suppressions of each structure rule in main code. Lower a number when a batch removes one. */
         val RECORDED: Map<String, Int> = mapOf(
-            "TooManyFunctions" to 19,
+            "TooManyFunctions" to 18,
             "NestedBlockDepth" to 12,
-            "LongParameterList" to 7,
+            "LongParameterList" to 6,
         )
 
         private val SUPPRESS = Regex("""@(?:file:)?Suppress\(([^)]*)\)""")
