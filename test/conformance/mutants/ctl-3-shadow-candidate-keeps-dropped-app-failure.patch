@@ -1,6 +1,6 @@
 # Rule: CTL-3
 # Mutant: a tenant candidate that no longer reads an app document keeps that document's failure, and reports SAME (#1410)
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ShadowAppFailureTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ShadowDocumentFailureTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
 index 81d57c6d..b37afb2f 100644

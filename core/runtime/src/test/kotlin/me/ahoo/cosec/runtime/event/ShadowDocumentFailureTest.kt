@@ -56,8 +56,11 @@ import kotlin.time.Duration.Companion.seconds
  * candidate that drops the binding no longer reads it: once published the request is 200, so the shadow reports
  * `WIDENED`, never `SAME` on the failure of a document the candidate does not read. The failures of documents it still
  * reads, or newly reads, stay.
+ *
+ * A candidate of the document that does not compile replaces it: the candidate is that document, compiled, so the stored
+ * one's failure goes. One that could not be read is not compared, since the shadow cannot know the store will answer.
  */
-class ShadowAppFailureTest {
+class ShadowDocumentFailureTest {
     /** How order's document fails, when it does. */
     enum class Failure {
         /** It is stored and does not compile: an unknown member. */
@@ -116,6 +119,13 @@ class ShadowAppFailureTest {
     private fun candidate(vararg bindings: String): ShadowListener {
         val document = compiler.compile(TENANT, tenant(*bindings))
         val candidates = CandidateSource { key -> if (key == TENANT) Candidate.Ready("w", 1, document) else null }
+        return ShadowListener("shadow", 1.0, candidates, recorder, views = views)
+    }
+
+    /** The candidate of [key] of window `w`, made on the installed revision 1. */
+    private fun replacing(key: SnapshotKey, body: String): ShadowListener {
+        val document = compiler.compile(key, document(body))
+        val candidates = CandidateSource { asked -> if (asked == key) Candidate.Ready("w", 1, document) else null }
         return ShadowListener("shadow", 1.0, candidates, recorder, views = views)
     }
 
@@ -191,6 +201,36 @@ class ShadowAppFailureTest {
         source.reload(SnapshotKey.Platform).join().invalid.assert().isTrue()
         evaluate(candidate(SELF)).assert().isEqualTo(503)
         counts().assert().isEqualTo(mapOf(ShadowOutcome.SAME to 1L))
+    }
+
+    /** A platform candidate that compiles, replacing one that does not: the request it unblocks is `WIDENED`. */
+    @Test
+    fun `a platform candidate that compiles replaces the failure of the platform that does not`() {
+        install(null, SELF)
+        store.put(SnapshotKey.Platform, document(""","unknown":1"""))
+        source.reload(SnapshotKey.Platform).join().invalid.assert().isTrue()
+        evaluate(replacing(SnapshotKey.Platform, "")).assert().isEqualTo(503)
+        counts().assert().isEqualTo(mapOf(ShadowOutcome.WIDENED to 1L))
+
+        store.put(SnapshotKey.Platform, document("", revision = 2))
+        source.reload(SnapshotKey.Platform).join().revision.assert().isEqualTo(2)
+        evaluate().assert().isEqualTo(200)
+    }
+
+    /**
+     * An app candidate of the document the request reads: it replaces one that does not compile (`WIDENED`). One that
+     * could not be read has no revision the view knows (0), so the candidate is not compared on it: `BASE_MISMATCH`, never
+     * a prediction that the store will answer.
+     */
+    @ParameterizedTest
+    @EnumSource(Failure::class)
+    fun `an app candidate replaces an app document that does not compile, and is not compared on one that cannot be read`(
+        failure: Failure,
+    ) {
+        install(failure, GRANT)
+        evaluate(replacing(ORDER, ""","policies":[$READ]""")).assert().isEqualTo(503)
+        val expected = if (failure == Failure.INVALID) ShadowOutcome.WIDENED else ShadowOutcome.BASE_MISMATCH
+        counts().assert().isEqualTo(mapOf(expected to 1L))
     }
 
     private companion object {

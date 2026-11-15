@@ -87,7 +87,7 @@ class ShadowListener(
         if (name !in replay.sampledBy) {
             return
         }
-        for ((key, installed) in documents(replay.view)) {
+        for ((key, installed) in documents(replay)) {
             when (val candidate = candidates.candidate(key)) {
                 null -> Unit
                 is Candidate.Failed -> recorder.record(key, candidate.window, ShadowOutcome.CANDIDATE_ERROR, null, null)
@@ -156,11 +156,20 @@ class ShadowListener(
         )
     }
 
-    /** The documents [view] read, with the revisions it had of them (null when unknown). */
-    private fun documents(view: SnapshotView): List<Pair<SnapshotKey, Long?>> = buildList {
-        add(SnapshotKey.Platform to view.version?.platform)
-        view.app?.let { add(SnapshotKey.App(it.owner) to view.version?.app) }
-        view.tenant?.let { add(SnapshotKey.Tenant(it.owner) to view.version?.tenant) }
+    /**
+     * The documents the replay's view read, with the revisions it had of them (null when unknown): one it read and could
+     * not read or compile too, at the revision the view names, since a candidate of it replaces what failed.
+     */
+    private fun documents(replay: ReplayHandle): List<Pair<SnapshotKey, Long?>> = buildList {
+        val view = replay.view
+        val version = view.version
+        val scope = replay.request.scope
+        add(SnapshotKey.Platform to version?.platform)
+        val app = view.app?.owner ?: scope.app.value.takeIf { version?.app != null && view.unresolved.any(::ofApp) }
+        app?.let { add(SnapshotKey.App(it) to version?.app) }
+        val tenant = view.tenant?.owner
+            ?: scope.tenant.value.takeIf { version?.tenant != null && view.unresolved.any { failed(it, DocumentKind.TENANT) } }
+        tenant?.let { add(SnapshotKey.Tenant(it) to version?.tenant) }
     }
 
     /**
@@ -201,9 +210,12 @@ class ShadowListener(
         SnapshotView(view.platform, app, view.tenant, unresolved, view.version)
 
     /** Whether [cause] is the app document's: it could not be read, or does not compile. */
-    private fun ofApp(cause: Cause): Boolean = when (cause) {
-        is Cause.SourceUnavailable -> cause.document == DocumentKind.APP
-        is Cause.DocumentInvalid -> cause.document == DocumentKind.APP
+    private fun ofApp(cause: Cause): Boolean = failed(cause, DocumentKind.APP)
+
+    /** Whether [cause] is a document of [kind]'s: it could not be read, or does not compile. */
+    private fun failed(cause: Cause, kind: DocumentKind): Boolean = when (cause) {
+        is Cause.SourceUnavailable -> cause.document == kind
+        is Cause.DocumentInvalid -> cause.document == kind
         else -> false
     }
 
@@ -217,10 +229,13 @@ class ShadowListener(
         require(document.kind == expected && (expected == DocumentKind.PLATFORM || document.owner == ownerOf(key))) {
             "The candidate of [$key] is a ${document.kind} document of [${document.owner}]."
         }
+        // The candidate is that document, compiled: that the stored one does not compile was a property of the bytes it
+        // replaces. One that could not be read stays: the shadow cannot know the store will answer.
+        val unresolved = view.unresolved.filterNot { it is Cause.DocumentInvalid && it.document == expected }
         return when (expected) {
-            DocumentKind.PLATFORM -> SnapshotView(document, view.app, view.tenant, view.unresolved, view.version)
-            DocumentKind.APP -> SnapshotView(view.platform, document, view.tenant, view.unresolved, view.version)
-            DocumentKind.TENANT -> SnapshotView(view.platform, view.app, document, view.unresolved, view.version)
+            DocumentKind.PLATFORM -> SnapshotView(document, view.app, view.tenant, unresolved, view.version)
+            DocumentKind.APP -> SnapshotView(view.platform, document, view.tenant, unresolved, view.version)
+            DocumentKind.TENANT -> SnapshotView(view.platform, view.app, document, unresolved, view.version)
         }
     }
 
