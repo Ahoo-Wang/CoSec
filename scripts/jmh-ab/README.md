@@ -63,4 +63,10 @@ mismatch, and `compare.py` exits with status 1. The raw JMH JSON (`base-N.json`,
 
 `compare.py <dir>` reads `<dir>/base-N.json` and `<dir>/head-N.json` and prints the table; run it locally on the
 artifact with `python3 -I scripts/jmh-ab/compare.py <dir>`. `python3 -I -m unittest discover -s scripts/jmh-ab` runs its
-tests, and CI runs them in the `Plan` job.
+tests, and CI runs them in the `Plan` job, with those of `scripts/jmh-v7-v8`.
+
+A run that measured nothing fails. The jobs run JMH with `-foe true`, so a benchmark that throws fails the run (without
+it JMH exits 0 and writes `[]`), and `compare.py` also refuses a file without results, a file without its partner, a
+run where no row could be compared, and, with `--rounds N` and `--expected FILE` (which the workflow passes), a round or a
+benchmark the run selected that is missing. The selection is what JMH lists for the include and params
+(`estimate.py --expected=FILE`), not what came back, so something both sides lost is still missing.
