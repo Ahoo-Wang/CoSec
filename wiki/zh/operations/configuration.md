@@ -175,7 +175,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 |---|---|---|---|
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 对抽样的请求在暂存的候选上再求值一次，并把本实例的报告和状态写入 Redis。关闭后，本实例的流量在窗口中不计数，它编译不了的候选也不会阻塞窗口，它也不为传播视图写状态。 |
 | `cosec.authorization.shadow.sample-rate` | double，`0` 到 `1` | `0.1` | 在候选上再求值的请求比例，不在请求路径上执行。 |
-| `cosec.authorization.shadow.report-interval` | duration | `10s` | 实例多久写一次报告和状态。 |
+| `cosec.authorization.shadow.report-interval` | duration | `10s` | 实例多久写一次报告和状态。至少 `1ms`：更短的间隔会让启动失败。 |
 | `cosec.authorization.shadow.instance-id` | string | 随机 UUID | 本实例在报告和状态中的 id。每个运行中的实例唯一；只能包含字母、数字、`.`、`_` 和 `-`，因为它是 Redis key 的结尾。其他 id 使启动失败。 |
 
 ## 认证 {#authentication}

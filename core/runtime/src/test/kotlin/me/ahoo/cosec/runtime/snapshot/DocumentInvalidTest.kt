@@ -18,7 +18,7 @@ package me.ahoo.cosec.runtime.snapshot
 import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
-import ch.qos.logback.core.read.ListAppender
+import ch.qos.logback.core.AppenderBase
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -57,7 +57,14 @@ import java.util.concurrent.CopyOnWriteArrayList
 class DocumentInvalidTest {
     private val store = InMemorySnapshotDocumentStore()
     private val revisions = HashMap<SnapshotKey, Long>()
-    private val appender = ListAppender<ILoggingEvent>().apply { start() }
+
+    /** The source writes its lines off the request's thread while the test reads them: a list both can share. */
+    private val logged = CopyOnWriteArrayList<ILoggingEvent>()
+    private val appender = object : AppenderBase<ILoggingEvent>() {
+        override fun append(event: ILoggingEvent) {
+            logged += event
+        }
+    }.apply { start() }
     private val logger = LoggerFactory.getLogger(SnapshotSource::class.java) as Logger
 
     @BeforeEach
@@ -82,7 +89,7 @@ class DocumentInvalidTest {
         """"condition":{"eq":["ext.geo.inFence",true]}}]}],""" +
         """"bindings":[{"id":"t","subject":"*","app":"*","space":"*","policy":"fenced"}]"""
 
-    private fun lines(level: Level, text: String) = appender.list.filter {
+    private fun lines(level: Level, text: String) = logged.filter {
         it.level == level && text in it.formattedMessage
     }
 
@@ -92,7 +99,7 @@ class DocumentInvalidTest {
         while (lines(level, text).size < count) {
             check(
                 System.nanoTime() < deadline
-            ) { "No $count $level lines with [$text]: ${appender.list.map { it.formattedMessage }}" }
+            ) { "No $count $level lines with [$text]: ${logged.map { it.formattedMessage }}" }
             Thread.sleep(5)
         }
         return lines(level, text)

@@ -129,10 +129,12 @@ jobs:
       # params multiplies quickly. Narrow `include` and `params` when this prints more than ~60 minutes.
       - name: Estimate run time
         run: |
+          set -o pipefail
           est=$(find "$RUNNER_TEMP/head" -path '*/build/libs/*-jmh.jar' | head -n 1)
           read -ra params <<< "$PARAMS"
+          # --expected: the benchmarks and params this run selects, from JMH's listing, for the Summarize step.
           "$JAVA_HOME_25_X64/bin/java" -jar "$est" "$INCLUDE" -lp 2>&1 \
-            | python3 -I "$RUNNER_TEMP/estimate.py" "$ROUNDS" "$FORKS" "$WARMUP" "$ITERATIONS" \
+            | python3 -I "$RUNNER_TEMP/estimate.py" --expected="$RUNNER_TEMP/expected.json" "$ROUNDS" "$FORKS" "$WARMUP" "$ITERATIONS" \
                 "${WARMUP_TIME%s}" "${MEASUREMENT_TIME%s}" "${params[@]}" 2> "$RUNNER_TEMP/estimate.err" | tee -a "$GITHUB_STEP_SUMMARY"
           minutes=$(sed -n 's/^minutes=//p' "$RUNNER_TEMP/estimate.err")
           if [ "${minutes:-0}" -gt 80 ]; then
@@ -145,7 +147,8 @@ jobs:
           set -euo pipefail
           JAVA25="$JAVA_HOME_25_X64/bin/java"
           mkdir -p "$RUNNER_TEMP/results"
-          args=(-f "$FORKS" -wi "$WARMUP" -i "$ITERATIONS" -w "$WARMUP_TIME" -r "$MEASUREMENT_TIME" -prof gc -rf json)
+          # -foe true: a benchmark that throws fails the run. Without it JMH exits 0 and writes `[]`.
+          args=(-f "$FORKS" -wi "$WARMUP" -i "$ITERATIONS" -w "$WARMUP_TIME" -r "$MEASUREMENT_TIME" -prof gc -rf json -foe true)
           for p in $PARAMS; do args+=(-p "$p"); done
           for round in $(seq 1 "$ROUNDS"); do
             for side in base head; do
@@ -162,7 +165,10 @@ jobs:
           done
 
       - name: Summarize
-        run: python3 -I "$RUNNER_TEMP/compare.py" "$RUNNER_TEMP/results" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          python3 -I "$RUNNER_TEMP/compare.py" "$RUNNER_TEMP/results" \
+            --rounds "$ROUNDS" --expected "$RUNNER_TEMP/expected.json" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload raw JMH JSON
         if: always()

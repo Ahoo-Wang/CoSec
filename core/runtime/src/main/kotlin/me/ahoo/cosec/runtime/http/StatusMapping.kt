@@ -23,6 +23,7 @@ import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
+import java.time.Duration
 
 /**
  * The one place status codes and problem bodies are defined (RFC 0006 §6.1, §6.3; `PIP-1`, `PIP-2`), and the only
@@ -169,10 +170,11 @@ internal object StatusMapping {
 
     /**
      * `RateLimit-Limit`, `-Remaining` and `-Reset` of [result], and `Retry-After` when it was exhausted, in whole
-     * seconds of at least 1, so a client never reads "retry now".
+     * seconds of at least 1, rounded up: a client that waits as told is never refused again by the same window, and
+     * never reads "retry now".
      */
     private fun rateLimitHeaders(result: RateLimitResult): Map<String, String> {
-        val reset = result.resetAfter.toSeconds().coerceAtLeast(1).toString()
+        val reset = wholeSecondsUp(result.resetAfter).toString()
         val headers = LinkedHashMap<String, String>(RATE_LIMIT_HEADERS)
         headers[RATE_LIMIT_LIMIT] = result.limit.toString()
         headers[RATE_LIMIT_REMAINING] = result.remaining.toString()
@@ -182,6 +184,10 @@ internal object StatusMapping {
         }
         return headers
     }
+
+    /** [remaining] in whole seconds, a started second counting as one, and at least 1. */
+    private fun wholeSecondsUp(remaining: Duration): Long =
+        (remaining.seconds + if (remaining.nano > 0) 1 else 0).coerceAtLeast(1)
 
     const val RATE_LIMIT_LIMIT = "RateLimit-Limit"
     const val RATE_LIMIT_REMAINING = "RateLimit-Remaining"

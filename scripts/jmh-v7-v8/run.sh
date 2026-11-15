@@ -44,11 +44,16 @@ selected() { # v7 class, v8 class
   echo "$1 $2" | grep -Eq -- "$INCLUDE"
 }
 
+# -foe true: a benchmark that throws fails the run. Without it JMH exits 0 and writes `[]`, which compare.py refuses
+# but which a gate must not depend on alone.
 common_args() {
-  echo -f "$FORKS" -wi "$WARMUP" -i "$ITERATIONS" -w "$WARMUP_TIME" -r "$MEASUREMENT_TIME" -prof gc -rf json
+  echo -f "$FORKS" -wi "$WARMUP" -i "$ITERATIONS" -w "$WARMUP_TIME" -r "$MEASUREMENT_TIME" -prof gc -rf json -foe true
 }
 
 mode=${1:?estimate|run}
+# What the run selects, one line `pair scenario,scenario` each, written before anything runs: compare.py --expected
+# looks for these in every round, so a scenario both sides lose is missing, not absent.
+if [ "$mode" = run ]; then : > "$RESULTS/expected.txt"; fi
 total=0
 count=0
 for round in $(seq 1 "$ROUNDS"); do
@@ -58,6 +63,9 @@ for round in $(seq 1 "$ROUNDS"); do
     selected "$c7" "$c8" || continue
     scen=$(scenarios_of "$name")
     [ -n "$scen" ] || continue
+    if [ "$mode" = run ] && [ "$round" = 1 ] && ! grep -q "^$name " "$RESULTS/expected.txt"; then
+      echo "$name $scen" >> "$RESULTS/expected.txt"
+    fi
     for side in v7 v8; do
       if [ $side = v7 ]; then dir=$V7_DIR mod=$m7 cls=$c7 params="scenario=$scen"; else dir=$V8_DIR mod=$m8 cls=$c8 params="scenario=$scen $extra"; fi
       jar=$(jar_of "$dir" "$mod")
@@ -86,4 +94,6 @@ if [ "$mode" = estimate ]; then
   [ "$count" -gt 0 ] || { echo "::error::include '$INCLUDE' matches no pair"; exit 1; }
   echo "minutes=$total" >&2
   echo "total: about $total minutes of benchmarks"
+else
+  [ -s "$RESULTS/expected.txt" ] || { echo "::error::include '$INCLUDE' with scenarios '$SCENARIOS' selects nothing to measure"; exit 1; }
 fi

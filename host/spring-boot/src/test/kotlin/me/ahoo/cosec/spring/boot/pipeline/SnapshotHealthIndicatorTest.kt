@@ -45,6 +45,8 @@ class SnapshotHealthIndicatorTest {
         tenant: DocumentState<Any>? = null,
         /** The platform's stored revision that does not compile, if it is one. */
         invalidPlatform: Long? = null,
+        /** Tenants whose stored revision does not compile, by id. */
+        invalidTenants: Map<String, Long> = emptyMap(),
     ): SnapshotSource<Any, Any> {
         val snapshot = state?.let { policies -> mockk<Snapshot<Any, Any>> { every { this@mockk.policies } returns policies } }
         val entries = listOfNotNull(
@@ -62,7 +64,13 @@ class SnapshotHealthIndicatorTest {
                     every { invalid } returns true
                 }
             },
-        )
+        ) + invalidTenants.map { (id, revision) ->
+            mockk<SnapshotEntry<Any>> {
+                every { key } returns SnapshotKey.Tenant(id)
+                every { this@mockk.revision } returns revision
+                every { invalid } returns true
+            }
+        }
         return mockk {
             every { peek(any()) } returns snapshot
             every { isPrewarmed } returns prewarmed
@@ -118,11 +126,32 @@ class SnapshotHealthIndicatorTest {
         SnapshotHealthIndicator(source, readiness(source)).health().apply {
             status.assert().isEqualTo(Status.DOWN)
             details["platform"].assert().isEqualTo("invalid")
-            details["invalid"].assert().isEqualTo(listOf("platform@7"))
+            details["invalid"].assert().isEqualTo(1)
+            details["invalidFirst"].assert().isEqualTo(listOf("platform@7"))
             details.toString().assert().doesNotContain("secret")
         }
         // Without one, the body says nothing of it.
         health(failed, true).details.containsKey("invalid").assert().isFalse()
+    }
+
+    /**
+     * A platform revision whose limits stop many documents compiling makes many invalid at once: the body holds their
+     * count and names the first ten, the platform first and then by key, whatever order the source lists them in.
+     */
+    @Test
+    fun `health counts the documents that do not compile and names the first ten, in a stable order`() {
+        val failed = DocumentState.Failed(IllegalStateException("does not compile"))
+        val tenants = (1..11).associate { "t%02d".format(it) to it.toLong() }
+        val bodies = listOf(tenants, tenants.entries.reversed().associate { it.toPair() }).map { order ->
+            val source = source(failed, prewarmed = true, invalidPlatform = 3, invalidTenants = order)
+            SnapshotHealthIndicator(source, readiness(source)).health().details
+        }
+        bodies.forEach { details ->
+            details["invalid"].assert().isEqualTo(12)
+            details["invalidFirst"].assert()
+                .isEqualTo(listOf("platform@3") + (1..9).map { "tenant:t%02d@$it".format(it) })
+        }
+        bodies[0].assert().isEqualTo(bodies[1])
     }
 
     /**

@@ -542,34 +542,38 @@ and `TokenRevocation` beans, your credentials class, and a `TenantSwitch`: it ch
 there (throw to refuse), and answers what the user holds there, looked up for that tenant and app. That is a
 `TenantMembership` of the user's roles, policies and attributes, or `TenantMembership.fromProvider()` when your
 `MembershipProvider` answers for the tenant. Your credentials class implements `SwitchTenantCredentials` and carries
-what else your check reads, such as the device; the switch reads it without a cast. Declare the authentication as a
-bean, and the login finds it by that class:
+what else your check reads that the context does not hold; the switch reads it without a cast. The request's device is
+on the context: `context.deviceId` is its `CoSec-Device-Id`, read by CoSec's rules (one value, else the request is
+`400`), so the endpoint does not read the header itself. Declare the authentication as a bean, and the login finds it
+by that class:
 
 ```kotlin
 class SelectTenant(
     override val targetTenantId: String,
     override val targetAppId: String?,
     override val context: SecurityContext,
-    val deviceId: String,
 ) : SwitchTenantCredentials
 
 @Bean
-fun selectTenantAuthentication(families: TokenFamilies, revocation: TokenRevocation, members: Members) =
-    SwitchTenantAuthentication(families, revocation, SelectTenant::class.java) { credentials ->
-        val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
-        val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
-            "Not a member of this tenant's $app."
-        }
-        TenantMembership(roles = member.rolesIn(app), app = app)
+fun selectTenantAuthentication(
+    families: TokenFamilies,
+    revocation: TokenRevocation,
+    members: Members,
+    devices: TrustedDevices,
+) = SwitchTenantAuthentication(families, revocation, SelectTenant::class.java) { credentials ->
+    val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
+    val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
+        "Not a member of this tenant's $app."
     }
+    require(devices.trusts(credentials.context.principal.id, credentials.context.deviceId)) {
+        "Sign in again on this device."
+    }
+    TenantMembership(roles = member.rolesIn(app), app = app)
+}
 
 @PostMapping("/auth/select/{tenant}/{app}")
-suspend fun select(
-    @PathVariable tenant: String,
-    @PathVariable app: String,
-    @RequestHeader("CoSec-Device-Id") deviceId: String,
-    security: SecurityContext,
-): CompositeToken = authentication.authenticateAsToken(SelectTenant(tenant, app, security, deviceId))
+suspend fun select(@PathVariable tenant: String, @PathVariable app: String, security: SecurityContext): CompositeToken =
+    authentication.authenticateAsToken(SelectTenant(tenant, app, security))
 ```
 
 The new token has the previous principal's id, the target tenant and only that membership: roles belong to a tenant,
@@ -609,8 +613,12 @@ class SelectTenantTest {
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
     private val revocation = TokenRevocation(RevocationReader.NONE)
     private val members = testMembers() // your own directory, alice a clerk of globex's order
+    private val devices = testDevices() // alice trusts her "phone"
     private val login = TokenCompositeAuthentication.of(
-        listOf(passwordAuthentication, SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members)),
+        listOf(
+            passwordAuthentication,
+            SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members, devices),
+        ),
         JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, algorithm),
         families,
     )
@@ -618,9 +626,13 @@ class SelectTenantTest {
     @Test
     fun `a member of globex switches into it with the app she has there`() = runTest {
         val pair = login.authenticateAsToken(PasswordCredentials("alice", "secret"))
-        val request = PermittedRequest.withToken(pair.accessToken, verifier)
+        val request = PermittedRequest.withToken(
+            pair.accessToken,
+            verifier,
+            headers = mapOf("CoSec-Device-Id" to listOf("phone")),
+        )
 
-        val switched = login.authenticateAsToken(SelectTenant("globex", "order", request, deviceId = "phone"))
+        val switched = login.authenticateAsToken(SelectTenant("globex", "order", request))
 
         val token = verifier.verify(switched.accessToken)
         token.tenant.assert().isEqualTo("globex")
@@ -630,7 +642,10 @@ class SelectTenantTest {
 ```
 
 `withToken` throws when the verifier refuses the token, and reads revocations from the `RevocationReader` you pass
-(none revoked by default). A session you end in the test (`families.end`) gives a context from which the switch issues
+(none revoked by default). `headers` are the request's other headers, as a client would send them: the context answers
+what CoSec reads from them, so `CoSec-Device-Id` is its `deviceId`, and two different values fail as they do on a host
+(`IllegalStateException`, status `400`). The token is the request's credential and no header replaces it: `Authorization`,
+`X-API-Key` and `CoSec-Identity` are refused. A session you end in the test (`families.end`) gives a context from which the switch issues
 nothing, as in production. The kit only makes the context: to test what a request is allowed, use `PipelineFixture` and
 [`PolicyTestKit`](../policies/testing.md).
 
