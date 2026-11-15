@@ -376,6 +376,12 @@ snapshot/
   那个签名表达不了它：没有目标应用进来，也没有应用出去，final 类照抄上一个令牌的应用。4.x 时它就已经绕开了这个钩子。定下的是 `fun interface TenantSwitch<C : SwitchTenantCredentials> { suspend fun switchTenant(credentials: C): TenantMembership }`：
   钩子拿到应用自己的凭据类；`SwitchTenantCredentials.targetAppId` 可选；**新令牌的应用只取自钩子的回答（`TenantMembership.app`，空则沿用上一个令牌的），绝不取自请求**。直接采用请求里的应用，会让只检查了租户的实现把任意应用的令牌发给点名它的用户。规则 `SCP-12`。
 - **刷新是受支持的扩展，而不是让应用抄实现。** `RefreshTokenAuthentication` 自己按固定顺序做验证、撤销检查、钩子、会话轮转与会话延续；应用只经 `MembershipRefresh` 回答“这个用户现在持有什么”。此前文档让应用自己写一个认证，漏掉撤销检查不会报错。
+  钩子与租户切换的钩子同形（#1417，演练的发现）：`MembershipRefresh<in C : RefreshTokenCredentials>` 拿到令牌与应用自己的刷新凭据，受信设备之类的检查不必强转，也不必再解析一次请求；
+  `RefreshTokenAuthentication<C>` 的构造器要凭据类，常见情形由同名的顶层函数承担，原有的写法一字不改。
+- **`SecurityContext` 给出应用原本要自己读请求头才拿得到的三样（#1417）。** `requestId` 是 CoSec 在审计、追踪与问题响应里用的那个 id，客户端没给时由 CoSec 生成，任何请求头里都没有；
+  `deviceId` 是客户端在 `CoSec-Device-Id` 里声明的设备，CoSec 只检查形式，不是设备的证明，网关之后按同一条规则读；`DEFAULT_TENANT_ID` 是默认租户的字符串。两个属性在接口上有默认值，应用自己的实现照旧编译。
+  默认租户因此有两处字面量，`SecurityContext.DEFAULT_TENANT_ID` 与 `TenantId.DEFAULT`，由一个测试保证相等。我曾要求合成一处，前提是 `model` 已依赖 `cosec-api`，而它并不依赖（`model` 与 `engine` 只声明 `annotations`，`api` 从 `spi` 才加入）；
+  为一个字面量给最内层模块加一条写进发布元数据的依赖，比重复它代价大，方向也反了：默认租户是模型的概念，上下文只是把它的写法交给应用。
 - `TokenCompositeAuthentication.of(…)`：一个公开类不能只有内部类型才满足得了的构造器；`ConstructibleApiTest` 守着这一条。`problem` 格式描述符保持原样，由 `ProblemSchemaTest` 守着与 `ProblemType` 一致。
 - A3 是两个 PR，都已合入（2026-11-15）：时长类型与守护规则（#1388）；登录与 `cosec-api` 的名字，连同租户切换、刷新钩子与登录组合类的工厂（#1398）。A 档至此完成。
 
