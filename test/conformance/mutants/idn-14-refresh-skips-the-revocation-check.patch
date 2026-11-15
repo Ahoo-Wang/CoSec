@@ -1,16 +1,16 @@
 # Rule: IDN-14
-# Mutant: a refresh never checks the revocations, so a revoked access token is refreshed
-# Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenAuthenticationTest :conformance:test
+# Mutant: an issue from an earlier token (a refresh, a tenant switch) never checks the revocations, so a revoked access token is refreshed or switched
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenAuthenticationTest :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest :conformance:test
 
-diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
-index 2b8b1dd0..80068d3c 100644
---- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
-+++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
-@@ -45,7 +45,6 @@ class RefreshTokenAuthentication(
- 
-     override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
-         val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
--        revocation.check(token)
-         val now = memberships.refresh(token)
-         require(now?.app == null || now.app == token.app) { "A refresh never changes the app a token is for." }
-         val issue = families.rotate(token)
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+index 68c99d14..25f8b82c 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+@@ -60,7 +60,6 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
+         issuedAt: Instant?,
+         session: TokenSession,
+     ): Live {
+-        revocation.check(tokenId, tenant, principal, issuedAt)
+         families.requireLive(session, tenant, principal)
+         return Live(principal, session)
+     }

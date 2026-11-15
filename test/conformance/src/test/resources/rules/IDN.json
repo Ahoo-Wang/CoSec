@@ -177,13 +177,14 @@
     {
       "id": "IDN-14",
       "source": "Round-2 review H1 (2026-11-13); RFC 0009 §5",
-      "statement": "A token is never issued on a revocation read that failed: a refresh whose revocations cannot be read (RevocationUnavailableException) fails, never reads the old token as not revoked, so a revoked token, or a token of a revoked principal, cannot be refreshed into one that no revocation names. The pipeline's degraded verification (PIP-7) applies to verifying a token only.",
+      "statement": "A token is never issued from an earlier token on a revocation read that failed: a refresh, or a tenant switch, whose revocations cannot be read (RevocationUnavailableException) fails, never reads the earlier token as not revoked, so a revoked token, or a token of a revoked principal, cannot be refreshed or switched into one that no revocation names. The pipeline's degraded verification (PIP-7) applies to verifying a token only.",
       "level": "pipeline",
       "pending": null,
       "guards": [
         "jwt:RefreshTokenAuthenticationTest#a refresh is refused when the revocations cannot be read",
         "cocache:CoCacheRevocationReaderTest#aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails",
-        "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens"
+        "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens",
+        "login:SwitchLiveSessionTest#a switch whose revocations cannot be read issues nothing"
       ]
     },
     {
@@ -220,7 +221,7 @@
       "guards": [
         "login:TokenFamiliesTest#a family ends at its absolute lifetime",
         "jwt:RefreshTokenFamiliesJwtTest#a pair never outlives its session",
-        "login:SwitchTenantAuthenticationTest#the new session keeps the login time of the token switched from"
+        "login:SwitchTenantAuthenticationTest#the new session keeps the login time of the session switched from"
       ]
     },
     {
@@ -269,6 +270,21 @@
         "spi:AuthenticatedPrincipalTest#attributesAreReadOnly",
         "jwt:JwtTokenConverterTest#verifiedAttributesAreReadOnlyAtEveryLevel",
         "testkit:PipelineFixtureTest#aFurtherCheckCannotBeWidenedThroughThePrincipalsAttributes"
+      ]
+    },
+    {
+      "id": "IDN-22",
+      "source": "RFC 0009 (8.0 drill, entry 9)",
+      "statement": "A tenant switch issues only from a live session: the request's session, as CoSec's token proved it, whose family is readable, its principal's and tenant's, not revoked and not ended, with the token's revocations read strictly (IDN-14). Otherwise nothing is issued: 401 when the session is unknown, another's, revoked or ended, 503 when the family or the revocations cannot be read (IDN-19). A refresh checks its session in the same place, so a family revoked by a logout (IDN-18) or by a pair presented again (IDN-16) issues nothing, by either.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "login:SwitchLiveSessionTest#a switch from a revoked session issues nothing",
+        "login:SwitchLiveSessionTest#a switch from an ended session issues nothing",
+        "login:SwitchLiveSessionTest#a switch from a session of no family, or of another principal's, issues nothing",
+        "login:SwitchLiveSessionTest#a switch whose family cannot be read issues nothing",
+        "jwt:SwitchFromReplayedPairTest#a replayed pair revokes the session, and the thief's access token switches into nothing",
+        "login:LiveSessionsGuardTest#only the live-session check rotates a family or starts one at an earlier login"
       ]
     }
   ]
