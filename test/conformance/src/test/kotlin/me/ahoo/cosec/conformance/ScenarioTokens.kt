@@ -23,9 +23,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.jwt.JwtTokenVerifier
-import me.ahoo.cosec.login.token.StoreTokenRevoker
-import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
+import me.ahoo.cosec.login.token.RefreshTokenCredentials
+import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId

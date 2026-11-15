@@ -15,9 +15,9 @@ package me.ahoo.cosec.jwt
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.login.token.StoreTokenRevoker
-import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
+import me.ahoo.cosec.login.token.RefreshTokenCredentials
+import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId

@@ -10,21 +10,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.api
 
-import me.ahoo.test.asserts.assert
-import org.junit.jupiter.api.Test
+package me.ahoo.cosec.migrate.v7.api
 
-/**
- * CoSecTest .
- *
- * @author ahoo wang
- */
-internal class CoSecTest {
-    @Test
-    fun test() {
-        CoSec.COSEC.assert().isEqualTo("cosec")
-        CoSec.COSEC_PREFIX.assert().isEqualTo("cosec.")
-        CoSec.DEFAULT.assert().isEqualTo("(0)")
-    }
+/** 7.x `me.ahoo.cosec.api.CoSec`, mirrored for the 7.x model this tool reads: its constants as they were. */
+internal object CoSec {
+    const val COSEC = "cosec"
+    const val COSEC_PREFIX = "$COSEC."
+
+    const val DEFAULT = "(0)"
 }

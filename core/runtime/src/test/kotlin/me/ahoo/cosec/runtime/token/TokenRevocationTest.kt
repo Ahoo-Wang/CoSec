@@ -18,7 +18,6 @@ package me.ahoo.cosec.runtime.token
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.RevocationReader
@@ -111,7 +110,7 @@ class TokenRevocationTest {
 
     @Test
     fun aPrincipalWithoutTenantIsInTheDefaultTenant() = runTest {
-        revocations.revokeSubject(TenantId(CoSec.DEFAULT), alice, now)
+        revocations.revokeSubject(TenantId.DEFAULT, alice, now)
 
         assertRevoked(token(now.minusSeconds(60), tenantId = null))
         assertAccepted(token(now.minusSeconds(60)))

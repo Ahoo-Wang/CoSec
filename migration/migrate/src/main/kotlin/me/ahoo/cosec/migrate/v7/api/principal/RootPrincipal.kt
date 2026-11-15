@@ -13,7 +13,7 @@
 
 package me.ahoo.cosec.migrate.v7.api.principal
 
-import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.migrate.v7.api.CoSec
 
 /** 7.x's root principal id: the system property [ROOT_KEY], `cosec` by default. */
 internal object RootPrincipal {

@@ -12,7 +12,7 @@
  */
 package me.ahoo.cosec.migrate.v7.api.principal
 
-import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.migrate.v7.api.CoSec
 import java.security.Principal
 
 /**

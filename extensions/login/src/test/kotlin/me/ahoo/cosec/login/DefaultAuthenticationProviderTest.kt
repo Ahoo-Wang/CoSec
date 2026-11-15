@@ -17,8 +17,8 @@ package me.ahoo.cosec.login
 
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
+import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore

@@ -10,16 +10,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.api
 
-/**
- * CoSec framework constants.
- *
- * This object contains common constants used throughout the CoSec framework.
- */
-object CoSec {
-    const val COSEC = "cosec"
-    const val COSEC_PREFIX = "$COSEC."
+package me.ahoo.cosec.api.principal
 
-    const val DEFAULT = "(0)"
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
+
+/** The anonymous principal's id is a stored and audited value: it does not change. */
+class AnonymousIdTest {
+    @Test
+    fun `the anonymous principal is (0)`() {
+        CoSecPrincipal.ANONYMOUS_ID.assert().isEqualTo("(0)")
+    }
 }

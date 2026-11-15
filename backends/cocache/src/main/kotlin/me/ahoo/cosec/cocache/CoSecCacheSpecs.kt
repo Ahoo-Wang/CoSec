@@ -30,7 +30,6 @@ import me.ahoo.cocache.core.policy.ReadFailureMode
 import me.ahoo.cocache.core.policy.Ttl
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
@@ -320,7 +319,7 @@ object CoSecCacheSpecs {
      * reads it again for its health indicator; CoCache refuses to start with an `allkeys-*` policy as well.
      */
     fun policySnapshot(
-        keyPrefix: String = CoSec.COSEC,
+        keyPrefix: String = DEFAULT_KEY_PREFIX,
         localMaxAge: Duration = DEFAULT_SNAPSHOT_LOCAL_MAX_AGE,
     ): StoreSpec<SnapshotKey, SnapshotDocument> =
         storeOfRecord(POLICY_SNAPSHOT_CACHE_NAME, keyPrefix, SnapshotKeyEncoder, SnapshotDocumentCodec)
@@ -374,14 +373,14 @@ object CoSecCacheSpecs {
      * The revoked token ids ([RevokedTokenCache]), under the rules of [revocation], read with [CoSecJson.mapper], CoSec's
      * one mapper, not the application's (RC1-44).
      */
-    fun revokedToken(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Boolean> =
+    fun revokedToken(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Boolean> =
         revocation(REVOKED_TOKEN_CACHE_NAME, keyPrefix, jacksonCodec<Boolean>(CoSecJson.mapper))
 
     /**
      * The revoked subjects, under the same rules as [revokedToken]. A key is a subject's [RevokedSubjectCache.key]; a
      * value is the revocation's `issuedBefore`, in epoch milliseconds.
      */
-    fun revokedSubject(keyPrefix: String = CoSec.COSEC): StoreSpec<String, Long> =
+    fun revokedSubject(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Long> =
         revocation(REVOKED_SUBJECT_CACHE_NAME, keyPrefix, jacksonCodec<Long>(CoSecJson.mapper))
 
     /**
@@ -389,7 +388,7 @@ object CoSecCacheSpecs {
      * entries each carry the family's remaining lifetime, so a family leaves Redis at its end; a failed read throws
      * ([locks]).
      */
-    fun tokenFamily(keyPrefix: String = CoSec.COSEC): StoreSpec<String, TokenFamily> {
+    fun tokenFamily(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, TokenFamily> {
         val layout = layout(keyPrefix, TOKEN_FAMILY_CACHE_NAME)
         return StoreSpec.builder<String, TokenFamily>(TOKEN_FAMILY_CACHE_NAME)
             .keyPrefix(layout.keyPrefix)
@@ -409,7 +408,7 @@ object CoSecCacheSpecs {
      * every read passes the provider's loader, so a late delete only makes the next request load again.
      */
     fun membership(
-        keyPrefix: String = CoSec.COSEC,
+        keyPrefix: String = DEFAULT_KEY_PREFIX,
         ttl: Duration = DEFAULT_MEMBERSHIP_TTL
     ): CacheSpec<String, Memberships> {
         val layout = layout(keyPrefix, MEMBERSHIP_CACHE_NAME)

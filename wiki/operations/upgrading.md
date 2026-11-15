@@ -101,6 +101,12 @@ and have to be provisioned again.
 - **`DefaultTokenRevoker` is `StoreTokenRevoker`**: it revokes through the `TokenStore`, which the name now says.
   Same package (`me.ahoo.cosec.login.token`) and constructor; the starter's bean is still `cosecTokenRevoker`, and
   `TokenRevoker` is still the SPI. Rename the class where you construct it.
+- **`api.CoSec` is removed.** Its values keep their spelling and gain names where they mean something: the anonymous
+  principal is `CoSecPrincipal.ANONYMOUS_ID` and the default tenant `TenantId.DEFAULT`, two different ids both spelled
+  `(0)`; the `cosec.*` properties and the default Redis key prefix (`cosec.key-prefix`, `cosec`) are as before, and so
+  are the span attributes (`cosec.tenant_id`, …) and the OpenAPI scheme `cosec.BearerAuth`. Code that read
+  `CoSec.COSEC`, `CoSec.COSEC_PREFIX` or `CoSec.DEFAULT` writes the value it meant. No key, property or attribute
+  changes.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

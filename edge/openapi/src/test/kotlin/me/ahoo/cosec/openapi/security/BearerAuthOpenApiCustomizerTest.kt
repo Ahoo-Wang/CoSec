@@ -28,6 +28,8 @@ class BearerAuthOpenApiCustomizerTest {
         val openAPI = OpenAPI()
         BearerAuthOpenApiCustomizer.accept(openAPI)
         openAPI.components.securitySchemes.containsKey(BearerAuthOpenApiCustomizer.BEARER_AUTH_NAME)
+        // The scheme name is what generated clients and an application's own annotations name: it does not change.
+        BearerAuthOpenApiCustomizer.BEARER_AUTH_NAME.assert().isEqualTo("cosec.BearerAuth")
         val bearerAuthSecuritySchema = openAPI.components.securitySchemes[BearerAuthOpenApiCustomizer.BEARER_AUTH_NAME]!!
         bearerAuthSecuritySchema.type.assert().isEqualTo(SecurityScheme.Type.HTTP)
         bearerAuthSecuritySchema.scheme.assert().isEqualTo(BearerAuthOpenApiCustomizer.BEARER_SCHEME)

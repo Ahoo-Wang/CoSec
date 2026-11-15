@@ -13,7 +13,6 @@
 package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
 
@@ -29,7 +28,7 @@ interface EnabledCapable {
  *
  * @author ahoo wang
  */
-@ConfigurationProperties(prefix = CoSec.COSEC)
+@ConfigurationProperties(prefix = CoSecProperties.PREFIX)
 @InternalCoSecApi
 class CoSecProperties(
     @DefaultValue("true") override var enabled: Boolean = true,
@@ -39,8 +38,17 @@ class CoSecProperties(
      * API keys (`<p>:api-key:…`) and rate limit counters (`<p>:rate-limiter:…`). Two deployments on one Redis that differ
      * in it share nothing. A trailing `:` is ignored.
      */
-    @DefaultValue(CoSec.COSEC) var keyPrefix: String = CoSec.COSEC,
+    @DefaultValue(DEFAULT_KEY_PREFIX) var keyPrefix: String = DEFAULT_KEY_PREFIX,
 ) : EnabledCapable {
     /** The prefix of one family of this deployment's keys: `<keyPrefix>:<family>`. */
     fun keysOf(family: String): String = "${keyPrefix.trimEnd(':')}:$family"
+
+    @InternalCoSecApi
+    companion object {
+        /** The prefix of every `cosec.*` property. */
+        const val PREFIX = "cosec"
+
+        /** `cosec.key-prefix` when a deployment sets none. */
+        const val DEFAULT_KEY_PREFIX = "cosec"
+    }
 }

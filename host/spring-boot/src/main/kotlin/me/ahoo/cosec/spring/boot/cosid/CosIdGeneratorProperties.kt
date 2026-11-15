@@ -14,7 +14,7 @@
 package me.ahoo.cosec.spring.boot.cosid
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosid.runtime.RuntimeSpec
 import org.springframework.boot.context.properties.ConfigurationProperties
 
@@ -27,7 +27,7 @@ class CosIdGeneratorProperties {
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "cosid"
+        const val PREFIX = CoSecProperties.PREFIX + ".cosid"
         const val GENERATOR_KEY = "$PREFIX.generator"
 
         /** The bean that gives CoSec its ids from CosId, which [GENERATOR_KEY] configures. */
