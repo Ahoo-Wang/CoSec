@@ -19,8 +19,6 @@ import me.ahoo.cosec.spi.ratelimit.RateLimit
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong
 
-private val log = KotlinLogging.logger {}
-
 /** Logs rate limiter failures at most once per [interval]: under an outage every request would log one. */
 internal class RateLimitFailures(private val interval: Duration = Duration.ofSeconds(10)) {
     private val last = AtomicLong(Long.MIN_VALUE)
