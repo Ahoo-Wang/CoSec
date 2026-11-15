@@ -543,6 +543,9 @@ class Changes(
     ): ChangeRequest {
         val change = visible(publisher, id)
         authority.require(publisher, change.key, PublishRules.publishing(change))
+        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
+            return releasedAfterHead(change, publisher, again)
+        }
         PublishRules.requireState(change, setOf(ChangeState.READY))
         PublishRules.acknowledged(change, ack)
         candidates.authorize(publisher, change)
@@ -701,6 +704,19 @@ class Changes(
         slots.release(settled)
         return settled
     }
+
+    /**
+     * #1386: [change] is `PUBLISHED` and still holds its slot, so the release after its head write failed: what
+     * [afterHead]'s answer promised a publish again settles. The slot is released and, by the call that released it,
+     * the outcome recorded that the first call did not reach; no revision is written.
+     */
+    private suspend fun releasedAfterHead(change: ChangeRequest, publisher: Operator, again: String?): ChangeRequest =
+        afterHead(change, checkNotNull(change.publishedRevision)) {
+            if (slots.release(change)) {
+                audit(PublishRules.outcomeOf(change, change), change.publishedAgain(publisher, again), publisher.actor)
+            }
+            change
+        }
 
     /** What moved under [published] while it was written, as an event of its own ([MovedHeads], RC1-33). */
     private suspend fun recordMoved(

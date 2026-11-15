@@ -126,18 +126,19 @@ internal class StagingSlots(
         }
     }
 
-    /** Releases the slot [change] holds, and withdraws its candidate. */
-    suspend fun release(change: ChangeRequest) {
+    /** Releases the slot [change] holds, and withdraws its candidate. True when this call freed the slot. */
+    suspend fun release(change: ChangeRequest): Boolean {
         withdraw(change)
         repeat(MAX_ATTEMPTS) {
-            val current = store.stage(change.key) ?: return
+            val current = store.stage(change.key) ?: return false
             if (current.value.holder != change.id) {
-                return
+                return false
             }
             if (store.putStage(change.key, current.digest, StageSlot.FREE)) {
-                return
+                return true
             }
         }
+        return false
     }
 
     /**

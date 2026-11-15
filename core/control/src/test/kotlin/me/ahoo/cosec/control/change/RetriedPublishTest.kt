@@ -50,6 +50,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
+import org.junit.jupiter.api.assertThrows
 
 /**
  * Review item 13: a publish whose head write went through but whose reply was lost is recognised when it is retried,
@@ -72,7 +73,19 @@ class RetriedPublishTest {
     /** What runs once right before the next head write: another call meanwhile. */
     @Volatile
     private var beforeHead: (suspend () -> Unit)? = null
+    /** Whether the next release of a staging slot fails, once: a transient store failure after the head write. */
+    @Volatile
+    private var failRelease = false
+
     private val store = object : ControlStore by memory {
+        override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean {
+            if (failRelease && slot.holder == null) {
+                failRelease = false
+                error("one transient release failure")
+            }
+            return memory.putStage(key, expected, slot)
+        }
+
         override suspend fun putHead(
             key: SnapshotKey,
             expected: SnapshotDigest?,
@@ -166,6 +179,36 @@ class RetriedPublishTest {
             .assert().isEqualTo("retried by (platform)/pia, not re-analyzed")
         events.none { it.kind == ChangeEvent.Kind.HEADS_MOVED }.assert().isTrue()
         revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
+        listeners.cancel()
+    }
+
+    /**
+     * #1386: the head is written and the change PUBLISHED, but releasing its slot fails. The answer says publishing it
+     * again settles it, and it does: the retry releases the slot and records the publish the first call did not reach,
+     * once, and writes no revision. A change settled that far is not published again.
+     */
+    @Test
+    fun `a publish whose slot release failed is settled by publishing it again, adding no revision`() = runBlocking<Unit> {
+        val change = changes.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("reads"))), "reads")
+        changes.skipShadow(PLATO, change.id, "test")
+        failRelease = true
+        val failure = assertThrows<ChangeRejectedException> { changes.publish(PLATO, change.id) }
+        failure.status.assert().isEqualTo(503)
+        failure.message!!.assert().contains("publishing it again settles it")
+        head(ACME).assert().isEqualTo(1L)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        store.stage(ACME)!!.value.holder.assert().isEqualTo(change.id)
+        events.clear()
+
+        val again = changes.publish(PLATO, change.id)
+
+        again.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        again.publishedRevision.assert().isEqualTo(1L)
+        store.stage(ACME)?.value?.holder.assert().isNull()
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
+        delivered(ChangeEvent.Kind.PUBLISHED).count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
+        refused { changes.publish(PLATO, change.id) }.assert().isEqualTo(409)
+        events.count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
         listeners.cancel()
     }
 
