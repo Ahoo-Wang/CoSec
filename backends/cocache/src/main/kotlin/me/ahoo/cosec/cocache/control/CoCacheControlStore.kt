@@ -29,8 +29,8 @@ import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
+import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.shadow.StoredCandidateCodec
@@ -409,7 +409,7 @@ class CoCacheControlStore internal constructor(
         fun create(
             factory: CoCacheFactory,
             heads: PolicySnapshotCache,
-            keyPrefix: String = CoSec.COSEC,
+            keyPrefix: String = DEFAULT_KEY_PREFIX,
             onPublished: (SnapshotKey) -> Unit = {},
             missingGrace: Duration = DEFAULT_MISSING_GRACE,
         ): CoCacheControlStore = CoCacheControlStore(

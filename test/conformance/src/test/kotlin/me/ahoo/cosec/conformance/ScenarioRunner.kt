@@ -51,6 +51,8 @@ sealed interface Outcome {
         val credentials: List<String> = emptyList(),
         /** The kind of decision a check of the permitted request answered (`"check"`); null without one. */
         val check: String? = null,
+        /** A login that issued a token: what the token is for (`"issued"`: its `tenant` and `app`); null without one. */
+        val issued: Map<String, String?>? = null,
     ) : Outcome
 
     /** The caller went away and the pipeline made no outcome at all (RFC 0006 §7.4). */

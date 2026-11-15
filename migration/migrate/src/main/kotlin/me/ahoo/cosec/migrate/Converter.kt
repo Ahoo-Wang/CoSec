@@ -200,10 +200,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         { kind, location, message -> reject(kind, location, message) },
         { changes += it }
     )
-    val statements = StatementTranslator(
-        translator,
-        conditions
-    ) { kind, location, message -> reject(kind, location, message) }
+    val statements = StatementTranslator(translator, conditions, scan, ::reject)
     val treeReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     /** The policies and bindings of each document, in the order they are written. */

@@ -19,7 +19,6 @@ import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
-import me.ahoo.cosec.login.token.SimpleCompositeToken
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
@@ -91,16 +90,16 @@ class JwtTokenVerifierTest {
         )
         val attacker = jwtTokenConverter.toToken(TokenSubject(JWT.decode(victim.accessToken).id, null))
         assertThrownBy<TokenVerificationException> {
-            jwtTokenVerifier.refresh(SimpleCompositeToken(victim.accessToken, attacker.accessToken))
+            jwtTokenVerifier.refresh(CompositeToken(victim.accessToken, attacker.accessToken))
         }.message().contains("not a refresh token")
 
         val access = signed { withIssuedAt(issuedAt) }
-        jwtTokenVerifier.refresh(SimpleCompositeToken(access, refreshOf(access))).principal.assert().isEqualTo("alice")
+        jwtTokenVerifier.refresh(CompositeToken(access, refreshOf(access))).principal.assert().isEqualTo("alice")
         assertThrownBy<RefreshTokenMismatchException> {
-            jwtTokenVerifier.refresh(SimpleCompositeToken(access, refreshOf(access, issuedAt.plusSeconds(1))))
+            jwtTokenVerifier.refresh(CompositeToken(access, refreshOf(access, issuedAt.plusSeconds(1))))
         }
         assertThrownBy<TokenVerificationException> {
-            jwtTokenVerifier.refresh(SimpleCompositeToken(access, refreshOf(access, iat = null)))
+            jwtTokenVerifier.refresh(CompositeToken(access, refreshOf(access, iat = null)))
         }.message().contains("no iat")
     }
 
@@ -146,7 +145,7 @@ class JwtTokenVerifierTest {
         }
         val refresh = refreshOf(access)
         assertThrownBy<DelegationUnsupportedException> {
-            jwtTokenVerifier.refresh(SimpleCompositeToken(access, refresh))
+            jwtTokenVerifier.refresh(CompositeToken(access, refresh))
         }
     }
 
@@ -156,7 +155,7 @@ class JwtTokenVerifierTest {
         val refresh = JWT.create().withSubject("t1").withExpiresAt(Instant.now().plusSeconds(3600))
             .sign(JwtFixture.ALGORITHM)
         val thrown = assertThrows(TokenVerificationException::class.java) {
-            jwtTokenVerifier.refresh(SimpleCompositeToken("not-a-jwt", refresh))
+            jwtTokenVerifier.refresh(CompositeToken("not-a-jwt", refresh))
         }
         assertFalse(thrown is TokenExpiredException)
     }
@@ -193,7 +192,7 @@ class JwtTokenVerifierTest {
         val refresh = refreshOf(access)
         for (read in listOf<() -> VerifiedToken>(
             { jwtTokenVerifier.verify(access) },
-            { jwtTokenVerifier.refresh(SimpleCompositeToken(access, refresh)) },
+            { jwtTokenVerifier.refresh(CompositeToken(access, refresh)) },
         )) {
             val thrown = assertThrows(TokenVerificationException::class.java) { read() }
             assertFalse(thrown is TokenExpiredException)
@@ -371,7 +370,7 @@ class JwtTokenVerifierTest {
         // A valid refresh token paired with another valid access token is an invalid token (401), not a bad argument.
         val first: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", null))
         val second: CompositeToken = jwtTokenConverter.toToken(TokenSubject("alice", null))
-        val mismatched = SimpleCompositeToken(accessToken = second.accessToken, refreshToken = first.refreshToken)
+        val mismatched = CompositeToken(accessToken = second.accessToken, refreshToken = first.refreshToken)
 
         assertThrows(RefreshTokenMismatchException::class.java) {
             jwtTokenVerifier.refresh(mismatched)
@@ -386,7 +385,7 @@ class JwtTokenVerifierTest {
             .withJWTId(legitAccessTokenId)
             .withSubject(TokenSubject("alice", null).id)
             .sign(Algorithm.HMAC256("attacker-secret"))
-        val forgedToken = SimpleCompositeToken(
+        val forgedToken = CompositeToken(
             accessToken = forgedAccessToken,
             refreshToken = oldToken.refreshToken,
         )

@@ -17,10 +17,10 @@ package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.runtime.event.DecisionListeners
+import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.NestedConfigurationProperty
@@ -74,7 +74,7 @@ class PipelineProperties {
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "pipeline"
+        const val PREFIX = CoSecProperties.PREFIX + ".pipeline"
         const val MODE_KEY = "$PREFIX.mode"
         const val API_KEY_HEADER_KEY = "$PREFIX.api-key-header"
         const val DEFAULT_API_KEY_HEADER = "X-API-Key"
@@ -104,7 +104,7 @@ class GatewayProperties {
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "gateway"
+        const val PREFIX = CoSecProperties.PREFIX + ".gateway"
         const val UNPROTECTED_ENDPOINTS_KEY = "$PREFIX.unprotected-endpoints"
     }
 }
@@ -135,7 +135,7 @@ class GatewayIdentityProperties {
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "gateway.identity"
+        const val PREFIX = CoSecProperties.PREFIX + ".gateway.identity"
     }
 }
 
@@ -263,7 +263,7 @@ class RuntimeAuthorizationProperties {
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "authorization"
+        const val PREFIX = CoSecProperties.PREFIX + ".authorization"
     }
 }
 
@@ -287,7 +287,7 @@ class RevocationProperties {
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "authentication.revocation"
+        const val PREFIX = CoSecProperties.PREFIX + ".authentication.revocation"
     }
 }
 
@@ -306,6 +306,6 @@ class ListenerProperties {
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "observability.listener"
+        const val PREFIX = CoSecProperties.PREFIX + ".observability.listener"
     }
 }

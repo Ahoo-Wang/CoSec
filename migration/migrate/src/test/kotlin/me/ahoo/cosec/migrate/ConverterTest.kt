@@ -101,7 +101,8 @@ class ConverterTest {
         global.statements[1].actions.assert().containsExactly("http:*")
         platform.policies[1].statements.single().resources.map { it.pattern }.assert()
             .containsExactly("http:path:/reports/**", "http:path:/exports/**")
-        platform.policies[2].statements.single().actions.assert().containsExactly("*")
+        // An ALLOW of every 7.x action is every HTTP request, never `*` (MIG-2).
+        platform.policies[2].statements.single().actions.assert().containsExactly("http:*")
         val binding = platform.bindings.single()
         binding.id.value.assert().isEqualTo("g:g")
         binding.subject.assert().isEqualTo(SubjectRef.Anyone)

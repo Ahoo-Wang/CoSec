@@ -182,6 +182,9 @@ object Expectations {
         if (outcome.proceed) put("proceed", true)
         outcome.type?.let { put("type", it) }
         outcome.check?.let { put("check", it) }
+        outcome.issued?.let { issued ->
+            set("issued", json.objectNode().apply { issued.forEach { (name, value) -> put(name, value) } })
+        }
         if (outcome.identity.first) set("identity", outcome.identity.second ?: json.nullNode())
         if (outcome.credentials.isNotEmpty()) {
             set(

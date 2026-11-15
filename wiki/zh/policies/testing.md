@@ -402,7 +402,7 @@ class OrderPermissionsTest {
     private val reader = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
 
     @Test
-    fun `a reader may read`() = runBlocking {
+    fun `a reader may read`() = runBlocking<Unit> {
         PipelineFixture.load(Path.of("src/test/resources/policies/documents")).use { fixture ->
             val request = fixture.request("GET", "/orders/1", reader)
             check(fixture.evaluate(request).status == 200)
@@ -413,6 +413,8 @@ class OrderPermissionsTest {
     }
 }
 ```
+
+这里的 `runBlocking<Unit>` 是有意写的。JUnit 不会运行返回值的测试方法，也不报告任何东西：如果代码块的最后一次调用返回了值（断言库的调用通常如此），方法就会返回它，构建保持绿色，测试却被跳过。每个写成 `runBlocking` 表达式的测试都应这样写。
 
 `PipelineFixture.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。文档无法编译时，构建夹具就会失败。`Principal` 说明请求是谁，如同令牌一样：`tenant`、`roles`（`role` 或 `role@space`）、`policies`、`app` 和 `attributes`；不提供时请求是匿名的。它只替换凭证检查：状态码、`SecurityContext` 和决策都来自管道。用完关闭夹具，通常一个测试类一个。
 

@@ -10,16 +10,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.api
 
-/**
- * CoSec framework constants.
- *
- * This object contains common constants used throughout the CoSec framework.
- */
-object CoSec {
-    const val COSEC = "cosec"
-    const val COSEC_PREFIX = "$COSEC."
+package me.ahoo.cosec.cocache
 
-    const val DEFAULT = "(0)"
-}
+import me.ahoo.cosec.annotations.InternalCoSecApi
+
+/** The prefix of a deployment's Redis keys when it sets none (`cosec.key-prefix`). */
+@InternalCoSecApi
+const val DEFAULT_KEY_PREFIX = "cosec"

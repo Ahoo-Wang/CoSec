@@ -29,7 +29,6 @@ import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.context.Context
 import io.opentelemetry.extension.kotlin.asContextElement
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
@@ -106,19 +105,22 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
         private const val INSTRUMENTATION_NAME = "me.ahoo.cosec"
         private val INSTRUMENTATION_VERSION =
             instrumentationVersion(TracingListener::class.java.`package`.implementationVersion)
-        private const val AUTHORIZE = CoSec.COSEC_PREFIX + "authorize."
-        val TENANT_ID = stringKey(CoSec.COSEC_PREFIX + "tenant_id")
-        val APP_ID = stringKey(CoSec.COSEC_PREFIX + "app_id")
-        val SPACE_ID = stringKey(CoSec.COSEC_PREFIX + "space_id")
-        val REQUEST_ID = stringKey(CoSec.COSEC_PREFIX + "request_id")
+
+        /** The namespace of CoSec's span attributes. */
+        private const val ATTRIBUTE_PREFIX = "cosec."
+        private const val AUTHORIZE = ATTRIBUTE_PREFIX + "authorize."
+        val TENANT_ID = stringKey(ATTRIBUTE_PREFIX + "tenant_id")
+        val APP_ID = stringKey(ATTRIBUTE_PREFIX + "app_id")
+        val SPACE_ID = stringKey(ATTRIBUTE_PREFIX + "space_id")
+        val REQUEST_ID = stringKey(ATTRIBUTE_PREFIX + "request_id")
         val DEVICE_ID = stringKey("device.id")
         val USER_ID = stringKey("user.id")
         val RESULT = stringKey(AUTHORIZE + "result")
         val POLICY_ID = stringKey(AUTHORIZE + "policy.id")
         val STATEMENT_INDEX = longKey(AUTHORIZE + "statement.index")
         val STATEMENT_NAME = stringKey(AUTHORIZE + "statement.name")
-        val BINDING_ID = stringKey(CoSec.COSEC_PREFIX + "binding.id")
-        val SNAPSHOT_VERSION = stringKey(CoSec.COSEC_PREFIX + "snapshot.version")
+        val BINDING_ID = stringKey(ATTRIBUTE_PREFIX + "binding.id")
+        val SNAPSHOT_VERSION = stringKey(ATTRIBUTE_PREFIX + "snapshot.version")
 
         /** The jar's `Implementation-Version`; classes that run from a directory have none. */
         internal fun instrumentationVersion(manifestVersion: String?): String = manifestVersion ?: "unknown"

@@ -21,25 +21,33 @@ import tools.jackson.databind.JsonNode
 
 /**
  * Translates 7.x actions into the `action` and `resource` of an 8.0 statement, exactly or not at all (RFC 0005 §5.2,
- * §7.2): `all`, `path` patterns with their methods and options, and `composite`s of them. Path templates are not
+ * §7.2): `all`, `path` patterns with their methods and options, and `composite`s of them. 7.x decided HTTP requests and
+ * nothing else, so every action of an ALLOW is `http:*`: `*` would also grant the control plane's actions (`cosec:*`)
+ * and those of checks in code, which 7.x never had (`MIG-2`). Every action of a DENY stays `*`: it keeps refusing what
+ * it refused, through whichever door the request comes. Path templates are not
  * translated: a template's value is compared to the captured segment by a condition only after the pattern matched,
  * which 7.x does not do (RFC 0005 §2 J9); they are rejected. Conditions are [ConditionTranslator]'s.
  *
  * Rejections go to [reject] with a location: the statement's location followed by a JSON path.
  */
 internal class MatcherTranslator(private val reject: (RejectionKind, String, String) -> Unit) {
-    /** The `action` and `resource` of a statement: `*` and no resource for `all`. */
+    /** The `action` and `resource` of a statement: every action and no resource for `all`. */
     data class Action(val actions: List<String>, val resources: List<ResourceSource>) {
         val isAll: Boolean get() = resources.isEmpty() && actions == ALL_ACTIONS
     }
 
     /**
-     * The translation of the action at [location], or null when it is rejected. The JSON forms are those of
-     * `JsonActionMatcherDeserializer`: a pattern string (`*` is `all`), an array of actions, or `{ "<type>": config }`.
+     * The translation of the action at [location] in a DENY ([deny]) or an ALLOW, or null when it is rejected. The JSON
+     * forms are those of `JsonActionMatcherDeserializer`: a pattern string (`*` is `all`), an array of actions, or
+     * `{ "<type>": config }`. Every action is `*` in a DENY and `http:*` in an ALLOW (`MIG-2`).
      */
-    fun action(node: JsonNode, location: String): Action? = when {
+    fun action(node: JsonNode, location: String, deny: Boolean): Action? =
+        translated(node, location)?.let { if (it.isAll && !deny) HTTP_ACTION else it }
+
+    /** [action], with every action as [ALL_ACTION] whatever the direction: what [merge] tells apart. */
+    private fun translated(node: JsonNode, location: String): Action? = when {
         node.isString -> if (node.asString() == ALL) ALL_ACTION else path(listOf(node.asString()), null, location)
-        node.isArray -> merge(node.values().mapIndexed { i, member -> action(member, "$location[$i]") }, location)
+        node.isArray -> merge(node.values().mapIndexed { i, member -> translated(member, "$location[$i]") }, location)
         node.isObject && node.size() == 1 -> node.properties().first().let { (type, config) ->
             typed(
                 type,
@@ -58,7 +66,7 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
 
         PATH_TYPE -> pathConfig(config, "$location.$type")
         COMPOSITE_TYPE -> if (config.isArray) {
-            merge(config.values().mapIndexed { i, member -> action(member, "$location.$type[$i]") }, location)
+            merge(config.values().mapIndexed { i, member -> translated(member, "$location.$type[$i]") }, location)
         } else {
             rejected(RejectionKind.UNDECODABLE, location, "a composite action is an array of actions")
         }
@@ -197,6 +205,9 @@ internal class MatcherTranslator(private val reject: (RejectionKind, String, Str
         const val HTTP_PATH = "http:path:"
         val ALL_ACTIONS = listOf(ALL)
         val ALL_ACTION = Action(ALL_ACTIONS, emptyList())
+
+        /** Every action 7.x decided: every HTTP request (`MIG-2`). */
+        val HTTP_ACTION = Action(listOf("$HTTP$ALL"), emptyList())
 
         const val ALL_TYPE = "all"
         const val PATH_TYPE = "path"

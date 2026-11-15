@@ -53,7 +53,8 @@ What is different, in short:
    ([Modules, artifacts and packages](#modules-artifacts-and-packages)), remove the uses of
    [removed APIs](#removed-and-replaced-apis) and register the 8.0 extension beans instead.
 5. **Update the configuration**: rename or remove every [7.x key](#removed-and-renamed-properties), and decide on the
-   new ones. A `cosec.*` key 8.0 does not read fails startup and names its replacement. Startup also fails in three
+   new ones. A `cosec.*` key 8.0 does not read fails startup: the message lists every such key and links the
+   [table of removed and renamed keys](#removed-and-renamed-properties), where you look up each replacement. Startup also fails in three
    common cases: a `classpath:cosec-routes.json` that `cosec.authorization.routes.location` does not name (set the
    property to it, or to empty), JWT without `cosec-cocache` and without a
    revocation store of your own ([Token revocation is always on](#token-revocation-is-always-on)), and a Redis whose
@@ -166,7 +167,7 @@ they are dropped).
 #### Semantic changes in the report
 
 `semanticChanges` lists, for each place in the 7.x data, the shape whose decision 8.0 makes differently by design.
-`change` is one of the rule ids in [What 8.0 decides differently](#what-8-0-decides-differently) (`C1a`–`C6`,
+`change` is one of the rule ids in [What 8.0 decides differently](#what-8-0-decides-differently) (`C1a`–`C7`,
 `D1`–`D3`), or:
 
 - `ASCII-CASE`: an ALLOW condition with `ignoreCase`. 8.0 folds ASCII letters only, so the ALLOW matches fewer
@@ -389,6 +390,7 @@ In 8.0 these are the rules; each has an id in the conformance suite. Without err
 | **C4** (`SCP-2`) | With `cosec.authorization.scope.app-id` set, a request declaring another app is denied (`scope-rejected`); without a declaration the host's app applies. | The declared app always applied. | Hosts that serve one app. |
 | **C5** (`BND-2`) | A principal attaches only attachable policies of its own tenant's document or of the platform. | Any principal could attach any policy. | Principal policies, with `--partition by-owner` only. The default partition keeps 7.x's behavior. |
 | **C6** | A role grant that names a permission its app does not define is rejected by `convert`. | `500` on the request that reached it. | Grants with stale permission ids. |
+| **C7** (`MIG-2`) | A DENY of every action (`*`) also refuses checks in code and the control plane's actions (`cosec:*`) for the requests it matches. | Only HTTP requests were decided. | DENY statements on every action ([Every action is every HTTP request](#every-action-is-every-http-request)). |
 | **D1** | `inRole: r` in an ALLOW matches only a role in effect in the requested space; `inRole: r@s` in an ALLOW matches only while the request is in space `s`; `inRole: r` in a DENY matches the role held in any space. | Literal role match, a bare role also matching `r@<requested space>`. | `inRole` conditions. A DENY never narrows and an ALLOW never widens. |
 | **D2** (`CND-1`) | An absent attribute equals no value, not the empty string. | An absent part read as `""`. | `eq` against `#{principal.id}`, `#{principal.attributes['k']}` or `#{tenant.tenantId}`. In an ALLOW, an absent part no longer matches an empty attribute (narrower). In a DENY, `convert` keeps 7.x's reading by adding the 7.x cases. |
 | **D3** | No regular expressions, so no regex timeouts. | A `RegexTimeoutException` was an implicit deny. | `regular` conditions; only literal, literal-prefix and choice-of-literals patterns translate. |
@@ -409,6 +411,21 @@ bounded in time (at most 24 hours, `cosec.control.break-glass.max-duration`, def
 `OBS-2`). Request one through the control plane when you need it, where two people take part. `cosec-migrate` writes
 no break-glass binding: `convert` does not convert 7.x root, and `--root-enabled`, `--root-id`, `--root-expires-at` and
 `publish --break-glass-max-duration` are gone (passing one is a usage error that says so).
+
+#### Every action is every HTTP request
+
+7.x decided HTTP requests and nothing else, so its every-action forms meant every HTTP request: the pattern `*`, `all`
+without methods, a `path` array holding `*`, and an array or composite holding one of them. In 8.0, `*` also matches
+the control plane's actions (`cosec:*`) and those of [checks in code](../integration/checks.md), which 7.x never
+granted. So `convert` writes an ALLOW of every action as `"action": "http:*"` (`MIG-2`), and the decisions on HTTP
+requests are those of 7.x.
+
+A DENY of every action stays `"action": "*"`: it keeps refusing what it refused, now also through a check in code
+or the control plane, and the report records it as C7. Where such a DENY can match the administrator's own requests,
+it refuses them the control plane too.
+
+A statement on `http:*` never matches a request a [route map](../policies/language.md#route-maps) maps. After you add
+a route map, grant the actions it names with policies of their own.
 
 #### Path templates in actions
 
@@ -742,6 +759,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.apikey` | `me.ahoo.cosec.spi.apikey` (`cosec-spi`) | `ApiKey`, `ApiKeyReader`, `InMemoryApiKeyStore` |
 | `me.ahoo.cosec.limiter` | `me.ahoo.cosec.spi.ratelimit` (`cosec-spi`) | `RateLimit`, `RateLimitResult`, `RateLimiter` ([below](#removed-and-replaced-apis)) |
 | `me.ahoo.cosec` | `me.ahoo.cosec.model` (`cosec-model`) | `CoSecException` |
+| `me.ahoo.cosec.spring.boot.starter` and its sub-packages | `me.ahoo.cosec.spring.boot` and the same sub-packages (`cosec-spring-boot`) | The starter's classes, such as `jwt.JwtProperties`: `me.ahoo.cosec.spring.boot.starter.jwt.JwtProperties` is now `me.ahoo.cosec.spring.boot.jwt.JwtProperties`, and, like the other `*Properties` classes, `@InternalCoSecApi` ([From 8.0.0-alpha.4](#from-8-0-0-alpha-4)): read `cosec.jwt.*` with `@Value` or the `Environment`, and do not reuse its nested types |
 
 The 8.0 SPIs live in the same places: `MembershipProvider` and `MembershipClaims` in `me.ahoo.cosec.spi.membership`,
 `SnapshotDocumentStore` and `InMemorySnapshotDocumentStore` in `me.ahoo.cosec.spi.snapshot`, `AttributeProvider` in
@@ -788,7 +806,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `Policy`, `Statement`, `PermissionVerifier`, `ActionMatcher`, `ConditionMatcher`, `AppPermission`, `AppRolePermission`, `RolePermission` and the rest of `cosec-api`'s policy and permission model | Documents ([policy language](../policies/language.md)). A `Statement` that overrode `verify` has no counterpart. |
 | `ActionMatcherFactory`, `ConditionMatcherFactory`, `MatcherFactoryRegistry`, the built-in matchers, OGNL and SpEL | Built-in actions and conditions only. A value a custom condition read comes from an `AttributeProvider` ([Extending](../architecture/extending.md)). |
 | `AuthenticationProvider`, `DefaultAuthenticationProvider` | Declare `Authentication` beans: the starter registers them. |
-| `AbstractRefreshTokenAuthentication` | `SimpleRefreshTokenAuthentication`, or an `Authentication<RefreshTokenCredentials>` of your own. |
+| `AbstractRefreshTokenAuthentication` | `RefreshTokenAuthentication`, or an `Authentication<RefreshTokenCredentials>` of your own. |
 | `ApiKeyStore` | `ApiKeyReader` to look keys up; the `InMemoryApiKeyStore` or `RedisApiKeyStore` bean to manage them. |
 | `BlockingAware` | None: no condition runs code. Blocking lookups go into an `AttributeProvider`, which suspends. |
 | `RootPrincipalMatcher`, `CoSecPrincipal.isRoot`, `root-enabled` | Break-glass bindings ([Root becomes break-glass](#root-becomes-break-glass)). |
@@ -995,10 +1013,35 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 
 ### From 8.0.0-alpha.4 {#from-8-0-0-alpha-4}
 
-8.0.0-alpha.4 is a preview with no compatibility promise. **Every token issued before this version declares no app, so a
+**If you published documents `cosec-migrate convert` wrote with any preview, check their ALLOW statements** (the first
+entry below): a converted 7.x "every action" granted the control plane. 8.0.0-alpha.4 is a preview with no
+compatibility promise. **Every token issued before this version declares no app, so a
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
 and have to be provisioned again.
 
+- **Security: a converted 7.x "every action" no longer grants the control plane.** From 8.0.0-alpha.1 to
+  8.0.0-alpha.4, `convert` wrote an ALLOW of every 7.x action as `"action": "*"`, which also matches every
+  control-plane action (`cosec:*`) and every action of a check in code. A converted global policy such as "signed-in
+  users may do anything" gave every authenticated principal every control-plane action on its own tenant's document,
+  and a principal of `(platform)` on the platform's and the app documents. An attachable one did the same for every
+  token that lists it. Such a principal could write and grant in that document, and another holding the same grant
+  could approve it. `convert` now writes `"action": "http:*"`
+  ([Every action is every HTTP request](#every-action-is-every-http-request)); a DENY of every action stays `*`.
+  If you published converted documents:
+  1. Find the ALLOW statements on `*` in each document (`platform`, `app:<id>`, `tenant:<id>`). An administrator
+     reads the head through the control API ([Revisions, history and rollback](./storage.md#revisions-history-and-rollback)):
+
+     ```bash
+     curl -s "$CONTROL/documents/platform" -H "$AUTH" \
+       | jq -r '.policies[] | select(any(.statements[]; .effect == "allow" and ([.action] | flatten | index("*")))) | .id'
+     ```
+
+     The ones `convert` wrote are in the conversion's `platform.json`, `apps/` and `tenants/`, and its
+     `provenance.json` names the 7.x policy of each. A statement on `*` you wrote yourself after the upgrade is yours
+     to keep.
+  2. Change each converted one to `http:*` through the control plane: a change that puts the policy again with
+     `"action": "http:*"`. If a document has not changed since `publish`, `apply` the file a new `convert` writes for
+     it instead; the change it proposes is exactly those statements.
 - **No CoSec module imports a platform, and `cosec-dependencies` is no longer published** (R11). Until now every library
   module's POM and Gradle module metadata imported `cosec-dependencies`, which imports the Spring Boot, Spring Cloud,
   CoCache, OpenTelemetry, springdoc and fluent-assert BOMs and manages jmh, mockk, archunit, blockhound,
@@ -1081,6 +1124,48 @@ and have to be provisioned again.
   `java.time.Duration`, where it wrote `200.milliseconds`. `CoCacheMembershipProvider.DEFAULT_FILL_TIMEOUT` and the
   `drainTimeout` of `KafkaAuditListener` and `KafkaChangeListener` take a `java.time.Duration` too; code that passed a
   `kotlin.time.Duration` converts it with `toJavaDuration()`. No property, default or behaviour changes.
+- **`CompositeToken` is a final class in `cosec-api`, and `SimpleCompositeToken` is removed.** Build one with
+  `CompositeToken(accessToken, refreshToken)`. It is equal by value and has no `copy` or `componentN`. Logging a token no
+  longer prints it: its string is `CompositeToken(accessToken=***, refreshToken=***)`. The JSON a login or refresh
+  endpoint answers is unchanged (`{"accessToken":…,"refreshToken":…}`). `RefreshTokenCredentials` declares `accessToken`
+  and `refreshToken` itself and no longer is a `CompositeToken`: a credential an application implements does not
+  inherit from a value. Your refresh credentials class overrides the two, as it did:
+
+  ```kotlin
+  data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
+      RefreshTokenCredentials
+  ```
+
+  Code that passed it where a `CompositeToken` is expected (`TokenRevoker.revoke`) builds one,
+  `CompositeToken(credentials.accessToken, credentials.refreshToken)`.
+- **`SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication`**, in the same package and with the same
+  constructor: the only one there is needs no prefix. Rename the class where you declare its bean.
+- **`DefaultTokenRevoker` is `StoreTokenRevoker`**: it revokes through the `TokenStore`, which the name now says.
+  Same package (`me.ahoo.cosec.login.token`) and constructor; the starter's bean is still `cosecTokenRevoker`, and
+  `TokenRevoker` is still the SPI. Rename the class where you construct it.
+- **`api.CoSec` is removed.** Its values keep their spelling and gain names where they mean something: the anonymous
+  principal is `CoSecPrincipal.ANONYMOUS_ID` and the default tenant `TenantId.DEFAULT`, two different ids both spelled
+  `(0)`; the `cosec.*` properties and the default Redis key prefix (`cosec.key-prefix`, `cosec`) are as before, and so
+  are the span attributes (`cosec.tenant_id`, …) and the OpenAPI scheme `cosec.BearerAuth`. Code that read
+  `CoSec.COSEC`, `CoSec.COSEC_PREFIX` or `CoSec.DEFAULT` writes the value it meant. No key, property or attribute
+  changes.
+- **A tenant switch is `SwitchTenantAuthentication` with a `TenantSwitch`, and it can set the app.**
+  `AbstractSwitchTenantAuthentication` is removed. Where you extended it and implemented
+  `switchTenant(targetTenantId, previous)`, declare
+  `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java) { credentials -> … }` as a bean: the switch
+  gets your own credentials class (`credentials.targetTenantId`, `credentials.context`, and anything else it carries),
+  and answers a `TenantMembership` as before. `SwitchTenantCredentials` gains `targetAppId`, the app the user asks for,
+  null by default; `TenantMembership` gains `app`. The new token is for the app your switch answers, else the previous
+  token's (`SCP-12`): a switch that answers none behaves as before, and a user never gets an app by naming it.
+  See [Switching tenant and app](../integration/authentication.md#switching-tenant-and-app).
+- **A refresh can re-read the user.** `RefreshTokenAuthentication` takes an optional `MembershipRefresh`, which
+  answers what the user holds now; the class keeps the verification, the revocation check, the rotation and the session.
+  Where you wrote an `Authentication` of your own to re-read the user on refresh, pass a `MembershipRefresh` instead.
+  Without one, a refresh keeps the token's claims, as before.
+- **`TokenCompositeAuthentication` is built with `TokenCompositeAuthentication.of(authentications, tokenConverter,
+  families)`.** Its constructor took two types no application could build (`CompositeAuthentication`,
+  `DefaultAuthenticationProvider`) and is now `@InternalCoSecApi`. The starter's bean is unchanged; a login assembled
+  by hand, in a test say, passes its `Authentication`s to `of`.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests

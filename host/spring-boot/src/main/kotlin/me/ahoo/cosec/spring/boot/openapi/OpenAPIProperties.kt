@@ -13,7 +13,7 @@
 package me.ahoo.cosec.spring.boot.openapi
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
+import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.EnabledCapable
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
@@ -29,6 +29,6 @@ class OpenAPIProperties(@DefaultValue("true") override var enabled: Boolean = tr
 
     @InternalCoSecApi
     companion object {
-        const val PREFIX = CoSec.COSEC_PREFIX + "openapi"
+        const val PREFIX = CoSecProperties.PREFIX + ".openapi"
     }
 }

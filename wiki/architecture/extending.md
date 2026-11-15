@@ -38,6 +38,8 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `SnapshotDocumentStore` | `cosec-spi`, `spi.snapshot` | Keep policy documents somewhere other than Redis. | one bean, without `cosec-cocache` |
 | `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |
 | `Authentication` | `cosec-login`, `login` | Check another kind of login credential and say what its token holds. Throw to refuse. | every bean, by the credential type it supports |
+| `TenantSwitch` | `cosec-login`, `login.token` | Say what a user holds in the tenant, and the app, it switches to, and which app the new token is for ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). Throw to refuse. | none: declare `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java, yourSwitch)` as an `Authentication` bean |
+| `MembershipRefresh` | `cosec-login`, `login.token` | Say what a user holds now when its token is refreshed, so changed roles apply ([Refreshing tokens](../integration/authentication.md#refreshing-tokens)). Throw to refuse; null keeps the claims. | none: pass it to `RefreshTokenAuthentication` |
 | `TokenConverter` | `cosec-login`, `login.token` | Issue tokens in another format. | one bean, replacing `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`, `social` | Turn a provider's user into your principal. | one bean, replacing `DirectSocialUserPrincipalConverter` |
 | `SocialStateStore` | `cosec-social`, `social` | Keep the OAuth states social login issues somewhere other than Redis: `put` a state with its binding's hash, and `take` removes it atomically, so a state is used once. Both suspend: over a blocking client, make the calls on a dispatcher of your own. Throw when the store fails. | one bean, replacing `RedisSocialStateStore` |
@@ -72,7 +74,7 @@ Every public declaration of a published module is in one of four levels. The mar
 | Marker | What it promises | What you do |
 |---|---|---|
 | none | Stable. From 8.0 GA on, removing or changing it is a breaking change, made only in a major release. | Use it. |
-| `@CoSecSpi` | An interface applications implement, not only call: the extension points above, and the capabilities a principal declares (`ExpiresAtCapable`, `IssuedAtCapable`, `MembershipMarkerCapable`). Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
+| `@CoSecSpi` | An interface applications implement, not only call: the extension points above. Stable like the rest, and a member added in a minor release comes with a default body, so an implementation keeps compiling. | Implement it. |
 | `@ExperimentalCoSecApi` | Public, but it may change or go away in a minor release; the release notes say so. Today: the public API of `cosec-testkit` (`PolicyTestKit`, `PipelineFixture`, `AttributeRequests`, `EngineOutcome` and their exceptions); assembling a pipeline without Spring (`Pipeline.builder`, `PipelineBuilder` and its settings `PipelineSettings`, `SnapshotSettings`, `ListenerSettings` and `IdentityForwardingSettings`, `Pipeline.behindGateway` with `GatewayIdentitySettings`, `Pipeline.evaluate` and `awaitDocuments`, `RequestGate`, `HttpFacts`, `Headers`, `Cookies`, `Outcome`, `Problem`, `ProblemEncoder`, `RequestSecurity`); the evaluation trace (`DecisionEvent.evaluationTrace`, `me.ahoo.cosec.engine.trace`); and the control plane's store and shadow window ports with their records ([Control store](#control-store)). | Opt in with `@OptIn(ExperimentalCoSecApi::class)`, or the compiler warns. |
 | `@InternalCoSecApi` | Public only so that CoSec's own modules can call each other. No promise: it may change in any release. | Never use it. Opting in is required at error level, and only CoSec's own sources do. |
 
@@ -217,7 +219,7 @@ verifier read them.
 
 A `TokenVerifier` is pure computation by contract: no I/O and nothing that blocks, since the pipeline calls it on the
 request's thread. Whether a token was revoked is not its question: `TokenAuthenticator`, refresh
-(`SimpleRefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one
+(`RefreshTokenAuthentication`) and `TokenRevoker` read it through the suspending `RevocationReader`, all with one
 judgement, `TokenRevocation`. Only CoSec's own verifier's tokens may use break-glass. A token with an `act` claim must never become a principal
 (`IDN-4`): a `TokenVerifier` of your own throws `DelegationUnsupportedException` for it, which `TokenAuthenticator`
 turns into a `token-invalid` refusal, and an `Authenticator` of your own that reads tokens itself returns
@@ -333,6 +335,7 @@ class DirectoryAttributeProviderTest {
     private val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
 
     @Test
+    // <Unit>: JUnit skips, without a word, a test method that returns a value
     fun `reads the department of the principal`() = runBlocking<Unit> {
         val request = AttributeRequests.of(Action("order", "read"), Resource("order", "7", emptyMap()), alice)
         val values = provider.fetch(request, setOf("ext.directory.department"))

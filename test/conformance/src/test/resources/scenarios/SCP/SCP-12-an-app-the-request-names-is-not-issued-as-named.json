@@ -1,0 +1,37 @@
+{
+  "rules": [
+    "SCP-12"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "Switching from a token for billing, the credentials name the app order and the TenantSwitch answers no app: the new token is for billing. An app the request names never reaches the token as named.",
+  "switch": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "aud": "billing",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "targetTenantId": "globex",
+    "targetAppId": "order",
+    "answer": {
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "issued": {
+      "tenant": "globex",
+      "app": "billing"
+    }
+  }
+}

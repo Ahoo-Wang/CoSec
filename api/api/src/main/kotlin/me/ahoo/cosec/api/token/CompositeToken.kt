@@ -13,8 +13,16 @@
 
 package me.ahoo.cosec.api.token
 
-/** The tokens of a login: the [accessToken] a request presents and the [refreshToken] that renews it. */
-interface CompositeToken {
-    val accessToken: String
-    val refreshToken: String
+/**
+ * The tokens of a login: the [accessToken] a request presents and the [refreshToken] that renews it. Two credentials,
+ * so its string names neither, as `Credentials` does: a token that reaches a log line is not written
+ * there. Equal by value.
+ */
+class CompositeToken(val accessToken: String, val refreshToken: String) {
+    override fun equals(other: Any?): Boolean =
+        this === other || (other is CompositeToken && accessToken == other.accessToken && refreshToken == other.refreshToken)
+
+    override fun hashCode(): Int = 31 * accessToken.hashCode() + refreshToken.hashCode()
+
+    override fun toString(): String = "CompositeToken(accessToken=***, refreshToken=***)"
 }

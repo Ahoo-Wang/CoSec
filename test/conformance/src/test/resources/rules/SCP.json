@@ -142,9 +142,21 @@
         "runtime:IdentityGateTest#an identity that names no app is refused by a host with one",
         "runtime:AuthorizationCheckerTest#decidesInTheDefaultSpaceOfAnotherApp",
         "cocache:StoredFormatTest#a stored api key has exactly its fields",
-        "login:AbstractSwitchTenantAuthenticationTest#the new token keeps the app of the previous one",
+        "login:SwitchTenantAuthenticationTest#the new token keeps the app of the previous one",
         "spi:VerifiedTokenTest#anAppThatCannotBeAnAppIdIsRefused",
         "runtime:ApiKeyAuthenticatorTest#theAppOfAKeyIsTheAppOfItsPrincipal"
+      ]
+    },
+    {
+      "id": "SCP-12",
+      "source": "RFC 0013 §7.3 (A3)",
+      "statement": "The app of a token is its issuer's decision. A tenant switch issues the new token for the app its TenantSwitch answers (TenantMembership.app), which must be one a token can carry as its aud, and otherwise for the previous token's app. An app the switch's credentials name (targetAppId) reaches the new token only through that answer, never as named.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "login:SwitchTenantAuthenticationTest#a switch that answers an app issues the token for it",
+        "login:SwitchTenantAuthenticationTest#an app the credentials name and the answer does not return is never issued",
+        "login:SwitchTenantAuthenticationTest#an answered app that cannot be an app id refuses the switch"
       ]
     }
   ]

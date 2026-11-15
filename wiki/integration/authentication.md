@@ -217,7 +217,9 @@ thread.
 
 `LoginCredentials` and `Authentication` here are the login types of `me.ahoo.cosec.login` (`TokenCompositeAuthentication`
 and `TokenConverter` are in `me.ahoo.cosec.login.token`), from `cosec-login`, which the starter brings; they are not
-the pipeline's `Credentials` and `Authenticator` (`me.ahoo.cosec.spi.authn`).
+the pipeline's `Credentials` and `Authenticator` (`me.ahoo.cosec.spi.authn`). Without the starter, in a test say, build
+the login from your authentications: `TokenCompositeAuthentication.of(listOf(passwordAuthentication), tokenConverter,
+tokenFamilies)`.
 `cosec.authentication.login.enabled` (on by default) switches only these login beans, `TokenCompositeAuthentication`
 and social login included; requests are authenticated by the pipeline either way. The login path must be reachable by
 anonymous callers, so it needs an `Anyone` binding that permits it, as in the
@@ -270,7 +272,7 @@ A failed check throws a `TokenVerificationException`; a refresh token that was i
 throws its subclass `RefreshTokenMismatchException`. Refreshing a [delegation token](#tokens) (one with an `act` claim)
 fails too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
 
-`SimpleRefreshTokenAuthentication` refreshes as an `Authentication`, so with it declared as a bean, a refresh is a login
+`RefreshTokenAuthentication` refreshes as an `Authentication`, so with it declared as a bean, a refresh is a login
 with credentials that implement `RefreshTokenCredentials`. It verifies the pair on the caller's thread, which is pure
 computation; checks through `TokenRevocation` that the access token was not revoked, and neither were its principal's
 tokens; and rotates the session through `TokenFamilies` ([Sessions](#sessions)). The new pair says what the old access
@@ -282,7 +284,7 @@ fun refreshTokenAuthentication(
     tokenVerifier: TokenVerifier,
     tokenRevocation: TokenRevocation,
     tokenFamilies: TokenFamilies,
-) = SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -297,9 +299,27 @@ presented), `token-expired` when the session's lifetime is over, `token-invalid`
 before sessions existed, or outside one). It throws anything else, a store that cannot be read above all: answer
 `503`, and nothing was issued.
 
-A refresh does not re-read the user: the new token carries the claims of the old one. To pick up changed roles on
-refresh, write your own `Authentication` for refresh credentials that verifies them with `TokenVerifier.refresh`,
-rotates the session with `TokenFamilies.rotate` and then loads the user.
+By default a refresh does not re-read the user: the new token carries the claims of the old one. To pick up changed
+roles on refresh, give `RefreshTokenAuthentication` a `MembershipRefresh`. It answers what the user holds now, looked up
+again, and throws when the user may no longer sign in:
+
+```kotlin
+@Bean
+fun refreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    tokenRevocation: TokenRevocation,
+    tokenFamilies: TokenFamilies,
+    users: Users,
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token ->
+    val user = users.active(token.principal) ?: throw IllegalStateException("User [${token.principal}] is disabled.")
+    TenantMembership(roles = user.rolesIn(token.tenant, token.app))
+}
+```
+
+The class keeps every step a refresh needs, in order: it verifies the pair, refuses a revoked token, asks your
+`MembershipRefresh`, moves the session to its next generation, and issues in that session. The new token is for the
+old one's principal, tenant and app, with what your answer says. An answer of null keeps the old claims; an answer for
+another app is refused, since a refresh never changes the app a token is for. A refused refresh spends no generation.
 
 ## Logout and revocation
 
@@ -334,7 +354,7 @@ Every authenticated request checks revocation, without blocking. Three propertie
   10 seconds.
 - **A refresh fails while Redis cannot be read.** A token is never issued on a revocation read that failed (`IDN-14`):
   issued then, it would be named by no revocation, neither the old token's nor its principal's, and outlive both.
-  `SimpleRefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`.
+  `RefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`.
 - **Any other error fails the request.** A revocation entry that Redis returns but CoSec cannot decode, or an error
   a custom `RevocationReader` throws, is `503`, never an accepted token.
 
@@ -461,16 +481,58 @@ tenant cannot be one fails to load (`503`). The tenant decides which tenant
 document a request reads, and conditions read it as `subject.tenant` or `scope.tenant`. What CoSec does and does not
 isolate between tenants is in [Tenant isolation](../guide/security-model.md#tenant-isolation).
 
-To let a user switch tenants, extend `AbstractSwitchTenantAuthentication`, passing it the `TokenVerifier` bean, and implement
-`switchTenant(targetTenantId, previous)`, with `previous` the `SecurityContext` of the request asking: check that the user belongs to the target tenant (throw to refuse), and answer what it
-holds there, looked up for that tenant: a `TenantMembership` of its roles, policies and attributes in the target
-tenant, or `TenantMembership.fromProvider()` when your `MembershipProvider` answers for it. Then issue a new token for
-the `TokenSubject` `authenticate` returns. It has the previous principal's id, the target tenant and only that
-membership: roles belong to a tenant, so none of the previous token's roles, policies or attributes reach the new one
-(an administrator of one tenant is not one of another). It keeps the previous token's app: switching tenant never
-changes the app a token is for. The switch reads `auth_time` from `SwitchTenantCredentials.accessToken`, the token of the
-request asking, which must be the request's principal's: the new token starts a session of its own, which keeps that
-login time, so it ends when the previous one would. The user did not sign in again.
+### Switching tenant and app
+
+Many identity services sign a user in in two steps. The first proves the user (a password, a code sent by SMS or mail)
+and issues a token for no tenant and no app: nobody has chosen either yet. The second presents that token and names the
+tenant, and the app, to work in; its answer is the token every later request carries. Changing tenant later, or app
+within a tenant, is the same call. `SwitchTenantAuthentication` is that second step. You give it the `TokenVerifier`
+bean, your credentials class, and a `TenantSwitch`: it checks that the user belongs to the target tenant and has the app
+there (throw to refuse), and answers what the user holds there, looked up for that tenant and app. That is a
+`TenantMembership` of the user's roles, policies and attributes, or `TenantMembership.fromProvider()` when your
+`MembershipProvider` answers for the tenant. Your credentials class implements `SwitchTenantCredentials` and carries
+what else your check reads, such as the device; the switch reads it without a cast. Declare the authentication as a
+bean, and the login finds it by that class:
+
+```kotlin
+class SelectTenant(
+    override val targetTenantId: String,
+    override val targetAppId: String?,
+    override val context: SecurityContext,
+    override val accessToken: String,
+    val deviceId: String,
+) : SwitchTenantCredentials
+
+@Bean
+fun selectTenantAuthentication(tokenVerifier: TokenVerifier, members: Members) =
+    SwitchTenantAuthentication(tokenVerifier, SelectTenant::class.java) { credentials ->
+        val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
+        val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
+            "Not a member of this tenant's $app."
+        }
+        TenantMembership(roles = member.rolesIn(app), app = app)
+    }
+
+@PostMapping("/auth/select/{tenant}/{app}")
+suspend fun select(
+    @PathVariable tenant: String,
+    @PathVariable app: String,
+    @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
+    @RequestHeader("CoSec-Device-Id") deviceId: String,
+    security: SecurityContext,
+): CompositeToken = authentication.authenticateAsToken(
+    SelectTenant(tenant, app, security, authorization.removePrefix("Bearer "), deviceId),
+)
+```
+
+The new token has the previous principal's id, the target tenant and only that membership: roles belong to a tenant,
+so none of the previous token's roles, policies or attributes reach the new one (an administrator of one tenant is not
+one of another). **Its app is the one your `TenantSwitch` answers** (`TenantMembership.app`), which must be one a
+token's `aud` can carry; without one it keeps the previous token's app (`SCP-12`). `targetAppId` is what the user asks
+for, and reaches the token only through your answer: a user cannot get a token for an app by naming it, only when your
+code has checked that the user has it. The switch reads `auth_time` from `SwitchTenantCredentials.accessToken`, the
+token of the request asking, which must be the request's principal's: the new token starts a session of its own, which
+keeps that login time, so it ends when the previous one would. The user did not sign in again.
 
 ## Apps
 

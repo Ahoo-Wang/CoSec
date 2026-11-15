@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.CompositeAuthentication
-import me.ahoo.cosec.login.token.DefaultTokenRevoker
+import me.ahoo.cosec.login.token.StoreTokenRevoker
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenFamilies
@@ -168,7 +168,7 @@ internal class CoSecJwtAutoConfiguration {
         tokenFamilies: TokenFamilies,
         jwtProperties: JwtProperties
     ): TokenRevoker {
-        return DefaultTokenRevoker(
+        return StoreTokenRevoker(
             tokenVerifier,
             tokenStore,
             tokenRevocation,
