@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.control.change
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -209,6 +213,26 @@ class RetriedPublishTest {
         revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
         delivered(ChangeEvent.Kind.PUBLISHED).count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
         refused { changes.publish(PLATO, change.id) }.assert().isEqualTo(409)
+        events.count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
+        listeners.cancel()
+    }
+
+    /** #1386: two retries at once settle it as one does: one revision, the slot free, the publish recorded once. */
+    @Test
+    fun `two retries at once of a publish whose slot release failed settle it once`() = runBlocking<Unit> {
+        val change = changes.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("reads"))), "reads")
+        changes.skipShadow(PLATO, change.id, "test")
+        failRelease = true
+        assertThrows<ChangeRejectedException> { changes.publish(PLATO, change.id) }
+        events.clear()
+
+        val retries = (1..2).map { async(Dispatchers.Default) { changes.publish(PLATO, change.id) } }.awaitAll()
+
+        retries.forEach { it.state.assert().isEqualTo(ChangeState.PUBLISHED) }
+        store.stage(ACME)?.value?.holder.assert().isNull()
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
+        delivered(ChangeEvent.Kind.PUBLISHED)
+        delay(200)
         events.count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
         listeners.cancel()
     }
