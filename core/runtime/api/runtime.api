@@ -458,9 +458,11 @@ public final class me/ahoo/cosec/runtime/http/RequestSecurity$Companion {
 public final class me/ahoo/cosec/runtime/http/TraceContext : kotlin/coroutines/AbstractCoroutineContextElement {
 	public static final field Key Lme/ahoo/cosec/runtime/http/TraceContext$Key;
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Z)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;ZLjava/lang/String;)V
 	public final fun getSampled ()Z
 	public final fun getSpanId ()Ljava/lang/String;
 	public final fun getTraceId ()Ljava/lang/String;
+	public final fun getTraceState ()Ljava/lang/String;
 	public fun toString ()Ljava/lang/String;
 }
 
