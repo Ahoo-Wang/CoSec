@@ -66,6 +66,8 @@ import java.time.ZoneOffset
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 /** The two forms of [Pipeline.builder]: what `awaitDocuments` answers, and what `close` closes. */
@@ -163,6 +165,28 @@ class PipelineBuilderTest {
             // The load the cancelled wait started went on and installed the document: no second load read it again.
             store.coldReads.getValue(tenant).get().assert().isEqualTo(1)
             pipeline.evaluate(facts()).status.assert().isEqualTo(200)
+        }
+    }
+
+    /** `settled` ends on every path: a close while the platform loads, and a load that throws as it starts. */
+    @Test
+    fun `the wait ends when the source closes or a load cannot start`() {
+        val compiler = PlatformCompiler()
+        val held = store().apply { hold(SnapshotKey.Platform) }
+        val closing = DocumentSnapshots.source(held, compiler, SnapshotOptions())
+        val wait = closing.settled(listOf(tenant))
+        closing.close()
+        held.release(SnapshotKey.Platform)
+        assertThrows<ExecutionException> { wait.get(10, TimeUnit.SECONDS) }.cause.assert()
+            .isInstanceOf(IllegalStateException::class.java).hasMessageContaining("closed")
+
+        val failing = store().apply { hold(SnapshotKey.Platform) }
+        DocumentSnapshots.source(failing, compiler, SnapshotOptions()).use { source ->
+            val starting = source.settled(listOf(tenant))
+            source.afterSlotLookup = { throw IllegalStateException("no slot") }
+            failing.release(SnapshotKey.Platform)
+            assertThrows<ExecutionException> { starting.get(10, TimeUnit.SECONDS) }.cause.assert()
+                .hasMessage("no slot")
         }
     }
 

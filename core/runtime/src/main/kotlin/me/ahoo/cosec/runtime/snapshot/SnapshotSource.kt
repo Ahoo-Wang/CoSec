@@ -291,14 +291,20 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * @throws IllegalArgumentException when a key belongs to no family of this source.
      */
     @InternalCoSecApi
+    @Suppress("TooGenericExceptionCaught")
     fun settled(keys: Collection<SnapshotKey>): CompletableFuture<Void> {
         keys.forEach(::familyOf)
         val settled = CompletableFuture<Void>()
         val shared = if (closed) CompletableFuture.completedFuture(null) else usableOf(sharedKey)
         shared.whenComplete { _, _ ->
-            val loads = if (closed) emptyList() else keys.map(::usableOf)
-            CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
-                if (closed) settled.completeExceptionally(closedError()) else settled.complete(null)
+            // What this callback throws would go to a stage nobody holds, and the wait would never end.
+            try {
+                val loads = if (closed) emptyList() else keys.map(::usableOf)
+                CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
+                    if (closed) settled.completeExceptionally(closedError()) else settled.complete(null)
+                }
+            } catch (failure: Throwable) {
+                settled.completeExceptionally(failure)
             }
         }
         return settled
