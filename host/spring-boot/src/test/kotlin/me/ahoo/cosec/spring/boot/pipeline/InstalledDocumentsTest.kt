@@ -17,6 +17,7 @@ package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
@@ -45,7 +46,7 @@ class InstalledDocumentsTest {
     })
 
     private fun publish(key: SnapshotKey, revision: Long) {
-        store.put(key, SnapshotDocument(2, revision, now, byteArrayOf()))
+        store.put(key, SnapshotDocuments.read("""{"schema":2,"revision":$revision,"publishedAt":"$now"}""".encodeToByteArray()))
     }
 
     private fun installed() = CoSecSnapshotAutoConfiguration.Shadow.installedDocuments(source.entries(), now)

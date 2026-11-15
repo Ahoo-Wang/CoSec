@@ -18,6 +18,7 @@ package me.ahoo.cosec.document.format
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -111,7 +112,7 @@ class PolicyDocumentValuesTest {
     }
 
     private fun compiling(key: SnapshotKey, body: String): Exception? {
-        val document = SnapshotDocument(2, 1, Instant.parse("2026-10-26T00:00:00Z"), body.encodeToByteArray())
+        val document = SnapshotDocuments.read(body.encodeToByteArray())
         return try {
             compiler.compile(key, document)
             null

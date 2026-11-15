@@ -17,6 +17,7 @@ package me.ahoo.cosec.document.shadow
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
@@ -36,12 +37,7 @@ import java.time.Instant
 class ShadowCodecTest {
     private val now: Instant = Instant.parse("2026-11-01T00:00:00Z")
     private val acme: SnapshotKey = SnapshotKey.Tenant("acme")
-    private val document = SnapshotDocument(
-        2,
-        5,
-        Instant.parse("2026-11-01T00:00:00Z"),
-        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray(),
-    )
+    private val document = SnapshotDocuments.read("""{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray())
 
     @Test
     fun `candidates, reports and statuses read back as they were written`() {
@@ -72,7 +68,10 @@ class ShadowCodecTest {
         ShadowCodec.decodeStatuses(
             ShadowCodec.encodeStatuses(mapOf("i1" to status))
         ).assert().isEqualTo(mapOf("i1" to status))
-        listOf("{}", "[]", "not json", """{"window":"w","baseRevision":"x"}""").forEach { text ->
+        // SNP-12: one shape. A record that states the header beside the document, as 8.0.0-alpha.4 wrote it, is refused.
+        val alpha4 = """{"window":"w","baseRevision":4,"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z",""" +
+            """"document":{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}}"""
+        listOf("{}", "[]", "not json", """{"window":"w","baseRevision":"x"}""", alpha4).forEach { text ->
             assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeCandidate(text.encodeToByteArray()) }
         }
         assertThrownBy<SnapshotFormatException> {

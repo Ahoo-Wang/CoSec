@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.CandidateSource
@@ -109,12 +110,7 @@ class ShadowReportingWiringTest {
         val staged = StoredCandidate(
             "w",
             1,
-            SnapshotDocument(
-                2,
-                2,
-                Instant.parse("2026-11-01T00:00:00Z"),
-                """{"schema":2,"revision":2,"publishedAt":"2026-11-01T00:00:00Z","limits":{"maxNodes":7}}""".encodeToByteArray(),
-            ),
+            SnapshotDocuments.read("""{"schema":2,"revision":2,"publishedAt":"2026-11-01T00:00:00Z","limits":{"maxNodes":7}}""".encodeToByteArray()),
         )
         runner
             .withBean(

@@ -137,6 +137,20 @@
         "spring-boot:ShadowReportingWiringTest#a staged platform candidate leaves what the instance compiles with as it was"
       ],
       "pending": null
+    },
+    {
+      "id": "SNP-12",
+      "source": "RFC 0003 §3.3 (8.0 drill, entry 3)",
+      "statement": "A snapshot document's header is read from its body: the stored bytes are the whole document, and the only way to make a SnapshotDocument is SnapshotDocuments, which reads schema, revision and publishedAt from them (read) or from the document it encodes (of). No main code of any module calls the constructor, so no store, candidate or test kit can state a revision its bytes contradict, and the revision an instance reports installed is the revision of the content it enforces. A shadow candidate's record holds its window, its base revision and its document only; a record that states the header beside the document is refused as an unreadable candidate.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "architecture:SnapshotDocumentMakersTest#only SnapshotDocuments makes a snapshot document",
+        "document:SnapshotDocumentsTest#theHeaderIsTheBodys",
+        "document:SnapshotDocumentsTest#aPolicyDocumentStatesItsOwnHeader",
+        "document:SnapshotDocumentsTest#rejectsWhatTheCompilerWouldReject",
+        "runtime:CandidateRecordShapeTest#a candidate record in the shape of 8_0_0-alpha_4 is not compared, and the request is answered as without it"
+      ]
     }
   ]
 }

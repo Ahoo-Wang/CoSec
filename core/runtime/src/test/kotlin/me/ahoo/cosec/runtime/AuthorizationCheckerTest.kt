@@ -24,6 +24,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -65,11 +66,7 @@ import kotlin.coroutines.cancellation.CancellationException
 class AuthorizationCheckerTest {
     private val platform = PolicyDocumentCompiler().compile(
         SnapshotKey.Platform,
-        SnapshotDocument(
-            2,
-            1,
-            Instant.parse("2026-10-26T00:00:00Z"),
-            (
+        SnapshotDocuments.read((
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
                     """{"id":"order","statements":[{"effect":"allow","action":"order:read","resource":"order/{id}"}]},""" +
@@ -84,8 +81,7 @@ class AuthorizationCheckerTest {
                     """{"id":"g:no-read","subject":"*","app":"*","space":"*","policy":"no-read"},""" +
                     """{"id":"g:control","subject":"*","app":"cosec-control","space":"","policy":"control"},""" +
                     """{"id":"g:rank","subject":"*","app":"cosec-control","space":"","policy":"rank"}]}"""
-                ).encodeToByteArray(),
-        ),
+                ).encodeToByteArray()),
     )
 
     /** Installed, except after [fail] is set. */

@@ -36,6 +36,7 @@ import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.CoSecTestCaches
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import org.junit.jupiter.api.Assumptions.assumeTrue
@@ -266,6 +267,6 @@ class DocumentWriter(private val cache: PolicySnapshotCache, private val store: 
     private fun document(revision: Long): SnapshotDocument {
         val publishedAt = Instant.now().truncatedTo(ChronoUnit.MILLIS)
         val body = """{"schema":${SnapshotDocument.DOCUMENT_SCHEMA},"revision":$revision,"publishedAt":"$publishedAt"}"""
-        return SnapshotDocument(SnapshotDocument.DOCUMENT_SCHEMA, revision, publishedAt, body.encodeToByteArray())
+        return SnapshotDocuments.read(body.encodeToByteArray())
     }
 }

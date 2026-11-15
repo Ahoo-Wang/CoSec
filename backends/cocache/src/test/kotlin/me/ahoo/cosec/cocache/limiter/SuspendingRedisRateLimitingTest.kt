@@ -17,6 +17,7 @@ package me.ahoo.cosec.cocache.limiter
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import kotlin.coroutines.startCoroutine
@@ -38,17 +39,12 @@ class SuspendingRedisRateLimitingTest {
 
     private val platform = me.ahoo.cosec.document.PolicyDocumentCompiler().compile(
         me.ahoo.cosec.spi.snapshot.SnapshotKey.Platform,
-        me.ahoo.cosec.spi.snapshot.SnapshotDocument(
-            2,
-            1,
-            java.time.Instant.parse("2026-10-26T00:00:00Z"),
-            (
+        SnapshotDocuments.read((
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"open","statements":[{"effect":"allow","action":"*"}]}],""" +
                     """"bindings":[{"id":"g","subject":"*","app":"*","space":"*","policy":"open"}],""" +
                     """"rateLimits":[{"id":"per-ip","action":"*","key":"environment.ip","permitsPerSecond":100}]}"""
-                ).encodeToByteArray(),
-        ),
+                ).encodeToByteArray()),
     )
 
     private val views = object : me.ahoo.cosec.runtime.snapshot.SnapshotViews {

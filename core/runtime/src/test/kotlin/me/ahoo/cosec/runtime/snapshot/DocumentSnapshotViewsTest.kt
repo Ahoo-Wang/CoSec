@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -59,7 +60,7 @@ class DocumentSnapshotViewsTest {
         val revision = (revisions[key] ?: 0) + 1
         revisions[key] = revision
         val text = """{"schema":2,"revision":$revision,"publishedAt":"2026-10-26T00:00:00Z"$body}"""
-        store.put(key, SnapshotDocument(2, revision, Instant.parse("2026-10-26T00:00:00Z"), text.encodeToByteArray()))
+        store.put(key, SnapshotDocuments.read(text.encodeToByteArray()))
     }
 
     private fun source() = DocumentSnapshots.source(

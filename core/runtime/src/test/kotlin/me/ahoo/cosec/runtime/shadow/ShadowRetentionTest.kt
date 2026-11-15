@@ -21,6 +21,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
@@ -54,12 +55,7 @@ class ShadowRetentionTest {
     }
 
     private val clock = MovableClock()
-    private val document = SnapshotDocument(
-        2,
-        5,
-        Instant.parse("2026-01-01T00:00:00Z"),
-        """{"schema":2,"revision":5,"publishedAt":"2026-01-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray(),
-    )
+    private val document = SnapshotDocuments.read("""{"schema":2,"revision":5,"publishedAt":"2026-01-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray())
 
     /** The `candidate:` namespace as the control plane leaves it. */
     private val staged = HashMap<SnapshotKey, StoredCandidate>()

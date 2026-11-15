@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.DocumentCompileException
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
@@ -48,7 +49,7 @@ class PlatformCompilerCandidateTest {
 
     private fun document(revision: Long, body: String): SnapshotDocument {
         val text = """{"schema":2,"revision":$revision,"publishedAt":"2026-10-27T00:00:00Z"$body}"""
-        return SnapshotDocument(2, revision, Instant.parse("2026-10-27T00:00:00Z"), text.encodeToByteArray())
+        return SnapshotDocuments.read(text.encodeToByteArray())
     }
 
     private fun scope(tenant: String): Scope {

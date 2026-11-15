@@ -16,6 +16,7 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.FlatRequest
 import me.ahoo.cosec.engine.flat.SnapshotView
@@ -50,12 +51,7 @@ import java.time.Instant
 class PolicyDocumentCompilerTest {
     private val compiler = PolicyDocumentCompiler()
 
-    private fun stored(body: String, schema: Int = 2) = SnapshotDocument(
-        schema,
-        1,
-        Instant.parse("2026-10-26T00:00:00Z"),
-        """{"schema":$schema,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray(),
-    )
+    private fun stored(body: String, schema: Int = 2) = SnapshotDocuments.read("""{"schema":$schema,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray())
 
     private fun errors(key: SnapshotKey, body: String): List<String> =
         try {

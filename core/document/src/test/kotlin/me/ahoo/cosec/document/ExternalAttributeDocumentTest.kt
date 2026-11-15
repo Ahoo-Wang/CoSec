@@ -16,6 +16,7 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.flat.OnMissing
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
@@ -34,12 +35,7 @@ class ExternalAttributeDocumentTest {
     private val catalog = AttributeCatalog.of(listOf(Attribute.external("ext.geo.inFence", AttributeType.BOOL)))
     private val compiler = PolicyDocumentCompiler(catalog)
 
-    private fun stored(body: String) = SnapshotDocument(
-        2,
-        1,
-        Instant.parse("2026-10-26T00:00:00Z"),
-        """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray(),
-    )
+    private fun stored(body: String) = SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray())
 
     private fun policies(effect: String, onMissing: String?, attribute: String = "ext.geo.inFence") =
         ""","policies":[{"id":"p","statements":[{"effect":"$effect","action":"*",""" +

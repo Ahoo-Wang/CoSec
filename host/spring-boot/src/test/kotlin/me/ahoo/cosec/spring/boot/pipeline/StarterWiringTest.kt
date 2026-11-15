@@ -41,6 +41,7 @@ import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.login.token.TokenConverter
@@ -110,12 +111,7 @@ class StarterWiringTest {
     private val documents = InMemorySnapshotDocumentStore().apply {
         put(
             SnapshotKey.Platform,
-            SnapshotDocument(
-                SnapshotDocument.DOCUMENT_SCHEMA,
-                1,
-                Instant.parse(PUBLISHED_AT),
-                """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$PLATFORM}""".encodeToByteArray(),
-            ),
+            SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$PLATFORM}""".encodeToByteArray()),
         )
     }
 
@@ -389,12 +385,7 @@ class StarterWiringTest {
         mapOf(SnapshotKey.Platform to "", SnapshotKey.Tenant(TENANT) to CLERKS).forEach { (key, body) ->
             cache.put(
                 key,
-                SnapshotDocument(
-                    SnapshotDocument.DOCUMENT_SCHEMA,
-                    1,
-                    Instant.parse(PUBLISHED_AT),
-                    """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray(),
-                ),
+                SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray()),
             )
             documents.notifyChanged(key)
         }

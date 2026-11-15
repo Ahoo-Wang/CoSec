@@ -32,6 +32,7 @@ import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.snapshot.RedisTarget
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.shadow.ShadowCodec
 import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
@@ -98,7 +99,7 @@ class CoCacheShadowTest {
         val instance = CoCacheCandidateStore.create(node().factory, keyPrefix)
         instance.candidate(key).assert().isNull()
         val body = """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}"""
-        val document = SnapshotDocument(2, 5, Instant.parse("2026-11-01T00:00:00Z"), body.encodeToByteArray())
+        val document = SnapshotDocuments.read(body.encodeToByteArray())
         control.putCandidate(key, null, StoredCandidate("c1@1", 4, document)).assert().isTrue()
         val read = instance.candidate(key)!!
         read.window.assert().isEqualTo("c1@1")

@@ -36,6 +36,7 @@ import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -65,12 +66,7 @@ import java.time.Instant
 class StoredFormatTest {
     private val at = Instant.parse("2026-11-01T00:00:00Z")
     private val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
-    private val document = SnapshotDocument(
-        2,
-        5,
-        at,
-        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray(),
-    )
+    private val document = SnapshotDocuments.read("""{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray())
 
     /**
      * The bytes `main` wrote before RFC 0011 PR-2, kept in `stored-format/<name>.json` with no trailing newline (except

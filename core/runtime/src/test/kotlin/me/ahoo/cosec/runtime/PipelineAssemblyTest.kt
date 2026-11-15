@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime
 
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
@@ -34,12 +35,7 @@ import java.time.Instant
 class PipelineAssemblyTest {
     private val publishedAt = "2026-10-26T00:00:00Z"
 
-    private fun document(body: String) = SnapshotDocument(
-        2,
-        1,
-        Instant.parse(publishedAt),
-        """{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray(),
-    )
+    private fun document(body: String) = SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray())
 
     private fun request(path: String) = HttpFacts(
         method = "GET",

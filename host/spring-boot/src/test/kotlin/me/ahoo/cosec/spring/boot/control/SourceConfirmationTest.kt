@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -63,7 +64,10 @@ class SourceConfirmationTest {
     )
 
     private fun publish(revision: Long) {
-        store.put(SnapshotKey.Platform, SnapshotDocument(1, revision, Instant.now(), byteArrayOf()))
+        store.put(
+            SnapshotKey.Platform,
+            SnapshotDocuments.read("""{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()),
+        )
     }
 
     private fun decide(): ControlDecision = runBlocking {

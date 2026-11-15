@@ -18,6 +18,7 @@ package me.ahoo.cosec.spring.boot.pipeline
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -100,13 +101,8 @@ class SnapshotReadinessTest {
 
             documents.put(
                 SnapshotKey.Platform,
-                SnapshotDocument(
-                    SnapshotDocument.DOCUMENT_SCHEMA,
-                    1,
-                    Instant.EPOCH,
-                    """{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z","policies":[],"bindings":[]}"""
-                        .encodeToByteArray(),
-                ),
+                SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z","policies":[],"bindings":[]}"""
+                        .encodeToByteArray()),
             )
             waitFor { availability.readinessState == ReadinessState.ACCEPTING_TRAFFIC }
             availability.readinessState.assert().isEqualTo(ReadinessState.ACCEPTING_TRAFFIC)

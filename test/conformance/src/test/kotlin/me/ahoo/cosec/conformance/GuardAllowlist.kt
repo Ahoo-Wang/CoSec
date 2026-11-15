@@ -24,6 +24,11 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "architecture:SnapshotDocumentMakersTest#only SnapshotDocuments makes a snapshot document",
+            "document:SnapshotDocumentsTest#theHeaderIsTheBodys",
+            "document:SnapshotDocumentsTest#aPolicyDocumentStatesItsOwnHeader",
+            "document:SnapshotDocumentsTest#rejectsWhatTheCompilerWouldReject",
+            "runtime:CandidateRecordShapeTest#a candidate record in the shape of 8_0_0-alpha_4 is not compared, and the request is answered as without it",
             "migrate:ConditionTranslatorTest#no row widens access against what enforcement fills",
             "migrate:ConditionTranslatorTest#every row agrees with 7x on adversarial requests, never widening",
             "migrate:ConditionTranslatorTest#a template on a part only 7x filled never holds as enforced, and is recorded",

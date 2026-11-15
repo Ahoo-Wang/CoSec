@@ -42,6 +42,7 @@ import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.engine.flat.BuiltinPolicies
 import me.ahoo.cosec.engine.flat.ResourceSource
@@ -98,7 +99,7 @@ class ControlPlaneTest {
             val document = stored.document
             val body = """{"schema":2,"revision":${document.revision},"publishedAt":"2026-10-27T00:00:00Z","next":1}"""
             StoredDocument(
-                SnapshotDocument(document.schema, document.revision, document.publishedAt, body.encodeToByteArray()),
+                SnapshotDocuments.read(body.encodeToByteArray()),
                 SnapshotDigest(ByteArray(32) { 7 }),
             )
         }

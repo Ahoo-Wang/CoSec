@@ -21,6 +21,7 @@ import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -88,12 +89,7 @@ class BreakGlassAndShadowTest {
     private fun compile(body: String, catalog: AttributeCatalog = AttributeCatalog.NONE): CompiledDocument =
         PolicyDocumentCompiler(catalog).compile(
             SnapshotKey.Platform,
-            SnapshotDocument(
-                2,
-                1,
-                Instant.parse("2026-10-26T00:00:00Z"),
-                """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray(),
-            ),
+            SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()),
         )
 
     private val breakGlass = compile(

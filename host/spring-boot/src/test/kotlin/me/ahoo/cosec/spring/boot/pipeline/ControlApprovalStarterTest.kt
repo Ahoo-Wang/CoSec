@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.flat.StatementSource
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
@@ -112,12 +113,7 @@ class ControlApprovalStarterTest {
         ).forEach { (key, body) ->
             cache.put(
                 key,
-                SnapshotDocument(
-                    SnapshotDocument.DOCUMENT_SCHEMA,
-                    1,
-                    Instant.parse(PUBLISHED_AT),
-                    """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray(),
-                ),
+                SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$PUBLISHED_AT"$body}""".encodeToByteArray()),
             )
             documents.notifyChanged(key)
         }

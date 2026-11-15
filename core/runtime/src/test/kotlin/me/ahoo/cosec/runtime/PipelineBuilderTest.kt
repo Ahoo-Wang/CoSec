@@ -21,6 +21,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures.InstalledViews
@@ -112,12 +113,7 @@ class PipelineBuilderTest {
 
     private fun document(body: String = ""): SnapshotDocument {
         val publishedAt = Instant.parse("2026-11-01T00:00:00Z")
-        return SnapshotDocument(
-            2,
-            1,
-            publishedAt,
-            """{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray(),
-        )
+        return SnapshotDocuments.read("""{"schema":2,"revision":1,"publishedAt":"$publishedAt"$body}""".encodeToByteArray())
     }
 
     private fun store() = HeldStore().apply {

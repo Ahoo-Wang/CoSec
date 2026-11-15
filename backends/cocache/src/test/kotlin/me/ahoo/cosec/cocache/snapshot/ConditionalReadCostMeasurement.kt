@@ -17,6 +17,7 @@ package me.ahoo.cosec.cocache.snapshot
 
 import io.lettuce.core.RedisClient
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
@@ -127,7 +128,7 @@ class ConditionalReadCostMeasurement {
             i++
         }
         val body = """{"schema":2,"revision":1,"publishedAt":"$PUBLISHED","policies":[$policies],"bindings":[]}"""
-        return SnapshotDocument(2, 1, Instant.parse(PUBLISHED), body.encodeToByteArray())
+        return SnapshotDocuments.read(body.encodeToByteArray())
     }
 
     private fun label(bytes: Int): String {

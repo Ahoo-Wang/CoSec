@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.scope.HostScope
@@ -49,11 +50,7 @@ class GeoBlockDecisionTest {
 
     private fun document(onMissing: String?): CompiledDocument = PolicyDocumentCompiler(providers.catalog).compile(
         SnapshotKey.Platform,
-        SnapshotDocument(
-            2,
-            1,
-            Instant.parse("2026-11-14T00:00:00Z"),
-            (
+        SnapshotDocuments.read((
                 """{"schema":2,"revision":1,"publishedAt":"2026-11-14T00:00:00Z","policies":[""" +
                     """{"id":"open","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/**"}]},""" +
                     """{"id":"geo-block","statements":[{"effect":"deny","action":"*","resource":"http:path:/**",""" +
@@ -66,8 +63,7 @@ class GeoBlockDecisionTest {
                     """"condition":{"in":["ext.ip2region.country",["中国"]]}}]}],""" +
                     """"bindings":[{"id":"b1","subject":"*","app":"*","space":"*","policy":"open"},""" +
                     """{"id":"b2","subject":"*","app":"*","space":"*","policy":"geo-block"}]}"""
-                ).encodeToByteArray(),
-        ),
+                ).encodeToByteArray()),
     )
 
     private fun pipeline(document: CompiledDocument) = Pipeline.builder(

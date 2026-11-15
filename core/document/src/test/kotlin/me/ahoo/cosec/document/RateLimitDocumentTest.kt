@@ -33,7 +33,7 @@ class RateLimitDocumentTest {
     private fun body(rules: String) =
         """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","rateLimits":[$rules]}""".encodeToByteArray()
 
-    private fun stored(rules: String) = SnapshotDocument(2, 1, Instant.parse("2026-10-26T00:00:00Z"), body(rules))
+    private fun stored(rules: String) = SnapshotDocuments.read(body(rules))
 
     private val rule = """{"id":"login","action":"http:POST","resource":"http:path:/login","key":"environment.ip",""" +
         """"permitsPerSecond":0.5,"windowSeconds":60,"strictFailure":true}"""

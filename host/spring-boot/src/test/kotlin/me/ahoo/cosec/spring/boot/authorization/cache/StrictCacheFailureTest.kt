@@ -26,6 +26,7 @@ import me.ahoo.cosec.cocache.RevokedTokenCache
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
@@ -78,7 +79,7 @@ class StrictCacheFailureTest {
                 val runtime = context.getBean(CacheRuntime::class.java)
                 val cache = context.getBean(PolicySnapshotCache::class.java)
                 val store = context.getBean(RedisSnapshotDocumentStore::class.java)
-                cache.put(SnapshotKey.Platform, SnapshotDocument(2, 1, Instant.EPOCH, PLATFORM.encodeToByteArray()))
+                cache.put(SnapshotKey.Platform, SnapshotDocuments.read(PLATFORM.encodeToByteArray()))
                 // never expires in Redis, whatever the global layers say
                 checkNotNull(runtime.admin(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME))
                     .inspect(SnapshotKeyEncoder.PLATFORM).remote.ttl.assert().isNull()

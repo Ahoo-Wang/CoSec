@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
@@ -103,12 +104,7 @@ class FakeCompiler : SnapshotCompiler<Compiled> {
 }
 
 fun document(revision: Long, body: String = "p$revision"): SnapshotDocument =
-    SnapshotDocument(
-        SnapshotDocument.DOCUMENT_SCHEMA,
-        revision,
-        Instant.parse("2026-10-21T08:00:00Z"),
-        body.encodeToByteArray()
-    )
+    SnapshotDocuments.read(body.encodeToByteArray())
 
 /**
  * A [SnapshotDocumentStore] the test drives: it can fail reads, fail them as undecodable, hold them until released,
