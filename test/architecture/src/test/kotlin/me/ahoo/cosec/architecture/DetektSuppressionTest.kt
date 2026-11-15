@@ -31,21 +31,27 @@ class DetektSuppressionTest {
         )
 
         private val SUPPRESS = Regex("""@(?:file:)?Suppress\(([^)]*)\)""")
+
+        /** Every suppression of a structure rule in main code. */
+        fun suppressions(): List<Suppression> = MainSources.files.flatMap { source ->
+            source.lines.mapIndexedNotNull { index, line ->
+                val rules = SUPPRESS.find(line)?.groupValues?.get(1)?.let { arguments ->
+                    Regex("\"(\\w+)\"").findAll(arguments).map { it.groupValues[1] }.toSet() intersect RECORDED.keys
+                }.orEmpty()
+                rules.takeIf { it.isNotEmpty() }?.let {
+                    Suppression(source.path, index + 1, it, source.lines.getOrNull(index - 1))
+                }
+            }
+        }
         private val REASON = Regex("""^\s*// (?:(?:${Batch.entries.joinToString("|")}): |stays: )\S""")
     }
 
-    private class Suppression(val path: String, val line: Int, val rules: Set<String>, val reasoned: Boolean)
-
-    private val suppressions: List<Suppression> = MainSources.files.flatMap { source ->
-        source.lines.mapIndexedNotNull { index, line ->
-            val rules = SUPPRESS.find(line)?.groupValues?.get(1)?.let { arguments ->
-                Regex("\"(\\w+)\"").findAll(arguments).map { it.groupValues[1] }.toSet() intersect RECORDED.keys
-            }.orEmpty()
-            rules.takeIf { it.isNotEmpty() }?.let {
-                Suppression(source.path, index + 1, it, index > 0 && REASON.containsMatchIn(source.lines[index - 1]))
-            }
-        }
+    /** A suppression of a structure rule, at [line] of [path], with the line above it. */
+    class Suppression(val path: String, val line: Int, val rules: Set<String>, val above: String?) {
+        val reasoned: Boolean get() = above != null && REASON.containsMatchIn(above)
     }
+
+    private val suppressions: List<Suppression> = suppressions()
 
     @Test
     fun `a structure rule is suppressed with its batch or the reason it stays`() {

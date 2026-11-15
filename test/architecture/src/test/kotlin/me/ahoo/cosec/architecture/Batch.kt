@@ -19,4 +19,22 @@ package me.ahoo.cosec.architecture
  * type per file where no other batch goes and the large files that need only an extraction.
  */
 @Suppress("EnumNaming") // the batches' own names, as RFC 0013 writes them
-enum class Batch { B1, B2a, B2b, B3, B4, B5, B6, B7 }
+enum class Batch {
+    B1,
+    B2a,
+    B2b,
+    B3,
+    B4,
+    B5,
+    B6,
+    B7,
+    ;
+
+    companion object {
+        /**
+         * The batches that have landed. The last PR of a batch adds it here, and [LandedBatchTest] then fails on every
+         * ledger entry or suppression that still names it: that PR is where the batch is checked complete.
+         */
+        val LANDED: Set<Batch> = emptySet()
+    }
+}
