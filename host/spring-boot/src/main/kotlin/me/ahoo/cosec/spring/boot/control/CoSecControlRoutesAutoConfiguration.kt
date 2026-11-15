@@ -236,23 +236,3 @@ internal class CoSecControlRoutesAutoConfiguration {
         fun relative(path: String, base: String): String = path.removePrefix(base).ifEmpty { "/" }
     }
 }
-
-/** [delegate] for the requests under [basePath] only; every other request goes on untouched. */
-internal class ControlRoutesWebFilter(
-    private val delegate: PipelineWebFilter,
-    private val basePath: String
-) : WebFilter, Ordered {
-    override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        val path = exchange.request.path.pathWithinApplication().value()
-        return if (path == basePath || path.startsWith("$basePath/")) {
-            delegate.filter(
-                exchange,
-                chain
-            )
-        } else {
-            chain.filter(exchange)
-        }
-    }
-
-    override fun getOrder(): Int = delegate.order
-}

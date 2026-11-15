@@ -91,14 +91,3 @@ internal class CoSecServiceGeneratorEndpoint(
             ReflectionUtils.findMethod(AbstractOpenApiResource::class.java, "getOpenApi", Locale::class.java)
     }
 }
-
-@AutoConfiguration
-@ConditionalOnClass(OpenAPIServiceGenerator::class, Endpoint::class, AbstractOpenApiResource::class)
-internal class CoSecServiceGeneratorEndpointAutoConfiguration {
-    @Bean
-    fun cosecServiceGeneratorEndpoint(
-        springDoc: ObjectProvider<AbstractOpenApiResource>,
-        environment: Environment,
-    ): CoSecServiceGeneratorEndpoint =
-        CoSecServiceGeneratorEndpoint(springDoc, environment)
-}

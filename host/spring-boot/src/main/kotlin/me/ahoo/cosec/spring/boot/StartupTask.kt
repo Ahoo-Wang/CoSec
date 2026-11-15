@@ -50,22 +50,3 @@ interface StartupTask {
         )
     }
 }
-
-/**
- * Registers [StartupTask.EAGER]. Every auto-configuration that declares a [StartupTask] imports it, so the exclusion
- * is there wherever a check is, whichever auto-configurations an application excludes; imported many times, it is one
- * bean.
- */
-// A class, not an object: Spring instantiates what it imports.
-@Suppress("UtilityClassWithPublicConstructor")
-@Configuration(proxyBeanMethods = false)
-@InternalCoSecApi
-class StartupTaskExclusion {
-    @InternalCoSecApi
-    companion object {
-        /** Static: `LazyInitializationBeanFactoryPostProcessor` reads it before any configuration is instantiated. */
-        @JvmStatic
-        @Bean
-        fun cosecStartupTasksEager(): LazyInitializationExcludeFilter = StartupTask.EAGER
-    }
-}
