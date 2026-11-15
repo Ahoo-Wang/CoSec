@@ -1053,6 +1053,17 @@ and have to be provisioned again.
   2. Change each converted one to `http:*` through the control plane: a change that puts the policy again with
      `"action": "http:*"`. If a document has not changed since `publish`, `apply` the file a new `convert` writes for
      it instead; the change it proposes is exactly those statements.
+- **No CoSec module imports a platform, and `cosec-dependencies` is no longer published** (R11). Until now every library
+  module's POM and Gradle module metadata imported `cosec-dependencies`, which imports the Spring Boot, Spring Cloud,
+  CoCache, OpenTelemetry, springdoc and fluent-assert BOMs and manages jmh, mockk, archunit, blockhound,
+  json-schema-validator and detekt-formatting, so adding one module raised those versions in the whole build of an
+  application, `cosec-cocache`'s CoCache 8 over an application's CoCache 4 included. Now a module's metadata names the
+  libraries it needs with the versions it was built with, as minimums, and nothing else; Maven no longer needs the import
+  to resolve them. An application that imported `me.ahoo.cosec:cosec-dependencies` removes the import and manages the
+  versions it wants itself ([what CoSec needs from your build](../guide/introduction.md#what-cosec-needs-from-your-build)).
+  `cosec-bom` lists the CoSec modules an application can depend on, without `cosec-migrate`, and imports nothing.
+  The POMs of `cosec-cocache` and `cosec-kafka` mark `cosec-control` `provided`: a Maven application that uses the
+  control plane adds `cosec-control`, which they used to bring (with `cosec-runtime`) to run time.
 - **Three packages follow their modules' names.** `me.ahoo.cosec.cache` (`cosec-cocache`) is now
   `me.ahoo.cosec.cocache`, `me.ahoo.cosec.servlet` (`cosec-webmvc`) is `me.ahoo.cosec.webmvc`, and
   `me.ahoo.cosec.spring.boot.starter` (`cosec-spring-boot`) is `me.ahoo.cosec.spring.boot`. Sub-packages keep their

@@ -50,6 +50,8 @@ flowchart LR
 
 ## 快速开始
 
+需要 JDK 21、Spring Boot 4.1，使用 `cosec-cocache` 时还需要 CoCache 8：见[CoSec 对构建的要求](https://cosec.ahoo.me/zh/guide/introduction#what-cosec-needs-from-your-build)。
+
 ```kotlin
 dependencies {
     implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))

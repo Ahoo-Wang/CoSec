@@ -57,6 +57,9 @@ over a rate limit `429`.
 
 ## Quick start
 
+Needs JDK 21, Spring Boot 4.1 and, for `cosec-cocache`, CoCache 8: see
+[what CoSec needs from your build](https://cosec.ahoo.me/guide/introduction#what-cosec-needs-from-your-build).
+
 ```kotlin
 dependencies {
     implementation(platform("me.ahoo.cosec:cosec-bom:<version>"))
