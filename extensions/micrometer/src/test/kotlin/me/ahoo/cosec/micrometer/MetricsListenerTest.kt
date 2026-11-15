@@ -39,7 +39,6 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
 import me.ahoo.cosec.runtime.event.DecisionEvent
@@ -115,14 +114,10 @@ class MetricsListenerTest {
                 FlatEvaluation(decision, null)
         }
         val pipeline =
-            Pipeline(
-                PipelineComponents(
-                    authenticator,
-                    SuspendingSnapshotSource(Views),
-                    engine = engine,
-                    listeners = listeners
-                )
-            )
+            Pipeline.builder(authenticator, SuspendingSnapshotSource(Views))
+                .engine(engine)
+                .listeners(listeners)
+                .build()
         val facts =
             HttpFacts("GET", "/orders", null, Headers.of(emptyMap()), Cookies.EMPTY, "10.0.0.1", HostScope(null))
         runBlocking {

@@ -37,7 +37,6 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
@@ -94,7 +93,9 @@ class PipelineGatewayFilterTest {
             }
         }
         val authenticator = Authenticator { AuthnResult.Anonymous }
-        val pipeline = Pipeline(PipelineComponents(authenticator, SuspendingSnapshotSource(Views), engine = engine))
+        val pipeline = Pipeline.builder(authenticator, SuspendingSnapshotSource(Views))
+            .engine(engine)
+            .build()
         val exchange = MockServerWebExchange.from(
             MockServerHttpRequest.get("/orders").header("CoSec-Request-Id", "r-1")
         )
@@ -151,15 +152,11 @@ class PipelineGatewayFilterTest {
         issuer: IdentityIssuer?,
         options: PipelineOptions = PipelineOptions(),
         engine: FlatEngine = permit,
-    ) = Pipeline(
-        PipelineComponents(
-            authenticator,
-            SuspendingSnapshotSource(Views),
-            engine = engine,
-            identity = issuer,
-            options = options
-        )
-    )
+    ) = Pipeline.builder(authenticator, SuspendingSnapshotSource(Views))
+        .engine(engine)
+        .apply { issuer?.let(::identity) }
+        .options(options)
+        .build()
 
     private fun route(uri: String, identity: Any? = null, app: Any? = null): Route =
         Route.async().id("r").uri(URI.create(uri)).predicate { true }.apply {

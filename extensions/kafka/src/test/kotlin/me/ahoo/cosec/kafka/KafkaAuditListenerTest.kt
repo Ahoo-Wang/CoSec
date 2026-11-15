@@ -43,7 +43,6 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.audit.AuditAuthorizationData
 import me.ahoo.cosec.runtime.audit.AuditDeviceData
 import me.ahoo.cosec.runtime.audit.AuditEventData
@@ -130,14 +129,13 @@ class KafkaAuditListenerTest {
         }
         val claims = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val principal = AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), claims)
-        val pipeline = Pipeline(
-            PipelineComponents(
-                { AuthnResult.Authenticated(principal, "token") },
-                SuspendingSnapshotSource(Views),
-                engine = engine,
-                listeners = listeners,
-            )
+        val pipeline = Pipeline.builder(
+            { AuthnResult.Authenticated(principal, "token") },
+            SuspendingSnapshotSource(Views),
         )
+            .engine(engine)
+            .listeners(listeners)
+            .build()
         val facts = HttpFacts(
             "GET",
             "/orders",

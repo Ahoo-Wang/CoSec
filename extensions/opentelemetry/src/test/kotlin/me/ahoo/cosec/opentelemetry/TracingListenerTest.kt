@@ -44,7 +44,6 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.Cookies
@@ -108,14 +107,10 @@ class TracingListenerTest {
             override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
                 FlatEvaluation(Decision.Permit(bound), null)
         }
-        val pipeline = Pipeline(
-            PipelineComponents(
-                { AuthnResult.Anonymous },
-                SuspendingSnapshotSource(Views),
-                engine = engine,
-                listeners = listeners
-            )
-        )
+        val pipeline = Pipeline.builder({ AuthnResult.Anonymous }, SuspendingSnapshotSource(Views))
+            .engine(engine)
+            .listeners(listeners)
+            .build()
         val parent = openTelemetry.getTracer("test").spanBuilder("http").startSpan()
         val bridged = parent.storeInContext(Context.root()).makeCurrent().use {
             BridgeContextContributor.capture(listOf(OpenTelemetryContextContributor))
