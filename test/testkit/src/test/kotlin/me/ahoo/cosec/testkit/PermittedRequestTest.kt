@@ -129,4 +129,61 @@ class PermittedRequestTest {
         }
         assertThrows<IllegalArgumentException> { PermittedRequest.withToken(revoked, verifier, revocations) }
     }
+
+    /** `SecurityContext.deviceId` reads `CoSec-Device-Id`, as a host's does: the switch's hook can compare it. */
+    @Test
+    fun `a context made with a device header has that device, and the switch reads it`() = runBlocking<Unit> {
+        val token = signIn().accessToken
+        PermittedRequest.withToken(token, verifier).deviceId.assert().isEqualTo("")
+        val context = PermittedRequest.withToken(
+            token,
+            verifier,
+            headers = mapOf("cosec-device-id" to listOf("phone-1"), "Accept" to listOf("application/json")),
+        )
+        context.deviceId.assert().isEqualTo("phone-1")
+        context.principal.id.assert().isEqualTo("alice")
+        var seen = ""
+        val deviceAware = SwitchTenantAuthentication(
+            families,
+            TokenRevocation(RevocationReader.NONE),
+            Select::class.java,
+        ) { credentials ->
+            seen = credentials.context.deviceId
+            TenantMembership(roles = setOf("clerk"))
+        }
+
+        TokenCompositeAuthentication.of(listOf(deviceAware), converter, families)
+            .authenticateAsToken(Select("globex", context))
+
+        seen.assert().isEqualTo("phone-1")
+    }
+
+    /** The pipeline refuses a device sent twice with different values, so the context is never made from it. */
+    @Test
+    fun `an ambiguous device id fails as the pipeline fails it`() {
+        val token = signIn().accessToken
+        val error = assertThrows<IllegalStateException> {
+            PermittedRequest.withToken(
+                token,
+                verifier,
+                headers = mapOf("CoSec-Device-Id" to listOf("phone-1", "phone-2")),
+            )
+        }
+        error.message.assert().contains("400")
+        PermittedRequest.withToken(token, verifier, headers = mapOf("CoSec-Device-Id" to listOf("phone-1", "phone-1")))
+            .deviceId.assert().isEqualTo("phone-1")
+    }
+
+    /** The token is the request's credential: no header replaces it. */
+    @Test
+    fun `a credential header is refused, whatever its case`() {
+        val token = signIn().accessToken
+        listOf("Authorization", "authorization", "X-API-Key", "x-api-key", "CoSec-Identity", "COSEC-IDENTITY")
+            .forEach { name ->
+                val error = assertThrows<IllegalArgumentException> {
+                    PermittedRequest.withToken(token, verifier, headers = mapOf(name to listOf("anything")))
+                }
+                error.message.assert().contains("[$name]").contains("pass the token as [token]")
+            }
+    }
 }

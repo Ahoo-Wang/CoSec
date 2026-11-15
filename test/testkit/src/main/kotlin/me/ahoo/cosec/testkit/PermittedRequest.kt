@@ -51,20 +51,36 @@ import java.util.concurrent.CompletableFuture
  * in `Authorization`, and reads its [revocations], so what the context carries by provenance (the principal, its tenant
  * and app, and with CoSec's own [TokenVerifier] the token's session, which a tenant switch issues from) is what the
  * token says. Only the host's rule is a stand-in: it permits the request, whatever the documents would say.
+ *
+ * The request is the pipeline's, so a test can give it the headers a client would send, and what the pipeline reads
+ * from them is what the context answers: a `CoSec-Device-Id` is the context's `deviceId`, and two different values are
+ * as ambiguous here as on a host.
  */
 @ExperimentalCoSecApi
 object PermittedRequest {
     /**
      * The context of the request [token] makes, verified by [verifier] over [revocations].
      *
+     * [headers] are the request's other headers, such as `CoSec-Device-Id`; names are case-insensitive. The token is the
+     * request's credential and no header can replace it: `Authorization`, `X-API-Key` and `CoSec-Identity` are refused.
+     *
      * @throws IllegalArgumentException when [verifier] refuses [token] (invalid, expired, revoked), so a test never
-     * goes on with an anonymous context it did not ask for
+     * goes on with an anonymous context it did not ask for, or when [headers] names a credential header
+     * @throws IllegalStateException when the pipeline does not permit the request: a header it refuses, such as a
+     * `CoSec-Device-Id` sent with two different values (`400`), as it would on a host
      */
     fun withToken(
         token: String,
         verifier: TokenVerifier,
-        revocations: RevocationReader = RevocationReader.NONE
+        revocations: RevocationReader = RevocationReader.NONE,
+        headers: Map<String, List<String>> = emptyMap(),
     ): SecurityContext {
+        headers.keys.firstOrNull { name -> CREDENTIAL_HEADERS.any { it.equals(name, ignoreCase = true) } }?.let {
+            throw IllegalArgumentException(
+                "The header [$it] carries a credential, and the credential of this request is the token: " +
+                    "pass the token as [token], not through [headers]."
+            )
+        }
         val pipeline = Pipeline.builder(
             TokenAuthenticator(verifier, revocations),
             SuspendingSnapshotSource(NO_DOCUMENTS)
@@ -75,7 +91,7 @@ object PermittedRequest {
             method = "POST",
             rawPath = "/",
             rawQuery = null,
-            headers = Headers.of(mapOf("Authorization" to listOf("Bearer $token"))),
+            headers = Headers.of(headers + ("Authorization" to listOf("Bearer $token"))),
             cookies = Cookies.of(emptyMap()),
             remoteAddress = "127.0.0.1",
             host = HostScope(null),
@@ -86,6 +102,9 @@ object PermittedRequest {
         require(context.principal.authenticated) { "The verifier refused the token: invalid, expired or revoked." }
         return context
     }
+
+    /** The headers that carry who the caller is: a test passes the token, never one of these. */
+    private val CREDENTIAL_HEADERS = listOf("Authorization", "X-API-Key", "CoSec-Identity")
 
     /** The host's rule, "permit the request": the context is what is tested, not the decision. */
     private val PERMITTING = object : FlatEngine {

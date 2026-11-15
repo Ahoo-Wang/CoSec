@@ -29,7 +29,14 @@ Scenario mapping (the `scenario` param is identical on both sides):
 
 The ratio is the speed ratio: v8 / v7 for throughput, v7 / v8 for time per operation, so 100 % means equal and
 more is better in every mode. The row's ratio is the median across rounds; it PASSES at or above the threshold.
-Exit status 1 when any row fails or lacks a side.
+Exit status 1 when any row fails or lacks a side, and when the run measured nothing it could compare: JMH, without
+`-foe true`, exits 0 after a benchmark failed and writes `[]`, so a file without results, a file without its
+partner, no scenario at all, and, with the options below, a round or a scenario the run asked for that is missing are
+all failures, never "zero failed scenarios":
+
+- `--rounds N`: rounds 1 to N of every pair;
+- `--expected FILE`: one line `pair scenario[,scenario...]` for each pair the run selected, as run.sh writes it from the
+  scenarios it passed to JMH (not from what came back, so a scenario both sides lost is still missing).
 """
 import argparse
 import json
@@ -44,9 +51,12 @@ HIGHER_IS_BETTER = {"thrpt"}
 
 
 def load(path):
-    """Map scenario -> (mode, score, unit, B/op or None)."""
+    """Map scenario -> (mode, score, unit, B/op or None); a file without results is refused."""
     out = {}
-    for e in json.loads(path.read_text()):
+    entries = json.loads(path.read_text())
+    if not entries:
+        sys.exit(f"{path.name} holds no results: every benchmark failed, or none was selected")
+    for e in entries:
         params = e.get("params") or {}
         secondary = e.get("secondaryMetrics") or {}
         alloc = next((secondary[k].get("score") for k in ALLOC_KEYS if k in secondary), None)
@@ -63,6 +73,18 @@ def collect(directory):
         if m:
             found.setdefault(m.group(2), {}).setdefault(int(m.group(3)), {})[m.group(1)] = load(p)
     return found
+
+
+def expected_of(path):
+    """Map pair -> the scenarios the run selected, from lines `pair scenario[,scenario...]`."""
+    expected = {}
+    for line in path.read_text().splitlines():
+        if line.strip():
+            pair, scenarios = line.split(None, 1)
+            expected[pair] = [s.strip() for s in scenarios.split(",") if s.strip()]
+    if not expected:
+        sys.exit(f"{path} lists no pair: the run selected nothing")
+    return expected
 
 
 def pct(r):
@@ -82,24 +104,29 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("directory", type=Path)
     ap.add_argument("--threshold", type=float, default=100.0, help="minimum median speed ratio in percent")
+    ap.add_argument("--rounds", type=int, help="the rounds the run asked for, from 1")
+    ap.add_argument("--expected", type=Path, help="lines `pair scenario[,scenario...]` the run selected")
     args = ap.parse_args()
     found = collect(args.directory)
     if not found:
         sys.exit(f"no v7-<pair>-N.json / v8-<pair>-N.json files in {args.directory}")
+    expected = expected_of(args.expected) if args.expected else {}
+    for pair in expected:
+        found.setdefault(pair, {})
 
     head = ["Pair", "Scenario", "Unit", "v7 score", "v8 score", "v8 / v7 (median)", "Per round", "B/op v7", "B/op v8", "Result"]
     rows = ["| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
     failed = 0
     for pair in sorted(found):
         rounds = found[pair]
-        scenarios = []
+        scenarios = list(expected.get(pair, []))
         for sides in rounds.values():
             for side in sides.values():
                 scenarios += [s for s in side if s not in scenarios]
         for scenario in scenarios:
             ratios, s7, s8, b7, b8, mode, unit, problem = [], [], [], [], [], "", "", ""
-            for n in sorted(rounds):
-                sides = rounds[n]
+            for n in range(1, args.rounds + 1) if args.rounds else sorted(rounds):
+                sides = rounds.get(n, {})
                 if "v7" not in sides or "v8" not in sides or scenario not in sides["v7"] or scenario not in sides["v8"]:
                     problem = f"round {n} lacks a side"
                     continue
@@ -125,6 +152,10 @@ def main():
                 f"| {pair} | {scenario} | {unit} | {num(median(s7))} | {num(median(s8))} | **{pct(med)}** "
                 f"| {' / '.join(pct(r) for r in ratios)} | {num(median(b7))} | {num(median(b8))} | {'PASS' if ok else '**FAIL**'} |"
             )
+
+    if len(rows) == 2:
+        failed += 1
+        rows.append("| – | – | – | – | – | – | – | – | – | **FAIL** (no scenario was measured) |")
 
     print("### JMH: 8.0 against 7.x\n")
     print("\n".join(rows))
