@@ -1,0 +1,34 @@
+{
+  "rules": [
+    "IDN-22"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The token family store cannot be read: the switch is refused with 503, never read as a live session.",
+  "switch": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "targetTenantId": "globex",
+    "answer": {
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "families": {
+    "unavailable": "Redis is down"
+  },
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

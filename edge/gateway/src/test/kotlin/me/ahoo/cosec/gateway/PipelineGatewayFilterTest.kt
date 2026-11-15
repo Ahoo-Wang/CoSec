@@ -142,6 +142,7 @@ class PipelineGatewayFilterTest {
                 issuedAt = null,
                 apiKeyCredential = false,
                 app = credentialApp?.let(::AppId),
+                session = null,
             ),
             "token",
         )

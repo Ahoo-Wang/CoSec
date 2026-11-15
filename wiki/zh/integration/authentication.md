@@ -289,20 +289,19 @@ cosec:
 
 ### 切换租户和应用 {#switching-tenant-and-app}
 
-很多身份服务分两步让用户登录。第一步证明用户（密码、短信或邮件中的验证码），签发一个不属于任何租户和应用的令牌：此时谁也没有选择这两者。第二步出示这个令牌，指明要工作的租户和应用；它的回答就是之后每个请求携带的令牌。之后切换租户，或在同一租户内切换应用，都是同一个调用。`SwitchTenantAuthentication` 就是这第二步。你给它 `TokenVerifier` Bean、你的凭证类，以及一个 `TenantSwitch`：它检查用户属于目标租户并在那里拥有该应用（不满足时抛出异常以拒绝），并回答用户在那里拥有什么，按该租户和应用查询：一个包含用户角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。你的凭证类实现 `SwitchTenantCredentials`，并携带你的检查还要读取的内容，例如设备；切换读取它不需要强制转换。把这个认证声明为 Bean，登录按那个类找到它：
+很多身份服务分两步让用户登录。第一步证明用户（密码、短信或邮件中的验证码），签发一个不属于任何租户和应用的令牌：此时谁也没有选择这两者。第二步出示这个令牌，指明要工作的租户和应用；它的回答就是之后每个请求携带的令牌。之后切换租户，或在同一租户内切换应用，都是同一个调用。`SwitchTenantAuthentication` 就是这第二步。你给它 `TokenFamilies` 和 `TokenRevocation` Bean、你的凭证类，以及一个 `TenantSwitch`：它检查用户属于目标租户并在那里拥有该应用（不满足时抛出异常以拒绝），并回答用户在那里拥有什么，按该租户和应用查询：一个包含用户角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。你的凭证类实现 `SwitchTenantCredentials`，并携带你的检查还要读取的内容，例如设备；切换读取它不需要强制转换。把这个认证声明为 Bean，登录按那个类找到它：
 
 ```kotlin
 class SelectTenant(
     override val targetTenantId: String,
     override val targetAppId: String?,
     override val context: SecurityContext,
-    override val accessToken: String,
     val deviceId: String,
 ) : SwitchTenantCredentials
 
 @Bean
-fun selectTenantAuthentication(tokenVerifier: TokenVerifier, members: Members) =
-    SwitchTenantAuthentication(tokenVerifier, SelectTenant::class.java) { credentials ->
+fun selectTenantAuthentication(families: TokenFamilies, revocation: TokenRevocation, members: Members) =
+    SwitchTenantAuthentication(families, revocation, SelectTenant::class.java) { credentials ->
         val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
         val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
             "Not a member of this tenant's $app."
@@ -314,15 +313,50 @@ fun selectTenantAuthentication(tokenVerifier: TokenVerifier, members: Members) =
 suspend fun select(
     @PathVariable tenant: String,
     @PathVariable app: String,
-    @RequestHeader(HttpHeaders.AUTHORIZATION) authorization: String,
     @RequestHeader("CoSec-Device-Id") deviceId: String,
     security: SecurityContext,
-): CompositeToken = authentication.authenticateAsToken(
-    SelectTenant(tenant, app, security, authorization.removePrefix("Bearer "), deviceId),
-)
+): CompositeToken = authentication.authenticateAsToken(SelectTenant(tenant, app, security, deviceId))
 ```
 
-新令牌只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。**它的应用是你的 `TenantSwitch` 回答的应用**（`TenantMembership.app`），必须是令牌的 `aud` 能携带的应用 id；没有回答应用时，保留先前令牌的应用（`SCP-12`）。`targetAppId` 是用户请求的应用，只能经由你的回答进入令牌：用户不能靠指名得到某个应用的令牌，只有在你的代码检查过用户拥有它之后才行。切换从 `SwitchTenantCredentials.accessToken`（发起切换的请求的令牌，必须属于该请求的主体）读取 `auth_time`：新令牌开始一个自己的会话，保留这个登录时间，因此会在先前的会话结束时结束。用户并没有重新登录。
+新令牌只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。**它的应用是你的 `TenantSwitch` 回答的应用**（`TenantMembership.app`），必须是令牌的 `aud` 能携带的应用 id；没有回答应用时，保留先前令牌的应用（`SCP-12`）。`targetAppId` 是用户请求的应用，只能经由你的回答进入令牌：用户不能靠指名得到某个应用的令牌，只有在你的代码检查过用户拥有它之后才行。
+
+**切换从请求的会话签发**，即 CoSec 的令牌向管道证明的那个会话：`context` 必须是管道为该请求构造的上下文，你的凭证中没有任何东西指定会话。新令牌开始一个自己的会话，保留那个会话的登录时间，因此会在先前的会话结束时结束：用户并没有重新登录（`IDN-17`）。它只在那个会话仍然有效时签发（`IDN-22`），并且在询问你的 `TenantSwitch` 之前就检查：
+
+- 重新严格读取其令牌的吊销记录：吊销存储无法读取时，切换回答 503，即使请求本身已被放行（PIP-7，[登出与吊销](#logout-and-revocation)）；
+- 它的会话仍属于该主体且没有被结束：登出，或刷新之后再次出示旧的令牌对（[刷新令牌](#refreshing-tokens)），都会结束会话，此后该会话的访问令牌虽然在过期前仍然有效，却切换不出任何令牌（`token-revoked`）；超过生命周期的会话为 `token-expired`。
+
+凭证不是 CoSec 令牌的请求（例如 API key）没有会话，不能切换（`token-invalid`）。被切换离开的会话保持原样：登出结束的是交给它的令牌对，而不是它切换自的那个。要结束一个用户的所有会话，请[吊销该主体](#revoking-every-token-of-a-principal)。网关之后的服务暂时还不能切换：网关转发的身份不携带会话。
+
+**测试切换。** 切换需要管道为一个携带有效会话令牌的请求构造的上下文，所以测试不能手工构造它。`PermittedRequest.withToken`（`cosec-testkit`）提供这个上下文：用你自己的登录、基于内存中的令牌族签发一个令牌，测试工具会让它经过 CoSec 自己的令牌认证器。切换使用同一组令牌族：
+
+```kotlin
+class SelectTenantTest {
+    private val algorithm = Algorithm.HMAC256("test-secret")
+    private val verifier = JwtTokenVerifier(algorithm)
+    private val families = TokenFamilies(InMemoryTokenFamilyStore())
+    private val revocation = TokenRevocation(RevocationReader.NONE)
+    private val members = testMembers() // your own directory, alice a clerk of globex's order
+    private val login = TokenCompositeAuthentication.of(
+        listOf(passwordAuthentication, SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members)),
+        JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, algorithm),
+        families,
+    )
+
+    @Test
+    fun `a member of globex switches into it with the app she has there`() = runTest {
+        val pair = login.authenticateAsToken(PasswordCredentials("alice", "secret"))
+        val request = PermittedRequest.withToken(pair.accessToken, verifier)
+
+        val switched = login.authenticateAsToken(SelectTenant("globex", "order", request, deviceId = "phone"))
+
+        val token = verifier.verify(switched.accessToken)
+        token.tenant.assert().isEqualTo("globex")
+        token.app.assert().isEqualTo("order")
+    }
+}
+```
+
+验证器拒绝令牌时 `withToken` 会抛出异常；它从你传入的 `RevocationReader` 读取吊销记录（默认没有任何吊销）。在测试中结束的会话（`families.end`）得到的上下文，与生产中一样，切换不出任何令牌。这个工具只构造上下文：要测试一个请求被允许做什么，请使用 `PipelineFixture` 和 [`PolicyTestKit`](../policies/testing.md)。
 
 ## 应用 {#apps}
 

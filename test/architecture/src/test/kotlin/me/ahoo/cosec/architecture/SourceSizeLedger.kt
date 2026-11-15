@@ -56,7 +56,8 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt",
-            772,
+            // +1 (IDN-22): a recorded approver's principal names its session, which a recorded one never has.
+            773,
             Disposition.Debt(Batch.B4),
         ),
         Entry(

@@ -247,6 +247,7 @@ class PipelineBuilderTest {
             issuedAt = null,
             apiKeyCredential = false,
             app = null,
+            session = null,
         )
         val gateway = PipelineFixtures.pipeline(authenticator(AuthnResult.Authenticated(principal, "token"))) {
             forwardIdentity { maxBytes = IdentityCodec.DEFAULT_MAX_BYTES }

@@ -3,10 +3,10 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index d38f7bef..aec78f64 100644
+index 9d5cad8c..800dff19 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -104,7 +104,7 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -120,7 +120,7 @@ class TokenFamilies @JvmOverloads constructor(
              throw TokenExpiredException("The session that began at ${session.authTime} has ended: sign in again.")
          }
          repeat(MAX_ATTEMPTS) {
@@ -14,4 +14,4 @@ index d38f7bef..aec78f64 100644
 +            val read = runCatching { store.read(session.id) }.getOrNull()
                  ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
              val family = read.family
-             checkOwner(family, token, session)
+             checkOwner(family, token.tenant?.let(::TenantId) ?: TenantId.DEFAULT, PrincipalId(token.principal), session)

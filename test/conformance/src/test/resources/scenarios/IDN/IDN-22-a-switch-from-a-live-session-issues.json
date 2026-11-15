@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "IDN-22"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "alice's session f1 is live: her switch to globex issues a token there, in a session of its own.",
+  "switch": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "targetTenantId": "globex",
+    "answer": {
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 1
+    }
+  ],
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "issued": {
+      "tenant": "globex",
+      "app": null
+    }
+  }
+}

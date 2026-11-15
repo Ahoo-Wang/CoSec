@@ -48,14 +48,13 @@ public final class me/ahoo/cosec/login/token/StoreTokenRevoker : me/ahoo/cosec/s
 }
 
 public final class me/ahoo/cosec/login/token/SwitchTenantAuthentication : me/ahoo/cosec/login/Authentication {
-	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Ljava/lang/Class;Lme/ahoo/cosec/login/token/TenantSwitch;)V
+	public fun <init> (Lme/ahoo/cosec/login/token/TokenFamilies;Lme/ahoo/cosec/runtime/token/TokenRevocation;Ljava/lang/Class;Lme/ahoo/cosec/login/token/TenantSwitch;)V
 	public synthetic fun authenticate (Lme/ahoo/cosec/login/LoginCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun authenticate (Lme/ahoo/cosec/login/token/SwitchTenantCredentials;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public fun getCredentialsType ()Ljava/lang/Class;
 }
 
 public abstract interface class me/ahoo/cosec/login/token/SwitchTenantCredentials : me/ahoo/cosec/login/LoginCredentials {
-	public abstract fun getAccessToken ()Ljava/lang/String;
 	public abstract fun getContext ()Lme/ahoo/cosec/api/context/SecurityContext;
 	public fun getTargetAppId ()Ljava/lang/String;
 	public abstract fun getTargetTenantId ()Ljava/lang/String;
@@ -113,9 +112,7 @@ public final class me/ahoo/cosec/login/token/TokenFamilies {
 	public synthetic fun <init> (Lme/ahoo/cosec/spi/token/TokenFamilyStore;Ljava/time/Duration;Ljava/time/Duration;Lme/ahoo/cosec/spi/id/IdGenerator;Ljava/time/Clock;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun end (Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun getLifetime ()Ljava/time/Duration;
-	public final fun rotate (Lme/ahoo/cosec/spi/token/VerifiedToken;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public final fun start-opWVSHk (Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
-	public static synthetic fun start-opWVSHk$default (Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/lang/String;Ljava/lang/String;Ljava/time/Instant;Lkotlin/coroutines/Continuation;ILjava/lang/Object;)Ljava/lang/Object;
+	public final fun start-hPxUw84 (Ljava/lang/String;Ljava/lang/String;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 }
 
 public final class me/ahoo/cosec/login/token/TokenFamilies$Companion {
@@ -131,12 +128,11 @@ public final class me/ahoo/cosec/login/token/TokenFamilies$Issue {
 
 public final class me/ahoo/cosec/login/token/TokenSubject {
 	public static final field Companion Lme/ahoo/cosec/login/token/TokenSubject$Companion;
-	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;Ljava/time/Instant;)V
-	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;Ljava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;)V
+	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getApp ()Ljava/lang/String;
 	public final fun getAttributes ()Ljava/util/Map;
-	public final fun getAuthTime ()Ljava/time/Instant;
 	public final fun getId ()Ljava/lang/String;
 	public final fun getMembershipMarker ()Ljava/lang/String;
 	public final fun getNotAfter ()Ljava/time/Instant;

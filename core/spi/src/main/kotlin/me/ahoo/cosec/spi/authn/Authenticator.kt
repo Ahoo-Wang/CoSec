@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spi.authn
 
 import me.ahoo.cosec.annotations.CoSecSpi
@@ -24,6 +26,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipClaims
+import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant
 import java.util.Collections
@@ -132,6 +135,14 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
      * credential declaring another or none (`SCP-11`).
      */
     val app: AppId?,
+    /**
+     * The session of CoSec's own token (`sid`, `auth_time`, `cosec.generation`, RFC 0009), by provenance as [breakGlass]:
+     * CoSec's token authenticator sets it, and nothing else can. Null for any other credential, and for a token of no
+     * session. What a tenant switch issues from, after it has checked the session is still live (`IDN-22`). CoSec's own:
+     * an application reads the session's login time nowhere, and issues from it only through `cosec-login`.
+     */
+    @property:InternalCoSecApi
+    val session: TokenSession?,
 ) {
     /**
      * What the credential says about the principal, such as a token's `attributes` claim: an unmodifiable view of the map
@@ -143,6 +154,9 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         require(breakGlass == (credential?.method == Identity.Method.JWT)) {
             "The authentication method [${Identity.Method.JWT}] is CoSec's own token's, and only it may use " +
                 "break-glass: name another authenticator's method otherwise (RFC 0010 C3)."
+        }
+        require(session == null || credential?.method == Identity.Method.JWT) {
+            "Only CoSec's own token has a session (RFC 0009)."
         }
     }
 
@@ -181,7 +195,6 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
     }
 
     /** A principal another authenticator proved: never break-glass. */
-    @OptIn(InternalCoSecApi::class)
     constructor(
         id: PrincipalId,
         tenant: TenantId,
@@ -199,6 +212,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         issuedAt = null,
         apiKeyCredential = false,
         app = app,
+        session = null,
     ) {
         requireWellFormed()
     }
@@ -207,7 +221,6 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
      * [memberships] are the claims of the token (RFC 0004 §4.5.1); null when the token asks for the
      * `MembershipProvider` (§4.5.2).
      */
-    @OptIn(InternalCoSecApi::class)
     constructor(
         id: PrincipalId,
         tenant: TenantId,
@@ -225,6 +238,7 @@ class AuthenticatedPrincipal @InternalCoSecApi constructor(
         issuedAt = null,
         apiKeyCredential = false,
         app = app,
+        session = null,
     ) {
         requireWellFormed()
     }

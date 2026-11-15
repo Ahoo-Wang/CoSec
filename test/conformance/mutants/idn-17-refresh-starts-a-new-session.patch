@@ -3,13 +3,13 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenFamiliesJwtTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
-index 2b8b1dd0..baa5b9e0 100644
+index dc86ea61..b543c5e5 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
-@@ -49,7 +49,7 @@ class RefreshTokenAuthentication(
+@@ -52,7 +52,7 @@ class RefreshTokenAuthentication(
          val now = memberships.refresh(token)
          require(now?.app == null || now.app == token.app) { "A refresh never changes the app a token is for." }
-         val issue = families.rotate(token)
+         val issue = live.next(token)
 -        return if (now == null) TokenSubject.of(token, issue) else current(token, now).inSession(issue)
 +        return if (now == null) TokenSubject.of(token) else current(token, now)
      }

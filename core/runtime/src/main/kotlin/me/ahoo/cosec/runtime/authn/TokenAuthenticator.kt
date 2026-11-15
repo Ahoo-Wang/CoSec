@@ -129,6 +129,8 @@ class TokenAuthenticator(
                 issuedAt = token.issuedAt,
                 apiKeyCredential = false,
                 app = token.app?.let(::AppId),
+                // A session is CoSec's: another verifier's token has none to be issued from (IDN-22).
+                session = if (ownTokens) token.session else null,
             ),
             method,
         )

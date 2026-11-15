@@ -174,6 +174,7 @@ class IdentityGate(
             issuedAt = null,
             apiKeyCredential = false,
             app = identity.app.takeIf(ScopeResolver::isValidAppId)?.let(::AppId),
+            session = null,
         )
         val resolution = ScopeResolver.resolve(
             // The forwarded identity is the credential here, and its app the one the credential declared (`SCP-11`).
