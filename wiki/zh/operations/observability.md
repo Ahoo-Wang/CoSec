@@ -18,7 +18,7 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 | 投递方式 | 监听器何时运行 | 失败的后果 |
 |---|---|---|
 | `REQUIRED` | 在响应之前，与其他 `REQUIRED` 监听器一起运行，每个都在 [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners)（1 秒）之内，并且在 `cosec.pipeline.timeout` 剩余的时间之内。它看到的是到此为止决定的结果。 | 放行变成 `503` `unavailable`，请求不会继续。其他结果保持原状态；失败以 `ERROR` 记录并计数。 |
-| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 [`cosec.observability.listener.queue-capacity`](./configuration.md)（1,024）个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件；抛异常的监听器最多每 10 秒以 `WARN` 记录一次，两者都会计数。 |
+| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 [`cosec.observability.listener.queue-capacity`](./configuration.md)（1,024）个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件并计数，请求从不等待与之相关的日志：由一个报告者在请求线程之外，最多每 10 秒以 `WARN` 记录一次 `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`。抛异常的监听器最多每 10 秒以 `WARN` 记录一次，并会计数。 |
 
 starter 注册的监听器：
 
@@ -41,8 +41,8 @@ starter 注册的监听器：
   break-glass 之前，设置 `cosec.audit.kafka.delivery=required`，或者注册你自己的 `REQUIRED` 监听器。
 - **`REQUIRED` 监听器应按事件的 `id` 保持幂等**：超时的写入可能其实已经成功。
 - **关闭时**，监听器停止接收事件，已在队列中的事件仍会继续投递，最多
-  [`cosec.observability.listener.drain-timeout`](./configuration.md)（5 秒）。之后剩下的被丢弃，并以 `WARN` 记录
-  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`。随后 Kafka 审计监听器
+  [`cosec.observability.listener.drain-timeout`](./configuration.md)（5 秒）。之后不再开始任何监听器调用：进行中的调用不会被中断，剩下的事件被丢弃并计入 `cosec.listener.dropped`，并以 `WARN` 记录
+  `Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`。随后 Kafka 审计监听器
   最多再用同样长的时间，等待它手中的发送以及 broker 对这些发送的应答，然后才关闭 producer。到达这个上限时，排队的发送
   被丢弃，进行中的发送被中断，并以 `WARN` 记录 `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...`
 - **求值追踪。** `DecisionEvent` 带有 `evaluationTrace`，即引擎查看过的内容，深度由
@@ -116,6 +116,7 @@ JSON 数组 `[tenantId, principalId]`。它与审计日志并存，而不是替�
 kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管道的耗时生成，挂在适配器收到请求时的当前 span 之下；没有
 当前 span 时它是根 span。因此追踪从不拖慢请求，也不会使请求失败。管道为请求发起的调用（Redis、成员关系提供者）是
 `cosec.authorize` 的兄弟 span，挂在同一个父 span 下。tracer 来自 `GlobalOpenTelemetry`。
+该 span 像 SDK 自己的子 span 一样继承父 span 的 `tracestate`。事件的 trace 以 W3C 头部形式的不透明字符串携带它：它是厂商数据，CoSec 只把它写到该 span 的父上下文上，不写入审计记录、Kafka 记录、日志或指标标签，你自己的决策监听器也不应记录它。SDK 拒绝的值，或超过 512 个字符的值，视为没有 tracestate：span 仍会生成，父 span 不变。
 
 | 属性 | 值 |
 |---|---|
@@ -144,7 +145,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 | 指标 | 标签 | 计数内容 |
 |---|---|---|
-| `cosec.listener.dropped` | `listener` | 队列满时丢弃的事件 |
+| `cosec.listener.dropped` | `listener` | 队列满或已关闭时丢弃的事件，以及排空超时时丢弃的事件 |
 | `cosec.listener.failures` | `listener` | 抛异常的监听器调用，以及超时的 `REQUIRED` 监听器调用 |
 | `cosec.audit.required.failures` | 无 | 发生在它无法改变的决策（非放行）上的 `REQUIRED` 失败 |
 
