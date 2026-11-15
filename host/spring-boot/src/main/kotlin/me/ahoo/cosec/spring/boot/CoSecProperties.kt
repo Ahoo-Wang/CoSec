@@ -12,6 +12,7 @@
  */
 package me.ahoo.cosec.spring.boot
 
+import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.context.properties.ConfigurationProperties
 import org.springframework.boot.context.properties.bind.DefaultValue
@@ -38,6 +39,8 @@ class CoSecProperties(
      * API keys (`<p>:api-key:…`) and rate limit counters (`<p>:rate-limiter:…`). Two deployments on one Redis that differ
      * in it share nothing. A trailing `:` is ignored.
      */
+    // The stores' own default: one definition, so the property's default and the keys the stores write agree. A const,
+    // inlined here, so `cosec-cocache` stays an optional dependency.
     @DefaultValue(DEFAULT_KEY_PREFIX) var keyPrefix: String = DEFAULT_KEY_PREFIX,
 ) : EnabledCapable {
     /** The prefix of one family of this deployment's keys: `<keyPrefix>:<family>`. */
@@ -47,8 +50,5 @@ class CoSecProperties(
     companion object {
         /** The prefix of every `cosec.*` property. */
         const val PREFIX = "cosec"
-
-        /** `cosec.key-prefix` when a deployment sets none. */
-        const val DEFAULT_KEY_PREFIX = "cosec"
     }
 }
