@@ -9,7 +9,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 
 ## 扩展点 {#extension-points}
 
-使用 starter 时，声明一个 Spring bean 就能扩展 CoSec。有些扩展点收集该类型的所有 bean；其余的是单个 bean，替换 starter 的默认实现（`@ConditionalOnMissingBean`）。不使用 Spring 时，用 `PipelineComponents` 和 `SuspendingSnapshotSource.of(store)` 提供的文档组装一个 `Pipeline`，再把实现交给使用它的类。这种组装是 `@ExperimentalCoSecApi`（[稳定性等级](#stability-levels)）；测试用 `PipelineFixture`（`cosec-testkit`）获得真实管道。
+使用 starter 时，声明一个 Spring bean 就能扩展 CoSec。有些扩展点收集该类型的所有 bean；其余的是单个 bean，替换 starter 的默认实现（`@ConditionalOnMissingBean`）。不使用 Spring 时，用 `Pipeline.builder(authenticator, store)` 在你的文档存储之上构建管道，把实现交给构建器（`memberships`、`attributes`、`listener`、`rateLimiter`、`ids`），并在第一个请求之前调用 `awaitDocuments()`。构建器是 `@ExperimentalCoSecApi`（[稳定性等级](#stability-levels)）；测试用 `PipelineFixture`（`cosec-testkit`）获得真实管道。
 
 | 扩展点 | 模块、包 | 实现它来 | starter 接收 |
 |---|---|---|---|
@@ -50,7 +50,7 @@ gate 会成为第二条决策路径。编译器守住这一点：实现 `Request
 |---|---|---|
 | 无 | 稳定。从 8.0 GA 起，删除或修改它是破坏性变更，只在主版本中发生。 | 直接使用。 |
 | `@CoSecSpi` | 应用要实现、而不只是调用的接口：上面的扩展点，以及主体声明的能力（`ExpiresAtCapable`、`IssuedAtCapable`、`MembershipMarkerCapable`）。与其余部分同样稳定；次版本新增的成员带默认实现，已有的实现照常编译。 | 实现它。 |
-| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API（`PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常）；不使用 Spring 组装管道（`Pipeline` 的构造器和 `evaluate`、`RequestGate`、`PipelineComponents`、`PipelineOptions`、`SnapshotOptions`、`SuspendingSnapshotSource`、`AttributeProviders`、`DecisionListeners`、`IdentityIssuer`、`IdentityGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`RequestSecurity`、`CoSecParameters.read`）；评估轨迹（`DecisionEvent.evaluationTrace`、`me.ahoo.cosec.engine.trace`）；以及控制面的存储和影子窗口端口及其记录（[控制面存储](#control-store)）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
+| `@ExperimentalCoSecApi` | 公开，但可能在次版本中改变或移除，发布说明会写明。目前包括：`cosec-testkit` 的公共 API（`PolicyTestKit`、`PipelineFixture`、`AttributeRequests`、`EngineOutcome` 及其异常）；不使用 Spring 组装管道（`Pipeline.builder`、`PipelineBuilder` 及其设置 `PipelineSettings`、`SnapshotSettings`、`ListenerSettings` 和 `IdentityForwardingSettings`、`Pipeline.behindGateway` 与 `GatewayIdentitySettings`、`Pipeline.evaluate` 和 `awaitDocuments`、`RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`RequestSecurity`）；评估轨迹（`DecisionEvent.evaluationTrace`、`me.ahoo.cosec.engine.trace`）；以及控制面的存储和影子窗口端口及其记录（[控制面存储](#control-store)）。 | 用 `@OptIn(ExperimentalCoSecApi::class)` 选择加入，否则编译器给出警告。 |
 | `@InternalCoSecApi` | 公开只是为了让 CoSec 自己的模块互相调用。没有任何承诺：任何版本都可能改变。 | 不要使用。它要求 error 级别的 opt-in，只有 CoSec 自己的源码这样做。 |
 
 这些承诺由构建守住。每个发布的库模块把自己的公共 ABI 存在一个转储文件里，即模块目录下的 `api/<project>.api`
@@ -298,7 +298,7 @@ implementation("me.ahoo.cosid:cosid-spring-boot-starter") // 5.x，并用 cosid.
 fun cosecIdGenerator(ids: MyIds): IdGenerator = IdGenerator { ids.next() }
 ```
 
-由于 `generate` 在事件循环上运行，请选择从不等待其存储的生成器，例如 Snowflake 生成器。不使用 Spring 时，把它作为 `PipelineComponents(idGenerator = …)`、`IdentityGate(idGenerator = …)`（二者都是实验性的）以及 `JwtTokenConverter` 的第一个参数传入。
+由于 `generate` 在事件循环上运行，请选择从不等待其存储的生成器，例如 Snowflake 生成器。不使用 Spring 时，把它交给 `Pipeline.builder(…).ids(…)` 和 `Pipeline.behindGateway { ids = … }`（二者都是实验性的），并作为 `JwtTokenConverter` 的第一个参数传入。
 
 ## 桥接上下文 {#bridge-context}
 

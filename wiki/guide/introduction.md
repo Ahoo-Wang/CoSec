@@ -138,8 +138,8 @@ Two artifacts are not dependencies of an application:
 - `cosec-gateway-server` is a ready-to-run gateway built from these modules: deploy it, do not depend on it (see
   [Deployment](../operations/deployment.md)).
 
-Without Spring Boot, assemble a `Pipeline` from `PipelineComponents` and `SuspendingSnapshotSource.of(store)` yourself,
-and call it from your own transport. These types are `@ExperimentalCoSecApi`: they grow with every new port, and may
+Without Spring Boot, build a `Pipeline` over your document store with `Pipeline.builder(authenticator, store)`, and
+call it from your own transport. The builder is `@ExperimentalCoSecApi`: it gains a method with every new port, and may
 change in a minor release. To test your code against a real pipeline, use `PipelineFixture` (`cosec-testkit`). See
 [Extending CoSec](../architecture/extending.md) and [Testing policies](../policies/testing.md#testing-your-code-against-a-real-pipeline).
 
