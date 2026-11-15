@@ -49,9 +49,9 @@ object ShadowCodec {
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     /**
-     * A candidate as its window, its base and its document, whose header is its own (SNP-12): a record that states
-     * `schema`, `revision` or `publishedAt` beside the document, as 8.0.0-alpha.4 wrote it, is refused as an unknown
-     * member, and its window is not compared, as for any unreadable candidate.
+     * A candidate as its window, its base and its document, whose header is its own (SNP-12): a record that also states
+     * `schema`, `revision` or `publishedAt` beside the document is refused as an unknown member, and its window is not
+     * compared, as for any unreadable candidate.
      */
     fun encode(candidate: StoredCandidate): ByteArray = write(
         factory.objectNode().put("window", candidate.window).put("baseRevision", candidate.baseRevision)

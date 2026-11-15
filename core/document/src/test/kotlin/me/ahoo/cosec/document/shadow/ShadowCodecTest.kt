@@ -69,10 +69,7 @@ class ShadowCodecTest {
         ShadowCodec.decodeStatuses(
             ShadowCodec.encodeStatuses(mapOf("i1" to status))
         ).assert().isEqualTo(mapOf("i1" to status))
-        // SNP-12: one shape. A record that states the header beside the document, as 8.0.0-alpha.4 wrote it, is refused.
-        val alpha4 = """{"window":"w","baseRevision":4,"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z",""" +
-            """"document":{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}}"""
-        listOf("{}", "[]", "not json", """{"window":"w","baseRevision":"x"}""", alpha4).forEach { text ->
+        listOf("{}", "[]", "not json", """{"window":"w","baseRevision":"x"}""").forEach { text ->
             assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeCandidate(text.encodeToByteArray()) }
         }
         assertThrownBy<SnapshotFormatException> {
@@ -122,5 +119,13 @@ class ShadowCodecTest {
         assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(missing.encodeToByteArray()) }
         val zero = """{"a":{"at":"2026-11-08T00:00:00Z","documents":{},"formatLevel":0}}"""
         assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(zero.encodeToByteArray()) }
+    }
+
+    /** SNP-12: one shape. A record that states the header beside the document, as 8.0.0-alpha.4 wrote it, is refused. */
+    @Test
+    fun `a candidate record that states its header beside its document is refused`() {
+        val record = """{"window":"w","baseRevision":4,"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z",""" +
+            """"document":{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}}"""
+        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeCandidate(record.encodeToByteArray()) }
     }
 }
