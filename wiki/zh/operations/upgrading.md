@@ -130,7 +130,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 #### 报告中的语义改动 {#semantic-changes-in-the-report}
 
 `semanticChanges` 按 7.x 数据中的位置，列出 8.0 有意做出不同决策的形态。`change` 是[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
-中的规则 id（`C1a`–`C6`、`D1`–`D3`）之一，或者：
+中的规则 id（`C1a`–`C7`、`D1`–`D3`）之一，或者：
 
 - `ASCII-CASE`：带 `ignoreCase` 的 ALLOW 条件。8.0 只折叠 ASCII 字母，所以这条 ALLOW 匹配的写法更少。DENY 条件的值含 ASCII 以外的字母时，
   这个条件改为被拒绝。
@@ -291,6 +291,7 @@ spec:
 | **C4**（`SCP-2`） | 设置了 `cosec.authorization.scope.app-id` 时，声明其他应用的请求被拒绝（`scope-rejected`）；没有声明时使用宿主的应用。 | 声明的应用总是生效。 | 只服务一个应用的宿主。 |
 | **C5**（`BND-2`） | 主体只能附加自己租户文档或平台层中可附加的策略。 | 任何主体都能附加任何策略。 | 主体策略，仅在 `--partition by-owner` 时。默认分区保持 7.x 的行为。 |
 | **C6** | 引用了所属应用未定义权限的角色授权，被 `convert` 拒绝。 | 到达它的请求为 `500`。 | 带有过时权限 id 的授权。 |
+| **C7**（`MIG-2`） | 针对所有动作（`*`）的 DENY，对它匹配的请求，也拒绝代码中的检查和控制面的动作（`cosec:*`）。 | 只决策 HTTP 请求。 | 针对所有动作的 DENY 语句（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
 | **D1** | ALLOW 中的 `inRole: r` 只匹配在请求空间中生效的角色；ALLOW 中的 `inRole: r@s` 只在请求处于空间 `s` 时匹配；DENY 中的 `inRole: r` 匹配在任意空间持有的该角色。 | 按字面匹配角色，裸角色也匹配 `r@<请求的空间>`。 | `inRole` 条件。DENY 只会变宽，ALLOW 只会变窄。 |
 | **D2**（`CND-1`） | 不存在的属性不等于任何值，也不等于空串。 | 不存在的 part 读作 `""`。 | 与 `#{principal.id}`、`#{principal.attributes['k']}` 或 `#{tenant.tenantId}` 比较的 `eq`。ALLOW 中，不存在的 part 不再匹配空的属性（变窄）。DENY 中，`convert` 补上 7.x 的情形，保持 7.x 的读法。 |
 | **D3** | 没有正则表达式，所以也没有正则超时。 | `RegexTimeoutException` 按默认拒绝处理。 | `regular` 条件；只有字面量、字面量前缀和字面量选择的模式能翻译。 |
@@ -308,6 +309,17 @@ spec:
 `cosec.control.break-glass.max-duration`，默认 4 小时），受每一条 DENY 约束（C2），并且只有在 REQUIRED 决策监听器记录了请求时才能放行
 （否则 `503`，规则 `OBS-2`）。需要时通过控制面申请，由两个人完成。`cosec-migrate` 不写 break-glass 绑定：`convert` 不转换 7.x 的 root，
 `--root-enabled`、`--root-id`、`--root-expires-at` 与 `publish --break-glass-max-duration` 已删除（传入时报用法错误并说明原因）。
+
+#### 所有动作即所有 HTTP 请求 {#every-action-is-every-http-request}
+
+7.x 只决策 HTTP 请求，所以它表示"所有动作"的写法指的是所有 HTTP 请求：模式 `*`、不带方法的 `all`、含 `*` 的 `path` 数组，以及含其中之一的数组或
+composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中的检查](../integration/checks.md)的动作，这些 7.x 从未授予过。所以 `convert`
+把针对所有动作的 ALLOW 写成 `"action": "http:*"`（`MIG-2`），对 HTTP 请求的决策与 7.x 相同。
+
+针对所有动作的 DENY 仍是 `"action": "*"`：它继续拒绝它拒绝过的请求，现在也经由代码中的检查和控制面拒绝，报告把它记为 C7。如果这样的 DENY
+可能匹配管理员自己的请求，它也会拒绝管理员使用控制面。
+
+`http:*` 上的语句永远不匹配[路由映射](../policies/language.md#route-maps)映射过的请求。加入路由映射之后，用单独的策略授予它命名的动作。
 
 #### 动作中的路径模板 {#path-templates-in-actions}
 
@@ -764,8 +776,26 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 
 ### 从 8.0.0-alpha.4 升级 {#from-8-0-0-alpha-4}
 
+**如果你发布过任一预览版的 `cosec-migrate convert` 写出的文档，请检查其中的 ALLOW 语句**（下面第一条）：转换得到的 7.x"所有动作"授予了控制面。
 8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
 
+- **安全：转换得到的 7.x"所有动作"不再授予控制面。** 从 8.0.0-alpha.1 到 8.0.0-alpha.4，`convert` 把针对所有 7.x 动作的 ALLOW 写成
+  `"action": "*"`，它还匹配每一个控制面动作（`cosec:*`）和代码中检查的每一个动作。像"登录用户可以做任何事"这样的全局策略经转换后，给了每个已认证主体
+  对其所在租户文档的全部控制面动作，`(platform)` 的主体则得到对平台文档和应用文档的全部控制面动作。可附加的策略对列出它的每个令牌也是如此。这样的主体
+  可以在该文档中写入和授权，持有同样授权的另一个主体可以批准。`convert` 现在写 `"action": "http:*"`
+  （[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）；针对所有动作的 DENY 仍是 `*`。如果你发布过转换得到的文档：
+  1. 找出每个文档（`platform`、`app:<id>`、`tenant:<id>`）中 `*` 上的 ALLOW 语句。管理员通过控制 API 读取 head
+     （[修订、历史与回滚](./storage.md#revisions-history-and-rollback)）：
+
+     ```bash
+     curl -s "$CONTROL/documents/platform" -H "$AUTH" \
+       | jq -r '.policies[] | select(any(.statements[]; .effect == "allow" and ([.action] | flatten | index("*")))) | .id'
+     ```
+
+     `convert` 写出的那些在这次转换的 `platform.json`、`apps/` 和 `tenants/` 中，它的 `provenance.json` 给出每一条对应的 7.x 策略。升级之后
+     你自己写的 `*` 上的语句由你决定是否保留。
+  2. 通过控制面把每一条转换得到的语句改为 `http:*`：提交一个变更，以 `"action": "http:*"` 重新写入该策略。如果某个文档自 `publish` 以来没有变过，
+     也可以对它 `apply` 新一次 `convert` 写出的文件，它提出的变更正好是这些语句。
 - **三个包名与其模块名对齐。** `me.ahoo.cosec.cache`（`cosec-cocache`）现在是 `me.ahoo.cosec.cocache`，`me.ahoo.cosec.servlet`（`cosec-webmvc`）是 `me.ahoo.cosec.webmvc`，`me.ahoo.cosec.spring.boot.starter`（`cosec-spring-boot`）是 `me.ahoo.cosec.spring.boot`。子包在新根之下保持原名；没有类名、artifact id、`cosec.*` 属性、bean 名或 Redis key 改变。在应用中需要修改：import；`spring.autoconfigure.exclude` 与 `@ConditionalOnClass(name = ...)` 字符串中的自动配置类名（`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` 现在是 `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`）；以及日志配置中的 logger 名（`logging.level.me.ahoo.cosec.cache` 现在是 `logging.level.me.ahoo.cosec.cocache`）。
 - **策略文档、路由映射和 JSON 格式成为独立模块 `cosec-document`。** `me.ahoo.cosec.runtime.document` 现在是 `me.ahoo.cosec.document`，`me.ahoo.cosec.runtime.document.format` 是 `me.ahoo.cosec.document.format`，`me.ahoo.cosec.runtime.route` 是 `me.ahoo.cosec.document.route`；类（`PolicyDocument`、`PolicyDocumentCodec`、`PolicyDocumentCompiler`、`DocumentCompileException`、`Actor`、`RouteMap`、`RouteMapCodec` 等）保持原名。没有文档、schema、`cosec.*` 属性、bean 或 Redis key 改变。在应用中修改 import 即可。`cosec-runtime` 和 starter 会带上 `cosec-document`，所以依赖不变；只读写文档的代码（生成器、[CI 检查](../policies/testing.md#policies-in-ci)）可以只依赖 `me.ahoo.cosec:cosec-document`，不必依赖 `cosec-runtime`。`cosec-openapi` 现在依赖 `cosec-document` 而不是 `cosec-runtime`：经由它编译依赖管道的应用需要自己添加 `cosec-runtime` 或 starter。
 - **影子窗口端口及其值移到 `cosec-spi`。** `CandidateStore`、`StoredCandidate`、`ShadowReportSink`、`ShadowReportReader`、`ShadowReport`、`ShadowSample`、`ShadowOutcome`、`InstanceStatus` 和 `InstalledDocument` 从 `me.ahoo.cosec.runtime.shadow` 移到 `me.ahoo.cosec.spi.shadow`，仍是实验性 API，名称不变。你自己的存储修改 import 即可，并且可以只依赖 `cosec-spi`。`cosec-cocache` 不再依赖 `cosec-runtime`：只经由 `cosec-cocache` 编译依赖管道的应用需要自己添加 `cosec-runtime` 或 starter。存储格式和 Redis key 都不变。
