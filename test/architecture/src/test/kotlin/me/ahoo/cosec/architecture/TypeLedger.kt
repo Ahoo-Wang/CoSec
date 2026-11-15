@@ -40,12 +40,6 @@ object TypeLedger {
     val ENTRIES: Map<String, Disposition> = mapOf(
         "api/api/src/main/kotlin/me/ahoo/cosec/api/audit/AuditEvent.kt" to family(RECORD, "the audit record"),
         "api/api/src/main/kotlin/me/ahoo/cosec/api/context/SecurityContext.kt" to family(RECORD, "the security context, its scope and the identity a gateway forwarded"),
-        "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheMembershipProvider.kt" to Disposition.Debt(Batch.B7),
-        "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoCacheTokenFamilyStore.kt" to Disposition.Debt(Batch.B7),
-        "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/MembershipCache.kt" to Disposition.Debt(Batch.B7),
-        "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/ControlCacheSpecs.kt" to Disposition.Debt(Batch.B7),
-        "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/shadow/CoCacheShadow.kt" to Disposition.Debt(Batch.B7),
-        "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt" to Disposition.Debt(Batch.B7),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessReport.kt" to family(RECORD, "an access report"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlaneResults.kt" to Disposition.Debt(Batch.B4),

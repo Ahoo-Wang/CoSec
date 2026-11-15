@@ -19,181 +19,23 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
-import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
-import me.ahoo.cocache.api.Lookup
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CoCacheFactory
-import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.createLocked
-import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
-import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.document.shadow.ShadowCodec
-import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
-import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
-import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
-
-/**
- * The caches of the shadow window (RFC 0007 §6.4, §6.5):
- *
- * | Cache | Redis key | Policy |
- * |---|---|---|
- * | candidates | `<p>:candidate:<docKey>` | store of record: the control plane's only copy while a change stages |
- * | reports | `<p>:shadow:report:<window>:<instance>` | one instance's report of one window; expires [REPORT_TTL] after its last write |
- * | reporters | `<p>:shadow:reporters:<window>` | the instances that reported on one window, only ever added to; expires as the reports |
- * | statuses | `<p>:shadow:status:<instance>` | one instance's last status; expires [STATUS_TTL] after its last write |
- * | instances | `<p>:shadow:instances:all` | the instances that have a status, each with when it listed itself; expires as the reports |
- *
- * All five are `Store`s. Reports and statuses are observations, so they expire; a failed read still throws, so that an
- * outage is never read as "no samples" or "no instance". Each instance writes only its own report and status keys
- * (round-2 review R1, #1214), so that one instance can never replace another's numbers, an ACL can confine each
- * instance to its own keys, and a heartbeat costs the size of one status, not of the cluster's.
- */
-internal object ShadowCacheSpecs {
-    /** Longer than the longest window (24 hours) and the week a change may stay unpublished. */
-    val REPORT_TTL: Duration = Duration.ofDays(8)
-
-    /** Statuses older than a minute are not counted (RFC 0007 §6.5); the key outlives that only to be read. */
-    val STATUS_TTL: Duration = Duration.ofMinutes(2)
-
-    /** The key of the one list of instances. */
-    const val INDEX_KEY: String = "all"
-
-    /** An instance lists itself again after this long, so that its entry outlives [INDEX_EXPIRY]. */
-    val INDEX_REFRESH: Duration = Duration.ofHours(1)
-
-    /**
-     * An entry not refreshed for this long belongs to an instance that is gone: the next instance to write the list
-     * drops it. Readers skip an entry whose status has expired in any case, so this only bounds the list.
-     */
-    val INDEX_EXPIRY: Duration = Duration.ofHours(3)
-
-    fun candidate(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<SnapshotKey, StoredCandidate> =
-        CoSecCacheSpecs.storeOfRecord(
-            CoSecCacheSpecs.CANDIDATE_CACHE_NAME,
-            keyPrefix,
-            SnapshotKeyEncoder,
-            StoredCandidateCodec
-        )
-            .build()
-
-    fun reports(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, ShadowReport> =
-        observation(CoSecCacheSpecs.SHADOW_REPORT_CACHE_NAME, keyPrefix, ShadowReportCodec, REPORT_TTL)
-
-    fun reporters(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Set<String>> =
-        observation(CoSecCacheSpecs.SHADOW_REPORTER_CACHE_NAME, keyPrefix, ReportersCodec, REPORT_TTL)
-
-    /** The key of [instance]'s report of [window], under the reports' namespace. */
-    fun reportKey(window: String, instance: String): String = "$window:$instance"
-
-    /** One instance's status under its id ([ShadowReport.isInstanceId]). */
-    fun statuses(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, InstanceStatus> =
-        observation(CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, keyPrefix, InstanceStatusCodec, STATUS_TTL)
-
-    /** The instances that have a status to read, by when each last listed itself, under [INDEX_KEY]. */
-    fun instances(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, Map<String, Instant>> =
-        observation(CoSecCacheSpecs.INSTANCE_INDEX_CACHE_NAME, keyPrefix, InstanceIndexCodec, REPORT_TTL)
-
-    /** A `Store` whose entries expire [ttl] after their last write; a failed read throws ([CoSecCacheSpecs.locks]). */
-    private fun <V : Any> observation(
-        cacheName: String,
-        keyPrefix: String,
-        codec: Codec<V>,
-        ttl: Duration
-    ): StoreSpec<String, V> {
-        val layout = CoSecCacheSpecs.layout(keyPrefix, cacheName)
-        return StoreSpec.builder<String, V>(cacheName)
-            .keyPrefix(layout.keyPrefix)
-            .namespace(layout.namespace)
-            .keyEncoder { it }
-            .codec(codec)
-            .policy { this.ttl = ttl }
-            .build()
-    }
-}
-
-internal object StoredCandidateCodec : Codec<StoredCandidate> {
-    override fun encode(value: StoredCandidate): ByteArray = ShadowCodec.encode(value)
-
-    override fun decode(bytes: ByteArray): StoredCandidate = ShadowCodec.decodeCandidate(bytes)
-}
-
-internal object ShadowReportCodec : Codec<ShadowReport> {
-    override fun encode(value: ShadowReport): ByteArray = ShadowCodec.encodeReport(value)
-
-    override fun decode(bytes: ByteArray): ShadowReport = ShadowCodec.decodeReport(bytes)
-}
-
-/** The instances that reported on a window, as a sorted JSON array of their ids. */
-internal object ReportersCodec : Codec<Set<String>> {
-    override fun encode(value: Set<String>): ByteArray = CoSecJson.mapper.writeValueAsBytes(value.sorted())
-
-    override fun decode(bytes: ByteArray): Set<String> {
-        val node = CoSecJson.mapper.readTree(bytes)
-        require(
-            node.isArray && node.values().all { it.isString }
-        ) { "The reporters of a window are an array of instance ids" }
-        return node.values().mapTo(LinkedHashSet()) { it.asString() }
-    }
-}
-
-/** One instance's status, in the format of [ShadowCodec.encodeStatuses] with the one instance. */
-internal object InstanceStatusCodec : Codec<InstanceStatus> {
-    override fun encode(value: InstanceStatus): ByteArray = ShadowCodec.encodeStatuses(mapOf(value.instance to value))
-
-    override fun decode(bytes: ByteArray): InstanceStatus {
-        val statuses = ShadowCodec.decodeStatuses(bytes)
-        require(statuses.size == 1) { "A stored status is one instance's, not ${statuses.size}" }
-        return statuses.values.single()
-    }
-}
-
-/** The instances that have a status, as a JSON object of instance id to the time it listed itself. */
-internal object InstanceIndexCodec : Codec<Map<String, Instant>> {
-    override fun encode(value: Map<String, Instant>): ByteArray =
-        CoSecJson.mapper.writeValueAsBytes(value.toSortedMap().mapValues { it.value.toString() })
-
-    override fun decode(bytes: ByteArray): Map<String, Instant> {
-        val node = CoSecJson.mapper.readTree(bytes)
-        require(
-            node.isObject && node.values().all { it.isString }
-        ) { "The instances with a status are an object of instance id to time" }
-        return node.properties().associate { (instance, at) -> instance to Instant.parse(at.asString()) }
-    }
-}
-
-/**
- * The data plane's [CandidateStore] on Redis: reads `<p>:candidate:<docKey>` from Redis, never a local copy
- * (`lookupRemote`, CoCache 8.0.0-rc.1), and throws when Redis fails.
- */
-@InternalCoSecApi
-class CoCacheCandidateStore(private val candidates: Store<SnapshotKey, StoredCandidate>) : CandidateStore {
-    override suspend fun candidate(key: SnapshotKey): StoredCandidate? =
-        when (val read = candidates.suspending().lookupRemote(key)) {
-            is Lookup.Present -> read.value
-            is Lookup.Absent -> null
-        }
-
-    @InternalCoSecApi
-    companion object {
-        fun create(factory: CoCacheFactory, keyPrefix: String = DEFAULT_KEY_PREFIX): CoCacheCandidateStore =
-            CoCacheCandidateStore(factory.createLocked(ShadowCacheSpecs.candidate(keyPrefix)))
-    }
-}
 
 /**
  * Shadow reports and instance statuses on Redis (RFC 0007 §6.4, §6.5). Each instance's report of a window has a key
