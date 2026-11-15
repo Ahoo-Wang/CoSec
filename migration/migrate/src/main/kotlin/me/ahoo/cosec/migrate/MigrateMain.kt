@@ -177,8 +177,9 @@ object MigrateMain {
     private class UsageException(message: String) : IllegalArgumentException(message)
 
     /**
-     * `--name value` pairs and `--flag`s; a repeated or unknown option is a usage error. With [readable], reading an
-     * option outside it is a defect of the command, never a usage error.
+     * `--name value` and `--name=value` pairs and `--flag`s; a repeated or unknown option is a usage error, and so is a
+     * value that starts with `--` (the next option, with its value forgotten): write `--name=--value` for such a value.
+     * With [readable], reading an option outside it is a defect of the command, never a usage error.
      */
     private class Options(
         private val values: Map<String, String>,
@@ -225,16 +226,15 @@ object MigrateMain {
                 val flags = HashSet<String>()
                 var i = 0
                 while (i < args.size) {
-                    val name = args[i].removePrefix("--")
                     require(args[i].startsWith("--")) { "Unexpected argument [${args[i]}]." }
+                    val (name, attached) = args[i].substring(2).split('=', limit = 2).let { it[0] to it.getOrNull(1) }
                     when (name) {
-                        in FLAGS -> require(flags.add(name)) { "--$name is given twice." }
+                        in FLAGS -> require(attached == null && flags.add(name)) { "--$name is repeated or valued." }
                         in VALUED -> {
-                            require(i + 1 < args.size) { "--$name needs a value." }
-                            require(values.put(name, args[i + 1]) == null) { "--$name is given twice." }
-                            i++
+                            val value = attached ?: args.getOrNull(i + 1)?.takeUnless { it.startsWith("--") }?.also { i++ }
+                            require(value != null) { "--$name needs a value (--$name=value, if it starts with --)." }
+                            require(values.put(name, value) == null) { "--$name is given twice." }
                         }
-
                         in REMOVED -> throw IllegalArgumentException(
                             "--$name was removed: cosec-migrate writes no break-glass binding. After the switch, " +
                                 "request break-glass through the control plane, by two people."

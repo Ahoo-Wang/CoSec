@@ -125,7 +125,11 @@ class DocumentSnapshotViews(
             is DocumentState.Present<*> -> state.compiled as CompiledDocument
             DocumentState.Absent -> absent()
             is DocumentState.Failed -> {
-                unresolved += Cause.SourceUnavailable(kind, state.error)
+                unresolved += if (entry.invalid) {
+                    Cause.DocumentInvalid(kind, entry.revision, state.error)
+                } else {
+                    Cause.SourceUnavailable(kind, state.error)
+                }
                 null
             }
         }

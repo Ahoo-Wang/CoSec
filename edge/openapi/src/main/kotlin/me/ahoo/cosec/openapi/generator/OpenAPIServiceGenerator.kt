@@ -18,6 +18,7 @@ package me.ahoo.cosec.openapi.generator
 import io.swagger.v3.oas.models.OpenAPI
 import io.swagger.v3.oas.models.Operation
 import io.swagger.v3.oas.models.PathItem
+import io.swagger.v3.oas.models.servers.Server
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.CatalogGroup
@@ -44,7 +45,8 @@ internal class OpenAPIGenerationException(
  * name `service:verb` actions instead of paths:
  *
  * - `service` is `info.title`, or `info.x-cosec-service`;
- * - each operation is one route: its path is the document's `servers` path followed by the operation's, its `action`
+ * - each operation is one route: its path is the path of its servers followed by the operation's (the operation's own
+ *   `servers`, else its Path Item's, else the document's, as the specification has them override one another), its `action`
  *   is `<service>:<operationId>`, or the operation's `x-cosec-action`; its `resource` is `<service>/{<variable>}/...`,
  *   every path variable in order (`<service>` without one), or `x-cosec-resource`;
  * - the app document (app = service) holds a catalog, one group per tag, whose entries are short-form permissions
@@ -59,7 +61,9 @@ internal class OpenAPIGenerationException(
  * a route map that would not load (two operations one request could match; see [RouteMap]), and on a Path Item `$ref`
  * it cannot resolve: a target that does not exist, a loop, a reference to anything but a path item of this document
  * (a file, a URL, another part of the document), or operations beside the `$ref`, which the specification leaves
- * undefined. A document that dropped or guessed those operations would grant less or more than the API describes.
+ * undefined. A document that dropped or guessed those operations would grant less or more than the API describes. The
+ * same goes for servers: an operation whose servers do not come to one path (different paths, a server variable in the
+ * path, a URL whose path cannot be told) fails generation, naming the operation, and never gets a guessed prefix.
  */
 @InternalCoSecApi
 object OpenAPIServiceGenerator {
@@ -69,6 +73,11 @@ object OpenAPIServiceGenerator {
     const val DEFAULT_GROUP = "default"
     private const val PATH_ITEM_REFERENCE = "#/components/pathItems/"
     private val PATH_ITEM_NAME = Regex("""[A-Za-z0-9._-]+""")
+
+    /** RFC 3986 appendix B: scheme, authority, path, query, fragment. */
+    private val URL_REFERENCE =
+        Regex("""^(?:([^:/?#]+):)?(?://([^/?#]*))?([^?#]*)(?:\?([^#]*))?(?:#(.*))?$""", RegexOption.DOT_MATCHES_ALL)
+    private const val PATH_GROUP = 3
     private val VARIABLE = Regex("""\{([^{}]+)}""")
 
     /** One operation, as generated. */
@@ -87,11 +96,15 @@ object OpenAPIServiceGenerator {
      */
     fun operations(openAPI: OpenAPI, contextPath: String = ""): List<GeneratedOperation> {
         val service = service(openAPI)
-        val prefix = withoutContextPath(serverPath(openAPI), contextPath.trimEnd('/'))
+        val context = contextPath.trimEnd('/')
         val operationIds = HashSet<String>()
         return openAPI.paths.orEmpty().flatMap { (relative, item) ->
-            val path = prefix + relative
-            resolve(openAPI, path, item).readOperationsMap().map { (method, operation) ->
+            val resolved = resolve(openAPI, relative, item)
+            resolved.readOperationsMap().map { (method, operation) ->
+                // The operation's servers override the Path Item's, which override the document's (OpenAPI 3.1 §4.8.10).
+                val servers = operation.servers.orEmpty().ifEmpty { resolved.servers.orEmpty() }
+                    .ifEmpty { openAPI.servers.orEmpty() }
+                val path = withoutContextPath(serverPath(servers, "${method.name} $relative"), context) + relative
                 val where = "${method.name} $path"
                 operation.operationId?.let { id ->
                     if (!operationIds.add(
@@ -172,22 +185,22 @@ object OpenAPIServiceGenerator {
     }
 
     /**
-     * The path of the document's `servers`, which its paths are relative to (round 2 L4): requests arrive at
-     * `/api/v1/orders/1` for a server `/api/v1` and a path `/orders/{id}`, and a map without the prefix matches none of
-     * them. Empty without servers or with a server at the root; servers with different paths, or a path holding a server
-     * variable, refuse generation: which one the host serves cannot be told.
+     * The path of [servers], which an operation's path is relative to (round 2 L4): requests arrive at `/api/v1/orders/1`
+     * for a server `/api/v1` and a path `/orders/{id}`, and a map without the prefix matches none of them. Empty without
+     * servers or with a server at the root. Refused, naming [where]: servers with different paths, a path holding a
+     * server variable, and a URL whose path cannot be told: which one the host serves cannot be said.
      */
-    private fun serverPath(openAPI: OpenAPI): String {
-        val paths = openAPI.servers.orEmpty().map { pathOf(it.url.orEmpty()) }.toSet()
+    private fun serverPath(servers: List<Server>, where: String): String {
+        val paths = servers.map { pathOf(it.url.orEmpty(), where) }.toSet()
         if (paths.size > 1) {
             throw OpenAPIGenerationException(
-                "The servers have different paths ${paths.sorted()}: generate for one of them"
+                "$where: the servers have different paths ${paths.sorted()}: generate for one of them"
             )
         }
         val path = paths.firstOrNull().orEmpty()
         if ('{' in path) {
             throw OpenAPIGenerationException(
-                "The server path [$path] holds a server variable: resolve it before generating"
+                "$where: the server path [$path] holds a server variable: resolve it before generating"
             )
         }
         return path
@@ -199,12 +212,25 @@ object OpenAPIServiceGenerator {
         return if (under) path.substring(context.length) else path
     }
 
-    /** The path of a server [url], absolute (`https://host/api`) or relative (`/api`), without a trailing `/`. */
-    private fun pathOf(url: String): String {
-        val authority = url.indexOf("://")
-        val start = if (authority < 0) 0 else url.indexOf('/', authority + 3)
-        val path = if (start < 0) "" else url.substring(start)
-        return path.substringBefore('?').trimEnd('/')
+    /**
+     * The path of a server [url], by its components as RFC 3986 splits a reference (appendix B): `https://host/api`,
+     * `//host/api` (a network-path reference, which omits the scheme) and `/api` all have the path `/api`. The path has no
+     * trailing `/`, and neither the query nor the fragment. A path that does not start with `/` (`api`, or `host:8080/api`
+     * read as a scheme and a path) is relative to the place the document was fetched from, which is not known: refused,
+     * as is a path with a dot segment.
+     */
+    private fun pathOf(url: String, where: String): String {
+        val path = URL_REFERENCE.matchEntire(url)?.groupValues?.get(PATH_GROUP).orEmpty().trimEnd('/')
+        if (path.isNotEmpty() && !path.startsWith('/')) {
+            throw OpenAPIGenerationException(
+                "$where: the server URL [$url] has the path [$path], which is relative to where the document was " +
+                    "fetched from: write the server's path, starting with /",
+            )
+        }
+        if (path.split('/').any { it == "." || it == ".." }) {
+            throw OpenAPIGenerationException("$where: the server URL [$url] has a dot segment in its path [$path]")
+        }
+        return path
     }
 
     /** The item [path] stands for: [item], or the component its `$ref` names, through further references. */
