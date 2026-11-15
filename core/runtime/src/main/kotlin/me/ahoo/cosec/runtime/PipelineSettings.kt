@@ -18,7 +18,9 @@ package me.ahoo.cosec.runtime
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.TraceLevel
-import kotlin.time.Duration
+import java.time.Duration
+import kotlin.time.toJavaDuration
+import kotlin.time.toKotlinDuration
 
 /**
  * The pipeline's tunables, set in [PipelineBuilder.options] and read once, when the pipeline is built. Each starts at
@@ -28,19 +30,19 @@ import kotlin.time.Duration
 @ExperimentalCoSecApi
 class PipelineSettings internal constructor() {
     /** The whole request, from the facts to the outcome (`cosec.pipeline.timeout`): past it, 503. */
-    var timeout: Duration = DEFAULTS.timeout
+    var timeout: Duration = DEFAULTS.timeout.toJavaDuration()
 
     /** The authenticator's answer (`cosec.pipeline.authentication-timeout`): past it, 503. */
-    var authenticationTimeout: Duration = DEFAULTS.authenticationTimeout
+    var authenticationTimeout: Duration = DEFAULTS.authenticationTimeout.toJavaDuration()
 
     /** The membership provider's answer (`cosec.authorization.membership.timeout`): past it, 503. */
-    var membershipTimeout: Duration = DEFAULTS.membershipTimeout
+    var membershipTimeout: Duration = DEFAULTS.membershipTimeout.toJavaDuration()
 
     /** One attribute provider's answer, unless it sets its own (`cosec.authorization.attributes.timeout`). */
-    var attributeTimeout: Duration = DEFAULTS.attributeTimeout
+    var attributeTimeout: Duration = DEFAULTS.attributeTimeout.toJavaDuration()
 
     /** The rate limiter's answer (`cosec.authorization.rate-limit.timeout`). */
-    var rateLimitTimeout: Duration = DEFAULTS.rateLimitTimeout
+    var rateLimitTimeout: Duration = DEFAULTS.rateLimitTimeout.toJavaDuration()
 
     /** Whether a token is read from the `authorization` query parameter (`cosec.pipeline.allow-query-token`). */
     var allowQueryToken: Boolean = DEFAULTS.allowQueryToken
@@ -55,11 +57,11 @@ class PipelineSettings internal constructor() {
     var traceLevel: TraceLevel = DEFAULTS.traceLevel
 
     internal fun toOptions(): PipelineOptions = PipelineOptions(
-        timeout = timeout,
-        authenticationTimeout = authenticationTimeout,
-        membershipTimeout = membershipTimeout,
-        attributeTimeout = attributeTimeout,
-        rateLimitTimeout = rateLimitTimeout,
+        timeout = timeout.toKotlinDuration(),
+        authenticationTimeout = authenticationTimeout.toKotlinDuration(),
+        membershipTimeout = membershipTimeout.toKotlinDuration(),
+        attributeTimeout = attributeTimeout.toKotlinDuration(),
+        rateLimitTimeout = rateLimitTimeout.toKotlinDuration(),
         allowQueryToken = allowQueryToken,
         allowCookieToken = allowCookieToken,
         apiKeyHeader = apiKeyHeader,

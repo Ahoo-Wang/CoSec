@@ -25,12 +25,12 @@ public final class me/ahoo/cosec/runtime/IdentityForwardingSettings {
 }
 
 public final class me/ahoo/cosec/runtime/ListenerSettings {
-	public final fun getDrainTimeout-UwyO8pc ()J
+	public final fun getDrainTimeout ()Ljava/time/Duration;
 	public final fun getQueueCapacity ()I
-	public final fun getRequiredTimeout-UwyO8pc ()J
-	public final fun setDrainTimeout-LRDsOJo (J)V
+	public final fun getRequiredTimeout ()Ljava/time/Duration;
+	public final fun setDrainTimeout (Ljava/time/Duration;)V
 	public final fun setQueueCapacity (I)V
-	public final fun setRequiredTimeout-LRDsOJo (J)V
+	public final fun setRequiredTimeout (Ljava/time/Duration;)V
 }
 
 public final class me/ahoo/cosec/runtime/Pipeline : java/lang/AutoCloseable, me/ahoo/cosec/runtime/http/RequestGate {
@@ -66,20 +66,20 @@ public final class me/ahoo/cosec/runtime/PipelineSettings {
 	public final fun getAllowCookieToken ()Z
 	public final fun getAllowQueryToken ()Z
 	public final fun getApiKeyHeader ()Ljava/lang/String;
-	public final fun getAttributeTimeout-UwyO8pc ()J
-	public final fun getAuthenticationTimeout-UwyO8pc ()J
-	public final fun getMembershipTimeout-UwyO8pc ()J
-	public final fun getRateLimitTimeout-UwyO8pc ()J
-	public final fun getTimeout-UwyO8pc ()J
+	public final fun getAttributeTimeout ()Ljava/time/Duration;
+	public final fun getAuthenticationTimeout ()Ljava/time/Duration;
+	public final fun getMembershipTimeout ()Ljava/time/Duration;
+	public final fun getRateLimitTimeout ()Ljava/time/Duration;
+	public final fun getTimeout ()Ljava/time/Duration;
 	public final fun getTraceLevel ()Lme/ahoo/cosec/engine/TraceLevel;
 	public final fun setAllowCookieToken (Z)V
 	public final fun setAllowQueryToken (Z)V
 	public final fun setApiKeyHeader (Ljava/lang/String;)V
-	public final fun setAttributeTimeout-LRDsOJo (J)V
-	public final fun setAuthenticationTimeout-LRDsOJo (J)V
-	public final fun setMembershipTimeout-LRDsOJo (J)V
-	public final fun setRateLimitTimeout-LRDsOJo (J)V
-	public final fun setTimeout-LRDsOJo (J)V
+	public final fun setAttributeTimeout (Ljava/time/Duration;)V
+	public final fun setAuthenticationTimeout (Ljava/time/Duration;)V
+	public final fun setMembershipTimeout (Ljava/time/Duration;)V
+	public final fun setRateLimitTimeout (Ljava/time/Duration;)V
+	public final fun setTimeout (Ljava/time/Duration;)V
 	public final fun setTraceLevel (Lme/ahoo/cosec/engine/TraceLevel;)V
 }
 

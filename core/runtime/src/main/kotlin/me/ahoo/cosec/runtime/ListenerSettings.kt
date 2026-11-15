@@ -18,8 +18,8 @@ package me.ahoo.cosec.runtime
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.DecisionListeners
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.seconds
+import java.time.Duration
+import kotlin.time.toJavaDuration
 
 /**
  * How the decision listeners of a pipeline are run (RFC 0006 §9), set in [PipelineBuilder.listeners]. The properties
@@ -28,11 +28,11 @@ import kotlin.time.Duration.Companion.seconds
 @ExperimentalCoSecApi
 class ListenerSettings internal constructor() {
     /** How long one REQUIRED listener may take (`required-timeout`). */
-    var requiredTimeout: Duration = 1.seconds
+    var requiredTimeout: Duration = Duration.ofSeconds(1)
 
     /** The events one BEST_EFFORT listener may have waiting (`queue-capacity`); beyond it, events are dropped. */
     var queueCapacity: Int = DecisionListeners.DEFAULT_QUEUE_CAPACITY
 
     /** How long [Pipeline.close] lets the BEST_EFFORT listeners deliver what is queued (`drain-timeout`). */
-    var drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT
+    var drainTimeout: Duration = DecisionListeners.DEFAULT_DRAIN_TIMEOUT.toJavaDuration()
 }
