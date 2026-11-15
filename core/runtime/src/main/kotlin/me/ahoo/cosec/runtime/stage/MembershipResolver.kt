@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime
+package me.ahoo.cosec.runtime.stage
 
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive

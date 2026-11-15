@@ -31,8 +31,8 @@ class ObligationDispatchTest {
 
     @Test
     fun `obligations are dispatched by an exhaustive when without else`() {
-        val pipeline = main.resolve("me/ahoo/cosec/runtime/Pipeline.kt").readText()
-        val dispatch = Regex("""when \(next\) \{(.*?)\n\s*}""", RegexOption.DOT_MATCHES_ALL).find(pipeline)
+        val dispatcher = main.resolve("me/ahoo/cosec/runtime/stage/RunObligations.kt").readText()
+        val dispatch = Regex("""when \(next\) \{(.*?)\n\s*}""", RegexOption.DOT_MATCHES_ALL).find(dispatcher)
         dispatch.assert().isNotNull()
         dispatch!!.groupValues[1].assert().contains("is Obligation.RateLimit").doesNotContain("else")
     }

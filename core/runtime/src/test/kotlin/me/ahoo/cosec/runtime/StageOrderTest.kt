@@ -1,0 +1,58 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+package me.ahoo.cosec.runtime
+
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
+import java.nio.file.Path
+import kotlin.io.path.readText
+
+/**
+ * RFC 0013 §4.2: the request path is these stages, in this order. Within the deadline, a permit's obligations run
+ * after the engine decided and before the outcome (OBL-1: a denied request never spends a permit). The identity, the
+ * REQUIRED and the BEST_EFFORT listeners come after, on the outcome; their order is held by `IdentityForwardingTest`,
+ * `ListenerIsolationTest` and `BreakGlassAndShadowTest`.
+ */
+class StageOrderTest {
+    /** `Pipeline.runStages` and the classes of the fields it calls, read from the source. */
+    private val source = Path.of("src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt").readText()
+
+    @Test
+    fun `the request path is nine stages, in order`() {
+        val chain = Regex(
+            """private suspend fun runStages\(state: RequestState\): Outcome =(.*?)\n\n""",
+            RegexOption.DOT_MATCHES_ALL
+        )
+            .find(source)
+        chain.assert().isNotNull()
+        val fields = Regex(
+            """private val (\w+) = (\w+)\("""
+        ).findAll(source).associate { it.groupValues[1] to it.groupValues[2] }
+        val receivers = Regex(
+            """(\w+)\.run\(state\)"""
+        ).findAll(chain!!.groupValues[1]).map { it.groupValues[1] }.toList()
+        // A field is a stage's instance; an object is called by its own name.
+        receivers.map { fields[it] ?: it }.assert().containsExactly(
+            "ReadRequest",
+            "Authenticate",
+            "ResolveMembers",
+            "ResolveScope",
+            "LoadView",
+            "FetchAttributes",
+            "Evaluate",
+            "RunObligations",
+            "Respond",
+        )
+    }
+}

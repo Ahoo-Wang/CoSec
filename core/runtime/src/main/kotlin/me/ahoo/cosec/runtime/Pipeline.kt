@@ -15,55 +15,27 @@
 
 package me.ahoo.cosec.runtime
 
-import io.github.oshai.kotlinlogging.KotlinLogging
-import kotlinx.coroutines.CoroutineStart
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.audit.AuditRequest
-import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.document.route.RouteResolution
-import me.ahoo.cosec.engine.flat.AttributePlan
 import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
-import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
-import me.ahoo.cosec.model.Environment
-import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.Subject
-import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.model.condition.HttpNames
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.decision.Obligation
-import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.model.scope.Scope
-import me.ahoo.cosec.model.scope.ScopeResolution
-import me.ahoo.cosec.model.scope.ScopeResolver
-import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
-import me.ahoo.cosec.runtime.attribute.FetchedAttributes
+import me.ahoo.cosec.runtime.call.Answer
 import me.ahoo.cosec.runtime.call.FallbackIds
-import me.ahoo.cosec.runtime.call.Throttle
+import me.ahoo.cosec.runtime.call.callPort
 import me.ahoo.cosec.runtime.call.resumeOffIo
 import me.ahoo.cosec.runtime.call.withLazyTimeoutOrNull
-import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.CookieHeaders
-import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.runtime.http.HttpMethods
 import me.ahoo.cosec.runtime.http.Outcome
-import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
 import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.http.RequestIds
@@ -72,47 +44,43 @@ import me.ahoo.cosec.runtime.http.StatusMapping
 import me.ahoo.cosec.runtime.http.TraceContext
 import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.runtime.identity.IdentityGate
-import me.ahoo.cosec.runtime.identity.IdentityIssuer
-import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
-import me.ahoo.cosec.runtime.shadow.ShadowListener
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
-import me.ahoo.cosec.spi.attribute.AttributeDeclaration
-import me.ahoo.cosec.spi.attribute.AttributeRequest
+import me.ahoo.cosec.runtime.stage.AttributeFetching
+import me.ahoo.cosec.runtime.stage.Authenticate
+import me.ahoo.cosec.runtime.stage.DeliverRequired
+import me.ahoo.cosec.runtime.stage.Evaluate
+import me.ahoo.cosec.runtime.stage.FetchAttributes
+import me.ahoo.cosec.runtime.stage.ForwardIdentity
+import me.ahoo.cosec.runtime.stage.LoadView
+import me.ahoo.cosec.runtime.stage.MembershipResolver
+import me.ahoo.cosec.runtime.stage.PublishBestEffort
+import me.ahoo.cosec.runtime.stage.ReadRequest
+import me.ahoo.cosec.runtime.stage.RequestState
+import me.ahoo.cosec.runtime.stage.ResolveMembers
+import me.ahoo.cosec.runtime.stage.ResolveScope
+import me.ahoo.cosec.runtime.stage.Respond
+import me.ahoo.cosec.runtime.stage.RunObligations
+import me.ahoo.cosec.runtime.stage.requestPathLog
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
-import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.spi.authn.Credentials
-import me.ahoo.cosec.spi.authn.MembershipSource
-import me.ahoo.cosec.spi.identity.Identity
-import me.ahoo.cosec.spi.identity.IdentityOverflowException
-import me.ahoo.cosec.spi.membership.MembershipUnavailableException
-import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import java.util.concurrent.TimeoutException
 import kotlin.coroutines.cancellation.CancellationException
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.nanoseconds
-
-private val log = KotlinLogging.logger {}
 
 /**
  * The request pipeline (RFC 0006 §5.8): one suspend function from [HttpFacts] to [Outcome], which adapters write.
  *
- * Normalize the path and read the `CoSec-*` parameters (400 when ambiguous) → route resolution → [Authenticator] →
- * memberships, together with the stage-A attributes such as the blacklist → scope → snapshot view → attribute plan and
- * the stage-B attributes → engine → rate-limit obligations, after a permit only → [StatusMapping] (§5.4) → REQUIRED
- * decision listeners, then BEST_EFFORT ones (§9).
+ * Within `cosec.pipeline.timeout`, the [stages] in order (RFC 0013 §4.2): read the request (400 when ambiguous) →
+ * [Authenticator] → memberships, together with the stage-A attributes such as the blacklist → scope → snapshot view →
+ * the stage-B attributes → engine → rate-limit obligations, after a permit only → [StatusMapping] (§5.4). Then, on
+ * the outcome: the forwarded identity at a gateway, the REQUIRED decision listeners, the BEST_EFFORT ones (§9).
  *
  * Fail closed, structurally: only a [Decision.Permit] makes an outcome that proceeds. Each SPI call that fails, throws
  * or does not answer in time is a 503; an exception nothing modelled is a 500; and an external cancellation makes no
  * outcome at all (§7.4, `PIP-3`). Every SPI call goes through [resumeOffIo], so a request that never really suspends
  * finishes on its calling thread without a dispatch (§7.2).
  */
-// B1: the request path becomes named stages over one request state
-@Suppress("TooManyFunctions", "LargeClass")
-@OptIn(InternalCoSecApi::class)
 class Pipeline internal constructor(
     components: PipelineComponents,
     /** What [close] closes, in order: what the builder created for this pipeline. */
@@ -120,34 +88,33 @@ class Pipeline internal constructor(
     /** The documents this pipeline loaded at build; null when its snapshot source is its owner's. */
     private val readiness: DocumentReadiness? = null,
 ) : RequestGate, AutoCloseable {
-    private val authenticator = components.authenticator
-    private val snapshots = components.snapshots
+    private val snapshots: SuspendingSnapshotSource = components.snapshots
     private val engine = components.engine
-
-    /** The application's generator, falling back to a random id when it throws (round 2 M6). */
-    private val ids = FallbackIds(components.idGenerator)
-
-    /**
-     * A provider's failures, reported at most once per interval per provider: a failure can repeat on every request (an
-     * address no ip2region database covers, a backend that is down), and each decision already carries its cause.
-     */
-    private val providerFailures = Throttle(PROVIDER_FAILURE_INTERVAL)
-
     private val clock = components.clock
     private val options = components.options
 
-    /** Folded once: no condition reads it ([HttpAttributes], `CND-5`). */
-    private val apiKeyHeader = HttpNames.fold(options.apiKeyHeader)
-    private val attributes = components.attributes
-    private val listeners = components.listeners
-
-    /** The shadow listeners, asked whether they sample a request before its event is made (§9.5.4). */
-    private val shadows: List<ShadowListener> = listeners.bestEffortListeners.filterIsInstance<ShadowListener>()
-    private val rateLimiter = components.rateLimiter
-    private val routes = components.routes
-    private val identity = components.identity
+    /** The application's generator, falling back to a random id when it throws (round 2 M6). */
+    private val ids = FallbackIds(components.idGenerator)
+    private val fetching = AttributeFetching(components.attributes, engine, options.attributeTimeout)
     private val memberships = MembershipResolver(components.membershipProvider, options.membershipTimeout)
-    private val rateLimitFailures = RateLimitFailures()
+
+    // The stages, each typed by its final class so that every call in [runStages] has one receiver type.
+    private val readRequest = ReadRequest(components.routes)
+    private val authenticate = Authenticate(
+        components.authenticator,
+        options.authenticationTimeout,
+        options.apiKeyHeader,
+        options.allowQueryToken,
+        options.allowCookieToken,
+    )
+    private val resolveMembers = ResolveMembers(fetching, memberships)
+    private val loadView = LoadView(snapshots)
+    private val fetchAttributes = FetchAttributes(fetching, clock, options.apiKeyHeader)
+    private val evaluation = Evaluate(engine, options.traceLevel, components.listeners)
+    private val runObligations = RunObligations(components.rateLimiter, options.rateLimitTimeout)
+    private val forwardIdentity = components.identity?.let(::ForwardIdentity)
+    private val deliverRequired = DeliverRequired(components.listeners, ids, options.timeout)
+    private val publishBestEffort = PublishBestEffort(components.listeners, ids)
 
     /**
      * The request headers this pipeline reads a credential from: `Authorization` and the API key header
@@ -157,7 +124,7 @@ class Pipeline internal constructor(
      * replay at the gateway.
      */
     @InternalCoSecApi
-    val credentialHeaders: Set<String> = setOf(AUTHORIZATION, options.apiKeyHeader)
+    val credentialHeaders: Set<String> = setOf(Authenticate.AUTHORIZATION, options.apiKeyHeader)
 
     /**
      * [rawQuery] without its `authorization` parameters, however their names are encoded or cased; null when nothing is
@@ -165,7 +132,7 @@ class Pipeline internal constructor(
      * (`cosec.pipeline.allow-query-token`), a backend might.
      */
     @InternalCoSecApi
-    fun withoutQueryToken(rawQuery: String?): String? = QueryParameters.without(rawQuery, AUTHORIZATION)
+    fun withoutQueryToken(rawQuery: String?): String? = QueryParameters.without(rawQuery, Authenticate.AUTHORIZATION)
 
     /**
      * [cookieHeader], one `Cookie` header value, without its `authorization` cookies, however their names are cased;
@@ -173,14 +140,16 @@ class Pipeline internal constructor(
      * this pipeline reads a token there (`cosec.pipeline.allow-cookie-token`), a backend might.
      */
     @InternalCoSecApi
-    fun withoutCookieToken(cookieHeader: String): String? = CookieHeaders.without(cookieHeader, AUTHORIZATION)
+    fun withoutCookieToken(
+        cookieHeader: String
+    ): String? = CookieHeaders.without(cookieHeader, Authenticate.AUTHORIZATION)
 
     /**
      * Whether [cookieHeader], one `Cookie` header value, has an `authorization` cookie [withoutCookieToken] removes:
      * exactly when it changes [cookieHeader]. Allocates nothing, so a gateway asks it of every header first.
      */
     @InternalCoSecApi
-    fun namesCookieToken(cookieHeader: String): Boolean = CookieHeaders.names(cookieHeader, AUTHORIZATION)
+    fun namesCookieToken(cookieHeader: String): Boolean = CookieHeaders.names(cookieHeader, Authenticate.AUTHORIZATION)
 
     /**
      * The only entry point of the adapters. An external cancellation propagates unchanged and makes no outcome;
@@ -188,116 +157,73 @@ class Pipeline internal constructor(
      */
     @ExperimentalCoSecApi
     override suspend fun evaluate(facts: HttpFacts): Outcome {
-        val requestId = requestId(facts)
         // The trace the bridge captured (§7.5): its id goes into problem bodies and decision events.
         val trace = currentCoroutineContext()[TraceContext]
-        val traceId = trace?.traceId
-        if (listeners.isEmpty) {
-            return evaluate(facts, requestId, traceId, null)
-        }
-        val record = RequestRecord(System.nanoTime(), clock.millis(), trace)
+        val state = RequestState(facts, requestId(facts), trace, System.nanoTime(), clock.millis())
         val outcome = try {
-            evaluate(facts, requestId, traceId, record)
+            decide(state)
         } catch (e: CancellationException) {
             // Only an external cancellation gets here: a CANCELLED event, and still no outcome (§7.4).
-            if (listeners.hasBestEffort) {
-                listeners.publish(record.event(eventId(), requestId, facts, null))
-            }
+            publishBestEffort.run(state, null)
             throw e
         }
-        // REQUIRED listeners had their event in [required]; without a BEST_EFFORT one, nobody would read this one.
-        if (listeners.hasBestEffort) {
-            listeners.publish(record.event(eventId(), requestId, facts, outcome, replay(record)))
-        }
+        publishBestEffort.run(state, outcome)
         return outcome
     }
 
+    /** The stages within the deadline, then the identity and the REQUIRED listeners on their outcome. */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun evaluate(
-        facts: HttpFacts,
-        requestId: String,
-        traceId: String?,
-        record: RequestRecord?,
-    ): Outcome = try {
+    private suspend fun decide(state: RequestState): Outcome = try {
         // A ...OrNull timeout, never withTimeout: its TimeoutCancellationException would look like an external
         // cancellation below and vanish instead of answering 503 (RFC 0006 K13). Lazy: a request that never
         // suspends arms no timer.
-        val decided = withLazyTimeoutOrNull(options.timeout) { decide(facts, requestId, traceId, record) }
-            ?: StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, traceId)
-        val forwarded = identity?.let { forward(it, decided, facts, traceId) } ?: decided
-        if (record == null) forwarded else required(facts, requestId, traceId, forwarded, record)
+        val decided = withLazyTimeoutOrNull(options.timeout) { runStages(state) }
+            ?: StatusMapping.unavailable(state.requestId, Unavailability.DeadlineExceeded, state.traceId)
+        val forwarded = forwardIdentity?.run(state, decided) ?: decided
+        deliverRequired.run(state, forwarded)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
             throw e
         }
         // Nobody cancelled this request: something threw a CancellationException of its own.
-        log.error(e) { "Request [$requestId] failed with a stray cancellation." }
-        StatusMapping.error(requestId, e, traceId)
+        requestPathLog.error(e) { "Request [${state.requestId}] failed with a stray cancellation." }
+        StatusMapping.error(state.requestId, e, state.traceId)
     } catch (e: Exception) {
-        log.error(e) { "Request [$requestId] failed with an unmodelled exception." }
-        StatusMapping.error(requestId, e, traceId)
+        requestPathLog.error(e) { "Request [${state.requestId}] failed with an unmodelled exception." }
+        StatusMapping.error(state.requestId, e, state.traceId)
     }
 
     /**
-     * The REQUIRED listeners (§9.4.2): they see the outcome so far, and a failure turns only a permit into 503; any
-     * other outcome keeps its status, and the failure is logged and counted.
-     *
-     * A permit's delivery shares the pipeline deadline: a store that does not answer in what remains of it is a 503,
-     * never a request held past `cosec.pipeline.timeout`. Any other outcome is not held to it: its status cannot change,
-     * so a slow listener only costs time, bounded by each listener's own timeout (review R2: a slow audit made a 401 a
-     * 503 before).
+     * The request path, in order, written here only (`StageOrderTest` reads it): each stage ends the request with an
+     * outcome or lets the next one run, and [Respond] always answers. A chain over fields of the stages' own types, not
+     * a loop over an array of [Stage]s: the loop's interface calls cost the shortest path (`anonymous`) about 6 % of
+     * its throughput in two JMH runs, and the chain none (#1381).
      */
-    private suspend fun required(
-        facts: HttpFacts,
-        requestId: String,
-        traceId: String?,
-        outcome: Outcome,
-        record: RequestRecord
-    ): Outcome {
-        if (listeners.required.isEmpty()) {
-            return outcome
-        }
-        val event = record.event(eventId(), requestId, facts, outcome)
-        val failed = if (outcome.proceed) {
-            val remaining = options.timeout - (System.nanoTime() - record.startNanos).nanoseconds
-            val delivered = remaining.takeIf { it.isPositive() }?.let { left ->
-                withLazyTimeoutOrNull(left) { listeners.required(event) }
-            }
-            delivered ?: return StatusMapping.unavailable(requestId, Unavailability.DeadlineExceeded, traceId)
-        } else {
-            listeners.required(event)
-        }
-        if (failed.isEmpty()) {
-            return outcome
-        }
-        record.requiredFailures = failed
-        if (!outcome.proceed) {
-            listeners.requiredFailedOnNonPermit(event, failed)
-            return outcome
-        }
-        return unavailable(requestId, traceId, Cause.RequiredListenerFailed(failed))
-    }
+    private suspend fun runStages(state: RequestState): Outcome =
+        readRequest.run(state)
+            ?: authenticate.run(state)
+            ?: resolveMembers.run(state)
+            ?: ResolveScope.run(state)
+            ?: loadView.run(state)
+            ?: fetchAttributes.run(state)
+            ?: evaluation.run(state)
+            ?: runObligations.run(state)
+            ?: Respond.run(state)
 
-    /**
-     * Whether [principal]'s credential would still be accepted as far as its memberships go: false when the membership
-     * provider no longer knows it, or knows it as not active (RFC 0009 §4.2); true for claimed memberships, which only
-     * the token's expiry or revocation ends. Throws [MembershipUnavailableException] when that cannot be established.
-     */
     /** What the membership provider answers for [principal] now, capped as its credential is; null when it does not know it. */
     internal suspend fun currentMemberships(principal: AuthenticatedPrincipal): Memberships? =
         memberships.resolve(principal.tenant, principal.id, principal.membershipSource)
 
     /**
-     * The decision for [action] on [resource] as [security] (RFC 0006 §7.6): the second half of [decide] (snapshot
-     * view, attribute plan, engine) for the principal and scope of a permitted request. A query, not a request: no
-     * obligation runs, no listener hears of it, and nothing fails open: an unreadable view, an error or a permit only
-     * break-glass gives is not a permit.
+     * The decision for [action] on [resource] as [security] (RFC 0006 §7.6): the view, the attributes and the engine of
+     * the request path, for the principal and scope of a permitted request. A query, not a request: no obligation runs,
+     * no listener hears of it, and nothing fails open: an unreadable view, an error or a permit only break-glass gives
+     * is not a permit.
      */
-    @Suppress("TooGenericExceptionCaught")
     internal suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Decision {
-        val view = when (val loaded = call(null) { snapshots.view(security.scope, false) }) {
-            is Fetched.Value -> loaded.value
-            is Fetched.Failed -> return Decision.Indeterminate(
+        val view = when (val loaded = callPort(null) { snapshots.view(security.scope, false) }) {
+            is Answer.Value -> loaded.value
+            is Answer.Failed -> return Decision.Indeterminate(
                 Cause.SourceUnavailable(DocumentKind.PLATFORM, loaded.error)
             )
         }
@@ -305,7 +231,8 @@ class Pipeline internal constructor(
         val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
         // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
         // fetched now, from stage A as from stage B (#1209).
-        val decision = evaluate(request, view, fetchedAttributes(), null, planEveryStage = true)
+        val evaluated = fetching.withPlanned(request, view, fetching.fetched(), everyStage = true)
+        val decision = engine.evaluate(evaluated, view, options.traceLevel).decision
         // A check writes no audit, and every use of break-glass is written to a REQUIRED one (§9.4.3): a check that
         // only break-glass permits is refused (review A1).
         if (decision is Decision.Permit && view.platform.isBreakGlass(decision.by.via)) {
@@ -313,590 +240,6 @@ class Pipeline internal constructor(
         }
         return decision
     }
-
-    /** What a shadow listener needs, only when one samples this request (§9.5.4). */
-    private fun replay(record: RequestRecord): ReplayHandle? {
-        if (shadows.isEmpty()) {
-            return null
-        }
-        val request = record.request ?: return null
-        val view = record.view ?: return null
-        var sampled: MutableSet<String>? = null
-        for (shadow in shadows) {
-            if (shadow.sample()) {
-                (sampled ?: HashSet<String>().also { sampled = it }) += shadow.name
-            }
-        }
-        return sampled?.let { ReplayHandle(request, view, it) }
-    }
-
-    private fun eventId(): String = ids.generate()
-
-    private suspend fun decide(input: HttpFacts, requestId: String, traceId: String?, record: RequestRecord?): Outcome {
-        val facts = routed(input)
-        val path = PathNormalizer.normalize(facts.rawPath)
-            ?: return StatusMapping.invalidRequest(requestId, "path", traceId)
-        val parameters = CoSecParameters.read(facts)
-            ?: return StatusMapping.invalidRequest(requestId, "CoSec-* parameter", traceId)
-        // PIP-18: a method holding a lower-case letter is no method any client sends on purpose, and backends that fold
-        // case (Django, Werkzeug) would serve `delete` as DELETE past a DENY on `http:DELETE`: refused, as an ambiguous
-        // path is. HEAD is GET without the content, and servers run the GET handler for it: decided as GET.
-        if (HttpMethods.hasLowerCase(facts.method)) {
-            return StatusMapping.invalidRequest(requestId, "method", traceId)
-        }
-        val (action, resource) = when (val route = routes.resolve(facts.method, path)) {
-            RouteResolution.Unmapped -> Action(HTTP, HttpMethods.decidedAs(facts.method)) to Resource(HTTP, path, emptyMap())
-            is RouteResolution.Mapped -> route.action to route.resource
-            // A capture that would change the resource id's segments: refused, never read as another resource.
-            is RouteResolution.Invalid -> return StatusMapping.invalidRequest(requestId, "path", traceId)
-        }
-        val authn = authenticate(credentials(facts))
-        return authorize(facts, requestId, traceId, record, path, parameters, action, resource, authn)
-    }
-
-    /**
-     * [facts] with the gateway route's app as the host app (RC1-6), under the app id rule (RC1-15). One that is not a
-     * string, or cannot be an app id, is an operator's mistake no request can be decided under: it throws, so the
-     * request is an unmodelled error (500), logged, never a request without a host app, whose client would then pick
-     * the app and step around the app's DENYs. A number is not read as its text: `cosec-app-id: 0123` would not be the
-     * app `0123`.
-     */
-    private fun routed(facts: HttpFacts): HttpFacts {
-        val app = facts.routeApp ?: return facts
-        if (app !is String || !ScopeResolver.isValidAppId(app)) {
-            invalidRouteApp(facts, app)
-        }
-        return HttpFacts(
-            facts.method,
-            facts.rawPath,
-            facts.rawQuery,
-            facts.headers,
-            facts.cookies,
-            facts.remoteAddress,
-            HostScope(AppId(app)),
-            facts.requestAttributes,
-        )
-    }
-
-    /**
-     * Why [routed] refuses [facts], whose route app is [app]: kept out of it, so the path every request takes stays
-     * small. The value itself is not written: its type, or why the string cannot be an app id, says what to fix.
-     */
-    private fun invalidRouteApp(facts: HttpFacts, app: Any): Nothing {
-        val routeId = printable(facts.requestAttributes[AuditRequest.ROUTE_ID_ATTRIBUTE_KEY])
-        val route = "The cosec-app-id of route [$routeId]"
-        error(
-            if (app is String) {
-                "$route cannot be an app id: blank, *, with ':', a control character or an unpaired surrogate, or " +
-                    "longer than ${ScopeResolver.MAX_APP_ID_LENGTH} characters."
-            } else {
-                "$route is a ${app.javaClass.name}, not a string: an app id is a string. Quote it in the route's " +
-                    "metadata (cosec-app-id: \"<app id>\"), as a single value."
-            }
-        )
-    }
-
-    /** [value] for a log line: control characters and unpaired surrogates escaped, so no configured value can forge one. */
-    private fun printable(value: String?): String = Identifiers.printable(value.orEmpty())
-
-    /**
-     * The rest of [decide], for the request as [authn] authenticated it. A credential whose principal the membership
-     * provider does not know, or knows as not active, is refused here (`IDN-3`): the request is then authorized again
-     * as anonymous, with the credential rejected, as if the authenticator had rejected it (RFC 0006 K2).
-     */
-    // B1: the parameters become the request state
-    @Suppress("LongParameterList")
-    private suspend fun authorize(
-        facts: HttpFacts,
-        requestId: String,
-        traceId: String?,
-        record: RequestRecord?,
-        path: String,
-        parameters: CoSecParameters,
-        action: Action,
-        resource: Resource,
-        authn: AuthnResult,
-    ): Outcome {
-        val fetched = fetchedAttributes()
-        record?.authenticated(path, parameters.deviceId, authn, action, resource, fetched)
-        if (authn is AuthnResult.Unavailable) {
-            return StatusMapping.unavailable(requestId, Unavailability.AuthenticatorUnavailable(authn.cause), traceId)
-        }
-        // A rejected credential is evaluated as anonymous (RFC 0006 K2).
-        val principal = (authn as? AuthnResult.Authenticated)?.principal
-
-        val tenant = principal?.tenant ?: TenantId.DEFAULT
-        val authzSubject = subject(principal)
-
-        val deviceId = parameters.deviceId
-        val stageA = if (fetched == null || attributes.stageA.isEmpty()) {
-            null
-        } else {
-            AttributeRequest(tenant, authzSubject, null, action, resource, facts.remoteAddress, requestId, deviceId)
-        }
-        val membershipsFetched = membershipsWithStageA(principal, stageA, fetched)
-            ?: return authorize(
-                facts, requestId, traceId, record, path, parameters, action, resource, refused(checkNotNull(principal))
-            )
-        val memberships = membershipsFetched.valueOr {
-            return unavailable(requestId, traceId, Cause.MembershipUnavailable(it))
-        }
-
-        val subject = ScopeSubject(tenant, principal != null, memberships, principal?.app?.value)
-        val scope = when (val resolution = ScopeResolver.resolve(subject, parameters.spaceId, facts.host)) {
-            is ScopeResolution.Resolved -> resolution.scope
-            is ScopeResolution.Rejected -> {
-                val denied = Decision.Deny(StatementRef.ScopeRejected(resolution.reason))
-                return StatusMapping.decided(requestId, denied, authn, traceId)
-            }
-        }
-
-        // The tenant is the scope's from here on: ScopeResolver makes it the principal's tenant (the default one when
-        // anonymous), the view loads that tenant's document, and the engine refuses a view of another tenant.
-        val blacklist = blacklist(fetched)
-        val view = view(scope, blacklist).valueOr {
-            return unavailable(requestId, traceId, Cause.SourceUnavailable(DocumentKind.PLATFORM, it))
-        }
-        record?.resolved(scope, view)
-        // RC1-38 (PIP-12): a header a document reads, sent with different values, has no value to decide on. Refused for
-        // every such header, whichever statement reads it, so the answer does not tell a DENY from an ALLOW.
-        if (HttpAttributes.ambiguousHeader(facts.headers, view) != null) {
-            return StatusMapping.invalidRequest(requestId, "header", traceId)
-        }
-
-        val authz = AuthzRequest(
-            subject = authzSubject,
-            action = action,
-            resource = resource,
-            environment = Environment(
-                remoteIp = facts.remoteAddress,
-                requestId = requestId,
-                deviceId = deviceId,
-                blocked = blacklist.blocked,
-            ),
-        )
-        val request = FlatRequest(authz, scope, memberships, clock.millis(), HttpAttributes(facts, apiKeyHeader))
-        val decision = evaluate(request, view, fetched, record)
-        breakGlass(requestId, traceId, decision, view, record)?.let { return it }
-        return decided(requestId, traceId, decision, authn, security(requestId, principal, request, decision))
-    }
-
-    /** The outcome of [decision]: a permit's obligations run first (§8.3). */
-    private suspend fun decided(
-        requestId: String,
-        traceId: String?,
-        decision: Decision,
-        authn: AuthnResult,
-        security: RequestSecurity?,
-    ): Outcome {
-        if (decision is Decision.Permit && decision.obligations.isNotEmpty()) {
-            return obligations(requestId, traceId, decision, authn, security!!)
-        }
-        return StatusMapping.decided(requestId, decision, authn, traceId, security)
-    }
-
-    /**
-     * Runs a permit's obligations in order (RFC 0006 §8.3): the first exhausted rule is a 429 and the later rules
-     * spend nothing, since the request is refused already; earlier rules keep what they spent; the response reports the rule
-     * with the fewest permits left. A rule that cannot be counted (its limiter failed, timed out or is missing, or its
-     * bucket could not be read) refuses the request (503) when it is strict, and is skipped otherwise.
-     */
-    private suspend fun obligations(
-        requestId: String,
-        traceId: String?,
-        permit: Decision.Permit,
-        authn: AuthnResult,
-        security: RequestSecurity,
-    ): Outcome {
-        var tightest: RateLimitResult? = null
-        for (next in permit.obligations) {
-            // Exhaustive, with no else (OBL-3): a new kind of obligation does not compile until it is handled here, and
-            // a newer model beside this pipeline throws NoWhenBranchMatchedException, which `evaluate` answers 500.
-            val obligation = when (next) {
-                is Obligation.RateLimit -> next
-            }
-            val result = acquire(obligation)
-            when {
-                result == null && obligation.strictFailure ->
-                    return unavailable(requestId, traceId, Cause.RateLimiterUnavailable(obligation.ruleId))
-                result == null -> continue
-                !result.allowed -> return StatusMapping.tooManyRequests(
-                    requestId,
-                    permit,
-                    obligation.ruleId,
-                    result,
-                    traceId
-                )
-                tightest == null || result.remaining < tightest.remaining -> tightest = result
-            }
-        }
-        return StatusMapping.decided(requestId, permit, authn, traceId, security, tightest)
-    }
-
-    /** The limiter's answer for [obligation]; null when it cannot be counted, logged at most once per interval. */
-    private suspend fun acquire(obligation: Obligation.RateLimit): RateLimitResult? {
-        val bucket = obligation.bucket
-        val limiter = rateLimiter
-        val failure: Throwable = when {
-            bucket == null -> IllegalStateException("The bucket of rule [${obligation.ruleId}] could not be read.")
-            limiter == null -> IllegalStateException("No rate limiter is configured.")
-            else -> when (
-                val fetched = call(options.rateLimitTimeout) {
-                    limiter.tryAcquire(obligation.ruleId, bucket, obligation.limit)
-                }
-            ) {
-                is Fetched.Value -> return fetched.value
-                is Fetched.Failed -> fetched.error
-            }
-        }
-        rateLimitFailures.report(obligation, failure)
-        return null
-    }
-
-    /** Who may proceed, for a permit only (§7.6). */
-    private fun security(
-        requestId: String,
-        principal: AuthenticatedPrincipal?,
-        request: FlatRequest,
-        decision: Decision,
-    ): RequestSecurity? = if (decision is Decision.Permit) {
-        RequestSecurity(requestId, principal, request.scope, request.memberships, request.request, request.attributes)
-    } else {
-        null
-    }
-
-    /**
-     * At a gateway that forwards the verified identity: what [outcome] tells the service behind, always naming the
-     * header, so whatever the client sent is never forwarded. The identity on a permit with a principal, only to a route
-     * the gateway marks as receiving it ([IdentityIssuer.FORWARD_ATTRIBUTE] `true`, RC1-49); otherwise none, so a
-     * request no gateway route marks forwards nothing. An identity too large to forward fails the request closed (500).
-     */
-    private fun forward(issuer: IdentityIssuer, outcome: Outcome, facts: HttpFacts, traceId: String?): Outcome {
-        val security = outcome.security
-        if (!outcome.proceed || security == null || facts.requestAttributes[IdentityIssuer.FORWARD_ATTRIBUTE] != "true") {
-            return StatusMapping.forwarding(outcome, null)
-        }
-        return try {
-            StatusMapping.forwarding(outcome, issuer.issue(security))
-        } catch (e: IdentityOverflowException) {
-            log.error(e) { "Request [${outcome.requestId}]: the identity cannot be forwarded." }
-            StatusMapping.error(outcome.requestId, e, traceId)
-        }
-    }
-
-    /** Where this request's external attributes go; null without providers. */
-    private fun fetchedAttributes(): FetchedAttributes? = if (attributes.isEmpty) null else FetchedAttributes()
-
-    /**
-     * Every use of break-glass is written to a REQUIRED audit (RFC 0006 §9.4.3, Q20): without a REQUIRED listener, a
-     * break-glass permit is a 503. With one, [required] lets it proceed only when they all succeed. Null otherwise.
-     */
-    private fun breakGlass(
-        requestId: String,
-        traceId: String?,
-        decision: Decision,
-        view: SnapshotView,
-        record: RequestRecord?
-    ): Outcome? {
-        if (decision !is Decision.Permit || !view.platform.isBreakGlass(decision.by.via)) {
-            return null
-        }
-        if (record == null || listeners.required.isEmpty()) {
-            log.error { "Request [$requestId] permitted through break-glass, but no REQUIRED listener is registered." }
-            return unavailable(requestId, traceId, Cause.RequiredListenerFailed(emptyList()))
-        }
-        record.breakGlass = true
-        return null
-    }
-
-    /**
-     * Stage B, when there are providers, then the engine. With [planEveryStage], a check's: the plan is fetched from
-     * every provider, since stage A has fetched nothing for it.
-     */
-    private suspend fun evaluate(
-        request: FlatRequest,
-        view: SnapshotView,
-        fetched: FetchedAttributes?,
-        record: RequestRecord?,
-        planEveryStage: Boolean = false,
-    ): Decision {
-        fetched?.let { fetchPlanned(request, view, it, planEveryStage) }
-        val evaluated = if (fetched == null || fetched.isEmpty) {
-            // Nothing fetched reads as ExternalValues.NONE: every external attribute is missing.
-            request
-        } else {
-            with(
-                request
-            ) { FlatRequest(this.request, scope, memberships, time, attributes, fetched.toExternalValues()) }
-        }
-        val evaluation = engine.evaluate(evaluated, view, options.traceLevel)
-        record?.let {
-            it.request = evaluated
-            it.decision = evaluation.decision
-            it.evaluationTrace = evaluation.trace
-        }
-        return evaluation.decision
-    }
-
-    /**
-     * The request's subject in the engine's request (`AuthzRequest`): the engine takes the tenant from the scope and
-     * reads the subject's id, whether it is authenticated, and whether its principal and break-glass bindings apply.
-     */
-    private fun subject(principal: AuthenticatedPrincipal?): Subject = Subject(
-        id = principal?.id?.value ?: CoSecPrincipal.ANONYMOUS_ID,
-        authenticated = principal != null,
-        attributes = principal?.attributes.orEmpty(),
-        principalBindings = principal?.principalBindings ?: true,
-        breakGlass = principal?.breakGlass ?: true,
-    )
-
-    /**
-     * Stage A, when there is a [request] for it, together with the memberships (K17): neither waits for the other. Null
-     * when the credential is refused ([memberships]).
-     */
-    private suspend fun membershipsWithStageA(
-        principal: AuthenticatedPrincipal?,
-        request: AttributeRequest?,
-        fetched: FetchedAttributes?,
-    ): Fetched<Memberships>? {
-        if (request == null || fetched == null) {
-            return memberships(principal)
-        }
-        if (principal?.membershipSource !is MembershipSource.Provider) {
-            // Claims, or nothing to ask: the memberships never suspend, so there is nothing to overlap stage A with.
-            val memberships = memberships(principal)
-            fetchStageA(request, fetched)
-            return memberships
-        }
-        return coroutineScope {
-            val stageA = async(start = CoroutineStart.UNDISPATCHED) { fetchStageA(request, fetched) }
-            val memberships = memberships(principal)
-            stageA.await()
-            memberships
-        }
-    }
-
-    /**
-     * The snapshot view for [scope]: the platform document only when [blacklist] blocks the request. A blacklist that
-     * could not be read is never "not blocked": the evaluation is then indeterminate unless a DENY matches, as for a
-     * document that could not be read (RFC 0006 §5.4.4).
-     */
-    private suspend fun view(scope: Scope, blacklist: Blacklist): Fetched<SnapshotView> {
-        val loaded = call(null) { snapshots.view(scope, blacklist.blocked) }
-        val unavailable = blacklist.unavailable ?: return loaded
-        return when (loaded) {
-            is Fetched.Value -> Fetched.Value(loaded.value.withUnresolved(unavailable))
-            is Fetched.Failed -> loaded
-        }
-    }
-
-    /** Every stage-A attribute, each provider in parallel. Records failures; never throws. */
-    private suspend fun fetchStageA(request: AttributeRequest, fetched: FetchedAttributes) {
-        val stageA = attributes.stageA
-        if (stageA.size == 1) {
-            fetchFrom(stageA[0], stageA[0].names, request, fetched)
-            return
-        }
-        val answers = coroutineScope {
-            stageA.map { async(start = CoroutineStart.UNDISPATCHED) { provide(it, it.names, request) } }
-                .map { it.await() }
-        }
-        stageA.forEachIndexed { index, registered -> fetched.record(registered, registered.names, answers[index]) }
-    }
-
-    /**
-     * The planned attributes stage A did not fetch, each provider in parallel with its own timeout: a provider that
-     * fails or times out makes only its own attributes unavailable (§5.4.2). A planned attribute no provider declares
-     * stays unavailable. Stage B, or with [everyStage] a check, which asks a stage-A provider as stage A does: without
-     * the scope (#1209).
-     */
-    private suspend fun fetchPlanned(
-        request: FlatRequest,
-        view: SnapshotView,
-        fetched: FetchedAttributes,
-        everyStage: Boolean,
-    ) {
-        if (!everyStage && !attributes.hasStageB) {
-            // Only stage-A providers, the blacklist say, and stage A asked them for everything: no plan to make.
-            return
-        }
-        if (request.request.environment.blocked) {
-            // The blacklist rule decides; nothing else would be read.
-            return
-        }
-        val plan = engine.plan(request, view)
-        if (plan.isEmpty) {
-            return
-        }
-        val asked = unasked(plan, fetched) ?: return
-        val stageB = attributeRequest(request, request.scope)
-        // Only a check gets here with a stage-A provider: a request's stage A asked for all of them already.
-        val stageA = if (everyStage) attributeRequest(request, null) else stageB
-        fun requestOf(registered: AttributeProviders.Registered) =
-            if (registered.stage == AttributeDeclaration.Stage.A) stageA else stageB
-        if (asked.size == 1) {
-            val (registered, names) = asked.entries.first()
-            fetchFrom(registered, names, requestOf(registered), fetched)
-            return
-        }
-        val entries = asked.entries.toList()
-        val answers = coroutineScope {
-            entries.map { (registered, names) ->
-                async(start = CoroutineStart.UNDISPATCHED) { provide(registered, names, requestOf(registered)) }
-            }.map { it.await() }
-        }
-        entries.forEachIndexed { index, (registered, names) -> fetched.record(registered, names, answers[index]) }
-    }
-
-    /** The attributes of [plan] not asked for yet, by the provider that declares them; null when there are none. */
-    private fun unasked(
-        plan: AttributePlan,
-        fetched: FetchedAttributes,
-    ): LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>? {
-        var groups: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>? = null
-        for (attribute in plan.attributes) {
-            val path = attribute.path
-            if (fetched.asked(path)) {
-                continue
-            }
-            val registered = attributes.registered(path) ?: continue
-            val names = (groups ?: LinkedHashMap<AttributeProviders.Registered, MutableSet<String>>().also { groups = it })
-                .getOrPut(registered) { LinkedHashSet() }
-            names += path
-        }
-        return groups
-    }
-
-    private fun attributeRequest(request: FlatRequest, scope: Scope?) = AttributeRequest(
-        request.scope.tenant,
-        request.request.subject,
-        scope,
-        request.request.action,
-        request.request.resource,
-        request.request.environment.remoteIp,
-        request.request.environment.requestId,
-        request.request.environment.deviceId,
-    )
-
-    private suspend fun fetchFrom(
-        registered: AttributeProviders.Registered,
-        names: Set<String>,
-        request: AttributeRequest,
-        fetched: FetchedAttributes,
-    ) {
-        fetched.record(registered, names, provide(registered, names, request))
-    }
-
-    /** What [registered] answered for [names]; null when it failed or did not answer in time. */
-    private suspend fun provide(
-        registered: AttributeProviders.Registered,
-        names: Set<String>,
-        request: AttributeRequest,
-    ): Map<String, Any>? {
-        val timeout = registered.provider.timeout ?: options.attributeTimeout
-        return when (val answer = call(timeout) { registered.provider.fetch(request, names) }) {
-            is Fetched.Value -> answer.value
-            is Fetched.Failed -> {
-                if (providerFailures.allow(registered.provider)) {
-                    log.warn(answer.error) {
-                        "${registered.provider} failed to fetch $names. Reported at most once every " +
-                            "$PROVIDER_FAILURE_INTERVAL per provider; each decision it affects carries the cause " +
-                            "(AttributeUnavailable)."
-                    }
-                }
-                null
-            }
-        }
-    }
-
-    /** Blocked when any blacklist attribute says so; else unavailable when any of them could not be read. */
-    private fun blacklist(fetched: FetchedAttributes?): Blacklist {
-        if (fetched == null) {
-            return Blacklist.NOT_BLOCKED
-        }
-        var unavailable: MutableSet<String>? = null
-        for (path in BlacklistAttributeProvider.ATTRIBUTES) {
-            if (!fetched.asked(path)) {
-                continue
-            }
-            if (!fetched.available(path)) {
-                (unavailable ?: LinkedHashSet<String>().also { unavailable = it }) += path
-            } else if (fetched.value(path) == true) {
-                return Blacklist.BLOCKED
-            }
-        }
-        return unavailable?.let { Blacklist(false, Cause.AttributeUnavailable(it, null)) } ?: Blacklist.NOT_BLOCKED
-    }
-
-    private class Blacklist(val blocked: Boolean, val unavailable: Cause?) {
-        companion object {
-            val BLOCKED = Blacklist(true, null)
-            val NOT_BLOCKED = Blacklist(false, null)
-        }
-    }
-
-    private fun SnapshotView.withUnresolved(cause: Cause): SnapshotView =
-        SnapshotView(platform, app, tenant, unresolved + cause, version)
-
-    /** The authenticator's answer; a failure, a stray cancellation or no answer in time is [AuthnResult.Unavailable]. */
-    private suspend fun authenticate(credentials: Credentials): AuthnResult =
-        when (val fetched = call(options.authenticationTimeout) { authenticator.authenticate(credentials) }) {
-            is Fetched.Value -> fetched.value
-            is Fetched.Failed -> AuthnResult.Unavailable(fetched.error)
-        }
-
-    /**
-     * The memberships of [principal] (RFC 0004 §4.5): none for an anonymous one, else what [memberships] resolves. Its
-     * failure is a failure, never "no memberships": no roles would also mean no `inRole` DENY matches. Null when the
-     * provider does not know the principal or it is not active: its credential is refused.
-     */
-    private suspend fun memberships(principal: AuthenticatedPrincipal?): Fetched<Memberships>? {
-        if (principal == null) {
-            return NO_MEMBERSHIPS
-        }
-        return try {
-            memberships.resolve(principal.tenant, principal.id, principal.membershipSource)?.let { Fetched.Value(it) }
-        } catch (e: MembershipUnavailableException) {
-            Fetched.Failed(e)
-        }
-    }
-
-    /**
-     * [principal]'s credential, refused: an API key as an invalid key, anything else as an invalid token; the event names
-     * whose it was (review L3).
-     */
-    private fun refused(principal: AuthenticatedPrincipal): AuthnResult.Rejected {
-        val reason = if (principal.credential?.method == Identity.Method.API_KEY) {
-            AuthnResult.RejectReason.API_KEY_INVALID
-        } else {
-            AuthnResult.RejectReason.TOKEN_INVALID
-        }
-        return AuthnResult.Rejected(
-            reason,
-            AuthnResult.RefusedCredential(principal.tenant, principal.id, principal.credential?.id),
-        )
-    }
-
-    /**
-     * Calls an SPI through [resumeOffIo], within [timeout] when there is one. An external cancellation propagates;
-     * anything else that goes wrong, a CancellationException the SPI throws while this request is active included, is
-     * [Fetched.Failed] (RFC 0006 §7.4).
-     */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun <T : Any> call(timeout: Duration?, spi: suspend () -> T): Fetched<T> = try {
-        val value = if (timeout == null) resumeOffIo(spi) else withLazyTimeoutOrNull(timeout) { resumeOffIo(spi) }
-        if (value == null) Fetched.Failed(TimeoutException("No answer within $timeout.")) else Fetched.Value(value)
-    } catch (e: CancellationException) {
-        if (!currentCoroutineContext().isActive) {
-            throw e
-        }
-        Fetched.Failed(e)
-    } catch (e: Exception) {
-        Fetched.Failed(e)
-    }
-
-    private fun unavailable(requestId: String, traceId: String?, cause: Cause): Outcome =
-        StatusMapping.unavailable(requestId, Unavailability.Indeterminate(cause), traceId)
 
     /**
      * The client's `CoSec-Request-Id` when it is a plain id ([RequestIds.isAcceptable]), else a new one. The id is
@@ -906,44 +249,6 @@ class Pipeline internal constructor(
     private fun requestId(facts: HttpFacts): String {
         val given = facts.headers.values(CoSecParameters.REQUEST_ID).firstOrNull(RequestIds::isAcceptable)
         return given ?: ids.generate()
-    }
-
-    /**
-     * The token is the first non-blank one of the `Authorization` header, the query parameter when allowed, and the
-     * cookie when allowed: the header is the channel a client sets on purpose, the others are fallbacks for clients that
-     * cannot set it.
-     */
-    private fun credentials(facts: HttpFacts): Credentials {
-        val token = facts.headers.values(AUTHORIZATION).firstOrNull { it.isNotBlank() }
-            ?: queryToken(facts)
-            ?: cookieToken(facts)
-        val apiKey = facts.headers.values(options.apiKeyHeader).firstOrNull { it.isNotBlank() }
-        return if (token == null && apiKey == null) NO_CREDENTIALS else Credentials(token, apiKey)
-    }
-
-    private fun queryToken(facts: HttpFacts): String? {
-        if (!options.allowQueryToken) {
-            return null
-        }
-        return QueryParameters.values(
-            facts.rawQuery,
-            AUTHORIZATION_NAMES
-        )?.get(AUTHORIZATION)?.firstOrNull { it.isNotBlank() }
-    }
-
-    private fun cookieToken(facts: HttpFacts): String? =
-        if (options.allowCookieToken) facts.cookies.values(AUTHORIZATION).firstOrNull { it.isNotBlank() } else null
-
-    private inline fun <T : Any> Fetched<T>.valueOr(failed: (Throwable) -> T): T = when (this) {
-        is Fetched.Value -> value
-        is Fetched.Failed -> failed(error)
-    }
-
-    /** What an SPI call gave: a value, or why not. Internal to the pipeline, so failures stay values (§7.4). */
-    private sealed interface Fetched<out T : Any> {
-        class Value<out T : Any>(val value: T) : Fetched<T>
-
-        class Failed(val error: Throwable) : Fetched<Nothing>
     }
 
     /**
@@ -974,14 +279,6 @@ class Pipeline internal constructor(
     }
 
     companion object {
-        private val PROVIDER_FAILURE_INTERVAL: java.time.Duration = java.time.Duration.ofSeconds(10)
-        private const val HTTP = "http"
-        private const val AUTHORIZATION = "authorization"
-        private val AUTHORIZATION_NAMES = setOf(AUTHORIZATION)
-        private val NO_CREDENTIALS = Credentials(null, null)
-        private val NO_MEMBERSHIPS: Fetched<Memberships> =
-            Fetched.Value(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList()))
-
         /**
          * A pipeline over the documents [documentStore] holds (RFC 0013 §4.3): it compiles and installs them as a Spring
          * host does, and [close] closes them. Load the ones a host needs before it takes traffic with

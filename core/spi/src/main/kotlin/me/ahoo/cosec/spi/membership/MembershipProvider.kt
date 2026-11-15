@@ -23,7 +23,7 @@ import me.ahoo.cosec.model.TenantId
  * that carry [MembershipClaims.PROVIDER], whose memberships change often, must be revoked at once, or do not fit in a
  * token, and every API key (RFC 0009 §4.2), which only narrows what the provider answers.
  *
- * The pipeline calls it through `me.ahoo.cosec.runtime.MembershipResolver` (`cosec-runtime`), which enforces the
+ * The pipeline calls it through `me.ahoo.cosec.runtime.stage.MembershipResolver` (`cosec-runtime`), which enforces the
  * contract: failure means deny. A failed or late answer makes the memberships unavailable, and the request fails closed
  * with 503; it never counts as "no memberships", because no roles also means no `inRole` DENY matches.
  *

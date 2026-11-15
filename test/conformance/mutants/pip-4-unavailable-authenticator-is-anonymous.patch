@@ -2,17 +2,21 @@
 # Mutant: an authenticator that is unavailable is read as an anonymous request
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.Pipeline* :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index bb8918cb..8d71724b 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -277,9 +277,6 @@ class Pipeline(components: PipelineComponents) : RequestGate {
-     ): Outcome {
-         val fetched = fetchedAttributes()
-         record?.authenticated(path, parameters.deviceId, authn, action, resource, fetched)
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Authenticate.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Authenticate.kt
+index f2dafe26..5e8ad8b0 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Authenticate.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/stage/Authenticate.kt
+@@ -50,13 +50,6 @@ internal class Authenticate(
+             is Answer.Failed -> AuthnResult.Unavailable(answer.error)
+         }
+         state.authn = authn
 -        if (authn is AuthnResult.Unavailable) {
--            return StatusMapping.unavailable(requestId, Unavailability.AuthenticatorUnavailable(authn.cause), traceId)
+-            return StatusMapping.unavailable(
+-                state.requestId,
+-                Unavailability.AuthenticatorUnavailable(authn.cause),
+-                state.traceId,
+-            )
 -        }
-         // A rejected credential is evaluated as anonymous (RFC 0006 K2).
-         val principal = (authn as? AuthnResult.Authenticated)?.principal
+         return null
+     }
  

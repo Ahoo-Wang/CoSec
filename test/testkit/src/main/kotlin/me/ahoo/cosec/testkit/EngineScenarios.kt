@@ -46,8 +46,8 @@ import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.runtime.MembershipResolver
 import me.ahoo.cosec.runtime.http.Enforceable
+import me.ahoo.cosec.runtime.stage.MembershipResolver
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipClaims

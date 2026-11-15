@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.HostAttributesPipelineTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-index c78e9cb4..41358f99 100644
+index d9e29b82..ee3b2c7e 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt
-@@ -262,7 +262,7 @@ class Pipeline(components: PipelineComponents) : RequestGate {
+@@ -223,7 +223,7 @@ class Pipeline internal constructor(
              )
          }
          val authz = with(security.request) { AuthzRequest(subject, action, resource, environment) }
@@ -14,4 +14,4 @@ index c78e9cb4..41358f99 100644
 +        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
          // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
          // fetched now, from stage A as from stage B (#1209).
-         val decision = evaluate(request, view, fetchedAttributes(), null, planEveryStage = true)
+         val evaluated = fetching.withPlanned(request, view, fetching.fetched(), everyStage = true)
