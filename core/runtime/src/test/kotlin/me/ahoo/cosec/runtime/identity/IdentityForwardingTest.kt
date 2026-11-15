@@ -26,6 +26,7 @@ import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
@@ -34,6 +35,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Clock
@@ -138,6 +140,97 @@ class IdentityForwardingTest {
         behind.forwardedIdentity!!.gatewayRequestId.assert().isEqualTo(outcome.requestId)
         behind.forwardedIdentity!!.credentialId.assert().isEqualTo("t1")
     }
+
+    /** CoSec's own token's session and issue time travel, and a service behind reads them as the gateway did (IDN-22). */
+    @Test
+    fun `the session and the issue time of CoSec's token reach the service behind`() {
+        val session = TokenSession("s1", now.minusSeconds(7200), 2)
+        val signedIn = AuthnResult.Authenticated(
+            AuthenticatedPrincipal(
+                PipelineFixtures.PRINCIPAL,
+                PipelineFixtures.TENANT,
+                MembershipSource.Claims(PipelineFixtures.claims("" to "clerk")),
+                emptyMap(),
+                credential,
+                breakGlass = true,
+                issuedAt = now.minusSeconds(60),
+                apiKeyCredential = false,
+                app = null,
+                session = session,
+            ),
+            "token",
+        )
+        val header = evaluate(signedIn).forward.getValue(IdentityCodec.HEADER)!!
+        IdentityCodec.decode(header).credential.session.assert().isEqualTo(session)
+        val behind = behind(header)
+        behind.principal!!.session.assert().isEqualTo(session)
+        behind.principal!!.issuedAt.assert().isEqualTo(now.minusSeconds(60))
+        // A credential without them forwards none, and reads as before.
+        val plain = behind(evaluate(alice).forward.getValue(IdentityCodec.HEADER)!!).principal!!
+        plain.session.assert().isNull()
+        plain.issuedAt.assert().isNull()
+    }
+
+    /** The device a client declares, and the request's id, read the same in front of the gateway and behind it. */
+    @Test
+    fun `the device id and the request id are on the context, in front of the gateway and behind it`() {
+        val outcome = runBlocking {
+            PipelineFixtures.pipeline(
+                PipelineFixtures.authenticator(alice),
+                PipelineFixtures.StubEngine(PipelineFixtures.PERMIT)
+            ) {
+                identity(IdentityIssuer(clock = Clock.fixed(now, ZoneOffset.UTC)))
+            }.evaluate(
+                HttpFacts(
+                    method = "GET",
+                    rawPath = "/orders",
+                    rawQuery = null,
+                    headers = Headers.of(mapOf(CoSecParameters.DEVICE_ID to listOf("phone"))),
+                    cookies = Cookies.EMPTY,
+                    remoteAddress = "10.0.0.1",
+                    host = HostScope(null),
+                    requestAttributes = routed,
+                ),
+            )
+        }
+        val atGateway = outcome.security!!.securityContext
+        atGateway.deviceId.assert().isEqualTo("phone")
+        atGateway.requestId.assert().isEqualTo(outcome.requestId).isNotEmpty()
+        val header = outcome.forward.getValue(IdentityCodec.HEADER)!!
+        val behind = behind(header, mapOf(CoSecParameters.DEVICE_ID to listOf("phone"))).securityContext
+        behind.deviceId.assert().isEqualTo("phone")
+        behind.requestId.assert().isNotEmpty()
+    }
+
+    /** SCP-4 behind the gateway too: a device id sent twice with different values cannot be read, and is a 400. */
+    @Test
+    fun `an ambiguous device id is refused behind the gateway`() {
+        val header = evaluate(alice).forward.getValue(IdentityCodec.HEADER)!!
+        val outcome = runBlocking {
+            IdentityGate(clock = Clock.fixed(now, ZoneOffset.UTC)).evaluate(
+                gateFacts(header, mapOf(CoSecParameters.DEVICE_ID to listOf("phone", "tablet"))),
+            )
+        }
+        outcome.status.assert().isEqualTo(400)
+        outcome.proceed.assert().isFalse()
+    }
+
+    private fun gateFacts(header: String, extra: Map<String, List<String>> = emptyMap()) = HttpFacts(
+        "GET",
+        "/orders",
+        null,
+        Headers.of(mapOf(IdentityCodec.HEADER to listOf(header)) + extra),
+        Cookies.EMPTY,
+        "10.0.0.2",
+        HostScope(null),
+    )
+
+    private fun behind(header: String, extra: Map<String, List<String>> = emptyMap()) =
+        runBlocking {
+            IdentityGate(
+                clock = Clock.fixed(now, ZoneOffset.UTC)
+            ).evaluate(gateFacts(header, extra))
+        }.security!!
 
     @Test
     fun `an anonymous permit, a deny and an opted-out route forward none`() {

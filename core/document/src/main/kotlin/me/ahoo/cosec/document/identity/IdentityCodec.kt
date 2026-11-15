@@ -22,6 +22,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.identity.IdentityFormatException.Reason
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
+import me.ahoo.cosec.spi.token.TokenSession
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -38,12 +39,17 @@ import java.util.Base64
  *
  * ```json
  * {"v":1,"tenant":"acme","sub":"alice","scope":{"app":"order","space":""},"roles":["clerk"],
- *  "auth":{"method":"jwt","jti":"0TEC7","exp":1793404800},"iat":1793401200,"rid":"0TEC7Hw00001zR0",
- *  "claims":{"name":"Alice"}}
+ *  "auth":{"method":"jwt","jti":"0TEC7","exp":1793404800,"iat":1793404200,
+ *          "session":{"sid":"0TEC5","auth_time":1793400000,"generation":2}},
+ *  "iat":1793401200,"rid":"0TEC7Hw00001zR0","claims":{"name":"Alice"}}
  * ```
  *
  * `auth.capped` is `true` for a credential with a role cap (an API key with `roles`, RFC 0009 §4.2), and absent
- * otherwise: the service behind then applies no principal binding either.
+ * otherwise: the service behind then applies no principal binding either. `auth.iat` is when the credential was issued,
+ * absent when it does not say, and never after `auth.exp`. `auth.session` is the session of CoSec's own token
+ * (`method` `jwt` only, and only with `auth.iat`): `sid`, `auth_time` (when the user signed in, not after `auth.iat`) and
+ * a positive `generation`, all three required. A service behind the gateway reads the user's login time from it, and a
+ * tenant switch issues from it (`IDN-22`); without it, everything else reads as before.
  *
  * Times are epoch seconds, from 0 to the end of year 9999. `claims` may be absent; `auth.exp` may not: a gateway
  * forwards no identity whose credential never expires, and a service refuses one without it. Decoding is strict: an unknown member, a member of
@@ -69,7 +75,8 @@ object IdentityCodec {
 
     private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "auth", "iat", "rid", "claims")
     private val SCOPE_FIELDS = arrayOf("app", "space")
-    private val AUTH_FIELDS = arrayOf("method", "jti", "exp", "capped")
+    private val AUTH_FIELDS = arrayOf("method", "jti", "exp", "iat", "capped", "session")
+    private val SESSION_FIELDS = arrayOf("sid", "auth_time", "generation")
 
     private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
     private val factory = JsonNodeFactory.instance
@@ -125,29 +132,54 @@ object IdentityCodec {
             )
         }
         val scope = root.need("scope").also { it.only("$.scope", *SCOPE_FIELDS) }
-        val auth = root.need("auth").also { it.only("$.auth", *AUTH_FIELDS) }
-        val method = auth.need("method").text("$.auth.method")
         return Identity(
             tenant = root.need("tenant").id("$.tenant"),
             subject = root.need("sub").id("$.sub"),
             app = scope.need("app").text("$.scope.app"),
             space = scope.need("space").text("$.scope.space"),
             roles = roles(root.need("roles")),
-            credential = Identity.Credential(
-                method = method.takeIf { it.isNotEmpty() }?.let(Identity::Method) ?: throw malformed("$.auth.method is empty"),
-                id = auth.need("jti").id("$.auth.jti"),
-                expiresAt = (
-                    auth.get("exp") ?: throw IdentityFormatException(Reason.UNBOUNDED, "The identity has no auth.exp.")
-                    ).seconds("$.auth.exp"),
-                capped = auth.get("capped")?.let {
-                    if (!it.isBoolean || !it.booleanValue()) throw malformed("$.auth.capped is true when present")
-                    true
-                } ?: false,
-            ),
+            credential = credential(root.need("auth")),
             issuedAt = root.need("iat").seconds("$.iat"),
             requestId = root.need("rid").id("$.rid"),
             claims = root.get("claims")?.let(::claims).orEmpty(),
         )
+    }
+
+    /** `auth`: how the principal authenticated, with the issue time and the session when the credential says. */
+    @Suppress("ThrowsCount")
+    private fun credential(auth: JsonNode): Identity.Credential {
+        auth.only("$.auth", *AUTH_FIELDS)
+        val method = auth.need("method").text("$.auth.method")
+        val expiresAt = (auth.get("exp") ?: throw IdentityFormatException(Reason.UNBOUNDED, "The identity has no auth.exp."))
+            .seconds("$.auth.exp")
+        val issuedAt = auth.get("iat")?.seconds("$.auth.iat")
+        if (issuedAt != null && issuedAt.isAfter(expiresAt)) throw malformed("$.auth.iat is after $.auth.exp")
+        return Identity.Credential(
+            method = method.takeIf { it.isNotEmpty() }?.let(Identity::Method) ?: throw malformed("$.auth.method is empty"),
+            id = auth.need("jti").id("$.auth.jti"),
+            expiresAt = expiresAt,
+            capped = auth.get("capped")?.let {
+                if (!it.isBoolean || !it.booleanValue()) throw malformed("$.auth.capped is true when present")
+                true
+            } ?: false,
+            issuedAt = issuedAt,
+            session = auth.get("session")?.let { session(it, method, issuedAt) },
+        )
+    }
+
+    /** `auth.session`: CoSec's own token's only, all three members, never read as no session when one is wrong. */
+    @Suppress("ThrowsCount")
+    private fun session(node: JsonNode, method: String, issuedAt: Instant?): TokenSession {
+        node.only("$.auth.session", *SESSION_FIELDS)
+        if (method != Identity.Method.JWT.value) throw malformed("$.auth.session is CoSec's own token's only")
+        issuedAt ?: throw malformed("$.auth.session needs $.auth.iat")
+        val authTime = node.need("auth_time").seconds("$.auth.session.auth_time")
+        if (authTime.isAfter(issuedAt)) throw malformed("$.auth.session.auth_time is after $.auth.iat")
+        val generation = node.need("generation")
+        if (!generation.isIntegralNumber || !generation.canConvertToLong() || generation.longValue() < 1) {
+            throw malformed("$.auth.session.generation is not a positive integer")
+        }
+        return TokenSession(node.need("sid").id("$.auth.session.sid"), authTime, generation.longValue())
     }
 
     private fun tree(identity: Identity): ObjectNode {
@@ -162,8 +194,13 @@ object IdentityCodec {
                 "The credential of [${identity.subject}] never expires: a service could not bound the identity."
             )
             put("exp", expiresAt.epochSecond)
+            identity.credential.issuedAt?.let { put("iat", it.epochSecond) }
             if (identity.credential.capped) {
                 put("capped", true)
+            }
+            identity.credential.session?.let { session ->
+                putObject("session").put("sid", session.id).put("auth_time", session.authTime.epochSecond)
+                    .put("generation", session.generation)
             }
         }
         root.put("iat", identity.issuedAt.epochSecond).put("rid", identity.requestId)

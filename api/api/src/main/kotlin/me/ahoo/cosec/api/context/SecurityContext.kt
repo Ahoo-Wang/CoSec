@@ -45,7 +45,7 @@ class ForwardedIdentity(
  * @see CoSecPrincipal
  */
 interface SecurityContext {
-    /** The tenant the request is in, `(0)` for the default one. */
+    /** The tenant the request is in, [DEFAULT_TENANT_ID] for the default one. */
     val tenantId: String
 
     /** The principal making the request. */
@@ -57,8 +57,28 @@ interface SecurityContext {
     /** Null unless this service sits behind a gateway that forwarded the caller's identity. */
     val forwardedIdentity: ForwardedIdentity?
 
+    /**
+     * The id of the request as CoSec used it in its audit records, spans and problem responses: the client's
+     * `CoSec-Request-Id` when it sent an acceptable one, else the one CoSec generated, which no request header holds.
+     * Empty for a context the pipeline did not make.
+     */
+    val requestId: String get() = ""
+
+    /**
+     * The device the client declared in `CoSec-Device-Id`, empty when it declared none. Declared by the client; CoSec
+     * checks its form only, so it is not proof of a device.
+     */
+    val deviceId: String get() = ""
+
     companion object {
         /** The request attribute an adapter stores the context under. */
         const val KEY = "COSEC_SECURITY_CONTEXT"
+
+        /**
+         * The [tenantId] of the default tenant, the one a principal without a tenant is in, and an anonymous caller's.
+         * Spelled like `CoSecPrincipal.ANONYMOUS_ID` and another id; `TenantId.DEFAULT` of `cosec-model` is the same
+         * value as a value class.
+         */
+        const val DEFAULT_TENANT_ID: String = "(0)"
     }
 }

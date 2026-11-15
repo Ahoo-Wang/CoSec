@@ -212,13 +212,15 @@ public final class me/ahoo/cosec/spi/identity/Identity {
 }
 
 public final class me/ahoo/cosec/spi/identity/Identity$Credential {
-	public fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;Z)V
-	public synthetic fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;ZILkotlin/jvm/internal/DefaultConstructorMarker;)V
+	public fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;ZLjava/time/Instant;Lme/ahoo/cosec/spi/token/TokenSession;)V
+	public synthetic fun <init> (Lme/ahoo/cosec/spi/identity/Identity$Method;Ljava/lang/String;Ljava/time/Instant;ZLjava/time/Instant;Lme/ahoo/cosec/spi/token/TokenSession;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getCapped ()Z
 	public final fun getExpiresAt ()Ljava/time/Instant;
 	public final fun getId ()Ljava/lang/String;
+	public final fun getIssuedAt ()Ljava/time/Instant;
 	public final fun getMethod ()Lme/ahoo/cosec/spi/identity/Identity$Method;
+	public final fun getSession ()Lme/ahoo/cosec/spi/token/TokenSession;
 	public fun hashCode ()I
 	public fun toString ()Ljava/lang/String;
 }
