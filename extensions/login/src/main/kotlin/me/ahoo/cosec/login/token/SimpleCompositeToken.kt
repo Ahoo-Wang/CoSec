@@ -10,7 +10,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package me.ahoo.cosec.runtime.token
+package me.ahoo.cosec.login.token
 
 import me.ahoo.cosec.api.token.CompositeToken
 

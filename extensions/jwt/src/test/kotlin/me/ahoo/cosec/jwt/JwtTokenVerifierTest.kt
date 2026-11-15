@@ -19,9 +19,9 @@ import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
+import me.ahoo.cosec.login.token.SimpleCompositeToken
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
-import me.ahoo.cosec.runtime.token.SimpleCompositeToken
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.identity.Identity

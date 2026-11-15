@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime.token
+package me.ahoo.cosec.login.token
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async

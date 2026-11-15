@@ -31,8 +31,6 @@ import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
 import me.ahoo.cosec.login.LoginCredentials
-import me.ahoo.cosec.runtime.token.SimpleCompositeToken
-import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

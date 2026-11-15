@@ -40,6 +40,10 @@ and have to be provisioned again.
   their names. A store of your own changes its imports and can depend on `cosec-spi` alone. `cosec-cocache` no longer
   depends on `cosec-runtime`: an application that compiled against the pipeline through `cosec-cocache` alone adds
   `cosec-runtime`, or the starter, itself. No stored format or Redis key changes.
+- **Issuing tokens is `cosec-login`'s.** `TokenFamilies`, `DefaultTokenRevoker` and `SimpleCompositeToken` move from
+  `me.ahoo.cosec.runtime.token` to `me.ahoo.cosec.login.token`, with their names; `me.ahoo.cosec.runtime.token` keeps
+  what verifying a request's token needs (`TokenRevocation`, `CoSecTokenVerifier`). In an application, change the
+  imports; the starter and `cosec-jwt` bring `cosec-login`, so no dependency changes.
 - **An `http` action no request can have does not compile** (`DOC-8`). A statement or rate limit rule on `http:HEAD`
   (decided as `http:GET` since `PIP-18`) or on a verb with a lower-case letter (`http:get`) matched nothing, so a DENY on
   it denied nothing. Such a document is now refused: a stored one is installed as failed, which fails its requests
@@ -1659,7 +1663,7 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractSwitchTenantAuthentication` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.runtime.token` (`cosec-runtime`) | `SimpleCompositeToken` (`RevocableTokenVerifier` is removed: [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `SimpleCompositeToken` (`RevocableTokenVerifier` is removed: [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.webmvc` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |

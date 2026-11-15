@@ -1,11 +1,11 @@
 # Rule: IDN-16
 # Mutant: the generation just replaced is answered at any time, so a copied pair of it is never caught
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest :conformance:test
+# Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest :conformance:test
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 index a07e8edf..abb680b9 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 @@ -128,7 +128,7 @@ class TokenFamilies @JvmOverloads constructor(
                      }
                      // Another refresh moved the family in between: read it again, the pair is now the one before.

@@ -13,17 +13,16 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.runtime.token
+package me.ahoo.cosec.login.token
 
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.CoSec
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
-import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spi.token.TokenStore
@@ -38,8 +37,9 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * RFC 0004 §4.5.3: revoking every token of a principal, against a real store, judged by [TokenRevocation], which the
- * pipeline, refresh and logout share.
+ * RFC 0004 §4.5.3: what the revoker records when it revokes every token of a principal, against a real store, and that
+ * it judges with [TokenRevocation], which the pipeline, refresh and logout share. The judgement's own cases are
+ * `cosec-runtime`'s `TokenRevocationTest`.
  */
 class SubjectRevocationTest {
     private val now = Instant.parse("2026-10-26T12:00:00Z")
@@ -80,74 +80,6 @@ class SubjectRevocationTest {
 
     private fun assertAccepted(principal: VerifiedToken, judgement: TokenRevocation = revocation) {
         runBlocking { judgement.check(principal) }
-    }
-
-    @Test
-    fun tokensIssuedBeforeAreRevokedAndLaterOnesAccepted() = runTest {
-        assertAccepted(token(now.minusSeconds(60)))
-
-        revoker.revokeSubject(tenant, alice, now)
-
-        assertRevoked(token(now.minusSeconds(60)))
-        assertRevoked(token(now.minusMillis(1)))
-        assertAccepted(token(now))
-        assertAccepted(token(now.plusSeconds(1)))
-    }
-
-    /**
-     * Review A7: a token issued within the skew after the revocation is revoked too. Refresh and the pipeline ask the
-     * same judgement, so a token the pipeline refuses is never renewed.
-     */
-    @Test
-    fun theSkewRevokesTokensIssuedJustAfterTheRevocation() = runTest {
-        val skewed = TokenRevocation(tokenStore, SubjectRevocation.DEFAULT_SKEW)
-        revoker.revokeSubject(tenant, alice, now)
-
-        assertRevoked(token(now.plusSeconds(4)), skewed)
-        assertAccepted(token(now.plus(SubjectRevocation.DEFAULT_SKEW)), skewed)
-        assertThrows<IllegalArgumentException> { TokenRevocation(tokenStore, Duration.ofSeconds(-1)) }
-    }
-
-    @Test
-    fun otherPrincipalsAndTenantsAreUntouched() = runTest {
-        revoker.revokeSubject(tenant, alice, now)
-
-        assertAccepted(token(now.minusSeconds(60), id = "bob"))
-        assertAccepted(token(now.minusSeconds(60), tenantId = "other"))
-    }
-
-    @Test
-    fun aPrincipalWithoutTenantIsInTheDefaultTenant() = runTest {
-        revoker.revokeSubject(TenantId(CoSec.DEFAULT), alice, now)
-
-        assertRevoked(token(now.minusSeconds(60), tenantId = null))
-        assertAccepted(token(now.minusSeconds(60)))
-    }
-
-    @Test
-    fun aTokenThatDoesNotSayWhenItWasIssuedIsRevoked() = runTest {
-        assertAccepted(token(null))
-
-        revoker.revokeSubject(tenant, alice, now)
-
-        assertRevoked(token(null))
-    }
-
-    @Test
-    fun aTokenWithoutIssuedAtIsRevoked() = runTest {
-        val plain = VerifiedToken("plain", alice.value, null, null)
-        assertAccepted(plain)
-
-        revoker.revokeSubject(TenantId.DEFAULT, alice, now)
-
-        assertRevoked(plain)
-    }
-
-    @Test
-    fun aRevokedTokenIdStaysRevoked() = runTest {
-        tokenStore.revoke("jti-$now", refreshValidity)
-
-        assertRevoked(token(now))
     }
 
     @Test

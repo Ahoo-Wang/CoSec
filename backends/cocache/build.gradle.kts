@@ -30,6 +30,8 @@ dependencies {
     // The tests decide requests through the pipeline (MembershipCacheFailureTest), read snapshots through
     // SnapshotSource and verify tokens with TokenRevocation.
     testImplementation(project(":runtime"))
+    // CoCacheTokenFamilyStoreTest rotates refresh token families through login's TokenFamilies.
+    testImplementation(project(":login"))
     testImplementation("me.ahoo.cocache:cocache-test")
     // MembershipCacheFailureTest resolves through the pipeline's MembershipResolver.
     testImplementation("io.lettuce:lettuce-core")

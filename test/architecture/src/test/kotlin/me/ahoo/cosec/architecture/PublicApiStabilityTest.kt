@@ -80,7 +80,7 @@ class PublicApiStabilityTest {
                 "spi.ratelimit.RateLimit" to value,
                 "spi.snapshot.SnapshotKey\$App" to value,
                 "spi.snapshot.SnapshotKey\$Tenant" to value,
-                "runtime.token.SimpleCompositeToken" to "An access token and a refresh token: the pair is the whole of a composite token.",
+                "login.token.SimpleCompositeToken" to "An access token and a refresh token: the pair is the whole of a composite token.",
             ) + listOf(
                 // The control store's records are experimental with the store (R9, D3); these stay stable because a
                 // ChangeEvent carries them.
