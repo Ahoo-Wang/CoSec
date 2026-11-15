@@ -5,6 +5,10 @@
 > 基线：`main` @ `a361084d`（第 1 版写于 `334da022`） · 交付：全部合入 `main`（8.0 线），不发布任何版本 ·
 > 范围：`model/`、`engine/`、`cosec-core`、`cosec-openapi`、`cosec-gateway`、`cosec-webflux`、`cosec-webmvc`、`migrate/`
 >
+> **2026-11-15 修订（#1409，安全修复）**：§7.2 的表原先规定 `"*"`、`all` 一律转成 `"action": "*"`，转换器照做了。7.x 只判定 HTTP 请求，“所有动作”就是“所有 HTTP 请求”；
+> 8.0 里 `*` 还匹配控制面的全部动作（`cosec:*`）与代码里检查用的动作，于是一条转换来的“允许全部”授予了 7.x 根本没有的东西，与 `MIG-1`（转换后的 ALLOW 不得更宽）相矛盾。
+> 现在 ALLOW 转成 `http:*`，DENY 保持 `*` 并记为语义改动 C7；规则 `MIG-2`。这是真实项目演练（路线图 R11）发现的；`MIG-1` 的判定只比较 HTTP 请求，所以没有看到它。
+>
 > **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 B（§8）与 PR-7 取消；PR-8、PR-9 并入 RFC 0008 的切换 PR；`legacy` 节点（§3.7、Q2）不实现，
 > 自定义条件匹配器在转换时被拒绝，迁移到 RFC 0006 的 `AttributeProvider`（RFC 0008 §6 Q4）。§9.3 中对 7.0 的 100 % 吞吐要求（Q12）作为绝对预算保留，
 > 对 `legacy` 语言的相对目标取消。A1–A4 作为规范性质保留。下文保留原样以便追溯。
@@ -314,7 +318,7 @@ class Resource(val type: String, val id: String, val attributes: Map<String, Str
 |---|---|
 | `"action": "/orders/{id}"`（方法不限） | `"action": "http:*"`，`"resource": "http:path:/orders/{id}"` |
 | `{"path": {"pattern": "/orders/**", "method": ["GET", "HEAD"]}}` | `"action": ["http:GET", "http:HEAD"]`，`"resource": "http:path:/orders/**"` |
-| `"*"`、`all` | `"action": "*"`，省略 `resource` |
+| `"*"`、`all` | ALLOW：`"action": "http:*"`；DENY：`"action": "*"`（C7）；省略 `resource`（§7.2，2026-11-15 修订） |
 | 多个模式（数组、`composite`） | `resource` 数组（任一匹配） |
 | `options.caseSensitive: false` | 资源模式上的 `"caseSensitive": false` |
 
@@ -496,7 +500,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | `endsWith`，part 是 `request.origin.host` / `request.referer.host`，值形如 `.example.com`，`ignoreCase: true` | `and(prefix(labels, "com.example"), not(eq(host, "example.com", ignoreCase)))` | `Labels` 按小写构造。区分大小写的写法拒绝，提示加上 `ignoreCase`（主机名本来就不区分大小写）；其余 `endsWith` 拒绝 |
 | `contains` | 拒绝 | |
 | `regular`（总是忽略大小写） | `^字面量$` → `eq(..., ignoreCase)`；`^字面量` 后接 `.*` 或 `.*$` → `prefix(..., ignoreCase)`；`^(a\|b\|c)$`（各分支都是字面量）→ `or(eq...)`（`in` 不支持忽略大小写）；其余拒绝 | 7.x 的 `matches` 是整串匹配，没有 `^`/`$` 的字面量等同于有 |
-| `path: {part, pattern}`，`part` 是 `request.path`，语句动作为 `all` / `*` | 移进语句的 `resource` | 两者是合取，动作为 `all` 时没有别的资源约束，等价 |
+| `path: {part, pattern}`，`part` 是 `request.path`，语句动作为 `all` / `*` | 移进语句的 `resource`；ALLOW 的动作同时成为 `http:*`（§7.2，`MIG-2`） | 两者是合取，动作为 `all` 时没有别的资源约束，等价 |
 | `path`，其余情形 | 拒绝 | |
 | `time` | `time`（同配置） | 时间来源改为 `environment.time`（§2 J5）；回放两边都用事件时间戳 |
 | `spel`、`ognl` | 拒绝 | 报告列出每一处的策略 id、语句、表达式 |
@@ -512,6 +516,7 @@ RFC 0002 的 `Rule`、`Guard`、`RuleGroup`、`RuleVisitor`、`HostFacts`、`Leg
 | 7.x | 翻译 |
 |---|---|
 | `path` 模式在 `HttpPathPattern` 子集内 | §5.2 的表 |
+| 所有动作：模式 `*`、不带方法的 `all`、含 `*` 的 `path` 数组、含其中之一的数组或 composite | **ALLOW**：`"action": "http:*"`；**DENY**：`"action": "*"`，在转换报告里记为 C7；都省略 `resource`（`MIG-2`，2026-11-15）。限流规则保持 `*`：义务只限制，不授予 |
 | `path` 模式含 `{x:regex}` 或自定义 `separator` | 拒绝 |
 | 路径模板 `/users/#{principal.id}/**` | 资源 `http:path:/users/{__t0}/**` + 条件 `eq(resource.var.__t0, {"attr": "subject.id"})`。代入的值只参与相等比较，不改变模式（§2 J9） |
 | 路径模板出现在一段的中间（`/a/x-#{principal.id}`） | 拒绝（段内模板没有对应的捕获语法） |
