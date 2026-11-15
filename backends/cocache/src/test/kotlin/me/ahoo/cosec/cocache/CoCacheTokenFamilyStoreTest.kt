@@ -22,9 +22,9 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.policy.PolicyField
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenSession

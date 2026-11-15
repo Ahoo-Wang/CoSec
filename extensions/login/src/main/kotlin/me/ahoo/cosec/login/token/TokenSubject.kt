@@ -13,7 +13,6 @@
 
 package me.ahoo.cosec.login.token
 
-import me.ahoo.cosec.runtime.token.TokenFamilies
 import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Instant

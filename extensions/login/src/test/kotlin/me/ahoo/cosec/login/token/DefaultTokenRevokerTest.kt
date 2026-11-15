@@ -11,13 +11,14 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime.token
+package me.ahoo.cosec.login.token
 
 import io.mockk.every
 import io.mockk.mockk
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.RevocationUnavailableException

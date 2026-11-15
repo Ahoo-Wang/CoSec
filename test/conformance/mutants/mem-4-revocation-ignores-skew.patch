@@ -1,6 +1,6 @@
 # Rule: MEM-4
 # Mutant: the revocation judgement reads a subject revocation without the skew, so a token issued by a clock running ahead escapes it, in the pipeline and in refresh alike
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.SubjectRevocationTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenRevocationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt
 index 28db031a..3bfb5d5d 100644

@@ -193,8 +193,8 @@
       "level": "pipeline",
       "pending": null,
       "guards": [
-        "runtime:TokenFamiliesTest#only the current generation refreshes",
-        "runtime:TokenFamiliesTest#refreshes of one pair racing move the family once",
+        "login:TokenFamiliesTest#only the current generation refreshes",
+        "login:TokenFamiliesTest#refreshes of one pair racing move the family once",
         "cocache:CoCacheTokenFamilyStoreTest#refreshes of one pair racing on two instances move the family once",
         "jwt:RefreshTokenFamiliesJwtTest#a retried refresh heals, and only the current pair moves the session on"
       ]
@@ -206,9 +206,9 @@
       "level": "pipeline",
       "pending": null,
       "guards": [
-        "runtime:TokenFamiliesTest#reuse revokes the family",
-        "runtime:TokenFamiliesTest#the pair just replaced is answered at the current generation within the leeway",
-        "runtime:TokenFamiliesTest#a copy answered within the leeway is caught at the next refresh"
+        "login:TokenFamiliesTest#reuse revokes the family",
+        "login:TokenFamiliesTest#the pair just replaced is answered at the current generation within the leeway",
+        "login:TokenFamiliesTest#a copy answered within the leeway is caught at the next refresh"
       ]
     },
     {
@@ -218,7 +218,7 @@
       "level": "pipeline",
       "pending": null,
       "guards": [
-        "runtime:TokenFamiliesTest#a family ends at its absolute lifetime",
+        "login:TokenFamiliesTest#a family ends at its absolute lifetime",
         "jwt:RefreshTokenFamiliesJwtTest#a pair never outlives its session",
         "login:AbstractSwitchTenantAuthenticationTest#the new session keeps the login time of the token switched from"
       ]
@@ -230,7 +230,7 @@
       "level": "pipeline",
       "pending": null,
       "guards": [
-        "runtime:TokenFamiliesTest#logout ends every pair of the family",
+        "login:TokenFamiliesTest#logout ends every pair of the family",
         "cocache:CoCacheTokenFamilyStoreTest#logout on one instance ends the family on the other",
         "jwt:RefreshTokenFamiliesJwtTest#logout ends every pair of the session"
       ]
@@ -242,7 +242,7 @@
       "level": "pipeline",
       "pending": null,
       "guards": [
-        "runtime:TokenFamiliesTest#an unreadable family record issues nothing",
+        "login:TokenFamiliesTest#an unreadable family record issues nothing",
         "cocache:CoCacheTokenFamilyStoreTest#an unreadable family record issues nothing",
         "cocache:CoCacheTokenFamilyStoreTest#the family table reads a failure as unknown, and no layer changes that"
       ]

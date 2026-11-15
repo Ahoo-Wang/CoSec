@@ -1,11 +1,11 @@
 # Rule: IDN-17
 # Mutant: a session refreshes past its lifetime as long as its record is there, so a changed role never takes effect
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenFamiliesTest
+# Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 index d38f7bef..b27e4e41 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenFamilies.kt
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 @@ -100,9 +100,6 @@ class TokenFamilies @JvmOverloads constructor(
      suspend fun rotate(token: VerifiedToken): Issue {
          val session = token.session ?: throw TokenVerificationException("The token belongs to no session: sign in again.")
