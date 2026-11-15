@@ -264,6 +264,7 @@ class ApprovalB2Test {
                 issuedAt = issuedAt,
                 apiKeyCredential = false,
                 app = PipelineControlAuthorizer.CONTROL_APP,
+                session = null,
             )
         )
 
@@ -417,6 +418,7 @@ class ApprovalB2Test {
                 issuedAt = null,
                 apiKeyCredential = true,
                 app = PipelineControlAuthorizer.CONTROL_APP,
+                session = null,
             )
         )
         val byName = engine.operator(

@@ -223,10 +223,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check", "refresh", "families",
             "switch",
         )
-        node.get("refresh")?.let {
-            return ScenarioRefresh.refreshed(it, revocations(node.get("revocations")), node.get("families"))
-        }
-        node.get("switch")?.let { return ScenarioSwitch.switched(it) }
+        issuedFromEarlierToken(node)?.let { return it }
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
@@ -564,6 +561,19 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             )
         }
         return InMemoryApiKeyStore(keys).reader
+    }
+
+    /** A scenario of an issue from an earlier token, a refresh or a tenant switch, over its revocations and families. */
+    private fun issuedFromEarlierToken(node: JsonNode): Outcome? {
+        val refresh = node.get("refresh")
+        val switch = node.get("switch") ?: refresh ?: return null
+        val revocations = revocations(node.get("revocations"))
+        val families = node.get("families")
+        return if (refresh != null) {
+            ScenarioRefresh.refreshed(refresh, revocations, families)
+        } else {
+            ScenarioSwitch.switched(switch, revocations, families)
+        }
     }
 
     private fun revocations(node: JsonNode?): RevocationReader {

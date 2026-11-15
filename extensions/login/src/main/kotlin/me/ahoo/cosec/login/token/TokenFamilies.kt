@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.login.token
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.id.IdGenerator
@@ -70,13 +71,21 @@ class TokenFamilies @JvmOverloads constructor(
     /** What a new pair says of its session, and the latest it may be valid until: its family's end. */
     class Issue(val session: TokenSession, val notAfter: Instant)
 
+    /** Starts a family for [principal] in [tenant], signed in now: a login. */
+    suspend fun start(tenant: TenantId, principal: PrincipalId): Issue = create(tenant, principal, null)
+
     /**
-     * Starts a family for [principal] in [tenant], signed in at [authTime]: now (null) for a login, the earlier login's
-     * time for a tenant switch, which does not sign the user in again.
+     * Starts a family for [principal] in [tenant], signed in at [authTime], the earlier login's: a tenant switch, which
+     * does not sign the user in again. CoSec's own: it issues from an earlier session only once that is known to be live
+     * (`IDN-22`), which `cosec-login` checks in one place.
      *
      * @throws TokenExpiredException when [authTime] is more than [lifetime] ago
      */
-    suspend fun start(tenant: TenantId, principal: PrincipalId, authTime: Instant? = null): Issue {
+    @InternalCoSecApi
+    suspend fun startAt(tenant: TenantId, principal: PrincipalId, authTime: Instant): Issue =
+        create(tenant, principal, authTime)
+
+    private suspend fun create(tenant: TenantId, principal: PrincipalId, authTime: Instant?): Issue {
         val loggedIn = (authTime ?: clock.instant()).truncatedToSeconds()
         val expiresAt = loggedIn.plus(lifetime)
         if (!expiresAt.isAfter(clock.instant())) {
@@ -103,6 +112,7 @@ class TokenFamilies @JvmOverloads constructor(
      */
     // Each refusal is a different answer to the client (401 invalid, revoked or expired), so each has its own throw.
     @Suppress("ThrowsCount")
+    @InternalCoSecApi
     suspend fun rotate(token: VerifiedToken): Issue {
         val session = token.session ?: throw TokenVerificationException("The token belongs to no session: sign in again.")
         val now = clock.instant()
@@ -113,7 +123,7 @@ class TokenFamilies @JvmOverloads constructor(
             val read = store.read(session.id)
                 ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
             val family = read.family
-            checkOwner(family, token, session)
+            checkOwner(family, token.tenant?.let(::TenantId) ?: TenantId.DEFAULT, PrincipalId(token.principal), session)
             if (family.revoked) {
                 throw TokenRevokedException("The token's session has been revoked.")
             }
@@ -146,6 +156,33 @@ class TokenFamilies @JvmOverloads constructor(
     }
 
     /**
+     * Returns when [session] of [principal] in [tenant] is live: its family exists, is theirs, and is neither revoked nor
+     * ended. It moves nothing. What a tenant switch issues from (`IDN-22`), checked once in `cosec-login`.
+     *
+     * @throws TokenVerificationException when the family is unknown or another principal's
+     * @throws TokenRevokedException when the family is revoked
+     * @throws TokenExpiredException when the family's lifetime has ended
+     */
+    // Each refusal is a different answer to the client (401 invalid, revoked or expired), so each has its own throw.
+    @Suppress("ThrowsCount")
+    @InternalCoSecApi
+    suspend fun requireLive(session: TokenSession, tenant: TenantId, principal: PrincipalId) {
+        val now = clock.instant()
+        if (!session.authTime.plus(lifetime).isAfter(now)) {
+            throw TokenExpiredException("The session that began at ${session.authTime} has ended: sign in again.")
+        }
+        val family = store.read(session.id)?.family
+            ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
+        checkOwner(family, tenant, principal, session)
+        if (family.revoked) {
+            throw TokenRevokedException("The token's session has been revoked.")
+        }
+        if (!family.expiresAt.isAfter(now)) {
+            throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
+        }
+    }
+
+    /**
      * Ends the session [id] names: no pair of it refreshes any more. A family already ended, or gone, is left alone.
      * The family is marked, not deleted, so it is told apart from one that expired until its end.
      */
@@ -165,9 +202,8 @@ class TokenFamilies @JvmOverloads constructor(
     )
 
     /** A family is its principal's: a token naming another principal's family is refused, and changes nothing. */
-    private fun checkOwner(family: TokenFamily, token: VerifiedToken, session: TokenSession) {
-        val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
-        if (family.principal.value != token.principal || family.tenant != tenant || family.authTime != session.authTime) {
+    private fun checkOwner(family: TokenFamily, tenant: TenantId, principal: PrincipalId, session: TokenSession) {
+        if (family.principal != principal || family.tenant != tenant || family.authTime != session.authTime) {
             throw TokenVerificationException("The token's session is another principal's.")
         }
     }

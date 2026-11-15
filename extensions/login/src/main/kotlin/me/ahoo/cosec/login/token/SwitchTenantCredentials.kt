@@ -29,9 +29,9 @@ interface SwitchTenantCredentials : LoginCredentials {
      */
     val targetAppId: String? get() = null
 
-    /** The context of the permitted request asking to switch: the token the user switches from. */
+    /**
+     * The context of the permitted request asking to switch, as the pipeline made it: its session, which CoSec's token
+     * proved, is what the new token is issued from, with its login time (`IDN-22`).
+     */
     val context: SecurityContext
-
-    /** The access token of that request: the new token keeps its login time (`auth_time`). */
-    val accessToken: String
 }
