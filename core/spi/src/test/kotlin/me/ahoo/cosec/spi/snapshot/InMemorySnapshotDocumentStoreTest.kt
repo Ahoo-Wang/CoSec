@@ -24,14 +24,14 @@ import java.util.concurrent.CopyOnWriteArrayList
  */
 class InMemorySnapshotDocumentStoreTest {
     private val store = InMemorySnapshotDocumentStore()
-    private val key = SnapshotKey.platform()
+    private val key = SnapshotKey.Platform
     private val document = SnapshotDocument(2, 1, Instant.parse("2026-11-01T00:00:00Z"), "{}".toByteArray())
 
     private class Recording : SnapshotChangeListener {
-        val changes = CopyOnWriteArrayList<List<SnapshotKey>>()
+        val changes = CopyOnWriteArrayList<SnapshotKey>()
         var resets = 0
 
-        override fun onChanged(keys: List<SnapshotKey>) {
+        override fun onChanged(keys: Collection<SnapshotKey>) {
             changes += keys
         }
 
@@ -41,7 +41,7 @@ class InMemorySnapshotDocumentStoreTest {
     }
 
     private class Failing : SnapshotChangeListener {
-        override fun onChanged(keys: List<SnapshotKey>) = throw IllegalStateException("subscriber failed")
+        override fun onChanged(keys: Collection<SnapshotKey>) = throw IllegalStateException("subscriber failed")
 
         override fun onReset() = throw IllegalStateException("subscriber failed")
     }
@@ -124,7 +124,7 @@ class InMemorySnapshotDocumentStoreTest {
     @Test
     fun `a virtual machine error is not swallowed`() {
         store.subscribe(object : SnapshotChangeListener {
-            override fun onChanged(keys: List<SnapshotKey>) = throw OutOfMemoryError("test")
+            override fun onChanged(keys: Collection<SnapshotKey>) = throw OutOfMemoryError("test")
 
             override fun onReset() = Unit
         })

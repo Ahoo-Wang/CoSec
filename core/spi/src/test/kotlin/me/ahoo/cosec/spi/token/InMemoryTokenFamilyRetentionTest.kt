@@ -46,6 +46,12 @@ class InMemoryTokenFamilyRetentionTest {
         false,
     )
 
+    /** A family that signed in at the clock's present and lives a day. */
+    private fun signedInNow(id: String): TokenFamily {
+        val at = clock.get()
+        return TokenFamily(id, TenantId("t"), PrincipalId("alice"), at, at.plus(Duration.ofDays(1)), 1, null, false)
+    }
+
     @Test
     fun `expired sessions are released from the single instance store`() = runTest {
         repeat(10_000) { store.create(family("s-$it")).assert().isTrue() }
@@ -53,7 +59,7 @@ class InMemoryTokenFamilyRetentionTest {
         clock.set(start.plus(Duration.ofHours(1)))
 
         repeat(10_000) { store.read("s-$it").assert().isNull() }
-        store.create(family("live", Duration.ofDays(1)).let { TokenFamily(it.id, it.tenant, it.principal, clock.get(), clock.get().plus(Duration.ofDays(1)), 1, null, false) })
+        store.create(signedInNow("live")).assert().isTrue()
         store.read("live").assert().isNotNull()
 
         store.size.assert().isEqualTo(1)
@@ -116,7 +122,16 @@ class InMemoryTokenFamilyRetentionTest {
     fun `a family created again over an ended one lives past the old end`() = runTest {
         store.create(family("f", Duration.ofSeconds(60))).assert().isTrue()
         clock.set(start.plusSeconds(120))
-        val again = TokenFamily("f", TenantId("t"), PrincipalId("alice"), clock.get(), clock.get().plusSeconds(600), 1, null, false)
+        val again = TokenFamily(
+            "f",
+            TenantId("t"),
+            PrincipalId("alice"),
+            clock.get(),
+            clock.get().plusSeconds(600),
+            1,
+            null,
+            false
+        )
         store.create(again).assert().isTrue()
 
         repeat(5) { store.read("another") }
