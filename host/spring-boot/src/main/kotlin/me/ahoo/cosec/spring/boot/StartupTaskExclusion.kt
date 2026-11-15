@@ -16,8 +16,6 @@
 package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import org.springframework.beans.factory.InitializingBean
-import org.springframework.beans.factory.SmartInitializingSingleton
 import org.springframework.boot.LazyInitializationExcludeFilter
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration

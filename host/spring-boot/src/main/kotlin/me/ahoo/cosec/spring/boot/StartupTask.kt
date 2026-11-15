@@ -19,8 +19,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.beans.factory.InitializingBean
 import org.springframework.beans.factory.SmartInitializingSingleton
 import org.springframework.boot.LazyInitializationExcludeFilter
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
 
 /**
  * What the starter runs at startup whether or not anything asks for it (`STA-3`): its checks, and the components that
