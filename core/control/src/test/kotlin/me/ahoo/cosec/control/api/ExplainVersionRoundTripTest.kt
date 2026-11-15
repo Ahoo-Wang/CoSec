@@ -64,6 +64,24 @@ class ExplainVersionRoundTripTest {
         again.get("version").assert().isEqualTo(first)
     }
 
+    /** A request no scope resolves for is answered with the version it was asked at, which may name only the platform. */
+    @Test
+    fun `a version with only a platform member is answered as it came, and accepted as at`() {
+        // team-a is a space bob is no member of: no scope resolves, and the version asked at is the answer.
+        val anonymous = withApp.replace("\"roles\":[\"ops@team-a\"]", "\"roles\":[]")
+        val (status, first) = explain("""{"request":$anonymous,"at":{"platform":1}}""")
+        status.assert().describedAs("$first").isEqualTo(200)
+        val version = first.get("version")
+        version.has("platform").assert().isTrue()
+        version.has("app").assert().isFalse()
+        version.has("tenant").assert().isFalse()
+
+        val (replayed, again) = explain("""{"request":$anonymous,"at":$version}""")
+
+        replayed.assert().describedAs("$again").isEqualTo(200)
+        again.get("version").assert().isEqualTo(version)
+    }
+
     /** Strict input stays strict: `at` takes no `null`, however the output is written. */
     @Test
     fun `at still refuses a null member`() {
