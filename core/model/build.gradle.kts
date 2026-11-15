@@ -18,7 +18,4 @@ dependencies {
     // The stability markers, annotation classes with no code: @InternalCoSecApi must be visible to every consumer, or a
     // marked type would compile without the opt-in that says it is internal.
     api(project(":annotations"))
-    // The contracts an application reads (cosec-api, pure as this module): the default tenant is defined there once,
-    // as the String a SecurityContext hands out, and TenantId.DEFAULT is that value.
-    api(project(":api"))
 }

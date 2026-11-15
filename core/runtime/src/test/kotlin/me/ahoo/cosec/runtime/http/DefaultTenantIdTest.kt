@@ -18,7 +18,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
-/** Drill entry 30: the default tenant is a stored and audited value, `(0)`; the model defines it through the context. */
+/** Drill entry 30: the context's default tenant is a plain `String`, the same value as the model's, and stays `(0)`. */
 class DefaultTenantIdTest {
     @Test
     fun `the default tenant id of the context is the model's`() {
