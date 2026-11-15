@@ -16,16 +16,6 @@ package me.ahoo.cosec.spi.snapshot
 import me.ahoo.cosec.model.CoSecException
 import java.time.Duration
 
-/**
- * A stored snapshot document exists but cannot be decoded. [SnapshotDocumentStore] implementations put it in the cause
- * chain of a failed read so that `SnapshotSource` can tell an unusable document from an unreachable store.
- */
-class SnapshotFormatException(message: String, cause: Throwable? = null) : CoSecException(message, cause)
-
-/** A snapshot document cannot be used; every evaluation that reads it fails closed. [key] names the document. */
-class SnapshotUnavailableException(val key: SnapshotKey, message: String, cause: Throwable? = null) :
-    CoSecException("Snapshot document [$key] is unavailable: $message", cause)
-
 /** The snapshot an evaluation would use is older than the fail-closed bound configured for the request's tenant. */
 class SnapshotStaleException(val tenantId: String, val lag: Duration, val maxLag: Duration) :
     CoSecException("Snapshot lag [$lag] exceeds the fail-closed bound [$maxLag] of tenant [$tenantId].")
