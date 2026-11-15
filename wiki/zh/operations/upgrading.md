@@ -35,6 +35,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
       .build()
   check(pipeline.awaitDocuments().isEmpty()) // 在第一个请求之前
   ```
+- **公共与 SPI 签名中的时长都是 `java.time.Duration`。** `AttributeProvider.timeout` 是 `java.time.Duration?`：自己的提供方原来写 `200.milliseconds` 的地方，改为使用 `java.time.Duration` 的 `override val timeout: Duration? = Duration.ofMillis(200)`。`CoCacheMembershipProvider.DEFAULT_FILL_TIMEOUT`，以及 `KafkaAuditListener` 和 `KafkaChangeListener` 的 `drainTimeout`，同样使用 `java.time.Duration`；原来传入 `kotlin.time.Duration` 的代码用 `toJavaDuration()` 转换。属性、默认值和行为都不变。
 - **任何请求都不可能有的 `http` 动作不能编译**（`DOC-8`）。`http:HEAD`（自 `PIP-18` 起按 `http:GET` 判定）或动词含小写字母（`http:get`）的语句或限流规则不匹配任何请求，这样的 DENY 什么也拒绝不了。现在这样的文档被拒绝：已存储的会被装载为失败，其请求失败即拒绝（`503`），控制面也拒绝会产生这种文档的变更。升级之前，请在控制面列出的文档中查找它们（`"http:HEAD"`，或冒号后含小写字母的 `"http:` 动作），改为 `http:GET` 或大写的方法后重新发布。
 - **`cosec-migrate cocache8` 已删除。** 它把 8.0.0-alpha.2 的数据从 CoCache 6 迁移到 CoCache 8（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）：仍保存这种数据的部署，请在升级之前用 8.0.0-alpha.4 的 `cosec-migrate` 迁移。`<p>:meta:cocache8` 存在时，`publish` 拒绝执行，不写入任何内容：这个标记由一次在删除文档之后中断的升级留下，那些文档在它的导出目录里，不在 Redis 中。请用 8.0.0-alpha.4 的 `cosec-migrate` 完成那次升级（`publish --resume`，`--in` 指向消息给出的导出目录），或者确认标记列出的每份文档都已发布，再删除这个 key。
 - **`cosec-migrate api-keys --app` 可用了**（第 2 轮 M3）。自 #1302 起这一步无法运行：#1302 把 `--app` 加进了代码和本页，却没有加进该命令接受的选项，命令因此把 `--app` 当作它不接受的选项而拒绝。对配置了应用的服务必须接受的 key，请带上 `--app <id>` 重新运行。

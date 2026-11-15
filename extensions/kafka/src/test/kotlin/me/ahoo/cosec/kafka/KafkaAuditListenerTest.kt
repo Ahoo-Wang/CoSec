@@ -85,6 +85,7 @@ import java.util.function.Supplier
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.nanoseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 /** RFC 0006 §9.4.1, §9.5.3: the Kafka audit as a listener; REQUIRED waits for the broker, and its failure is a 503. */
 // The shutdown tests wait for their records to reach the listener without a bound of their own (handOver): this ends one
@@ -295,7 +296,7 @@ class KafkaAuditListenerTest {
             }
         }
         val bound = 300.milliseconds
-        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = bound)
+        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = bound.toJavaDuration())
         // Both records are now the Kafka listener's: one send in progress, one queued behind it.
         handOver(listener, records = 2)
         started.await()
@@ -324,7 +325,7 @@ class KafkaAuditListenerTest {
             }
         }
         val bound = 300.milliseconds
-        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = bound)
+        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = bound.toJavaDuration())
         handOver(listener)
         // The send is made and never answered: the bound is all that ends the wait below.
         sent.await()
@@ -344,7 +345,7 @@ class KafkaAuditListenerTest {
         val kafka = mockk<KafkaOperations<String, String>> {
             every { send(any<String>(), any<String>(), any<String>()) } returns answer
         }
-        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = 5.seconds)
+        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = 5.seconds.toJavaDuration())
         handOver(listener)
         CompletableFuture.delayedExecutor(100, TimeUnit.MILLISECONDS).execute {
             answer.completeExceptionally(IllegalStateException("broker down"))
@@ -363,7 +364,7 @@ class KafkaAuditListenerTest {
         val kafka = mockk<KafkaOperations<String, String>> {
             every { send(any<String>(), any<String>(), any<String>()) } returns CompletableFuture()
         }
-        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = 5.seconds)
+        val listener = KafkaAuditListener(kafka, "audit", drainTimeout = 5.seconds.toJavaDuration())
         handOver(listener)
 
         val startedAt = System.nanoTime()

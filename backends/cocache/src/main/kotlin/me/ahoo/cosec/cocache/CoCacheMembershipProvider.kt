@@ -30,8 +30,8 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.membership.MembershipUnavailableException
-import kotlin.time.Duration
-import kotlin.time.Duration.Companion.milliseconds
+import java.time.Duration
+import kotlin.time.toKotlinDuration
 
 /**
  * Where the application's memberships come from: CoSec does not say where they are stored (RFC 0006 §5.5.2).
@@ -76,7 +76,9 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
     private val loader: MembershipLoader,
 ) : MembershipProvider {
     init {
-        require(fillTimeout.isPositive()) { "The fill timeout must be positive, not $fillTimeout." }
+        require(
+            !fillTimeout.isNegative && !fillTimeout.isZero
+        ) { "The fill timeout must be positive, not $fillTimeout." }
     }
 
     // Whatever the cache wraps the fill's failure in, an unknown principal is found by its sentinel; anything else rethrows.
@@ -101,7 +103,7 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
 
     /** What [loader] answers within [fillTimeout]; an unknown principal fails the fill, so it is not cached as missing. */
     private suspend fun load(tenant: TenantId, principal: PrincipalId): Memberships {
-        val answer = withTimeoutOrNull(fillTimeout) { loader.load(tenant, principal) }
+        val answer = withTimeoutOrNull(fillTimeout.toKotlinDuration()) { loader.load(tenant, principal) }
             ?: throw MembershipUnavailableException(
                 "The membership loader did not answer within $fillTimeout for principal [${principal.value}]."
             )
@@ -134,6 +136,6 @@ class CoCacheMembershipProvider @InternalCoSecApi constructor(
 
     companion object {
         /** The default of `cosec.authorization.membership.timeout`, which a request waits at most. */
-        val DEFAULT_FILL_TIMEOUT: Duration = 500.milliseconds
+        val DEFAULT_FILL_TIMEOUT: Duration = Duration.ofMillis(500)
     }
 }

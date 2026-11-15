@@ -55,7 +55,7 @@ class BoundaryAttributesPipelineTest {
         val calls = AtomicInteger()
 
         override val attributes = listOf(AttributeDeclaration(IN_FENCE, AttributeType.BOOL))
-        override val timeout = 50.milliseconds
+        override val timeout: java.time.Duration = java.time.Duration.ofMillis(50)
 
         override suspend fun fetch(request: AttributeRequest, names: Set<String>): Map<String, Any> {
             calls.incrementAndGet()

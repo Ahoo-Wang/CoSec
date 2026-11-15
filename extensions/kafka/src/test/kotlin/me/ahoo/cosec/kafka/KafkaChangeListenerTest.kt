@@ -44,6 +44,7 @@ import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.toJavaDuration
 
 /** RFC 0007 §10.5: change events on Kafka, keyed by document; a REQUIRED one stops a step Kafka cannot record. */
 class KafkaChangeListenerTest {
@@ -111,7 +112,8 @@ class KafkaChangeListenerTest {
         val kafka = mockk<KafkaOperations<String, String>> {
             every { send(any<String>(), any<String>(), any<String>()) } returns answer
         }
-        val listener = KafkaChangeListener(kafka, delivery = Delivery.BEST_EFFORT, drainTimeout = 5.seconds)
+        val listener =
+            KafkaChangeListener(kafka, delivery = Delivery.BEST_EFFORT, drainTimeout = 5.seconds.toJavaDuration())
         val publishing = Thread { runBlocking { listener.onChange(event) } }.apply { start() }
         Thread {
             Thread.sleep(200)
@@ -130,7 +132,7 @@ class KafkaChangeListenerTest {
         val kafka = mockk<KafkaOperations<String, String>> {
             every { send(any<String>(), any<String>(), any<String>()) } returns CompletableFuture()
         }
-        val listener = KafkaChangeListener(kafka, drainTimeout = 100.milliseconds)
+        val listener = KafkaChangeListener(kafka, drainTimeout = 100.milliseconds.toJavaDuration())
         Thread { runBlocking { runCatching { listener.onChange(event) } } }.apply {
             isDaemon = true
             start()
