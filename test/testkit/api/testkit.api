@@ -51,6 +51,12 @@ public final class me/ahoo/cosec/testkit/EngineOutcome$RequestPart : java/lang/E
 	public static fun values ()[Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
 }
 
+public final class me/ahoo/cosec/testkit/PermittedRequest {
+	public static final field INSTANCE Lme/ahoo/cosec/testkit/PermittedRequest;
+	public final fun withToken (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public static synthetic fun withToken$default (Lme/ahoo/cosec/testkit/PermittedRequest;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;ILjava/lang/Object;)Lme/ahoo/cosec/api/context/SecurityContext;
+}
+
 public final class me/ahoo/cosec/testkit/PipelineFixture : java/lang/AutoCloseable {
 	public static final field Companion Lme/ahoo/cosec/testkit/PipelineFixture$Companion;
 	public fun close ()V

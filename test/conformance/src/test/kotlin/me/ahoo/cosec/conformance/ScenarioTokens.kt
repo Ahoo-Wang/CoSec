@@ -159,7 +159,7 @@ internal object ScenarioRefresh {
      * `"families"`: the records there are, `[{ "id", "tenant", "principal", "authTime", "generation", "rotatedAt",
      * "revoked", "expiresAt" }]` (`expiresAt` defaults to `authTime` plus the lifetime), or `{ "unavailable": "message" }`.
      */
-    private fun familyStore(node: JsonNode?): TokenFamilyStore {
+    fun familyStore(node: JsonNode?): TokenFamilyStore {
         node?.get("unavailable")?.let { message ->
             return object : TokenFamilyStore {
                 override suspend fun create(family: TokenFamily): Boolean = throw IllegalStateException(message.text())
@@ -193,8 +193,8 @@ internal object ScenarioRefresh {
 
     private fun refused(type: String) = Outcome.Answered(401, false, type)
 
-    private val LIFETIME: Duration = Duration.ofDays(30)
-    private val LEEWAY: Duration = Duration.ofSeconds(5)
+    val LIFETIME: Duration = Duration.ofDays(30)
+    val LEEWAY: Duration = Duration.ofSeconds(5)
 
     /** Logout records the access token's id too; the scenarios read revocations from `"revocations"`, not from it. */
     private val NO_TOKEN_STORE = object : TokenStore {

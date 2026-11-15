@@ -1,0 +1,16 @@
+# Rule: IDN-22
+# Mutant: the live-session check reads no family, so a tenant switch issues from a session a logout or a replayed pair revoked, or that has ended (a refresh still meets the family when it rotates)
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest :jwt:test --tests me.ahoo.cosec.jwt.SwitchFromReplayedPairTest :conformance:test
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+index 68c99d14..761ba4c9 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+@@ -61,7 +61,6 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
+         session: TokenSession,
+     ): Live {
+         revocation.check(tokenId, tenant, principal, issuedAt)
+-        families.requireLive(session, tenant, principal)
+         return Live(principal, session)
+     }
+ 

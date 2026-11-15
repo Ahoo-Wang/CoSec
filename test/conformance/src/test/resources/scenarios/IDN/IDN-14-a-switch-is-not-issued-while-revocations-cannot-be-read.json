@@ -1,0 +1,43 @@
+{
+  "rules": [
+    "IDN-14"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The revocation store cannot be read: the request path lets alice's token through (PIP-7), and her switch to globex, which issues a token, is refused with 503.",
+  "switch": {
+    "access": {
+      "jti": "a1",
+      "sub": "alice",
+      "tenantId": "acme",
+      "iat": 1793404800,
+      "claims": {
+        "sid": "f1",
+        "auth_time": 1793404800,
+        "cosec.generation": 1
+      }
+    },
+    "targetTenantId": "globex",
+    "answer": {
+      "roles": [
+        "clerk"
+      ]
+    }
+  },
+  "revocations": {
+    "unavailable": "Redis is down"
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 1
+    }
+  ],
+  "expect": {
+    "status": 503,
+    "type": "unavailable"
+  }
+}

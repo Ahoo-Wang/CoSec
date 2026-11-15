@@ -63,6 +63,7 @@ class IdentityForwardingTest {
             issuedAt = null,
             apiKeyCredential = false,
             app = null,
+            session = null,
         ),
         "token",
     )
@@ -209,6 +210,7 @@ class IdentityForwardingTest {
                 issuedAt = null,
                 apiKeyCredential = false,
                 app = null,
+                session = null,
             ),
             "custom",
         )
@@ -238,6 +240,7 @@ class IdentityForwardingTest {
                 issuedAt = null,
                 apiKeyCredential = false,
                 app = null,
+                session = null,
             ),
             "apikey",
         )

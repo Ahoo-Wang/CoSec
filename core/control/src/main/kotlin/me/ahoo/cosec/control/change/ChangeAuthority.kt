@@ -633,6 +633,7 @@ class ChangeAuthority(
             apiKeyCredential = false,
             // An approval is recorded only for a credential of the control plane's app: `decideAs` decides in that app.
             app = null,
+            session = null,
         )
         val approver = Operator(approval.approver, memberships, approval.attributes)
         val permitted = TenantIsolation.allows(approver, change.key) &&
