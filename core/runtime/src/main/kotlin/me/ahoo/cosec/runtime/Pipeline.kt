@@ -61,7 +61,6 @@ import me.ahoo.cosec.runtime.stage.ResolveMembers
 import me.ahoo.cosec.runtime.stage.ResolveScope
 import me.ahoo.cosec.runtime.stage.Respond
 import me.ahoo.cosec.runtime.stage.RunObligations
-import me.ahoo.cosec.runtime.stage.Stage
 import me.ahoo.cosec.runtime.stage.requestPathLog
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
@@ -99,24 +98,20 @@ class Pipeline internal constructor(
     private val fetching = AttributeFetching(components.attributes, engine, options.attributeTimeout)
     private val memberships = MembershipResolver(components.membershipProvider, options.membershipTimeout)
 
-    /** The request path, in order (`StageOrderTest`): each stage ends the request or lets the next one run. */
-    internal val stages: Array<Stage> = arrayOf(
-        ReadRequest(components.routes),
-        Authenticate(
-            components.authenticator,
-            options.authenticationTimeout,
-            options.apiKeyHeader,
-            options.allowQueryToken,
-            options.allowCookieToken,
-        ),
-        ResolveMembers(fetching, memberships),
-        ResolveScope,
-        LoadView(snapshots),
-        FetchAttributes(fetching, clock, options.apiKeyHeader),
-        Evaluate(engine, options.traceLevel, components.listeners),
-        RunObligations(components.rateLimiter, options.rateLimitTimeout),
-        Respond,
+    // The stages, each typed by its final class so that every call in [runStages] has one receiver type.
+    private val readRequest = ReadRequest(components.routes)
+    private val authenticate = Authenticate(
+        components.authenticator,
+        options.authenticationTimeout,
+        options.apiKeyHeader,
+        options.allowQueryToken,
+        options.allowCookieToken,
     )
+    private val resolveMembers = ResolveMembers(fetching, memberships)
+    private val loadView = LoadView(snapshots)
+    private val fetchAttributes = FetchAttributes(fetching, clock, options.apiKeyHeader)
+    private val evaluation = Evaluate(engine, options.traceLevel, components.listeners)
+    private val runObligations = RunObligations(components.rateLimiter, options.rateLimitTimeout)
     private val forwardIdentity = components.identity?.let(::ForwardIdentity)
     private val deliverRequired = DeliverRequired(components.listeners, ids, options.timeout)
     private val publishBestEffort = PublishBestEffort(components.listeners, ids)
@@ -198,12 +193,20 @@ class Pipeline internal constructor(
         StatusMapping.error(state.requestId, e, state.traceId)
     }
 
-    private suspend fun runStages(state: RequestState): Outcome {
-        for (stage in stages) {
-            stage.run(state)?.let { return it }
-        }
-        error("Respond always answers.")
-    }
+    /**
+     * The request path, in order, written here only (`StageOrderTest` reads it): each stage ends the request with an
+     * outcome or lets the next one run, and [Respond] always answers.
+     */
+    private suspend fun runStages(state: RequestState): Outcome =
+        readRequest.run(state)
+            ?: authenticate.run(state)
+            ?: resolveMembers.run(state)
+            ?: ResolveScope.run(state)
+            ?: loadView.run(state)
+            ?: fetchAttributes.run(state)
+            ?: evaluation.run(state)
+            ?: runObligations.run(state)
+            ?: Respond.run(state)
 
     /** What the membership provider answers for [principal] now, capped as its credential is; null when it does not know it. */
     internal suspend fun currentMemberships(principal: AuthenticatedPrincipal): Memberships? =

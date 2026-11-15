@@ -11,13 +11,12 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class)
-
 package me.ahoo.cosec.runtime
 
-import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.nio.file.Path
+import kotlin.io.path.readText
 
 /**
  * RFC 0013 §4.2: the request path is these stages, in this order. Within the deadline, a permit's obligations run
@@ -26,9 +25,25 @@ import org.junit.jupiter.api.Test
  * `ListenerIsolationTest` and `BreakGlassAndShadowTest`.
  */
 class StageOrderTest {
+    /** `Pipeline.runStages` and the classes of the fields it calls, read from the source. */
+    private val source = Path.of("src/main/kotlin/me/ahoo/cosec/runtime/Pipeline.kt").readText()
+
     @Test
     fun `the request path is nine stages, in order`() {
-        PipelineFixtures.pipeline().stages.map { it.javaClass.simpleName }.assert().containsExactly(
+        val chain = Regex(
+            """private suspend fun runStages\(state: RequestState\): Outcome =(.*?)\n\n""",
+            RegexOption.DOT_MATCHES_ALL
+        )
+            .find(source)
+        chain.assert().isNotNull()
+        val fields = Regex(
+            """private val (\w+) = (\w+)\("""
+        ).findAll(source).associate { it.groupValues[1] to it.groupValues[2] }
+        val receivers = Regex(
+            """(\w+)\.run\(state\)"""
+        ).findAll(chain!!.groupValues[1]).map { it.groupValues[1] }.toList()
+        // A field is a stage's instance; an object is called by its own name.
+        receivers.map { fields[it] ?: it }.assert().containsExactly(
             "ReadRequest",
             "Authenticate",
             "ResolveMembers",
