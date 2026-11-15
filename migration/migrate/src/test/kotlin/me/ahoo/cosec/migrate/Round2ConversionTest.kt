@@ -221,6 +221,7 @@ class Round2ConversionTest {
         val translator = StatementTranslator(
             MatcherTranslator { kind, location, message -> rejections += Rejection(kind, location, message) },
             conditions,
+            SemanticScan {},
         ) { kind, location, message -> rejections += Rejection(kind, location, message) }
         val none = MatcherTranslator.Action(emptyList(), emptyList())
         translator.assembled("s", false, none, emptyList(), Translated.Always, "p").assert()

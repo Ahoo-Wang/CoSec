@@ -60,6 +60,22 @@ internal class SemanticScan(private val record: (SemanticChange) -> Unit) {
         }
     }
 
+    /**
+     * A DENY of every 7.x action: it stays every action (`*`, `MIG-2`), so it now also refuses the requests it matches
+     * the actions of checks in code and of the control plane (`cosec:*`), which 7.x did not have. Recorded at its action,
+     * by [StatementTranslator], which knows what the action translated to.
+     */
+    fun everyActionDenied(location: String) {
+        record(
+            SemanticChange(
+                "C7",
+                location,
+                "DENY of every action: it now also refuses checks in code and the control plane (cosec:*) for the " +
+                    "requests it matches; 7.x had only HTTP requests",
+            ),
+        )
+    }
+
     /** A policy or app condition other than `all`: evaluated only when one of its statements is a candidate. */
     fun policyCondition(condition: JsonNode?, location: String) {
         if (condition == null || condition.isNull || isAll(condition)) {
