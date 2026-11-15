@@ -104,7 +104,6 @@ class PipelineFixture private constructor(
      * A request as an adapter would hand it to the pipeline. With a [principal] it carries a credential for it, without
      * one it is anonymous; [hostApp] is the app of the host (`cosec.authorization.scope.app-id`), none by default.
      */
-    @Suppress("LongParameterList")
     fun request(
         method: String,
         path: String,

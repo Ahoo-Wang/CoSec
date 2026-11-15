@@ -187,6 +187,8 @@ private class SeenIds(
     }
 }
 
+// stays: migrate's one-off conversion, run once per deployment
+@Suppress("TooManyFunctions")
 private class Run(val source: Source7x, val options: ConvertOptions, val compiler: PolicyDocumentCompiler) {
     val rejections = ArrayList<Rejection>()
     val warnings = ArrayList<Warning>()

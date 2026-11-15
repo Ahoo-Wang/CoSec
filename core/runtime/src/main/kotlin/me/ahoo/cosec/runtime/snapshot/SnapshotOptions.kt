@@ -23,6 +23,8 @@ import java.time.Duration
  * Tuning of a [SnapshotSource]. Defaults are the values RFC 0003 §12 decided (Q7, Q18, Q19); the ones marked there as
  * "confirmed after measurement" may change once §4.8 has real numbers.
  */
+// stays: one parameter per option of a value set by name
+@Suppress("LongParameterList")
 @ExperimentalCoSecApi
 class SnapshotOptions(
     /**

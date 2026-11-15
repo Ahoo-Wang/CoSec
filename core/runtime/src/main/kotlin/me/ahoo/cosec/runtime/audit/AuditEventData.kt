@@ -38,7 +38,6 @@ class AuditPrincipalData(
 
     /** These values with some replaced: for CoSec's own use. */
     @InternalCoSecApi
-    @Suppress("LongParameterList")
     fun copy(
         id: String = this.id,
         authenticated: Boolean = this.authenticated,
@@ -120,6 +119,7 @@ class AuditEventData(
 
     /** These values with some replaced: for CoSec's own use. */
     @InternalCoSecApi
+    // stays: a copy of the audit record takes each of its fields
     @Suppress("LongParameterList")
     fun copy(
         eventId: String = this.eventId,

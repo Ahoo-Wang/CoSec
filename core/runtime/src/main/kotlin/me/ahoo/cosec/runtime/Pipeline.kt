@@ -94,6 +94,8 @@ private val log = KotlinLogging.logger {}
  * outcome at all (§7.4, `PIP-3`). Every SPI call goes through [resumeOffIo], so a request that never really suspends
  * finishes on its calling thread without a dispatch (§7.2).
  */
+// B1: the request path becomes named stages over one request state
+@Suppress("TooManyFunctions")
 @OptIn(InternalCoSecApi::class)
 class Pipeline @ExperimentalCoSecApi constructor(components: PipelineComponents) : RequestGate {
     private val authenticator = components.authenticator
@@ -377,6 +379,8 @@ class Pipeline @ExperimentalCoSecApi constructor(components: PipelineComponents)
      * provider does not know, or knows as not active, is refused here (`IDN-3`): the request is then authorized again
      * as anonymous, with the credential rejected, as if the authenticator had rejected it (RFC 0006 K2).
      */
+    // B1: the parameters become the request state
+    @Suppress("LongParameterList")
     private suspend fun authorize(
         facts: HttpFacts,
         requestId: String,

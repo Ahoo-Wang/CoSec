@@ -124,6 +124,8 @@ class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey,
  * Changing the platform's limits or attributes does not recompile the other documents; it is a warning. So are the two
  * things about a tenant's role that deny nothing but surprise (RFC 0012 §7.5).
  */
+// B4: the checks split by the section they check
+@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class ChangeChecks(
     private val options: ChangeOptions = ChangeOptions(),

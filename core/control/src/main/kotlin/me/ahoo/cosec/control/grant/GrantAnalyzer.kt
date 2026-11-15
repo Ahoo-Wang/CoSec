@@ -69,6 +69,8 @@ import me.ahoo.cosec.model.decision.StatementRef
  * Conditions come as written. Both sides are checked with the same [zones], within limits twice the document's
  * ([limits]): a statement's condition and its policy's are combined.
  */
+// B4: the analysis splits by grant kind
+@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionLimits = ConditionLimits.DEFAULT) {
     private val checker = ConditionChecker(

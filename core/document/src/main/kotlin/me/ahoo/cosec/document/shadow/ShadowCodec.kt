@@ -109,6 +109,8 @@ object ShadowCodec {
         }
     }
 
+    // B7: the samples writer extracts into a function of its own
+    @Suppress("NestedBlockDepth")
     private fun report(report: ShadowReport): ObjectNode = factory.objectNode().apply {
         put("window", report.window)
         put("instance", report.instance)

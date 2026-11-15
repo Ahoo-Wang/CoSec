@@ -85,6 +85,8 @@ internal class UnknownProperties(
         private val INDEX = Regex("\\[[^]]*]")
 
         /** From every `spring-configuration-metadata.json` on [classLoader]'s classpath. */
+        // B7: the metadata reader extracts into a function of its own
+        @Suppress("NestedBlockDepth")
         fun load(classLoader: ClassLoader?): UnknownProperties {
             val known = HashSet<String>()
             val containers = HashSet<String>()

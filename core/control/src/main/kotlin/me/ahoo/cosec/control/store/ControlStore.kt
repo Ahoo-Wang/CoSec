@@ -43,6 +43,8 @@ import java.time.Instant
  * Digests are the store's own ([digestOf]); the head's digest is also the address of its revision record, which is
  * what a document's `provenance.parent` points to (RFC 0007 §5.3).
  */
+// stays: one method per store operation of ControlStore
+@Suppress("TooManyFunctions")
 @CoSecSpi
 @ExperimentalCoSecApi
 interface ControlStore : CandidateStore {

@@ -64,6 +64,7 @@ import java.util.IdentityHashMap
  */
 // Large by design: the evaluator is its own visitor, condition input, index lookup and scratch source, so that an
 // evaluation allocates nothing for them; splitting it would add an object, or a call, per request.
+// B3: the evaluator splits into its parts, its one allocation unchanged (RFC 0013 §6)
 @Suppress("TooManyFunctions", "LargeClass")
 internal open class FlatEvaluator(protected val request: FlatRequest, protected val view: SnapshotView) :
     CandidateVisitor,
@@ -570,7 +571,8 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected 
      * The captures of the first resource pattern that matches ([Captures.NONE] when the condition reads none), or
      * null. A pattern that fails (a path that does not decode) fails the statement unless another one matches.
      */
-    @Suppress("TooGenericExceptionCaught")
+    // B3: the evaluator splits into its parts
+    @Suppress("NestedBlockDepth", "TooGenericExceptionCaught")
     private fun resource(statement: CompiledStatement): Captures? {
         var failure: Exception? = null
         // Only glob segments use the evaluation's table: a statement without one matches through the plain calls, as
