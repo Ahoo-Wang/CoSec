@@ -314,33 +314,35 @@ cosec:
 
 ### 切换租户和应用 {#switching-tenant-and-app}
 
-很多身份服务分两步让用户登录。第一步证明用户（密码、短信或邮件中的验证码），签发一个不属于任何租户和应用的令牌：此时谁也没有选择这两者。第二步出示这个令牌，指明要工作的租户和应用；它的回答就是之后每个请求携带的令牌。之后切换租户，或在同一租户内切换应用，都是同一个调用。`SwitchTenantAuthentication` 就是这第二步。你给它 `TokenFamilies` 和 `TokenRevocation` Bean、你的凭证类，以及一个 `TenantSwitch`：它检查用户属于目标租户并在那里拥有该应用（不满足时抛出异常以拒绝），并回答用户在那里拥有什么，按该租户和应用查询：一个包含用户角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。你的凭证类实现 `SwitchTenantCredentials`，并携带你的检查还要读取的内容，例如设备；切换读取它不需要强制转换。把这个认证声明为 Bean，登录按那个类找到它：
+很多身份服务分两步让用户登录。第一步证明用户（密码、短信或邮件中的验证码），签发一个不属于任何租户和应用的令牌：此时谁也没有选择这两者。第二步出示这个令牌，指明要工作的租户和应用；它的回答就是之后每个请求携带的令牌。之后切换租户，或在同一租户内切换应用，都是同一个调用。`SwitchTenantAuthentication` 就是这第二步。你给它 `TokenFamilies` 和 `TokenRevocation` Bean、你的凭证类，以及一个 `TenantSwitch`：它检查用户属于目标租户并在那里拥有该应用（不满足时抛出异常以拒绝），并回答用户在那里拥有什么，按该租户和应用查询：一个包含用户角色、策略和属性的 `TenantMembership`，或者在你的 `MembershipProvider` 为该租户作答时使用 `TenantMembership.fromProvider()`。你的凭证类实现 `SwitchTenantCredentials`，并携带你的检查还要读取、而上下文里没有的内容；切换读取它不需要强制转换。请求的设备在上下文里：`context.deviceId` 就是它的 `CoSec-Device-Id`，按 CoSec 的规则读取（只能有一个值，否则请求是 `400`），所以端点不必自己读这个请求头。把这个认证声明为 Bean，登录按那个类找到它：
 
 ```kotlin
 class SelectTenant(
     override val targetTenantId: String,
     override val targetAppId: String?,
     override val context: SecurityContext,
-    val deviceId: String,
 ) : SwitchTenantCredentials
 
 @Bean
-fun selectTenantAuthentication(families: TokenFamilies, revocation: TokenRevocation, members: Members) =
-    SwitchTenantAuthentication(families, revocation, SelectTenant::class.java) { credentials ->
-        val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
-        val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
-            "Not a member of this tenant's $app."
-        }
-        TenantMembership(roles = member.rolesIn(app), app = app)
+fun selectTenantAuthentication(
+    families: TokenFamilies,
+    revocation: TokenRevocation,
+    members: Members,
+    devices: TrustedDevices,
+) = SwitchTenantAuthentication(families, revocation, SelectTenant::class.java) { credentials ->
+    val app = requireNotNull(credentials.targetAppId) { "Name the app to work in." }
+    val member = requireNotNull(members.find(credentials.context.principal.id, credentials.targetTenantId, app)) {
+        "Not a member of this tenant's $app."
     }
+    require(devices.trusts(credentials.context.principal.id, credentials.context.deviceId)) {
+        "Sign in again on this device."
+    }
+    TenantMembership(roles = member.rolesIn(app), app = app)
+}
 
 @PostMapping("/auth/select/{tenant}/{app}")
-suspend fun select(
-    @PathVariable tenant: String,
-    @PathVariable app: String,
-    @RequestHeader("CoSec-Device-Id") deviceId: String,
-    security: SecurityContext,
-): CompositeToken = authentication.authenticateAsToken(SelectTenant(tenant, app, security, deviceId))
+suspend fun select(@PathVariable tenant: String, @PathVariable app: String, security: SecurityContext): CompositeToken =
+    authentication.authenticateAsToken(SelectTenant(tenant, app, security))
 ```
 
 新令牌只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。**它的应用是你的 `TenantSwitch` 回答的应用**（`TenantMembership.app`），必须是令牌的 `aud` 能携带的应用 id；没有回答应用时，保留先前令牌的应用（`SCP-12`）。`targetAppId` 是用户请求的应用，只能经由你的回答进入令牌：用户不能靠指名得到某个应用的令牌，只有在你的代码检查过用户拥有它之后才行。
@@ -361,8 +363,12 @@ class SelectTenantTest {
     private val families = TokenFamilies(InMemoryTokenFamilyStore())
     private val revocation = TokenRevocation(RevocationReader.NONE)
     private val members = testMembers() // your own directory, alice a clerk of globex's order
+    private val devices = testDevices() // alice trusts her "phone"
     private val login = TokenCompositeAuthentication.of(
-        listOf(passwordAuthentication, SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members)),
+        listOf(
+            passwordAuthentication,
+            SelectTenantConfiguration().selectTenantAuthentication(families, revocation, members, devices),
+        ),
         JwtTokenConverter(IdGenerator { UUID.randomUUID().toString() }, algorithm),
         families,
     )
@@ -370,9 +376,13 @@ class SelectTenantTest {
     @Test
     fun `a member of globex switches into it with the app she has there`() = runTest {
         val pair = login.authenticateAsToken(PasswordCredentials("alice", "secret"))
-        val request = PermittedRequest.withToken(pair.accessToken, verifier)
+        val request = PermittedRequest.withToken(
+            pair.accessToken,
+            verifier,
+            headers = mapOf("CoSec-Device-Id" to listOf("phone")),
+        )
 
-        val switched = login.authenticateAsToken(SelectTenant("globex", "order", request, deviceId = "phone"))
+        val switched = login.authenticateAsToken(SelectTenant("globex", "order", request))
 
         val token = verifier.verify(switched.accessToken)
         token.tenant.assert().isEqualTo("globex")
@@ -381,7 +391,7 @@ class SelectTenantTest {
 }
 ```
 
-验证器拒绝令牌时 `withToken` 会抛出异常；它从你传入的 `RevocationReader` 读取吊销记录（默认没有任何吊销）。在测试中结束的会话（`families.end`）得到的上下文，与生产中一样，切换不出任何令牌。这个工具只构造上下文：要测试一个请求被允许做什么，请使用 `PipelineFixture` 和 [`PolicyTestKit`](../policies/testing.md)。
+验证器拒绝令牌时 `withToken` 会抛出异常；它从你传入的 `RevocationReader` 读取吊销记录（默认没有任何吊销）。`headers` 是请求的其他请求头，如客户端发送的那样：上下文回答 CoSec 从它们读到的内容，所以 `CoSec-Device-Id` 就是它的 `deviceId`，两个不同的值会像在宿主上一样失败（`IllegalStateException`，状态 `400`）。令牌是请求的凭证，任何请求头都不能取代它：`Authorization`、`X-API-Key` 和 `CoSec-Identity` 会被拒绝。在测试中结束的会话（`families.end`）得到的上下文，与生产中一样，切换不出任何令牌。这个工具只构造上下文：要测试一个请求被允许做什么，请使用 `PipelineFixture` 和 [`PolicyTestKit`](../policies/testing.md)。
 
 ## 应用 {#apps}
 
