@@ -75,6 +75,7 @@ class PublicApiStabilityTest {
             ) + listOf(
                 "AmbiguousPolicy", "AttributeUnavailable", "BoundaryUnavailable", "MatcherFailed", "MembershipUnavailable",
                 "MissingPolicies", "NotLoaded", "RateLimiterUnavailable", "RequiredListenerFailed", "SourceUnavailable",
+                "DocumentInvalid",
             ).map { "model.decision.Cause\$$it" to decision } + listOf(
                 "engine.ViewVersion" to value,
                 "spi.ratelimit.RateLimit" to value,

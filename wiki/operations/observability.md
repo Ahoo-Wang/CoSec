@@ -151,7 +151,7 @@ number of time series stays bounded however many policies, apps and tenants ther
 |---|---|
 | `result` | `allow`, `too_many_requests`, `explicit_deny` (scope rejections and boundary denies included), `implicit_deny`, `indeterminate` (every `503`), `bad_request`, `cancelled`, `error` |
 | `source` | `binding`, `attachment`, `builtin`, `boundary`, `scope` (a scope rejection), `none` |
-| `cause` | on `indeterminate` only: `source_unavailable`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
+| `cause` | on `indeterminate` only: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
 
 The listeners themselves are counted:
 
@@ -170,8 +170,8 @@ So are the tokens the pipeline accepted without a revocation check, the revocati
 
 Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny`, on `cosec.listener.dropped`, and on any
 rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepted. A rise of
-`indeterminate` with `cause=source_unavailable` means documents cannot be read
-([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
+`indeterminate` with `cause=source_unavailable` means documents cannot be read, and with `cause=document_invalid` that a
+stored document does not compile on this instance ([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
 registry ([CoCache's documentation](https://cocache.ahoo.me)).
 
 ## Snapshot health
@@ -179,8 +179,10 @@ registry ([CoCache's documentation](https://cocache.ahoo.me)).
 CoSec registers no meters for the documents an instance holds. To see whether instances are current:
 
 - **Health.** With Spring Boot Actuator, the `cosecSnapshot` health indicator is `UP` once the platform document and
-  every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `failed`, `absent`
-  or `loading`) and `prewarmed`. Readiness follows the same condition
+  every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `invalid` when it is
+  stored and does not compile, `failed`, `absent` or `loading`), `prewarmed`, `missing`, and, when any document does
+  not compile, `invalid`, how many do not, and `invalidFirst`, the first ten of them with their stored revisions,
+  the platform first and then by key (`["tenant:acme@7"]`), never the compiler's message. Readiness follows the same condition
   ([Readiness](./deployment.md#readiness)).
 - **Eviction.** On Redis, the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict the snapshot,
   with an `eviction` detail that says why. It reports what the instance read last: every node's `maxmemory-policy`,

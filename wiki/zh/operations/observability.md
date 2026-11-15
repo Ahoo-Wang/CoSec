@@ -138,7 +138,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 |---|---|
 | `result` | `allow`、`too_many_requests`、`explicit_deny`（包括作用域拒绝和边界拒绝）、`implicit_deny`、`indeterminate`（每个 `503`）、`bad_request`、`cancelled`、`error` |
 | `source` | `binding`、`attachment`、`builtin`、`boundary`、`scope`（作用域拒绝）、`none` |
-| `cause` | 仅用于 `indeterminate`：`source_unavailable`、`missing_policies`、`membership`、`attribute`、`matcher`、`authenticator`、`required_listener`、`boundary`、`rate_limiter`、`deadline`、`unknown` |
+| `cause` | 仅用于 `indeterminate`：`source_unavailable`、`document_invalid`、`missing_policies`、`membership`、`attribute`、`matcher`、`authenticator`、`required_listener`、`boundary`、`rate_limiter`、`deadline`、`unknown` |
 
 监听器本身也被计数：
 
@@ -155,7 +155,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 | `cosec.revocation.unchecked` | 无 | 吊销无法读取时被接受的令牌；每段这样的时间还会以 `WARN` 记录 `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).`，最多每 10 秒一次 |
 
 按 `cause` 对 `result=indeterminate` 的速率、对 `explicit_deny`、对 `cosec.listener.dropped` 设置告警，并对 `cosec.revocation.unchecked` 的任何上升告警：它上升期间，被吊销的令牌会被接受。
-`indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到（[故障排查](./troubleshooting.md#unavailable)）。
+`indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到；伴随 `cause=document_invalid` 上升，说明某个已存储的文档在本实例上无法编译（[故障排查](./troubleshooting.md#unavailable)）。
 CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标（[CoCache 文档](https://cocache.ahoo.me)）。
 
 ## 快照健康状况 {#snapshot-health}
@@ -163,7 +163,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了文档：
 
 - **健康。** 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在平台文档和每个预热文档安装后为 `UP`，之前为
-  `DOWN`，细节为 `platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。就绪状态遵循同样的条件
+  `DOWN`，细节为 `platform`（`installed`；已存储但无法编译时为 `invalid`；`failed`、`absent` 或 `loading`）、`prewarmed`、`missing`，以及在有文档无法编译时的 `invalid`（无法编译的文档数）和 `invalidFirst`（其中的前十个及其存储的修订，平台文档在前，其余按键排序，如 `["tenant:acme@7"]`），从不包含编译器的消息。就绪状态遵循同样的条件
   （[就绪](./deployment.md#readiness)）。
 - **驱逐。** 在 Redis 上，Redis 可能驱逐快照时 `cosecSnapshotEviction` 健康指示器为 `DOWN`，并带说明原因的 `eviction`
   细节。它报告实例最近一次读到的结果：每个 `revalidate-interval` 在自己的线程上读取的每个节点的 `maxmemory-policy`，

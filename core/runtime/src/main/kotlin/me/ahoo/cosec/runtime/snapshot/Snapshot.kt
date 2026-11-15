@@ -57,6 +57,9 @@ class SnapshotEntry<out T : Any> internal constructor(
     var confirmedAt: Instant = confirmedAt
         private set
 
+    /** Whether the document is stored and does not compile on this instance: a decision says `Cause.DocumentInvalid`. */
+    val invalid: Boolean get() = origin == EntryOrigin.UNCOMPILABLE
+
     /** A snapshot of this entry alone, built once so that requests needing no app document allocate nothing. */
     internal val alone: Snapshot<T, Nothing> = Snapshot(this, null)
 
@@ -79,6 +82,13 @@ internal enum class EntryOrigin {
     /** A decoded document that failed to compile: revalidated with a full read so that it is compiled again. */
     UNCOMPILABLE,
 
+    /**
+     * A document compiled against inputs that changed since, whose compile again has not run (its reload failed or was
+     * rejected): failing closed until it does, revalidated with a full read as [UNCOMPILABLE] is. Not a document that
+     * does not compile: the decision says the source is unavailable, not that the document is invalid.
+     */
+    RECOMPILE_PENDING,
+
     /** A stored value that cannot be decoded. */
     UNDECODABLE,
 
@@ -94,6 +104,12 @@ internal enum class EntryOrigin {
 
     /** Whether the store held no document. */
     val storedAbsent: Boolean get() = this == ABSENT || this == LOST
+
+    /** Whether the entry was compiled from a decoded document, or tried to be: it depends on the compiler's inputs. */
+    val compiled: Boolean get() = this == DOCUMENT || this == UNCOMPILABLE || this == RECOMPILE_PENDING
+
+    /** Whether the entry is revalidated with a full read, so that the document is compiled again. */
+    val compilesAgain: Boolean get() = this == UNCOMPILABLE || this == RECOMPILE_PENDING
 }
 
 /**

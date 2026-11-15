@@ -192,7 +192,7 @@ How windows work: [Testing changes](../policies/testing.md).
 |---|---|---|---|
 | `cosec.authorization.shadow.enabled` | boolean | `true` | Evaluate sampled requests again on the staged candidates, and write this instance's reports and status to Redis. Off, this instance's traffic counts for nothing in a window, a candidate it cannot compile does not block one, and it writes no status for the propagation view. |
 | `cosec.authorization.shadow.sample-rate` | double, `0` to `1` | `0.1` | Share of requests evaluated again on the candidates, off the request path. |
-| `cosec.authorization.shadow.report-interval` | duration | `10s` | How often the instance writes its reports and its status. |
+| `cosec.authorization.shadow.report-interval` | duration | `10s` | How often the instance writes its reports and its status. At least `1ms`: a shorter interval fails startup. |
 | `cosec.authorization.shadow.instance-id` | string | a random UUID | This instance's id in reports and statuses. Unique per running instance; only letters, digits, `.`, `_` and `-`, since it ends a Redis key. Any other id fails startup. |
 
 ## Authentication

@@ -903,6 +903,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     // B2a: the slot's transitions leave it
     @Suppress("TooManyFunctions")
     private inner class Slot<T : Any>(val key: SnapshotKey, private val compiler: SnapshotCompiler<T>) {
+        private val report = CompileReport(key, compiler, ::offRequestThread)
+
         @Volatile
         var installed: SnapshotEntry<T>? = null
             private set
@@ -985,8 +987,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             val epoch = compileEpoch.get()
             val known = installed
             // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
-            val compiled = known != null &&
-                (known.origin == EntryOrigin.DOCUMENT || known.origin == EntryOrigin.UNCOMPILABLE)
+            val compiled = known != null && known.origin.compiled
             val recompiles = key != sharedKey && compiled && installedEpoch < epoch
             return Load(known, force, result, epoch, recompiles, passRead)
         }
@@ -1004,7 +1005,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 return false
             }
             val known = installed ?: return false
-            known.origin == EntryOrigin.DOCUMENT || known.origin == EntryOrigin.UNCOMPILABLE
+            known.origin.compiled
         }
 
         fun isIdle(): Boolean = synchronized(this) { inFlight == null }
@@ -1217,7 +1218,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             }
             val digest = when {
                 known == null || load.force || load.recompiles -> null
-                known.origin == EntryOrigin.UNCOMPILABLE -> null
+                known.origin.compilesAgain -> null
                 else -> known.digest
             }
             load.askedDigest = digest
@@ -1357,11 +1358,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             } catch (error: VirtualMachineError) {
                 // RC1-43: a document that compiles on the control plane can overflow a smaller data-plane stack. Ending
                 // the load as a transient failure would keep the previous revision, and a new DENY would never apply.
-                val failure = SnapshotUnavailableException(
-                    key,
-                    "revision ${document.revision} cannot be compiled",
-                    error
-                )
+                val failure = SnapshotUnavailableException(key, report.failedToCompile(document.revision), error)
                 val failed = SnapshotEntry(
                     key,
                     DocumentState.Failed(failure),
@@ -1386,7 +1383,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         } catch (error: VirtualMachineError) {
             throw error
         } catch (error: Throwable) {
-            val failure = SnapshotUnavailableException(key, "revision ${document.revision} cannot be compiled", error)
+            val failure = SnapshotUnavailableException(key, report.failedToCompile(document.revision), error)
             DocumentState.Failed(failure)
         }
 
@@ -1415,7 +1412,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     known.revision,
                     known.digest,
                     known.confirmedAt,
-                    EntryOrigin.UNCOMPILABLE
+                    EntryOrigin.RECOMPILE_PENDING
                 )
                 finish(load, failed, install = true)
                 retryLater()
@@ -1426,7 +1423,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                     log.warn(cause) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." }
                 }
                 finish(load, known, install = false)
-                if (rejected || known.origin == EntryOrigin.UNCOMPILABLE) {
+                if (rejected || known.origin.compilesAgain) {
                     retryLater()
                 }
                 return
@@ -1454,12 +1451,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             }
             // Whatever ended the load (a read that failed to start included), its read is over.
             load.passRead?.end()
-            val stale = install && key != sharedKey && load.epoch < compileEpoch.get() &&
-                (entry.origin == EntryOrigin.DOCUMENT || entry.origin == EntryOrigin.UNCOMPILABLE)
+            val stale = install && key != sharedKey && load.epoch < compileEpoch.get() && entry.origin.compiled
             val withheld = stale && entry.origin == EntryOrigin.DOCUMENT
             try {
                 if (install && !withheld) {
                     recordInstall(entry)
+                    report.installed(entry)
                 }
             } finally {
                 advance(load, entry, install && !withheld, stale, withheld)

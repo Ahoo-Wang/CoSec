@@ -24,6 +24,11 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            "runtime:DocumentInvalidTest#a document that does not compile is logged once per revision, and its recovery once",
+            "runtime:DocumentInvalidTest#a decision event says the document is invalid, at the revision its view carries",
+            "runtime:DocumentInvalidTest#the client's answer is the same as for an unavailable source",
+            "runtime:DocumentSnapshotViewsTest#missing documents are empty, failed ones are unresolved",
+            "spring-boot:SnapshotHealthIndicatorTest#health names a document that does not compile, by its revision",
             "runtime:DecisionListenersShutdownTest#a full queue drops without waiting on the log, which is written off the request's thread",
             "runtime:DecisionListenersShutdownTest#after a drain gives up, only the call in flight finishes and the queued events are dropped",
             "runtime:DecisionListenersShutdownTest#a cancelled consumer leaves nothing queued, and what it leaves is counted",
