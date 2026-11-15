@@ -136,7 +136,7 @@ import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.seconds
-import me.ahoo.cosec.runtime.Outcome as PipelineOutcome
+import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
 
 /**
  * The `pipeline` runner (RFC 0008 §3.3): an HTTP request → [Pipeline] → its outcome, with the scenario's documents

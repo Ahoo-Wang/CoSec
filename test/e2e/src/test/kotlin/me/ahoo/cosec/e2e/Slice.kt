@@ -31,7 +31,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolver
-import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.DecisionListeners

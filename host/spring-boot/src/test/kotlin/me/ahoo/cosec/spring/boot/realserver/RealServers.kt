@@ -24,7 +24,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.gateway.IdentityStripFilter
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.RequestGate
+import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webmvc.PipelineServletFilter

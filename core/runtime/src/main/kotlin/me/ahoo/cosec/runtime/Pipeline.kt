@@ -52,8 +52,17 @@ import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.FetchedAttributes
+import me.ahoo.cosec.runtime.call.FallbackIds
+import me.ahoo.cosec.runtime.call.Throttle
+import me.ahoo.cosec.runtime.call.resumeOffIo
+import me.ahoo.cosec.runtime.call.withLazyTimeoutOrNull
 import me.ahoo.cosec.runtime.event.ReplayHandle
-import me.ahoo.cosec.runtime.event.TraceContext
+import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.RequestGate
+import me.ahoo.cosec.runtime.http.RequestIds
+import me.ahoo.cosec.runtime.http.RequestSecurity
+import me.ahoo.cosec.runtime.http.StatusMapping
+import me.ahoo.cosec.runtime.http.TraceContext
 import me.ahoo.cosec.runtime.http.CoSecParameters
 import me.ahoo.cosec.runtime.http.CookieHeaders
 import me.ahoo.cosec.runtime.http.HttpAttributes
@@ -61,8 +70,10 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.HttpMethods
 import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.QueryParameters
+import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.ratelimit.RateLimitFailures
+import me.ahoo.cosec.runtime.shadow.ShadowListener
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
@@ -118,6 +129,9 @@ class Pipeline @ExperimentalCoSecApi constructor(components: PipelineComponents)
     private val apiKeyHeader = HttpNames.fold(options.apiKeyHeader)
     private val attributes = components.attributes
     private val listeners = components.listeners
+
+    /** The shadow listeners, asked whether they sample a request before its event is made (§9.5.4). */
+    private val shadows: List<ShadowListener> = listeners.bestEffortListeners.filterIsInstance<ShadowListener>()
     private val rateLimiter = components.rateLimiter
     private val routes = components.routes
     private val identity = components.identity
@@ -291,13 +305,13 @@ class Pipeline @ExperimentalCoSecApi constructor(components: PipelineComponents)
 
     /** What a shadow listener needs, only when one samples this request (§9.5.4). */
     private fun replay(record: RequestRecord): ReplayHandle? {
-        if (listeners.shadows.isEmpty()) {
+        if (shadows.isEmpty()) {
             return null
         }
         val request = record.request ?: return null
         val view = record.view ?: return null
         var sampled: MutableSet<String>? = null
-        for (shadow in listeners.shadows) {
+        for (shadow in shadows) {
             if (shadow.sample()) {
                 (sampled ?: HashSet<String>().also { sampled = it }) += shadow.name
             }

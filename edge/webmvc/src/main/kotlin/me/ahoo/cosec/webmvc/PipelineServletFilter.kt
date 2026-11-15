@@ -26,9 +26,9 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.Outcome
-import me.ahoo.cosec.runtime.ProblemEncoder
-import me.ahoo.cosec.runtime.RequestGate
+import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.ProblemEncoder
+import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.ApplicationPaths
 import me.ahoo.cosec.runtime.http.Cookies

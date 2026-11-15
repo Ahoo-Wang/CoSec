@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.runtime
 
+import me.ahoo.cosec.runtime.call.Throttle
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration

@@ -19,8 +19,8 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.runtime.Outcome
-import me.ahoo.cosec.runtime.ProblemEncoder
+import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.ProblemEncoder
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
 import me.ahoo.cosec.runtime.attribute.BlacklistKind

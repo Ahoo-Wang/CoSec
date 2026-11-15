@@ -27,7 +27,7 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.event.DecisionListener

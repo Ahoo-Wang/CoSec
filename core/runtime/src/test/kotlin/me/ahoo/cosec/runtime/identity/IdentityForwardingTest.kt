@@ -21,7 +21,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers

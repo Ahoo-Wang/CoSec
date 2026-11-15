@@ -39,8 +39,8 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.ProblemType
-import me.ahoo.cosec.runtime.RequestSecurity
+import me.ahoo.cosec.runtime.http.ProblemType
+import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKeyText

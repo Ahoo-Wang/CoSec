@@ -20,7 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.runtime.Pipeline
-import me.ahoo.cosec.runtime.RequestGate
+import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore

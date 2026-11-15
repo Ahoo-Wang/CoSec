@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime
+package me.ahoo.cosec.runtime.call
 
 import java.time.Duration
 import java.util.concurrent.ConcurrentHashMap

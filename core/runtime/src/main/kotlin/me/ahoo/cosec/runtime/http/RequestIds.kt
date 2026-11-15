@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime
+package me.ahoo.cosec.runtime.http
 
 /** Which client request ids the pipeline accepts. */
 internal object RequestIds {

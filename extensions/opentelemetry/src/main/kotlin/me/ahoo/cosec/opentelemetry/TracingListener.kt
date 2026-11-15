@@ -36,7 +36,7 @@ import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.runtime.event.TraceContext
+import me.ahoo.cosec.runtime.http.TraceContext
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.CoroutineContext
 

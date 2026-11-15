@@ -26,8 +26,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.runtime.Basis
-import me.ahoo.cosec.runtime.Outcome
+import me.ahoo.cosec.runtime.http.Basis
+import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.PipelineFixtures.EXPLICIT_DENY
 import me.ahoo.cosec.runtime.PipelineFixtures.PERMIT
@@ -38,8 +38,9 @@ import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.ThreadingFixtures.EVENT_LOOP
 import me.ahoo.cosec.runtime.ThreadingFixtures.singleThread
 import me.ahoo.cosec.runtime.ThreadingFixtures.startOn
-import me.ahoo.cosec.runtime.Unavailability
+import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.runtime.audit.AuditEvents
+import me.ahoo.cosec.runtime.shadow.ShadowListener
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult

@@ -26,7 +26,7 @@ import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.engine.flat.CompiledDocument
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
-import me.ahoo.cosec.runtime.event.ShadowListener
+import me.ahoo.cosec.runtime.shadow.ShadowListener
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.CandidateSource
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder

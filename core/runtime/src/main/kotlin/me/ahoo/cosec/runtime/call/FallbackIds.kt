@@ -11,7 +11,13 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime
+/*
+ * Package me.ahoo.cosec.runtime.call: what the runtime wraps around a call to a port. Its deadline (LazyTimeout), the
+ * thread it resumes on (ResumeOffIo, ResumeDispatcher), the throttled log of its failures (Throttle), and the fallback
+ * when the id generator fails (FallbackIds). What does not fit that sentence does not go here (RFC 0013 §3.3). It is a
+ * leaf: it uses no other package of cosec-runtime.
+ */
+package me.ahoo.cosec.runtime.call
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.spi.id.IdGenerator

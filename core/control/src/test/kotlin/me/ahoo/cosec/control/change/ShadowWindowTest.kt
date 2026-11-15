@@ -52,7 +52,7 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.event.DecisionListeners
-import me.ahoo.cosec.runtime.event.ShadowListener
+import me.ahoo.cosec.runtime.shadow.ShadowListener
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts

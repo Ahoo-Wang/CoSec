@@ -46,7 +46,7 @@ import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.MdcContextContributor
-import me.ahoo.cosec.runtime.event.TraceContext
+import me.ahoo.cosec.runtime.http.TraceContext
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
