@@ -15,7 +15,6 @@ package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.http.HttpFacts
 
 /**
  * What the adapters call for every request (RFC 0006 §6.3): an [Outcome] they write, from the facts they read. The

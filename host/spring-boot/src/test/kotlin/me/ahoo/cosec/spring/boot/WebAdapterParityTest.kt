@@ -44,13 +44,13 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineComponents
 import me.ahoo.cosec.runtime.PipelineOptions
-import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.runtime.http.TraceContext
 import me.ahoo.cosec.runtime.identity.IdentityGate
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews

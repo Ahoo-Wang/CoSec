@@ -31,9 +31,9 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
+import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.http.Basis
 import me.ahoo.cosec.runtime.http.Outcome
-import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.runtime.shadow.Candidate
 import me.ahoo.cosec.runtime.shadow.CandidateSource

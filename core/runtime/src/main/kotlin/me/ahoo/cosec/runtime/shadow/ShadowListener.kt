@@ -33,9 +33,6 @@ import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.ReplayHandle
-import me.ahoo.cosec.runtime.shadow.Candidate
-import me.ahoo.cosec.runtime.shadow.CandidateSource
-import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.runtime.snapshot.ViewKey

@@ -35,9 +35,9 @@ import me.ahoo.cosec.runtime.event.ReplayHandle
 import me.ahoo.cosec.runtime.event.RequestSummary
 import me.ahoo.cosec.runtime.event.SubjectSummary
 import me.ahoo.cosec.runtime.http.Basis
+import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.TraceContext
-import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.spi.authn.AuthnResult
 

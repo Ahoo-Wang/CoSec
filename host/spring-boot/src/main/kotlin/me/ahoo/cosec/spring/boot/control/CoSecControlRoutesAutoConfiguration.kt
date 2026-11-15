@@ -24,9 +24,9 @@ import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
 import me.ahoo.cosec.control.api.ControlHttpResponse
 import me.ahoo.cosec.runtime.Pipeline
+import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
-import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER

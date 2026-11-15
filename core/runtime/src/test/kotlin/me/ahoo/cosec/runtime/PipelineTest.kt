@@ -51,7 +51,6 @@ import me.ahoo.cosec.runtime.http.Basis
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.ProblemEncoder
 import me.ahoo.cosec.runtime.http.ProblemType
-import me.ahoo.cosec.runtime.http.StatusMapping
 import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator

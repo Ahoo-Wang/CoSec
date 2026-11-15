@@ -36,6 +36,8 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.runtime.call.FallbackIds
+import me.ahoo.cosec.runtime.http.CoSecParameters
+import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestGate
@@ -43,8 +45,6 @@ import me.ahoo.cosec.runtime.http.RequestIds
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.http.StatusMapping
 import me.ahoo.cosec.runtime.http.TraceContext
-import me.ahoo.cosec.runtime.http.CoSecParameters
-import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.id.IdGenerator
