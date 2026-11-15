@@ -131,6 +131,23 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 这里的 `LoginCredentials` 和 `Authentication` 是 `me.ahoo.cosec.login` 中的登录类型（`TokenCompositeAuthentication` 和 `TokenConverter` 在 `me.ahoo.cosec.login.token` 中），来自 starter 自带的 `cosec-login`；它们不是管道的 `Credentials` 和 `Authenticator`（`me.ahoo.cosec.spi.authn`）。不使用 starter 时（例如在测试中），用你的认证构建登录：`TokenCompositeAuthentication.of(listOf(passwordAuthentication), tokenConverter, tokenFamilies)`。`cosec.authentication.login.enabled`（默认开启）只开关这些登录 Bean，包括 `TokenCompositeAuthentication` 和社交登录；无论它如何设置，请求都由管道认证。登录路径必须允许匿名调用方访问，因此需要一个放行它的 `Anyone` 绑定，如[快速开始](../guide/quick-start.md#write-a-first-policy)所示。`authenticateAsToken` 会为主体开始一个[会话](#sessions)。单独调用 `TokenConverter.toToken(subject)` 签发的令牌对不属于任何会话，永远不能刷新：要自己签发可刷新的令牌对，请先开始它的会话：`converter.toToken(subject.inSession(tokenFamilies.start(tenant, principal)))`。
 
+### 只签发令牌的服务 {#a-service-that-only-issues-tokens}
+
+让用户登录、签发令牌，而不对请求做任何决定的服务（4.x 的 `cosec.authorization.enabled: false` 给出的就是这个），需要把登录和执行分开，而看起来像它的开关并不是：
+
+| 设置 | 服务得到什么 |
+|---|---|
+| `cosec.enabled=false` | 每一个 CoSec bean 都关闭，登录也不例外：没有 `TokenConverter`、`TokenVerifier` 或 `TokenCompositeAuthentication`，登录控制器因缺少 bean 而无法启动。 |
+| `cosec.jwt.enabled=false` | 签发同样如此：`TokenConverter` 属于 `cosec.jwt.enabled` 所控制的内容（“签发、校验和吊销”，[配置](../operations/configuration.md)）。 |
+| `cosec.pipeline.mode=gateway` 加 `cosec.jwt.enabled=true` | 登录和签发令牌可用；服务不用策略做任何决定，也不需要文档。它**会相信收到的任何 `CoSec-Identity` 头**，所以只适用于只有 CoSec 网关才能到达的服务（[网关后面的服务](./web.md#services-behind-the-gateway)）。 |
+| 默认的 `enforce`，加一份允许每个请求的平台文档 | 登录和签发可用，服务会校验收到的令牌。每个请求都被允许：见下。需要 Redis 和一份已发布的文档（在有文档之前一直是 `503`）。 |
+
+两种可用的方式都需要吊销读写的令牌存储：`cosec-cocache`，或你自己的 bean（[登出与吊销](#logout-and-revocation)）。第二种方式，用于任何人都能到达的服务，只需要一份文档：
+
+<<< @/examples/token-issuer/documents/platform.json [documents/platform.json]
+
+把它作为第一份平台文档发布（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。它也允许了控制 API 的路径，但控制面会把它的每一步再以调用方的身份授权一次，所以匿名调用方在那里仍是 `401`；只签发令牌的服务不要引入 `cosec-control`。[`wiki/examples/token-issuer`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/token-issuer/scenarios) 里的场景检查匿名请求和带令牌的请求都被允许。
+
 ## 会话 {#sessions}
 
 登录会开始一个**会话**，即一族令牌对：一个 id（`sid`）、用户登录的时间（`auth_time`）和一个代数（`cosec.generation`），每一对令牌的两个令牌都带有它们。会话保存在 Redis 中（`<cosec.key-prefix>:token:family:<sid>`，[存储](../operations/storage.md#redis-keys)），每个存活的会话一个 key，只在令牌刷新或吊销时读写，从不在请求时读取。

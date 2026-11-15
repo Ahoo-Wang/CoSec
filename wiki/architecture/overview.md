@@ -109,7 +109,8 @@ The rules behind the picture:
   Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or
   `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
 - **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
-  approvals, break-glass, simulation and analysis. It is a library that a host wires in. `ControlBoundaryTest`
+  approvals, break-glass, simulation and analysis. The starter wires it into a host; an application does not call it, it
+  writes through the control API. `ControlBoundaryTest`
   (ArchUnit) imports the module's own compiled classes and fails when one of them is outside `me.ahoo.cosec.control`,
   references Spring, `reactor.*`, the coroutine or Reactive Streams bridges or a Redis client, or calls `runBlocking`,
   `Dispatchers.IO` or `GlobalScope`.

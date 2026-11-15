@@ -15,10 +15,11 @@ A deployment that already runs an 8.0 preview (an `8.0.0-alpha`) reads
 
 ## 7.x to 8.0
 
-8.0 upgrades only from 7.x. To upgrade from 6.x, first follow
+8.0 upgrades from 7.x. From 6.x, first follow
 [the upgrade guide on the `7.x` branch](https://github.com/Ahoo-Wang/CoSec/blob/7.x/wiki/operations/upgrading.md) to
 7.x, including its data migration, then come back here. `cosec-migrate convert` refuses Redis data that is not in the
-7.0 layout.
+7.0 layout. From 4.x and 5.x, and from any version whose policies live in your own database, there is one path:
+[From 4.x, 5.x and 6.x](#from-4-x-5-x-and-6-x).
 
 What is different, in short:
 
@@ -373,6 +374,98 @@ documents.
 The 7.x policy history (`<prefix>:policy:history:*`) is neither converted nor deleted. Export it yourself if you need
 it.
 
+### From 4.x, 5.x and 6.x {#from-4-x-5-x-and-6-x}
+
+There is no separate migration tool for versions before 7.x. The supported path is `cosec-migrate convert --from-files`:
+you get your policies into the three files it reads, and it converts them as it converts 7.x's. From 6.x with its data in
+Redis, go through 7.x first, as the head of this section says. Everything else on this page that is about the data applies from there on.
+
+**What the files are.** `convert --from-files <dir>` reads `policies.json` (an array of policies, each with its `id`),
+`global-policies.json` (an array of the ids of the policies that apply to everyone) and `app-role-permissions.json`
+(an array with one entry per app: its permission list as `appPermission`, and its role grants as `grants`). It decodes the
+policy JSON that 7.x's own deserializers read, which is what 4.3 wrote (`{"all": {}}`, `{"path": {...}}` and
+`{"authenticated": {}}` objects, a pattern string as a shorthand for a path). `--from-redis` reads only the 7.0 layout,
+so it cannot read an older store. An application whose store of record is its own database writes the exporter itself:
+serialize each policy the way your version did, and write the three files. A small export:
+
+```json
+[
+  {
+    "id": "orders-reader", "name": "Orders reader", "category": "order", "description": "Reads orders, never deletes them",
+    "type": "custom", "tenantId": "(0)",
+    "statements": [
+      {
+        "name": "read-orders", "effect": "allow",
+        "action": { "path": { "pattern": "/orders/**", "method": "GET" } },
+        "condition": { "authenticated": {} }
+      },
+      { "name": "no-deletes", "effect": "deny", "action": { "path": { "pattern": "/orders/*", "method": "DELETE" } } }
+    ]
+  }
+]
+```
+
+as `policies.json`, with `[]` as `global-policies.json` and, for the app's permissions and the roles that hold them:
+
+```json
+[
+  {
+    "appPermission": {
+      "id": "orders",
+      "groups": [
+        { "name": "order", "description": "order management",
+          "permissions": [ { "id": "order.ship", "name": "Ship", "description": "Ship", "action": "/order/ship" } ] }
+      ]
+    },
+    "grants": { "clerk": ["order.ship"] }
+  }
+]
+```
+
+as `app-role-permissions.json`. `cosec-migrate convert --from-files export --out converted` accepts both, with the
+semantic changes `C1b` and `PIP-18`, and writes the platform document and the app document `orders`.
+
+**What converts.** Each row was converted by `convert --from-files` as an ALLOW and as a DENY statement, and the report is
+the authority for your own data: read it ([Rejections](#rejections), [Semantic changes in the report](#semantic-changes-in-the-report)).
+
+| Construct | Result |
+|---|---|
+| Action `*` or `{"all": {}}` | An ALLOW becomes `http:*`, every HTTP request, and no control-plane or in-code action; a DENY stays `*` ([Every action is every HTTP request](#every-action-is-every-http-request)). |
+| Action `{"all": {"method": "GET"}}`, a path pattern (a string, an array, `{"path": {"pattern", "method"}}`, `**`) | `http:<METHOD>` or `http:*` on `http:path:<pattern>`. |
+| Conditions `all`, `authenticated`, `inTenant`, `in`, `startsWith`, `eq` on the method, `bool` with `and` and `or` | The same condition of the 8.0 language, or none for `all`. |
+| `inRole` | `in` on `scope.roles` (ALLOW) or `subject.roles` (DENY), recorded as `D1`. |
+| `eq` against a `#{principal.id}`-style reference | A comparison with the attribute, recorded as `D2`. |
+| `regular` with a literal pattern | An ALLOW only, as `eq` with `ignoreCase`, recorded as `ASCII-CASE` and `D3`. |
+| Every DENY | Converted as above, each recorded as `C1b`. |
+| An app permission with path actions, and its role grants | An app document: the catalog, one `perm:<app>/<id>` policy for each permission, and a role binding for each grant (`role` or `role@space`). |
+| The deployment's rate limit rules | `--rate-limit-rules`, as 7.x's files ([Convert](#convert)). |
+
+**What needs a judgement.** Each is rejected with a message that says what to rewrite, and the data is fixed in the
+export, then converted again: a path with a `#{...}` template (`ACTION_NOT_TRANSLATED`: [Path templates in actions](#path-templates-in-actions));
+an action that is a composite of different methods (`ACTION_NOT_TRANSLATED`: split it by method); `eq` on the client's
+address, `contains`, `endsWith`, a `regular` that is not a literal, `path` on a part other than `request.path`, and
+`regular` in a DENY (`CONDITION_NOT_TRANSLATED`).
+
+**What does not convert.** `spel` and `ognl` conditions (`EXPRESSION_CONDITION`), custom action and condition types
+(`CUSTOM_ACTION`, `CUSTOM_CONDITION`), and 4.x's `rateLimiter` and `groupedRateLimiter` conditions: they are rejected as
+`UNDECODABLE` with `CUSTOM_CONDITION`, because 7.x had no such condition, and their `UNDECODABLE` message names 7.x, not
+your version. Rewrite them as [rate limit rules](../policies/rate-limiting.md). The policy history is not converted.
+
+**What the tool cannot decide**, and you do, before you publish:
+
+1. **What a `*` ALLOW should mean.** It becomes `http:*`: the same requests it permitted, and nothing of the control
+   plane. If your 4.x policy used it for actions you check in code, name those actions.
+2. **Where the role grants go.** `convert` writes every grant as a binding of the app document, which belongs to the
+   platform and applies in every tenant; `--partition by-owner` moves policies to their tenants and not grants, which
+   carry no tenant. An identity system whose roles belong to a tenant projects them as `roles` of the tenant documents
+   through the control plane instead ([Roles from an external source](../scenarios/external-source.md)).
+3. **What replaces the checks your application did when a policy was written.** `convert` is a command line, not a
+   library. In 8.0 a document is checked by the control plane when a change is proposed, and a policy that does not
+   compile is a `DRAFT` with findings ([Testing policies](../policies/testing.md#validating-policies)).
+
+Then [publish](#publish) as for 7.x data. The application's own code moves as the rest of this page says: its imports and
+removed APIs ([Removed and replaced APIs](#removed-and-replaced-apis)).
+
 ### What 8.0 decides differently
 
 In 8.0 these are the rules; each has an id in the conformance suite. Without errors, missing data or the shapes below,
@@ -509,8 +602,9 @@ the token may also go in the query string with that property.
 `cosec.jwt.token-revocation.enabled` is gone. With JWT enabled, every token is checked for revocation, and startup
 fails when nothing can answer that check: add `cosec-cocache`, which brings the Redis revocation store, or register a
 `TokenStore` and a `RevocationReader` bean of your own. In 7.x, without `cosec-cocache` the starter used a store that
-records nothing, so logout silently did nothing. A service that only issues tokens and never verifies them can set
-`cosec.jwt.enabled=false` instead ([Logout and revocation](../integration/authentication.md#logout-and-revocation)).
+records nothing, so logout silently did nothing. A service that issues no tokens and reads none can set
+`cosec.jwt.enabled=false` instead ([Logout and revocation](../integration/authentication.md#logout-and-revocation)); one
+that only issues tokens keeps it on, with the stores ([A service that only issues tokens](../integration/authentication.md#a-service-that-only-issues-tokens)).
 Revocations written by 7.x stay in force: 8.0 reads them under the same keys (`<prefix>:token:revoked:*`). An error
 the revocation check reports is `503`, never an accepted token (`PIP-7`).
 
@@ -529,8 +623,9 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
   32, 48 or 64 UTF-8 bytes for `hmac256`, `hmac384` or `hmac512`, or startup fails.
 - **Break-glass, 7.x's root,** applies only to a token CoSec's own `JwtTokenVerifier` verified, never to a token of a
   custom `TokenVerifier` or to a principal another authenticator accepted (`BRK-8`).
-- **Tenant switch and social login.** `AbstractSwitchTenantAuthentication.switchTenant` answers the user's
-  `TenantMembership` in the target tenant instead of a principal, so the new token never carries the previous
+- **Tenant switch and social login.** A tenant switch (7.x's `AbstractSwitchTenantAuthentication`, now
+  `SwitchTenantAuthentication` with a `TenantSwitch`, [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) answers the user's
+  `TenantMembership` in the target tenant and app instead of a principal, so the new token never carries the previous
   tenant's roles. `DirectSocialUserPrincipalConverter` signs only `cosec_oauth_provider` and `cosec_oauth_user_id`,
   not the provider's user info ([Authentication](../integration/authentication.md#tenants)).
 - `cosec.api-key.header` is now `cosec.pipeline.api-key-header` (default `X-API-Key`), and no document may read the
@@ -748,10 +843,12 @@ three. A library that only implements a port depends on `cosec-spi`. The package
 | 7.x package | 8.0 package (module) | Types |
 |---|---|---|
 | `me.ahoo.cosec.api.authentication`, `me.ahoo.cosec.authentication` | `me.ahoo.cosec.login` (`cosec-login`) | `Authentication`, `Credentials` (now `LoginCredentials`), `CompositeAuthentication` |
-| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractSwitchTenantAuthentication` |
+| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `AbstractSwitchTenantAuthentication` is `SwitchTenantAuthentication` with a `TenantSwitch`; `SimpleRefreshTokenAuthentication` is `RefreshTokenAuthentication` (`AbstractRefreshTokenAuthentication` is removed) ([From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `TokenConverter`, `TokenCompositeAuthentication`, `RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token` (`cosec-spi`) | `TokenVerifier`, `TokenStore`, `TokenRevoker`, `RevocationReader`, `TokenVerificationException`, `TokenExpiredException`, `TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `SimpleCompositeToken` (`RevocableTokenVerifier` is removed: [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token` (`cosec-login`) | `DefaultTokenRevoker` is `StoreTokenRevoker` ([From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.api.token` (`cosec-api`) | `SimpleCompositeToken` is removed: `CompositeToken` is a final class (`RevocableTokenVerifier` is removed too: [From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
+| `me.ahoo.cosec.api.CoSec` | gone | Its values have names where they mean something: `CoSecPrincipal.ANONYMOUS_ID` (`me.ahoo.cosec.api.principal`), `TenantId.DEFAULT` (`me.ahoo.cosec.model`); the `cosec.` property prefix is written out ([From 8.0.0-alpha.4](#from-8-0-0-alpha-4)) |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.webmvc` (`cosec-webmvc`) | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http` (`cosec-runtime`) | `RemoteIpResolver`, `XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit` (`cosec-spi`) | `AuditEventSink` |
@@ -817,7 +914,7 @@ Code that uses any of these no longer compiles or is no longer called.
 | `RoleCapable`, `PolicyCapable` (a principal's `roles` and `policies`) | The principal's memberships, `Memberships` (`me.ahoo.cosec.model`), from the token's claims or a `MembershipProvider`. The roles effective for a request are `SecurityContext.scope.roles`. |
 | The `String` aliases `RoleId`, `PolicyId` and `PermissionId` of `cosec-api` | `RoleId` and `PolicyId` are value classes of `me.ahoo.cosec.model`, with the same names in another package: `RoleId("admin")`, and `.value` for the string. `PermissionId`: none. A permission is an action, granted by a policy or by a catalog entry ([Role permissions](../policies/role-permissions.md)). |
 | `KafkaAuditEventSink` | `KafkaAuditListener`, a `DecisionListener` the starter registers when `cosec-kafka` is on the classpath ([Observability](./observability.md)). The record's key is the same, and its value is the audit event ([Observability changes](#observability-changes)). |
-| `PolicyRepository`, `AppRolePermissionRepository`, the Redis repositories and caches, `SnapshotPublisher`, `RedisSnapshotPublisher`, `PolicyHistory`, `RedisPolicyRevisionStore`, writes to `AppPermissionCache`/`RolePermissionCache` | The control plane (library or HTTP API) for writes; `cosec-migrate publish` for the first ones. |
+| `PolicyRepository`, `AppRolePermissionRepository`, the Redis repositories and caches, `SnapshotPublisher`, `RedisSnapshotPublisher`, `PolicyHistory`, `RedisPolicyRevisionStore`, writes to `AppPermissionCache`/`RolePermissionCache` | The control plane's HTTP API for writes, from a client of your own ([Roles from an external source](../scenarios/external-source.md)); `cosec-migrate publish` for the first ones. |
 | `LocalPolicyInitializer` and `init-repository`/`force-refresh` | `cosec-migrate convert` and `publish`, or the control plane's declarative `apply`. |
 | `CoSecExplainEndpoint` (`cosecExplain` actuator), `AuthorizationExplainer`, `ExplainWarningCode` | The control plane's `explain` (authorized, and for any revision); see [Checks](../integration/checks.md). |
 | Shadow mode (`ShadowAuthorization`, `ShadowPolicyProvider`, `cosec.shadow.*` files) | Shadow windows of control-plane changes; see [Testing policies](../policies/testing.md). |
@@ -847,8 +944,10 @@ During the 8.0 previews an application could replace, with beans of its own, the
 authorization and approvals: `ControlAuthorizer`, `ChangeAuthority`, `Changes`, `ControlPlane` and `ControlHttp`. It no
 longer can: a second bean of one of these types fails startup (for `ControlHttp`, where the control routes are served).
 `ControlAuthorizer`, `DocumentConfirmation`, `PipelineControlAuthorizer`, `ChangeAuthority`, `Changes`,
-`DefaultControlPlane`, `ControlHttp`, `ControlHttpRequest` and `ControlHttpResponse` are `@InternalCoSecApi`: call the
-control plane through the `ControlPlane` bean or its HTTP API. `ControlStore`, `ChangeOptions`, the change listeners,
+`DefaultControlPlane`, `ControlHttp`, `ControlHttpRequest` and `ControlHttpResponse` are `@InternalCoSecApi`, and
+so are `ControlPlane` and the `Operator` every one of its methods takes: the control plane is not a library an application
+calls, and an application writes through its HTTP API
+([Roles from an external source](../scenarios/external-source.md)). `ControlStore`, `ChangeOptions`, the change listeners,
 `Revisions`, `ControlSnapshot` and the maintenance beans stay replaceable.
 
 #### Policy test suites
@@ -885,7 +984,7 @@ read; no property turns the check off ([Unknown properties](./configuration.md#u
 | `cosec.authentication.social.` | `cosec.authentication.login.social.` |
 | `cosec.authorization.allow-query-token` | `cosec.pipeline.allow-query-token` |
 | `cosec.api-key.header` | `cosec.pipeline.api-key-header` |
-| `cosec.authorization.enabled` | Removed: `cosec.enabled=false` switches CoSec off. |
+| `cosec.authorization.enabled` | Removed. `cosec.enabled=false` switches every CoSec bean off, login and token issuing included, so a service that logs users in and enforces nothing does not use it ([A service that only issues tokens](../integration/authentication.md#a-service-that-only-issues-tokens)). |
 | `cosec.authorization.local-policy.` | Removed: convert and publish the files with `cosec-migrate` ([Migrating the data](#migrating-the-data)). |
 | `cosec.authorization.root-enabled` | Removed: root becomes break-glass ([Root becomes break-glass](#root-becomes-break-glass)). |
 | `cosec.authorization.cache.enabled` | Removed: snapshot caching is `cosec.authorization.snapshot.*`. |

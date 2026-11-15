@@ -20,8 +20,9 @@ For developers adding CoSec to a Spring Boot service for the first time. Follow 
   docker exec redis redis-cli CONFIG GET maxmemory-policy   # noeviction
   ```
 
-- A checkout of [CoSec](https://github.com/Ahoo-Wang/CoSec) at the version you use, to build the `cosec-migrate`
-  tool that publishes the first policy document.
+- The `cosec-migrate` tool of the CoSec version you use, which publishes the first policy document: the
+  `cosec-migrate-<version>.zip` of its [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases), unzipped, or built
+  from a checkout of [CoSec](https://github.com/Ahoo-Wang/CoSec). It needs Java 21.
 
 ## Add the dependency
 
@@ -102,8 +103,9 @@ Download `cosec-migrate-<version>.zip` from the [GitHub release](https://github.
 ```
 
 `publish` reads a directory the way `convert` writes it: it publishes exactly the files that `report.json` lists,
-each with the SHA-256 recorded there, so that nothing is published that was edited afterwards. For a document you
-wrote yourself, write that report:
+each with the SHA-256 recorded there, so that nothing is published that was edited afterwards. It has no option for a
+single file, so a document you wrote yourself needs that report. Two fields are all it reads of one you write
+(`accepted` and `outputSha256`):
 
 ```bash
 SHA=$(sha256sum documents/platform.json | cut -d' ' -f1)   # macOS: shasum -a 256
