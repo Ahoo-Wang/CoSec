@@ -21,7 +21,12 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * A [SnapshotDocumentStore] in memory: for tests, local policy files and the policy test kit. Reads complete on the
- * caller's thread. Writes notify subscribers on the writer's thread after the new value is readable.
+ * caller's thread. Writes notify subscribers on the writer's thread after the new value is readable, with no lock held.
+ *
+ * A subscriber that throws does not undo the write or keep the others from being told: the write has happened and
+ * returns normally, and every other subscriber is notified, as the Redis store of `cosec-cocache` does. The failure
+ * is handed to the writer thread's uncaught-exception handler, which this module, with no logging, has in place of a
+ * log. Only a VM error (an [OutOfMemoryError] say) goes through.
  */
 class InMemorySnapshotDocumentStore : SnapshotDocumentStore {
     private class Stored(val document: SnapshotDocument, val digest: SnapshotDigest)
@@ -48,7 +53,7 @@ class InMemorySnapshotDocumentStore : SnapshotDocumentStore {
 
     /** Tells subscribers that notifications may have been lost. */
     fun reset() {
-        listeners.forEach { it.onReset() }
+        listeners.forEach { listener -> deliver { listener.onReset() } }
     }
 
     override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> =
@@ -74,7 +79,21 @@ class InMemorySnapshotDocumentStore : SnapshotDocumentStore {
 
     private fun notifyChanged(key: SnapshotKey) {
         val keys = listOf(key)
-        listeners.forEach { it.onChanged(keys) }
+        listeners.forEach { listener -> deliver { listener.onChanged(keys) } }
+    }
+
+    /** A subscriber must not break the delivery to the others, nor report a stored write as failed. */
+    @Suppress("TooGenericExceptionCaught")
+    private inline fun deliver(block: () -> Unit) {
+        try {
+            block()
+        } catch (error: VirtualMachineError) {
+            throw error
+        } catch (error: Throwable) {
+            val thread = Thread.currentThread()
+            (thread.uncaughtExceptionHandler ?: Thread.getDefaultUncaughtExceptionHandler())
+                ?.uncaughtException(thread, error)
+        }
     }
 
     companion object {
