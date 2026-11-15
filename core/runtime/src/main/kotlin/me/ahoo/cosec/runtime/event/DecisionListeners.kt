@@ -27,7 +27,6 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.future.asCompletableFuture
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
@@ -113,6 +112,7 @@ class DecisionListeners(
         val halfFull = (capacity + 1) / 2
     }
 
+    private val drops: DropReporter
     internal val required: List<DecisionListener>
     private val requiredStats: List<Stats>
     private val bestEffort: List<Queued>
@@ -134,9 +134,6 @@ class DecisionListeners(
     /** Tests only: runs between a publish's check of the queue and its offer, to close the listeners in that gap. */
     @Volatile
     internal var beforeOffer: (() -> Unit)? = null
-
-    /** Conflated: a burst of drops wakes the reporter once, and the request's thread never waits on it. */
-    private val drops = Channel<Unit>(Channel.CONFLATED)
 
     /**
      * The BEST_EFFORT listeners, in registration order: the pipeline asks the shadow listeners among them before it
@@ -167,8 +164,9 @@ class DecisionListeners(
             Queued(listener, Stats(listener.name, Delivery.BEST_EFFORT), queueCapacity)
         }
         consumers = bestEffort.map { queued -> scope.launch { consume(queued) } }
+        drops = DropReporter(bestEffort.map { it.stats }, warnInterval)
         if (bestEffort.isNotEmpty()) {
-            scope.launch { reportDrops() }
+            scope.launch { drops.run() }
         }
         bestEffortListeners = bestEffort.map { it.listener }
         stats = requiredStats + bestEffort.map { it.stats }
@@ -256,51 +254,7 @@ class DecisionListeners(
         }
     }
 
-    private fun dropped(queued: Queued, closed: Boolean) {
-        queued.stats.droppedCount.incrementAndGet()
-        if (closed) {
-            queued.stats.closedDrops.incrementAndGet()
-        }
-        drops.trySend(Unit)
-    }
-
-    /** Logs, for each listener that dropped events since its last line, how many and why; then waits [warnInterval]. */
-    private suspend fun reportDrops() {
-        val reported = LongArray(bestEffort.size)
-        val reportedClosed = LongArray(bestEffort.size)
-        while (true) {
-            drops.receive()
-            bestEffort.forEachIndexed { index, queued ->
-                val all = queued.stats.droppedCount.get()
-                val closedDrops = queued.stats.closedDrops.get()
-                val full = all - reported[index] - (closedDrops - reportedClosed[index])
-                val afterClose = closedDrops - reportedClosed[index]
-                reported[index] = all
-                reportedClosed[index] = closedDrops
-                if (full > 0) {
-                    logDrops {
-                        "Dropping decision events: the queue of listener [${queued.listener.name}] is full; $full dropped since the last report."
-                    }
-                }
-                if (afterClose > 0) {
-                    logDrops {
-                        "Dropping decision events: the queue of listener [${queued.listener.name}] is closed; $afterClose dropped since the last report."
-                    }
-                }
-            }
-            delay(warnInterval)
-        }
-    }
-
-    /** A failing appender must not end the reporter: its exception, and only that, is swallowed. */
-    @Suppress("TooGenericExceptionCaught", "SwallowedException")
-    private fun logDrops(message: () -> String) {
-        try {
-            log.warn(message)
-        } catch (_: RuntimeException) {
-            // The appender failed; the drops stay counted in stats.
-        }
-    }
+    private fun dropped(queued: Queued, closed: Boolean) = drops.dropped(queued.stats, closed)
 
     /** Removes what is left in [queued] and counts it as dropped: no listener call is started for it. */
     private fun discard(queued: Queued): Long {
