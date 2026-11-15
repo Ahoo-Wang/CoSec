@@ -215,7 +215,13 @@ val gate: RequestGate = CoSecPipeline.builder(authenticator, documentStore)   //
 定下的做法是把整个适配器契约放进 `runtime.http`（那里已经有 `HttpFacts`），连同唯一构造 `Outcome` 的 `StatusMapping`；写适配器的人在一个包里找得到要用的全部类型。
 这是实验性公共类型的包移动，放在冻结之前。根包剩下装配。`ProblemType` 随 `Problem` 走；它没有进 `cosec-api`（`cosec-document` 里 `problem` 格式描述符重复了它的行，这要有一个两者之下的家才能消除，留给 A3 看）。
 
-**阶段。** 九个，顺序是一个固定数组，`StageOrderTest` 按名字断言：`ReadRequest`、`Authenticate`、`ResolveMembers`、`ResolveScope`、`LoadView`、`FetchAttributes`、`Evaluate`、`RunObligations`、`Respond`。
+**阶段。** 九个：`ReadRequest`、`Authenticate`、`ResolveMembers`、`ResolveScope`、`LoadView`、`FetchAttributes`、`Evaluate`、`RunObligations`、`Respond`。
+顺序只写在一处，`Pipeline.runStages`，是一条显式的链（`readRequest.run(state) ?: authenticate.run(state) ?: …`），每个阶段是一个类型确定的字段；`StageOrderTest` 从源码读这条链并按名字断言。
+
+- **是链，不是数组上的循环（实测，#1381）。** 先落地的是一个 `Array<Stage>` 上的循环，按名字断言更直接。JMH 对比（`main` 对它，两次独立运行，三轮与五轮）里最短的路径 `anonymous` 的吞吐比是 92.4% 与 94.5%，
+  其余八个场景在噪声之内：九次经数组的接口调用，JIT 无法内联，在每个阶段工作量最小的路径上最先显现。换成链之后同样设置下 `anonymous` 是 99.5%，其余场景 100.5%–104.6%，
+  有监听器的场景每请求字节数不高于 `main`。门槛是每个场景不低于 0.97；数组没有过，链过了。不要把它“简化”回循环。
+- 主体与租户不是 `RequestState` 的字段，而是认证结果上的取值：凭据被成员关系提供者拒绝时，各处同时变成匿名，不存在未设置的状态。
 
 - `FetchAttributes` 与 `Evaluate` 分开：引擎无 I/O 是不变量，一个会等待属性提供者的 `Evaluate` 会把它弄模糊；分开之后 `Evaluate` 不挂起。
 - 被拒凭据的重试（今天是 `authorize` 调用自己）成为 `ResolveMembers` 内部的循环，顺序保持线性。
@@ -360,9 +366,19 @@ snapshot/
 
 这修订了 R9 的 D6：它改了 `Credentials` 的名字，但留下了上面两个登录类的名字。
 
+**2026-11-15，A3 开工前的半页定下的。**
+
+- **`CompositeToken` 是一个普通的 final 类，不是数据类。** 它装着访问令牌与刷新令牌；数据类生成的 `toString` 会把两者原样打印，今天的 `SimpleCompositeToken` 就是这样。
+  `cosec-spi` 的 `Credentials` 早已脱敏，这里照做：按值的 `equals` 与 `hashCode`，不带令牌的 `toString`，没有 `copy` 与 `componentN`；它的 JSON 形状不变并有测试钉住。
+- **`engine.flat` → `engine` 属于 A3，单独一个 PR，放在最后。** A 档的定义是“改公共名字的”，真实项目演练在 A 档的结果上进行；单独成 PR 是纯移动，B3 此后不改任何公共名字，它的 JMH 对比只比较拆分本身。
+- `TenantSwitch` 作为新的 `@CoSecSpi`，签名与今天的抽象方法完全一致。`problem` 格式描述符保持原样，由 `ProblemSchemaTest` 守着与 `ProblemType` 一致。
+- A3 分三个 PR：时长类型与守护规则；登录与 `cosec-api` 的名字（每个名字一个提交）；引擎包改名。
+
 **2026-11-15 增加（审查构建器时发现）。** 两件冻结后改不了的事并入 A3：
 
-- **公共与 SPI 签名里只有一种时长类型，`java.time.Duration`。** `TokenStore`、`RateLimiter` 与构建器的设置已经如此；例外是 `AttributeProvider.timeout`（`kotlin.time.Duration?`）与 `cosec-cocache` 的一个默认值常量。
+- **公共与 SPI 签名里只有一种时长类型，`java.time.Duration`。** `TokenStore`、`RateLimiter` 与构建器的设置已经如此；例外是 `AttributeProvider.timeout`（`kotlin.time.Duration?`）、`cosec-cocache` 的一个默认值常量，
+  以及 `cosec-kafka` 两个监听器公共构造器里的 `drainTimeout`（值类参数在 ABI 清单里只显示成一个 `long`，看清单发现不了，是读源码找到的）。
+  守护规则从 Kotlin 元数据读签名：已发布模块的公共与 SPI 签名不得出现 `kotlin.time` 的任何类型。
 - **明说扩展点用 Kotlin 实现。** id（`TenantId`、`AppId`、`PrincipalId`）是值类，凡签名里有它们的方法在字节码里都带哈希后缀（`memberships-hPxUw84`），Java 写不出这样的方法名；数据面的 SPI 又都是挂起函数。
   id 用值类是模型的决定，不改；`wiki/architecture/extending.md` 把这句话写出来，而不是让实现者自己撞上。
 
