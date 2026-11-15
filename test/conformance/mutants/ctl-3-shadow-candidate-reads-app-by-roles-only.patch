@@ -2,10 +2,10 @@
 # Mutant: a shadow window compares a tenant candidate without the app document it makes a roleless request read
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ShadowAppDocumentTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/ShadowListener.kt
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
 index 4b46c81d..ffc8faa5 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/ShadowListener.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/ShadowListener.kt
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
 @@ -160,7 +160,7 @@ class ShadowListener(
              return view
          }
