@@ -21,7 +21,7 @@ except that a `REQUIRED` one that fails turns a permit into `503`.
 | Delivery | When the listener runs | What a failure does |
 |---|---|---|
 | `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
-| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event; a listener that throws is logged at `WARN` at most every 10 seconds, and both are counted. |
+| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event and counts it, and the request never waits on a log line for it: a reporter logs `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` at `WARN`, at most every 10 seconds, off the request's thread. A listener that throws is logged at `WARN` at most every 10 seconds, and counted. |
 
 The listeners the starter registers:
 
@@ -46,8 +46,10 @@ A bean that is both is registered once, as the `DecisionListener` it is.
   `cosec.audit.kafka.delivery=required`, or register a `REQUIRED` listener of your own, before you rely on break-glass.
 - **A `REQUIRED` listener should be idempotent** by the event's `id`: a write that timed out may still have succeeded.
 - **On shutdown**, the listeners stop taking events, and the events already queued are still delivered for up to
-  [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). What is left then is dropped, with
-  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.` at `WARN`. The Kafka
+  [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). Then no listener call starts any
+  more: a call in progress is not interrupted, and what is left is dropped and counted in `cosec.listener.dropped`, with
+  `Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`
+  at `WARN`. The Kafka
   audit listener then gets up to the same timeout for the sends it still holds and the broker's answers to them, before
   the producer is closed. At that bound its queued sends are dropped and a send in progress is interrupted, with
   `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...` at `WARN`.
@@ -155,7 +157,7 @@ The listeners themselves are counted:
 
 | Meter | Tag | Counts |
 |---|---|---|
-| `cosec.listener.dropped` | `listener` | events a full queue dropped |
+| `cosec.listener.dropped` | `listener` | events a full or closed queue dropped, or a drain that timed out |
 | `cosec.listener.failures` | `listener` | listener calls that threw or, for `REQUIRED` ones, timed out |
 | `cosec.audit.required.failures` | none | `REQUIRED` failures on decisions they could not change (not permits) |
 
