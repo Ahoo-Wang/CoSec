@@ -16,6 +16,14 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.CompiledPolicy
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -180,8 +188,8 @@ open class FlatAuthorizationBenchmark {
         }
         check(expected) { "Scenario $scenario decided $decision" }
         val resolved = (ScopeResolver.resolve(subject, "", host) as ScopeResolution.Resolved).scope
-        val traced = CoSecFlatEngine.evaluate(
-            FlatRequest(authz, resolved, memberships, 0),
+        val traced = CoSecEngine.evaluate(
+            EngineRequest(authz, resolved, memberships, 0),
             SnapshotView(platform, app, tenant),
             TraceLevel.FULL,
         )
@@ -191,8 +199,8 @@ open class FlatAuthorizationBenchmark {
     @Benchmark
     fun authorize(): Decision {
         val scope = (ScopeResolver.resolve(subject, "", host) as ScopeResolution.Resolved).scope
-        val request = FlatRequest(authz, scope, memberships, 0)
-        return CoSecFlatEngine.evaluate(request, SnapshotView(platform, app, tenant)).decision
+        val request = EngineRequest(authz, scope, memberships, 0)
+        return CoSecEngine.evaluate(request, SnapshotView(platform, app, tenant)).decision
     }
 
     private companion object {

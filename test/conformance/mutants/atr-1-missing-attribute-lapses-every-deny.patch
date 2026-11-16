@@ -1,12 +1,12 @@
 # Rule: ATR-1
 # Mutant: a DENY whose external attribute cannot be fetched lapses, whatever its onMissing
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :runtime:test --tests me.ahoo.cosec.runtime.attribute.* :conformance:test
+# Tests: :engine:test --tests me.ahoo.cosec.engine.* :runtime:test --tests me.ahoo.cosec.runtime.attribute.* :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
 index 5f88243f..fff8489d 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
-@@ -558,7 +558,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -558,7 +558,7 @@ internal open class Evaluator(protected val request: EngineRequest, protected
          guard: Boolean
      ) {
          val missing = error is AttributeMissing

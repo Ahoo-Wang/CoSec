@@ -346,7 +346,7 @@ class ControlHttp(private val plane: ControlPlane) {
                 instantOf("expiresAt", it.text("expiresAt")),
                 it.text("reason"),
                 it.optText("policy")?.let { p -> field("policy", "a policy id") { PolicyId(p) } }
-                    ?: me.ahoo.cosec.engine.flat.BuiltinPolicies.ROOT,
+                    ?: me.ahoo.cosec.engine.BuiltinPolicies.ROOT,
             )
             changeResponse(change, CREATED)
         }

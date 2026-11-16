@@ -16,7 +16,7 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.CompileError
+import me.ahoo.cosec.engine.CompileError
 import me.ahoo.cosec.model.CoSecException
 
 /** A document that decodes but does not compile; it is never installed, and every request needing it fails closed. */

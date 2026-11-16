@@ -30,7 +30,7 @@ import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.document.RolePermissions
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.engine.BuiltinPolicies
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match

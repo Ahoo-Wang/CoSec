@@ -21,9 +21,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -212,8 +212,8 @@ class ApiKeyMigrationTest {
                 compiler.compile(document(DocumentKind.TENANT, tenant.value, emptyList(), emptyList()))
             },
         )
-        val decision = CoSecFlatEngine.evaluate(
-            FlatRequest(request, scope, memberships, now.toEpochMilli()),
+        val decision = CoSecEngine.evaluate(
+            EngineRequest(request, scope, memberships, now.toEpochMilli()),
             view
         ).decision
         return decision::class.simpleName!!

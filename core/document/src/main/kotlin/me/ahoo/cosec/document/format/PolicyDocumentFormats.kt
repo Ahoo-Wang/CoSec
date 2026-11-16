@@ -22,7 +22,7 @@ import me.ahoo.cosec.document.format.DocumentFormats.BINDING
 import me.ahoo.cosec.document.format.DocumentFormats.CATALOG
 import me.ahoo.cosec.document.format.DocumentFormats.DEFINITIONS
 import me.ahoo.cosec.document.format.DocumentFormats.SNAPSHOT_DOCUMENT
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
