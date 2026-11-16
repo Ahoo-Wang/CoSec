@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.StageReservationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-index 32458882..133b54d5 100644
+index 23eb8d55..f1c302c3 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
-@@ -100,10 +100,10 @@ internal class Staging(
-         head: Head?,
+@@ -102,10 +102,10 @@ internal class Staging(
+         step: ChangeStep,
          next: suspend (ChangeRequest) -> ChangeRequest,
      ): ChangeRequest {
 +        takeSlot(operator, change, head)
-         val reserved = flow.transition(change.id, setOf(ChangeState.CHECKED), next)
+         val reserved = flow.transition(change.id, step, next = next)
          var taken = false
          try {
 -            takeSlot(operator, reserved, head)

@@ -1,0 +1,16 @@
+# Rule: CTL-33
+# Mutant: a transition writes whatever state its step makes, in its row or not
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangeTransitionTableTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
+index d2d109a6..1d5fd02d 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
+@@ -162,7 +162,6 @@ internal class ChangeLifecycle(
+             PublishRules.requireState(current.value, from)
+             val updated = next(current.value).copy(updatedAt = clock.instant())
+             // The table decides where a step may take a change: anything else is a fault, and nothing is written.
+-            check(updated.state in step.to) { "$step leaves a change in ${step.to}, not in ${updated.state}" }
+             if (store.putChange(current.digest, updated)) {
+                 return updated
+             }
