@@ -57,7 +57,11 @@ class SnapshotFamilyMembershipTest {
         val (documents, absent) = source.heldMembers(SnapshotKind.APP)
         documents.size.assert().isEqualTo(DOCUMENTS)
         absent.assert().isEqualTo((0 until ABSENT).mapTo(HashSet()) { SnapshotKey.App("made-up-$it") })
-        source.evictionVisits(SnapshotKind.APP, absent = true, wanted = ABSENT - options.maxAbsent).assert().isEqualTo(ABSENT)
+        source.evictionVisits(
+            SnapshotKind.APP,
+            absent = true,
+            wanted = ABSENT - options.maxAbsent
+        ).assert().isEqualTo(ABSENT)
         source.evictionVisits(SnapshotKind.APP, absent = false, wanted = 1).assert().isEqualTo(DOCUMENTS)
     }
 

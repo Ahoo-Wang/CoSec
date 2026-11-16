@@ -34,7 +34,10 @@ internal fun SnapshotSource<*, *>.heldMembers(kind: SnapshotKind): Pair<Set<Snap
 /** Tests only: how many slots a pass choosing [wanted] victims of the kind [absent] names reads the stamp of. */
 internal fun SnapshotSource<*, *>.evictionVisits(kind: SnapshotKind, absent: Boolean, wanted: Int): Int {
     var visits = 0
-    families.victims(familyOfKind(kind), absent, wanted) { slot -> visits++; slot.lastAccess }
+    families.victims(familyOfKind(kind), absent, wanted) { slot ->
+        visits++
+        slot.lastAccess
+    }
     return visits
 }
 

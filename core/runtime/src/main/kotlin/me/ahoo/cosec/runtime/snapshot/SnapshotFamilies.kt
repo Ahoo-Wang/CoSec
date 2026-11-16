@@ -102,7 +102,8 @@ internal class SnapshotFamilies<A : Any>(
         lastAccessOf: (Slot<*>) -> Long = Slot<*>::lastAccess,
     ): List<Slot<*>> {
         // The kind's members; a slot is checked again, since its kind can change between the set and this read.
-        val ofKind = family.members(absent).asSequence().filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
+        val members = family.members(absent).asSequence()
+        val ofKind = members.filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
         return leastRecentlyUsed(ofKind, wanted, lastAccessOf, { it.isIdle() })
     }
 
