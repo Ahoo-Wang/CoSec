@@ -30,8 +30,9 @@ class LeastRecentlyUsedTest {
         val firstRead = LongArray(SLOTS)
         val reads = IntArray(SLOTS)
         val chosen = SnapshotFamilies.leastRecentlyUsed(
-            (0 until SLOTS).asSequence(),
+            0 until SLOTS,
             WANTED,
+            { true },
             { slot ->
                 reads[slot]++
                 stamps[slot].also {
@@ -51,14 +52,14 @@ class LeastRecentlyUsedTest {
     fun `only a slot that would be chosen is asked whether it is idle, and a busy one is passed over`() {
         val asked = mutableListOf<Int>()
         // Stamps fall from 10 to 1: every slot would be chosen as it is reached; slot 5 is busy.
-        val falling = SnapshotFamilies.leastRecentlyUsed((0 until 10).asSequence(), 3, { (10 - it).toLong() }) { slot ->
+        val falling = SnapshotFamilies.leastRecentlyUsed(0 until 10, 3, { true }, { (10 - it).toLong() }) { slot ->
             asked += slot
             slot != 5
         }
         falling.assert().containsExactly(9, 8, 7)
         asked.assert().isEqualTo((0 until 10).toList())
         asked.clear()
-        val rising = SnapshotFamilies.leastRecentlyUsed((0 until 10).asSequence(), 3, { it.toLong() }) { slot ->
+        val rising = SnapshotFamilies.leastRecentlyUsed(0 until 10, 3, { true }, { it.toLong() }) { slot ->
             asked += slot
             true
         }
@@ -70,8 +71,9 @@ class LeastRecentlyUsedTest {
     @Test
     fun `wanting none chooses none and reads nothing`() {
         val none = SnapshotFamilies.leastRecentlyUsed(
-            (0 until 10).asSequence(),
+            0 until 10,
             0,
+            { true },
             { error("read") }
         ) { error("asked") }
         none.assert().isEmpty()

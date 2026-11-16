@@ -33,7 +33,7 @@ internal fun SnapshotSource<*, *>.heldAbsentMembers(kind: SnapshotKind): Set<Sna
 internal fun SnapshotSource<*, *>.evictionVisits(kind: SnapshotKind, absent: Boolean, wanted: Int): Int {
     var visits = 0
     val stamp = { slot: Slot<*> -> slot.lastAccess.also { visits++ } }
-    SnapshotFamilies.leastRecentlyUsed(families.candidates(familyOfKind(kind), absent), wanted, stamp) { it.isIdle() }
+    families.victims(familyOfKind(kind), absent, wanted, stamp)
     return visits
 }
 
