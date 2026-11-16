@@ -14,7 +14,7 @@ a change that fails to compile. When unsure, deny, and ask.
 
 ```bash
 ./gradlew :runtime:check                          # tests + detekt for one module (what CI runs per module)
-./gradlew :engine:test --tests "me.ahoo.cosec.engine.flat.FlatEnginePropertyTest"
+./gradlew :engine:test --tests "me.ahoo.cosec.engine.EnginePropertyTest"
 ./gradlew check                                   # every module
 ./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark   # also :e2e:jmh -PjmhIncludes=PipelineBenchmark
 ./gradlew :code-coverage-report:codeCoverageReport
@@ -22,7 +22,8 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew :architecture:check                     # RFC 0011 §5: dependency, source and project-list rules
 ./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
 gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
-./gradlew :conformance:mutationCheck             # break each security rule on purpose, expect a test to fail (manual, not in check)
+./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
+gh workflow run mutation.yml                       # every mutant, on CI only: 36 shards, about an hour (-f mutants=a,b for a subset; also weekly)
 ./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
 ```
 
@@ -60,7 +61,9 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   not recompile its users incrementally: compile them with `--rerun-tasks` to see the opt-ins they now need.
 - `:conformance:mutationCheck` applies each patch in `test/conformance/mutants/` in a temporary worktree and requires a
   failing test (`-Pmutants=a,b` runs a subset). Run it in PRs that add or change a security property; list the
-  mutants the change kills in the PR. `:conformance:check` requires every patch to apply to the working tree
+  mutants the change kills in the PR. Only a failed test in a result file is a kill: a build that fails otherwise is
+  `BUILD_FAILED`, to be run again. The full run is the `mutation.yml` workflow (`.github/workflows/`), weekly and on
+  demand, never a local run: a mutant it reports as not killed is either a wrong patch or a missing test. `:conformance:check` requires every patch to apply to the working tree
   (`MutationCheckTest`): a refactoring that moves the code a mutant breaks fails `check` and names the patch. Rewrite
   it to break the same property where the code now lives (its header says what it is for), then run it.
 - Build cache, configuration cache and parallel execution are on in `gradle.properties`. If a task fails with a
@@ -140,7 +143,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library and
     the `cosec-annotations` markers only: `EnginePurityTest` and `DependencyRulesTest` fail otherwise, and the root
     build leaves out the SLF4J default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
-    engine holds the compiler, the indexes and the flat evaluator (`engine/flat/`).
+    engine holds the compiler, the indexes and the evaluator (`Evaluator`, behind `CoSecEngine`).
   - `cosec-spi` (`core/spi/`, `me.ahoo.cosec.spi.*`) holds the ports whose signatures need only the model and the
     contracts, with their values and in-memory implementations: `snapshot` (`SnapshotDocumentStore`, `SnapshotRead`,
     `SnapshotKey`, `InMemorySnapshotDocumentStore`), `membership`, `token` (`TokenVerifier`, `RevocationReader`,
@@ -202,7 +205,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `CandidateOrder`), then evaluates: every DENY first, and a matching DENY decides; without one, an erroring DENY
   or anything unresolved makes the decision `Indeterminate`; only then the ALLOWs, where the first match permits and
   an erroring ALLOW counts as no match; nothing matched is an implicit deny. A permit is then held to the tenant's
-  platform boundary (`FlatEvaluator`). The order never changes the decision, only which statement is reported.
+  platform boundary (`Evaluator`). The order never changes the decision, only which statement is reported.
   Rate limits are obligations: they run only after a permit, and an exhausted rule makes the outcome 429.
 - **Policies are data.** Policies, bindings, catalogs and rate limits live in three kinds of snapshot documents
   (platform, app, tenant; `schema: 2`), compiled into indexes. Roles and short-form permissions (`action` on a catalog
@@ -221,7 +224,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 
 | Invariant | Why | Guard |
 |---|---|---|
-| **Deny-first**: no `ALLOW` wins over a matching `DENY`, whatever document either comes from | Otherwise adding a policy can widen access | `FlatEnginePropertyTest` (ALG-1, `P1'`), the ALG conformance scenarios |
+| **Deny-first**: no `ALLOW` wins over a matching `DENY`, whatever document either comes from | Otherwise adding a policy can widen access | `EnginePropertyTest` (ALG-1, `P1'`), the ALG conformance scenarios |
 | **Fail closed**: a failing `DENY`, an unreadable document, a failing or slow SPI never permit; Indeterminate is 503, an unmodelled error 500. Only exceptions: rate limit rules without `strictFailure`, and verifying a request's token while the revocation store cannot be read (documented; never refresh, `IDN-14`) | An outage must not open the gate | `FlatEnginePropertyTest` (`P9`), `PipelineTest` (PIP-2, PIP-4), `CoCacheRevocationReaderTest` (PIP-7) |
 | **One decision path**: outcomes and status codes come only from `StatusMapping`; adapters never see a `Decision` | Three adapters must answer identically | `OneDecisionPathTest`, `WebAdapterParityTest` |
 | **No blocking on the event loop**: the data plane's SPIs suspend, and implementations use non-blocking clients; `SnapshotSource.peek` does no I/O; a local cache hit answers on the caller's thread | Blocking a Netty thread stalls every request on it | `SnapshotStoreBlockHoundTest`, `PipelineBlockHoundTest`, `SuspendingRedisRateLimitingTest`, `RuntimeBoundaryTest` |
@@ -287,7 +290,8 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 - Tests: JUnit 5, MockK, FluentAssert (`me.ahoo.test.asserts.assert`), Reactor Test. For caching and
   concurrency, use real implementations (CoCache's in-memory backend, real Redis) rather than mocks; mocks hide the
   races these tests exist to catch.
-- Dependency versions live only in `gradle/libs.versions.toml`.
+- Dependency versions live only in `gradle/libs.versions.toml`. The build resolves from Maven Central only;
+  `-Pcosec.mavenLocal` adds `mavenLocal()` first, to test against a locally published library (`MavenLocalGuardTest`).
 - PR titles follow Conventional Commits (CI-enforced; they drive labels, release notes and the version).
   Mark breaking changes with `!`. Breaking = public API, `cosec.*` properties, or authorization semantics.
 
