@@ -90,8 +90,10 @@ class SnapshotFamilyBoundTest {
 
     @Test
     fun `passes at once take a kind exactly to its bound, never below it and never stopping above it`() {
-        // A pass that stopped on a claim another was about to give back left one above the bound in about 1 round in
-        // 10,000 before claims moved under the victim's lock: so many rounds, two to four passes at a time.
+        // One-sided: it can only show the defect, never prove it absent, so it runs many rounds. The first version of
+        // SNP-14's fix claimed a victim's decrement before its removal and gave it back on a refusal; two passes then
+        // stopped one above the bound in 2 of 20,000 rounds, and this test failed on it in 2 of 2 runs. Do not cut the
+        // rounds to save its 3.6 s.
         repeat(RACES) { round ->
             (0 until CAP).forEach { source.load("app-$it").join() }
             val passes = threads.housekeeping.tasks.toList().also { threads.housekeeping.tasks.clear() }

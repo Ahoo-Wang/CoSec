@@ -186,7 +186,7 @@
     {
       "id": "SNP-14",
       "source": "RFC 0013 B2b (the family bound under a burst)",
-      "statement": "A family holds at most its bound plus the smaller of its bound and 4,096 entries of each kind (documents; entries for documents the store does not hold), plus the entries being installed or loaded at that moment; an install that finds its kind over that evicts on the installing thread before it answers its waiters, and evictions never take a kind below its bound.",
+      "statement": "A family holds at most its bound plus the smaller of its bound and 4,096 entries of each kind (documents; entries for documents the store does not hold), plus the entries being installed or loaded at that moment; an install that finds its kind over that evicts on the installing thread before it answers its waiters. Evictions never take a kind below its bound, and passes running at once leave a kind at its bound when every victim was idle: they never stop above it.",
       "level": "timing",
       "properties": [
         "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"

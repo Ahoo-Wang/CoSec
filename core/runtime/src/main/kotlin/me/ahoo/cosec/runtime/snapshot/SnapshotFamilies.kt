@@ -76,7 +76,7 @@ internal class SnapshotFamilies<A : Any>(
             return
         }
         for (victim in victims(family, absent, minOf(excess, limit))) {
-            evictOne(family, victim, absent) ?: return
+            evictOne(victim, absent) ?: return
         }
     }
 
@@ -85,7 +85,7 @@ internal class SnapshotFamilies<A : Any>(
      * removal claims the decrement under the victim's lock ([Slot.removeIfIdle]). Null when the kind is at its bound,
      * else whether it went.
      */
-    fun evictOne(family: Family<*>, victim: Slot<*>, absent: Boolean): Boolean? {
+    fun evictOne(victim: Slot<*>, absent: Boolean): Boolean? {
         val removed = victim.removeIfIdle(onlyIfEmpty = false, claimedAbsent = absent) ?: return null
         if (removed) {
             lagReports.forget(victim.key)

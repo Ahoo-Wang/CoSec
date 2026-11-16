@@ -39,11 +39,13 @@ internal fun SnapshotSource<*, *>.evictionScan(kind: SnapshotKind, wanted: Int):
 internal fun SnapshotSource<*, *>.evictClaiming(key: SnapshotKey, absent: Boolean): Boolean? {
     val family = familyOfKind(key.kind)
     val slot = family.slots[family.spec.idOf(key)] ?: return false
-    return families.evictOne(family, slot, absent)
+    return families.evictOne(slot, absent)
 }
 
 /** Tests only: the [kind] family's slots with a load in flight. */
-internal fun SnapshotSource<*, *>.loadsInFlight(kind: SnapshotKind): Int = familyOfKind(kind).slots.values.count { !it.isIdle() }
+internal fun SnapshotSource<*, *>.loadsInFlight(kind: SnapshotKind): Int = familyOfKind(kind).slots.values.count {
+    !it.isIdle()
+}
 
 private fun SnapshotSource<*, *>.familyOfKind(kind: SnapshotKind): SnapshotFamilies.Family<*> =
     families.first { it.spec.kind == kind }
