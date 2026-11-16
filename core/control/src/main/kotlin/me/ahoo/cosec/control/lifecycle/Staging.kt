@@ -34,7 +34,6 @@ import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.BREAK_GLASS_EXEMPT
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.CONFLICT
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.MAX_ATTEMPTS
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.STAGED
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.UNAVAILABLE
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
@@ -72,17 +71,19 @@ internal class Staging(
     suspend fun stage(operator: Operator, id: ChangeId): ChangeRequest {
         val change = flow.visible(operator, id)
         authority.require(operator, change.key, PublishRules.publishing(change))
-        PublishRules.requireState(change, setOf(ChangeState.CHECKED))
+        PublishRules.requireState(change, ChangeStep.STAGE.from)
         val head = revisions.head(change.key)
         if (PublishRules.exempt(change, head)) {
-            return reserved(operator, change, head) {
+            return reserved(operator, change, head, ChangeStep.STAGE) {
                 it.copy(state = PublishRules.afterWindow(it), skipShadow = BREAK_GLASS_EXEMPT)
             }
         }
         val now = clock.instant()
         val state = ShadowState("${id.value}@${now.toEpochMilli()}", now)
         val candidate = slots.candidate(change, state) { candidates.applied(change, head?.document).first!! }
-        val shadowing = reserved(operator, change, head) { it.copy(state = ChangeState.SHADOWING, shadow = state) }
+        val shadowing = reserved(operator, change, head, ChangeStep.STAGE) {
+            it.copy(state = ChangeState.SHADOWING, shadow = state)
+        }
         slots.write(shadowing, candidate) { undo(shadowing) }
         flow.audit(ChangeEvent.Kind.SHADOW_STARTED, shadowing, operator.actor)
         return shadowing
@@ -98,9 +99,10 @@ internal class Staging(
         operator: Operator,
         change: ChangeRequest,
         head: Head?,
+        step: ChangeStep,
         next: suspend (ChangeRequest) -> ChangeRequest,
     ): ChangeRequest {
-        val reserved = flow.transition(change.id, setOf(ChangeState.CHECKED), next)
+        val reserved = flow.transition(change.id, step, next = next)
         var taken = false
         try {
             takeSlot(operator, reserved, head)
@@ -115,7 +117,7 @@ internal class Staging(
     private suspend fun unreserve(reserved: ChangeRequest) = slots.giveBack(reserved) { undo(reserved) }
 
     private suspend fun undo(reserved: ChangeRequest) {
-        flow.transition(reserved.id, setOf(reserved.state)) {
+        flow.transition(reserved.id, ChangeStep.UNRESERVE, setOf(reserved.state)) {
             it.copy(state = ChangeState.CHECKED, skipShadow = null, shadow = null)
         }
     }
@@ -128,10 +130,10 @@ internal class Staging(
      */
     suspend fun shadowed(id: ChangeId): ChangeRequest {
         val change = flow.get(id)
-        PublishRules.requireState(change, setOf(ChangeState.SHADOWING))
+        PublishRules.requireState(change, ChangeStep.SHADOWED.from)
         val state = change.shadow ?: error("change ${id.value} is shadowing without a window")
         if (revisions.head(change.key)?.digest != change.base.digest) {
-            return flow.settle(change, ChangeState.CONFLICTED, from = setOf(ChangeState.SHADOWING))
+            return flow.settle(change, ChangeState.CONFLICTED, ChangeStep.SHADOWED)
         }
         @Suppress("TooGenericExceptionCaught")
         val look = try {
@@ -146,9 +148,9 @@ internal class Staging(
         val summary = look.summary ?: return if (seen == state) {
             change
         } else {
-            flow.transition(id, setOf(ChangeState.SHADOWING)) { it.copy(shadow = seen) }
+            flow.transition(id, ChangeStep.SHADOWED) { it.copy(shadow = seen) }
         }
-        val closed = flow.transition(id, setOf(ChangeState.SHADOWING)) {
+        val closed = flow.transition(id, ChangeStep.SHADOWED) {
             it.copy(state = PublishRules.afterWindow(it), shadow = seen.copy(closed = summary))
         }
         slots.withdraw(closed)
@@ -173,8 +175,8 @@ internal class Staging(
         } else {
             authority.require(operator, change.key, ControlActions.SKIP_SHADOW)
         }
-        PublishRules.requireState(change, setOf(ChangeState.CHECKED))
-        return reserved(operator, change, revisions.head(change.key)) {
+        PublishRules.requireState(change, ChangeStep.SKIP_SHADOW.from)
+        return reserved(operator, change, revisions.head(change.key), ChangeStep.SKIP_SHADOW) {
             it.copy(state = PublishRules.afterWindow(it), skipShadow = reason)
         }
     }
@@ -232,7 +234,7 @@ internal class Staging(
     /** [held] made `CONFLICTED` for [by] from any staged state, before its slot moves; 409 or 503 when it cannot be. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun conflict(held: ChangeRequest, by: ChangeRequest): ChangeRequest = try {
-        flow.transition(held.id, STAGED) { it.copy(state = ChangeState.CONFLICTED) }
+        flow.transition(held.id, ChangeStep.PREEMPT) { it.copy(state = ChangeState.CONFLICTED) }
     } catch (e: CancellationException) {
         throw e
     } catch (e: ChangeRejectedException) {
