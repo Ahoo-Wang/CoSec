@@ -86,7 +86,3 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
         return Propagation(revision, recent.count { (it.documents[key]?.revision ?: 0) >= revision }, recent.size)
     }
 }
-
-/** Every instance that has reported on a window so far, and its [summary] once it may close. */
-@InternalCoSecApi
-class ShadowLook(val reporters: Set<String>, val summary: ShadowSummary?)
