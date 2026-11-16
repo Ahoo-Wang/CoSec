@@ -19,11 +19,6 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 
 internal const val ENABLED_SUFFIX_KEY = ".enabled"
 
-@InternalCoSecApi
-interface EnabledCapable {
-    val enabled: Boolean
-}
-
 /**
  * CoSec Properties .
  *

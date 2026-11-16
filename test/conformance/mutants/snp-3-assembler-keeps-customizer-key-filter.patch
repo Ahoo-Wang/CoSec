@@ -2,14 +2,14 @@
 # Mutant: CoSec's locks leave the key filter and the TTL function open, so a customizer's key filter can hide revocations
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.authorization.cache.StoreOfRecordOverrideTest
 
-diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt
-index e4056e1..cedabe6 100644
---- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt
-+++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt
-@@ -229,7 +229,7 @@ object CoSecCacheSpecs {
-      * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
-      */
-     fun locks(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
+index 46f68bd5..4c009d40 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
+@@ -47,7 +47,7 @@ internal object CacheLocks {
+     private val COMMAND_TIMEOUT: Duration = ChronoUnit.FOREVER.duration
+ 
+     fun of(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
 -        lockLayout(*LayoutField.entries.toTypedArray())
 +        lockLayout(*(LayoutField.entries - LayoutField.KEY_FILTER - LayoutField.TTL_OF).toTypedArray())
          when (cacheName) {
