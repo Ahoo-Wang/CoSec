@@ -245,10 +245,11 @@
     {
       "id": "CTL-20",
       "source": "RFC 0007 §3.1 N3, §6.2",
-      "statement": "The control plane checks a candidate's conditions against the external attributes the platform declares and, after them, those the host's attribute providers declare, as an instance compiles it: a condition on a provider's attribute is checked clean, one on an attribute neither declares does not compile.",
+      "statement": "The control plane checks a candidate's conditions against the external attributes the platform declares and, after them, those the host's attribute providers declare, as an instance compiles it: a condition on a provider's attribute is checked clean, one on an attribute neither declares does not compile. cosec-migrate publish compiles what it writes the same way: an app or tenant document against the published platform document's condition limits and declared attributes.",
       "level": "control",
       "guards": [
-        "control:ProviderAttributesTest#a candidate compiles against the platform's and the providers' attributes"
+        "control:ProviderAttributesTest#a candidate compiles against the platform's and the providers' attributes",
+        "migrate:PublishFileTest#a tenant document compiles against the published platform, as every instance compiles it"
       ],
       "pending": null
     },
@@ -265,7 +266,7 @@
     {
       "id": "CTL-22",
       "source": "RFC 0007 §5.5, Q5 (2026-10-30 revision)",
-      "statement": "A change that only narrows, every operation one of: removing a binding of an ALLOW-only policy, making an attachable ALLOW-only policy unattachable, a new DENY-only policy or a new binding of one, none on a policy id the platform also defines, staged by a holder of cosec:skip-shadow, takes a busy staging slot: the holder is made CONFLICTED first, from whichever staged state it is in, and keeps its slot when it cannot be. A READY holder whose revision the chain shows written is settled PUBLISHED by whichever change comes for its slot. A publish goes on only while its change holds the slot, checked again right before its head write; the change that took a slot and finds the head its holder wrote over the same base records why it failed. Any other change waits (409).",
+      "statement": "A change that only narrows, every operation one of: removing a binding of an ALLOW-only policy, making an attachable ALLOW-only policy unattachable, a new DENY-only policy or a new binding of one, none on a policy id the platform also defines, staged by a holder of cosec:skip-shadow, takes a busy staging slot: the holder is made CONFLICTED first, from whichever staged state it is in, and keeps its slot when it cannot be. A READY holder whose revision the chain shows written is settled PUBLISHED by whichever change comes for its slot. A PUBLISHED change that still holds its slot, because releasing it after the head write failed, is settled by publishing it again: the slot is released and the publish recorded once, by the call that released it, and no revision is written (#1386). A publish goes on only while its change holds the slot, checked again right before its head write; the change that took a slot and finds the head its holder wrote over the same base records why it failed. Any other change waits (409).",
       "level": "control",
       "pending": null,
       "guards": [
@@ -282,6 +283,8 @@
         "control:PreemptionRaceTest#a preemption that gives up says so",
         "control:RetriedPublishTest#a revoke settles a published holder and takes its slot",
         "control:RetriedPublishTest#a publish and its retry record it once",
+        "control:RetriedPublishTest#a publish whose slot release failed is settled by publishing it again, adding no revision",
+        "control:RetriedPublishTest#two retries that both saw the slot held settle it once",
         "control:PreemptionRaceTest#a head write that meets the preempting change's head records the failure"
       ]
     },

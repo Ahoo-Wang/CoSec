@@ -21,7 +21,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.MembershipLoader
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -44,7 +45,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.pipeline.CoSecMembershipAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
@@ -120,7 +120,7 @@ class Slice(
         val revision = revisions.merge(key, 1, Long::plus)!!
         val publishedAt = Instant.now()
         val text = """{"schema":2,"revision":$revision,"publishedAt":"$publishedAt"$body}"""
-        cache.put(key, SnapshotDocument(2, revision, publishedAt, text.encodeToByteArray()))
+        cache.put(key, SnapshotDocuments.read(text.encodeToByteArray()))
         source.reload(key).join()
     }
 

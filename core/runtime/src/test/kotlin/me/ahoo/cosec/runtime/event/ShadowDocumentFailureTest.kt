@@ -21,7 +21,8 @@ import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CoSecEngine
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures
@@ -45,7 +46,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.time.Duration.Companion.seconds
 
@@ -103,7 +103,7 @@ class ShadowDocumentFailureTest {
 
     private fun document(body: String, revision: Long = 1): SnapshotDocument {
         val text = """{"schema":2,"revision":$revision,"publishedAt":"2026-10-26T00:00:00Z"$body}"""
-        return SnapshotDocument(2, revision, Instant.parse("2026-10-26T00:00:00Z"), text.encodeToByteArray())
+        return SnapshotDocuments.read(text.encodeToByteArray())
     }
 
     private fun tenant(vararg bindings: String, revision: Long = 1) =
@@ -136,7 +136,7 @@ class ShadowDocumentFailureTest {
         val registered = DecisionListeners(listOfNotNull(shadow)).also { opened += it }
         val pipeline = PipelineFixtures.pipeline(
             authenticator = PipelineFixtures.authenticator(PipelineFixtures.authenticated(app = "order")),
-            engine = CoSecFlatEngine,
+            engine = CoSecEngine,
             views = views,
         ) { listeners(registered) }
         return runBlocking {

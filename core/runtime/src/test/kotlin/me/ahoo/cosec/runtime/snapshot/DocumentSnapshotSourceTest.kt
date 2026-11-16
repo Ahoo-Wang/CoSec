@@ -18,11 +18,11 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -32,7 +32,6 @@ import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -233,10 +232,7 @@ class DocumentSnapshotSourceTest {
         val store = InMemorySnapshotDocumentStore()
         fun put(key: SnapshotKey, body: String) = store.put(
             key,
-            SnapshotDocument(
-                2,
-                1,
-                Instant.EPOCH,
+            SnapshotDocuments.read(
                 """{"schema":2,"revision":1,"publishedAt":"1970-01-01T00:00:00Z"$body}""".encodeToByteArray()
             ),
         )

@@ -19,10 +19,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.future.await
-import me.ahoo.cocache.api.CacheWriteException
 import me.ahoo.cocache.api.Codec
-import me.ahoo.cocache.api.ConditionalDelete
-import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
@@ -31,6 +28,11 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
+import me.ahoo.cosec.cocache.control.ConditionalStores.MAX_LIST_ATTEMPTS
+import me.ahoo.cosec.cocache.control.ConditionalStores.Put
+import me.ahoo.cosec.cocache.control.ConditionalStores.deleteIf
+import me.ahoo.cosec.cocache.control.ConditionalStores.put
+import me.ahoo.cosec.cocache.control.ConditionalStores.read
 import me.ahoo.cosec.cocache.createLocked
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.shadow.StoredCandidateCodec
@@ -269,46 +271,6 @@ class CoCacheControlStore internal constructor(
         deleteIf(leases, name) { it == holder }
     }
 
-    /**
-     * Removes [key] if its value, read now, is [wanted], and only while it still is (`deleteIfMatch`). A conflict is
-     * read again: the value that replaced it may be wanted too. A removal whose outcome is unknown is read back: gone, or
-     * another value, means it is not this caller's to remove any more.
-     */
-    private suspend fun <K : Any, V : Any> deleteIf(store: Store<K, V>, key: K, wanted: (V) -> Boolean): Boolean {
-        repeat(MAX_LIST_ATTEMPTS) {
-            val (value, digest) = read(store, key) ?: return false
-            if (!wanted(value)) {
-                return false
-            }
-            val deleted = try {
-                store.async().deleteIfMatch(key, cocacheDigest(digest)).await()
-            } catch (error: CacheWriteException) {
-                return removedAfter(store, key, digest, error)
-            }
-            if (deleted == ConditionalDelete.Deleted) {
-                return true
-            }
-        }
-        throw IllegalStateException(
-            "[$key] kept changing while it was removed; gave up after $MAX_LIST_ATTEMPTS attempts."
-        )
-    }
-
-    /**
-     * Whether a `deleteIfMatch` of [key] over [digest] that failed with [error] removed it: read back when its outcome
-     * is unknown. Still [digest] means it did not, and the failure is the answer.
-     */
-    private suspend fun <K : Any, V : Any> removedAfter(
-        store: Store<K, V>,
-        key: K,
-        digest: SnapshotDigest,
-        error: CacheWriteException,
-    ): Boolean {
-        val after = if (error.outcomeUnknown) read(store, key) else throw error
-        if (after?.second == digest) throw error
-        return after == null
-    }
-
     /** Read, change, `putIfMatch`: retried while another writer changed the list in between. */
     private suspend fun updateList(name: String, next: (Map<String, Instant>) -> Map<String, Instant>) {
         repeat(MAX_LIST_ATTEMPTS) {
@@ -326,68 +288,10 @@ class CoCacheControlStore internal constructor(
         )
     }
 
-    private sealed interface Put {
-        object Written : Put
-
-        class Conflict(val current: SnapshotDigest?) : Put
-    }
-
-    /**
-     * `putIfMatch`. A write that failed with an unknown outcome is resolved by reading back: [mine] means it landed;
-     * still [expected] means it did not, and the failure is the answer; anything else means another writer got there.
-     * A write CoCache knows was not executed (`outcomeUnknown` false, such as a command rejected before it was sent) is
-     * not read back: the failure is the answer, even when another writer stored the same bytes in between.
-     */
-    private suspend fun <K : Any, V : Any> put(
-        cache: Store<K, V>,
-        key: K,
-        expected: SnapshotDigest?,
-        value: V,
-        mine: SnapshotDigest
-    ): Put {
-        val async = cache.async()
-        val result = try {
-            async.putIfMatch(key, expected?.let(::cocacheDigest), value).await()
-        } catch (error: CacheWriteException) {
-            val read = if (error.outcomeUnknown) readBack(cache, key, mine) else null
-            val current = (read as? ConditionalGet.Present)?.let { snapshotDigest(it.digest) }
-            return when {
-                read == ConditionalGet.Unchanged -> Put.Written
-                read == null || current == expected -> throw error
-                else -> Put.Conflict(current)
-            }
-        }
-        return when (result) {
-            is ConditionalPut.Written -> Put.Written
-            is ConditionalPut.Conflict -> Put.Conflict(result.current?.let(::snapshotDigest))
-        }
-    }
-
-    /** What [key] holds now, compared with [mine]; null when Redis cannot say, so the write's own failure stands. */
-    @Suppress("SwallowedException", "TooGenericExceptionCaught")
-    private suspend fun <K : Any, V : Any> readBack(
-        cache: Store<K, V>,
-        key: K,
-        mine: SnapshotDigest
-    ): ConditionalGet<V>? =
-        try {
-            cache.async().getIfChanged(key, cocacheDigest(mine)).await()
-        } catch (_: Exception) {
-            null
-        }
-
-    private suspend fun <K : Any, V : Any> read(cache: Store<K, V>, key: K): Pair<V, SnapshotDigest>? =
-        when (val read = cache.async().getIfChanged(key, null).await()) {
-            is ConditionalGet.Present -> read.value to snapshotDigest(read.digest)
-            ConditionalGet.Unchanged -> error("An unconditional read of [$key] was answered as unchanged.")
-            ConditionalGet.Absent -> null
-        }
-
     companion object {
         private const val DOCUMENTS = "documents"
         private const val OPEN_CHANGES = "open-changes"
         private const val APP_LIST = "all"
-        private const val MAX_LIST_ATTEMPTS = 16
 
         /** How many changes [openChanges] reads at once. */
         private const val READ_BATCH = 32

@@ -194,7 +194,9 @@ cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefi
 ```
 
 `publish` reads only an accepted conversion, and only the files `report.json` lists with the SHA-256 recorded there:
-a file edited, missing or added since `convert` stops it. It then compiles every document, checks every app
+a file edited, missing or added since `convert` stops it. A document you wrote yourself, rather than one `convert`
+wrote, publishes with `--file <document.json> --document <platform|app:<id>|tenant:<id>>` in place of `--in`, with
+the same checks. It then compiles every document, checks every app
 document's references against the platform document, and refuses documents that hold a break-glass binding, writing
 nothing (`bootstrap` refuses them too). It writes each document as revision 1 through the control
 plane's store, so the document's revision history starts there, and only when the document does not exist yet: it
@@ -1118,7 +1120,8 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 entry below): a converted 7.x "every action" granted the control plane. 8.0.0-alpha.4 is a preview with no
 compatibility promise. **Every token issued before this version declares no app, so a
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
-and have to be provisioned again.
+and have to be provisioned again. **Close or withdraw open shadow windows before you upgrade**: a candidate staged by
+8.0.0-alpha.4 states its header beside its document, and is refused as unreadable, so its window is not compared.
 
 - **Security: a tenant switch no longer issues from a revoked or ended session.** From 8.0.0-alpha.1 to
   8.0.0-alpha.4, a switch read no revocation itself: while the revocation store could not be read, which the request
@@ -1593,6 +1596,9 @@ and have to be provisioned again.
   - `RateLimitResult` is no longer a `data class`: `copy` and `componentN` are gone, and equality is unchanged.
   - `SnapshotDocument.DOCUMENT_SCHEMA` is no longer a `const`, so compiled code reads the schema of the CoSec it runs
     with. A `const val` set from it no longer compiles: make it a `val`.
+  - **A `SnapshotDocument` is made from its bytes** (`SNP-12`): its constructor is internal. Replace
+    `SnapshotDocument(schema, revision, publishedAt, bytes)` with `SnapshotDocuments.read(bytes)` (`cosec-document`),
+    which reads the header from the bytes and refuses bytes that are not a document. The stored bytes do not change.
   - Internal now (`@InternalCoSecApi`): `Environment`, the condition literals (`Literal`), `Attribute` and its `Kind`,
     `ScopeResolver`, `ScopeSubject`, `SubjectRevocation`, `IdentityFormatException`, `IdentityOverflowException` and
     `Identifiers.isUnpairedSurrogateAt`. The constructors of `ScopeResolution.Resolved` and `ScopeResolution.Rejected`
@@ -2105,7 +2111,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   makes the request's `SecurityContext`, and a test mocks or implements the interface. Of the engine's request,
   `AuthzRequest.scope`, the class `me.ahoo.cosec.model.Scope`, and `Subject.roles`, `policies` and `root`, none of
   which the engine read: code that builds an `AuthzRequest` or a `Subject` drops those arguments. The engine's tenant,
-  roles and attachments are in `FlatRequest.scope` and `FlatRequest.memberships`. `Subject.tenantId` stays, for a
+  roles and attachments are in `EngineRequest.scope` and `EngineRequest.memberships`. `Subject.tenantId` stays, for a
   stage-A `AttributeProvider`, which runs before there is a scope.
 
 #### Data written through CoCache 6

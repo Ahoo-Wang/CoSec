@@ -22,7 +22,7 @@ import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.RoleDefinition
-import me.ahoo.cosec.engine.flat.RateLimitSource
+import me.ahoo.cosec.engine.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Identifiers

@@ -18,13 +18,14 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.ViewVersion
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -67,7 +68,7 @@ class SnapshotConsistencyPropertyTest {
     private fun document(revision: Long, body: String): SnapshotDocument {
         val publishedAt = Instant.parse("2026-10-27T00:00:00Z")
         val json = """{"schema":2,"revision":$revision,"publishedAt":"$publishedAt",$body}"""
-        return SnapshotDocument(SnapshotDocument.DOCUMENT_SCHEMA, revision, publishedAt, json.encodeToByteArray())
+        return SnapshotDocuments.read(json.encodeToByteArray())
     }
 
     private fun policy(id: String, revision: Long) =
@@ -100,7 +101,7 @@ class SnapshotConsistencyPropertyTest {
         (resolution as ScopeResolution.Resolved).scope
     }
 
-    private val request = FlatRequest(
+    private val request = EngineRequest(
         AuthzRequest(
             subject = Subject("user", true, emptyMap(), true, true),
             action = Action("http", "GET"),
@@ -130,7 +131,7 @@ class SnapshotConsistencyPropertyTest {
     }
 
     /** The statements of [evaluation] that do not belong to the revisions of [view]. */
-    private fun violationsOf(view: SnapshotView, evaluation: FlatEvaluation): List<String> {
+    private fun violationsOf(view: SnapshotView, evaluation: Evaluation): List<String> {
         val violations = ArrayList<String>()
         val version = view.version!!
         if (evaluation.decision !is Decision.Deny) {
@@ -174,7 +175,7 @@ class SnapshotConsistencyPropertyTest {
                     try {
                         while (publishing.get()) {
                             val view = view(source.loadAll(listOf(TENANT_KEY)).get())
-                            val evaluation = CoSecFlatEngine.evaluate(request, view, TraceLevel.FULL)
+                            val evaluation = CoSecEngine.evaluate(request, view, TraceLevel.FULL)
                             evaluations.incrementAndGet()
                             seen.add(view.version!!.platform to view.version!!.tenant)
                             violations.addAll(violationsOf(view, evaluation))

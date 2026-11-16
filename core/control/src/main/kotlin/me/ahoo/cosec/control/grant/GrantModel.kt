@@ -16,8 +16,8 @@
 package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.OnMissing
-import me.ahoo.cosec.engine.flat.SubjectAttributes
+import me.ahoo.cosec.engine.OnMissing
+import me.ahoo.cosec.engine.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.model.AppId

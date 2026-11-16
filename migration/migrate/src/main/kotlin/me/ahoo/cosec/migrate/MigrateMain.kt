@@ -20,7 +20,6 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.ScanArgs
 import io.lettuce.core.ScanCursor
 import io.lettuce.core.api.sync.RedisCommands
-import io.lettuce.core.cluster.RedisClusterClient
 import io.lettuce.core.codec.ByteArrayCodec
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CoCacheFactory
@@ -57,6 +56,7 @@ import kotlin.system.exitProcess
  * convert --from-files ./export --out ./converted [...]
  *         [--rate-limit-rules ./rate-limit.json]
  * publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --in ./converted [--resume]
+ * publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --file ./platform.json --document platform
  * bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --platform-admin alice [--force]
  * repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
@@ -89,7 +89,7 @@ object MigrateMain {
      */
     internal val OPTIONS = mapOf(
         "convert" to setOf("from-redis", "from-files", "key-prefix", "out", "partition", "rate-limit-rules"),
-        "publish" to setOf("to-redis", "cluster", "key-prefix", "in", "resume"),
+        "publish" to setOf("to-redis", "cluster", "key-prefix", "in", "resume", "file", "document"),
         "bootstrap" to setOf("to-redis", "cluster", "key-prefix", "platform-admin", "force"),
         "repair-references" to setOf("to-redis", "cluster", "key-prefix"),
         "partition plan" to setOf("from-redis", "from-files", "key-prefix", "out"),
@@ -107,6 +107,7 @@ object MigrateMain {
                   [--partition platform|by-owner]
                   [--rate-limit-rules <file>]
           publish --to-redis <uri> [--cluster] [--key-prefix <p>] --in <dir> [--resume]
+                  or, in place of --in: --file <document.json> --document platform|app:<id>|tenant:<id>
           bootstrap --to-redis <uri> [--cluster] [--key-prefix <p>] --platform-admin <principal> [--force]
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
@@ -213,7 +214,7 @@ object MigrateMain {
             private val VALUED = setOf(
                 "from-redis", "from-files", "key-prefix", "out", "partition", "to-redis", "in",
                 "rate-limit-rules", "platform-admin", "redis", "role-prefix", "app",
-                "memberships", "grant-to-principal",
+                "memberships", "grant-to-principal", "file", "document",
             )
             private val FLAGS = setOf("resume", "force", "dry-run", "cluster")
             private val REDIS_URIS = listOf("to-redis", "from-redis", "redis")
@@ -323,76 +324,30 @@ object MigrateMain {
     }
 
     private fun publish(options: Options, out: PrintStream): Int {
-        val uri = options.required("to-redis")
-        val keyPrefix = options.value("key-prefix") ?: DEFAULT_KEY_PREFIX
-        val cluster = options.flag("cluster")
-        val input = Path.of(options.required("in"))
-        val documents = ConvertedDirectory.read(input)
-        unfinishedUpgrade(uri, cluster, keyPrefix)?.let { refusal ->
-            refusal.forEach(out::println)
-            return FAILED
+        val file = options.value("file")
+        if (file != null && (options.value("in") != null || options.flag("resume"))) {
+            throw UsageException("publish takes --file or --in, not both; --resume is for --in.")
         }
-        try {
-            controlStore(options) { store ->
-                val result = DocumentPublisher(store).publish(documents, resume = options.flag("resume"))
-                result.written.forEach { out.println("Published $it") }
-                result.skipped.forEach { out.println("Already published, identical: $it") }
-            }
-        } catch (error: PublishException) {
-            out.println("Failed: ${RedisUris.scrub(error.message.orEmpty(), options.redisUris)}")
-            out.println(
-                "Finish with (the credentials of --to-redis left out): cosec-migrate publish --to-redis " +
-                    RedisUris.withoutUserInfo(uri) + " --key-prefix $keyPrefix" +
-                    (if (cluster) " --cluster" else "") + " --in ${input.toAbsolutePath()} --resume"
-            )
-            return FAILED
+        if (file == null && options.value("document") != null) {
+            throw UsageException("--document names the document of --file.")
         }
-        out.println("Published ${documents.size} document(s). The 7.x data is untouched.")
-        return OK
-    }
-
-    /**
-     * The refusal to write while `<prefix>:meta:cocache8` is there, null when it is not. 8.0.0-alpha's CoCache 6 → 8
-     * upgrade wrote that marker after it exported the documents and before it deleted them, and removed it once every
-     * one was published again: one left means a run that stopped half-way, whose documents are in its export, not in
-     * Redis. This tool no longer has that upgrade, and its documents are in alpha.4's layout, so it does not finish it:
-     * publishing over it would hide that some documents are missing, and nothing at run time reads the marker.
-     */
-    private fun unfinishedUpgrade(uri: String, cluster: Boolean, keyPrefix: String): List<String>? {
-        val key = "${keyPrefix.trimEnd(':')}:meta:cocache8"
-        val marker = redisValue(uri, cluster, key) ?: return null
-        val export = try {
-            // Read from Redis, not written by this tool: printed so that it cannot drive the terminal.
-            CoSecJson.mapper.readTree(marker).get("out")?.asString()?.let(Identifiers::printable)
-        } catch (_: JacksonException) {
-            null
-        }
-        return listOf(
-            "Refused: [$key] marks a CoCache 6 to 8 upgrade of 8.0.0-alpha that stopped after it deleted the documents " +
-                "and before it published them all again${export?.let { " (its export: $it)" }.orEmpty()}.",
-            "Finish it with the cosec-migrate of 8.0.0-alpha.4, the last one that has the upgrade: publish --resume " +
-                "with --in on its export. Or check that every document it lists is published, then delete [$key].",
-            "Nothing was written.",
+        val source = file?.let { fileSource(it, options.required("document")) }
+            ?: PublishCommand.Source.Directory(Path.of(options.required("in")), options.flag("resume"))
+        val target = PublishCommand.Target(
+            options.required("to-redis"),
+            options.value("key-prefix") ?: DEFAULT_KEY_PREFIX,
+            options.flag("cluster"),
+            options.redisUris,
         )
+        return PublishCommand.run(target, source, out) { block -> controlStore(options, block) }
     }
 
-    /** The value of [key] on the Redis at [uri], or the Redis Cluster [uri] names seed nodes of; null when it has none. */
-    private fun redisValue(uri: String, cluster: Boolean, key: String): String? {
-        if (cluster) {
-            val client = RedisClusterClient.create(uri.split(',').map { RedisURI.create(it.trim()) })
-            try {
-                return client.connect().use { it.sync().get(key) }
-            } finally {
-                client.shutdown()
-            }
-        }
-        val client = RedisClient.create(RedisURI.create(uri))
-        try {
-            return client.connect().use { it.sync().get(key) }
-        } finally {
-            client.shutdown()
-        }
-    }
+    private fun fileSource(file: String, document: String) = PublishCommand.Source.File(
+        Path.of(file),
+        PublishCommand.documentKey(document) ?: throw UsageException(
+            "--document is platform, app:<id> or tenant:<id>, not [${Identifiers.printable(document)}]."
+        ),
+    )
 
     private fun bootstrap(options: Options, out: PrintStream): Int {
         val principal = PrincipalId(options.required("platform-admin"))

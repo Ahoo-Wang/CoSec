@@ -18,7 +18,8 @@ package me.ahoo.cosec.runtime.shadow
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.shadow.CandidateStore
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
@@ -30,7 +31,6 @@ import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.shadow.ShadowReportSink
 import me.ahoo.cosec.spi.shadow.ShadowSample
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -57,11 +57,8 @@ class ShadowSupportTest {
 
     private val clock = MovableClock()
     private val acme: SnapshotKey = SnapshotKey.Tenant("acme")
-    private val document = SnapshotDocument(
-        2,
-        5,
-        Instant.parse("2026-11-01T00:00:00Z"),
-        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray(),
+    private val document = SnapshotDocuments.read(
+        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray()
     )
     private val compiled = CompiledDocument.tenant(TenantId("acme"), emptyList(), emptyList())
 

@@ -17,8 +17,8 @@ package me.ahoo.cosec.control
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.EntryDigest
-import me.ahoo.cosec.engine.flat.ResourceSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.document.PolicyDefinition

@@ -25,7 +25,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.engine.BuiltinPolicies
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope

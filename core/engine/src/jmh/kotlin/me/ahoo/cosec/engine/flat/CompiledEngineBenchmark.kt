@@ -16,6 +16,15 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.CompiledPolicy
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
@@ -63,7 +72,7 @@ open class CompiledEngineBenchmark {
     @Param("http", "service")
     lateinit var namespace: String
 
-    private lateinit var request: FlatRequest
+    private lateinit var request: EngineRequest
     private lateinit var view: SnapshotView
 
     @Setup
@@ -100,11 +109,11 @@ open class CompiledEngineBenchmark {
             else -> decision == Decision.Deny(null)
         }
         check(expected) { "Scenario $scenario decided $decision" }
-        check(decision == CoSecFlatEngine.evaluate(request, view, TraceLevel.FULL).decision)
+        check(decision == CoSecEngine.evaluate(request, view, TraceLevel.FULL).decision)
     }
 
     @Benchmark
-    fun evaluate(): FlatEvaluation = CoSecFlatEngine.evaluate(request, view)
+    fun evaluate(): Evaluation = CoSecEngine.evaluate(request, view)
 
     private fun statement(k: Int): StatementSource {
         val effect = if (k % 2 == 0) Effect.DENY else Effect.ALLOW
@@ -115,7 +124,7 @@ open class CompiledEngineBenchmark {
         }
     }
 
-    private fun request(target: Int): FlatRequest {
+    private fun request(target: Int): EngineRequest {
         val (action, resource) = if (namespace == "http") {
             Action("http", "GET") to Resource("http", if (target < 0) "/nothing/items/7" else "/r$target/items/7", emptyMap())
         } else {
@@ -136,7 +145,7 @@ open class CompiledEngineBenchmark {
             resource = resource,
             environment = Environment("127.0.0.1", "request", "device", blocked = false),
         )
-        return FlatRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, time = 0)
+        return EngineRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, time = 0)
     }
 
     private companion object {

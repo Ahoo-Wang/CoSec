@@ -85,7 +85,8 @@ object PackageLedger {
                 "format" to setOf(ROOT),
                 IDENTITY to setOf("json"),
                 "route" to setOf("json"),
-                SHADOW to setOf("json"),
+                // A candidate's document is made by SnapshotDocuments (SNP-12); the root does not reach shadow.
+                SHADOW to setOf("json", ROOT),
             ),
         ),
     )

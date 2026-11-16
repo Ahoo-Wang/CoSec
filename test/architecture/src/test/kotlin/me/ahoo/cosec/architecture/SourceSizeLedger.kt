@@ -35,13 +35,13 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B2a),
         ),
         Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt",
+            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt",
             971,
             Disposition.Debt(Batch.B3),
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt",
-            938,
+            934,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
@@ -72,7 +72,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MigrateMain.kt",
-            646,
+            601,
             Disposition.Debt(Batch.B6),
         ),
         Entry(
@@ -106,7 +106,7 @@ object SourceSizeLedger {
             Disposition.Stays("migrate's one-off translation of 7.x condition parts"),
         ),
         Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt",
+            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt",
             488,
             Disposition.Debt(Batch.B3),
         ),
@@ -126,24 +126,9 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt",
-            454,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
             "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
             403,
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
-        ),
-        Entry(
-            "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt",
-            438,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
-            "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt",
-            430,
-            Disposition.Debt(Batch.B7),
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt",

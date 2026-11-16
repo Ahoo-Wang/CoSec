@@ -1,11 +1,11 @@
 # Rule: DOC-8
 # Mutant: an http verb with a lower-case letter compiles again, so a DENY on it denies nothing
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.PolicyCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+# Tests: :engine:test --tests me.ahoo.cosec.engine.PolicyCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
 index 1a8e168f..95f40b89 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
 @@ -199,7 +199,7 @@ class PolicyCompiler(
          if (verb == HEAD) {
              return "$pattern matches no request: a HEAD request is decided as GET; write http:GET (DOC-8, PIP-18)"

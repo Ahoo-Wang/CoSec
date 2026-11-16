@@ -71,7 +71,11 @@ ext.set("libraryProjects", libraryProjects)
 
 allprojects {
     repositories {
-        mavenLocal()
+        // A jar in ~/.m2 with the coordinates of a published one shadows it, and CI has none: only when asked, with
+        // -Pcosec.mavenLocal (or in ~/.gradle/gradle.properties), to test against a locally published CoCache or CosId.
+        if (providers.gradleProperty("cosec.mavenLocal").isPresent) {
+            mavenLocal()
+        }
         mavenCentral()
     }
     apply<DetektPlugin>()

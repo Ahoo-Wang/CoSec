@@ -16,10 +16,11 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
@@ -54,7 +55,7 @@ open class DocumentSnapshotViewsBenchmark {
         val store = InMemorySnapshotDocumentStore()
         fun publish(key: SnapshotKey) {
             val text = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"}"""
-            store.put(key, SnapshotDocument(2, 1, Instant.parse("2026-10-26T00:00:00Z"), text.encodeToByteArray()))
+            store.put(key, SnapshotDocuments.read(text.encodeToByteArray()))
         }
         publish(SnapshotKey.Platform)
         if (tenant == "empty") {

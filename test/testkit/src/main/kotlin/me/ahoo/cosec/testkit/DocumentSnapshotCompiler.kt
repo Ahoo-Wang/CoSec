@@ -20,8 +20,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -29,7 +30,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
-import java.time.Instant
 
 /** The documents of a scenario, as written. */
 @InternalCoSecApi
@@ -130,13 +130,7 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
      * the bytes [PipelineFixture] installs. A document that writes its own header keeps it.
      */
     internal fun published(node: JsonNode?): SnapshotDocument {
-        val document = withHeader(node, "scenario")
-        return SnapshotDocument(
-            document.required("schema").intValue(),
-            document.required("revision").longValue(),
-            Instant.parse(document.required("publishedAt").text()),
-            CoSecJson.mapper.writeValueAsBytes(document),
-        )
+        return SnapshotDocuments.read(CoSecJson.mapper.writeValueAsBytes(withHeader(node, "scenario")))
     }
 
     private fun withHeader(node: JsonNode?, name: String): ObjectNode {

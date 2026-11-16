@@ -35,7 +35,8 @@ import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -47,7 +48,6 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -173,7 +173,7 @@ class MigrateMainTest {
             BindingId("root"),
             SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("cosec")),
             BindingScope(Match.Any, Match.Any),
-            me.ahoo.cosec.engine.flat.BuiltinPolicies.ROOT,
+            me.ahoo.cosec.engine.BuiltinPolicies.ROOT,
             expiresAt = Instant.now().plusSeconds(3600).toEpochMilli(),
             breakGlass = true,
         )
@@ -287,12 +287,7 @@ class MigrateMainTest {
         controlStore(keyPrefix) { store ->
             store.putIndex(broken, null, RevisionIndex()).assert().isTrue()
             val body = """{"schema":${PolicyDocumentCodec.SCHEMA},"revision":1,"publishedAt":"2026-11-01T00:00:00Z","unknown":1}"""
-            val garbage = SnapshotDocument(
-                PolicyDocumentCodec.SCHEMA,
-                1,
-                Instant.parse("2026-11-01T00:00:00Z"),
-                body.encodeToByteArray()
-            )
+            val garbage = SnapshotDocuments.read(body.encodeToByteArray())
             store.putHead(broken, null, garbage).assert().isInstanceOf(HeadWrite.Written::class.java)
         }
         val (failed, out) = run(args)

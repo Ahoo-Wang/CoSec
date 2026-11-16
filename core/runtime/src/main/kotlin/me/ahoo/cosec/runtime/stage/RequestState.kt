@@ -19,8 +19,8 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Memberships
@@ -80,7 +80,7 @@ internal class RequestState(
     lateinit var view: SnapshotView
 
     /** The engine's request, with the external values stage B fetched. */
-    lateinit var request: FlatRequest
+    lateinit var request: EngineRequest
     lateinit var decision: Decision
     var evaluationTrace: EvaluationTrace? = null
     var breakGlass: Boolean = false

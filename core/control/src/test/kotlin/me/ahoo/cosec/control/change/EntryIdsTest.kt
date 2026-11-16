@@ -23,8 +23,8 @@ import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.RoleDefinition
 import me.ahoo.cosec.document.RolePermissions
-import me.ahoo.cosec.engine.flat.RateLimitSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.RateLimitSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Effect

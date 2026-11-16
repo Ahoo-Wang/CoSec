@@ -15,6 +15,9 @@
 
 package me.ahoo.cosec.control.change
 
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -31,8 +34,8 @@ import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.BuiltinPolicies
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
@@ -48,6 +51,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -72,7 +76,30 @@ class RetriedPublishTest {
     /** What runs once right before the next head write: another call meanwhile. */
     @Volatile
     private var beforeHead: (suspend () -> Unit)? = null
+
+    /** Whether the next release of a staging slot fails, once: a transient store failure after the head write. */
+    @Volatile
+    private var failRelease = false
+
+    /** Reads of the staging slot that wait at [atSlot] after they read it: two calls that both saw it held. */
+    private val heldReads = java.util.concurrent.atomic.AtomicInteger()
+    private val atSlot = java.util.concurrent.CyclicBarrier(2)
+
     private val store = object : ControlStore by memory {
+        override suspend fun stage(key: SnapshotKey) = memory.stage(key).also {
+            if (heldReads.getAndDecrement() > 0) {
+                atSlot.await(10, java.util.concurrent.TimeUnit.SECONDS)
+            }
+        }
+
+        override suspend fun putStage(key: SnapshotKey, expected: SnapshotDigest?, slot: StageSlot): Boolean {
+            if (failRelease && slot.holder == null) {
+                failRelease = false
+                error("one transient release failure")
+            }
+            return memory.putStage(key, expected, slot)
+        }
+
         override suspend fun putHead(
             key: SnapshotKey,
             expected: SnapshotDigest?,
@@ -166,6 +193,68 @@ class RetriedPublishTest {
             .assert().isEqualTo("retried by (platform)/pia, not re-analyzed")
         events.none { it.kind == ChangeEvent.Kind.HEADS_MOVED }.assert().isTrue()
         revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
+        listeners.cancel()
+    }
+
+    /**
+     * #1386: the head is written and the change PUBLISHED, but releasing its slot fails. The answer says publishing it
+     * again settles it, and it does: the retry releases the slot and records the publish the first call did not reach,
+     * once, and writes no revision. A change settled that far is not published again.
+     */
+    @Test
+    fun `a publish whose slot release failed is settled by publishing it again, adding no revision`() = runBlocking<Unit> {
+        val change = changes.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("reads"))), "reads")
+        changes.skipShadow(PLATO, change.id, "test")
+        failRelease = true
+        val failure = assertThrows<ChangeRejectedException> { changes.publish(PLATO, change.id) }
+        failure.status.assert().isEqualTo(503)
+        failure.message!!.assert().contains("publishing it again settles it")
+        head(ACME).assert().isEqualTo(1L)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+        store.stage(ACME)!!.value.holder.assert().isEqualTo(change.id)
+        events.clear()
+
+        val again = changes.publish(PLATO, change.id)
+
+        again.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        again.publishedRevision.assert().isEqualTo(1L)
+        store.stage(ACME)?.value?.holder.assert().isNull()
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
+        delivered(ChangeEvent.Kind.PUBLISHED).count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
+        refused { changes.publish(PLATO, change.id) }.assert().isEqualTo(409)
+        events.count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
+        listeners.cancel()
+    }
+
+    /**
+     * #1386: two retries that both read the slot as still held, held at that point until both have: one revision, the
+     * slot free, both answer `PUBLISHED`, and the publish is recorded once, by the one that freed the slot. A publish
+     * after that, of the settled change, is 409.
+     */
+    @Test
+    fun `two retries that both saw the slot held settle it once`() = runBlocking<Unit> {
+        val change = changes.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("reads"))), "reads")
+        changes.skipShadow(PLATO, change.id, "test")
+        failRelease = true
+        assertThrows<ChangeRejectedException> { changes.publish(PLATO, change.id) }
+        listeners.awaitDelivered()
+        events.clear()
+        heldReads.set(2)
+
+        val pool = java.util.concurrent.Executors.newFixedThreadPool(2)
+        val retries = try {
+            val on = pool.asCoroutineDispatcher()
+            (1..2).map { async(on) { changes.publish(PLATO, change.id) } }.awaitAll()
+        } finally {
+            pool.shutdown()
+        }
+
+        retries.forEach { it.state.assert().isEqualTo(ChangeState.PUBLISHED) }
+        store.stage(ACME)?.value?.holder.assert().isNull()
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(1L)
+        listeners.awaitDelivered()
+        events.count { it.kind == ChangeEvent.Kind.PUBLISHED }.assert().isEqualTo(1)
+        refused { changes.publish(PLATO, change.id) }.assert().isEqualTo(409)
         listeners.cancel()
     }
 

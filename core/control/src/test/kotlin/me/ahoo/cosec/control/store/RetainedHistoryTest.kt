@@ -50,6 +50,7 @@ class RetainedHistoryTest {
         store.putHead(
             ACME,
             head.digest,
+            // A head whose bytes are not a document at all, which SnapshotDocuments never makes: the constructor.
             SnapshotDocument(
                 document.schema,
                 document.revision,

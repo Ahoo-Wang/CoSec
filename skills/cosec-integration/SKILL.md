@@ -126,10 +126,11 @@ behind a gateway (which loads no route map), leaves the property unset and write
 The service decides on a snapshot of documents (platform, app, tenant), read from Redis with `cosec-cocache` or from an
 in-memory store without it. **Until a platform document exists, every request is 503.**
 
-- With Redis: write the documents into a directory (`platform.json`, `apps/<appId>.json`, `tenants/<tenantId>.json`)
-  and run `cosec-migrate publish --to-redis redis://... [--key-prefix cosec] --in <dir>`. It publishes first
-  revisions only, never overwrites, and reads a `report.json` with each file's SHA-256 (`convert` writes it; for
-  hand-written files write `{"accepted": true, "outputSha256": {"platform.json": "<sha256>"}}`). Migrating 7.x data:
+- With Redis: write the platform document and run
+  `cosec-migrate publish --to-redis redis://... [--key-prefix cosec] --file platform.json --document platform`
+  (`--document app:<id>` or `tenant:<id>` for others, after the platform's). It publishes first revisions only, never
+  overwrites, and makes the checks a converted directory gets (`--in <dir>`, which reads `convert`'s `report.json`
+  with each file's SHA-256). Migrating 7.x data:
   `cosec-migrate convert`, then `publish`; see https://cosec.ahoo.me/operations/upgrading.
   The tool is `cosec-migrate-<version>.zip` on each GitHub release (Java 21+; as a Kubernetes Job in the same page). Seed
   hand-written app and tenant documents after the platform document with `bootstrap` and the control plane's
@@ -144,7 +145,7 @@ in-memory store without it. **Until a platform document exists, every request is
   (`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`); it is `DOWN` until the platform
   document and every `prewarm-apps`/`prewarm-tenants` document are installed, so `/actuator/health` is `DOWN` too.
 - Without Redis: the `SnapshotDocumentStore` bean is an `InMemorySnapshotDocumentStore`; put documents into it
-  (`put(SnapshotKey.Platform, SnapshotDocument(2, revision, publishedAt, bytes))`), for example from files at startup.
+  (`put(SnapshotKey.Platform, SnapshotDocuments.read(bytes))`, which reads the header from the bytes), for example from files at startup.
   Each instance holds its own copy.
 
 Use `$cosec-policy-author` to write the documents. Storage details: https://cosec.ahoo.me/operations/storage.

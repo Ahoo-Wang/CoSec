@@ -27,7 +27,7 @@ import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDefinition
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.migrate.ConvertedReach.Companion.HTTP_GET
 import me.ahoo.cosec.migrate.ConvertedReach.Companion.ORDER
 import me.ahoo.cosec.migrate.ConvertedReach.Companion.ORDER_DELETE

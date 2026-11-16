@@ -1,11 +1,11 @@
 # Rule: ATR-6
 # Mutant: a DENY with onMissing nomatch compiles without the control plane's confirmation, in any document
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :document:test --tests me.ahoo.cosec.document.* --tests me.ahoo.cosec.runtime.snapshot.* :conformance:test
+# Tests: :engine:test --tests me.ahoo.cosec.engine.* :document:test --tests me.ahoo.cosec.document.* --tests me.ahoo.cosec.runtime.snapshot.* :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
 index 45de40a9..3556b795 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/PolicyCompiler.kt
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt
 @@ -252,7 +252,7 @@ class PolicyCompiler(
              return
          }

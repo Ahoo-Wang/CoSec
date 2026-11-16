@@ -20,9 +20,10 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.runtime.PipelineFixtures
@@ -34,7 +35,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -52,10 +52,7 @@ import kotlin.time.Duration.Companion.milliseconds
 class RateLimitObligationTest {
     private fun platform(rules: String): CompiledDocument = PolicyDocumentCompiler().compile(
         SnapshotKey.Platform,
-        SnapshotDocument(
-            2,
-            1,
-            Instant.parse("2026-10-26T00:00:00Z"),
+        SnapshotDocuments.read(
             (
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
@@ -63,7 +60,7 @@ class RateLimitObligationTest {
                     """"bindings":[{"id":"g:read","subject":"*","app":"*","space":"*","policy":"read"},""" +
                     """{"id":"g:no-delete","subject":"*","app":"*","space":"*","policy":"no-delete"}],""" +
                     """"rateLimits":[$rules]}"""
-                ).encodeToByteArray(),
+                ).encodeToByteArray()
         ),
     )
 
@@ -98,7 +95,7 @@ class RateLimitObligationTest {
     ): List<Outcome> {
         val pipeline = PipelineFixtures.pipeline(
             authenticator = PipelineFixtures.authenticator(PipelineFixtures.authenticated()),
-            engine = CoSecFlatEngine,
+            engine = CoSecEngine,
             views = Views(platform(rules)),
         ) {
             options(PipelineOptions(rateLimitTimeout = 50.milliseconds))
