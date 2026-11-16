@@ -52,22 +52,23 @@ internal object ControlResponseJson {
         set("decision", decision(explanation.decision, explanation.trace))
     }
 
-    // B4: the decision view moves to its own writer
-    @Suppress("NestedBlockDepth")
     fun decision(decision: DecisionView, trace: TraceView?): ObjectNode = factory.objectNode().apply {
         put("decision", decision.decision)
         decision.by?.let { set("by", statement(it)) }
         decision.cause?.let { put("cause", it) }
         if (decision.redacted) put("redacted", true)
-        trace?.let { t ->
-            val node = putObject("trace").put("redacted", t.redacted)
-            node.putArray("candidates").apply {
-                t.entries.forEach {
-                    addObject().put(
-                        "effect",
-                        it.effect
-                    ).put("outcome", it.outcome).set("statement", statement(it.statement))
-                }
+        trace?.let { trace(putObject("trace"), it) }
+    }
+
+    /** [trace] written into [node]: whether it is redacted, and each candidate statement with its effect and outcome. */
+    private fun trace(node: ObjectNode, trace: TraceView) {
+        node.put("redacted", trace.redacted)
+        node.putArray("candidates").apply {
+            trace.entries.forEach {
+                addObject().put(
+                    "effect",
+                    it.effect
+                ).put("outcome", it.outcome).set("statement", statement(it.statement))
             }
         }
     }
