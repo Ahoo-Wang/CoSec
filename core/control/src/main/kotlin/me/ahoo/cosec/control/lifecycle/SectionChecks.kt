@@ -17,13 +17,13 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.document.PolicyDocument
 
 /** What changing a platform section does to the other documents, which are not compiled again. */
 internal object SectionChecks {
-    private const val UNPROCESSABLE = 422
 
     fun sectionWarnings(base: PolicyDocument?, candidate: PolicyDocument, findings: MutableList<Finding>) {
         val limitsChanged = base?.limits?.let(::limitsOf) != candidate.limits?.let(::limitsOf)

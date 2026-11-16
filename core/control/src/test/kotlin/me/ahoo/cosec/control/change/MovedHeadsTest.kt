@@ -20,7 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
-import me.ahoo.cosec.control.lifecycle.ChangeChecks
+import me.ahoo.cosec.control.lifecycle.CurrentDocuments
 import me.ahoo.cosec.control.lifecycle.HeadsMoved
 import me.ahoo.cosec.control.lifecycle.MovedHeads
 import me.ahoo.cosec.control.store.AppList
@@ -43,7 +43,7 @@ import kotlin.time.Duration.Companion.milliseconds
 class MovedHeadsTest {
     private val store = InMemoryControlStore()
     private val revisions = Revisions(store)
-    private val context = object : ChangeChecks.Context {
+    private val context = object : CurrentDocuments {
         override suspend fun head(key: SnapshotKey): Head? = revisions.head(key)
 
         override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey> =

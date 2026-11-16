@@ -27,7 +27,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * [context], keeping the digest of every head it served first, and of the app list: what one check of a candidate read
  * (RC1-33).
  */
-internal class RecordingContext(private val context: ChangeChecks.Context) : ChangeChecks.Context by context {
+internal class RecordingCurrentDocuments(private val context: CurrentDocuments) : CurrentDocuments by context {
     val read = LinkedHashMap<SnapshotKey, SnapshotDigest?>()
 
     /** The app list as first read; `null` until it is. */

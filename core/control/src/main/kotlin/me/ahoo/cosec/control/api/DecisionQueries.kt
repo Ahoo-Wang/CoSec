@@ -21,6 +21,8 @@ import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.engine.ViewVersion
@@ -159,10 +161,5 @@ internal class DecisionQueries(
         SnapshotKey.Platform -> DocumentKind.PLATFORM
         is SnapshotKey.App -> DocumentKind.APP
         else -> DocumentKind.TENANT
-    }
-
-    private companion object {
-        const val BAD_REQUEST = 400
-        const val CONFLICT = 409
     }
 }

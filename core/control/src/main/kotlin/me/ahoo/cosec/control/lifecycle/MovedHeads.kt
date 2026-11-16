@@ -51,7 +51,7 @@ private val log = KotlinLogging.logger {}
 internal class MovedHeads(
     private val store: ControlStore,
     private val authority: ChangeAuthority,
-    private val context: ChangeChecks.Context,
+    private val context: CurrentDocuments,
     private val clock: Clock,
     /** How long the detection may take: an order above the analysis budget (RFC 0007 §14.2), for its reads. */
     private val timeout: Duration = DEFAULT_TIMEOUT,

@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
-index 065ca669..0a6fc59a 100644
+index eb0ed369..f7d2f8e6 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
-@@ -36,14 +36,7 @@ internal object EnforceableOrRefused {
+@@ -37,12 +37,5 @@ internal object EnforceableOrRefused {
          )
  
      /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
@@ -19,6 +19,4 @@ index 065ca669..0a6fc59a 100644
 -                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
 -        )
 +    fun resource(resource: Resource): Resource = resource
- 
-     private const val BAD_REQUEST = 400
  }

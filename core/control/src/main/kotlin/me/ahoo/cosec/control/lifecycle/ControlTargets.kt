@@ -18,7 +18,7 @@ package me.ahoo.cosec.control.lifecycle
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.change.ChangeRejectedException
-import me.ahoo.cosec.control.lifecycle.ChangeAuthority.Companion.FORBIDDEN
+import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.SubjectRef

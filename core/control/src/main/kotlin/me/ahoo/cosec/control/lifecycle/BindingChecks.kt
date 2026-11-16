@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.Expansion
@@ -31,7 +32,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** What the bindings of an app or tenant candidate resolve to (RFC 0007 §3.1 N1, §7.6). */
 internal object BindingChecks {
-    private const val UNPROCESSABLE = 422
     private val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value
 
     /**
@@ -43,7 +43,7 @@ internal object BindingChecks {
     suspend fun unresolved(
         candidate: PolicyDocument,
         platform: PolicyDocument?,
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
         findings: MutableList<Finding>,
     ) {
@@ -81,7 +81,7 @@ internal object BindingChecks {
         candidate: PolicyDocument,
         binding: Binding,
         apps: MutableMap<String, Set<String>>,
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
     ): Boolean {
         val app = (binding.scope.app as? Match.Exactly)?.value?.value

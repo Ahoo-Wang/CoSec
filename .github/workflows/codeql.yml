@@ -60,6 +60,7 @@ jobs:
           languages: java-kotlin
           build-mode: manual
           queries: security-and-quality
+          config-file: ./.github/codeql/codeql-config.yml
 
       # services.gradle.org answers 504 often enough to fail this required check. Fetch the wrapper's distribution first.
       - name: Download Gradle

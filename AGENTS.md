@@ -275,6 +275,8 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 ## Conventions
 
 - Every source file starts with the header in `config/detekt/license.template`; detekt fails otherwise.
+- A local that is never read, or a value assigned to one and never read, fails the build (`UNUSED_VARIABLE`, `VARIABLE_NEVER_READ`,
+  `ASSIGNED_VALUE_IS_NEVER_READ`, raised to errors beside `-Wextra` in the root `build.gradle.kts`): remove the dead store.
 - Kotlin with `-Xjsr305=strict`. Data-plane SPIs are `suspend` functions; `Mono<T>` appears only at the WebFlux and
   Gateway bridges and in their convenience extensions.
 - Comments explain *why*, only where it isn't obvious.

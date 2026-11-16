@@ -25,10 +25,11 @@ import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.change.Approval
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Operation
-import me.ahoo.cosec.control.lifecycle.ChangeAuthority.Companion.FORBIDDEN
-import me.ahoo.cosec.control.lifecycle.ChangeAuthority.Companion.UNAVAILABLE
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
@@ -217,6 +218,5 @@ internal class ApprovalRules(
         /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */
         const val RECORDED_APPROVAL = "recorded-approval"
         private val RECORDED_METHOD = Identity.Method(RECORDED_APPROVAL)
-        const val CONFLICT = 409
     }
 }
