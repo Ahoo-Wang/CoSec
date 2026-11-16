@@ -7,7 +7,7 @@ exactly the states that transitions under that step write.
 
 Each command refuses a change outside its row's From (409). The other steps are not commands and are never refused with
 a 409. No step writes a change into a state outside its row's To, or from a state outside its row's From: such a write
-is a fault, nothing is stored, and the control API answers 500.
+is a fault, nothing is stored, and the control API answers with a server error, never a 409.
 
 The first eight rows are the commands. The others are steps those commands take on their way:
 
