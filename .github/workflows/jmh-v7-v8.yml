@@ -32,9 +32,9 @@ on:
         required: true
         default: 'main'
       include:
-        description: 'Regex over the benchmark class names to run (pairs: SecurityPipelineBenchmark/PipelineBenchmark, SimpleAuthorizationBenchmark/FlatAuthorizationBenchmark)'
+        description: 'Regex over the benchmark class names to run (pairs: SecurityPipelineBenchmark/PipelineBenchmark, SimpleAuthorizationBenchmark/EngineAuthorizationBenchmark)'
         required: true
-        default: 'SecurityPipelineBenchmark|PipelineBenchmark|SimpleAuthorizationBenchmark|FlatAuthorizationBenchmark'
+        default: 'SecurityPipelineBenchmark|PipelineBenchmark|SimpleAuthorizationBenchmark|EngineAuthorizationBenchmark'
       scenarios:
         description: 'Scenarios (anonymous exists only for the pipeline pair)'
         required: true

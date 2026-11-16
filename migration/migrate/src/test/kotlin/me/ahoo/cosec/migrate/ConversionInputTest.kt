@@ -190,7 +190,7 @@ class ConversionInputTest {
         val other = ConvertedDirectory.fileOf(SnapshotKey.Tenant("租".repeat(29) + "田"))
         one.assert().isNotEqualTo(other)
         ConvertedDirectory.fileOf(SnapshotKey.Tenant("acme")).assert().isEqualTo("tenants/acme.json")
-        ConvertedDirectory.fileOf(SnapshotKey.Tenant("a/b")).assert().isEqualTo("tenants/a%2Fb.json")
+        ConvertedDirectory.fileOf(SnapshotKey.Tenant("a%b")).assert().isEqualTo("tenants/a%25b.json")
     }
 
     @Test

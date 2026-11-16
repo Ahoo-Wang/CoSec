@@ -201,4 +201,17 @@ class IdentityGateTest {
             IdentityCodec.encode(identity.copy(roles = emptySet()))
         ).problem().assert().isEqualTo("400 invalid-request")
     }
+
+    /**
+     * `SCP-13` (#1403): the gateway refuses a token of a tenant no tenant id can be, so it never forwards one: such an
+     * identity is refused, 400, and the service never acts in that tenant (nor in `acme`, whose id it extends).
+     */
+    @Test
+    fun `an identity whose tenant can be no tenant id is refused`() {
+        for (tenant in listOf("acme/west", "a:b")) {
+            evaluate(IdentityCodec.encode(identity.copy(tenant = tenant))).problem().assert()
+                .describedAs(tenant).isEqualTo("400 invalid-request")
+        }
+        evaluate(IdentityCodec.encode(identity.copy(tenant = "acme west"))).proceed.assert().isTrue()
+    }
 }

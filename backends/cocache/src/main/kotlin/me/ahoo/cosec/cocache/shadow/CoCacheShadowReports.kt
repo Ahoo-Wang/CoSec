@@ -29,6 +29,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.createLocked
+import me.ahoo.cosec.cocache.readRecord
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
@@ -159,7 +160,7 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
             coroutineScope {
                 batch.map { instance ->
                     async {
-                        read(statuses, instance)?.first?.also {
+                        read(statuses, instance, "The status of instance [$instance]")?.first?.also {
                             check(it.instance == instance) { "The status under [$instance] is ${it.instance}'s" }
                         }
                     }
@@ -181,12 +182,8 @@ class CoCacheShadowReports @InternalCoSecApi constructor(
         error("[$key] kept changing while it was written")
     }
 
-    private suspend fun <V : Any> read(cache: Store<String, V>, key: String): Pair<V, Digest>? =
-        when (val read = cache.async().getIfChanged(key, null).await()) {
-            is ConditionalGet.Present -> read.value to read.digest
-            ConditionalGet.Unchanged -> error("An unconditional read of [$key] was answered as unchanged.")
-            ConditionalGet.Absent -> null
-        }
+    private suspend fun <V : Any> read(cache: Store<String, V>, key: String, name: String = "[$key]") =
+        cache.readRecord(key, name)
 
     @InternalCoSecApi
     companion object {
