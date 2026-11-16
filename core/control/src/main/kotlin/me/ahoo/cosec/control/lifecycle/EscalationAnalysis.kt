@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.grant.Dimension
@@ -28,7 +29,6 @@ import me.ahoo.cosec.control.grant.GrantAnalyzer
 import me.ahoo.cosec.control.grant.GrantChange
 import me.ahoo.cosec.control.grant.GrantDocuments
 import me.ahoo.cosec.control.grant.Grantor
-import me.ahoo.cosec.control.lifecycle.ChangeAuthority.Companion.UNAVAILABLE
 import me.ahoo.cosec.control.lifecycle.ControlTargets.entry
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
@@ -64,7 +64,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
     /**
      * The grant analysis of [candidate] replacing [base] as tenant [key], by [operator]; a failure is a 503. It reads
      * every app document there is, not only the apps the change names (RC1-4): an app document binds roles, so the
-     * grantor may be denied something in any app. They are listed in the app list ([ChangeChecks.Context.apps]), which
+     * grantor may be denied something in any app. They are listed in the app list ([CurrentDocuments.apps]), which
      * [me.ahoo.cosec.control.store.Revisions] keeps before any app head moves. One that cannot be read leaves the
      * grantor's rights in its app unknown; a list that is not to be trusted ([listedApps]) leaves them unknown in every
      * app not named.
@@ -75,7 +75,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         key: SnapshotKey.Tenant,
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        documents: ChangeChecks.Context,
+        documents: CurrentDocuments,
         now: Instant,
     ): GrantAnalysis = try {
         val tenant = TenantId(key.tenantId)
@@ -120,7 +120,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
      * dropped: one the analysis cannot read could be an app document it would miss.
      */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun listedApps(documents: ChangeChecks.Context): Set<AppId>? = try {
+    private suspend fun listedApps(documents: CurrentDocuments): Set<AppId>? = try {
         val list = documents.apps()?.value
         when {
             list == null || !list.complete -> null.also {
@@ -166,7 +166,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
 
     /** The head of [app]'s document, [AppHead.document] `null` when there is none; `null` when it cannot be read. */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun appHead(documents: ChangeChecks.Context, app: AppId): AppHead? = try {
+    private suspend fun appHead(documents: CurrentDocuments, app: AppId): AppHead? = try {
         AppHead(documents.head(SnapshotKey.App(app.value))?.document)
     } catch (e: CancellationException) {
         throw e
@@ -188,7 +188,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         operations: List<Operation>,
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        documents: ChangeChecks.Context,
+        documents: CurrentDocuments,
     ): List<Escalation> {
         val escalations = ArrayList<Escalation>()
         if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding && it !is Operation.RemoveRole }) {
@@ -213,7 +213,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         key: SnapshotKey,
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        documents: ChangeChecks.Context,
+        documents: CurrentDocuments,
     ): List<Escalation> {
         base ?: return emptyList()
         val removed = try {
@@ -245,7 +245,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         key: SnapshotKey.App,
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        documents: ChangeChecks.Context,
+        documents: CurrentDocuments,
     ): List<Escalation> = try {
         val app = AppId(key.appId)
         val widened = analyzer.widened(GrantDocuments.of(base), GrantDocuments.of(candidate))
@@ -266,7 +266,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         app: AppId,
         policy: PolicyId,
         statements: List<Int>,
-        documents: ChangeChecks.Context,
+        documents: CurrentDocuments,
     ): List<Escalation> {
         val found = ArrayList<Escalation>()
         val referrers = documents.referrers(key, policy)

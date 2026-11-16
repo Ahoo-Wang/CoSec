@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.engine.pattern.ResourceTarget
 import me.ahoo.cosec.model.Binding
@@ -118,8 +119,4 @@ internal class AccessAnalysis(
     private fun inScope(exact: String?, value: String?): Boolean = exact == null || value == null || exact == value
 
     private fun <T> Match<T>.exact(text: (T) -> String): String? = (this as? Match.Exactly<T>)?.value?.let(text)
-
-    private companion object {
-        const val BAD_REQUEST = 400
-    }
 }

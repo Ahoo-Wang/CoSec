@@ -83,7 +83,7 @@ class Changes(
 ) {
     private val windows = ShadowWindows(reports, options.shadow)
 
-    private val context = ChangeContext(store, revisions)
+    private val context = StoreCurrentDocuments(store, revisions)
 
     /** This instance has reconciled the app list ([me.ahoo.cosec.control.lifecycle.ControlMaintenance.reconcileApps]). */
     internal fun appListReconciled() = context.reconciled()

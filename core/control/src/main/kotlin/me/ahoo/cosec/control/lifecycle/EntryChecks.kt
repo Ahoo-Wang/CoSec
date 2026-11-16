@@ -17,19 +17,22 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.scope.ScopeResolver
 
 /** The names and ids a candidate and its change use (V2, RFC 0007 §6.2, §7.1, §3.1 N2). */
 internal object EntryChecks {
-    private const val BAD_REQUEST = 400
-    private const val UNPROCESSABLE = 422
+    /** The prefixes of ids no change may put: built-in policies, migration, and role expansion. */
+    val RESERVED = listOf("cosec:", "g:", "r:", RoleExpansion.BINDING_PREFIX)
 
     /**
      * A tenant policy takes a platform policy's id only as an exact copy of it (RFC 0007 N2, §9.4, #1224): that is the
@@ -64,7 +67,7 @@ internal object EntryChecks {
                 is Operation.PutBinding -> operation.binding.id.value
                 else -> continue
             }
-            ChangeChecks.RESERVED.firstOrNull { id.startsWith(it) }?.let { prefix ->
+            RESERVED.firstOrNull { id.startsWith(it) }?.let { prefix ->
                 findings += Finding("V2", "operations[$i]", "[$id]: the prefix [$prefix] is reserved for built-in policies, cosec-migrate and role expansion", UNPROCESSABLE)
             }
         }

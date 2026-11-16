@@ -21,6 +21,7 @@ import kotlinx.coroutines.sync.withLock
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
@@ -181,6 +182,5 @@ class PipelineControlAuthorizer(
 
         /** How often one change's decisions are taken again because a document moved under them. */
         private const val MAX_BATCHES = 4
-        private const val UNAVAILABLE = 503
     }
 }

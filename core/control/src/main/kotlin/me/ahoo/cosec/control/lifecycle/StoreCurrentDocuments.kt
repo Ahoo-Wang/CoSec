@@ -28,7 +28,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.time.Duration.Companion.seconds
 
 /** What the checks of a change read of the other documents, from the store of record. */
-internal class ChangeContext(private val store: ControlStore, private val revisions: Revisions) : ChangeChecks.Context {
+internal class StoreCurrentDocuments(
+    private val store: ControlStore,
+    private val revisions: Revisions
+) : CurrentDocuments {
     private val reconciled = AtomicBoolean(false)
     private val attempts = Throttle(RECONCILE_INTERVAL)
 

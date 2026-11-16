@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.api
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ControlStatus.GONE
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -61,8 +62,4 @@ internal class RetainedDocuments(
         GONE,
         "[$key] keeps no revision $revision"
     )
-
-    private companion object {
-        const val GONE = 410
-    }
 }

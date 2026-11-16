@@ -26,12 +26,12 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.APPROVAL
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.BREAK_GLASS
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.CONFLICT
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.FORBIDDEN
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.ProvenanceKind
 import java.time.Clock
