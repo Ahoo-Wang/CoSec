@@ -58,7 +58,7 @@ class SnapshotSlotModelPropertyTest {
                 "${totals.installs} installs, ${totals.answered} answered waiters, ${totals.failures} compile failures, " +
                 "${totals.readTimeouts} store read timeouts, ${totals.coldTimeouts} request timeouts, " +
                 "${totals.evictions} evictions, ${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
-                "${totals.lostWritesChecked} lost invalidations"
+                "${totals.lostWritesChecked} lost invalidations ${totals.lostWritesByLag}"
         )
         if (only == null) {
             // A property test that rarely gets past the first load proves little: each kind of event is reached.
@@ -81,6 +81,7 @@ class SnapshotSlotModelPropertyTest {
         totals.regressions += counts.regressions
         totals.resetsChecked += counts.resetsChecked
         totals.lostWritesChecked += counts.lostWritesChecked
+        counts.lostWritesByLag.forEach { (lag, n) -> totals.lostWritesByLag.merge(lag, n, Int::plus) }
         mapOf(
             "reset reloads checked" to counts.resetsChecked,
             "lost invalidation installed by a pass" to counts.lostWritesChecked,

@@ -93,6 +93,9 @@ internal class SlotModel(
         var regressions = 0
         var resetsChecked = 0
         var lostWritesChecked = 0
+
+        /** [lostWritesChecked] by what went wrong meanwhile. */
+        val lostWritesByLag = java.util.EnumMap<SlotModelScript.Lag, Int>(SlotModelScript.Lag::class.java)
     }
 
     /** A reset of the change channel at [at]: each of [keys], installed then, is read again after it (`SNP-6`). */
@@ -238,8 +241,9 @@ internal class SlotModel(
     fun isInstalled(key: SnapshotKey): Boolean = key in lastInstall
 
     /** A write of [key] whose notification was lost was checked to be installed in time. */
-    fun lostWriteChecked() {
+    fun lostWriteChecked(lag: SlotModelScript.Lag) {
         counts.lostWritesChecked++
+        counts.lostWritesByLag.merge(lag, 1, Int::plus)
     }
 
     val metrics = object : SnapshotMetrics {

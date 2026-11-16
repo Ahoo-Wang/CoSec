@@ -92,6 +92,8 @@ internal data class SlotModelScript(
             val lag = Lag.entries.random(random)
             val target = KEYS.random(random)
             val lanes = 1 + random.nextInt(2)
+            // A fifth of the runs end their events with a reset that nothing after it can mask: the reset check's own.
+            if (random.nextInt(5) == 0) events += Event(Kind.RESET)
             return SlotModelScript(initial, subscribe, events, lag, target, lanes)
         }
 
