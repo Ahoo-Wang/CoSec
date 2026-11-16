@@ -25,8 +25,17 @@ import kotlin.random.Random
 internal data class SlotModelScript(
     val initial: List<SnapshotKey>,
     val duringSubscribe: Subscribe,
-    val events: List<Event>
+    val events: List<Event>,
+    /** What goes wrong while the lag phase checks that lost invalidations are made good by the passes. */
+    val lag: Lag = Lag.NONE,
+    /** The document [lag] happens to. */
+    val lagTarget: SnapshotKey = SHARED,
+    /** Documents a pass reloads at once: with one, a pass that waits on a load waits for good (`SNP-6`). */
+    val lanes: Int = 2,
 ) {
+    /** In the lag phase: nothing, the target's first read hangs, or its compilation never runs. */
+    enum class Lag { NONE, HANG_READ, STUCK_COMPILE }
+
     /** What the store tells the source's listener before `subscribe` returns. */
     enum class Subscribe { NOTHING, RESET, SHARED_CHANGED, APP_CHANGED, TENANT_CHANGED }
 
@@ -79,7 +88,13 @@ internal data class SlotModelScript(
             val events = MutableList(length) { event(random) }
             // A third of the runs close the source somewhere; the others run to the end and converge.
             if (random.nextInt(3) == 0) events[random.nextInt(length)] = Event(Kind.CLOSE)
-            return SlotModelScript(initial, subscribe, events)
+            // Drawn after the events, so that the events of a seed stay what they were before these existed.
+            val lag = Lag.entries.random(random)
+            val target = KEYS.random(random)
+            val lanes = 1 + random.nextInt(2)
+            // A fifth of the runs end their events with a reset that nothing after it can mask: the reset check's own.
+            if (random.nextInt(5) == 0) events += Event(Kind.RESET)
+            return SlotModelScript(initial, subscribe, events, lag, target, lanes)
         }
 
         private fun event(random: Random): Event {
