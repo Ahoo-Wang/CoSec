@@ -43,6 +43,7 @@ import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.ShadowState
 import me.ahoo.cosec.control.change.StageSlot
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
@@ -203,7 +204,7 @@ class Changes(
         note: String
     ): ChangeRequest {
         val head = revisions.head(key)
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         requireRequest(desired.kind == kind && desired.owner == owner) {
             "The desired document is not a document of [$key]."
         }

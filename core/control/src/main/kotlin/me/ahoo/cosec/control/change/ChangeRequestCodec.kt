@@ -17,7 +17,6 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
@@ -95,7 +94,7 @@ object ChangeRequestCodec {
     }
 
     private fun tree(change: ChangeRequest): ObjectNode {
-        val (kind, owner) = Revisions.ownerOf(change.key)
+        val (kind, owner) = ownerOf(change.key)
         val root = factory.objectNode()
         root.put("id", change.id.value)
         root.put("key", change.key.toString())
@@ -349,7 +348,7 @@ object ChangeRequestCodec {
             "checkedApps",
         )
         val key = documentKey(node.need("key").text())
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         val base = node.need("base").also { it.only("revision", "digest") }
         return ChangeRequest(
             id = ChangeId(node.need("id").text()),
@@ -429,7 +428,7 @@ object ChangeRequestCodec {
     /** An operation as the control API's request bodies write it: the stored form (RFC 0007 §10.2). */
     @InternalCoSecApi
     fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         node.only(
             "op", "policy", "id", "binding", "rateLimit", "role", "catalog", "limits", "attributes", "boundary", "ifMatch",
         )

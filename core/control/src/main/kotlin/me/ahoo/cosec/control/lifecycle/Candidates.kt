@@ -20,7 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
-import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
@@ -105,7 +105,7 @@ internal object Operations {
         val findings = ArrayList<Finding>()
 
         init {
-            val (kind, owner) = Revisions.ownerOf(key)
+            val (kind, owner) = ownerOf(key)
             this.kind = kind
             this.owner = owner
             base?.policies?.forEach { policies[it.id.value] = it }
@@ -239,7 +239,7 @@ internal object Operations {
      * the sections it does not set.
      */
     fun diff(key: SnapshotKey, base: PolicyDocument?, desired: PolicyDocument, mode: ApplyMode): List<Operation> {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         val operations = ArrayList<Operation>()
         val policies = base?.policies?.associateBy { it.id.value }.orEmpty()
         for (policy in desired.policies) {
