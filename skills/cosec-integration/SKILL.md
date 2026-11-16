@@ -144,7 +144,7 @@ in-memory store without it. **Until a platform document exists, every request is
   (`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`); it is `DOWN` until the platform
   document and every `prewarm-apps`/`prewarm-tenants` document are installed, so `/actuator/health` is `DOWN` too.
 - Without Redis: the `SnapshotDocumentStore` bean is an `InMemorySnapshotDocumentStore`; put documents into it
-  (`put(SnapshotKey.Platform, SnapshotDocument(2, revision, publishedAt, bytes))`), for example from files at startup.
+  (`put(SnapshotKey.Platform, SnapshotDocuments.read(bytes))`, which reads the header from the bytes), for example from files at startup.
   Each instance holds its own copy.
 
 Use `$cosec-policy-author` to write the documents. Storage details: https://cosec.ahoo.me/operations/storage.

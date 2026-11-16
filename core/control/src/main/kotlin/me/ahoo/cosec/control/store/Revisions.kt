@@ -26,6 +26,7 @@ import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.Provenance
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.RoleExpansion
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
@@ -105,8 +106,7 @@ class Revisions(
         val document = next(base, candidate, publication)
         val revision = document.revision
         val publishedAt = document.publishedAt
-        val stored =
-            SnapshotDocument(PolicyDocumentCodec.SCHEMA, revision, publishedAt, PolicyDocumentCodec.encode(document))
+        val stored = SnapshotDocuments.of(document)
         val digest = store.digestOf(stored)
         updateIndex(key) { it.copy(pending = it.pending + PendingRecord(digest, publishedAt)) } ||
             warn("[$key] revision $revision: its record could not be registered as pending; an orphan would stay")

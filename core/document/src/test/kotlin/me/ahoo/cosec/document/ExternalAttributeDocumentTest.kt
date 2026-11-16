@@ -21,24 +21,19 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.time.Instant
 
 /** RFC 0006 §5.4: documents read external attributes the catalog declares, and say what `onMissing` means. */
 class ExternalAttributeDocumentTest {
     private val catalog = AttributeCatalog.of(listOf(Attribute.external("ext.geo.inFence", AttributeType.BOOL)))
     private val compiler = PolicyDocumentCompiler(catalog)
 
-    private fun stored(body: String) = SnapshotDocument(
-        2,
-        1,
-        Instant.parse("2026-10-26T00:00:00Z"),
-        """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray(),
+    private fun stored(body: String) = SnapshotDocuments.read(
+        """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()
     )
 
     private fun policies(effect: String, onMissing: String?, attribute: String = "ext.geo.inFence") =

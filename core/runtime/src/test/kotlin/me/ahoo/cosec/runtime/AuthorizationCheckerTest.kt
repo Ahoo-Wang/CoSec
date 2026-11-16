@@ -24,6 +24,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.engine.flat.CompiledDocument
@@ -51,13 +52,11 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -65,10 +64,7 @@ import kotlin.coroutines.cancellation.CancellationException
 class AuthorizationCheckerTest {
     private val platform = PolicyDocumentCompiler().compile(
         SnapshotKey.Platform,
-        SnapshotDocument(
-            2,
-            1,
-            Instant.parse("2026-10-26T00:00:00Z"),
+        SnapshotDocuments.read(
             (
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
@@ -84,7 +80,7 @@ class AuthorizationCheckerTest {
                     """{"id":"g:no-read","subject":"*","app":"*","space":"*","policy":"no-read"},""" +
                     """{"id":"g:control","subject":"*","app":"cosec-control","space":"","policy":"control"},""" +
                     """{"id":"g:rank","subject":"*","app":"cosec-control","space":"","policy":"rank"}]}"""
-                ).encodeToByteArray(),
+                ).encodeToByteArray()
         ),
     )
 
