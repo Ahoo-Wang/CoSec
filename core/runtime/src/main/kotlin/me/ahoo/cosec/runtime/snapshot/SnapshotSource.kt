@@ -315,8 +315,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * before is loaded again, [SnapshotOptions.reloadConcurrency] at a time. Until then the previous compilation is
      * served. A document that cannot be compiled again (the store cannot be read, the compile queue is full) fails
      * closed rather than keep the old compilation, and is retried. The future completes when every app and tenant
-     * document, idle or loading at the call, has been loaded again with the new inputs: a loading one by the load that
-     * follows it (`SNP-13`).
+     * document, idle or loading at the call, has been loaded again with the new inputs (`SNP-13`).
      */
     fun recompile(): CompletableFuture<Void> {
         context.compileEpoch.incrementAndGet()
@@ -325,10 +324,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     }
 
     /**
-     * Revalidates every installed document with a conditional read, a few at a time. Every document installed at the
-     * call is read again by a read that starts after the call: one whose load is in flight is read once more when that
-     * load ends, since that load may have read before what the caller wants seen (`SNP-13`). A document not installed
-     * at the call (one that failed with nothing installed, or still on its first load) is not part of it.
+     * Revalidates every document installed at the call with a conditional read that starts after the call (`SNP-13`), a
+     * few at a time; a document not installed then (failed with nothing installed, or on its first load) is not.
      */
     fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
 

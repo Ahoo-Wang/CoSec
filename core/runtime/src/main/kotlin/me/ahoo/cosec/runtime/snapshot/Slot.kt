@@ -139,9 +139,8 @@ internal class Slot<T : Any>(
     }
 
     /**
-     * For [recompile], after the epoch moved: a load in flight is followed by another, which starts in the new
-     * epoch. True when this slot is to be loaded again: loading, or idle with a compiled entry. The caller then
-     * reloads it, and waits for the load that follows the one in flight.
+     * For [recompile], after the epoch moved: a load in flight is followed by another, which starts in the new epoch.
+     * True when this slot is to be loaded again (loading, or idle with a compiled entry): the caller reloads it.
      */
     fun markRecompile(): Boolean = synchronized(this) {
         if (removed) {
