@@ -17,13 +17,17 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.ObjectNode
 
 /**
- * What a generated snapshot document needs to be one the codec can read, which the descriptors cannot say: ids unique
- * where the codec rejects duplicates, and an app document's principals naming their tenant, which the shared binding
- * schema cannot require of one kind of document only ([FormatPatterns]). Shared by the tests that decode generated
- * documents.
+ * What a generated snapshot document needs to be one the codec can read, which the descriptors cannot say: one schema
+ * describes the three kinds of document, so it accepts combinations that no single kind reads.
+ *
+ * Ids are made unique where the codec rejects duplicates. An app document's principals must name their tenant, which the
+ * shared binding schema cannot require of one kind of document only ([FormatPatterns]), so they get one when the
+ * document can only be an app's: it has a `catalog`, or a role that lists `"*"` (a tenant's role may not, and a platform
+ * document has no roles). Shared by the tests that decode generated documents.
  */
 internal fun selfConsistentSnapshotDocument(document: JsonNode): JsonNode {
-    if (document.has("catalog")) {
+    val onlyAnAppDocument = document.has("catalog") || document.get("roles")?.values()?.any(::listsEverything) == true
+    if (onlyAnAppDocument) {
         document.get("bindings")?.values()?.map { it.get("subject") }?.filterIsInstance<ObjectNode>()
             ?.filter { it.has("principal") && !it.has("tenant") }?.forEach { it.put("tenant", "acme") }
     }
@@ -32,3 +36,6 @@ internal fun selfConsistentSnapshotDocument(document: JsonNode): JsonNode {
     }
     return document
 }
+
+private fun listsEverything(role: JsonNode): Boolean =
+    role.get("permissions")?.let { it.isString && it.asString() == "*" } == true

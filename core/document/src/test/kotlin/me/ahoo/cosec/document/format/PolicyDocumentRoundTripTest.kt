@@ -123,7 +123,7 @@ class PolicyDocumentRoundTripTest {
     }
 
     private companion object {
-        const val SEED = 20261117L
+        const val SEED = 20261116L
         const val GENERATED = 300
 
         // What the seed gives today is about 170 per kind and 45 repository documents; the margin is for the corpus to grow.
