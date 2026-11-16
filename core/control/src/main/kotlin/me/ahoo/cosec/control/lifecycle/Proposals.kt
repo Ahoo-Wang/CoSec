@@ -36,7 +36,6 @@ import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.BREAK_GLASS
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.CONFLICT
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.GONE
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.NOT_FOUND
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.REBASABLE
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
@@ -181,9 +180,9 @@ internal class Proposals(
     suspend fun rebase(author: Operator, id: ChangeId): ChangeRequest {
         val change = flow.visible(author, id)
         authority.requireAuthor(author, change, "rebases")
-        PublishRules.requireState(change, REBASABLE)
+        PublishRules.requireState(change, ChangeStep.REBASE.from)
         candidates.authorize(author, change)
-        return flow.transition(id, REBASABLE) { current ->
+        return flow.transition(id, ChangeStep.REBASE) { current ->
             val head = revisions.head(current.key)
             val base = head?.let { Base(it.revision, it.digest) } ?: Base.NONE
             candidates.checked(

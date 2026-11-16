@@ -3,14 +3,14 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
-index 8d62b68f..8bb641ef 100644
+index 6235795b..a442e4bc 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
-@@ -138,7 +138,6 @@ internal class Approvals(
+@@ -137,7 +137,6 @@ internal class Approvals(
          val breakGlass = current.kind == ProvenanceKind.BREAK_GLASS
          if (breakGlass) {
-             PublishRules.requireState(current, OPEN)
+             PublishRules.requireState(current, ChangeStep.ABANDON.from)
 -            PublishRules.requireAudit(true, listeners.hasRequired)
              flow.audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
          }
-         val change = flow.transition(id, OPEN) { it.copy(state = ChangeState.ABANDONED) }
+         val change = flow.transition(id, ChangeStep.ABANDON) { it.copy(state = ChangeState.ABANDONED) }
