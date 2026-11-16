@@ -126,7 +126,7 @@ internal class SlotModelRun(private val script: SlotModelScript) {
         threads.thrown.clear()
         if (::source.isInitialized) {
             model.afterEvent(source.entries(), model.closedAt >= 0 || closed)
-            model.checkHeld(source.entries(), source::heldCounts)
+            model.checkHeld(source.entries(), source::heldCounts, source::heldMembers)
         }
         if (model.violations.isEmpty()) return true
         failure = "${model.violations.first()} (after ${log.last()})"
@@ -263,7 +263,7 @@ internal class SlotModelRun(private val script: SlotModelScript) {
         threads.thrown.filterNot { it is StackOverflowError }.forEach { model.violations += "a task threw $it" }
         threads.thrown.clear()
         model.afterEvent(source.entries(), closed)
-        model.checkHeld(source.entries(), source::heldCounts)
+        model.checkHeld(source.entries(), source::heldCounts, source::heldMembers)
         return model.violations.isEmpty()
     }
 
@@ -289,7 +289,7 @@ internal class SlotModelRun(private val script: SlotModelScript) {
             threads.thrown.filterNot { it is StackOverflowError }.forEach { model.violations += "a task threw $it" }
             threads.thrown.clear()
             model.afterEvent(source.entries(), closed)
-            model.checkHeld(source.entries(), source::heldCounts)
+            model.checkHeld(source.entries(), source::heldCounts, source::heldMembers)
             if (model.violations.isNotEmpty()) return
         }
         model.violations += "the run did not settle within $SETTLE_LIMIT steps"

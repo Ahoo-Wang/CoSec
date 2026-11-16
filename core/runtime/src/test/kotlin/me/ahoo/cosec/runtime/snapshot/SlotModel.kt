@@ -398,9 +398,13 @@ internal class SlotModel(
      * `SNP-14`: after every event, each kind of each family holds at most its cap (its bound plus the smaller of the
      * bound and `MAX_SLACK`), plus what can still be installed without an eviction having run: the family's reads in
      * flight and the compilations queued. Once nothing is in flight, that is the cap itself. [counted] is what the source
-     * counts it holds, which must equal a recount of what it serves.
+     * counts it holds, and [members] the keys it lists for each kind: both must equal a recount of what it serves.
      */
-    fun checkHeld(served: List<SnapshotEntry<*>>, counted: (SnapshotKind) -> Pair<Int, Int>) {
+    fun checkHeld(
+        served: List<SnapshotEntry<*>>,
+        counted: (SnapshotKind) -> Pair<Int, Int>,
+        members: (SnapshotKind) -> Pair<Set<SnapshotKey>, Set<SnapshotKey>>,
+    ) {
         if (closedAt >= 0) return
         for (kind in listOf(SnapshotKind.APP, SnapshotKind.TENANT)) {
             val family = served.filter { it.key.kind == kind }
@@ -408,6 +412,11 @@ internal class SlotModel(
             val absent = family.size - documents
             if (counted(kind) != (documents to absent)) {
                 violations += "the $kind family counts ${counted(kind)} (documents, absent) and holds ${documents to absent}"
+            }
+            val held = family.filter { it.origin != EntryOrigin.ABSENT }.mapTo(HashSet()) { it.key } to
+                family.filter { it.origin == EntryOrigin.ABSENT }.mapTo(HashSet()) { it.key }
+            if (members(kind) != held) {
+                violations += "the $kind family lists ${members(kind)} (documents, absent) and holds $held"
             }
             val loading = store.pending.count { it.key.kind == kind && !ended(it) } + threads.compiles.size
             val bound = if (kind == SnapshotKind.APP) options.maxApps else options.maxTenants

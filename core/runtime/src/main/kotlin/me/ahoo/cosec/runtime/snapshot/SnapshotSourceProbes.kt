@@ -25,15 +25,28 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 internal fun SnapshotSource<*, *>.heldCounts(kind: SnapshotKind): Pair<Int, Int> =
     familyOfKind(kind).let { it.count(absent = false).get() to it.count(absent = true).get() }
 
+/** Tests only: the keys the family of [kind] lists as holding each kind, documents then absent entries. */
+internal fun SnapshotSource<*, *>.heldMembers(kind: SnapshotKind): Pair<Set<SnapshotKey>, Set<SnapshotKey>> =
+    familyOfKind(kind).let { family ->
+        family.members(absent = false).mapTo(HashSet()) { it.key } to family.members(absent = true).mapTo(HashSet()) { it.key }
+    }
+
+/** Tests only: how many slots a pass choosing [wanted] victims of the kind [absent] names reads the stamp of. */
+internal fun SnapshotSource<*, *>.evictionVisits(kind: SnapshotKind, absent: Boolean, wanted: Int): Int {
+    var visits = 0
+    families.victims(familyOfKind(kind), absent, wanted) { slot -> visits++; slot.lastAccess }
+    return visits
+}
+
 /** Benchmarks only: one eviction pass over the [kind] family's documents, at most [limit] of them. */
 internal fun SnapshotSource<*, *>.evictionPass(
     kind: SnapshotKind,
     limit: Int
 ) = families.evictBeyond(familyOfKind(kind), limit)
 
-/** Benchmarks only: the scan of an eviction pass alone, choosing [wanted] victims among the [kind] family's documents. */
-internal fun SnapshotSource<*, *>.evictionScan(kind: SnapshotKind, wanted: Int): Int =
-    families.victims(familyOfKind(kind), false, wanted).size
+/** Benchmarks only: the scan of an eviction pass alone, choosing [wanted] victims of the kind [absent] names. */
+internal fun SnapshotSource<*, *>.evictionScan(kind: SnapshotKind, wanted: Int, absent: Boolean = false): Int =
+    families.victims(familyOfKind(kind), absent, wanted).size
 
 /** Tests only: one claimed eviction of [key]'s slot, as a pass that chose it as of the kind [absent] would do it. */
 internal fun SnapshotSource<*, *>.evictClaiming(key: SnapshotKey, absent: Boolean): Boolean? {

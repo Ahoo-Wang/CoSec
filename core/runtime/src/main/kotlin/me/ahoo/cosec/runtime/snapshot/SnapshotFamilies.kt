@@ -95,20 +95,26 @@ internal class SnapshotFamilies<A : Any>(
     }
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
-    internal fun victims(family: Family<*>, absent: Boolean, wanted: Int): List<Slot<*>> {
-        val ofKind = family.slots.values.asSequence().filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
-        return leastRecentlyUsed(ofKind, wanted, { it.lastAccess }, { it.isIdle() })
+    internal fun victims(
+        family: Family<*>,
+        absent: Boolean,
+        wanted: Int,
+        lastAccessOf: (Slot<*>) -> Long = Slot<*>::lastAccess,
+    ): List<Slot<*>> {
+        // The kind's members; a slot is checked again, since its kind can change between the set and this read.
+        val ofKind = family.members(absent).asSequence().filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
+        return leastRecentlyUsed(ofKind, wanted, lastAccessOf, { it.isIdle() })
     }
 
     /** Moves [family]'s counts for an entry replaced by another, either of them null: where `installed` is written. */
-    fun move(family: Family<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
+    fun move(family: Family<*>, slot: Slot<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
         val from = old?.let(::isAbsent)
         val to = new?.let(::isAbsent)
         if (from == to) {
             return
         }
-        from?.let { family.count(it).decrementAndGet() }
-        to?.let { family.count(it).incrementAndGet() }
+        from?.let { family.leave(slot, it) }
+        to?.let { family.join(slot, it) }
     }
 
     /** One family's documents, by id, and how many of each kind it holds (`SNP-14`). */
@@ -119,7 +125,27 @@ internal class SnapshotFamilies<A : Any>(
         private val documents = AtomicInteger()
         private val absentEntries = AtomicInteger()
 
+        /**
+         * The slots holding an entry of each kind, beside the counts and moved with them: a pass for a kind walks only
+         * that kind's, so it costs what the kind holds, not what the family holds (the absent kind's 512 at most,
+         * whatever the documents number). Read only by eviction passes and tests; `peek` never sees them.
+         */
+        private val documentSlots: MutableSet<Slot<*>> = ConcurrentHashMap.newKeySet()
+        private val absentSlots: MutableSet<Slot<*>> = ConcurrentHashMap.newKeySet()
+
         fun count(absent: Boolean): AtomicInteger = if (absent) absentEntries else documents
+
+        fun members(absent: Boolean): Set<Slot<*>> = if (absent) absentSlots else documentSlots
+
+        fun join(slot: Slot<*>, absent: Boolean) {
+            (if (absent) absentSlots else documentSlots) += slot
+            count(absent).incrementAndGet()
+        }
+
+        fun leave(slot: Slot<*>, absent: Boolean) {
+            (if (absent) absentSlots else documentSlots) -= slot
+            count(absent).decrementAndGet()
+        }
 
         fun bound(absent: Boolean): Int = if (absent) spec.maxAbsent else spec.maxEntries
 
@@ -128,10 +154,17 @@ internal class SnapshotFamilies<A : Any>(
 
         fun overCap(absent: Boolean): Boolean = count(absent).get() > cap(absent)
 
-        /** Claims one removal of a kind's entry: its count's decrement, never below the bound; false at the bound. */
-        fun claim(absent: Boolean): Boolean {
+        /**
+         * Claims the removal of [slot], an entry of the kind [absent] names: its count's decrement, never below the
+         * bound, and its place among that kind's members; false at the bound, and nothing moves.
+         */
+        fun claim(slot: Slot<*>, absent: Boolean): Boolean {
             val bound = bound(absent)
-            return count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound
+            val claimed = count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound
+            if (claimed) {
+                (if (absent) absentSlots else documentSlots) -= slot
+            }
+            return claimed
         }
 
         /** Drops [slot] from the map, if it is still the one held for [id]. */

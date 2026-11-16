@@ -39,8 +39,10 @@ import java.util.concurrent.TimeUnit
  * One eviction pass of `SNP-14`, as an installing thread runs it in place when its install took the family over its
  * cap: at [bound] documents held to their cap (twice the bound, at most `MAX_SLACK` above it), the time of a pass that
  * evicts [batch] of them (`1`, `eighth` of the slack, or the whole `slack`), and of its scan alone (`scan`), which
- * no batch size changes, single-shot as an install over the cap runs it, and warmed (`scanWarm`, average time). The source's
- * housekeeping is held, so nothing else evicts.
+ * no batch size changes, single-shot as an install over the cap runs it, and warmed (`scanWarm`, average time). Beside
+ * them the family holds `max-absent` absent entries, and `scanAbsentWarm` is the absent kind's scan: what an absent
+ * entry's install over its cap scans, which must not grow with [bound] (§4c). The source's housekeeping is held, so
+ * nothing else evicts.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 @BenchmarkMode(Mode.SingleShotTime)
@@ -77,6 +79,8 @@ open class EvictionPassBenchmark {
             options, Clock.systemUTC(), SnapshotMetrics.NOOP, null, null, System::nanoTime, Held(),
         )
         source.load().join()
+        // At the absent kind's bound, not over it: a pass evicts documents alone.
+        (0 until options.maxAbsent).forEach { source.loadAll(listOf(SnapshotKey.App("absent-$it"))).join() }
         fill()
     }
 
@@ -104,6 +108,11 @@ open class EvictionPassBenchmark {
     @Benchmark
     @BenchmarkMode(Mode.AverageTime)
     fun scanWarm(): Int = source.evictionScan(SnapshotKind.APP, limit)
+
+    /** The absent kind's scan, warmed, choosing as many victims as [scanWarm] does. */
+    @Benchmark
+    @BenchmarkMode(Mode.AverageTime)
+    fun scanAbsentWarm(): Int = source.evictionScan(SnapshotKind.APP, limit, absent = true)
 
     private fun app(index: Int) = SnapshotKey.App("app-$index")
 

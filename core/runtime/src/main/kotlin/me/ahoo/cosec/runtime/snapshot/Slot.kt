@@ -174,11 +174,11 @@ internal class Slot<T : Any>(
                 return false
             }
             if (claimedAbsent != null && (entry == null || SnapshotFamilies.isAbsent(entry) != claimedAbsent)) return false
-            if (claimedAbsent != null && !family.claim(claimedAbsent)) return null
+            if (claimedAbsent != null && !family.claim(this, claimedAbsent)) return null
             removed = true
             family.drop(family.spec.idOf(key), this)
             if (claimedAbsent == null) {
-                context.families.move(family, entry, null)
+                context.families.move(family, this, entry, null)
             }
         }
         return true
@@ -623,7 +623,7 @@ internal class Slot<T : Any>(
         val empty: Boolean
         synchronized(this) {
             if (install) {
-                family()?.let { context.families.move(it, installed, entry) }
+                family()?.let { context.families.move(it, this, installed, entry) }
                 installed = entry
                 installedEpoch = load.epoch
             }
