@@ -441,6 +441,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal fun heldCounts(kind: SnapshotKind): Pair<Int, Int> =
         family(kind).let { it.count(absent = false).get() to it.count(absent = true).get() }
 
+    /** Tests only: one claimed eviction of [key]'s slot, as a pass that chose it as of the kind [absent] would do it. */
+    internal fun evictClaiming(key: SnapshotKey, absent: Boolean): Boolean? {
+        val family = familyOf(key)
+        val slot = family.slots[family.spec.idOf(key)] ?: return false
+        return families.evictOne(family, slot, absent)
+    }
+
     /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
     internal fun evict(key: SnapshotKey): Boolean {
         val family = familyOf(key)

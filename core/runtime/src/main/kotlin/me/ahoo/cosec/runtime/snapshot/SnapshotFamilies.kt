@@ -75,16 +75,26 @@ internal class SnapshotFamilies<A : Any>(
             return
         }
         for (victim in victims(family, absent, minOf(excess, limit))) {
-            if (!family.claim(absent)) {
-                return
-            }
-            if (victim.removeIfIdle(onlyIfEmpty = false, claimedAbsent = absent)) {
-                lagReports.forget(victim.key)
-                log.debug { "Evicted snapshot document [${victim.key}]." }
-            } else {
-                family.count(absent).incrementAndGet()
-            }
+            evictOne(family, victim, absent) ?: return
         }
+    }
+
+    /**
+     * Evicts [victim], an entry of the kind [absent] names when it was chosen: claims the decrement first, removes it if
+     * it is still idle and of that kind, and gives the claim back otherwise. Null when there was nothing to claim (the
+     * kind is at its bound), else whether it went.
+     */
+    fun evictOne(family: Family<*>, victim: Slot<*>, absent: Boolean): Boolean? {
+        if (!family.claim(absent)) {
+            return null
+        }
+        if (victim.removeIfIdle(onlyIfEmpty = false, claimedAbsent = absent)) {
+            lagReports.forget(victim.key)
+            log.debug { "Evicted snapshot document [${victim.key}]." }
+            return true
+        }
+        family.count(absent).incrementAndGet()
+        return false
     }
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
