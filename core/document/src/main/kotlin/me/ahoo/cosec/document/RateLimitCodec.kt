@@ -31,7 +31,7 @@ internal object RateLimitCodec {
     )
 
     /** `{"id", "action", "resource", "condition", "onMissing", "key", "permitsPerSecond", "windowSeconds", "strictFailure"}`. */
-    internal fun rateLimit(node: DocumentNode): RateLimitSource {
+    internal fun decode(node: DocumentNode): RateLimitSource {
         node.requireObject(*RATE_LIMIT_FIELDS)
         val id = node.required("id").text()
         val permitsPerSecond = node.required("permitsPerSecond")
@@ -57,7 +57,7 @@ internal object RateLimitCodec {
         )
     }
 
-    internal fun rateLimit(rule: RateLimitSource): ObjectNode {
+    internal fun tree(rule: RateLimitSource): ObjectNode {
         val written = StatementCodec.tree(rule.statement)
         val node = factory.objectNode().put("id", rule.id)
         listOf("action", "resource", "condition", "onMissing").forEach { field ->

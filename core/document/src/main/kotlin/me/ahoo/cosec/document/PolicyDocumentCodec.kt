@@ -17,12 +17,9 @@ package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.document.CatalogCodec.catalog
 import me.ahoo.cosec.document.DocumentJson.ROOT
 import me.ahoo.cosec.document.DocumentJson.factory
 import me.ahoo.cosec.document.DocumentJson.nonEmpty
-import me.ahoo.cosec.document.ProvenanceCodec.provenance
-import me.ahoo.cosec.document.RateLimitCodec.rateLimit
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.RateLimitSource
 import me.ahoo.cosec.model.AppId
@@ -131,7 +128,7 @@ object PolicyDocumentCodec {
             publishedAt = root.required("publishedAt").instant(),
             policies = root.field("policies")?.elements()?.map(PolicyCodec::decode).orEmpty(),
             bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
-            catalog = root.field("catalog")?.let(::catalog),
+            catalog = root.field("catalog")?.let(CatalogCodec::decode),
             boundary = when (kind) {
                 DocumentKind.PLATFORM -> root.field("boundaries")?.let { boundaries ->
                     boundaries.requireObject("default")
@@ -141,10 +138,10 @@ object PolicyDocumentCodec {
                 DocumentKind.TENANT -> root.field("boundary")?.let { PolicyId(it.nonEmpty()) }
                 DocumentKind.APP -> null
             },
-            provenance = root.field("provenance")?.let(::provenance),
+            provenance = root.field("provenance")?.let(ProvenanceCodec::decode),
             limits = root.field("limits")?.let(::limits),
             attributes = root.field("attributes")?.let(::attributes),
-            rateLimits = root.field("rateLimits")?.elements()?.map(::rateLimit).orEmpty(),
+            rateLimits = root.field("rateLimits")?.elements()?.map(RateLimitCodec::decode).orEmpty(),
             roles = root.field("roles")?.elements()?.map { role(it, kind) }.orEmpty(),
         )
     }
@@ -296,7 +293,7 @@ object PolicyDocumentCodec {
         binding(DocumentNode(tree, path), kind, owner)
 
     @InternalCoSecApi
-    fun catalogTree(catalog: Catalog): ObjectNode = catalog(catalog)
+    fun catalogTree(catalog: Catalog): ObjectNode = CatalogCodec.tree(catalog)
 
     @InternalCoSecApi
     fun roleTree(role: RoleDefinition): ObjectNode = role(role)
@@ -307,13 +304,15 @@ object PolicyDocumentCodec {
         role(DocumentNode(tree, path), kind)
 
     @InternalCoSecApi
-    fun rateLimitTree(rule: RateLimitSource): ObjectNode = rateLimit(rule)
+    fun rateLimitTree(rule: RateLimitSource): ObjectNode = RateLimitCodec.tree(rule)
 
     @InternalCoSecApi
-    fun decodeRateLimit(tree: JsonNode, path: String = ROOT): RateLimitSource = rateLimit(DocumentNode(tree, path))
+    fun decodeRateLimit(tree: JsonNode, path: String = ROOT): RateLimitSource = RateLimitCodec.decode(
+        DocumentNode(tree, path)
+    )
 
     @InternalCoSecApi
-    fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = catalog(DocumentNode(tree, path))
+    fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = CatalogCodec.decode(DocumentNode(tree, path))
 
     @InternalCoSecApi
     fun decodeLimits(tree: JsonNode, path: String = ROOT): ConditionLimits = limits(DocumentNode(tree, path))
@@ -336,7 +335,7 @@ object PolicyDocumentCodec {
                 else -> root.put("boundary", boundary.value)
             }
         }
-        document.provenance?.let { root.set("provenance", provenance(it)) }
+        document.provenance?.let { root.set("provenance", ProvenanceCodec.tree(it)) }
         document.limits?.let { limits ->
             root.putObject("limits").put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
                 .put("maxInValues", limits.maxInValues).put("maxCidrBlocks", limits.maxCidrBlocks)
@@ -354,7 +353,7 @@ object PolicyDocumentCodec {
     }
 
     private fun putEntries(root: ObjectNode, document: PolicyDocument) {
-        document.catalog?.let { root.set("catalog", catalog(it)) }
+        document.catalog?.let { root.set("catalog", CatalogCodec.tree(it)) }
         val policies = root.putArray("policies")
         document.policies.forEach { policies.add(PolicyCodec.tree(it)) }
         val bindings = root.putArray("bindings")
@@ -365,7 +364,7 @@ object PolicyDocumentCodec {
         }
         if (document.rateLimits.isNotEmpty()) {
             val rules = root.putArray("rateLimits")
-            document.rateLimits.forEach { rules.add(rateLimit(it)) }
+            document.rateLimits.forEach { rules.add(RateLimitCodec.tree(it)) }
         }
     }
 

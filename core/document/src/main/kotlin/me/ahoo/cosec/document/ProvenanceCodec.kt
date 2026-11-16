@@ -25,7 +25,7 @@ import tools.jackson.databind.node.ObjectNode
 internal object ProvenanceCodec {
     private val PROVENANCE_FIELDS = arrayOf("parent", "change", "kind", "publishedBy", "approvedBy", "shadow")
 
-    internal fun provenance(node: DocumentNode): Provenance {
+    internal fun decode(node: DocumentNode): Provenance {
         node.requireObject(*PROVENANCE_FIELDS)
         val kind = node.required("kind")
         return Provenance(
@@ -50,7 +50,7 @@ internal object ProvenanceCodec {
         )
     }
 
-    internal fun provenance(provenance: Provenance): ObjectNode {
+    internal fun tree(provenance: Provenance): ObjectNode {
         val node = factory.objectNode()
         provenance.parent?.let { node.putObject("parent").put("revision", it.revision).put("digest", it.digest) }
         node.put("change", provenance.change)

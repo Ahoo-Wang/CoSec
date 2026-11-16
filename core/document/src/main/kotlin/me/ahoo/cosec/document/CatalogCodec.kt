@@ -21,7 +21,7 @@ import tools.jackson.databind.node.ObjectNode
 
 /** An app document's catalog of permission groups, both ways; a permission's resources are [StatementCodec]'s. */
 internal object CatalogCodec {
-    internal fun catalog(node: DocumentNode): Catalog {
+    internal fun decode(node: DocumentNode): Catalog {
         node.requireObject("groups")
         return Catalog(
             node.required("groups").elements().map { group ->
@@ -45,7 +45,7 @@ internal object CatalogCodec {
         )
     }
 
-    internal fun catalog(catalog: Catalog): ObjectNode {
+    internal fun tree(catalog: Catalog): ObjectNode {
         val node = factory.objectNode()
         val groups = node.putArray("groups")
         for (group in catalog.groups) {
