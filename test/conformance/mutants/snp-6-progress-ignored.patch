@@ -2,15 +2,15 @@
 # Mutant: a finished document is not progress, so a pass still finishing documents is abandoned storeReadTimeout after it started
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 3d80418c..db500589 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -644,7 +644,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-         val abandoned: Boolean get() = reads.get() == ABANDONED
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
+index c9a077a2..0e261b71 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
+@@ -31,7 +31,6 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: Slot
+     val abandoned: Boolean get() = reads.get() == ABANDONED
  
-         fun progressed() {
--            progressedAt = nanoTime.asLong
-         }
+     fun progressed() {
+-        progressedAt = context.nanoTime.get().asLong
+     }
  
-         /** A read of this pass starting, or null once the pass is abandoned. */
+     /** A read of this pass starting, or null once the pass is abandoned. */

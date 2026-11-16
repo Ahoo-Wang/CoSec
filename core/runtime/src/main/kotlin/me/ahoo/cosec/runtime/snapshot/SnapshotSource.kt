@@ -15,41 +15,21 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newCompileExecutor
-import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newHousekeeping
-import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newScheduler
-import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
+import me.ahoo.cosec.runtime.snapshot.SnapshotFamilies.Family
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
-import me.ahoo.cosec.spi.snapshot.SnapshotDigest
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
-import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotStaleException
-import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
-import java.util.concurrent.ExecutorService
-import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ThreadPoolExecutor
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.TimeoutException
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
-import java.util.concurrent.atomic.AtomicLong
 import java.util.function.LongSupplier
 
 /**
@@ -103,7 +83,7 @@ import java.util.function.LongSupplier
  * retries); eviction, lag reports and log lines with stack traces run on a separate housekeeping thread, so a slow log
  * appender cannot delay a timeout (#1252).
  */
-// B2a: the snapshot source splits into its state, its transitions and its runner
+// stays: the read interface with its contract and its test hooks, and the construction and close order in one place
 @Suppress("TooManyFunctions")
 @InternalCoSecApi
 class SnapshotSource<P : Any, A : Any> internal constructor(
@@ -129,60 +109,29 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * Monotonic nanoseconds, the time the scheduler's timeouts keep: whether a periodic pass stalled is measured in it,
      * so a step of the wall clock does not look like time passing. Replaced only in tests.
      */
-    @Volatile
-    internal var nanoTime: LongSupplier = LongSupplier(System::nanoTime)
+    internal var nanoTime: LongSupplier
+        get() = context.nanoTime.get()
+        set(value) = context.nanoTime.set(value)
 
-    /** Set on the threads this source starts: [close] does not wait for the thread it runs on. */
-    private val onOwnThread = ThreadLocal<Boolean>()
-    private val ownsCompileExecutor = compileExecutor == null
-    private val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options, onOwnThread)
-    private val ownsScheduler = scheduler == null
-    private val scheduler: ScheduledExecutorService = scheduler ?: newScheduler(onOwnThread)
-    private val housekeeping: ThreadPoolExecutor = newHousekeeping(onOwnThread)
-
-    private val shared = Slot(sharedKey, sharedCompiler)
-    private val families: List<Family> = families.map { Family(it) }
-    private val evictionLock = Any()
-
-    init {
-        require(
-            this.families.map { it.spec.kind }.toSet().size == this.families.size
-        ) { "Families must differ in kind." }
-        require(this.families.none { it.spec.kind == sharedKey.kind }) { "The shared key cannot be a family's." }
-    }
-
-    /**
-     * Bumped by [recompile]. A family slot remembers the epoch its entry was compiled in; a load that starts in a
-     * later epoch compiles it again (see [recompile]).
-     */
-    private val compileEpoch = AtomicLong()
-
-    /** The last decoded revision read or installed per key, kept across eviction (see the class comment). */
-    private val seen = ConcurrentHashMap<SnapshotKey, Seen>()
-    private val lastLagReport = ConcurrentHashMap<SnapshotKey, Instant>()
-
-    /** Whether a lag report waits on the housekeeping thread: a stalled appender must not pile up one per tick. */
-    private val lagReportQueued = AtomicBoolean()
-    private val pendingPrewarms: MutableSet<CompletableFuture<Void>> = ConcurrentHashMap.newKeySet()
-    private val pendingRequests: MutableSet<Slot<*>.RequestView> = ConcurrentHashMap.newKeySet()
-
-    @Volatile
-    private var closed = false
-
-    @Volatile
-    private var prewarmed = false
+    private val threads = SnapshotThreads(options, compileExecutor, scheduler)
+    private val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
+    private val families = SnapshotFamilies(families, sharedKey.kind, lagReports)
+    private val context = SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families)
+    private val shared = Slot(sharedKey, sharedCompiler, context)
 
     /** Tests only: runs between finding a family's slot and using it, to force an eviction into that gap. */
     @Volatile
     internal var afterSlotLookup: ((SnapshotKey) -> Unit)? = null
 
     // #1383: a step that throws releases what the constructor took before it, so a source that fails to build holds nothing.
-    private val subscription: AutoCloseable = undoing({}) { store.subscribe(ChangeListener()) }
-    private val passes = PeriodicPasses()
-    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { schedulePeriodic() }
+    private val passes = Passes(shared, this.families, context, lagReports)
+    private val prewarms = Prewarms(context, ::usableOf)
+    private val subscription: AutoCloseable =
+        undoing({}) { store.subscribe(SnapshotChanges(sharedKey, shared, this.families, passes)) }
+    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { passes.schedulePeriodic() }
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
-    val isPrewarmed: Boolean get() = prewarmed
+    val isPrewarmed: Boolean get() = prewarms.prewarmed
 
     /**
      * The installed snapshot for a request that needs the app document of [appId] (or none when null), or null when a
@@ -192,7 +141,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * A document that is installed but failed is returned as such: the caller fails every evaluation that reads it.
      */
     fun peek(appId: String? = null): Snapshot<P, A>? {
-        if (closed) {
+        if (context.closed.get()) {
             return null
         }
         val policiesEntry = shared.installed ?: return null
@@ -214,7 +163,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      */
     internal fun peekAll(keys: List<SnapshotKey>): SnapshotSet<P, A>? {
         val families = keys.map(::familyOf)
-        if (closed) {
+        if (context.closed.get()) {
             return null
         }
         val sharedEntry = shared.installed ?: return null
@@ -227,7 +176,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         return SnapshotSet(sharedEntry, entries)
     }
 
-    private fun peekScoped(family: Family, id: String): SnapshotEntry<A>? {
+    private fun peekScoped(family: Family<A>, id: String): SnapshotEntry<A>? {
         val slot = family.slots[id] ?: return null
         val entry = slot.installed ?: return null
         if (slot.removed) {
@@ -253,7 +202,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      */
     fun load(appId: String? = null): CompletableFuture<Snapshot<P, A>> {
         val appKey = appId?.let { SnapshotKey.App(it) }
-        if (closed) {
+        if (context.closed.get()) {
             return CompletableFuture.failedFuture(closedError())
         }
         val policiesEntry = shared.forRequest() ?: error("The shared slot is never removed.")
@@ -272,7 +221,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     @InternalCoSecApi
     fun loadAll(keys: List<SnapshotKey>): CompletableFuture<SnapshotSet<P, A>> {
         keys.forEach(::familyOf)
-        if (closed) {
+        if (context.closed.get()) {
             return CompletableFuture.failedFuture(closedError())
         }
         val sharedEntry = shared.forRequest() ?: error("The shared slot is never removed.")
@@ -295,13 +244,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     fun settled(keys: Collection<SnapshotKey>): CompletableFuture<Void> {
         keys.forEach(::familyOf)
         val settled = CompletableFuture<Void>()
-        val shared = if (closed) CompletableFuture.completedFuture(null) else usableOf(sharedKey)
+        val shared = if (context.closed.get()) CompletableFuture.completedFuture(null) else usableOf(sharedKey)
         shared.whenComplete { _, _ ->
             // What this callback throws would go to a stage nobody holds, and the wait would never end.
             try {
-                val loads = if (closed) emptyList() else keys.map(::usableOf)
+                val loads = if (context.closed.get()) emptyList() else keys.map(::usableOf)
                 CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
-                    if (closed) settled.completeExceptionally(closedError()) else settled.complete(null)
+                    if (context.closed.get()) settled.completeExceptionally(closedError()) else settled.complete(null)
                 }
             } catch (failure: Throwable) {
                 settled.completeExceptionally(failure)
@@ -314,13 +263,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * Loads [keys] and completes once every one of them is installed and not failed, retrying with backoff from
      * [SnapshotOptions.prewarmInitialBackoff] up to [SnapshotOptions.prewarmMaxBackoff]. [isPrewarmed] turns true then.
      */
-    fun prewarm(keys: Collection<SnapshotKey>): CompletableFuture<Void> {
-        val done = CompletableFuture<Void>()
-        pendingPrewarms.add(done)
-        done.whenComplete { _, _ -> pendingPrewarms.remove(done) }
-        attemptPrewarm(keys.toList(), options.prewarmInitialBackoff, done)
-        return done
-    }
+    fun prewarm(keys: Collection<SnapshotKey>): CompletableFuture<Void> = prewarms.start(keys)
 
     /**
      * Throws [SnapshotStaleException] when [tenantId] is configured to fail closed and [snapshot] lags more than
@@ -375,13 +318,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * been loaded again.
      */
     fun recompile(): CompletableFuture<Void> {
-        compileEpoch.incrementAndGet()
+        context.compileEpoch.incrementAndGet()
         val idle = families.flatMap { it.slots.values }.filter { it.markRecompile() }
-        return reloadAll(idle) { it.load() }
+        return passes.reloadAll(idle) { it.load() }
     }
 
     /** Revalidates every installed document with a conditional read, a few at a time. */
-    fun revalidate(): CompletableFuture<Void> = reloadAll(installedSlots()) { it.load() }
+    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.load() }
 
     /**
      * Stops this source and answers everything waiting on it. Every step runs whatever the ones before it did, so a
@@ -389,10 +332,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * ran, with the others suppressed in it. A second call does nothing.
      */
     override fun close() {
-        if (closed) {
+        if (context.closed.get()) {
             return
         }
-        closed = true
+        context.closed.set(true)
         var failure: Throwable? = null
         for (step in closeSteps()) {
             failure = attemptClosing(step, failure)
@@ -407,13 +350,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun closeSteps(): List<() -> Unit> = listOf(
         { periodic.cancel(false) },
         subscription::close,
-        { if (ownsScheduler) scheduler.shutdownNow() },
-        { pendingPrewarms.forEach { it.completeExceptionally(closedError()) } },
-        { pendingRequests.forEach { it.abort(closedError()) } },
+        threads::stopScheduler,
+        prewarms::abort,
+        { context.pendingRequests.forEach { it.abort(closedError()) } },
         ::endLoads,
-        housekeeping::shutdown,
-        { if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown() },
-        ::awaitOwnedThreads,
+        threads::stopHousekeeping,
+        threads::stopCompiling,
+        { threads.awaitOwned(closeTimeout) },
     )
 
     /** Runs the constructor's [step]; when it throws, [undo] and the executors this source made are released first. */
@@ -421,9 +364,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun <T> undoing(undo: () -> Unit, step: () -> T): T = try {
         step()
     } catch (e: Throwable) {
-        listOf(undo, { if (ownsScheduler) scheduler.shutdownNow() }, housekeeping::shutdown, {
-            if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown()
-        }).forEach { release -> attemptClosing(release, e) }
+        listOf(undo, threads::stopScheduler, threads::stopHousekeeping, threads::stopCompiling)
+            .forEach { release -> attemptClosing(release, e) }
         throw e
     }
 
@@ -443,141 +385,23 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         families.forEach { family -> family.slots.values.forEach { it.endLoad() } }
     }
 
-    /**
-     * Waits, at most [closeTimeout], until the threads this source started have finished what was already queued on
-     * them: once [close] returns, a closed source does no more work and leaves no thread behind. Without the wait, a
-     * host that closes and replaces sources faster than queued work drains piles their threads up (RFC 0008 §3.5's
-     * property stress reached the per-process thread limit). Not on one of those threads, which would wait for itself.
-     */
-    private fun awaitOwnedThreads() {
-        if (onOwnThread.get() == true) {
-            return
-        }
-        val owned = buildList {
-            if (ownsScheduler) add(scheduler)
-            add(housekeeping)
-            if (ownsCompileExecutor) add(compileExecutor as ExecutorService)
-        }
-        val deadline = System.nanoTime() + closeTimeout.toNanos()
-        try {
-            for (executor in owned) {
-                val remaining = (deadline - System.nanoTime()).coerceAtLeast(0)
-                if (!executor.awaitTermination(remaining, TimeUnit.NANOSECONDS)) {
-                    log.warn { "The snapshot source's threads did not finish within $closeTimeout of closing." }
-                    return
-                }
-            }
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
-    }
-
     /** Whether every thread this source started has finished: true once [close] has returned. */
     internal val threadsTerminated: Boolean
-        get() = (!ownsScheduler || scheduler.isTerminated) && housekeeping.isTerminated &&
-            (!ownsCompileExecutor || (compileExecutor as ExecutorService).isTerminated)
+        get() = threads.terminated
 
     /**
-     * One periodic tick: queue a lag report, then revalidate, unless a pass is in flight ([PeriodicPasses]). The future
+     * One periodic tick: queue a lag report, then revalidate, unless a pass is in flight ([Passes]). The future
      * completes when a pass that started after this call has ended.
      */
-    internal fun tick(): CompletableFuture<Void> {
-        queueLagReport()
-        return passes.tick()
-    }
-
-    /** At most one report waits on the housekeeping thread; a tick that finds it there, or no room, leaves it to the next. */
-    private fun queueLagReport() {
-        if (!lagReportQueued.compareAndSet(false, true)) {
-            return
-        }
-        val queued = offTimer {
-            lagReportQueued.set(false)
-            reportLag()
-        }
-        if (!queued) {
-            lagReportQueued.set(false)
-        }
-    }
+    internal fun tick(): CompletableFuture<Void> = passes.periodic()
 
     /**
-     * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval].
-     * Off the scheduler thread: a log appender or a meter may take its time here.
+     * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval]
+     * ([LagReports]). Off the scheduler thread: a log appender or a meter may take its time here.
      */
-    internal fun reportLag() {
-        val now = clock.instant()
-        for (entry in entries()) {
-            if (entry.state is DocumentState.Failed) {
-                continue
-            }
-            val lag = entry.lagAt(now)
-            val escalated = lag > options.lagEscalate
-            if (!escalated && lag <= options.lagWarn) {
-                lastLagReport.remove(entry.key)
-                continue
-            }
-            if (!lagReportDue(entry.key, now)) {
-                continue
-            }
-            metrics.onLagExceeded(entry.key, lag, escalated)
-            if (escalated) {
-                log.error { "Snapshot document [${entry.key}] revision ${entry.revision} is stale: not confirmed for $lag." }
-            } else {
-                log.warn { "Snapshot document [${entry.key}] revision ${entry.revision} has not been confirmed for $lag." }
-            }
-        }
-    }
+    internal fun reportLag() = lagReports.report()
 
-    private fun lagReportDue(key: SnapshotKey, now: Instant): Boolean {
-        var due = false
-        lastLagReport.compute(key) { _, last ->
-            if (last != null && Duration.between(last, now) < options.lagLogInterval) {
-                last
-            } else {
-                due = true
-                now
-            }
-        }
-        return due
-    }
-
-    private fun closedError() = IllegalStateException("SnapshotSource is closed.")
-
-    private fun schedulePeriodic(): ScheduledFuture<*> {
-        val millis = options.revalidateInterval.toMillis()
-        return scheduler.scheduleWithFixedDelay(::periodicTick, millis, millis, TimeUnit.MILLISECONDS)
-    }
-
-    /** Never lets anything escape: a throwing task would silently cancel the periodic schedule. */
-    @Suppress("TooGenericExceptionCaught")
-    private fun periodicTick() {
-        try {
-            tick()
-        } catch (error: Throwable) {
-            offTimer { log.error(error) { "Snapshot revalidation pass failed." } }
-        }
-    }
-
-    /**
-     * Runs [task] on the housekeeping thread, for what the scheduler thread must not do itself. Never in place, unlike
-     * [offRequestThread], since nothing may hold up a timeout: false when the thread has no room, and [task] is dropped.
-     */
-    private fun offTimer(task: () -> Unit): Boolean = try {
-        housekeeping.execute(task)
-        true
-    } catch (_: RejectedExecutionException) {
-        false
-    }
-
-    /** Runs [task] on the housekeeping thread, off every request thread and off the timer; in place if it is gone. */
-    private fun offRequestThread(task: () -> Unit) {
-        try {
-            housekeeping.execute(task)
-        } catch (rejected: RejectedExecutionException) {
-            log.debug { "Housekeeping rejected a task ($rejected); running it in place." }
-            task()
-        }
-    }
+    private fun closedError() = context.closedError()
 
     /**
      * Runs [action] on the slot of [key], retrying with a fresh slot when the one found was removed concurrently
@@ -588,7 +412,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         val family = familyOf(key)
         val id = family.spec.idOf(key)
         while (true) {
-            val slot = family.slots.computeIfAbsent(id) { Slot(key, family.spec.compiler) }
+            val slot = family.slots.computeIfAbsent(id) { Slot(key, family.spec.compiler, context) }
             afterSlotLookup?.invoke(key)
             action(slot)?.let { return it }
             family.slots.remove(id, slot)
@@ -599,241 +423,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (key == sharedKey) shared.usable()!! else withSlot(key) { it.usable() }
 
     /** The family [key] belongs to; [IllegalArgumentException] when it is no document of this source. */
-    private fun familyOf(key: SnapshotKey): Family =
+    private fun familyOf(key: SnapshotKey): Family<A> =
         families.firstOrNull { it.spec.kind == key.kind }
             ?: throw IllegalArgumentException("[$key] is not one of this source's documents.")
 
-    private fun family(kind: SnapshotKind): Family =
+    private fun family(kind: SnapshotKind): Family<A> =
         families.firstOrNull { it.spec.kind == kind }
             ?: throw IllegalArgumentException("This source has no $kind documents.")
-
-    private fun installedSlots(): List<Slot<*>> = buildList {
-        if (shared.installed != null) add(shared)
-        families.forEach { family -> family.slots.values.filterTo(this) { it.installed != null } }
-    }
-
-    /**
-     * Runs [reload] on [slots], [SnapshotOptions.reloadConcurrency] at a time; a removed slot counts as done. Each lane
-     * loops while reloads complete inline (a synchronous store), so the stack never grows with the number of slots. For a
-     * periodic [pass], each slot that finishes is progress, and once it is abandoned no lane takes another slot. A lane
-     * holds a read of the pass while it takes a slot, so the pass cannot be abandoned between that check and the read
-     * the slot starts ([Pass.abandonIfStalled]).
-     */
-    private fun reloadAll(
-        slots: List<Slot<*>>,
-        pass: Pass? = null,
-        reload: (Slot<*>) -> CompletableFuture<*>?,
-    ): CompletableFuture<Void> {
-        val done = CompletableFuture<Void>()
-        if (slots.isEmpty()) {
-            done.complete(null)
-            return done
-        }
-        val next = AtomicInteger()
-        val remaining = AtomicInteger(slots.size)
-        fun finishedOne() {
-            pass?.progressed()
-            if (remaining.decrementAndGet() == 0) {
-                done.complete(null)
-            }
-        }
-        fun lane() {
-            while (true) {
-                val holding = pass?.let { it.startRead() ?: return }
-                val index = next.getAndIncrement()
-                if (index >= slots.size) {
-                    holding?.end()
-                    return
-                }
-                val reloading = try {
-                    reload(slots[index])
-                } finally {
-                    holding?.end()
-                }
-                if (reloading == null || reloading.isDone) {
-                    finishedOne()
-                    continue
-                }
-                reloading.whenComplete { _, _ ->
-                    finishedOne()
-                    lane()
-                }
-                return
-            }
-        }
-        repeat(minOf(options.reloadConcurrency, slots.size)) { lane() }
-        return done
-    }
-
-    /**
-     * The periodic passes (#1215): one at a time. A tick that comes while a pass is in flight starts none, so a store
-     * slower than the interval does not get another [SnapshotOptions.reloadConcurrency] reads each interval; it owes a
-     * pass instead, which starts as soon as the one in flight ends, over every document installed by then. However many
-     * ticks come meanwhile, one pass is owed. Nothing here waits: the scheduler thread only starts passes.
-     *
-     * A pass that has finished no document for [SnapshotOptions.storeReadTimeout] and has no read in flight is held only
-     * by compilations. It is abandoned: it takes no more documents, and the tick starts a pass, so a compilation that
-     * never ends does not hold back the revalidation of the documents that pass reaches (`SNP-6`). A pass whose reads are
-     * slow but still finishing is never abandoned, and neither is one with a read in flight, so the reads of an abandoned
-     * pass and of the one that replaced it never add up.
-     */
-    private inner class PeriodicPasses {
-        // Guarded by this.
-        private var current: Pass? = null
-        private var owed: CompletableFuture<Void>? = null
-
-        fun tick(): CompletableFuture<Void> {
-            val now = nanoTime.asLong
-            val stalled: Pass?
-            val started: Pass
-            synchronized(this) {
-                val running = current
-                // Abandoning is atomic with the pass's lanes taking a slot: once it returns true, no lane of it reads.
-                if (running != null && !running.abandonIfStalled(now)) {
-                    return owed ?: CompletableFuture<Void>().also { owed = it }
-                }
-                stalled = running
-                // The pass that starts now is the one owed, if any: it starts after every tick that owed it.
-                started = Pass(owed ?: CompletableFuture())
-                owed = null
-                current = started
-                stalled?.follow(started)
-            }
-            if (stalled != null) {
-                offTimer {
-                    log.warn {
-                        "A snapshot revalidation pass finished no document for ${options.storeReadTimeout} and has no " +
-                            "read in flight: compilations hold it. Starting the next pass without it."
-                    }
-                }
-            }
-            run(started)
-            return started.done
-        }
-
-        @Suppress("TooGenericExceptionCaught")
-        private fun run(pass: Pass) {
-            val reloads = try {
-                reloadAll(installedSlots(), pass) { it.load(pass = pass) }
-            } catch (error: Throwable) {
-                // Never leave a pass in flight that nothing will end: every later tick would only owe one.
-                pass.done.completeExceptionally(error)
-                ended(pass)
-                throw error
-            }
-            reloads.whenComplete { _, error ->
-                if (error != null) pass.done.completeExceptionally(error) else pass.done.complete(null)
-                ended(pass)
-            }
-        }
-
-        /** [pass] ended: the owed pass starts now, if any. An abandoned pass ends with nothing to start. */
-        private fun ended(pass: Pass) {
-            val next = synchronized(this) {
-                if (current !== pass) {
-                    return
-                }
-                val waiting = owed
-                if (waiting == null) {
-                    current = null
-                    return
-                }
-                owed = null
-                Pass(waiting).also { current = it }
-            }
-            run(next)
-        }
-    }
-
-    /** One periodic pass: [done] completes when it ends, or, once abandoned, when the pass that replaced it does. */
-    private inner class Pass(val done: CompletableFuture<Void>) {
-        /** When a document of this pass last finished, in [nanoTime]: the start, until one does. */
-        @Volatile
-        private var progressedAt: Long = nanoTime.asLong
-
-        /** The reads this pass has in flight, with the lanes about to start one; [ABANDONED] once it is abandoned. */
-        private val reads = AtomicInteger()
-
-        val abandoned: Boolean get() = reads.get() == ABANDONED
-
-        fun progressed() {
-            progressedAt = nanoTime.asLong
-        }
-
-        /** A read of this pass starting, or null once the pass is abandoned. */
-        fun startRead(): PassRead? {
-            while (true) {
-                val count = reads.get()
-                if (count == ABANDONED) {
-                    return null
-                }
-                if (reads.compareAndSet(count, count + 1)) {
-                    return PassRead(this)
-                }
-            }
-        }
-
-        fun readEnded() {
-            reads.decrementAndGet()
-        }
-
-        /**
-         * Abandons this pass if it has finished no document for [SnapshotOptions.storeReadTimeout] and has no read in
-         * flight; only one with no read can be, so [startRead] never succeeds after this does.
-         */
-        fun abandonIfStalled(now: Long): Boolean =
-            now - progressedAt > options.storeReadTimeout.toNanos() && reads.compareAndSet(0, ABANDONED)
-
-        /** This abandoned pass ends when [successor] does. */
-        fun follow(successor: Pass) {
-            successor.done.whenComplete { _, error ->
-                if (error != null) done.completeExceptionally(error) else done.complete(null)
-            }
-        }
-    }
-
-    /** One read of a [Pass], or a lane about to start one: ends once. */
-    private inner class PassRead(private val pass: Pass) {
-        private val open = AtomicBoolean(true)
-
-        fun end() {
-            if (open.compareAndSet(true, false)) {
-                pass.readEnded()
-            }
-        }
-    }
-
-    private fun attemptPrewarm(keys: List<SnapshotKey>, backoff: Duration, done: CompletableFuture<Void>) {
-        if (closed) {
-            done.completeExceptionally(closedError())
-            return
-        }
-        val loads = keys.map { usableOf(it) }
-        CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
-            if (closed) {
-                done.completeExceptionally(closedError())
-                return@whenComplete
-            }
-            val answered = loads.filterNot { it.isCompletedExceptionally }.map { it.join() }
-            val failed = answered.filter { it.state is DocumentState.Failed }
-            if (failed.isEmpty() && answered.size == loads.size) {
-                prewarmed = true
-                done.complete(null)
-                return@whenComplete
-            }
-            offRequestThread { log.warn { "Snapshot prewarm failed for ${failed.map { it.key }}; retrying in $backoff." } }
-            val nextBackoff = minOf(backoff.multipliedBy(2), options.prewarmMaxBackoff)
-            try {
-                scheduler.schedule(
-                    { attemptPrewarm(keys, nextBackoff, done) },
-                    backoff.toMillis(),
-                    TimeUnit.MILLISECONDS,
-                )
-            } catch (rejected: RejectedExecutionException) {
-                done.completeExceptionally(rejected)
-            }
-        }
-    }
 
     /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
     internal fun evict(key: SnapshotKey): Boolean {
@@ -841,802 +437,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         return family.slots[family.spec.idOf(key)]?.removeIfIdle(onlyIfEmpty = false) ?: false
     }
 
-    /**
-     * Evicts the least recently used idle entries of [family] beyond its bounds: documents beyond
-     * [SnapshotFamily.maxEntries], and entries for documents the store does not hold beyond [SnapshotFamily.maxAbsent].
-     * Each kind evicts only its own, and a load in flight counts toward neither (`SNP-7`).
-     */
-    private fun evictBeyond(family: Family) {
-        val slots = family.slots
-        if (slots.size <= minOf(family.spec.maxEntries, family.spec.maxAbsent)) {
-            return
-        }
-        synchronized(evictionLock) {
-            evictBeyond(slots, family.spec.maxEntries, absent = false)
-            evictBeyond(slots, family.spec.maxAbsent, absent = true)
-        }
-    }
-
-    private fun evictBeyond(slots: ConcurrentHashMap<String, Slot<A>>, bound: Int, absent: Boolean) {
-        while (true) {
-            var held = 0
-            var victim: Slot<A>? = null
-            for (slot in slots.values) {
-                val entry = slot.installed ?: continue
-                if ((entry.origin == EntryOrigin.ABSENT) != absent) {
-                    continue
-                }
-                held++
-                if ((victim == null || slot.lastAccess < victim.lastAccess) && slot.isIdle()) {
-                    victim = slot
-                }
-            }
-            if (held <= bound || victim == null) {
-                return
-            }
-            if (victim.removeIfIdle(onlyIfEmpty = false)) {
-                lastLagReport.remove(victim.key)
-                log.debug { "Evicted snapshot document [${victim.key}]." }
-            }
-        }
-    }
-
-    /** One family's documents, by id. */
-    private inner class Family(val spec: SnapshotFamily<A>) {
-        val slots = ConcurrentHashMap<String, Slot<A>>()
-    }
-
-    /** Registers the decoded revision of [entry]; returns the previous one when [entry] regresses from it. */
-    private fun recordSeen(entry: SnapshotEntry<*>): Seen? {
-        if (entry.revision == 0L) {
-            return null
-        }
-        val previous = seen.put(entry.key, Seen(entry.revision, entry.digest)) ?: return null
-        val regressed = entry.revision < previous.revision ||
-            (entry.revision == previous.revision && entry.digest != previous.digest)
-        return previous.takeIf { regressed }
-    }
-
-    private class Seen(val revision: Long, val digest: SnapshotDigest?)
-
-    /** One key: its installed entry and its single in-flight load. */
-    // B2a: the slot's transitions leave it
-    @Suppress("TooManyFunctions")
-    private inner class Slot<T : Any>(val key: SnapshotKey, private val compiler: SnapshotCompiler<T>) {
-        private val report = CompileReport(key, compiler, ::offRequestThread)
-
-        @Volatile
-        var installed: SnapshotEntry<T>? = null
-            private set
-
-        /**
-         * The LRU stamp. A plain field: every hit writes it, and eviction only needs an approximate order, so it does
-         * without the memory barrier a volatile write would cost on the hot path.
-         */
-        var lastAccess: Long = ticker.asLong
-            private set
-
-        // Guarded by this.
-        private var inFlight: Load? = null
-        private var dirty = false
-        private var forceNext = false
-        private var next: CompletableFuture<SnapshotEntry<T>>? = null
-
-        /** The [compileEpoch] the load that installed [installed] started in. */
-        private var installedEpoch = 0L
-
-        /**
-         * Set, under this slot's lock and together with dropping the slot from the map, when the slot is evicted or
-         * forgotten. Volatile because readers that found the slot before that check it without the lock: a removed
-         * slot gets no notifications and no revalidation, so its entry must never be served again.
-         */
-        @Volatile
-        var removed = false
-            private set
-
-        /** The delay before the next retry of a reload the compile queue rejected; doubles while it keeps rejecting. */
-        @Volatile
-        private var retryDelay: Duration = options.rejectedReloadRetry
-
-        /** One read of the store and what follows it. Finishes exactly once. */
-        inner class Load(
-            val known: SnapshotEntry<T>?,
-            val force: Boolean,
-            val result: CompletableFuture<SnapshotEntry<T>>,
-            /** The [compileEpoch] this load started in: it compiles with the inputs of that epoch or a later one. */
-            val epoch: Long,
-            /** Whether [known] was compiled in an earlier epoch: this load reads in full and must not keep it. */
-            val recompiles: Boolean,
-            /** The read of the periodic pass that started this load, ended once the read has answered or timed out. */
-            val passRead: PassRead?,
-        ) {
-            val startedAt: Instant = clock.instant()
-
-            /** When this load started, in [nanoTime]: what a periodic pass measures its age by. */
-            val startedNanos: Long = nanoTime.asLong
-
-            /** Whether the read may have been answered from a local copy rather than the store of record. */
-            var fromLocalCopy = false
-
-            /** The digest the conditional read sent; null for an unconditional read or "I believe it absent". */
-            var askedDigest: SnapshotDigest? = null
-
-            private val finished = AtomicBoolean()
-
-            /**
-             * When what this load read is known to have been current: the start of the read, or for a local copy the
-             * oldest that copy can be, so that only a conditional read can make it look fresh.
-             */
-            val confirmedAt: Instant get() = if (fromLocalCopy) startedAt.minus(store.localCopyMaxAge) else startedAt
-
-            fun claim(): Boolean = finished.compareAndSet(false, true)
-
-            val isFinished: Boolean get() = finished.get()
-        }
-
-        fun touch() {
-            lastAccess = ticker.asLong
-        }
-
-        /** A load starting now; under this slot's lock. */
-        private fun newLoad(
-            force: Boolean,
-            result: CompletableFuture<SnapshotEntry<T>>,
-            passRead: PassRead? = null,
-        ): Load {
-            val epoch = compileEpoch.get()
-            val known = installed
-            // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
-            val compiled = known != null && known.origin.compiled
-            val recompiles = key != sharedKey && compiled && installedEpoch < epoch
-            return Load(known, force, result, epoch, recompiles, passRead)
-        }
-
-        /**
-         * For [recompile], after the epoch moved: a load in flight is followed by another, which starts in the new
-         * epoch. True when this slot is idle with a compiled entry, which the caller then loads again.
-         */
-        fun markRecompile(): Boolean = synchronized(this) {
-            if (removed) {
-                return false
-            }
-            if (inFlight != null) {
-                dirty = true
-                return false
-            }
-            val known = installed ?: return false
-            known.origin.compiled
-        }
-
-        fun isIdle(): Boolean = synchronized(this) { inFlight == null }
-
-        /**
-         * Marks this slot removed and drops it from the map, unless a load is in flight or, with [onlyIfEmpty], a
-         * document is installed. The checks and the mark happen under this slot's lock.
-         */
-        fun removeIfIdle(onlyIfEmpty: Boolean): Boolean {
-            // The shared slot is never removed.
-            val family = families.firstOrNull { it.spec.kind == key.kind } ?: return false
-            synchronized(this) {
-                val holdsDocument = onlyIfEmpty && installed != null
-                if (inFlight != null || removed || holdsDocument) {
-                    return false
-                }
-                removed = true
-                family.slots.computeIfPresent(
-                    family.spec.idOf(key)
-                ) { _, current -> current.takeUnless { it === this } }
-            }
-            return true
-        }
-
-        /** The installed entry if it is usable, otherwise a load; null when this slot was removed. */
-        fun usable(): CompletableFuture<SnapshotEntry<T>>? {
-            if (removed) {
-                return null
-            }
-            val entry = installed
-            if (entry != null && entry.state !is DocumentState.Failed) {
-                return CompletableFuture.completedFuture(entry)
-            }
-            return load()
-        }
-
-        /**
-         * What one request waits for: the installed entry, or its own view of the shared load, bounded in time.
-         * Null when this slot was removed.
-         */
-        fun forRequest(): CompletableFuture<SnapshotEntry<T>>? {
-            if (removed) {
-                return null
-            }
-            installed?.let {
-                touch()
-                metrics.onLoad(key.kind, LoadOutcome.HIT)
-                return CompletableFuture.completedFuture(it)
-            }
-            val shared = load() ?: return null
-            val own = RequestView()
-            pendingRequests.add(own)
-            if (closed) {
-                own.abort(closedError())
-                return own
-            }
-            val timeout = if (shared.isDone) null else scheduleTimeout(own)
-            shared.whenComplete { entry, error ->
-                val result = entry ?: transientFailure(clock.instant(), unwrap(error))
-                val outcome = if (result.state is DocumentState.Failed) LoadOutcome.FAILED else LoadOutcome.COLD
-                if (own.answer(result, outcome)) {
-                    timeout?.cancel(false)
-                }
-            }
-            return own
-        }
-
-        /**
-         * One request's future. Whoever answers first (the shared load, the timeout, or [close]) claims it; an answer
-         * records the outcome before completing, so a caller that sees the result also sees the metric.
-         */
-        inner class RequestView : CompletableFuture<SnapshotEntry<T>>() {
-            private val answered = AtomicBoolean()
-
-            fun answer(entry: SnapshotEntry<T>, outcome: LoadOutcome): Boolean {
-                if (!answered.compareAndSet(false, true)) {
-                    return false
-                }
-                pendingRequests.remove(this)
-                try {
-                    metrics.onLoad(key.kind, outcome)
-                } finally {
-                    complete(entry)
-                }
-                return true
-            }
-
-            fun abort(error: Throwable) {
-                if (answered.compareAndSet(false, true)) {
-                    pendingRequests.remove(this)
-                    completeExceptionally(error)
-                }
-            }
-        }
-
-        private fun scheduleTimeout(own: RequestView): ScheduledFuture<*>? {
-            val timeout = options.coldLoadTimeout
-            val onTimeout = Runnable {
-                val error = SnapshotUnavailableException(key, "not loaded within $timeout", TimeoutException())
-                own.answer(failedEntry(error, clock.instant()), LoadOutcome.TIMEOUT)
-            }
-            return try {
-                scheduler.schedule(onTimeout, timeout.toNanos(), TimeUnit.NANOSECONDS)
-            } catch (rejected: RejectedExecutionException) {
-                own.answer(transientFailure(clock.instant(), rejected), LoadOutcome.FAILED)
-                null
-            }
-        }
-
-        /**
-         * Starts a load unless one is in flight, in which case it returns that one. Null when this slot was removed;
-         * after [close], an already failed entry. A load that [pass] starts counts as a read of it until the read ends.
-         *
-         * A [pass] does not wait for a load that has been in flight longer than [SnapshotOptions.storeReadTimeout],
-         * whoever started it, and gets null as for a removed slot: the store's answer is in by then, so the load is held
-         * by a compilation, and confirms the document when it ends. Waiting would stop the pass behind it, and the
-         * documents after it would never be revalidated once as many compilations as there are lanes never end (`SNP-6`).
-         */
-        fun load(force: Boolean = false, pass: Pass? = null): CompletableFuture<SnapshotEntry<T>>? {
-            val load: Load
-            synchronized(this) {
-                if (removed) {
-                    return null
-                }
-                if (closed) {
-                    return CompletableFuture.completedFuture(failedEntry(closedError(), clock.instant()))
-                }
-                inFlight?.let {
-                    if (pass != null && nanoTime.asLong - it.startedNanos > options.storeReadTimeout.toNanos()) {
-                        return null
-                    }
-                    return it.result
-                }
-                load = newLoad(force, CompletableFuture(), pass?.startRead())
-                inFlight = load
-                dirty = false
-            }
-            read(load)
-            return load.result
-        }
-
-        /**
-         * Loads again even if a load is in flight, since a change may postdate what that load reads. Returns the future
-         * of the load that starts after the current one. Null when this slot was removed.
-         */
-        fun reload(force: Boolean): CompletableFuture<SnapshotEntry<T>>? {
-            synchronized(this) {
-                if (removed) {
-                    return null
-                }
-                if (inFlight != null) {
-                    dirty = true
-                    forceNext = forceNext || force
-                    return next ?: CompletableFuture<SnapshotEntry<T>>().also { next = it }
-                }
-            }
-            return load(force)
-        }
-
-        /**
-         * For [close], with [closed] already set, so no load starts after this looks. What is installed stays, as for a
-         * read that failed, and is what this load's waiters get, unless a [recompile] has outdated it.
-         */
-        fun endLoad() {
-            val load = synchronized(this) { inFlight } ?: return
-            val outdated = load.recompiles || load.epoch < compileEpoch.get()
-            finish(
-                load,
-                load.known.takeUnless { outdated } ?: failedEntry(closedError(), clock.instant()),
-                install = false
-            )
-        }
-
-        /** A change notification: reload if this key is installed or loading, otherwise there is nothing to refresh. */
-        fun onChanged() {
-            synchronized(this) {
-                if (removed) {
-                    return
-                }
-                if (inFlight != null) {
-                    dirty = true
-                    return
-                }
-                if (installed == null) {
-                    return
-                }
-            }
-            load()
-        }
-
-        private fun read(load: Load) {
-            guarded(load) {
-                val reading = readFor(load)
-                withTimeout(reading).whenComplete { read, error ->
-                    load.passRead?.end()
-                    // Closing may have ended this load already; what the read found then has nowhere to go.
-                    if (!load.isFinished) {
-                        guarded(load) { onRead(load, read, error) }
-                    }
-                }
-            }
-        }
-
-        /** Chooses the read: see the class comment of [SnapshotSource] for why seen keys never use a local copy. */
-        private fun readFor(load: Load): CompletableFuture<SnapshotRead> {
-            val known = load.known
-            if (known == null && !seen.containsKey(key)) {
-                load.fromLocalCopy = true
-                return store.read(key)
-            }
-            val digest = when {
-                known == null || load.force || load.recompiles -> null
-                known.origin.compilesAgain -> null
-                else -> known.digest
-            }
-            load.askedDigest = digest
-            return store.readIfChanged(key, digest)
-        }
-
-        /** [reading], failed after [SnapshotOptions.storeReadTimeout] if the store never answers. */
-        private fun withTimeout(reading: CompletableFuture<SnapshotRead>): CompletableFuture<SnapshotRead> {
-            if (reading.isDone) {
-                return reading
-            }
-            val bounded = CompletableFuture<SnapshotRead>()
-            val timeout = try {
-                scheduler.schedule(
-                    {
-                        bounded.completeExceptionally(
-                            TimeoutException("The store did not answer within ${options.storeReadTimeout}.")
-                        )
-                    },
-                    options.storeReadTimeout.toNanos(),
-                    TimeUnit.NANOSECONDS,
-                )
-            } catch (rejected: RejectedExecutionException) {
-                log.debug { "No store read timeout: $rejected" }
-                null
-            }
-            reading.whenComplete { read, error ->
-                timeout?.cancel(false)
-                if (error != null) bounded.completeExceptionally(error) else bounded.complete(read)
-            }
-            return bounded
-        }
-
-        private fun onRead(load: Load, read: SnapshotRead?, error: Throwable?) {
-            if (error != null) {
-                val cause = unwrap(error)
-                if (cause.isFormatFailure()) onUndecodable(load, cause) else onTransientFailure(load, cause)
-                return
-            }
-            when (read) {
-                is SnapshotRead.Present -> {
-                    seen.putIfAbsent(key, Seen(read.document.revision, read.digest))
-                    compileOffThread(load, read)
-                }
-                SnapshotRead.Absent -> onAbsent(load)
-                SnapshotRead.Unchanged -> onUnchanged(load)
-                null -> onTransientFailure(load, IllegalStateException("The store answered null."))
-            }
-        }
-
-        private fun onUnchanged(load: Load) {
-            val known = load.known
-            when {
-                load.fromLocalCopy -> {
-                    onTransientFailure(load, IllegalStateException("Unchanged answer to an unconditional read."))
-                }
-                load.askedDigest == null -> onAbsent(load)
-                known == null -> {
-                    onTransientFailure(load, IllegalStateException("Unchanged answer without a known digest."))
-                }
-                else -> {
-                    known.confirm(load.confirmedAt)
-                    finish(load, known, install = false)
-                }
-            }
-        }
-
-        private fun onUndecodable(load: Load, cause: Throwable) {
-            seen.putIfAbsent(key, Seen(0, null))
-            val known = load.known
-            if (known != null && known.origin == EntryOrigin.UNDECODABLE) {
-                known.confirm(load.confirmedAt)
-                finish(load, known, install = false)
-                return
-            }
-            val failure = SnapshotUnavailableException(key, "the stored document cannot be decoded", cause)
-            finish(load, entryOf(load, DocumentState.Failed(failure), EntryOrigin.UNDECODABLE), install = true)
-        }
-
-        private fun onAbsent(load: Load) {
-            val known = load.known
-            if (known != null && known.origin.storedAbsent) {
-                known.confirm(load.confirmedAt)
-                finish(load, known, install = false)
-                return
-            }
-            val lastSeen = seen[key]
-            if (lastSeen == null) {
-                finish(load, entryOf(load, DocumentState.Absent, EntryOrigin.ABSENT), install = true)
-                return
-            }
-            val error = SnapshotUnavailableException(
-                key,
-                "the store has no document, but revision ${lastSeen.revision} was seen; it may have lost data",
-            )
-            finish(load, entryOf(load, DocumentState.Failed(error), EntryOrigin.LOST), install = true)
-            // After the install: a throwing meter must not keep the lost document in service.
-            offRequestThread {
-                log.error(error) { "Snapshot document [$key] disappeared from the store; failing closed." }
-            }
-            metrics.onDocumentLost(key, lastSeen.revision)
-        }
-
-        private fun compileOffThread(load: Load, read: SnapshotRead.Present) {
-            try {
-                compileExecutor.execute {
-                    guarded(load) { compileAndInstall(load, read) }
-                }
-            } catch (rejected: RejectedExecutionException) {
-                onTransientFailure(
-                    load,
-                    SnapshotUnavailableException(key, "the compile queue is full", rejected),
-                    rejected = true
-                )
-            }
-        }
-
-        /**
-         * A reload that found the compile queue full tries again, with a delay that doubles while the queue stays full,
-         * up to the revalidation interval.
-         */
-        private fun retryLater() {
-            val delay = retryDelay
-            retryDelay = minOf(delay.multipliedBy(2), options.revalidateInterval)
-            try {
-                scheduler.schedule({ reload(force = false) }, delay.toNanos(), TimeUnit.NANOSECONDS)
-            } catch (rejected: RejectedExecutionException) {
-                log.debug { "No reload retry: $rejected" }
-            }
-        }
-
-        private fun compileAndInstall(load: Load, read: SnapshotRead.Present) {
-            val document = read.document
-            val begin = System.nanoTime()
-            val state = try {
-                compileState(document)
-            } catch (error: VirtualMachineError) {
-                // RC1-43: a document that compiles on the control plane can overflow a smaller data-plane stack. Ending
-                // the load as a transient failure would keep the previous revision, and a new DENY would never apply.
-                val failure = SnapshotUnavailableException(key, report.failedToCompile(document.revision), error)
-                val failed = SnapshotEntry(
-                    key,
-                    DocumentState.Failed(failure),
-                    document.revision,
-                    read.digest,
-                    load.confirmedAt,
-                    EntryOrigin.UNCOMPILABLE,
-                )
-                finish(load, failed, install = true)
-                throw error
-            }
-            retryDelay = options.rejectedReloadRetry
-            metrics.onCompile(key.kind, Duration.ofNanos(System.nanoTime() - begin), state is DocumentState.Present)
-            val origin = if (state is DocumentState.Present) EntryOrigin.DOCUMENT else EntryOrigin.UNCOMPILABLE
-            val entry = SnapshotEntry(key, state, document.revision, read.digest, load.confirmedAt, origin)
-            finish(load, entry, install = true)
-        }
-
-        @Suppress("TooGenericExceptionCaught")
-        private fun compileState(document: SnapshotDocument): DocumentState<T> = try {
-            DocumentState.Present(compiler.compile(key, document))
-        } catch (error: VirtualMachineError) {
-            throw error
-        } catch (error: Throwable) {
-            val failure = SnapshotUnavailableException(key, report.failedToCompile(document.revision), error)
-            DocumentState.Failed(failure)
-        }
-
-        /**
-         * The store could not be read: keep what is installed (F6), or answer failed without installing (F1). An entry
-         * compiled with inputs that have changed since is not kept: it fails closed until a retry compiles it again.
-         * A reload [rejected] by the compile queue retries, and so does one that keeps an entry that failed to compile
-         * (it may only be waiting for a recompile), however the inputs changed, until a load compiles it.
-         */
-        private fun onTransientFailure(load: Load, cause: Throwable, rejected: Boolean = false) {
-            val known = load.known
-            if (known != null && load.recompiles) {
-                offRequestThread {
-                    log.warn(
-                        cause
-                    ) { "Compiling snapshot document [$key] again failed; failing closed until it compiles." }
-                }
-                val error = SnapshotUnavailableException(
-                    key,
-                    "compiled with inputs that changed, and not compiled again",
-                    cause
-                )
-                val failed = SnapshotEntry(
-                    key,
-                    DocumentState.Failed(error),
-                    known.revision,
-                    known.digest,
-                    known.confirmedAt,
-                    EntryOrigin.RECOMPILE_PENDING
-                )
-                finish(load, failed, install = true)
-                retryLater()
-                return
-            }
-            if (known != null) {
-                offRequestThread {
-                    log.warn(cause) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." }
-                }
-                finish(load, known, install = false)
-                if (rejected || known.origin.compilesAgain) {
-                    retryLater()
-                }
-                return
-            }
-            offRequestThread { log.warn(cause) { "Loading snapshot document [$key] failed." } }
-            finish(load, transientFailure(load.startedAt, cause), install = false)
-        }
-
-        /**
-         * Ends [load] once. The install is recorded (metrics first, then visible to [peek]); then, whatever the metrics
-         * did, the state changes: the in-flight load is cleared and, if a change arrived meanwhile, the next load is
-         * created under the same lock, so no other load and no removal can come between them. The load's future
-         * completes last. Eviction and dropping an empty slot run afterwards on the housekeeping thread.
-         *
-         * A family entry compiled in an earlier [compileEpoch] may have compiled with inputs that [recompile] replaced:
-         * another load follows at once, and a compiled document is not installed. Its waiters get what that load
-         * installs, or fail by their own timeout, never the old compilation.
-         */
-        private fun finish(load: Load, entry: SnapshotEntry<T>, install: Boolean) {
-            if (!load.claim()) {
-                if (!closed) {
-                    log.error { "Snapshot load of [$key] tried to finish twice; ignored." }
-                }
-                return
-            }
-            // Whatever ended the load (a read that failed to start included), its read is over.
-            load.passRead?.end()
-            val stale = install && key != sharedKey && load.epoch < compileEpoch.get() && entry.origin.compiled
-            val withheld = stale && entry.origin == EntryOrigin.DOCUMENT
-            try {
-                if (install && !withheld) {
-                    recordInstall(entry)
-                    report.installed(entry)
-                }
-            } finally {
-                advance(load, entry, install && !withheld, stale, withheld)
-            }
-        }
-
-        private fun advance(load: Load, entry: SnapshotEntry<T>, install: Boolean, stale: Boolean, withheld: Boolean) {
-            val nextLoad: Load?
-            val unanswered: CompletableFuture<SnapshotEntry<T>>?
-            val empty: Boolean
-            synchronized(this) {
-                if (install) {
-                    installed = entry
-                    installedEpoch = load.epoch
-                }
-                if (inFlight === load) {
-                    inFlight = null
-                }
-                val wanted = dirty || stale || (install && load.fromLocalCopy)
-                val pending = next
-                val open = !closed && !removed
-                nextLoad = if (wanted && inFlight == null && open) {
-                    newLoad(forceNext, pending ?: CompletableFuture()).also { inFlight = it }
-                } else {
-                    null
-                }
-                unanswered = if (nextLoad == null) pending else null
-                dirty = false
-                forceNext = false
-                next = null
-                empty = installed == null
-            }
-            val answer = answerFor(entry, withheld, nextLoad)
-            try {
-                startOrAnswer(nextLoad, unanswered, answer)
-            } finally {
-                housekeep(empty, install)
-                answerWaiters(load, answer, nextLoad.takeIf { withheld })
-            }
-        }
-
-        /** [entry], unless it is withheld and no load follows to compile it again (the source is closing): a failure. */
-        private fun answerFor(entry: SnapshotEntry<T>, withheld: Boolean, nextLoad: Load?): SnapshotEntry<T> =
-            if (withheld && nextLoad == null) {
-                failedEntry(SnapshotUnavailableException(key, "compiled with inputs that changed"), clock.instant())
-            } else {
-                entry
-            }
-
-        /** Completes [load]'s future with [answer], or with what [recompiling] installs in place of a withheld entry. */
-        private fun answerWaiters(load: Load, answer: SnapshotEntry<T>, recompiling: Load?) {
-            if (recompiling == null) {
-                load.result.complete(answer)
-                return
-            }
-            recompiling.result.whenComplete { next, error ->
-                load.result.complete(next ?: transientFailure(clock.instant(), unwrap(error)))
-            }
-        }
-
-        /** Starts [nextLoad], or answers a pending [reload] future with [entry] when no load could follow. */
-        private fun startOrAnswer(
-            nextLoad: Load?,
-            unanswered: CompletableFuture<SnapshotEntry<T>>?,
-            entry: SnapshotEntry<T>,
-        ) {
-            if (nextLoad != null) {
-                read(nextLoad)
-            } else {
-                unanswered?.complete(entry)
-            }
-        }
-
-        private fun housekeep(empty: Boolean, install: Boolean) {
-            if (empty) {
-                offRequestThread { removeIfIdle(onlyIfEmpty = true) }
-            } else if (install) {
-                families.firstOrNull { it.spec.kind == key.kind }?.let { family ->
-                    offRequestThread {
-                        evictBeyond(
-                            family
-                        )
-                    }
-                }
-            }
-        }
-
-        private fun recordInstall(entry: SnapshotEntry<T>) {
-            val regressedFrom = synchronized(this) { recordSeen(entry) }
-            log.debug { "Installed $entry." }
-            if (regressedFrom != null) {
-                offRequestThread {
-                    log.error {
-                        "Snapshot document [$key] regressed from revision ${regressedFrom.revision} to ${entry.revision}; " +
-                            "the store may have lost a write (for example a Redis failover). Installing what the store holds."
-                    }
-                }
-            }
-            try {
-                metrics.onInstall(entry)
-            } finally {
-                if (regressedFrom != null) {
-                    metrics.onRegression(key, regressedFrom.revision, entry.revision)
-                }
-            }
-        }
-
-        /** An entry with no decoded document behind it: what the store answered, as of [load]'s confirmation time. */
-        private fun entryOf(load: Load, state: DocumentState<T>, origin: EntryOrigin): SnapshotEntry<T> =
-            SnapshotEntry(key, state, 0, null, load.confirmedAt, origin)
-
-        private fun transientFailure(at: Instant, cause: Throwable): SnapshotEntry<T> {
-            val error = cause as? SnapshotUnavailableException ?: SnapshotUnavailableException(key, "the store cannot be read", cause)
-            return failedEntry(error, at)
-        }
-
-        private fun failedEntry(error: Throwable, at: Instant): SnapshotEntry<T> =
-            SnapshotEntry(key, DocumentState.Failed(error), 0, null, at, EntryOrigin.TRANSIENT)
-
-        /**
-         * Runs [block]; anything it throws before [load] finishes ends the load as a transient failure, so the slot is
-         * never left with a load that never finishes. A [VirtualMachineError] is rethrown after that.
-         */
-        @Suppress("TooGenericExceptionCaught")
-        private inline fun guarded(load: Load, block: () -> Unit) {
-            try {
-                block()
-            } catch (error: VirtualMachineError) {
-                endAfter(load, error)
-                throw error
-            } catch (error: Throwable) {
-                endAfter(load, error)
-            }
-        }
-
-        private fun endAfter(load: Load, error: Throwable) {
-            if (load.isFinished) {
-                log.error(error) { "Snapshot document [$key] failed after its load finished." }
-            } else {
-                onTransientFailure(load, error)
-            }
-        }
-    }
-
-    private inner class ChangeListener : SnapshotChangeListener {
-        override fun onChanged(keys: Collection<SnapshotKey>) {
-            for (key in keys) {
-                if (key == sharedKey) {
-                    shared.onChanged()
-                    continue
-                }
-                // A key of no family here is another source's document.
-                val family = families.firstOrNull { it.spec.kind == key.kind } ?: continue
-                family.slots[family.spec.idOf(key)]?.onChanged()
-            }
-        }
-
-        override fun onReset() {
-            log.info { "Snapshot change notifications may have been lost; reloading every installed document." }
-            reloadAll(installedSlots()) { it.reload(force = false) }
-        }
-    }
-
     internal companion object {
-        private val log = KotlinLogging.logger {}
-
-        /** A [Pass]'s count of reads once it is abandoned: no read can start any more. */
-        private const val ABANDONED = -1
-
-        fun unwrap(error: Throwable?): Throwable {
-            var current = error ?: return IllegalStateException("The load completed without a result.")
-            while (current is CompletionException || current is ExecutionException) {
-                current = current.cause ?: return current
-            }
-            return current
-        }
-
-        fun Throwable.isFormatFailure(): Boolean =
-            generateSequence(this) { it.cause }.take(16).any { it is SnapshotFormatException }
-
         /** How long [close] waits for this source's threads to finish what was queued. */
         val CLOSE_TIMEOUT: Duration = Duration.ofSeconds(5)
     }
