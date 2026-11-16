@@ -80,12 +80,10 @@ CoSec 依据**文档**做决策：一份作用于所有租户的平台文档，�
 # 工具位于 migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
 ```
 
-`publish` 按 `convert` 写出的格式读取目录：它只发布 `report.json` 列出的文件，并逐个核对其中记录的 SHA-256，因此事后被修改过的内容不会被发布。它没有发布单个文件的选项，所以你自己编写的文档需要这份报告；你写的报告，`publish` 只读其中两个字段（`accepted` 和 `outputSha256`）：
+`publish --file` 发布一份你写的文档，作为 `--document` 指名的那个文档：
 
 ```bash
-SHA=$(sha256sum documents/platform.json | cut -d' ' -f1)   # macOS：shasum -a 256
-printf '{"accepted":true,"outputSha256":{"platform.json":"%s"}}\n' "$SHA" > documents/report.json
-cosec-migrate publish --to-redis redis://localhost:6379 --in documents
+cosec-migrate publish --to-redis redis://localhost:6379 --file documents/platform.json --document platform
 ```
 
 它会输出 `Published platform`，并把文档写为平台文档的第一个修订。`publish` 从不覆盖：平台文档一旦存在，之后的变更都通过控制面进行（[存储](../operations/storage.md)、[策略测试](../policies/testing.md)）。
