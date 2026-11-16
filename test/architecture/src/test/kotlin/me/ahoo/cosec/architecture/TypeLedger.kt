@@ -52,7 +52,6 @@ object TypeLedger {
         "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt" to family(RECORD, "a grantor's rights and the statements it holds them through"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/ScopeSet.kt" to family(RECORD, "a scope set and its dimensions"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/store/ControlStore.kt" to family(PORT, "ControlStore and the records it stores"),
-        "core/control/src/main/kotlin/me/ahoo/cosec/control/store/Publications.kt" to Disposition.Debt(Batch.B4),
         "core/document/src/main/kotlin/me/ahoo/cosec/document/Catalog.kt" to family(RECORD, "a catalog, its groups and permissions"),
         "core/document/src/main/kotlin/me/ahoo/cosec/document/Provenance.kt" to family(RECORD, "a provenance"),
         "core/document/src/main/kotlin/me/ahoo/cosec/document/RoleDefinition.kt" to family(RECORD, "a role and what it grants"),
