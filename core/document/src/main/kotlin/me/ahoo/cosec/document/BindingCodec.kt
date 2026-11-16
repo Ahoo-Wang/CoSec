@@ -38,7 +38,7 @@ import java.time.Instant
 internal object BindingCodec {
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
 
-    internal fun binding(node: DocumentNode, kind: DocumentKind, owner: String): Binding {
+    internal fun decode(node: DocumentNode, kind: DocumentKind, owner: String): Binding {
         node.requireObject(*BINDING_FIELDS)
         val id = node.required("id").text()
         return try {
@@ -90,7 +90,7 @@ internal object BindingCodec {
         return Match.Exactly(of(text))
     }
 
-    internal fun binding(binding: Binding, kind: DocumentKind, owner: String): ObjectNode {
+    internal fun tree(binding: Binding, kind: DocumentKind, owner: String): ObjectNode {
         val node = factory.objectNode().put("id", binding.id.value)
         when (val subject = binding.subject) {
             SubjectRef.Anyone -> node.put("subject", WILDCARD)

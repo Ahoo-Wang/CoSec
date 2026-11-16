@@ -17,13 +17,9 @@ package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.document.BindingCodec.binding
 import me.ahoo.cosec.document.DocumentJson.ROOT
 import me.ahoo.cosec.document.DocumentJson.factory
 import me.ahoo.cosec.document.DocumentJson.nonEmpty
-import me.ahoo.cosec.document.PlatformSettingsCodec.attributes
-import me.ahoo.cosec.document.PlatformSettingsCodec.limits
-import me.ahoo.cosec.document.RoleCodec.role
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.RateLimitSource
 import me.ahoo.cosec.model.AppId
@@ -107,7 +103,7 @@ object PolicyDocumentCodec {
             revision = revision,
             publishedAt = root.required("publishedAt").instant(),
             policies = root.field("policies")?.elements()?.map(PolicyCodec::decode).orEmpty(),
-            bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
+            bindings = root.field("bindings")?.elements()?.map { BindingCodec.decode(it, kind, owner) }.orEmpty(),
             catalog = root.field("catalog")?.let(CatalogCodec::decode),
             boundary = when (kind) {
                 DocumentKind.PLATFORM -> root.field("boundaries")?.let { boundaries ->
@@ -119,10 +115,10 @@ object PolicyDocumentCodec {
                 DocumentKind.APP -> null
             },
             provenance = root.field("provenance")?.let(ProvenanceCodec::decode),
-            limits = root.field("limits")?.let(::limits),
-            attributes = root.field("attributes")?.let(::attributes),
+            limits = root.field("limits")?.let(PlatformSettingsCodec::decodeLimits),
+            attributes = root.field("attributes")?.let(PlatformSettingsCodec::decodeAttributes),
             rateLimits = root.field("rateLimits")?.elements()?.map(RateLimitCodec::decode).orEmpty(),
-            roles = root.field("roles")?.elements()?.map { role(it, kind) }.orEmpty(),
+            roles = root.field("roles")?.elements()?.map { RoleCodec.decode(it, kind) }.orEmpty(),
         )
     }
 
@@ -143,22 +139,26 @@ object PolicyDocumentCodec {
 
     /** A binding of a [kind] document of [owner], which decides the subjects' default tenants. */
     @InternalCoSecApi
-    fun bindingTree(binding: Binding, kind: DocumentKind, owner: String): ObjectNode = binding(binding, kind, owner)
+    fun bindingTree(
+        binding: Binding,
+        kind: DocumentKind,
+        owner: String
+    ): ObjectNode = BindingCodec.tree(binding, kind, owner)
 
     @InternalCoSecApi
     fun decodeBinding(tree: JsonNode, kind: DocumentKind, owner: String, path: String = ROOT): Binding =
-        binding(DocumentNode(tree, path), kind, owner)
+        BindingCodec.decode(DocumentNode(tree, path), kind, owner)
 
     @InternalCoSecApi
     fun catalogTree(catalog: Catalog): ObjectNode = CatalogCodec.tree(catalog)
 
     @InternalCoSecApi
-    fun roleTree(role: RoleDefinition): ObjectNode = role(role)
+    fun roleTree(role: RoleDefinition): ObjectNode = RoleCodec.tree(role)
 
     /** A role of a [kind] document, which decides the fields it may write. */
     @InternalCoSecApi
     fun decodeRole(tree: JsonNode, kind: DocumentKind, path: String = ROOT): RoleDefinition =
-        role(DocumentNode(tree, path), kind)
+        RoleCodec.decode(DocumentNode(tree, path), kind)
 
     @InternalCoSecApi
     fun rateLimitTree(rule: RateLimitSource): ObjectNode = RateLimitCodec.tree(rule)
@@ -172,10 +172,16 @@ object PolicyDocumentCodec {
     fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = CatalogCodec.decode(DocumentNode(tree, path))
 
     @InternalCoSecApi
-    fun decodeLimits(tree: JsonNode, path: String = ROOT): ConditionLimits = limits(DocumentNode(tree, path))
+    fun decodeLimits(
+        tree: JsonNode,
+        path: String = ROOT
+    ): ConditionLimits = PlatformSettingsCodec.decodeLimits(DocumentNode(tree, path))
 
     @InternalCoSecApi
-    fun decodeAttributes(tree: JsonNode, path: String = ROOT): List<Attribute> = attributes(DocumentNode(tree, path))
+    fun decodeAttributes(
+        tree: JsonNode,
+        path: String = ROOT
+    ): List<Attribute> = PlatformSettingsCodec.decodeAttributes(DocumentNode(tree, path))
 
     @InternalCoSecApi
     fun encode(document: PolicyDocument): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(document))
@@ -214,10 +220,10 @@ object PolicyDocumentCodec {
         val policies = root.putArray("policies")
         document.policies.forEach { policies.add(PolicyCodec.tree(it)) }
         val bindings = root.putArray("bindings")
-        document.bindings.forEach { bindings.add(binding(it, document.kind, document.owner)) }
+        document.bindings.forEach { bindings.add(BindingCodec.tree(it, document.kind, document.owner)) }
         if (document.roles.isNotEmpty()) {
             val roles = root.putArray("roles")
-            document.roles.forEach { roles.add(role(it)) }
+            document.roles.forEach { roles.add(RoleCodec.tree(it)) }
         }
         if (document.rateLimits.isNotEmpty()) {
             val rules = root.putArray("rateLimits")

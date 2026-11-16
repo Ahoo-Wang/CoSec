@@ -35,7 +35,7 @@ internal object RoleCodec {
      * A role (RFC 0012 §5.3). What each kind of document may write is checked here; what makes a value valid (an id
      * without `@`, an app id, a space that is not reserved) is the compiler's, at the same path.
      */
-    internal fun role(node: DocumentNode, kind: DocumentKind): RoleDefinition {
+    internal fun decode(node: DocumentNode, kind: DocumentKind): RoleDefinition {
         node.requireObject(*(if (kind == DocumentKind.TENANT) TENANT_ROLE_FIELDS else APP_ROLE_FIELDS))
         val id = node.required("id").text()
         return try {
@@ -67,7 +67,7 @@ internal object RoleCodec {
         return RolePermissions.Listed(node.elements().map { it.text() })
     }
 
-    internal fun role(role: RoleDefinition): ObjectNode {
+    internal fun tree(role: RoleDefinition): ObjectNode {
         val node = factory.objectNode().put("id", role.id.value)
         role.app?.let { node.put("app", it.value) }
         role.space?.let { node.put("space", it.value) }

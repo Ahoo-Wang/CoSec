@@ -40,7 +40,7 @@ internal object PlatformSettingsCodec {
         "ip" to AttributeType.IP,
     )
 
-    internal fun limits(node: DocumentNode): ConditionLimits {
+    internal fun decodeLimits(node: DocumentNode): ConditionLimits {
         node.requireObject(*LIMIT_FIELDS)
         fun limit(name: String, default: Int): Int {
             val field = node.field(name) ?: return default
@@ -59,7 +59,7 @@ internal object PlatformSettingsCodec {
         )
     }
 
-    internal fun attributes(node: DocumentNode): List<Attribute> {
+    internal fun decodeAttributes(node: DocumentNode): List<Attribute> {
         // Unique paths, like unique ids, are the compiler's to check: a schema cannot say it.
         return node.elements().map { item ->
             item.requireObject("path", "type")
