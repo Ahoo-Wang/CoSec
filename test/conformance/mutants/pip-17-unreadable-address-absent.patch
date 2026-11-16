@@ -2,11 +2,11 @@
 # Mutant: a client address that is no address reads as absent, so a DENY on environment.ip does not match
 # Tests: :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
 index d0ea6129..6db34fd8 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
-@@ -745,7 +745,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -745,7 +745,7 @@ internal open class Evaluator(protected val request: EngineRequest, protected
          // address could not be read, so it is unavailable, as a missing external attribute is (PIP-17), never absent,
          // which a DENY would read as "no match". An empty one is absent: nothing was reported, as in a check or a
          // simulation that names no address.

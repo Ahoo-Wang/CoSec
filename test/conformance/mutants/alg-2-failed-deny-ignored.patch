@@ -1,12 +1,12 @@
 # Rule: ALG-2
 # Mutant: a DENY that fails is ignored instead of making the decision indeterminate
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :conformance:test
+# Tests: :engine:test --tests me.ahoo.cosec.engine.* :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
 index 5f88243f..351eff23 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
-@@ -562,7 +562,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -562,7 +562,7 @@ internal open class Evaluator(protected val request: EngineRequest, protected
              return
          }
          if (pass === Effect.DENY) {

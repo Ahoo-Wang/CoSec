@@ -22,9 +22,9 @@ import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.OnMissing
-import me.ahoo.cosec.engine.flat.OnMissingConfirmation
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.OnMissing
+import me.ahoo.cosec.engine.OnMissingConfirmation
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Condition

@@ -42,7 +42,7 @@ import me.ahoo.cosec.control.store.ControlMaintenance
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.RetentionPolicy
 import me.ahoo.cosec.control.store.Revisions
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.kafka.KafkaChangeListener
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.runtime.AuthorizationChecker

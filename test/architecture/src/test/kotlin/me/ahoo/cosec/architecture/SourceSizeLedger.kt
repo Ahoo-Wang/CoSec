@@ -35,7 +35,7 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B2a),
         ),
         Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt",
+            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt",
             971,
             Disposition.Debt(Batch.B3),
         ),
@@ -106,7 +106,7 @@ object SourceSizeLedger {
             Disposition.Stays("migrate's one-off translation of 7.x condition parts"),
         ),
         Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt",
+            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt",
             488,
             Disposition.Debt(Batch.B3),
         ),

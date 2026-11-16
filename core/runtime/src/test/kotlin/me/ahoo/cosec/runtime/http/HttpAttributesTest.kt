@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.Attribute.Kind
 import me.ahoo.cosec.model.condition.ConditionInput

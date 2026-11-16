@@ -18,8 +18,8 @@ package me.ahoo.cosec.control.api
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.engine.pattern.ActionPattern
 import me.ahoo.cosec.engine.pattern.ResourcePattern
 import me.ahoo.cosec.engine.pattern.ResourceTarget

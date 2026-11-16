@@ -19,9 +19,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -93,7 +93,7 @@ class DocumentSnapshotViewsTest {
         )
         val memberships =
             Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId.DEFAULT to scope.roles.toSet()), emptyList())
-        return CoSecFlatEngine.evaluate(FlatRequest(authz, scope, memberships, 0), view).decision
+        return CoSecEngine.evaluate(EngineRequest(authz, scope, memberships, 0), view).decision
     }
 
     private val allowRead = ""","policies":[{"id":"read","statements":[{"name":"read","effect":"allow","action":"order:read"}]}]"""

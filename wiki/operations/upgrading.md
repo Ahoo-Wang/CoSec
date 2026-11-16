@@ -2109,7 +2109,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   makes the request's `SecurityContext`, and a test mocks or implements the interface. Of the engine's request,
   `AuthzRequest.scope`, the class `me.ahoo.cosec.model.Scope`, and `Subject.roles`, `policies` and `root`, none of
   which the engine read: code that builds an `AuthzRequest` or a `Subject` drops those arguments. The engine's tenant,
-  roles and attachments are in `FlatRequest.scope` and `FlatRequest.memberships`. `Subject.tenantId` stays, for a
+  roles and attachments are in `EngineRequest.scope` and `EngineRequest.memberships`. `Subject.tenantId` stays, for a
   stage-A `AttributeProvider`, which runs before there is a scope.
 
 #### Data written through CoCache 6
