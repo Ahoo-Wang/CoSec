@@ -25,11 +25,8 @@ import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.model.Action
-import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolution
-import me.ahoo.cosec.runtime.http.Enforceable
-import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** What the control API says about a decision: a request simulated (with a change applied) and a request explained, redacted to what the caller may read. */
@@ -117,7 +114,7 @@ internal class DecisionQueries(
      * [request] as enforcement would decide it, once [operator] may [action] on the tenant whose document decides it
      * (RC1-40): the one the scope resolves to, never one the request only names. A request without a principal is
      * decided on tenant `(0)`, so naming another tenant is a 400, after the authorization, as enforcement would decide
-     * it on `(0)`. Its resource is the one enforcement would decide on ([enforceable], RC1-41).
+     * it on `(0)`. Its resource is the one enforcement would decide on ([EnforceableOrRefused], RC1-41).
      */
     private suspend fun decidable(operator: Operator, request: SimulatedRequest, action: Action): Decidable {
         val tenant = simulator.tenantOf(request)
@@ -132,27 +129,12 @@ internal class DecisionQueries(
         }
         return Decidable(
             key,
-            request.copy(action = enforceable(request.action), resource = enforceable(request.resource))
+            request.copy(
+                action = EnforceableOrRefused.action(request.action),
+                resource = EnforceableOrRefused.resource(request.resource)
+            )
         )
     }
-
-    /** [action] as enforcement would decide it (`PIP-18`): [Enforceable]. */
-    private fun enforceable(action: Action): Action = Enforceable.action(action)
-        ?: throw ChangeRejectedException(
-            BAD_REQUEST,
-            "The action is not one enforcement decides: an http method with a lower-case letter is refused as a " +
-                "request's is; http:HEAD is decided as http:GET."
-        )
-
-    /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
-    private fun enforceable(resource: Resource): Resource = Enforceable.resource(resource)
-        ?: throw ChangeRejectedException(
-            BAD_REQUEST,
-            "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
-                "an empty segment, an encoded separator, a backslash, a malformed escape or its length), and any " +
-                "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
-                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
-        )
 
     private fun resolved(request: SimulatedRequest) = (simulator.scope(request) as? ScopeResolution.Resolved)?.scope
 

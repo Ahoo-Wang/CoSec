@@ -22,14 +22,10 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.engine.pattern.ResourceTarget
-import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
-import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.appliesIn
-import me.ahoo.cosec.runtime.http.Enforceable
-import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** Who may do what to a resource, binding by binding, in the documents the caller may read. */
@@ -40,9 +36,9 @@ internal class AccessAnalysis(
     suspend fun analyze(operator: Operator, query: AccessQuery): AccessReport {
         val tenant = SnapshotKey.Tenant(query.tenant.value)
         authority.require(operator, tenant, ControlActions.ANALYZE)
-        val resource = enforceable(query.resource)
+        val resource = EnforceableOrRefused.resource(query.resource)
         // The query's action as enforcement reads it (PIP-18): who may HEAD is who may GET.
-        val asked = query.copy(action = enforceable(query.action))
+        val asked = query.copy(action = EnforceableOrRefused.action(query.action))
         val app = queriedApp(query)
         val keys = listOfNotNull(SnapshotKey.Platform, tenant, app)
         val readable = keys.filter { it == tenant || authority.holds(operator, it, ControlActions.READ) }
@@ -122,24 +118,6 @@ internal class AccessAnalysis(
     private fun inScope(exact: String?, value: String?): Boolean = exact == null || value == null || exact == value
 
     private fun <T> Match<T>.exact(text: (T) -> String): String? = (this as? Match.Exactly<T>)?.value?.let(text)
-
-    /** [action] as enforcement would decide it (`PIP-18`): [Enforceable]. */
-    private fun enforceable(action: Action): Action = Enforceable.action(action)
-        ?: throw ChangeRejectedException(
-            BAD_REQUEST,
-            "The action is not one enforcement decides: an http method with a lower-case letter is refused as a " +
-                "request's is; http:HEAD is decided as http:GET."
-        )
-
-    /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
-    private fun enforceable(resource: Resource): Resource = Enforceable.resource(resource)
-        ?: throw ChangeRejectedException(
-            BAD_REQUEST,
-            "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
-                "an empty segment, an encoded separator, a backslash, a malformed escape or its length), and any " +
-                "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
-                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
-        )
 
     private companion object {
         const val BAD_REQUEST = 400
