@@ -20,7 +20,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
+import java.util.PriorityQueue
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicInteger
 
 // The source's logger: moving the code did not move the name operators configure.
 private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
@@ -36,7 +38,6 @@ internal class SnapshotFamilies<A : Any>(
     private val lagReports: LagReports,
 ) : Iterable<SnapshotFamilies.Family<A>> {
     private val families: List<Family<A>> = specs.map { Family(it) }
-    private val evictionLock = Any()
 
     init {
         require(
@@ -51,48 +52,94 @@ internal class SnapshotFamilies<A : Any>(
     override fun iterator(): Iterator<Family<A>> = families.iterator()
 
     /**
-     * Evicts the least recently used idle entries of [family] beyond its bounds: documents beyond
-     * [SnapshotFamily.maxEntries], and entries for documents the store does not hold beyond [SnapshotFamily.maxAbsent].
-     * Each kind evicts only its own, and a load in flight counts toward neither (`SNP-7`).
+     * Evicts the least recently used idle entries of [family] beyond its bounds, at most [limit] of each kind: documents
+     * beyond [SnapshotFamily.maxEntries], and entries for documents the store does not hold beyond
+     * [SnapshotFamily.maxAbsent]. Each kind evicts only its own, and a load in flight counts toward neither (`SNP-7`).
+     *
+     * One scan of the family's slots picks every victim of a kind; each removal first claims its decrement of that
+     * kind's count, which never goes below the bound, and gives it back when the victim is refused (busy, removed, or
+     * of the other kind by now). So passes running at once, here and on installing threads, never take a kind below its
+     * bound between them, and a victim two passes chose is removed once (`SNP-14`).
      */
-    fun evictBeyond(family: Family<*>) {
-        val slots = family.slots
-        if (slots.size <= minOf(family.spec.maxEntries, family.spec.maxAbsent)) {
+    fun evictBeyond(family: Family<*>, limit: Int = Int.MAX_VALUE) {
+        evictBeyond(family, absent = false, limit)
+        evictBeyond(family, absent = true, limit)
+    }
+
+    /** Whether [family] holds more entries of a kind than its cap ([Family.cap]): its installer evicts in place. */
+    fun overCap(family: Family<*>): Boolean = family.overCap(absent = false) || family.overCap(absent = true)
+
+    private fun evictBeyond(family: Family<*>, absent: Boolean, limit: Int) {
+        val excess = family.count(absent).get() - family.bound(absent)
+        if (excess <= 0) {
             return
         }
-        synchronized(evictionLock) {
-            evictBeyond(slots, family.spec.maxEntries, absent = false)
-            evictBeyond(slots, family.spec.maxAbsent, absent = true)
-        }
-    }
-
-    private fun evictBeyond(slots: ConcurrentHashMap<String, out Slot<*>>, bound: Int, absent: Boolean) {
-        while (true) {
-            var held = 0
-            var victim: Slot<*>? = null
-            for (slot in slots.values) {
-                val entry = slot.installed ?: continue
-                if ((entry.origin == EntryOrigin.ABSENT) != absent) {
-                    continue
-                }
-                held++
-                if ((victim == null || slot.lastAccess < victim.lastAccess) && slot.isIdle()) {
-                    victim = slot
-                }
-            }
-            if (held <= bound || victim == null) {
+        for (victim in victims(family, absent, minOf(excess, limit))) {
+            if (!family.claim(absent)) {
                 return
             }
-            if (victim.removeIfIdle(onlyIfEmpty = false)) {
+            if (victim.removeIfIdle(onlyIfEmpty = false, claimedAbsent = absent)) {
                 lagReports.forget(victim.key)
                 log.debug { "Evicted snapshot document [${victim.key}]." }
+            } else {
+                family.count(absent).incrementAndGet()
             }
         }
     }
 
-    /** One family's documents, by id. */
+    /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
+    internal fun victims(family: Family<*>, absent: Boolean, wanted: Int): List<Slot<*>> {
+        if (wanted <= 0) {
+            return emptyList()
+        }
+        // The most recently used of the chosen on top, so that a less recently used slot replaces it.
+        val chosen = PriorityQueue<Slot<*>>(compareByDescending { it.lastAccess })
+        for (slot in family.slots.values) {
+            val entry = slot.installed ?: continue
+            if (isAbsent(entry) != absent || !slot.isIdle()) {
+                continue
+            }
+            chosen.add(slot)
+            if (chosen.size > wanted) {
+                chosen.poll()
+            }
+        }
+        return chosen.sortedBy { it.lastAccess }
+    }
+
+    /** Moves [family]'s counts for an entry replaced by another, either of them null: where `installed` is written. */
+    fun move(family: Family<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
+        val from = old?.let(::isAbsent)
+        val to = new?.let(::isAbsent)
+        if (from == to) {
+            return
+        }
+        from?.let { family.count(it).decrementAndGet() }
+        to?.let { family.count(it).incrementAndGet() }
+    }
+
+    /** One family's documents, by id, and how many of each kind it holds (`SNP-14`). */
     class Family<A : Any>(val spec: SnapshotFamily<A>) {
         val slots = ConcurrentHashMap<String, Slot<A>>()
+
+        /** The documents held (every failed entry is one) and the entries for documents the store does not hold. */
+        private val documents = AtomicInteger()
+        private val absentEntries = AtomicInteger()
+
+        fun count(absent: Boolean): AtomicInteger = if (absent) absentEntries else documents
+
+        fun bound(absent: Boolean): Int = if (absent) spec.maxAbsent else spec.maxEntries
+
+        /** The most a kind may hold before its installer evicts in place: twice the bound, at most [MAX_SLACK] above it. */
+        fun cap(absent: Boolean): Int = bound(absent).let { it + minOf(it, MAX_SLACK) }
+
+        fun overCap(absent: Boolean): Boolean = count(absent).get() > cap(absent)
+
+        /** Claims one removal of a kind's entry: its count's decrement, never below the bound; false at the bound. */
+        fun claim(absent: Boolean): Boolean {
+            val bound = bound(absent)
+            return count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound
+        }
 
         /** Drops [slot] from the map, if it is still the one held for [id]. */
         fun drop(id: String, slot: Slot<*>) {
@@ -112,4 +159,22 @@ internal class SnapshotFamilies<A : Any>(
     }
 
     class Seen(val revision: Long, val digest: SnapshotDigest?)
+
+    companion object {
+        /**
+         * How far above its bound a family's kind may go before the installing thread evicts in place (`SNP-14`): the
+         * cap is the bound plus the smaller of the bound and this. A rule of its own, not the housekeeping queue's size.
+         */
+        const val MAX_SLACK = 4096
+
+        /**
+         * The most entries of a kind an installing thread evicts in place, in one pass, when its install took the family
+         * over the cap (`SNP-14`); the rest is left to housekeeping and to the next install over the cap. Chosen from
+         * the measurement in the PR that introduced it: see [MAX_SLACK]'s rule.
+         */
+        const val IN_PLACE_BATCH = 64
+
+        /** Whether [entry] is for a document the store does not hold: the other kind ([Family.count]). */
+        fun isAbsent(entry: SnapshotEntry<*>): Boolean = entry.origin == EntryOrigin.ABSENT
+    }
 }

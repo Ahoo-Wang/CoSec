@@ -437,6 +437,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         families.firstOrNull { it.spec.kind == kind }
             ?: throw IllegalArgumentException("This source has no $kind documents.")
 
+    /** Tests only: what the family of [kind] counts it holds, documents then absent entries (`SNP-14`). */
+    internal fun heldCounts(kind: SnapshotKind): Pair<Int, Int> =
+        family(kind).let { it.count(absent = false).get() to it.count(absent = true).get() }
+
     /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
     internal fun evict(key: SnapshotKey): Boolean {
         val family = familyOf(key)

@@ -159,17 +159,28 @@ internal class Slot<T : Any>(
     /**
      * Marks this slot removed and drops it from the map, unless a load is in flight or, with [onlyIfEmpty], a
      * document is installed. The checks and the mark happen under this slot's lock.
+     *
+     * An eviction that claimed its decrement of a kind's count ([SnapshotFamilies.evictBeyond]) names that kind in
+     * [claimedAbsent]: the removal is refused when the entry is of the other kind by now, and moves no count, since the
+     * claim did. A removal with no claim moves the count of what it removes itself (`SNP-14`).
      */
-    fun removeIfIdle(onlyIfEmpty: Boolean): Boolean {
+    fun removeIfIdle(onlyIfEmpty: Boolean, claimedAbsent: Boolean? = null): Boolean {
         // The shared slot is never removed.
         val family = context.families.firstOrNull { it.spec.kind == key.kind } ?: return false
         synchronized(this) {
-            val holdsDocument = onlyIfEmpty && installed != null
+            val entry = installed
+            val holdsDocument = onlyIfEmpty && entry != null
             if (inFlight != null || removed || holdsDocument) {
+                return false
+            }
+            if (claimedAbsent != null && (entry == null || SnapshotFamilies.isAbsent(entry) != claimedAbsent)) {
                 return false
             }
             removed = true
             family.drop(family.spec.idOf(key), this)
+            if (claimedAbsent == null) {
+                context.families.move(family, entry, null)
+            }
         }
         return true
     }
@@ -613,6 +624,7 @@ internal class Slot<T : Any>(
         val empty: Boolean
         synchronized(this) {
             if (install) {
+                context.families.firstOrNull { it.spec.kind == key.kind }?.let { context.families.move(it, installed, entry) }
                 installed = entry
                 installedEpoch = load.epoch
             }
@@ -634,11 +646,15 @@ internal class Slot<T : Any>(
             empty = installed == null
         }
         val answer = answerFor(entry, withheld, nextLoad)
+        // An install over the cap evicts before anyone is answered (`SNP-14`); whatever it throws, the load goes on.
         try {
-            startOrAnswer(nextLoad, unanswered, answer)
-        } finally {
             housekeep(empty, install)
-            answerWaiters(load, answer, nextLoad.takeIf { withheld })
+        } finally {
+            try {
+                startOrAnswer(nextLoad, unanswered, answer)
+            } finally {
+                answerWaiters(load, answer, nextLoad.takeIf { withheld })
+            }
         }
     }
 
@@ -674,15 +690,19 @@ internal class Slot<T : Any>(
         }
     }
 
+    /**
+     * After a load: an empty slot is dropped on housekeeping. An install leaves eviction to housekeeping, unless it took
+     * its family over the cap: then this thread evicts, before the load's waiters are answered (`SNP-14`).
+     */
     private fun housekeep(empty: Boolean, install: Boolean) {
         if (empty) {
             context.threads.offRequestThread { removeIfIdle(onlyIfEmpty = true) }
         } else if (install) {
             context.families.firstOrNull { it.spec.kind == key.kind }?.let { family ->
-                context.threads.offRequestThread {
-                    context.families.evictBeyond(
-                        family
-                    )
+                if (context.families.overCap(family)) {
+                    context.families.evictBeyond(family, SnapshotFamilies.IN_PLACE_BATCH)
+                } else {
+                    context.threads.offRequestThread { context.families.evictBeyond(family) }
                 }
             }
         }
