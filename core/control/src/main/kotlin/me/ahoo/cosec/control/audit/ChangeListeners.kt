@@ -133,14 +133,3 @@ class ChangeListeners(
         val NONE: ChangeListeners = ChangeListeners(emptyList())
     }
 }
-
-/** Logs every change event (RFC 0007 §10.5); BEST_EFFORT. */
-class LoggingChangeListener(override val name: String = "logging") : ChangeListener {
-    override suspend fun onChange(event: ChangeEvent) {
-        log.info {
-            "Change ${event.change.value} ${event.kind} on ${event.document} by ${event.operator.principal.value}@" +
-                "${event.operator.tenant.value}: base=${event.base}, candidate=${event.candidate}, " +
-                "escalations=${event.escalations.size}, confirmations=${event.confirmations.size}"
-        }
-    }
-}
