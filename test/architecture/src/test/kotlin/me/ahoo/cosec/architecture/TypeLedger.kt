@@ -114,7 +114,7 @@ object TypeLedger {
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotDocumentStore.kt" to family(PORT, "SnapshotDocumentStore"),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/snapshot/SnapshotKey.kt" to family(OWN_EXCEPTION, "the snapshot key"),
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/RevocationReader.kt" to family(PORT, "RevocationReader and the subject revocation it reads"),
-        "core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/TokenFamilyStore.kt" to Disposition.Debt(Batch.B7),
+        "core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/TokenFamilyStore.kt" to family(PORT, "TokenFamilyStore and the session family it keeps"),
         "edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt" to family(OWN_EXCEPTION, "the OpenAPI generator"),
         "extensions/ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider.kt" to family(OWN_EXCEPTION, "the region provider"),
         "extensions/opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/TracingListener.kt" to Disposition.Debt(Batch.B7),
