@@ -17,11 +17,17 @@ package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.DocumentJson.ROOT
+import me.ahoo.cosec.document.DocumentJson.actor
+import me.ahoo.cosec.document.DocumentJson.factory
+import me.ahoo.cosec.document.DocumentJson.nonEmpty
+import me.ahoo.cosec.document.PolicyCodec.policy
+import me.ahoo.cosec.document.StatementCodec.onMissing
+import me.ahoo.cosec.document.StatementCodec.putResources
+import me.ahoo.cosec.document.StatementCodec.resources
+import me.ahoo.cosec.document.StatementCodec.statement
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.OnMissing
-import me.ahoo.cosec.engine.OnMissingConfirmation
 import me.ahoo.cosec.engine.RateLimitSource
-import me.ahoo.cosec.engine.ResourceSource
 import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
@@ -46,7 +52,6 @@ import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.ObjectReader
-import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 import java.time.Instant
 
@@ -73,7 +78,6 @@ object PolicyDocumentCodec {
     const val WILDCARD: String = Match.WILDCARD
 
     private val reader: ObjectReader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-    private val factory = JsonNodeFactory.instance
 
     private val PLATFORM_FIELDS = arrayOf("limits", "attributes")
     private val LIMIT_FIELDS = arrayOf(
@@ -99,11 +103,6 @@ object PolicyDocumentCodec {
         "id", "action", "resource", "condition", "onMissing", "key", "permitsPerSecond", "windowSeconds", "strictFailure",
     )
     private val PROVENANCE_FIELDS = arrayOf("parent", "change", "kind", "publishedBy", "approvedBy", "shadow")
-    private val POLICY_FIELDS = arrayOf("id", "attachable", "boundary", "condition", "statements")
-    private val STATEMENT_FIELDS =
-        arrayOf("name", "effect", "action", "resource", "condition", "onMissing", "onMissingConfirmed")
-    private val CONFIRMATION_FIELDS = arrayOf("by", "change")
-    private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
     private val APP_ROLE_FIELDS = arrayOf("id", "name", "description", "permissions")
     private val TENANT_ROLE_FIELDS = APP_ROLE_FIELDS + arrayOf("app", "space")
@@ -281,80 +280,6 @@ object PolicyDocumentCodec {
                 ShadowWindow(shadow.field("window")?.nonEmpty(), shadow.required("skipped").bool())
             },
         )
-    }
-
-    private fun actor(node: DocumentNode): Actor {
-        node.requireObject("tenant", "principal")
-        return Actor(TenantId(node.required("tenant").nonEmpty()), PrincipalId(node.required("principal").nonEmpty()))
-    }
-
-    private fun DocumentNode.nonEmpty(): String = text().ifEmpty { fail("must not be empty") }
-
-    private fun policy(node: DocumentNode): PolicyDefinition {
-        node.requireObject(*POLICY_FIELDS)
-        return PolicyDefinition(
-            id = PolicyId(node.required("id").text()),
-            attachable = node.field("attachable")?.bool() ?: false,
-            condition = node.field("condition")?.let(ConditionJson::read),
-            statements = node.required("statements").elements().map(::statement),
-            boundary = node.field("boundary")?.bool() ?: false,
-        )
-    }
-
-    private fun statement(node: DocumentNode): StatementSource {
-        node.requireObject(*STATEMENT_FIELDS)
-        val effect = node.required("effect")
-        return StatementSource(
-            name = node.field("name")?.text() ?: "",
-            effect = when (val text = effect.text()) {
-                "allow" -> Effect.ALLOW
-                "deny" -> Effect.DENY
-                else -> effect.fail("an effect is allow or deny, not [$text]")
-            },
-            actions = node.required("action").strings(),
-            resources = node.field("resource")?.let(::resources).orEmpty(),
-            condition = node.field("condition")?.let(ConditionJson::read),
-            onMissing = node.field("onMissing")?.let(::onMissing),
-            onMissingConfirmed = node.field("onMissingConfirmed")?.let(::confirmation),
-        )
-    }
-
-    /** RFC 0007 §9.5: who confirmed a `nomatch` DENY, and in which change. */
-    private fun confirmation(node: DocumentNode): OnMissingConfirmation {
-        node.requireObject(*CONFIRMATION_FIELDS)
-        val by = actor(node.required("by"))
-        return OnMissingConfirmation(by.tenant.value, by.principal.value, node.required("change").text())
-    }
-
-    private fun onMissing(node: DocumentNode): OnMissing = when (val text = node.text()) {
-        "indeterminate" -> OnMissing.INDETERMINATE
-        "nomatch" -> OnMissing.NOMATCH
-        else -> node.fail("onMissing is indeterminate or nomatch, not [$text]")
-    }
-
-    /** A pattern or an object with options, or an array of them. */
-    private fun resources(node: DocumentNode): List<ResourceSource> {
-        val items = if (node.json.isArray) {
-            node.elements().ifEmpty {
-                node.fail(
-                    "expected at least one resource"
-                )
-            }
-        } else {
-            listOf(node)
-        }
-        return items.map { item ->
-            if (item.json.isObject) {
-                item.requireObject(*RESOURCE_FIELDS)
-                ResourceSource(
-                    item.required("pattern").text(),
-                    caseSensitive = item.field("caseSensitive")?.bool() ?: true,
-                    decodeAndParseSegments = item.field("decodeAndParseSegments")?.bool() ?: true,
-                )
-            } else {
-                ResourceSource(item.text())
-            }
-        }
     }
 
     private fun binding(node: DocumentNode, kind: DocumentKind, owner: String): Binding {
@@ -557,58 +482,6 @@ object PolicyDocumentCodec {
         return node
     }
 
-    private fun actor(actor: Actor): ObjectNode =
-        factory.objectNode().put("tenant", actor.tenant.value).put("principal", actor.principal.value)
-
-    private fun policy(policy: PolicyDefinition): ObjectNode {
-        val node = factory.objectNode().put("id", policy.id.value)
-        if (policy.attachable) node.put("attachable", true)
-        if (policy.boundary) node.put("boundary", true)
-        policy.condition?.let { node.set("condition", ConditionJson.write(it)) }
-        val statements = node.putArray("statements")
-        for (statement in policy.statements) {
-            statements.add(statement(statement))
-        }
-        return node
-    }
-
-    private fun statement(statement: StatementSource): ObjectNode {
-        val item = factory.objectNode()
-        if (statement.name.isNotEmpty()) item.put("name", statement.name)
-        item.put("effect", if (statement.effect == Effect.DENY) "deny" else "allow")
-        item.putArray("action").also { actions -> statement.actions.forEach(actions::add) }
-        putResources(item, statement.resources)
-        statement.condition?.let { item.set("condition", ConditionJson.write(it)) }
-        statement.onMissing?.let {
-            item.put(
-                "onMissing",
-                if (it == OnMissing.NOMATCH) "nomatch" else "indeterminate"
-            )
-        }
-        statement.onMissingConfirmed?.let {
-            item.putObject("onMissingConfirmed")
-                .put("change", it.change)
-                .set("by", actor(Actor(TenantId(it.tenant), PrincipalId(it.principal))))
-        }
-        return item
-    }
-
-    private fun putResources(item: ObjectNode, written: List<ResourceSource>) {
-        if (written.isEmpty()) {
-            return
-        }
-        val resources = item.putArray("resource")
-        for (resource in written) {
-            if (resource.hasOptions()) {
-                resources.addObject().put("pattern", resource.pattern)
-                    .put("caseSensitive", resource.caseSensitive)
-                    .put("decodeAndParseSegments", resource.decodeAndParseSegments)
-            } else {
-                resources.add(resource.pattern)
-            }
-        }
-    }
-
     private fun role(role: RoleDefinition): ObjectNode {
         val node = factory.objectNode().put("id", role.id.value)
         role.app?.let { node.put("app", it.value) }
@@ -671,6 +544,4 @@ object PolicyDocumentCodec {
         }
         return node
     }
-
-    private const val ROOT = "$"
 }
