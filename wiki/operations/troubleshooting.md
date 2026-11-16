@@ -261,6 +261,8 @@ plane published.
   [`cosec.key-prefix`](./configuration.md#key-prefix) and the Redis.
 - **Redis lost the write.** After a failover the instance may log
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`: publish the change again.
+  [`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) names every document whose revision
+  chain lost a record.
 
 The control plane's propagation view shows how many instances have a revision installed
 ([Snapshot health](./observability.md#snapshot-health)).

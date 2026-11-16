@@ -212,6 +212,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
   [`cosec.key-prefix`](./configuration.md#key-prefix) 和同一个 Redis。
 - **Redis 丢了写入。** 故障切换后实例可能以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`：重新发布这个变更。
+  [`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) 会指出每一份修订链丢了记录的文档。
 
 控制面的传播视图显示有多少实例已装入某个修订（[快照健康状况](./observability.md#snapshot-health)）。
 
