@@ -22,68 +22,75 @@ import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 /**
- * The 7.x reader of policies and permission groups: what it accepts must not move (its text fields are read with
- * `asString`, Jackson 3's name for what `asText` answered: a missing, a null and a text field alike).
+ * The 7.x reader of policies and permission groups: what it accepts must not move. Each text field is read as a string,
+ * an empty string, `null` and a number (what Jackson's `asText`, now `asString`, has always answered for each), and a
+ * required one that is absent is refused, naming the key.
  */
 class V7SerializersTest {
-    @Test
-    fun `a policy reads every text field`() {
-        val policy = V7JsonSerializer.readValue(
-            """{"id":"p","name":"n","category":"c","description":"d","type":"CUSTOM","tenantId":"t"}""",
-            Policy::class.java,
+    /** What the reader answers for a field whose JSON is [json]: the text, or `null` when it is absent. */
+    private val values = listOf(
+        """"x"""" to "x",
+        """""""" to "",
+        "null" to "",
+        "5" to "5",
+        "true" to "true",
+    )
+
+    private fun jsonObject(fields: Map<String, String>): String =
+        fields.entries.joinToString(",", "{", "}") { "\"${it.key}\":${it.value}" }
+
+    private fun policy(field: String, json: String?): Policy {
+        val fields = linkedMapOf(
+            "id" to "\"p\"",
+            "name" to "\"n\"",
+            "category" to "\"c\"",
+            "description" to "\"d\"",
+            "type" to "\"CUSTOM\"",
+            "tenantId" to "\"t\"",
         )
-        policy.id.assert().isEqualTo("p")
-        policy.name.assert().isEqualTo("n")
-        policy.category.assert().isEqualTo("c")
-        policy.description.assert().isEqualTo("d")
-        policy.type.assert().isEqualTo(PolicyType.CUSTOM)
-        policy.tenantId.assert().isEqualTo("t")
+        if (json == null) fields.remove(field) else fields[field] = json
+        return V7JsonSerializer.readValue(jsonObject(fields), Policy::class.java)
+    }
+
+    private fun group(field: String, json: String?): PermissionGroup {
+        val fields = linkedMapOf("name" to "\"g\"", "description" to "\"d\"", "permissions" to "[]")
+        if (json == null) fields.remove(field) else fields[field] = json
+        return V7JsonSerializer.readValue(jsonObject(fields), PermissionGroup::class.java)
     }
 
     @Test
-    fun `a policy without a category or a description, or with null ones, has empty ones`() {
-        for (optional in listOf("", ""","category":null,"description":null""")) {
-            val policy = V7JsonSerializer.readValue(
-                """{"id":"p","name":"n","type":"GLOBAL","tenantId":"t"$optional}""",
-                Policy::class.java,
-            )
-            policy.category.assert().isEmpty()
-            policy.description.assert().isEmpty()
+    fun `a policy reads each text field as the text it holds`() {
+        for ((json, text) in values) {
+            policy("id", json).id.assert().isEqualTo(text)
+            policy("name", json).name.assert().isEqualTo(text)
+            policy("tenantId", json).tenantId.assert().isEqualTo(text)
+            policy("category", json).category.assert().isEqualTo(text)
+            policy("description", json).description.assert().isEqualTo(text)
+        }
+        policy("type", """"GLOBAL"""").type.assert().isEqualTo(PolicyType.GLOBAL)
+    }
+
+    @Test
+    fun `a policy without a category or a description has empty ones, and without an id, name, type or tenant is refused`() {
+        policy("category", null).category.assert().isEmpty()
+        policy("description", null).description.assert().isEmpty()
+        for (required in listOf("id", "name", "type", "tenantId")) {
+            assertThrownBy<Exception> { policy(required, null) }.hasMessageContaining(required)
         }
     }
 
     @Test
-    fun `a policy without its id, name, type or tenant is refused, naming the key`() {
-        val whole = mapOf("id" to "\"p\"", "name" to "\"n\"", "type" to "\"SYSTEM\"", "tenantId" to "\"t\"")
-        for (missing in whole.keys) {
-            val json = whole.filterKeys { it != missing }.entries.joinToString(
-                ",",
-                "{",
-                "}"
-            ) { "\"${it.key}\":${it.value}" }
-            assertThrownBy<Exception> { V7JsonSerializer.readValue(json, Policy::class.java) }
-                .hasMessageContaining(missing)
+    fun `a permission group reads its name and description as the text they hold`() {
+        for ((json, text) in values) {
+            group("name", json).name.assert().isEqualTo(text)
+            group("description", json).description.assert().isEqualTo(text)
         }
+        group("permissions", "[]").permissions.assert().isEmpty()
     }
 
     @Test
-    fun `a permission group reads its name and description, and a missing or null description is empty`() {
-        val group = V7JsonSerializer.readValue(
-            """{"name":"g","description":"d","permissions":[]}""",
-            PermissionGroup::class.java,
-        )
-        group.name.assert().isEqualTo("g")
-        group.description.assert().isEqualTo("d")
-        group.permissions.assert().isEmpty()
-        for (description in listOf("", ""","description":null""")) {
-            V7JsonSerializer.readValue("""{"name":"g"$description}""", PermissionGroup::class.java)
-                .description.assert().isEmpty()
-        }
-    }
-
-    @Test
-    fun `a permission group without a name is refused`() {
-        assertThrownBy<Exception> { V7JsonSerializer.readValue("""{"description":"d"}""", PermissionGroup::class.java) }
-            .hasMessageContaining("name")
+    fun `a permission group without a description has an empty one, and without a name is refused`() {
+        group("description", null).description.assert().isEmpty()
+        assertThrownBy<Exception> { group("name", null) }.hasMessageContaining("name")
     }
 }
