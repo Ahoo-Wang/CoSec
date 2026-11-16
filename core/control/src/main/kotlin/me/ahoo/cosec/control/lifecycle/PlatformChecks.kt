@@ -119,7 +119,11 @@ internal object PlatformChecks {
 
     /** Whether the head of [tenant] defines [policy] itself; `null` when it cannot be read. */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun definesCopy(context: ChangeChecks.Context, tenant: SnapshotKey.Tenant, policy: PolicyId): Boolean? = try {
+    private suspend fun definesCopy(
+        context: ChangeChecks.Context,
+        tenant: SnapshotKey.Tenant,
+        policy: PolicyId
+    ): Boolean? = try {
         context.head(tenant)?.document?.policies?.any { it.id == policy } == true
     } catch (e: CancellationException) {
         throw e
@@ -130,7 +134,11 @@ internal object PlatformChecks {
 
     /** Whether the head of [tenant] defines or binds [policy]; `null` when it cannot be read. */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun uses(context: ChangeChecks.Context, tenant: SnapshotKey.Tenant, policy: PolicyId): Boolean? = try {
+    private suspend fun uses(
+        context: ChangeChecks.Context,
+        tenant: SnapshotKey.Tenant,
+        policy: PolicyId
+    ): Boolean? = try {
         context.head(tenant)?.document.let { document ->
             document != null && RoleExpansion.effective(document).let { effective ->
                 effective.policies.any { it.id == policy } || effective.bindings.any { it.policy == policy }
@@ -145,7 +153,11 @@ internal object PlatformChecks {
 
     /** Whether [referrer] is a tenant whose readable head defines [policy] itself and does not name it as its boundary. */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun definesItself(context: ChangeChecks.Context, referrer: SnapshotKey, policy: PolicyId): Boolean = try {
+    private suspend fun definesItself(
+        context: ChangeChecks.Context,
+        referrer: SnapshotKey,
+        policy: PolicyId
+    ): Boolean = try {
         referrer is SnapshotKey.Tenant && context.head(referrer)?.document?.let { document ->
             document.boundary != policy && document.policies.any { it.id == policy }
         } == true
