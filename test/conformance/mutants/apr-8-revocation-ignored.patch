@@ -2,11 +2,11 @@
 # Mutant: an approval counts at publish though the approver's token has been revoked since
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-index 103cfd2b..e5b315f4 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-@@ -612,7 +612,6 @@ class ChangeAuthority(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+index 0da6cedc..ca4b9316 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+@@ -174,7 +174,6 @@ internal class ApprovalRules(
          if (approval.approver.tenant != TenantId.PLATFORM) {
              approverTenantProblem(change)?.let { return it }
          }

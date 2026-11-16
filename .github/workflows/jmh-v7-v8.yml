@@ -107,9 +107,12 @@ jobs:
 
       # Each side compiles with its own Gradle toolchain, 7.x for 17 and 8.0 for 21; the benchmark JVMs run on 25
       # (RFC 0008 §3.8). 21 is listed last so it is JAVA_HOME, the JDK Gradle runs on.
+      # No Gradle cache, as in jmh-ab.yml: this job builds two lines (7.x and 8.0) and two sets of modules under one cache key,
+      # which is what let that job's cache entries drift apart.
       - name: Set up JDK 17, 25 and 21, and Gradle
         uses: ./.github/actions/setup-java-gradle
         with:
+          cache-disabled: true
           java-version: |
             17
             25

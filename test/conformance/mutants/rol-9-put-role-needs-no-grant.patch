@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RolesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-index 103cfd2b..928e6df0 100644
+index 49d29901..834ab066 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-@@ -152,7 +152,7 @@ class ChangeAuthority(
+@@ -142,7 +142,7 @@ class ChangeAuthority(
                  authorizeOperation(via, operator, key, operation)
              }
              for (binding in derivedAnew(key, operations, base)) {

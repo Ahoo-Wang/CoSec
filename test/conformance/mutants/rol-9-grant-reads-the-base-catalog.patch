@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RolesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-index 103cfd2b..2deec020 100644
+index 49d29901..4681a26e 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-@@ -198,7 +198,7 @@ class ChangeAuthority(
+@@ -188,7 +188,7 @@ class ChangeAuthority(
          val candidate = Operations.apply(key, base, operations).candidate ?: return emptyList()
          val (kind, owner) = ownerOf(key)
          val catalogBefore = RoleExpansion.definedInCatalog(base)

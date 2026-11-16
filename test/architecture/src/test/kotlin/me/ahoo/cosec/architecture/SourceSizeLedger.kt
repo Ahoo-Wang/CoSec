@@ -58,13 +58,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt",
-            // +1 (IDN-22): a recorded approver's principal names its session, which a recorded one never has.
-            // +6 (B4 2b): imports of the change values, which were the file's own package before it moved to lifecycle.
-            779,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
             583,
             Disposition.Debt(Batch.B4),
