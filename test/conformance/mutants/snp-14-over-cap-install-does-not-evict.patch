@@ -3,13 +3,13 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-index 2e2a3d81..cb5bc89e 100644
+index 4ed4a270..e2c4d7b5 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
 @@ -699,7 +699,7 @@ internal class Slot<T : Any>(
              context.threads.offRequestThread { removeIfIdle(onlyIfEmpty = true) }
          } else if (install) {
-             context.families.firstOrNull { it.spec.kind == key.kind }?.let { family ->
+             family()?.let { family ->
 -                if (context.families.overCap(family)) {
 +                if (false) {
                      // The whole excess in one pass: the scan dominates a pass's time, whatever it evicts (EvictionPassBenchmark).
