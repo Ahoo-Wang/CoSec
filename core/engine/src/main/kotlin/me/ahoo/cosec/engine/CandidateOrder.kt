@@ -20,28 +20,6 @@ import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
 
-/** Receives the candidates of one request, in [CandidateOrder]. */
-internal interface CandidateVisitor {
-    /** [policy] applies through [via]. Returns true to stop. */
-    fun candidate(policy: CompiledPolicy, via: BindingRef): Boolean
-
-    /**
-     * [policy] applies through [via], one of several bindings of its document that reach it ([BoundEntry.repeat] is
-     * [slot]). An evaluator need not evaluate it again through the later ones (`ALG-9`); listing them all, this calls
-     * [candidate]. Returns true to stop.
-     */
-    fun repeated(policy: CompiledPolicy, via: BindingRef.Bound, slot: Int): Boolean = candidate(policy, via)
-
-    /** A binding that would apply to the request had it not expired. */
-    fun expired(via: BindingRef.Bound)
-
-    /** An attachment or binding names [policyId], which the snapshot does not have (or does not let it attach). */
-    fun missing(policyId: String)
-
-    /** An attachment or tenant binding names [policyId], which both the tenant document and the platform define. */
-    fun ambiguous(policyId: String)
-}
-
 /**
  * The applicable policies of a request (RFC 0004 §6.4 `bindingsFor`), in the candidate order of §6.3:
  *
