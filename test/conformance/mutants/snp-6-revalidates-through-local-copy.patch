@@ -2,17 +2,17 @@
 # Mutant: a seen key is read through the local copy, so revalidation can confirm what the copy holds instead of the store
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 301a2f38..3475501f 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -1205,6 +1205,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-                 load.fromLocalCopy = true
-                 return store.read(key)
-             }
-+            if (known != null && !load.force && !load.recompiles) {
-+                return store.read(key)
-+            }
-             val digest = when {
-                 known == null || load.force || load.recompiles -> null
-                 known.origin.compilesAgain -> null
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+index 6b2d91c5..64267870 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+@@ -359,6 +359,9 @@ internal class Slot<T : Any>(
+             load.fromLocalCopy = true
+             return context.store.read(key)
+         }
++        if (known != null && !load.force && !load.recompiles) {
++            return context.store.read(key)
++        }
+         val digest = when {
+             known == null || load.force || load.recompiles -> null
+             known.origin.compilesAgain -> null

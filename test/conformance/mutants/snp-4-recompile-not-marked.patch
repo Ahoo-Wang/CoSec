@@ -2,16 +2,16 @@
 # Mutant: a load after a recompile does not know its entry compiled with the old inputs
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 301a2f38..2d20f2f1 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -977,7 +977,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-             val known = installed
-             // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
-             val compiled = known != null && known.origin.compiled
--            val recompiles = key != sharedKey && compiled && installedEpoch < epoch
-+            val recompiles = false
-             return Load(known, force, result, epoch, recompiles, passRead)
-         }
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+index 6b2d91c5..661d169f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+@@ -133,7 +133,7 @@ internal class Slot<T : Any>(
+         val known = installed
+         // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
+         val compiled = known != null && known.origin.compiled
+-        val recompiles = key != context.sharedKey && compiled && installedEpoch < epoch
++        val recompiles = false
+         return Load(known, force, result, epoch, recompiles, passRead)
+     }
  

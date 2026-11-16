@@ -2,16 +2,16 @@
 # Mutant: a recompiling load sends a conditional read, and Unchanged confirms the old compilation
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 301a2f38..53ce9392 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -1206,7 +1206,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-                 return store.read(key)
-             }
-             val digest = when {
--                known == null || load.force || load.recompiles -> null
-+                known == null || load.force -> null
-                 known.origin.compilesAgain -> null
-                 else -> known.digest
-             }
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+index 6b2d91c5..cf669049 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+@@ -360,7 +360,7 @@ internal class Slot<T : Any>(
+             return context.store.read(key)
+         }
+         val digest = when {
+-            known == null || load.force || load.recompiles -> null
++            known == null || load.force -> null
+             known.origin.compilesAgain -> null
+             else -> known.digest
+         }

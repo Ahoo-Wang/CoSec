@@ -2,20 +2,21 @@
 # Mutant: a periodic pass waits for a load that has been in flight longer than the store read timeout, so documents behind compilations that never end are never revalidated
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -1085,12 +1085,7 @@
-                 if (closed) {
-                     return CompletableFuture.completedFuture(failedEntry(closedError(), clock.instant()))
-                 }
--                inFlight?.let {
--                    if (pass != null && nanoTime.asLong - it.startedNanos > options.storeReadTimeout.toNanos()) {
--                        return null
--                    }
--                    return it.result
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+index 6b2d91c5..b77d2253 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+@@ -276,12 +276,7 @@ internal class Slot<T : Any>(
+             if (context.closed.get()) {
+                 return CompletableFuture.completedFuture(failedEntry(context.closedError(), context.clock.instant()))
+             }
+-            inFlight?.let {
+-                if (pass != null && context.nanoTime.get().asLong - it.startedNanos > context.options.storeReadTimeout.toNanos()) {
+-                    return null
 -                }
-+                inFlight?.let { return it.result }
-                 load = newLoad(force, CompletableFuture(), pass?.startRead())
-                 inFlight = load
-                 dirty = false
+-                return it.result
+-            }
++            inFlight?.let { return it.result }
+             load = newLoad(force, CompletableFuture(), pass?.startRead())
+             inFlight = load
+             dirty = false
