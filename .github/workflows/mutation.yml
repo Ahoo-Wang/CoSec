@@ -108,10 +108,17 @@ jobs:
           {
             echo "### Mutation shard \`$SHARD\`"
             if grep -qE '^(All [0-9]+ mutants killed|[0-9]+ of [0-9]+ mutant)' mutation.log 2>/dev/null; then
-              if grep -E '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|BUILD_FAILED) ' mutation.log; then
+              # Not killed: a mutant to fix, or a test to write.
+              if grep -E '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY) ' mutation.log; then
                 echo
                 echo "The mutants above are not killed."
-              else
+              fi
+              # The build failed for a reason of its own, twice: re-run the shard, do not write a test.
+              if grep -E '^BUILD_FAILED ' mutation.log; then
+                echo
+                echo "The mutants above were not checked: their build failed. Re-run the shard."
+              fi
+              if ! grep -qE '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|BUILD_FAILED) ' mutation.log; then
                 echo "Every mutant killed."
               fi
             else

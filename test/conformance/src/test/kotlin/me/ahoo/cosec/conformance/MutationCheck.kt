@@ -82,8 +82,10 @@ class Build(val exit: Int, val log: String) {
 
 /**
  * The verdict on a mutant that applied, from its compile build and its test build ([tests] is null when the compile
- * build failed). A failing test is a kill; a build that failed without one is not, and neither is a compile error
- * confused with it: both are told apart so that a flaky network cannot pass for either.
+ * build failed). [failedTests] is the number of failed tests in the JUnit result files ([MutationCheck.failedTests]):
+ * only a failed test in a result file is a kill, never an exit code or the text of a log, so a dependency that could not
+ * be downloaded, a crashed daemon or a timeout can never pass for one. A build that is not a clean pass and has no
+ * failed test is [MutantResult.BUILD_FAILED]: run it again, do not write a test for it.
  */
 fun verdict(compile: Build, tests: Build?, failedTests: Int): MutantResult = when {
     compile.exit != 0 -> if (compile.hasCompilerErrors) MutantResult.DOES_NOT_COMPILE else MutantResult.BUILD_FAILED
@@ -143,7 +145,7 @@ object MutationCheck {
     }
 
     /** Test failures recorded in the worktree's JUnit reports. */
-    private fun failedTests(worktree: Path): Int = Files.walk(worktree).use { paths ->
+    internal fun failedTests(worktree: Path): Int = Files.walk(worktree).use { paths ->
         paths.filter { it.name.startsWith("TEST-") && it.name.endsWith(".xml") && it.parent.parent.name == "test-results" }
             .toList()
             .sumOf { report -> Regex("<failure").findAll(report.readText()).count() }
