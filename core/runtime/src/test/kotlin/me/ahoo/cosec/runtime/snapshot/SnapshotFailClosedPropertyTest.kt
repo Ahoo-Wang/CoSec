@@ -106,7 +106,7 @@ class SnapshotFailClosedPropertyTest {
     /** [FakeCompiler], except that a body of [OVERFLOW] overflows the stack, as a deep document can on a small one. */
     private class OverflowingCompiler(private val fake: FakeCompiler = FakeCompiler()) : SnapshotCompiler<Compiled> {
         override fun compile(key: SnapshotKey, document: SnapshotDocument): Compiled {
-            if (document.bodyBytes().decodeToString() == OVERFLOW) {
+            if (document.fakeBody() == OVERFLOW) {
                 throw StackOverflowError("a document deeper than this thread's stack")
             }
             return fake.compile(key, document)

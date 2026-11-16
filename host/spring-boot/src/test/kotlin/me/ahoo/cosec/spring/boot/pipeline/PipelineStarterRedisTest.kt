@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
@@ -39,7 +40,6 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
@@ -245,7 +245,7 @@ class PipelineStarterRedisTest {
                 context.getBean(ControlStore::class.java).putCandidate(
                     SnapshotKey.Platform,
                     null,
-                    StoredCandidate(window, 1, SnapshotDocument(2, 2, startedAt, uncompilable.encodeToByteArray())),
+                    StoredCandidate(window, 1, SnapshotDocuments.read(uncompilable.encodeToByteArray())),
                 )
             }
             val windows = ShadowWindows(context.getBean(CoCacheShadowReports::class.java))
@@ -282,7 +282,7 @@ class PipelineStarterRedisTest {
                 context.getBean(ControlStore::class.java).putCandidate(
                     SnapshotKey.Tenant("acme"),
                     null,
-                    StoredCandidate(window, 1, SnapshotDocument(2, 2, startedAt, granting.encodeToByteArray())),
+                    StoredCandidate(window, 1, SnapshotDocuments.read(granting.encodeToByteArray())),
                 )
             }
             // The window closes as soon as one sample compared.

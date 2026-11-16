@@ -459,7 +459,7 @@ class ChangesB1Test {
     fun `what moved is recorded even when a written change cannot be settled - RC1-33`() = runBlocking<Unit> {
         publish(SnapshotKey.Platform, Operation.PutPolicy(allow("platform-read")))
         var written = false
-        val readAfter = java.util.Collections.synchronizedList(ArrayList<SnapshotKey>())
+        val readAfter = java.util.concurrent.CopyOnWriteArrayList<SnapshotKey>()
         val store = object : ControlStore by harness.memory {
             override suspend fun putHead(
                 key: SnapshotKey,
@@ -525,7 +525,7 @@ class ChangesB1Test {
                 return harness.memory.putChange(expected, change)
             }
         }
-        val events = java.util.Collections.synchronizedList(ArrayList<ChangeEvent.Kind>())
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent.Kind>()
         val listener = object : ChangeListener {
             override val name = "events"
 
@@ -651,7 +651,7 @@ class ChangesB1Test {
                 return harness.memory.putHead(key, expected, document)
             }
         }
-        val events = java.util.Collections.synchronizedList(ArrayList<ChangeEvent>())
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
         val listener = object : ChangeListener {
             override val name = "events"
 
@@ -777,7 +777,7 @@ class ChangesB1Test {
                 return harness.memory.head(key)
             }
         }
-        val events = java.util.Collections.synchronizedList(ArrayList<ChangeEvent>())
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
         val listener = object : ChangeListener {
             override val name = "events"
 
