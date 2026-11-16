@@ -20,7 +20,8 @@
       "level": "timing",
       "properties": [
         "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
-        "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge"
+        "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge",
+        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
       ],
       "pending": null
     },
@@ -47,7 +48,8 @@
       "statement": "Once the platform's limits or attributes change, every app and tenant document installed afterwards was compiled with them or is compiled again, including one whose load was in flight; one that cannot be compiled again fails closed.",
       "level": "timing",
       "properties": [
-        "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily"
+        "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
+        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
       ],
       "pending": null,
       "guards": [
@@ -105,7 +107,8 @@
       "statement": "A revision whose compilation fails, with an exception or a VirtualMachineError such as a StackOverflowError, is installed as failed: the source never keeps serving the revision before it in its place.",
       "level": "timing",
       "properties": [
-        "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision"
+        "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision",
+        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
       ],
       "guards": [
         "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
@@ -176,7 +179,8 @@
       "pending": null,
       "guards": [
         "runtime:SnapshotRevalidationTest#revalidationAnswersWithAReadThatStartedAfterTheCall",
-        "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs"
+        "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs",
+        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
       ]
     }
   ]
