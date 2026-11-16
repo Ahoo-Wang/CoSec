@@ -70,16 +70,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt",
-            410,
-            Disposition.Debt(Batch.B5),
-        ),
-        Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/format/PolicyDocumentFormats.kt",
-            585,
-            Disposition.Debt(Batch.B5),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
             583,
             Disposition.Debt(Batch.B4),
@@ -104,11 +94,6 @@ object SourceSizeLedger {
             "core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt",
             488,
             Disposition.Debt(Batch.B3),
-        ),
-        Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt",
-            466,
-            Disposition.Debt(Batch.B5),
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt",

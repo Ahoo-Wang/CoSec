@@ -65,6 +65,8 @@ object GuardAllowlist {
             "migrate:AllActionReachTest#a DENY of every action still refuses everything, and is recorded",
             "migrate:AllActionReachTest#a converted allow of every action publishes nothing through the control plane",
             "migrate:MatcherTranslatorTest#every action is http star in an ALLOW and star in a DENY",
+            "migrate:BootstrapKeepsDocumentTest#bootstrap adds its binding and keeps the rest of the document",
+            "migrate:BootstrapKeepsDocumentTest#a forced bootstrap adds its binding and keeps the rest of the document",
             "spi:AuthenticatedPrincipalTest#attributesAreReadOnly",
             "jwt:JwtTokenConverterTest#verifiedAttributesAreReadOnlyAtEveryLevel",
             "testkit:PipelineFixtureTest#aFurtherCheckCannotBeWidenedThroughThePrincipalsAttributes",
