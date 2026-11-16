@@ -24,6 +24,7 @@ import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
@@ -200,6 +201,11 @@ class ApiKeyMigration(
         val claims = MembershipClaims.parse(key.roles, emptyList())
         val ownRole = rolePrefix + key.id
         return when {
+            // #1403: an id that was a 7.x tenant may be none in 8.0, such as one with `/`; checked first, since
+            // everything after it reads the tenant's documents.
+            !SnapshotKey.Tenant.isValidTenantId(key.tenant.value) ->
+                "its tenant [${Identifiers.printable(key.tenant.value)}] is no 8.0 tenant id (no `/`, `:` or control " +
+                    "character): rename the tenant in the source system, then run again"
             key.id.isBlank() || key.id.any { it == '@' || it == '*' || it.isWhitespace() } ->
                 "its id has '@', '*' or a blank, so no principal or role can be named after it"
             key.attributes.isNotEmpty() ->

@@ -170,6 +170,7 @@ class ConverterTest {
                 "twice" to policy("twice"),
                 "twice" to policy("twice"),
                 "orphan" to policy("orphan", tenantId = ""),
+                "slash" to policy("slash", tenantId = "acme/west"),
                 "conditions" to policy(
                     "conditions",
                     statements = listOf(
@@ -190,6 +191,7 @@ class ConverterTest {
             globalIndex = setOf("ghost"),
             apps = listOf(
                 app("*", appPermission("*", permission("p"))),
+                app("a/b", appPermission("a/b", permission("p"))),
                 app("order", appPermission("order", permission("p")), "clerk" to """["p","nope"]"""),
             ),
             marker = "6",
@@ -208,6 +210,7 @@ class ConverterTest {
         located(RejectionKind.OWNER_TENANT).assert().containsExactly("policy:orphan")
         located(RejectionKind.GLOBAL_INDEX_WITHOUT_CONTENT).assert().containsExactly("global")
         located(RejectionKind.INVALID_ID).assert().containsExactly("app:*")
+        located(RejectionKind.SLASH_IN_ID).assert().containsExactly("policy:slash", "app:a/b")
         located(RejectionKind.UNDEFINED_PERMISSION).assert().containsExactly("app:role:permission:order:clerk")
         located(RejectionKind.SCHEMA_MARKER).assert().containsExactly("meta:schema")
         located(RejectionKind.CONDITION_NOT_TRANSLATED).assert()

@@ -48,13 +48,13 @@ class ConvertedDirectoryTest {
             "[${policy("g", "global")},${policy("c")}]",
             """["g"]""",
             """[{"appPermission":${appPermission(
-                "a/b",
+                "a\\\\b",
                 permission("p")
             )},"grants":{"r":["p"],"r@s":["*"]}},{"appId":"none","grants":{"x":["*"]}}]""",
         )
         val source = ExportDirectory.read(directory)
         source.schemaMarker.assert().isNull()
-        source.apps.map { it.appId }.assert().containsExactly("a/b", "none")
+        source.apps.map { it.appId }.assert().containsExactly("a\\b", "none")
         source.apps.first().grants.map { it.roleId to it.spaceId }.assert().containsExactly("r" to "", "r" to "s")
         source.inputSha256.length.assert().isEqualTo(64)
 
@@ -63,14 +63,14 @@ class ConvertedDirectoryTest {
         val out = temp.resolve("out")
         ConvertedDirectory.write(conversion, out)
         // An app id never names a path outside the directory.
-        Files.isRegularFile(out.resolve("apps/a%2Fb.json")).assert().isTrue()
+        Files.isRegularFile(out.resolve("apps/a%5Cb.json")).assert().isTrue()
         val read = ConvertedDirectory.read(out)
-        read.keys.assert().containsExactly(SnapshotKey.Platform, SnapshotKey.App("a/b"))
-        read.getValue(SnapshotKey.App("a/b")).bindings.map { it.id.value }.assert().containsExactly("r:r:0", "r:r@s:0")
+        read.keys.assert().containsExactly(SnapshotKey.Platform, SnapshotKey.App("a\\b"))
+        read.getValue(SnapshotKey.App("a\\b")).bindings.map { it.id.value }.assert().containsExactly("r:r:0", "r:r@s:0")
         val report = CoSecJson.mapper.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.REPORT_FILE)))
         report.get("accepted").asBoolean().assert().isTrue()
         report.get("outputSha256").propertyNames().toList().assert()
-            .containsExactly("apps/a%2Fb.json", "platform.json", "provenance.json")
+            .containsExactly("apps/a%5Cb.json", "platform.json", "provenance.json")
         report.get("warnings").single().get("location").asString().assert().isEqualTo("app-role-permissions.json[1]")
         val provenance = CoSecJson.mapper.readTree(
             Files.readAllBytes(out.resolve(ConvertedDirectory.PROVENANCE_FILE))
@@ -91,6 +91,23 @@ class ConvertedDirectoryTest {
         rejection.get("location").asString().assert().isEqualTo("policy:perm:x")
         rejection.get("advice").asString().assert().isNotBlank()
         assertThrows<IllegalArgumentException> { ConvertedDirectory.read(out) }
+    }
+
+    /** #1403: an app id with `/` names no 8.0 document, so it is refused at the id, with advice, and nothing is written. */
+    @Test
+    fun `an app id with a slash is refused, not encoded`() {
+        val directory = export("[]", "[]", """[{"appPermission":${appPermission("a/b", permission("p"))},"grants":{}}]""")
+        val conversion = Converter().convert(ExportDirectory.read(directory))
+        conversion.report.accepted.assert().isFalse()
+        val out = temp.resolve("out")
+        ConvertedDirectory.write(conversion, out)
+        Files.list(out).use { files -> files.map { it.fileName.toString() }.toList() }.assert()
+            .containsExactly(ConvertedDirectory.REPORT_FILE)
+        val rejection = CoSecJson.mapper.readTree(Files.readAllBytes(out.resolve(ConvertedDirectory.REPORT_FILE)))
+            .get("rejections").single()
+        rejection.get("kind").asString().assert().isEqualTo("SLASH_IN_ID")
+        rejection.get("location").asString().assert().isEqualTo("app-role-permissions.json[0]")
+        rejection.get("advice").asString().assert().contains("rename the tenant or app in the source system")
     }
 
     @Test

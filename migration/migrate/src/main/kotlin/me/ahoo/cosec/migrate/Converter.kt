@@ -419,6 +419,15 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             )
             return SnapshotKey.Platform
         }
+        if ('/' in tenantId) {
+            reject(
+                RejectionKind.SLASH_IN_ID,
+                location,
+                "policy [${Identifiers.printable(id)}] has tenantId [${Identifiers.printable(tenantId)}], which holds `/` " +
+                    "(--partition by-owner)",
+            )
+            return null
+        }
         if (!SnapshotKey.Tenant.isValidTenantId(tenantId)) {
             reject(
                 RejectionKind.OWNER_TENANT,
@@ -505,6 +514,10 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
      */
     private fun appPermissionTree(app: Source7x.App): ObjectNode? {
         val appId = app.appId
+        if ('/' in appId) {
+            reject(RejectionKind.SLASH_IN_ID, app.location, "app id [${Identifiers.printable(appId)}] holds `/`")
+            return null
+        }
         if (!SnapshotKey.App.isValidAppId(appId)) {
             reject(
                 RejectionKind.INVALID_ID,
