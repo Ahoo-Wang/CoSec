@@ -407,6 +407,18 @@
         "control:BoundaryReferencesTest#a grant analysis reads a boundary as no policy at all"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-33",
+      "source": "RFC 0007 §5.5, §6.1 (RFC 0013 B4)",
+      "statement": "A change moves only along the transition table (ChangeStep, as change-transitions.md commits it): each command refuses a change outside its row's From (409), and no step writes a change into a state outside its row's To, or from a state outside its row's From; such a step is a fault and writes nothing.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "control:ChangeTransitionTableTest#the transition table is the one committed in change-transitions md",
+        "control:ChangeTransitionTableTest#each command refuses exactly the states outside its from-set, for every state",
+        "control:ChangeTransitionTableTest#no step writes a change outside its row"
+      ]
     }
   ]
 }

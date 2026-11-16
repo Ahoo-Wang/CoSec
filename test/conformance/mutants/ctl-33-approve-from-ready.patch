@@ -1,0 +1,17 @@
+# Rule: CTL-33
+# Mutant: the table lets approve take a change that is already READY
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangeTransitionTableTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeStep.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeStep.kt
+index 1c8070d5..01b53502 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeStep.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeStep.kt
+@@ -42,7 +42,7 @@ internal enum class ChangeStep(val from: Set<ChangeState>, val to: Set<ChangeSta
+     STAGE(setOf(CHECKED), setOf(SHADOWING, READY, AWAITING_APPROVAL)),
+     SKIP_SHADOW(setOf(CHECKED), setOf(READY, AWAITING_APPROVAL)),
+     SHADOWED(setOf(SHADOWING), setOf(SHADOWING, CONFLICTED, READY, AWAITING_APPROVAL)),
+-    APPROVE(setOf(AWAITING_APPROVAL), setOf(READY)),
++    APPROVE(setOf(AWAITING_APPROVAL, READY), setOf(READY)),
+     REJECT(setOf(AWAITING_APPROVAL), setOf(REJECTED)),
+     ABANDON(open(), setOf(ABANDONED)),
+     PUBLISH(setOf(READY), setOf(DRAFT, AWAITING_APPROVAL, CONFLICTED)),
