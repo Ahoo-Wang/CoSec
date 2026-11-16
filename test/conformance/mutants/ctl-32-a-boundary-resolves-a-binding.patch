@@ -2,11 +2,11 @@
 # Mutant: the checks resolve a binding to a platform boundary as to any platform policy
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-index 7a690ee1..d453f779 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-@@ -306,7 +306,7 @@ class ChangeChecks(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BindingChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BindingChecks.kt
+index de69d9ca..64cc64df 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BindingChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BindingChecks.kt
+@@ -51,7 +51,7 @@ internal object BindingChecks {
          val expansion = expansionOf(candidate) ?: return
          val effective = expansion.document
          val (boundaries, policies) = platform?.policies.orEmpty().partition { it.boundary }

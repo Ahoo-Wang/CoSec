@@ -2,11 +2,11 @@
 # Mutant: the control plane accepts a tenant policy of a platform policy's id whatever its content, not only an exact copy
 # Tests: :control:test --tests me.ahoo.cosec.control.change.SharedPolicyCopyTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-index 7a690ee1..7b39bd92 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-@@ -211,7 +211,7 @@ class ChangeChecks(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
+index 2a60518b..10df1256 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
+@@ -41,7 +41,7 @@ internal object EntryChecks {
          val shared = platform.policies.associateBy { it.id }
          candidate.policies.withIndex().forEach { (i, policy) ->
              val original = shared[policy.id] ?: return@forEach

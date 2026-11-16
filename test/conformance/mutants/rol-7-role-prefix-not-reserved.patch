@@ -3,13 +3,13 @@
 # Tests: :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-index 7a690ee1..96f43922 100644
+index 43218cae..d299ec88 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-@@ -550,6 +550,6 @@ class ChangeChecks(
+@@ -135,6 +135,6 @@ class ChangeChecks(
+     internal companion object {
+         private const val BAD_REQUEST = 400
          private const val UNPROCESSABLE = 422
-         private const val UNAVAILABLE = 503
-         private val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value
 -        val RESERVED = listOf("cosec:", "g:", "r:", RoleExpansion.BINDING_PREFIX)
 +        val RESERVED = listOf("cosec:", "g:", "r:")
      }

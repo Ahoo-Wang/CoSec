@@ -2,11 +2,11 @@
 # Mutant: the control plane lets the platform add a policy id a tenant document already defines or binds
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-index 7a690ee1..fe5d0967 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-@@ -440,7 +440,7 @@ class ChangeChecks(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
+index 8b7ad47c..42d81814 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
+@@ -78,7 +78,7 @@ internal object PlatformChecks {
              }
              val tenants = context.referrers(SnapshotKey.Platform, policy.id).filterIsInstance<SnapshotKey.Tenant>()
              val uses = tenants.associateWith { uses(context, it, policy.id) }
