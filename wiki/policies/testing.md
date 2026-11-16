@@ -486,7 +486,8 @@ documents, it is `DRAFT` with the findings. A publish whose revision was written
 `PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
 finishes what followed the write, and records the events as the publisher the revision names. A publish that wrote
 the head and could not finish after it (a store failing or timing out) answers `503`: the revision is in effect, and
-publishing the change again settles it without adding a revision.
+publishing the change again settles it without adding a revision. That holds once the change is `PUBLISHED` too: when
+only releasing its staging slot failed, publishing it again releases the slot and records the publish, once.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
 landing at the same moment for example, can move between the publish's last check and its write; the control plane

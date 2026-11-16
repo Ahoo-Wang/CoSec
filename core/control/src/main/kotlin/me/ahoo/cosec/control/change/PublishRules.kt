@@ -33,6 +33,7 @@ internal object PublishRules {
     private const val CONFLICT = 409
     private const val UNPROCESSABLE = 422
     private const val PRECONDITION_REQUIRED = 428
+    private const val UNAVAILABLE = 503
 
     /**
      * The action that stages and publishes [change] on its document: `cosec:publish`, or for a break-glass request or
@@ -40,6 +41,19 @@ internal object PublishRules {
      */
     fun publishing(change: ChangeRequest): Action =
         if (change.kind == ProvenanceKind.BREAK_GLASS) ControlActions.BREAKGLASS else ControlActions.PUBLISH
+
+    /**
+     * Creating or altering break-glass ([breakGlass], [BreakGlassRules.touches]) needs a REQUIRED change listener to
+     * record it (RFC 0007 §8): without one ([hasRequired]), a 503, whatever the change's kind.
+     */
+    fun requireAudit(breakGlass: Boolean, hasRequired: Boolean) {
+        if (breakGlass && !hasRequired) {
+            throw ChangeRejectedException(
+                UNAVAILABLE,
+                "break-glass needs a REQUIRED change listener, and none is configured"
+            )
+        }
+    }
 
     /** That [change] is in one of [allowed]: a 409 otherwise. */
     fun requireState(change: ChangeRequest, allowed: Set<ChangeState>) {
