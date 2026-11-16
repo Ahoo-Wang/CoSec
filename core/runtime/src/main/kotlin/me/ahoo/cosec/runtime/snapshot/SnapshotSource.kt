@@ -18,9 +18,6 @@ package me.ahoo.cosec.runtime.snapshot
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newCompileExecutor
-import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newHousekeeping
-import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newScheduler
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -40,11 +37,9 @@ import java.util.concurrent.CompletionException
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.ThreadPoolExecutor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 import java.util.concurrent.atomic.AtomicBoolean
@@ -132,13 +127,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     @Volatile
     internal var nanoTime: LongSupplier = LongSupplier(System::nanoTime)
 
-    /** Set on the threads this source starts: [close] does not wait for the thread it runs on. */
-    private val onOwnThread = ThreadLocal<Boolean>()
-    private val ownsCompileExecutor = compileExecutor == null
-    private val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options, onOwnThread)
-    private val ownsScheduler = scheduler == null
-    private val scheduler: ScheduledExecutorService = scheduler ?: newScheduler(onOwnThread)
-    private val housekeeping: ThreadPoolExecutor = newHousekeeping(onOwnThread)
+    private val threads = SnapshotThreads(options, compileExecutor, scheduler)
 
     private val shared = Slot(sharedKey, sharedCompiler)
     private val families: List<Family> = families.map { Family(it) }
@@ -407,13 +396,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun closeSteps(): List<() -> Unit> = listOf(
         { periodic.cancel(false) },
         subscription::close,
-        { if (ownsScheduler) scheduler.shutdownNow() },
+        threads::stopScheduler,
         { pendingPrewarms.forEach { it.completeExceptionally(closedError()) } },
         { pendingRequests.forEach { it.abort(closedError()) } },
         ::endLoads,
-        housekeeping::shutdown,
-        { if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown() },
-        ::awaitOwnedThreads,
+        threads::stopHousekeeping,
+        threads::stopCompiling,
+        { threads.awaitOwned(closeTimeout) },
     )
 
     /** Runs the constructor's [step]; when it throws, [undo] and the executors this source made are released first. */
@@ -421,9 +410,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun <T> undoing(undo: () -> Unit, step: () -> T): T = try {
         step()
     } catch (e: Throwable) {
-        listOf(undo, { if (ownsScheduler) scheduler.shutdownNow() }, housekeeping::shutdown, {
-            if (ownsCompileExecutor) (compileExecutor as ThreadPoolExecutor).shutdown()
-        }).forEach { release -> attemptClosing(release, e) }
+        listOf(undo, threads::stopScheduler, threads::stopHousekeeping, threads::stopCompiling)
+            .forEach { release -> attemptClosing(release, e) }
         throw e
     }
 
@@ -443,39 +431,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         families.forEach { family -> family.slots.values.forEach { it.endLoad() } }
     }
 
-    /**
-     * Waits, at most [closeTimeout], until the threads this source started have finished what was already queued on
-     * them: once [close] returns, a closed source does no more work and leaves no thread behind. Without the wait, a
-     * host that closes and replaces sources faster than queued work drains piles their threads up (RFC 0008 §3.5's
-     * property stress reached the per-process thread limit). Not on one of those threads, which would wait for itself.
-     */
-    private fun awaitOwnedThreads() {
-        if (onOwnThread.get() == true) {
-            return
-        }
-        val owned = buildList {
-            if (ownsScheduler) add(scheduler)
-            add(housekeeping)
-            if (ownsCompileExecutor) add(compileExecutor as ExecutorService)
-        }
-        val deadline = System.nanoTime() + closeTimeout.toNanos()
-        try {
-            for (executor in owned) {
-                val remaining = (deadline - System.nanoTime()).coerceAtLeast(0)
-                if (!executor.awaitTermination(remaining, TimeUnit.NANOSECONDS)) {
-                    log.warn { "The snapshot source's threads did not finish within $closeTimeout of closing." }
-                    return
-                }
-            }
-        } catch (_: InterruptedException) {
-            Thread.currentThread().interrupt()
-        }
-    }
-
     /** Whether every thread this source started has finished: true once [close] has returned. */
     internal val threadsTerminated: Boolean
-        get() = (!ownsScheduler || scheduler.isTerminated) && housekeeping.isTerminated &&
-            (!ownsCompileExecutor || (compileExecutor as ExecutorService).isTerminated)
+        get() = threads.terminated
 
     /**
      * One periodic tick: queue a lag report, then revalidate, unless a pass is in flight ([PeriodicPasses]). The future
@@ -491,7 +449,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (!lagReportQueued.compareAndSet(false, true)) {
             return
         }
-        val queued = offTimer {
+        val queued = threads.offTimer {
             lagReportQueued.set(false)
             reportLag()
         }
@@ -545,7 +503,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     private fun schedulePeriodic(): ScheduledFuture<*> {
         val millis = options.revalidateInterval.toMillis()
-        return scheduler.scheduleWithFixedDelay(::periodicTick, millis, millis, TimeUnit.MILLISECONDS)
+        return threads.scheduler.scheduleWithFixedDelay(::periodicTick, millis, millis, TimeUnit.MILLISECONDS)
     }
 
     /** Never lets anything escape: a throwing task would silently cancel the periodic schedule. */
@@ -554,28 +512,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         try {
             tick()
         } catch (error: Throwable) {
-            offTimer { log.error(error) { "Snapshot revalidation pass failed." } }
-        }
-    }
-
-    /**
-     * Runs [task] on the housekeeping thread, for what the scheduler thread must not do itself. Never in place, unlike
-     * [offRequestThread], since nothing may hold up a timeout: false when the thread has no room, and [task] is dropped.
-     */
-    private fun offTimer(task: () -> Unit): Boolean = try {
-        housekeeping.execute(task)
-        true
-    } catch (_: RejectedExecutionException) {
-        false
-    }
-
-    /** Runs [task] on the housekeeping thread, off every request thread and off the timer; in place if it is gone. */
-    private fun offRequestThread(task: () -> Unit) {
-        try {
-            housekeeping.execute(task)
-        } catch (rejected: RejectedExecutionException) {
-            log.debug { "Housekeeping rejected a task ($rejected); running it in place." }
-            task()
+            threads.offTimer { log.error(error) { "Snapshot revalidation pass failed." } }
         }
     }
 
@@ -700,7 +637,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 stalled?.follow(started)
             }
             if (stalled != null) {
-                offTimer {
+                threads.offTimer {
                     log.warn {
                         "A snapshot revalidation pass finished no document for ${options.storeReadTimeout} and has no " +
                             "read in flight: compilations hold it. Starting the next pass without it."
@@ -821,10 +758,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 done.complete(null)
                 return@whenComplete
             }
-            offRequestThread { log.warn { "Snapshot prewarm failed for ${failed.map { it.key }}; retrying in $backoff." } }
+            threads.offRequestThread { log.warn { "Snapshot prewarm failed for ${failed.map { it.key }}; retrying in $backoff." } }
             val nextBackoff = minOf(backoff.multipliedBy(2), options.prewarmMaxBackoff)
             try {
-                scheduler.schedule(
+                threads.scheduler.schedule(
                     { attemptPrewarm(keys, nextBackoff, done) },
                     backoff.toMillis(),
                     TimeUnit.MILLISECONDS,
@@ -903,7 +840,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     // B2a: the slot's transitions leave it
     @Suppress("TooManyFunctions")
     private inner class Slot<T : Any>(val key: SnapshotKey, private val compiler: SnapshotCompiler<T>) {
-        private val report = CompileReport(key, compiler, ::offRequestThread)
+        private val report = CompileReport(key, compiler, threads::offRequestThread)
 
         @Volatile
         var installed: SnapshotEntry<T>? = null
@@ -1108,7 +1045,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 own.answer(failedEntry(error, clock.instant()), LoadOutcome.TIMEOUT)
             }
             return try {
-                scheduler.schedule(onTimeout, timeout.toNanos(), TimeUnit.NANOSECONDS)
+                threads.scheduler.schedule(onTimeout, timeout.toNanos(), TimeUnit.NANOSECONDS)
             } catch (rejected: RejectedExecutionException) {
                 own.answer(transientFailure(clock.instant(), rejected), LoadOutcome.FAILED)
                 null
@@ -1232,7 +1169,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             }
             val bounded = CompletableFuture<SnapshotRead>()
             val timeout = try {
-                scheduler.schedule(
+                threads.scheduler.schedule(
                     {
                         bounded.completeExceptionally(
                             TimeoutException("The store did not answer within ${options.storeReadTimeout}.")
@@ -1316,7 +1253,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             )
             finish(load, entryOf(load, DocumentState.Failed(error), EntryOrigin.LOST), install = true)
             // After the install: a throwing meter must not keep the lost document in service.
-            offRequestThread {
+            threads.offRequestThread {
                 log.error(error) { "Snapshot document [$key] disappeared from the store; failing closed." }
             }
             metrics.onDocumentLost(key, lastSeen.revision)
@@ -1324,7 +1261,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         private fun compileOffThread(load: Load, read: SnapshotRead.Present) {
             try {
-                compileExecutor.execute {
+                threads.compileExecutor.execute {
                     guarded(load) { compileAndInstall(load, read) }
                 }
             } catch (rejected: RejectedExecutionException) {
@@ -1344,7 +1281,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             val delay = retryDelay
             retryDelay = minOf(delay.multipliedBy(2), options.revalidateInterval)
             try {
-                scheduler.schedule({ reload(force = false) }, delay.toNanos(), TimeUnit.NANOSECONDS)
+                threads.scheduler.schedule({ reload(force = false) }, delay.toNanos(), TimeUnit.NANOSECONDS)
             } catch (rejected: RejectedExecutionException) {
                 log.debug { "No reload retry: $rejected" }
             }
@@ -1396,7 +1333,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         private fun onTransientFailure(load: Load, cause: Throwable, rejected: Boolean = false) {
             val known = load.known
             if (known != null && load.recompiles) {
-                offRequestThread {
+                threads.offRequestThread {
                     log.warn(
                         cause
                     ) { "Compiling snapshot document [$key] again failed; failing closed until it compiles." }
@@ -1419,7 +1356,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 return
             }
             if (known != null) {
-                offRequestThread {
+                threads.offRequestThread {
                     log.warn(cause) { "Reloading snapshot document [$key] failed; keeping revision ${known.revision}." }
                 }
                 finish(load, known, install = false)
@@ -1428,7 +1365,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 }
                 return
             }
-            offRequestThread { log.warn(cause) { "Loading snapshot document [$key] failed." } }
+            threads.offRequestThread { log.warn(cause) { "Loading snapshot document [$key] failed." } }
             finish(load, transientFailure(load.startedAt, cause), install = false)
         }
 
@@ -1532,10 +1469,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         private fun housekeep(empty: Boolean, install: Boolean) {
             if (empty) {
-                offRequestThread { removeIfIdle(onlyIfEmpty = true) }
+                threads.offRequestThread { removeIfIdle(onlyIfEmpty = true) }
             } else if (install) {
                 families.firstOrNull { it.spec.kind == key.kind }?.let { family ->
-                    offRequestThread {
+                    threads.offRequestThread {
                         evictBeyond(
                             family
                         )
@@ -1548,7 +1485,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
             val regressedFrom = synchronized(this) { recordSeen(entry) }
             log.debug { "Installed $entry." }
             if (regressedFrom != null) {
-                offRequestThread {
+                threads.offRequestThread {
                     log.error {
                         "Snapshot document [$key] regressed from revision ${regressedFrom.revision} to ${entry.revision}; " +
                             "the store may have lost a write (for example a Redis failover). Installing what the store holds."
