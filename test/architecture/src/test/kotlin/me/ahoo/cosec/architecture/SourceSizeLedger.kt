@@ -96,11 +96,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B3),
         ),
         Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt",
-            486,
-            Disposition.Stays("a grammar, one function per production"),
-        ),
-        Entry(
             "core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt",
             466,
             Disposition.Debt(Batch.B5),
