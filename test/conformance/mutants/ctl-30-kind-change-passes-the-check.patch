@@ -2,11 +2,11 @@
 # Mutant: the checks let a referenced policy change between a policy and a boundary
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-index 7a690ee1..47db4ed6 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-@@ -409,7 +409,7 @@ class ChangeChecks(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
+index 8b7ad47c..32190d2b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
+@@ -47,7 +47,7 @@ internal object PlatformChecks {
          findings: MutableList<Finding>,
      ) {
          val kept = candidate.policies.associate { it.id to it.boundary }
