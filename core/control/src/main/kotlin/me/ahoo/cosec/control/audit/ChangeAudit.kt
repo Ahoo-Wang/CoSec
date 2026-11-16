@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.audit
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -25,6 +26,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import me.ahoo.cosec.annotations.CoSecSpi
@@ -215,6 +217,11 @@ class ChangeListeners(
                 log.warn(e) { "Change listener [${listener.name}] could not record $event." }
             }
         }
+    }
+
+    /** Waits until every event handed off so far ([later]) has reached its listener, or failed to: for tests. */
+    internal suspend fun awaitDelivered() {
+        scope.coroutineContext[Job]!!.children.toList().joinAll()
     }
 
     /** Stops delivering the events still queued. */

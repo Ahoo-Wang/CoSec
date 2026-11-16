@@ -31,7 +31,7 @@ object SourceSizeLedger {
     val ENTRIES: List<Entry> = listOf(
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt",
-            1672,
+            1643,
             Disposition.Debt(Batch.B2a),
         ),
         Entry(
@@ -41,7 +41,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt",
-            938,
+            934,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
@@ -126,13 +126,8 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt",
-            454,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
             "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
-            444,
+            403,
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
         ),
         Entry(

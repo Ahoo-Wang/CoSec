@@ -21,6 +21,7 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyN
 import org.springframework.boot.context.properties.source.ConfigurationPropertySources
 import org.springframework.boot.context.properties.source.IterableConfigurationPropertySource
 import org.springframework.core.env.ConfigurableEnvironment
+import org.springframework.core.io.Resource
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import tools.jackson.core.StreamReadFeature
 
@@ -85,26 +86,27 @@ internal class UnknownProperties(
         private val INDEX = Regex("\\[[^]]*]")
 
         /** From every `spring-configuration-metadata.json` on [classLoader]'s classpath. */
-        // B7: the metadata reader extracts into a function of its own
-        @Suppress("NestedBlockDepth")
         fun load(classLoader: ClassLoader?): UnknownProperties {
             val known = HashSet<String>()
             val containers = HashSet<String>()
             val resolver = PathMatchingResourcePatternResolver(classLoader)
             for (pattern in METADATA) {
-                resolver.getResources(pattern).forEach { resource ->
-                    val properties = resource.inputStream.use { metadata.readTree(it) }.get("properties")
-                    properties?.values()?.forEach { property ->
-                        val name = property.get("name")?.asString() ?: return@forEach
-                        known += name
-                        val type = property.get("type")?.asString().orEmpty()
-                        if (CONTAINER_TYPES.any { type.startsWith(it) } || type.endsWith("[]")) {
-                            containers += name
-                        }
-                    }
-                }
+                resolver.getResources(pattern).forEach { resource -> read(resource, known, containers) }
             }
             return UnknownProperties(known, containers)
+        }
+
+        /** The property names of one metadata file into [known], and the ones that hold a collection into [containers]. */
+        private fun read(resource: Resource, known: MutableSet<String>, containers: MutableSet<String>) {
+            val properties = resource.inputStream.use { metadata.readTree(it) }.get("properties")
+            properties?.values()?.forEach { property ->
+                val name = property.get("name")?.asString() ?: return@forEach
+                known += name
+                val type = property.get("type")?.asString().orEmpty()
+                if (CONTAINER_TYPES.any { type.startsWith(it) } || type.endsWith("[]")) {
+                    containers += name
+                }
+            }
         }
 
         /**

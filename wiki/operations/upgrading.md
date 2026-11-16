@@ -1118,7 +1118,8 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 entry below): a converted 7.x "every action" granted the control plane. 8.0.0-alpha.4 is a preview with no
 compatibility promise. **Every token issued before this version declares no app, so a
 service with an app refuses it** (below): plan a re-login, or have tokens expire first. API keys stored in format 2 fail
-and have to be provisioned again.
+and have to be provisioned again. **Close or withdraw open shadow windows before you upgrade**: a candidate staged by
+8.0.0-alpha.4 states its header beside its document, and is refused as unreadable, so its window is not compared.
 
 - **Security: a tenant switch no longer issues from a revoked or ended session.** From 8.0.0-alpha.1 to
   8.0.0-alpha.4, a switch read no revocation itself: while the revocation store could not be read, which the request
@@ -1593,6 +1594,9 @@ and have to be provisioned again.
   - `RateLimitResult` is no longer a `data class`: `copy` and `componentN` are gone, and equality is unchanged.
   - `SnapshotDocument.DOCUMENT_SCHEMA` is no longer a `const`, so compiled code reads the schema of the CoSec it runs
     with. A `const val` set from it no longer compiles: make it a `val`.
+  - **A `SnapshotDocument` is made from its bytes** (`SNP-12`): its constructor is internal. Replace
+    `SnapshotDocument(schema, revision, publishedAt, bytes)` with `SnapshotDocuments.read(bytes)` (`cosec-document`),
+    which reads the header from the bytes and refuses bytes that are not a document. The stored bytes do not change.
   - Internal now (`@InternalCoSecApi`): `Environment`, the condition literals (`Literal`), `Attribute` and its `Kind`,
     `ScopeResolver`, `ScopeSubject`, `SubjectRevocation`, `IdentityFormatException`, `IdentityOverflowException` and
     `Identifiers.isUnpairedSurrogateAt`. The constructors of `ScopeResolution.Resolved` and `ScopeResolution.Rejected`

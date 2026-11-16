@@ -56,43 +56,6 @@ import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 
-/** What evaluating an engine scenario produced, compared with its `expect` by [EngineExpectations]. */
-@ExperimentalCoSecApi
-sealed interface EngineOutcome {
-    /** The engine decided. */
-    class Decided(val decision: Decision) : EngineOutcome
-
-    /** `ScopeResolver` rejected the request before the engine. */
-    class Rejected(val reason: ScopeResolution.Rejected.Reason) : EngineOutcome
-
-    /** A document does not compile; the request was never evaluated. */
-    class NotCompiled(val error: String) : EngineOutcome
-
-    /**
-     * Enforcement refuses the request before any decision (`400 invalid-request`, `PIP-15`): [refused] names the part
-     * of the scenario's request it refuses, as the scenario names it.
-     */
-    class InvalidRequest(val refused: RequestPart) : EngineOutcome
-
-    /** A part of a scenario's request, rendered in lower case in `expect` (`"refused": "action"`). */
-    enum class RequestPart {
-        /** An `http` action whose method holds a lower-case letter (`PIP-18`). */
-        ACTION,
-
-        /**
-         * A resource enforcement refuses: an `http` path the pipeline answers 400 for, such as one with a dot segment
-         * (`PIP-14`), or a typed resource id beyond the bounds of a request path.
-         */
-        RESOURCE,
-    }
-
-    /**
-     * This outcome in the scenario syntax, as `expect` writes it: `{"decision":"Deny","by":null}`, for an assertion
-     * message or a log line.
-     */
-    fun describe(): String = EngineExpectations.render(this).toString()
-}
-
 /**
  * The `engine` level of the scenario format (RFC 0008 §3.3): documents → compile → [SnapshotView] → [FlatEngine]. The
  * conformance suite runs its scenarios through it, and [PolicyTestKit] runs a user's scenarios against the user's

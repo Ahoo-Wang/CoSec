@@ -1,0 +1,17 @@
+# Rule: SNP-12
+# Mutant: SnapshotDocuments.of states a revision other than the one it encodes
+# Tests: :document:test --tests me.ahoo.cosec.document.SnapshotDocumentsTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/SnapshotDocuments.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/SnapshotDocuments.kt
+index ce9b2e4d..db87dca9 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/SnapshotDocuments.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/SnapshotDocuments.kt
+@@ -59,7 +59,7 @@ object SnapshotDocuments {
+     @InternalCoSecApi
+     fun of(document: PolicyDocument): SnapshotDocument = SnapshotDocument(
+         PolicyDocumentCodec.SCHEMA,
+-        document.revision,
++        document.revision + 1,
+         document.publishedAt,
+         PolicyDocumentCodec.encode(document),
+     )

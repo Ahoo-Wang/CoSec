@@ -57,6 +57,12 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 | `POST /break-glass`, `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | Request break-glass, approve a request, revoke a binding ([Security model](../guide/security-model.md#break-glass)). A revoke answers `200` only once the binding no longer grants, `404` when the platform document has no binding of that id, and `409` otherwise, an ordinary binding of that id included ([Taking a busy slot](#taking-a-busy-slot)). |
 | `POST /simulate`, `POST /explain`, `POST /analyze` | Decide or analyze without changing anything. |
 
+A path parameter (`{key}`, `{id}`, `{revision}`, `{bindingId}`) is percent-decoded once, after the path is split into
+segments: `tenant:acme%20west` is the tenant `acme west`, `tenant%3Aacme` is `tenant:acme`, an encoded `/` (`%2F`) is part
+of a value and never a second segment, `+` stays `+`, and a `%25` that was encoded twice (`%2520`) decodes to `%20`, not to
+a space. A malformed escape (`%zz`, a lone `%`, bytes that are not UTF-8) is a `400`. The route's own words (`documents`,
+`revisions`, `:apply`) are matched as written.
+
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
 exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is
@@ -254,6 +260,11 @@ out; the candidate never affects a real decision. A candidate is compared only o
 only by an instance that has installed the candidate's base revision. A tenant candidate is compared on the documents a
 request would read once it is published: one that binds an app's permission policy to `Anyone` or a principal brings in
 that app's installed document where the request read none, and one that removes the last such binding leaves it out.
+So does the failure of a document: one the candidate stops reading takes its failure with it, so a candidate that drops
+an app document that cannot be read or does not compile is `WIDENED` where the request is now 503, and one it starts
+reading brings its failure in. A candidate of a document that does not compile replaces it, failure and all; one of a
+document an instance cannot read is not compared there (`BASE_MISMATCH`: the instance does not know the revision it
+would replace), so read the window again once the store answers.
 
 | Outcome | Means |
 |---|---|
@@ -475,7 +486,8 @@ documents, it is `DRAFT` with the findings. A publish whose revision was written
 `PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
 finishes what followed the write, and records the events as the publisher the revision names. A publish that wrote
 the head and could not finish after it (a store failing or timing out) answers `503`: the revision is in effect, and
-publishing the change again settles it without adding a revision.
+publishing the change again settles it without adding a revision. That holds once the change is `PUBLISHED` too: when
+only releasing its staging slot failed, publishing it again releases the slot and records the publish, once.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
 landing at the same moment for example, can move between the publish's last check and its write; the control plane
@@ -502,7 +514,10 @@ action and resource, with its document,
 subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
 not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
 `hidden`, and bindings to policies in them in `opaque`. A tenant binding scoped to the app asked about finds that
-app's permission policies, as enforcement does, when you may read the app's document. Attachments are not listed: they depend on each principal's
+app's permission policies, as enforcement does, when you may read the app's document. A binding of a built-in
+control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer`) is listed from the
+statements CoSec defines for it, never as `opaque`; the tenant ones are `conditional`, since they grant only on the
+caller's own tenant. Attachments are not listed: they depend on each principal's
 memberships. A binding applies in the tenant as the engine looks it up: a principal binding only to a principal of
 that tenant, a role binding that names a tenant only in that tenant, a role binding without one and `Anyone` in every
 tenant. So a platform binding of `principal:globex/bob` is not listed for `acme`.

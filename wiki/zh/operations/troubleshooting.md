@@ -596,11 +596,11 @@ CoSec 在日志行与错误信息中把 id 里的控制字符或落单的 UTF-16
 
 1. `cosec.audit.enabled` 必须为 `true`（默认）。
 2. 审计日志以 `DEBUG` 记录放行：把 `me.ahoo.cosec.audit` 设为 `DEBUG` 才能看到。
-3. 队列满时丢弃的事件：`Dropping decision events: the queue of listener [<name>] is full.` 以及 `cosec.listener.dropped`
+3. 队列满时丢弃的事件：`Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` 以及 `cosec.listener.dropped`
    计数器。抛异常的监听器：`Decision listener [<name>] failed.`
 4. Kafka：`Failed to publish audit event to Kafka topic [<topic>].`，或 `The Kafka audit queue of [<topic>] is full.`
    （[审计日志与 Kafka](./observability.md#audit-log-and-kafka)）。
 5. 关闭时，队列中的事件最多再发送 [`cosec.observability.listener.drain-timeout`](./configuration.md#decision-listeners)（5 秒），
-   之后剩下的被丢弃（`Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`）。
+   之后不再开始任何监听器调用，剩下的被丢弃并计数（`Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`）。
 
 **下一步：** 把已有部署升级到新版本，见[升级](./upgrading.md)。

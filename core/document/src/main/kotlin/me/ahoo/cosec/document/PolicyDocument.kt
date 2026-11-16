@@ -94,6 +94,28 @@ class PolicyDocument @InternalCoSecApi constructor(
         require(attributes == null || attributes.all { it.external }) { "Declared attributes are external." }
         roles.firstNotNullOfOrNull { it.shapeProblem(kind) }?.let { throw IllegalArgumentException(it) }
     }
+
+    /**
+     * This document at [revision], published at [publishedAt], and otherwise the same: every member above is passed on.
+     * The one copy of a document under another header (a shadow candidate is one); a member added to the constructor is
+     * added here, in the same file (`PolicyDocumentAtTest` fails otherwise).
+     */
+    @InternalCoSecApi
+    fun at(revision: Long, publishedAt: Instant): PolicyDocument = PolicyDocument(
+        kind = kind,
+        owner = owner,
+        revision = revision,
+        publishedAt = publishedAt,
+        policies = policies,
+        bindings = bindings,
+        catalog = catalog,
+        boundary = boundary,
+        provenance = provenance,
+        limits = limits,
+        attributes = attributes,
+        rateLimits = rateLimits,
+        roles = roles,
+    )
 }
 
 /** The resource pattern options a document writes, as [ResourceSource] holds them. */

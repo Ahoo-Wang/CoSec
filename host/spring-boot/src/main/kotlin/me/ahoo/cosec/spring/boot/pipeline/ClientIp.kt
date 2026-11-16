@@ -28,19 +28,6 @@ import org.springframework.util.ReflectionUtils
 
 private val log = KotlinLogging.logger {}
 
-/**
- * How this host reads the client address (`PIP-16`): exactly once, from one party it trusts. Where the server has
- * already resolved it, CoSec takes the server's answer and never reads `X-Forwarded-For` again; where the server took
- * it from a header a client writes, CoSec reads the header and never the server's answer.
- *
- * - [maxTrustedIndex] `0`: the host's remote address, as the server gives it.
- * - [peerIsConnection] false: the host's remote address is a client's claim, so the address comes from
- *   `X-Forwarded-For` alone ([me.ahoo.cosec.runtime.http.XForwardedRemoteIpResolver]).
- */
-internal class ClientIpReading(val maxTrustedIndex: Int, val peerIsConnection: Boolean, val why: String) {
-    override fun toString(): String = why
-}
-
 /** A forward-headers setup under which CoSec cannot read the client address safely: startup fails, saying why. */
 internal class ClientIpConfigurationException(message: String) : IllegalStateException(message)
 
