@@ -25,7 +25,13 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.grant.GrantDocuments
-import me.ahoo.cosec.control.store.Revisions
+import me.ahoo.cosec.control.lifecycle.Applied
+import me.ahoo.cosec.control.lifecycle.CandidateDigest
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.ChangeChecks
+import me.ahoo.cosec.control.lifecycle.EntryDigest
+import me.ahoo.cosec.control.lifecycle.Narrowing
+import me.ahoo.cosec.control.lifecycle.Operations
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.CatalogGroup
@@ -412,6 +418,6 @@ class RolesTest {
         val derived = 100 * DocumentCache.DERIVED_BINDING_BYTES * DocumentCache.DECODED_FACTOR
         cached(document).assert().isEqualTo(cached(plain) + derived)
         PolicyDocumentCodec.encode(document).decodeToString().assert().contains("\"roles\"")
-        Revisions.ownerOf(wms).second.assert().isEqualTo("wms")
+        ownerOf(wms).second.assert().isEqualTo("wms")
     }
 }

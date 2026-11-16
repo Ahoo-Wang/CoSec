@@ -20,19 +20,20 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
-import me.ahoo.cosec.control.change.BreakGlass
-import me.ahoo.cosec.control.change.CandidateDigest
-import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
-import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Confirmation
-import me.ahoo.cosec.control.change.EntryDigest
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
+import me.ahoo.cosec.control.lifecycle.BreakGlass
+import me.ahoo.cosec.control.lifecycle.CandidateDigest
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.EntryDigest
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
@@ -87,7 +88,7 @@ class DefaultControlPlane(
         authority.require(operator, key, ControlActions.READ)
         val before = retained(key, from)
         val after = retained(key, to)
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         val expandedBefore = RoleExpansion.effective(before)
         val expandedAfter = RoleExpansion.effective(after)
         return DocumentDiff(

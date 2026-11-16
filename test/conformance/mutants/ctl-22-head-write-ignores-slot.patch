@@ -2,11 +2,11 @@
 # Mutant: a publish checks its slot before its PUBLISHING record only, not right before its head write, so a change preempted between the two still publishes
 # Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 6be8bc1f..31b4fb6a 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -587,7 +587,6 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+index 87eb42e6..07f4eb29 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+@@ -603,7 +603,6 @@ class Changes(
              head,
              candidate,
              PublishRules.publication(change, publisher, rechecked),

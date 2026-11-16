@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.change
+package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -21,6 +21,7 @@ import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.audit.RevisionRef
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.document.Actor
 import java.time.Clock
 

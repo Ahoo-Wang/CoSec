@@ -2,11 +2,11 @@
 # Mutant: a change that only narrows takes the slot of a break-glass revoke, so the principal it revokes can hold it off
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 6be8bc1f..eece42d1 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -852,7 +852,7 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+index 87eb42e6..fe44cfdb 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+@@ -868,7 +868,7 @@ class Changes(
                          return@repeat
                      }
                      // A revoke of a binding that still grants is taken only by another such revoke (review N1).

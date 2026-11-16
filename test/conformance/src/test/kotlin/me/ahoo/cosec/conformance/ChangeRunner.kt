@@ -37,17 +37,18 @@ import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.Approval
-import me.ahoo.cosec.control.change.ChangeAuthority
 import me.ahoo.cosec.control.change.ChangeId
-import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ShadowAck
-import me.ahoo.cosec.control.change.ShadowOptions
+import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
@@ -677,7 +678,7 @@ object ChangeRunner : ScenarioRunner {
 
     /** A scenario's document body as [key]'s document, one revision past [head]. */
     fun decode(key: SnapshotKey, body: JsonNode, head: Long): PolicyDocument {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         val document = JsonNodeFactory.instance.objectNode()
             .put("schema", PolicyDocumentCodec.SCHEMA).put("revision", head + 1).put("publishedAt", NOW.toString())
         document.setAll(body as? ObjectNode ?: throw ScenarioFormatException("The $key document is not an object"))
@@ -703,7 +704,7 @@ object ChangeRunner : ScenarioRunner {
     }
 
     fun operation(key: SnapshotKey, node: JsonNode): Operation {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         val (name, value) = node.fields().entries.singleOrNull() ?: throw ScenarioFormatException("An operation is one entry: $node")
         return when (name) {
             "putPolicy" -> Operation.PutPolicy(PolicyDocumentCodec.decodePolicy(value))

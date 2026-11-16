@@ -42,8 +42,9 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B2b),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt",
-            926,
+            "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt",
+            // +16 (B4 2b): imports of the change values, which were the file's own package before it moved to lifecycle.
+            942,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
@@ -57,24 +58,14 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt",
-            // +1 (IDN-22): a recorded approver's principal names its session, which a recorded one never has.
-            773,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt",
-            756,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
             583,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt",
-            552,
+            "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt",
+            // +3 (B4 2b): imports of the change values, which were the file's own package before it moved to lifecycle.
+            555,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
@@ -86,11 +77,6 @@ object SourceSizeLedger {
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt",
             500,
             Disposition.Stays("migrate's one-off translation of 7.x condition parts"),
-        ),
-        Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt",
-            488,
-            Disposition.Debt(Batch.B3),
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt",

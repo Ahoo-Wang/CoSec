@@ -25,9 +25,10 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.change.ChangeId
-import me.ahoo.cosec.control.change.Changes
+import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.store.AppList
-import me.ahoo.cosec.control.store.ControlMaintenance
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
@@ -167,7 +168,7 @@ class ControlMaintenanceSchedulerTest {
     }
 
     private fun document(key: SnapshotKey): PolicyDocument {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         return PolicyDocument(kind, owner, 1, Instant.EPOCH, emptyList(), emptyList())
     }
 

@@ -2,11 +2,11 @@
 # Mutant: the reclamation pass finds an app document the complete app list misses but leaves the list complete
 # Tests: :control:test --tests me.ahoo.cosec.control.store.ControlMaintenanceTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 74d84543..d6a480e2 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -265,7 +265,7 @@ class Revisions(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
+index cefa0c5a..3ff4fcca 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
+@@ -84,7 +84,7 @@ internal class AppListing(
                  return emptySet()
              }
              marked = missing

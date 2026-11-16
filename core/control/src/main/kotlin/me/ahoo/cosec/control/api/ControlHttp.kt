@@ -27,8 +27,8 @@ import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.ShadowAck
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
-import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.ViewVersion
@@ -224,7 +224,7 @@ class ControlHttp(private val plane: ControlPlane) {
         return when (verb) {
             null -> revisions(operator, request, key, segments.drop(1))
             "apply" -> post(request) {
-                val (kind, owner) = Revisions.ownerOf(key)
+                val (kind, owner) = ownerOf(key)
                 val desired = decoded("document") { PolicyDocumentCodec.decode(kind, owner, it.need("document")) }
                 val mode = it.text("mode").let { mode ->
                     field("mode", "one of ${ApplyMode.entries.joinToString()}") { ApplyMode.valueOf(mode) }

@@ -21,9 +21,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.control.api.ControlHttp
-import me.ahoo.cosec.control.change.ShadowOptions
 import me.ahoo.cosec.control.change.ShadowState
-import me.ahoo.cosec.control.change.ShadowWindows
+import me.ahoo.cosec.control.lifecycle.ShadowOptions
+import me.ahoo.cosec.control.lifecycle.ShadowWindows
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions

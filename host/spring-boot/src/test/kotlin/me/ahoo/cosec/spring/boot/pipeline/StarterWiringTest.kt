@@ -38,7 +38,7 @@ import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
-import me.ahoo.cosec.control.change.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.SnapshotDocuments
