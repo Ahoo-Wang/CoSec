@@ -18,53 +18,17 @@ package me.ahoo.cosec.control.api
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.api.ControlRequestJson.ack
-import me.ahoo.cosec.control.api.ControlRequestJson.changeIdOf
-import me.ahoo.cosec.control.api.ControlRequestJson.confirmations
-import me.ahoo.cosec.control.api.ControlRequestJson.documentKey
-import me.ahoo.cosec.control.api.ControlRequestJson.instantOf
-import me.ahoo.cosec.control.api.ControlRequestJson.query
-import me.ahoo.cosec.control.api.ControlRequestJson.revisionOf
-import me.ahoo.cosec.control.api.ControlRequestJson.simulated
-import me.ahoo.cosec.control.api.ControlRequestJson.version
-import me.ahoo.cosec.control.api.ControlResponseJson.diff
+import me.ahoo.cosec.control.api.ControlHttpSupport.factory
 import me.ahoo.cosec.control.api.ControlResponseJson.entries
-import me.ahoo.cosec.control.api.ControlResponseJson.explanation
-import me.ahoo.cosec.control.api.ControlResponseJson.history
-import me.ahoo.cosec.control.api.ControlResponseJson.report
-import me.ahoo.cosec.control.api.ControlResponseJson.simulation
-import me.ahoo.cosec.control.api.JsonFields.array
-import me.ahoo.cosec.control.api.JsonFields.decoded
-import me.ahoo.cosec.control.api.JsonFields.field
-import me.ahoo.cosec.control.api.JsonFields.long
-import me.ahoo.cosec.control.api.JsonFields.need
-import me.ahoo.cosec.control.api.JsonFields.optText
-import me.ahoo.cosec.control.api.JsonFields.text
-import me.ahoo.cosec.control.api.JsonFields.wellFormed
 import me.ahoo.cosec.control.authz.Operator
-import me.ahoo.cosec.control.change.ApplyMode
-import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
-import me.ahoo.cosec.control.change.ChangeRequest
-import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.InvalidControlRequestException
-import me.ahoo.cosec.control.change.ownerOf
-import me.ahoo.cosec.control.change.requireRequest
-import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.model.BindingId
-import me.ahoo.cosec.model.Identifiers
-import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
-import tools.jackson.core.StreamReadFeature
-import tools.jackson.databind.JsonNode
-import tools.jackson.databind.node.JsonNodeFactory
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
@@ -121,15 +85,15 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
 // B4: the HTTP layer becomes a route table with one handler per route
 @Suppress("TooManyFunctions")
 @InternalCoSecApi
-class ControlHttp(private val plane: ControlPlane) {
-    private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
+class ControlHttp(plane: ControlPlane) {
+    private val routes = ControlRoutes(plane)
 
     @Suppress("TooGenericExceptionCaught")
     suspend fun handle(request: ControlHttpRequest, security: RequestSecurity?): ControlHttpResponse {
         val requestId = security?.requestId ?: ANONYMOUS_REQUEST
         val operator = security?.let(Operator::of) ?: return problem(Problem.UNAUTHORIZED, requestId, null)
         return try {
-            route(operator, request)
+            routes.route(operator, request)
         } catch (e: CancellationException) {
             throw e
         } catch (e: ChangeRejectedException) {
@@ -174,264 +138,6 @@ class ControlHttp(private val plane: ControlPlane) {
         return problem(Problem.INTERNAL_ERROR, requestId, null)
     }
 
-    private suspend fun route(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
-        // RC1-52 (`IDN-10`): no id the request names may hold an unpaired surrogate, which a Redis key writes as `?`.
-        requireRequest(
-            Identifiers.isWellFormed(request.path) &&
-                request.query.all { (name, value) -> Identifiers.isWellFormed(name) && Identifiers.isWellFormed(value) }
-        ) { UNPAIRED_SURROGATE }
-        val segments = segmentsOf(request.path) ?: return notFound()
-        // A leaf route is its one segment: `/simulate/x` is no route, so a rule on `/simulate` covers what is served
-        // (R2-M1 of #1240's review).
-        if (segments.first() in LEAVES && segments.size != 1) {
-            return notFound()
-        }
-        return when (segments.firstOrNull()) {
-            "documents" -> documents(operator, request, segments.drop(1))
-            "changes" -> changes(operator, request, segments.drop(1))
-            "break-glass" -> breakGlass(operator, request, segments.drop(1))
-            "simulate" -> post(
-                request
-            ) {
-                json(
-                    simulation(
-                        plane.simulate(
-                            operator,
-                            simulated(it.need("request")),
-                            it.optText("candidate")?.let { c -> field("candidate", "a change id") { ChangeId(c) } }
-                        )
-                    )
-                )
-            }
-            "explain" -> post(
-                request
-            ) {
-                json(
-                    explanation(plane.explain(operator, simulated(it.need("request")), it.get("at")?.let(::version)))
-                )
-            }
-            "analyze" -> post(request) { json(report(plane.analyze(operator, query(it.need("query"))))) }
-            else -> notFound()
-        }
-    }
-
-    /**
-     * The segments of [path], or null when it is not written the one way the routes are (review M1 of #1240): a path
-     * that ends in `/` or holds an empty segment (`//`) is served by no route, so a rule that names the routes' exact
-     * paths, such as a rate limit rule on `.../simulate`, covers every request that reaches one.
-     */
-    private fun segmentsOf(path: String): List<String>? {
-        if (!path.startsWith('/')) {
-            return null
-        }
-        val segments = path.substring(1).split('/')
-        return segments.takeIf { it.none(String::isEmpty) }
-    }
-
-    private suspend fun documents(operator: Operator, request: ControlHttpRequest, segments: List<String>): ControlHttpResponse {
-        val (keyText, verb) = segments.firstOrNull()?.let(::verbOf) ?: return notFound()
-        // `:apply` and `:rollback` end the path (R2-M1 of #1240's review); the reads match their own exact shapes.
-        if (verb != null && segments.size != 1) {
-            return notFound()
-        }
-        val key = documentKey(unescaped(keyText))
-        return when (verb) {
-            null -> revisions(operator, request, key, segments.drop(1))
-            "apply" -> post(request) {
-                val (kind, owner) = ownerOf(key)
-                val desired = decoded("document") { PolicyDocumentCodec.decode(kind, owner, it.need("document")) }
-                val mode = it.text("mode").let { mode ->
-                    field("mode", "one of ${ApplyMode.entries.joinToString()}") { ApplyMode.valueOf(mode) }
-                }
-                changeResponse(plane.apply(operator, key, desired, mode, it.optText("note").orEmpty()), CREATED)
-            }
-
-            "rollback" -> post(request) {
-                changeResponse(
-                    plane.rollback(operator, key, it.long("revision"), it.optText("note").orEmpty(), confirmations(it)),
-                    CREATED
-                )
-            }
-
-            else -> notFound()
-        }
-    }
-
-    /** The reads of document [key]: its head, its history, a revision, a diff, a revision's propagation. */
-    private suspend fun revisions(
-        operator: Operator,
-        request: ControlHttpRequest,
-        key: SnapshotKey,
-        rest: List<String>
-    ): ControlHttpResponse =
-        get(request) {
-            when {
-                rest.isEmpty() -> document(plane.read(operator, key))
-                rest == listOf("diff") -> json(
-                    diff(plane.diff(operator, key, request.revision("from"), request.revision("to")))
-                )
-                rest == listOf("revisions") -> json(
-                    history(
-                        plane.history(
-                            operator,
-                            key,
-                            request.query["before"]?.let { revisionOf("before", it) },
-                            request.query["limit"]?.let { limit -> field("limit", "a number") { limit.toInt() } }
-                                ?: ControlPlane.DEFAULT_LIMIT
-                        )
-                    )
-                )
-                rest.size == 2 && rest[0] == "revisions" -> document(
-                    plane.read(operator, key, revisionOf("revision", unescaped(rest[1])))
-                )
-                rest.size == 3 && rest[0] == "revisions" && rest[2] == "propagation" -> {
-                    val propagation = plane.propagation(operator, key, revisionOf("revision", unescaped(rest[1])))
-                    json(
-                        factory.objectNode().put(
-                            "revision",
-                            propagation.revision
-                        ).put("installed", propagation.installed).put("recent", propagation.recent)
-                    )
-                }
-
-                else -> notFound()
-            }
-        }
-
-    private suspend fun changes(operator: Operator, request: ControlHttpRequest, segments: List<String>): ControlHttpResponse {
-        if (segments.isEmpty()) {
-            return post(request) {
-                val key = documentKey(it.text("document"))
-                val operations = it.array("operations").map { op ->
-                    decoded("operations") { ChangeRequestCodec.operation(key, op) }
-                }
-                // A change's kind is its entry point's, never the request's (review K1): break-glass is /break-glass.
-                requireRequest(
-                    !it.has("kind")
-                ) { "a change has no kind: propose it here, or request break-glass at /break-glass" }
-                changeResponse(
-                    plane.propose(
-                        operator,
-                        key,
-                        it.long("base"),
-                        operations,
-                        it.optText("note").orEmpty(),
-                        confirmations(it),
-                    ),
-                    CREATED
-                )
-            }
-        }
-        if (segments.size != 1) return notFound()
-        val (idText, verb) = verbOf(segments[0])
-        val id = changeIdOf(idText)
-        if (verb == null) {
-            return get(request) { changeResponse(plane.get(operator, id), OK) }
-        }
-        return post(request) {
-            val change = when (verb) {
-                "rebase" -> plane.rebase(operator, id)
-                "shadow" -> plane.startShadow(operator, id)
-                "skip-shadow" -> plane.skipShadow(operator, id, it.text("reason"))
-                "approve" -> plane.approve(operator, id, it.text("candidate"))
-                "reject" -> plane.reject(operator, id, it.text("reason"))
-                "abandon" -> plane.abandon(operator, id)
-                "publish" -> plane.publish(operator, id, it.get("ack")?.let(::ack))
-                else -> return@post notFound()
-            }
-            changeResponse(change, OK)
-        }
-    }
-
-    private suspend fun breakGlass(operator: Operator, request: ControlHttpRequest, segments: List<String>): ControlHttpResponse = when {
-        segments.isEmpty() -> post(request) {
-            val change = plane.breakGlass.request(
-                operator,
-                it.text("principal").let { p -> field("principal", "a principal id") { PrincipalId(p) } },
-                instantOf("expiresAt", it.text("expiresAt")),
-                it.text("reason"),
-                it.optText("policy")?.let { p -> field("policy", "a policy id") { PolicyId(p) } }
-                    ?: me.ahoo.cosec.engine.BuiltinPolicies.ROOT,
-            )
-            changeResponse(change, CREATED)
-        }
-
-        segments.size == 1 && request.method == DELETE -> {
-            val reason = request.query["reason"] ?: throw InvalidControlRequestException("Revoking break-glass needs a reason.")
-            val binding = field("binding", "a binding id") { BindingId(unescaped(segments[0])) }
-            val change = plane.breakGlass.revoke(operator, binding, reason)
-            // An emergency revoke that did not take effect never answers as one that did (R4-1), whoever removed it.
-            if (plane.breakGlass.grants(binding)) {
-                throw ChangeRejectedException(
-                    CONFLICT,
-                    "binding [${binding.value}] still grants: change ${change.id.value} is ${change.state}"
-                )
-            }
-            changeResponse(change, OK)
-        }
-
-        segments.size == 1 && verbOf(segments[0]).second == "approve" -> post(request) {
-            changeResponse(
-                plane.approve(operator, changeIdOf(verbOf(segments[0]).first), it.text("candidate")),
-                OK
-            )
-        }
-
-        else -> notFound()
-    }
-
-    private inline fun post(request: ControlHttpRequest, block: (JsonNode) -> ControlHttpResponse): ControlHttpResponse {
-        if (request.method != POST) return methodNotAllowed()
-        val body = request.body?.takeIf { it.isNotEmpty() }?.let { bytes ->
-            try {
-                reader.readTree(bytes)
-            } catch (e: JacksonException) {
-                // Not the parser's message: it is not one of the control plane's own (RC1-39).
-                throw InvalidControlRequestException("The request body is not JSON, or holds a key twice.", e)
-            }
-        } ?: factory.objectNode()
-        requireRequest(body.isObject) { "The request body is a JSON object." }
-        requireRequest(wellFormed(body)) { UNPAIRED_SURROGATE }
-        return block(body)
-    }
-
-    private inline fun get(request: ControlHttpRequest, block: () -> ControlHttpResponse): ControlHttpResponse =
-        if (request.method == GET) block() else methodNotAllowed()
-
-    private fun changeResponse(change: ChangeRequest, status: Int) =
-        ControlHttpResponse(status, JSON, ChangeRequestCodec.encodeShown(change))
-
-    private fun document(document: me.ahoo.cosec.document.PolicyDocument) = ControlHttpResponse(
-        OK,
-        JSON,
-        PolicyDocumentCodec.encode(document)
-    )
-
-    private fun json(node: JsonNode, status: Int = OK) = ControlHttpResponse(
-        status,
-        JSON,
-        CoSecJson.mapper.writeValueAsBytes(node)
-    )
-
-    private fun notFound(): ControlHttpResponse = throw ChangeRejectedException(NOT_FOUND, "no such route")
-
-    private fun methodNotAllowed(): ControlHttpResponse = throw InvalidControlRequestException(
-        "This route does not take that method."
-    )
-
-    /**
-     * A path segment and its custom verb (`c1:publish`, `tenant:acme:apply`): the verb follows the last `:` that is not
-     * part of a document key, whose `app:` or `tenant:` prefix has one of its own.
-     */
-    private fun verbOf(segment: String): Pair<String, String?> {
-        val keyed = segment.startsWith("app:") || segment.startsWith("tenant:")
-        val separator = segment.indexOf(':', if (keyed) segment.indexOf(':') + 1 else 0)
-        return if (separator < 0) segment to null else segment.substring(0, separator) to segment.substring(separator + 1)
-    }
-
-    private fun ControlHttpRequest.revision(name: String): Long =
-        query[name]?.let { revisionOf(name, it) } ?: throw InvalidControlRequestException("[$name] is a revision number.")
-
     /** The problems of the control API: RFC 0006's where it has one, the control API's own statuses otherwise. */
     private enum class Problem(val slug: String, val title: String, val status: Int, val detailed: Boolean) {
         INVALID_REQUEST(ProblemType.INVALID_REQUEST, detailed = true),
@@ -468,22 +174,8 @@ class ControlHttp(private val plane: ControlPlane) {
 
     @InternalCoSecApi
     companion object {
-        private const val UNPAIRED_SURROGATE = "The request holds a string with an unpaired UTF-16 surrogate, which " +
-            "no id may hold (IDN-10)."
-
         const val JSON: String = "application/json"
         const val PROBLEM_JSON: String = "application/problem+json"
-        private const val GET = "GET"
-        private const val POST = "POST"
-        private const val DELETE = "DELETE"
-        private const val OK = 200
-        private const val CREATED = 201
-        private const val NOT_FOUND = 404
-        private const val CONFLICT = 409
         private const val ANONYMOUS_REQUEST = "-"
-
-        /** The routes of one segment, whose verb is the whole path. */
-        private val LEAVES = setOf("simulate", "explain", "analyze")
-        private val factory = JsonNodeFactory.instance
     }
 }
