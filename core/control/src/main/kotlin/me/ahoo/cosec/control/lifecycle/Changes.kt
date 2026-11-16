@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.change
+package me.ahoo.cosec.control.lifecycle
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.NonCancellable
@@ -29,6 +29,22 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.TenantIsolation
+import me.ahoo.cosec.control.change.ApplyMode
+import me.ahoo.cosec.control.change.Approval
+import me.ahoo.cosec.control.change.Base
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.Confirmation
+import me.ahoo.cosec.control.change.Finding
+import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.change.Propagation
+import me.ahoo.cosec.control.change.ShadowAck
+import me.ahoo.cosec.control.change.ShadowState
+import me.ahoo.cosec.control.change.StageSlot
+import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.PublishOutcome
@@ -93,7 +109,7 @@ class Changes(
 
     private val context = ChangeContext(store, revisions)
 
-    /** This instance has reconciled the app list ([me.ahoo.cosec.control.store.ControlMaintenance.reconcileApps]). */
+    /** This instance has reconciled the app list ([me.ahoo.cosec.control.lifecycle.ControlMaintenance.reconcileApps]). */
     internal fun appListReconciled() = context.reconciled()
 
     private val movedHeads = MovedHeads(store, authority, context, clock)
@@ -188,7 +204,7 @@ class Changes(
         note: String
     ): ChangeRequest {
         val head = revisions.head(key)
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         requireRequest(desired.kind == kind && desired.owner == owner) {
             "The desired document is not a document of [$key]."
         }

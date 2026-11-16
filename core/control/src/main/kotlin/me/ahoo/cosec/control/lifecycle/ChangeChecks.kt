@@ -13,11 +13,14 @@
 
 @file:OptIn(me.ahoo.cosec.annotations.InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.change
+package me.ahoo.cosec.control.lifecycle
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.Finding
+import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Versioned

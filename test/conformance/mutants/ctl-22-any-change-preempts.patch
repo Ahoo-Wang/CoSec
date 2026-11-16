@@ -2,11 +2,11 @@
 # Mutant: any change staged by a holder of cosec:skip-shadow takes a busy slot, a widening one included
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-index eed12d74..61cdcd49 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-@@ -138,13 +138,7 @@ internal class Preemption(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
+index 0ad107c9..a5d1257a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
+@@ -196,13 +196,7 @@ internal class Preemption(
              return false
          }
          val candidate = Operations.apply(change.key, head?.document, change.operations).candidate ?: return false

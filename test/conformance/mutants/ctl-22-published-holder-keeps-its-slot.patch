@@ -2,11 +2,11 @@
 # Mutant: a PUBLISHED change whose slot release failed is refused when it is published again (409), so its slot stays held
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RetriedPublishTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 6be8bc1f..affaac67 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -535,12 +535,6 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+index 87eb42e6..8b325eae 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+@@ -551,12 +551,6 @@ class Changes(
      ): ChangeRequest {
          val change = visible(publisher, id)
          authority.require(publisher, change.key, PublishRules.publishing(change))

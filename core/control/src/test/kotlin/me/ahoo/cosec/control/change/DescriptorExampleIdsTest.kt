@@ -16,6 +16,7 @@
 package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.lifecycle.ChangeChecks
 import me.ahoo.cosec.document.format.AnyOf
 import me.ahoo.cosec.document.format.ArrayType
 import me.ahoo.cosec.document.format.DocumentFormats

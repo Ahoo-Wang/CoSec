@@ -13,13 +13,20 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.change
+package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.authz.ControlActions
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.Finding
+import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.change.ShadowAck
+import me.ahoo.cosec.control.change.ShadowSummary
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome

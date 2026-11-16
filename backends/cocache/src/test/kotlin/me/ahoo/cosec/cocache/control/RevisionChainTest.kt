@@ -167,14 +167,14 @@ class RevisionChainTest {
         val (firstNode, first) = instance()
         val (secondNode, second) = instance()
         val ids = java.util.concurrent.atomic.AtomicInteger()
-        fun changes(node: SnapshotNode, revisions: Revisions) = me.ahoo.cosec.control.change.Changes(
+        fun changes(node: SnapshotNode, revisions: Revisions) = me.ahoo.cosec.control.lifecycle.Changes(
             stores.getValue(node),
             revisions,
             { me.ahoo.cosec.control.change.ChangeId("rc${ids.incrementAndGet()}") },
             // The change flow across instances, not authorization: every action is permitted.
             { _, _, _ -> me.ahoo.cosec.control.authz.ControlDecision.PERMIT },
-            options = me.ahoo.cosec.control.change.ChangeOptions(
-                shadow = me.ahoo.cosec.control.change.ShadowOptions(
+            options = me.ahoo.cosec.control.lifecycle.ChangeOptions(
+                shadow = me.ahoo.cosec.control.lifecycle.ShadowOptions(
                     java.time.Duration.ZERO,
                     0,
                     java.time.Duration.ZERO

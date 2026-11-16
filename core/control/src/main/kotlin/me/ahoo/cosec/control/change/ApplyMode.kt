@@ -18,7 +18,7 @@ package me.ahoo.cosec.control.change
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
-/** How [Changes.apply] treats what the desired document leaves out (RFC 0007 §6.7). */
+/** How [me.ahoo.cosec.control.lifecycle.Changes.apply] treats what the desired document leaves out (RFC 0007 §6.7). */
 @InternalCoSecApi
 enum class ApplyMode {
     /** Adds and changes only: entries and sections the desired document does not mention stay. */

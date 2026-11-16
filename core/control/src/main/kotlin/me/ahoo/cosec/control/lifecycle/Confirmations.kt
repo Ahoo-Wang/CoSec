@@ -13,10 +13,14 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.change
+package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.Confirmation
+import me.ahoo.cosec.control.change.Finding
+import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument

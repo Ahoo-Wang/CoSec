@@ -16,7 +16,7 @@
 package me.ahoo.cosec.control
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.change.EntryDigest
+import me.ahoo.cosec.control.lifecycle.EntryDigest
 import me.ahoo.cosec.engine.ResourceSource
 import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Effect

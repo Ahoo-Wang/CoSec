@@ -18,6 +18,8 @@ package me.ahoo.cosec.control.change
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.lifecycle.EntryDigest
+import me.ahoo.cosec.control.lifecycle.StatementDigest
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.engine.OnMissing

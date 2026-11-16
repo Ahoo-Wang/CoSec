@@ -21,8 +21,8 @@ import me.ahoo.cosec.model.PolicyId
 
 /**
  * A confirmation an author gives with a change (RFC 0007 §9.5): that statement [statement] of [policy], whose content
- * has [digest] ([StatementDigest]), may do what [kind] says. Only `deny-nomatch` exists: a DENY with
- * `onMissing: nomatch`, which lapses while its attributes cannot be fetched.
+ * has [digest] ([me.ahoo.cosec.control.lifecycle.StatementDigest]), may do what [kind] says. Only `deny-nomatch`
+ * exists: a DENY with `onMissing: nomatch`, which lapses while its attributes cannot be fetched.
  */
 class Confirmation(val policy: PolicyId, val statement: Int, val digest: String, val kind: String = DENY_NOMATCH) {
     init {

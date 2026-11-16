@@ -22,8 +22,8 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDefinition
