@@ -360,6 +360,9 @@ app 的状态；以及 `repair-references` 读到的 `<s>:control:list:documents
 回滚和其他变更一样：按内容需要经过检查、影子窗口和审批，发布后产生一个新修订，所以历史只增不减，并记录了谁做的回滚。
 会把 break-glass 绑定带回来的回滚永远无法通过检查。
 
+每个修订都记着它的父修订及其摘要，它的记录按自己的摘要保存，所以历史是一条从头向下的链。Redis 故障切换丢失的写入会留下一个没有记录的父修订：
+[`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) 沿链检查，只读不写，并指出每一份断链的文档。
+
 每个控制面实例在运行期间执行两个维护任务，每个都在一个间隔之后第一次运行：
 
 - **回收修订**，每隔 [`cosec.control.revisions.reclaim-interval`](./configuration.md#control-plane)（1 小时）。对每个

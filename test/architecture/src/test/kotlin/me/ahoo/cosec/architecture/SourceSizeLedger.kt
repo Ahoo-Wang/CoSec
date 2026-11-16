@@ -49,8 +49,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt",
-            // +3 (B4 2b): imports of the change values, which were the file's own package before it moved to lifecycle.
-            555,
+            499,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
