@@ -100,18 +100,22 @@ class SnapshotSlotModelPropertyTest {
         }
     }
 
-    /** Leaves events out, one at a time from the end, while the run still fails with the same kind of violation. */
+    /**
+     * Leaves events out, one at a time from the end, while the run still fails with the same kind of violation; again
+     * until a whole pass leaves nothing out.
+     */
     private fun shrink(script: SlotModelScript, shape: String): SlotModelScript {
-        var current = script
-        val failedAt = SlotModelRun(current).run().log.size
-        current = current.copy(events = current.events.take(maxOf(0, failedAt - 1)))
-        var index = current.events.lastIndex
-        while (index >= 0) {
-            val candidate = current.copy(events = current.events.filterIndexed { i, _ -> i != index })
-            val failure = SlotModelRun(candidate).run().failure
-            if (failure != null && shapeOf(failure) == shape) current = candidate
-            index--
-        }
+        val failedAt = SlotModelRun(script).run().log.size
+        var current = script.copy(events = script.events.take(maxOf(0, failedAt - 1)))
+        do {
+            val before = current.events.size
+            for (index in current.events.indices.reversed()) {
+                if (index > current.events.lastIndex) continue
+                val candidate = current.copy(events = current.events.filterIndexed { i, _ -> i != index })
+                val failure = SlotModelRun(candidate).run().failure
+                if (failure != null && shapeOf(failure) == shape) current = candidate
+            }
+        } while (current.events.size < before)
         return current
     }
 
