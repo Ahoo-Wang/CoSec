@@ -264,6 +264,10 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
                     "published ${runner.installed}, but the state holds ${runner.state.installed}"
                 )
             }
+            val reading = runner.state.load?.takeIf { it.phase == LoadPhase.Reading }
+            if (reading != null && threads.nanos - reading.startedNanos > storeReadTimeout.toNanos()) {
+                fail("load ${reading.id} still reads after the store read timeout")
+            }
             val live = store.pending.count { loadOfRead[it]?.let { (r, id) -> r === runner && r.state.load?.id == id } == true }
             if (live > 1) fail("$live live reads of one key")
         }
