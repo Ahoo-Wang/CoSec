@@ -204,13 +204,25 @@ class MigrationRecoveryTest {
     )
 
     @Test
-    fun `a tenant id with a slash is planned under an encoded file name`() {
-        val plan = plan("acme/eu")
-        plan.keys.assert().containsExactly(SnapshotKey.Tenant("acme/eu"))
+    fun `a tenant id the file name encodes is planned under an encoded file name`() {
+        val plan = plan("acme%eu")
+        plan.keys.assert().containsExactly(SnapshotKey.Tenant("acme%eu"))
         val files = PartitionPlan.write(plan, temp.resolve("plan"))
-        files.map { it.fileName.toString() }.assert().containsExactly("tenant-acme%2Feu.json")
-        val decoded = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme/eu", Files.readAllBytes(files.single()))
+        files.map { it.fileName.toString() }.assert().containsExactly("tenant-acme%25eu.json")
+        val decoded = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme%eu", Files.readAllBytes(files.single()))
         decoded.policies.single().id.value.assert().isEqualTo("c")
+    }
+
+    /** #1403: no tenant id holds `/`, so such a tenant is not planned: its conversion is refused, at the id. */
+    @Test
+    fun `a tenant id with a slash is refused, not planned`() {
+        plan("acme/eu").assert().isEmpty()
+        val report = Converter().convert(
+            source(listOf("c" to policy("c", tenantId = "acme/eu"))),
+            ConvertOptions(Partition.BY_OWNER, publishedAt = now)
+        ).report
+        report.accepted.assert().isFalse()
+        report.rejections.single().kind.assert().isEqualTo(RejectionKind.SLASH_IN_ID)
     }
 
     @Test
@@ -234,15 +246,29 @@ class MigrationRecoveryTest {
     @Test
     fun `partition plan on the command line names each tenant it planned`() {
         val export = Files.createDirectories(temp.resolve("export"))
-        Files.writeString(export.resolve(ExportDirectory.POLICIES_FILE), "[${policy("c", tenantId = "acme/eu")}]")
+        Files.writeString(export.resolve(ExportDirectory.POLICIES_FILE), "[${policy("c", tenantId = "acme%eu")}]")
         Files.writeString(export.resolve(ExportDirectory.GLOBAL_POLICIES_FILE), "[]")
         Files.writeString(export.resolve(ExportDirectory.APP_ROLE_PERMISSIONS_FILE), "[]")
         val out = temp.resolve("plan")
 
         val (code, output) = run("partition", "plan", "--from-files", export.toString(), "--out", out.toString())
         code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
-        output.assert().contains("acme/eu").contains("tenant-acme%2Feu.json")
-        Files.isRegularFile(out.resolve("tenant-acme%2Feu.json")).assert().isTrue()
+        output.assert().contains("acme%eu").contains("tenant-acme%25eu.json")
+        Files.isRegularFile(out.resolve("tenant-acme%25eu.json")).assert().isTrue()
+    }
+
+    @Test
+    fun `partition plan on the command line refuses a tenant id with a slash and writes nothing`() {
+        val export = Files.createDirectories(temp.resolve("export"))
+        Files.writeString(export.resolve(ExportDirectory.POLICIES_FILE), "[${policy("c", tenantId = "acme/eu")}]")
+        Files.writeString(export.resolve(ExportDirectory.GLOBAL_POLICIES_FILE), "[]")
+        Files.writeString(export.resolve(ExportDirectory.APP_ROLE_PERMISSIONS_FILE), "[]")
+        val out = temp.resolve("plan")
+
+        val (code, output) = run("partition", "plan", "--from-files", export.toString(), "--out", out.toString())
+        code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().contains("SLASH_IN_ID").contains("acme/eu").contains("holds no `/`")
+        Files.exists(out).assert().isFalse()
     }
 
     // ---- #1264 ----

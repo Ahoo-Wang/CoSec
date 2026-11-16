@@ -50,6 +50,7 @@ import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
@@ -62,7 +63,8 @@ private val log = KotlinLogging.logger {}
  * with no keys, policies, snapshot or Redis of its own. The gateway strips any such header a client sends.
  *
  * - no header: the request proceeds as anonymous, and the service's own code decides;
- * - a header that cannot be read, is larger than [maxBytes] or arrives more than once: 400 `invalid-request`;
+ * - a header that cannot be read, is larger than [maxBytes] or arrives more than once, or an identity whose tenant can
+ *   be no tenant id, such as one with `/` (#1403), which no gateway forwards: 400 `invalid-request`;
  * - a version this service does not read, or an identity from the future: 401 `token-invalid`;
  * - a credential past its expiry, or an identity older than [maxAge] (with [skew]), which limits replaying a captured
  *   header inside the network: 401 `token-expired`;
@@ -142,6 +144,15 @@ class IdentityGate(
         }
         if (identity.issuedAt.isAfter(now.plus(skew))) {
             return reject(requestId, ProblemType.TOKEN_INVALID, "the identity is from ${identity.issuedAt}", traceId)
+        }
+        if (!SnapshotKey.Tenant.isValidTenantId(identity.tenant)) {
+            // The gateway refuses a token of such a tenant (`SCP-13`), so this one was not forwarded by it.
+            return reject(
+                requestId,
+                ProblemType.INVALID_REQUEST,
+                "the identity's tenant cannot be a tenant id",
+                traceId
+            )
         }
         val security = security(identity, requestId, facts, parameters)
             ?: return reject(requestId, ProblemType.INVALID_REQUEST, "the identity's scope does not resolve here", traceId)

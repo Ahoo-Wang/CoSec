@@ -23,17 +23,16 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.KeyEncoder
-import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
-import me.ahoo.cosec.cocache.snapshot.RawCodec
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.RedisTarget
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
+import me.ahoo.cosec.cocache.snapshot.rawStore
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
@@ -642,17 +641,6 @@ class CoCacheControlStoreTest {
 
     private companion object {
         const val OPEN_CHANGES = 25
-
-        /** A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would. */
-        fun <K : Any> rawStore(name: String, keyPrefix: String, cacheName: String, keyEncoder: KeyEncoder<K>) =
-            CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->
-                StoreSpec.builder<K, ByteArray>(name)
-                    .keyPrefix(layout.keyPrefix)
-                    .namespace(layout.namespace)
-                    .keyEncoder(keyEncoder)
-                    .codec(RawCodec)
-                    .build()
-            }
 
         val BOOTSTRAP = Publication(
             "bootstrap",

@@ -123,12 +123,13 @@ class ControlEncodedPathTest {
             "tenant:acme%2520west" to SnapshotKey.Tenant("acme%20west"),
             "tenant%3Aacme" to SnapshotKey.Tenant("acme"),
             "app%3Aorder" to SnapshotKey.App("order"),
-            "tenant:acme%2Fwest" to SnapshotKey.Tenant("acme/west"),
         )
         stacks.forEach { (stack, call) ->
             expected.forEach { (parameter, key) ->
                 readOn(call, parameter).assert().describedAs("$stack $parameter").isEqualTo(200 to key)
             }
+            // Decoded once, an encoded `/` is part of the id, which no tenant id may hold (#1403): refused, unread.
+            readOn(call, "tenant:acme%2Fwest").assert().describedAs("$stack acme%2Fwest").isEqualTo(400 to null)
         }
     }
 

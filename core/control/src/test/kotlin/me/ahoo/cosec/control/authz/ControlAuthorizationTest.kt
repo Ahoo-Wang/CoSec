@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
+import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.store.ControlStore
@@ -442,10 +443,10 @@ class ControlAuthorizationTest {
         ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId.DEFAULT)).id.assert().isEqualTo("*/*/(default)")
         // RC1-37: `-` is a space like any other, so a right on it is not one on the default space.
         ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId("-"))).id.assert().isEqualTo("*/*/-")
-        org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
-            ControlResources.document(
-                SnapshotKey.Tenant("a/b")
-            )
+        // No tenant or app id holds `/` (#1403); a space id still can, and is refused as more than one segment.
+        org.junit.jupiter.api.assertThrows<IllegalArgumentException> { SnapshotKey.Tenant("a/b") }
+        org.junit.jupiter.api.assertThrows<InvalidControlRequestException> {
+            ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId("a/b")))
         }
     }
 

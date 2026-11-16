@@ -209,15 +209,19 @@ class DocumentSnapshotViewsTest {
     @Test
     fun `a tenant id that cannot name a document is unresolved`() {
         publish(SnapshotKey.Platform, allowRead)
+        publish(SnapshotKey.Tenant("acme"), allowRead)
         source().use { source ->
             val views = DocumentSnapshotViews(source)
-            val scope = scope("a:b")
-            val view = views.load(ViewKey.of(scope, blocked = false)).join()
-            view.tenant.assert().isNull()
-            (view.unresolved.single() as Cause.SourceUnavailable).error.assert().isInstanceOf(
-                IllegalArgumentException::class.java
-            )
-            views.peek(ViewKey.of(scope, blocked = false))!!.unresolved.assert().hasSize(1)
+            // `acme/west` (#1403, `SCP-13`): an authenticator that answers such a tenant fails closed, never read as acme.
+            for (tenant in listOf("a:b", "acme/west")) {
+                val scope = scope(tenant)
+                val view = views.load(ViewKey.of(scope, blocked = false)).join()
+                view.tenant.assert().isNull()
+                val cause = view.unresolved.single() as Cause.SourceUnavailable
+                cause.document.assert().isEqualTo(DocumentKind.TENANT)
+                cause.error.assert().isInstanceOf(IllegalArgumentException::class.java)
+                views.peek(ViewKey.of(scope, blocked = false))!!.unresolved.assert().hasSize(1)
+            }
         }
     }
 
