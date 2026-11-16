@@ -358,7 +358,11 @@ object ControlResources {
         is SnapshotKey.Tenant -> "tenant/${segment(key.tenantId)}"
     }
 
-    /** An owner or scope part that would add a segment could make one document's resource look like another's. */
+    /**
+     * An owner or scope part that would add a segment could make one document's resource look like another's. A valid
+     * tenant or app id holds no `/` (#1403, `ScopeResolver.isValidAppId`), so for an owner this is a second line that a
+     * valid id never reaches; space ids, which may hold one, still meet it first.
+     */
     private fun segment(value: String): String {
         requireRequest(value.isNotEmpty() && '/' !in value) { "[$value] is not one resource segment." }
         return value
