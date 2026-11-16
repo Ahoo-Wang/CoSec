@@ -58,12 +58,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import java.time.Instant
-import java.util.concurrent.atomic.AtomicReference
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
-import kotlin.time.TimeMark
-import kotlin.time.TimeSource
 
 /**
  * Who may do what to a change (RFC 0007 §7.2–§7.5), for [Changes]. Every step is checked in order, and anything but a
@@ -765,15 +762,5 @@ class ChangeAuthority(
 
         /** How often the WARN that the app list is not to be trusted may be logged (RC1-4). */
         val UNTRUSTED_WARN_INTERVAL: Duration = 1.minutes
-    }
-}
-
-/** Says yes at most once per [interval] of [timeSource], first at once; safe across threads. */
-internal class Throttle(private val interval: Duration, private val timeSource: TimeSource = TimeSource.Monotonic) {
-    private val last = AtomicReference<TimeMark?>(null)
-
-    fun ready(): Boolean {
-        val mark = last.get()
-        return (mark == null || mark.elapsedNow() >= interval) && last.compareAndSet(mark, timeSource.markNow())
     }
 }
