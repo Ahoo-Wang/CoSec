@@ -21,6 +21,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.identity.IdentityCodec
@@ -45,6 +46,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
@@ -66,6 +68,8 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.cosec.webmvc.PipelineServletFilter
@@ -227,6 +231,14 @@ class WebAdapterParityTest {
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(peek(key))
     }
 
+    private val slashTenantTokens = TokenAuthenticator(
+        object : TokenVerifier {
+            override fun verify(accessToken: String) = VerifiedToken("jti", "alice", "acme/west", null)
+
+            override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
+        }
+    )
+
     private val authenticator = Authenticator { credentials ->
         val token = credentials.token?.removePrefix("Bearer ") ?: return@Authenticator AuthnResult.Anonymous
         when (token) {
@@ -235,6 +247,8 @@ class WebAdapterParityTest {
             "revoked" -> AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED)
             "down" -> AuthnResult.Unavailable(IllegalStateException("The key store is down"))
             "slow" -> awaitCancellation()
+            // A verifier's token of a tenant no tenant id can be (#1403), through the real token authenticator.
+            "acme-west" -> slashTenantTokens.authenticate(credentials)
             else -> {
                 val (who, rest) = token.split('@', limit = 2)
                 val (tenant, roles) = rest.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
@@ -440,6 +454,13 @@ class WebAdapterParityTest {
                 type = "token-invalid"
             ),
             Scenario(
+                "a token whose tenant can be no tenant id is 401",
+                path = "/orders/1",
+                headers = token("acme-west"),
+                status = 401,
+                type = "token-invalid"
+            ),
+            Scenario(
                 "a revoked token is 401",
                 path = "/orders/1",
                 headers = token("revoked"),
@@ -588,6 +609,14 @@ class WebAdapterParityTest {
                 "an unreadable identity is a 400",
                 path = "/orders",
                 headers = header("not base64!"),
+                pipeline = "identity",
+                status = 400,
+                type = "invalid-request"
+            ),
+            Scenario(
+                "an identity whose tenant can be no tenant id is a 400",
+                path = "/orders",
+                headers = header(IdentityCodec.encode(identity.copy(tenant = "acme/west"))),
                 pipeline = "identity",
                 status = 400,
                 type = "invalid-request"
