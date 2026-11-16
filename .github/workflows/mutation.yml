@@ -83,6 +83,12 @@ jobs:
       - name: Set up Java and Gradle
         uses: ./.github/actions/setup-java-gradle
 
+      # Each mutant builds in a worktree of its own: with the dependencies and the unchanged modules already built, a
+      # mutant rebuilds only what it changes, and 36 shards do not all ask Maven Central for everything at once (it
+      # answers 429 to that).
+      - name: Warm the dependency and build caches
+        run: ./gradlew testClasses --no-daemon --build-cache --stacktrace
+
       # mutationCheck prints one `<RESULT> <mutant> (<rules>)` line per mutant at its end, and exits 1 when any is not
       # KILLED.
       - name: Check ${{ matrix.count }} mutants
@@ -99,7 +105,7 @@ jobs:
           {
             echo "### Mutation shard \`$SHARD\`"
             if grep -qE '^(All [0-9]+ mutants killed|[0-9]+ of [0-9]+ mutant)' mutation.log 2>/dev/null; then
-              if grep -E '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY) ' mutation.log; then
+              if grep -E '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|BUILD_FAILED) ' mutation.log; then
                 echo
                 echo "The mutants above are not killed."
               else
@@ -110,7 +116,7 @@ jobs:
               echo
               echo "$MUTANTS" | tr ',' '\n' | sed 's/^/- NOT_CHECKED /'
             fi
-          } | sed -E 's/^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY) +/- \1: /' >> "$GITHUB_STEP_SUMMARY"
+          } | sed -E 's/^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY|BUILD_FAILED) +/- \1: /' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the log
         if: failure()

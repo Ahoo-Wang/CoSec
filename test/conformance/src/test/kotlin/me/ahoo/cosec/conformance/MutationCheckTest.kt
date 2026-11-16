@@ -67,6 +67,24 @@ class MutationCheckTest {
         stranded.map { it.name }.assert().describedAs("mutants that no longer apply").isEmpty()
     }
 
+    /**
+     * A build that fails for a reason of its own (a dependency that Maven Central refused with a 429 while many jobs
+     * resolved at once) is neither a mutant that does not compile nor one that survived: the first full run on CI
+     * reported such failures as `DOES_NOT_COMPILE` and `SURVIVED`.
+     */
+    @Test
+    fun `a failed build is told from a compile error, a kill and a survivor`() {
+        val ok = Build(0, "")
+        val compileError = Build(1, "e: file:///w/Engine.kt:12:5 Unresolved reference 'x'\nBUILD FAILED")
+        val network = Build(1, "Could not GET 'https://repo.maven.apache.org/x.pom'. Received status code 429")
+        verdict(compileError, null, 0).assert().isEqualTo(MutantResult.DOES_NOT_COMPILE)
+        verdict(network, null, 0).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        verdict(ok, Build(1, "1 test failed"), 2).assert().isEqualTo(MutantResult.KILLED)
+        verdict(ok, ok, 0).assert().isEqualTo(MutantResult.SURVIVED)
+        verdict(ok, network, 0).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        Build(1, "src/A.java:3: error: cannot find symbol").hasCompilerErrors.assert().isTrue()
+    }
+
     @Test
     fun `the header is read before the diff`() {
         val patch = Files.writeString(
