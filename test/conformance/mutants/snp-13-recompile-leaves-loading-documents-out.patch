@@ -1,0 +1,17 @@
+# Rule: SNP-13
+# Mutant: recompile leaves out a document that was loading, so its future can complete before that document is compiled with the new inputs
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+index 4c89f02a..08d18317 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
+@@ -149,7 +149,7 @@ internal class Slot<T : Any>(
+         }
+         if (inFlight != null) {
+             dirty = true
+-            return true
++            return false
+         }
+         val known = installed ?: return false
+         known.origin.compiled

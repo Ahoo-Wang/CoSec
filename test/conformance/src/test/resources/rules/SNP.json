@@ -167,6 +167,17 @@
         "document:ShadowCodecTest#a candidate record that states its header beside its document is refused",
         "runtime:CandidateRecordShapeTest#a candidate record in the shape of 8_0_0-alpha_4 is not compared, and the request is answered as without it"
       ]
+    },
+    {
+      "id": "SNP-13",
+      "source": "RFC 0003 §4.4 (the future of a maintenance call)",
+      "statement": "The future of `revalidate` or `recompile` completes only after, for every document it covers, a load that started after the call: `revalidate` covers every document installed at the call, `recompile` every app and tenant document idle or loading at the call. A load already in flight at the call, which may have read or compiled before it, is followed by another, and the future waits for that one.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:SnapshotRevalidationTest#revalidationAnswersWithAReadThatStartedAfterTheCall",
+        "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs"
+      ]
     }
   ]
 }
