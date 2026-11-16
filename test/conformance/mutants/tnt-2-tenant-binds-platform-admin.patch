@@ -2,11 +2,11 @@
 # Mutant: a tenant document binds cosec:platform-admin, so its principals approve and move the boundary of their own document
 # Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test
 
-diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
-index 04c026a1..a0757088 100644
---- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
-+++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt
-@@ -269,7 +269,7 @@ class PolicyDocumentCompiler(
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
+index 9e180c91..83c4ef0b 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
+@@ -115,7 +115,7 @@ internal class DocumentChecks(
                      "[$it] is reserved: space ids beginning with [${ScopeResolver.RESERVED_SPACE_PREFIX}] are CoSec's"
                  )
              }

@@ -98,11 +98,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B3),
         ),
         Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt",
-            466,
-            Disposition.Debt(Batch.B5),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt",
             454,
             Disposition.Debt(Batch.B4),
