@@ -33,21 +33,6 @@ import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
 
-/** A control API request (RFC 0007 §10.2), as an adapter reads it: [path] is relative to `cosec.control.http.base-path`. */
-@InternalCoSecApi
-class ControlHttpRequest(
-    val method: String,
-    val path: String,
-    val query: Map<String, String> = emptyMap(),
-    val body: ByteArray? = null,
-)
-
-/** What an adapter writes back: [status], `Content-Type` [contentType] and [body]. */
-@InternalCoSecApi
-class ControlHttpResponse(val status: Int, val contentType: String, val body: ByteArray) {
-    override fun toString(): String = "ControlHttpResponse($status, ${body.decodeToString()})"
-}
-
 /**
  * The control plane's HTTP API (RFC 0007 §10.2), without a web framework: the starter registers it as functional
  * routes on the host (WebFlux or WebMvc, RFC 0008 S1), behind the host pipeline. Every route takes the
@@ -82,8 +67,6 @@ class ControlHttpResponse(val status: Int, val contentType: String, val body: By
  * binding there is not a break-glass binding, or still grants after the revoke, naming the state of the caller's change
  * (`BRK-11`).
  */
-// B4: the HTTP layer becomes a route table with one handler per route
-@Suppress("TooManyFunctions")
 @InternalCoSecApi
 class ControlHttp(plane: ControlPlane) {
     private val routes = ControlRoutes(plane)
