@@ -51,26 +51,14 @@ class SnapshotSlotModelPropertyTest {
             val run = SlotModelRun(SlotModelScript.generate(seed, EVENTS)).run()
             run.failure?.let { throw AssertionError(report(seed, it)) }
             run.reached.forEach { reached.merge(it, 1, Int::plus) }
-            with(run.counts) {
-                totals.installs += installs
-                totals.failures += failures
-                totals.answered += answered
-                totals.readTimeouts += readTimeouts
-                totals.coldTimeouts += coldTimeouts
-                totals.evictions += evictions
-                totals.regressions += regressions
-                if (readTimeouts > 0) reached.merge("store read timed out", 1, Int::plus)
-                if (coldTimeouts > 0) reached.merge("request answered by its timeout", 1, Int::plus)
-                if (evictions > 0) reached.merge("eviction", 1, Int::plus)
-                if (regressions > 0) reached.merge("regression installed", 1, Int::plus)
-                if (failures > 0) reached.merge("compile failed", 1, Int::plus)
-            }
+            add(run.counts, totals, reached)
         }
         println(
             "Slot model: ${seeds.size} seeds; seeds reaching each kind of event: $reached; checked " +
                 "${totals.installs} installs, ${totals.answered} answered waiters, ${totals.failures} compile failures, " +
                 "${totals.readTimeouts} store read timeouts, ${totals.coldTimeouts} request timeouts, " +
-                "${totals.evictions} evictions, ${totals.regressions} regressions"
+                "${totals.evictions} evictions, ${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
+                "${totals.lostWritesChecked} lost invalidations ${totals.lostWritesByLag}"
         )
         if (only == null) {
             // A property test that rarely gets past the first load proves little: each kind of event is reached.
@@ -80,6 +68,29 @@ class SnapshotSlotModelPropertyTest {
                 ).isGreaterThan(0)
             }
         }
+    }
+
+    /** Adds one run's [counts] to [totals], and to [reached] the kinds of check it got to. */
+    private fun add(counts: SlotModel.Counts, totals: SlotModel.Counts, reached: MutableMap<String, Int>) {
+        totals.installs += counts.installs
+        totals.failures += counts.failures
+        totals.answered += counts.answered
+        totals.readTimeouts += counts.readTimeouts
+        totals.coldTimeouts += counts.coldTimeouts
+        totals.evictions += counts.evictions
+        totals.regressions += counts.regressions
+        totals.resetsChecked += counts.resetsChecked
+        totals.lostWritesChecked += counts.lostWritesChecked
+        counts.lostWritesByLag.forEach { (lag, n) -> totals.lostWritesByLag.merge(lag, n, Int::plus) }
+        mapOf(
+            "reset reloads checked" to counts.resetsChecked,
+            "lost invalidation installed by a pass" to counts.lostWritesChecked,
+            "store read timed out" to counts.readTimeouts,
+            "request answered by its timeout" to counts.coldTimeouts,
+            "eviction" to counts.evictions,
+            "regression installed" to counts.regressions,
+            "compile failed" to counts.failures,
+        ).filterValues { it > 0 }.keys.forEach { reached.merge(it, 1, Int::plus) }
     }
 
     private fun seedCount(): Int = maxOf(SEEDS, Integer.getInteger("cosec.property.iterations", 0) / 10)
@@ -132,6 +143,7 @@ class SnapshotSlotModelPropertyTest {
             "store read timed out", "request answered by its timeout", "eviction", "regression installed", "compile failed",
             "listener called in subscribe", "close mid-load", "recompile", "store regressed", "converged",
             "store read failed", "compile rejected", "abandoned read answered",
+            "reset reloads checked", "lost invalidation installed by a pass",
         )
     }
 }
