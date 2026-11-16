@@ -160,11 +160,14 @@ internal class Slot<T : Any>(
      * Marks this slot removed and drops it from the map, unless a load is in flight or, with [onlyIfEmpty], a
      * document is installed. The checks and the mark happen under this slot's lock.
      *
-     * An eviction that claimed its decrement of a kind's count ([SnapshotFamilies.evictBeyond]) names that kind in
-     * [claimedAbsent]: the removal is refused when the entry is of the other kind by now, and moves no count, since the
-     * claim did. A removal with no claim moves the count of what it removes itself (`SNP-14`).
+     * An eviction ([SnapshotFamilies.evictBeyond]) names the kind it chose the slot for in [claimedAbsent]: the removal is
+     * refused when the entry is of the other kind by now, and otherwise claims its decrement of that kind's count here,
+     * under this slot's lock, once nothing can refuse it any more. A claim is only ever taken for a removal that
+     * happens, so passes running at once never see a count lowered for a victim another pass removed. Null when the
+     * kind is at its bound: nothing was removed, and a pass stops. A removal with no kind named moves the count of
+     * what it removes itself (`SNP-14`).
      */
-    fun removeIfIdle(onlyIfEmpty: Boolean, claimedAbsent: Boolean? = null): Boolean {
+    fun removeIfIdle(onlyIfEmpty: Boolean, claimedAbsent: Boolean? = null): Boolean? {
         // The shared slot is never removed.
         val family = family() ?: return false
         synchronized(this) {
@@ -175,6 +178,9 @@ internal class Slot<T : Any>(
             }
             if (claimedAbsent != null && (entry == null || SnapshotFamilies.isAbsent(entry) != claimedAbsent)) {
                 return false
+            }
+            if (claimedAbsent != null && !family.claim(claimedAbsent)) {
+                return null
             }
             removed = true
             family.drop(family.spec.idOf(key), this)

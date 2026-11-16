@@ -42,5 +42,8 @@ internal fun SnapshotSource<*, *>.evictClaiming(key: SnapshotKey, absent: Boolea
     return families.evictOne(family, slot, absent)
 }
 
+/** Tests only: the [kind] family's slots with a load in flight. */
+internal fun SnapshotSource<*, *>.loadsInFlight(kind: SnapshotKind): Int = familyOfKind(kind).slots.values.count { !it.isIdle() }
+
 private fun SnapshotSource<*, *>.familyOfKind(kind: SnapshotKind): SnapshotFamilies.Family<*> =
     families.first { it.spec.kind == kind }

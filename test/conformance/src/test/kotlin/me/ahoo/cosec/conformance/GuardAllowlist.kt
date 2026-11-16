@@ -234,7 +234,7 @@ object GuardAllowlist {
             "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder",
             "runtime:SnapshotFamilyBoundTest#a burst with housekeeping held never holds more than the cap, and the installer evicted it in place",
             "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
-            "runtime:SnapshotFamilyBoundTest#two passes at once never take a kind below its bound",
+            "runtime:SnapshotFamilyBoundTest#passes at once take a kind exactly to its bound, never below it and never stopping above it",
             "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and the claim goes back",
         ),
     )

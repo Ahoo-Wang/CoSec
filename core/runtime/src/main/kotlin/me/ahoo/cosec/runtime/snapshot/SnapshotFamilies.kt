@@ -56,10 +56,11 @@ internal class SnapshotFamilies<A : Any>(
      * beyond [SnapshotFamily.maxEntries], and entries for documents the store does not hold beyond
      * [SnapshotFamily.maxAbsent]. Each kind evicts only its own, and a load in flight counts toward neither (`SNP-7`).
      *
-     * One scan of the family's slots picks every victim of a kind; each removal first claims its decrement of that
-     * kind's count, which never goes below the bound, and gives it back when the victim is refused (busy, removed, or
-     * of the other kind by now). So passes running at once, here and on installing threads, never take a kind below its
-     * bound between them, and a victim two passes chose is removed once (`SNP-14`).
+     * One scan of the family's slots picks every victim of a kind; each removal claims its decrement of that kind's
+     * count, which never goes below the bound, under the victim's lock and only once nothing can refuse it (busy,
+     * removed, or of the other kind by now). So passes running at once, here and on installing threads, never take a kind
+     * below its bound between them, never stop above it because of a claim another pass was about to give back, and a
+     * victim two passes chose is removed once (`SNP-14`).
      */
     fun evictBeyond(family: Family<*>, limit: Int = Int.MAX_VALUE) {
         evictBeyond(family, absent = false, limit)
@@ -80,21 +81,17 @@ internal class SnapshotFamilies<A : Any>(
     }
 
     /**
-     * Evicts [victim], an entry of the kind [absent] names when it was chosen: claims the decrement first, removes it if
-     * it is still idle and of that kind, and gives the claim back otherwise. Null when there was nothing to claim (the
-     * kind is at its bound), else whether it went.
+     * Evicts [victim], an entry of the kind [absent] names when it was chosen, if it is still idle and of that kind; its
+     * removal claims the decrement under the victim's lock ([Slot.removeIfIdle]). Null when the kind is at its bound,
+     * else whether it went.
      */
     fun evictOne(family: Family<*>, victim: Slot<*>, absent: Boolean): Boolean? {
-        if (!family.claim(absent)) {
-            return null
-        }
-        if (victim.removeIfIdle(onlyIfEmpty = false, claimedAbsent = absent)) {
+        val removed = victim.removeIfIdle(onlyIfEmpty = false, claimedAbsent = absent) ?: return null
+        if (removed) {
             lagReports.forget(victim.key)
             log.debug { "Evicted snapshot document [${victim.key}]." }
-            return true
         }
-        family.count(absent).incrementAndGet()
-        return false
+        return removed
     }
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */

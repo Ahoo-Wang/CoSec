@@ -60,8 +60,13 @@ class SnapshotFamilyBoundTest {
     private fun absentHeld() = source.entries().count { it.key is SnapshotKey.App && it.origin == EntryOrigin.ABSENT }
 
     private fun countsAreARecount() {
-        source.heldCounts(SnapshotKind.APP).assert().isEqualTo(documentsHeld() to absentHeld())
+        source.heldCounts(SnapshotKind.APP).assert().describedAs(state()).isEqualTo(documentsHeld() to absentHeld())
     }
+
+    /** What a failure must show: the counts, a recount of what is served, the loads in flight and the queued tasks. */
+    private fun state(): String =
+        "counts ${source.heldCounts(SnapshotKind.APP)}, recount ${documentsHeld() to absentHeld()}, " +
+            "loads in flight ${source.loadsInFlight(SnapshotKind.APP)}, queued ${threads.housekeeping.tasks.size}"
 
     @Test
     fun `a burst with housekeeping held never holds more than the cap, and the installer evicted it in place`() {
@@ -84,19 +89,23 @@ class SnapshotFamilyBoundTest {
     }
 
     @Test
-    fun `two passes at once never take a kind below its bound`() {
-        repeat(RACES) {
+    fun `passes at once take a kind exactly to its bound, never below it and never stopping above it`() {
+        // A pass that stopped on a claim another was about to give back left one above the bound in about 1 round in
+        // 10,000 before claims moved under the victim's lock: so many rounds, two to four passes at a time.
+        repeat(RACES) { round ->
             (0 until CAP).forEach { source.load("app-$it").join() }
             val passes = threads.housekeeping.tasks.toList().also { threads.housekeeping.tasks.clear() }
-            val barrier = CyclicBarrier(2)
-            val racers = listOf(passes.first(), passes.last()).map { pass ->
+            val count = 2 + round % 3
+            val barrier = CyclicBarrier(count)
+            val racers = List(count) { passes[it % passes.size] }.map { pass ->
                 thread {
                     barrier.await()
                     pass.run()
                 }
             }
             racers.forEach { it.join() }
-            documentsHeld().assert().isEqualTo(BOUND)
+            // Settled: compilation runs on this thread, the store answers at once, and both passes have ended.
+            documentsHeld().assert().describedAs(state()).isEqualTo(BOUND)
             countsAreARecount()
         }
     }
@@ -105,7 +114,7 @@ class SnapshotFamilyBoundTest {
     fun `a victim whose kind changed between the choice and the removal is not removed, and the claim goes back`() {
         (0 until CAP).forEach { source.load("app-$it").join() }
         // Chosen as an absent entry, it holds a document by the time it is removed.
-        source.evictClaiming(SnapshotKey.App("app-0"), absent = true).assert().isNull()
+        source.evictClaiming(SnapshotKey.App("app-0"), absent = true).assert().isEqualTo(false)
         source.evictClaiming(SnapshotKey.App("app-0"), absent = false).assert().isEqualTo(true)
         documentsHeld().assert().isEqualTo(CAP - 1)
         countsAreARecount()
@@ -120,6 +129,6 @@ class SnapshotFamilyBoundTest {
         const val BOUND = 4
         const val CAP = 2 * BOUND
         const val APPS = 40
-        const val RACES = 200
+        const val RACES = 20_000
     }
 }
