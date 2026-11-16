@@ -231,10 +231,14 @@ internal class DocumentCache(
         const val DERIVED_BINDING_BYTES: Long = 160
 
         /**
-         * The built-in control-plane policies (RFC 0007 §7.3) as `analyze` matches them (#1401): the engine's own
-         * statements ([BuiltinPolicies.CONTROL]), read the way any policy is, since no document can define them.
+         * The built-in policies a binding can name, as `analyze` matches them: the control-plane ones (RFC 0007 §7.3,
+         * #1401) and [BuiltinPolicies.ROOT], which break-glass bindings name. The engine's own statements
+         * ([BuiltinPolicies.CONTROL], [BuiltinPolicies.ROOT_STATEMENTS]), read the way any policy is, since no document
+         * can define them.
          */
-        internal val BUILTIN: Map<String, AnalyzedPolicy> = BuiltinPolicies.CONTROL.entries.associate { (id, statements) ->
+        internal val BUILTIN: Map<String, AnalyzedPolicy> = (
+            BuiltinPolicies.CONTROL + (BuiltinPolicies.ROOT to BuiltinPolicies.ROOT_STATEMENTS)
+            ).entries.associate { (id, statements) ->
             val definition = PolicyDefinition(id, attachable = false, condition = null, statements = statements)
             id.value to AnalyzedPolicy(definition) {
                 statements.mapIndexed { index, statement -> AnalyzedStatement(index, statement) }

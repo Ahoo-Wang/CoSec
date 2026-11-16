@@ -510,8 +510,10 @@ proposal does: the old revision's confirmation was given for another change. Whi
 The answer lists `allows` and `denies`: every binding (in the platform, tenant and, when `app` is given, app document)
 that can apply in the tenant asked about, whose scope fits the query and whose policy has a statement matching the
 action and resource, with its document,
-subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
-not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
+subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, or a
+binding with a window (`expiresAt`), which is not evaluated. `breakGlass` marks a break-glass binding, the strongest
+grant there is, listed with its `expiresAt` as an allow of `cosec:root`: it is a platform principal's, so it is in the
+platform tenant's review. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
 `hidden`, and bindings to policies in them in `opaque`. A tenant binding scoped to the app asked about finds that
 app's permission policies, as enforcement does, when you may read the app's document. A binding of a built-in
 control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer`) is listed from the
