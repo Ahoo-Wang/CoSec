@@ -817,7 +817,7 @@ class ChangesB1Test {
                 StoreFixtures.candidate(platform, listOf(allow("edge"))),
                 StoreFixtures.publication()
             )
-            val (kind, owner) = Revisions.ownerOf(ACME)
+            val (kind, owner) = ownerOf(ACME)
             val tenant = me.ahoo.cosec.document.PolicyDocument(
                 kind,
                 owner,

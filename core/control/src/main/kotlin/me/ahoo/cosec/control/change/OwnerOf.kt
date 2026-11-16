@@ -13,11 +13,13 @@
 
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** The document kind and owner of [key]: the platform, an app or a tenant document. */
-internal fun ownerOf(key: SnapshotKey): Pair<DocumentKind, String> = when (key) {
+@InternalCoSecApi
+fun ownerOf(key: SnapshotKey): Pair<DocumentKind, String> = when (key) {
     SnapshotKey.Platform -> DocumentKind.PLATFORM to ""
     is SnapshotKey.App -> DocumentKind.APP to key.appId
     is SnapshotKey.Tenant -> DocumentKind.TENANT to key.tenantId

@@ -24,9 +24,9 @@ import me.ahoo.cosec.control.change.ChangeHarness
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.PERMIT_ALL
 import me.ahoo.cosec.control.change.PLATO
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
-import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.engine.BuiltinPolicies
@@ -61,7 +61,7 @@ class BuiltinAccessReviewTest {
     private val acme = SnapshotKey.Tenant("acme")
 
     private fun publish(key: SnapshotKey, vararg bindings: Binding) = runBlocking {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         val document = PolicyDocument(kind, owner, 1, StoreFixtures.START, emptyList(), bindings.toList())
         revisions.publish(key, revisions.head(key), document, StoreFixtures.publication())
     }

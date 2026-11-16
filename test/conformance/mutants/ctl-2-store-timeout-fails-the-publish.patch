@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.store.CommittedRevisionTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 83a012c1..894971cc 100644
+index 912a306f..4c58a05c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -234,6 +234,8 @@ class Revisions(
+@@ -163,6 +163,8 @@ class Revisions(
      private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
          try {
              published(key, entry, dropped)

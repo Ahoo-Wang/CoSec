@@ -27,6 +27,7 @@ import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.CandidateDigest
@@ -87,7 +88,7 @@ class DefaultControlPlane(
         authority.require(operator, key, ControlActions.READ)
         val before = retained(key, from)
         val after = retained(key, to)
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         val expandedBefore = RoleExpansion.effective(before)
         val expandedAfter = RoleExpansion.effective(after)
         return DocumentDiff(

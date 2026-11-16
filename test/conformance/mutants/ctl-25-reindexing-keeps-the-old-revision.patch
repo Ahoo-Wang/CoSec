@@ -2,13 +2,13 @@
 # Mutant: a revision that refers again to what is still indexed keeps the earlier revision, so the late removal of the revision between them takes it out
 # Tests: :control:test --tests me.ahoo.cosec.control.store.ReferrerCleanupRaceTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 65da6263..f13c4cbb 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -375,7 +375,7 @@ class Revisions(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+index 70f21b4f..033a6c60 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+@@ -201,7 +201,7 @@ internal class ReferrerIndex(
       */
-     private fun indexed(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
+     fun indexed(referrers: Map<SnapshotKey, Long>, key: SnapshotKey, revision: Long): Map<SnapshotKey, Long> {
          val current = referrers[key]
 -        return if (current != null && current >= revision) referrers else referrers + (key to revision)
 +        return if (current != null) referrers else referrers + (key to revision)

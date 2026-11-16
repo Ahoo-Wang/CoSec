@@ -25,6 +25,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.Publication
@@ -247,7 +248,7 @@ class MigrateMainTest {
         }
 
     private fun document(key: SnapshotKey, policies: List<String>, bindings: List<String> = emptyList()): PolicyDocument {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         return PolicyDocument(
             kind,
             owner,

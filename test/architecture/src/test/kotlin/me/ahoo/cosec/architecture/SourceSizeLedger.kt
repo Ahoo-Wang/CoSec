@@ -65,11 +65,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt",
-            756,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
             583,
             Disposition.Debt(Batch.B4),

@@ -2,11 +2,11 @@
 # Mutant: the platform's first revision marks the app list complete without checking the app documents the store lists, so a rebuilt list that misses one is trusted
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 74d84543..2a69aadd 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -226,7 +226,7 @@ class Revisions(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
+index cefa0c5a..66142ed1 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
+@@ -47,7 +47,7 @@ internal class AppListing(
              repeat(maxAttempts) {
                  val current = store.apps()
                  val list = current?.value ?: AppList.EMPTY
