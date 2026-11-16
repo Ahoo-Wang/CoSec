@@ -146,7 +146,3 @@ class DocumentSnapshotViews(
 
     private fun empty(app: AppId) = CompiledDocument.app(app, emptyList(), emptyList())
 }
-
-/** No platform document is published where one is required ([DocumentSnapshotViews.platformRequired]). */
-@InternalCoSecApi
-class MissingPlatformException : IllegalStateException("No platform document is published; requests fail closed.")
