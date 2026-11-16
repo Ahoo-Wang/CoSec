@@ -77,7 +77,9 @@ class InstalledDocumentsTest {
 
             tenantCompiles = true
             publish(acme, 8)
-            it.revalidate().join()
+            // The store's change event starts acme's load of revision 8 on the source's own thread, and revalidate() does not wait
+            // for a load that was in flight (it joins that one): reload() is the load of acme that starts after it.
+            it.reload(acme).join()
             installed().assert().isEqualTo(mapOf(SnapshotKey.Platform to 3L, acme to 8L))
         }
     }
