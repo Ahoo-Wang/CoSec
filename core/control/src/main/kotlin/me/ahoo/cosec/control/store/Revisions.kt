@@ -34,7 +34,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
-import java.util.UUID
 import kotlin.coroutines.cancellation.CancellationException
 
 /**
@@ -58,7 +57,7 @@ import kotlin.coroutines.cancellation.CancellationException
  * A failure after step 3 loses no decision and no content: the index is rebuilt from the chain ([history]), extra
  * references block at most a deletion. The records of conflicted publishes are reclaimed as orphans ([reclaim]).
  */
-// B4: revisions split by operation
+// stays: the face its callers use; seven of its functions are one-line delegations to the part that does the work
 @Suppress("TooManyFunctions")
 @InternalCoSecApi
 class Revisions(
@@ -68,13 +67,10 @@ class Revisions(
     /** Attempts of a conditional replace of the index or the back-references before it gives up. */
     private val maxAttempts: Int = DEFAULT_MAX_ATTEMPTS,
 ) {
-    private val holder: String = UUID.randomUUID().toString()
-
     private val writes = RevisionWrites(store, maxAttempts)
-
     private val referrerIndex = ReferrerIndex(store, writes, ::head)
-
     private val listing = AppListing(store, writes, maxAttempts)
+    private val retained = Retention(store, writes, clock, retention, ::head, ::decode, ::history)
 
     /** The head of [key], read from the store of record. */
     suspend fun head(key: SnapshotKey): Head? {
@@ -302,98 +298,6 @@ class Revisions(
         revision(key, revision) ?: throw IllegalArgumentException("[$key] has no retained revision $revision.")
 
     /**
-     * Walks the `parent` chain of [key]'s head (`verify-chain`, RFC 0007 §5.4): every parent at or above the index
-     * floor must have its record, holding that revision. A missing one is a lost write.
-     */
-    suspend fun verifyChain(key: SnapshotKey): ChainCheck {
-        val head = head(key) ?: return ChainCheck.Intact(0)
-        val floor = store.index(key)?.value?.floor ?: 1
-        if (store.record(key, head.digest) == null) {
-            return ChainCheck.Broken(ParentRevision(head.revision, head.digest.toString()))
-        }
-        var document = head.document
-        while (true) {
-            val parent = document.provenance?.parent ?: return ChainCheck.Intact(document.revision)
-            val record = store.record(key, SnapshotDigest.parse(parent.digest))
-            if (record == null) {
-                return if (parent.revision >= floor) ChainCheck.Broken(parent) else ChainCheck.Intact(document.revision)
-            }
-            document = decode(key, record)
-            if (document.revision != parent.revision) {
-                return ChainCheck.Broken(parent)
-            }
-        }
-    }
-
-    /**
-     * Removes the records of [key] that the [retention] no longer keeps (RFC 0007 §5.7): beyond the [RetentionPolicy.maxCount]
-     * most recent revisions and older than [RetentionPolicy.minAge], unless [keep] names them (the bases and rollback
-     * targets of changes still open), and the orphans older than [RetentionPolicy.orphanAge]. One instance at a time:
-     * without the lease it removes nothing.
-     *
-     * The index is written first, so a listed revision never misses its record; what it takes out goes to
-     * [RevisionIndex.reclaiming] in that same write, and is dropped from there once deleted (#1226). A deletion that fails
-     * is tried again by the next pass; one of a record that became the head, a listed revision or a kept one since is
-     * not tried at all.
-     */
-    suspend fun reclaim(key: SnapshotKey, keep: Set<SnapshotDigest> = emptySet()): Reclaimed {
-        if (!store.acquireLease("reclaim:$key", holder, retention.leaseDuration)) {
-            return Reclaimed.NOTHING
-        }
-        val entries = history(key)
-        val now = clock.instant()
-        val recent = entries.takeLast(retention.maxCount).map { it.digest }.toSet()
-        val head = head(key)?.digest
-        val removed = entries.filter { entry ->
-            entry.digest !in recent && entry.digest !in keep && entry.digest != head &&
-                entry.publishedAt.isBefore(now.minus(retention.minAge))
-        }
-        var orphans: List<SnapshotDigest> = emptyList()
-        var reclaiming: List<SnapshotDigest> = emptyList()
-        val updated = writes.updateIndex(key) { index ->
-            val chain = index.entries.map { it.digest }.toSet()
-            orphans = index.pending.filter { pending ->
-                pending.digest !in chain && pending.digest !in keep && pending.digest != head &&
-                    pending.since.isBefore(now.minus(retention.orphanAge))
-            }.map { it.digest }
-            val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }
-            val pending = index.pending.filter { it.digest !in orphans }
-            val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head)
-            // What an earlier pass could not delete, unless it is live again; then what this pass takes out.
-            reclaiming = (index.reclaiming + removed.map { it.digest } + orphans).distinct().filter { it !in live }
-            index.copy(
-                entries = entries,
-                pending = pending,
-                floor = maxOf(index.floor, (removed.maxOfOrNull { it.revision } ?: 0) + 1),
-                reclaiming = reclaiming,
-            )
-        }
-        if (!updated) {
-            warn("[$key]: the index kept changing; nothing was reclaimed")
-            return Reclaimed.NOTHING
-        }
-        // The index no longer lists them, so a failure here leaves unlisted records behind, never a listed one missing.
-        val (deleted, failed) = reclaiming.partition { delete(key, it) }
-        if (deleted.isNotEmpty()) {
-            writes.updateIndex(key) { index -> index.copy(reclaiming = index.reclaiming - deleted.toSet()) } ||
-                warn("[$key]: the records deleted stay listed to reclaim; the next pass deletes them again")
-        }
-        return Reclaimed(removed.map { it.digest }, orphans, deleted, failed)
-    }
-
-    /** Deletes the record of [key] at [digest]; `false` when that failed, which the next pass tries again. */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun delete(key: SnapshotKey, digest: SnapshotDigest): Boolean = try {
-        store.removeRecord(key, digest)
-        true
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        log.warn(e) { "[$key]: the record $digest could not be deleted; the next pass tries again." }
-        false
-    }
-
-    /**
      * [document], a stored one of [key], decoded. One that does not decode (a newer version's, during a rolling
      * upgrade) names its key, so that the control API logs which one: its answer is a 500 without detail (RC1-39).
      */
@@ -437,6 +341,15 @@ class Revisions(
 
     /** [AppListing.completeApps]: lists [apps] and marks the app list complete. */
     suspend fun completeApps(apps: Set<String>): Boolean = listing.completeApps(apps)
+
+    /** [Retention.verifyChain]: walks the `parent` chain of [key]'s head. */
+    suspend fun verifyChain(key: SnapshotKey): ChainCheck = retained.verifyChain(key)
+
+    /** [Retention.reclaim]: removes the records of [key] the [retention] no longer keeps. */
+    suspend fun reclaim(key: SnapshotKey, keep: Set<SnapshotDigest> = emptySet()): Reclaimed = retained.reclaim(
+        key,
+        keep
+    )
 
     @InternalCoSecApi
     companion object {
