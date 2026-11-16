@@ -15,12 +15,13 @@
 
 package me.ahoo.cosec.control.store
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.store.RevisionLog.log
+import me.ahoo.cosec.control.store.RevisionLog.warn
 import me.ahoo.cosec.document.ParentRevision
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
@@ -73,6 +74,8 @@ class Revisions(
 ) {
     private val holder: String = UUID.randomUUID().toString()
 
+    private val writes = RevisionWrites(store, maxAttempts)
+
     /** The head of [key], read from the store of record. */
     suspend fun head(key: SnapshotKey): Head? {
         val stored = store.head(requireDocumentKey(key)) ?: return null
@@ -109,20 +112,20 @@ class Revisions(
         val publishedAt = document.publishedAt
         val stored = SnapshotDocuments.of(document)
         val digest = store.digestOf(stored)
-        updateIndex(key) { it.copy(pending = it.pending + PendingRecord(digest, publishedAt)) } ||
+        writes.updateIndex(key) { it.copy(pending = it.pending + PendingRecord(digest, publishedAt)) } ||
             warn("[$key] revision $revision: its record could not be registered as pending; an orphan would stay")
         check(store.putRecord(key, stored) == digest) { "The store addressed the record of [$key] by another digest." }
         val before = base?.let { references(it.document) }.orEmpty()
         val after = references(document)
         for ((target, policy) in after - before) {
-            check(updateReferrers(target, policy) { indexed(it, key, revision) }) {
+            check(writes.updateReferrers(target, policy) { indexed(it, key, revision) }) {
                 "[$key]: the reference to [$policy] of [$target] could not be indexed; the head was not moved."
             }
         }
         if (key is SnapshotKey.App) {
             // Before the head moves, whether this is its first revision or the list was lost: no app has a head the
             // app list does not name (RC1-4).
-            check(updateApps { it.copy(entries = it.entries + key.appId) }) {
+            check(writes.updateApps { it.copy(entries = it.entries + key.appId) }) {
                 "[$key] could not be listed among the app documents; the head was not moved."
             }
         }
@@ -262,7 +265,9 @@ class Revisions(
      * Lists [apps] among the app documents and marks the list complete (`repair-references`, RC1-4): the caller has
      * listed every app document there is. `false` when the list kept changing.
      */
-    suspend fun completeApps(apps: Set<String>): Boolean = updateApps { AppList(it.entries + apps, complete = true) }
+    suspend fun completeApps(
+        apps: Set<String>
+    ): Boolean = writes.updateApps { AppList(it.entries + apps, complete = true) }
 
     /** The document [publish] writes: the candidate's body at the revision after [base], naming [base] as its parent. */
     private fun next(base: Head?, candidate: PolicyDocument, publication: Publication): PolicyDocument = candidate.copy(
@@ -280,7 +285,7 @@ class Revisions(
 
     /** After the head moved to [entry] (§5.4 steps 5 and 6): index it, drop the [dropped] references. Failures only warn. */
     private suspend fun published(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
-        updateIndex(key) { index ->
+        writes.updateIndex(key) { index ->
             index.copy(
                 // Beside any later revision, never over it: a settle that runs late must not cut off the revisions indexed
                 // after it. What a head that moved back left above it stays until replaced; history() leaves that out.
@@ -289,7 +294,7 @@ class Revisions(
             )
         } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
         for ((target, policy) in dropped) {
-            updateReferrers(target, policy) { dropped(it, key, entry.revision) } ||
+            writes.updateReferrers(target, policy) { dropped(it, key, entry.revision) } ||
                 warn("[$key] no longer refers to [$policy] of [$target], which stays indexed")
         }
     }
@@ -342,7 +347,7 @@ class Revisions(
             document = store.record(key, digest)?.let { decode(key, it) }
         }
         val repaired = missing.sortedBy { it.revision }
-        updateIndex(key) { index ->
+        writes.updateIndex(key) { index ->
             val known = index.entries.map { it.revision }.toSet()
             // Against the index as it is at this attempt: reclamation may have taken some out since the chain was walked,
             // and below its floor nothing comes back (#1265).
@@ -381,7 +386,7 @@ class Revisions(
     internal suspend fun rewritten(key: SnapshotKey, published: Head, first: Boolean) = withContext(NonCancellable) {
         val entry = RevisionEntry(published.revision, published.digest, published.document.publishedAt)
         try {
-            updateIndex(key) { index ->
+            writes.updateIndex(key) { index ->
                 index.copy(
                     entries = (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision },
                     pending = index.pending.filter { it.digest != entry.digest },
@@ -458,7 +463,7 @@ class Revisions(
         }
         var orphans: List<SnapshotDigest> = emptyList()
         var reclaiming: List<SnapshotDigest> = emptyList()
-        val updated = updateIndex(key) { index ->
+        val updated = writes.updateIndex(key) { index ->
             val chain = index.entries.map { it.digest }.toSet()
             orphans = index.pending.filter { pending ->
                 pending.digest !in chain && pending.digest !in keep && pending.digest != head &&
@@ -483,7 +488,7 @@ class Revisions(
         // The index no longer lists them, so a failure here leaves unlisted records behind, never a listed one missing.
         val (deleted, failed) = reclaiming.partition { delete(key, it) }
         if (deleted.isNotEmpty()) {
-            updateIndex(key) { index -> index.copy(reclaiming = index.reclaiming - deleted.toSet()) } ||
+            writes.updateIndex(key) { index -> index.copy(reclaiming = index.reclaiming - deleted.toSet()) } ||
                 warn("[$key]: the records deleted stay listed to reclaim; the next pass deletes them again")
         }
         return Reclaimed(removed.map { it.digest }, orphans, deleted, failed)
@@ -518,7 +523,7 @@ class Revisions(
                 continue
             }
             check(
-                updateReferrers(target, policy) { indexed(it, key, head.revision) }
+                writes.updateReferrers(target, policy) { indexed(it, key, head.revision) }
             ) { "[$key]: the reference to [$policy] of [$target] was not repaired." }
             added++
         }
@@ -547,7 +552,7 @@ class Revisions(
             store.referrers(target, policy)?.value?.keys.orEmpty().forEach { referring(it, heads) }
             var gone = 0
             check(
-                updateReferrers(target, policy) { current ->
+                writes.updateReferrers(target, policy) { current ->
                     current.filterNot { (referrer, revision) -> heads.gone(referrer, revision, target, policy) }
                         .also { gone = current.size - it.size }
                 }
@@ -656,49 +661,6 @@ class Revisions(
         return references
     }
 
-    private suspend fun updateIndex(key: SnapshotKey, change: (RevisionIndex) -> RevisionIndex): Boolean {
-        repeat(maxAttempts) {
-            val current = store.index(key)
-            if (store.putIndex(key, current?.digest, change(current?.value ?: RevisionIndex.EMPTY))) {
-                return true
-            }
-        }
-        return false
-    }
-
-    /** A conditional replace of the app list, retried while it changes; no write when [change] leaves it as it is. */
-    private suspend fun updateApps(change: (AppList) -> AppList): Boolean {
-        repeat(maxAttempts) {
-            val current = store.apps()
-            val next = change(current?.value ?: AppList.EMPTY)
-            if (next == (current?.value ?: AppList.EMPTY)) {
-                return true
-            }
-            if (store.putApps(current?.digest, next)) {
-                return true
-            }
-        }
-        return false
-    }
-
-    private suspend fun updateReferrers(
-        target: SnapshotKey,
-        policy: PolicyId,
-        change: (Map<SnapshotKey, Long>) -> Map<SnapshotKey, Long>,
-    ): Boolean {
-        repeat(maxAttempts) {
-            val current = store.referrers(target, policy)
-            val next = change(current?.value.orEmpty())
-            if (next == (current?.value ?: emptyMap<SnapshotKey, Long>())) {
-                return true
-            }
-            if (store.putReferrers(target, policy, current?.digest, next)) {
-                return true
-            }
-        }
-        return false
-    }
-
     /**
      * [document], a stored one of [key], decoded. One that does not decode (a newer version's, during a rolling
      * upgrade) names its key, so that the control API logs which one: its answer is a 500 without detail (RC1-39).
@@ -725,14 +687,8 @@ class Revisions(
     /** The record of [key] with [digest], if retained. */
     internal suspend fun record(key: SnapshotKey, digest: SnapshotDigest): SnapshotDocument? = store.record(key, digest)
 
-    private fun warn(message: String): Boolean {
-        log.warn { message }
-        return false
-    }
-
     @InternalCoSecApi
     companion object {
-        private val log = KotlinLogging.logger {}
         const val DEFAULT_MAX_ATTEMPTS: Int = 16
 
         private fun requireDocumentKey(key: SnapshotKey): SnapshotKey = key.also { ownerOf(it) }
