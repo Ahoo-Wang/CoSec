@@ -266,12 +266,21 @@ internal class SlotModel(
         obligations.filter { it.overdue() && closedAt < 0 }.forEach {
             violations += "$it not answered within coldLoadTimeout"
         }
+        checkRegressions()
+        checkFailedCompiles()
+    }
+
+    private fun checkRegressions() {
         for (expected in expectedRegressions) {
             if (expected !in regressions) violations += "installed revision ${expected.second} of ${expected.first} below one installed before, unreported"
         }
         counts.regressions += expectedRegressions.size
         expectedRegressions.clear()
-        // A revision that does not compile is installed failed: the one before it is not served in its place.
+        regressions.clear()
+    }
+
+    /** A revision that does not compile is installed failed: the one before it is not served in its place. */
+    private fun checkFailedCompiles() {
         for ((key, revision) in failedCompiles) {
             val served = lastInstall[key]?.takeIf { it.state is DocumentState.Present } ?: continue
             if (closedAt < 0 && served.revision < revision) {
@@ -279,7 +288,6 @@ internal class SlotModel(
             }
         }
         failedCompiles.clear()
-        regressions.clear()
     }
 
     private fun abandonReads(closed: Boolean) {
