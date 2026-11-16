@@ -39,7 +39,8 @@ import java.util.concurrent.TimeUnit
  * One eviction pass of `SNP-14`, as an installing thread runs it in place when its install took the family over its
  * cap: at [bound] documents held to their cap (twice the bound, at most `MAX_SLACK` above it), the time of a pass that
  * evicts [batch] of them (`1`, `eighth` of the slack, or the whole `slack`), and of its scan alone (`scan`), which
- * no batch size changes. The source's housekeeping is held, so nothing else evicts.
+ * no batch size changes, single-shot as an install over the cap runs it, and warmed (`scanWarm`, average time). The source's
+ * housekeeping is held, so nothing else evicts.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
 @BenchmarkMode(Mode.SingleShotTime)
@@ -98,6 +99,11 @@ open class EvictionPassBenchmark {
 
     @Benchmark
     fun scan(): Int = source.evictionScan(SnapshotKind.APP, limit)
+
+    /** [scan] warmed: the average over many scans of the same family, which a pass on a busy instance is. */
+    @Benchmark
+    @BenchmarkMode(Mode.AverageTime)
+    fun scanWarm(): Int = source.evictionScan(SnapshotKind.APP, limit)
 
     private fun app(index: Int) = SnapshotKey.App("app-$index")
 

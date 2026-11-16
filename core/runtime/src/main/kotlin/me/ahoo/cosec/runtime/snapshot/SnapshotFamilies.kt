@@ -106,11 +106,19 @@ internal class SnapshotFamilies<A : Any>(
         val chosen = PriorityQueue<Slot<*>>(compareByDescending { it.lastAccess })
         for (slot in family.slots.values) {
             val entry = slot.installed ?: continue
-            if (isAbsent(entry) != absent || !slot.isIdle()) {
+            if (isAbsent(entry) != absent) {
+                continue
+            }
+            // Only a slot that would be chosen is asked whether it is idle: that takes its monitor.
+            val full = chosen.size >= wanted
+            if (full && slot.lastAccess >= chosen.peek().lastAccess) {
+                continue
+            }
+            if (!slot.isIdle()) {
                 continue
             }
             chosen.add(slot)
-            if (chosen.size > wanted) {
+            if (full) {
                 chosen.poll()
             }
         }
