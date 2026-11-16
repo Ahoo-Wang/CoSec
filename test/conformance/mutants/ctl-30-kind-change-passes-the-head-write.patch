@@ -2,11 +2,11 @@
 # Mutant: the head write lets a referenced policy change between a policy and a boundary
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index e68a55fe..151743e5 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -704,7 +704,7 @@ class Revisions(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+index 70f21b4f..3f31fc58 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+@@ -130,7 +130,7 @@ internal class ReferrerIndex(
          val kept = RoleExpansion.effective(candidate).policies.associate { it.id to it.boundary }
          val blocked = RoleExpansion.effective(
              base.document

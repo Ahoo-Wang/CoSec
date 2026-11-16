@@ -2,11 +2,11 @@
 # Mutant: the reference index is of the stored bindings: a tenant role is not indexed
 # Tests: :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index ec773baf..28a09508 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -658,7 +658,7 @@ class Revisions(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+index 70f21b4f..3995ea29 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+@@ -171,7 +171,7 @@ internal class ReferrerIndex(
          if (stored.kind == DocumentKind.PLATFORM) {
              return emptySet()
          }
