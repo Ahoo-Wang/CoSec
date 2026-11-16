@@ -31,7 +31,7 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.CoSecAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
@@ -44,7 +44,6 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.ExecutionException
 
 /**
@@ -140,7 +139,7 @@ class StoreOfRecordOverrideTest {
                 // and the store the starter created behaves that way
                 val cache = context.getBean(PolicySnapshotCache::class.java)
                 val store = context.getBean(RedisSnapshotDocumentStore::class.java)
-                cache.put(SnapshotKey.Platform, SnapshotDocument(2, 1, Instant.EPOCH, PLATFORM.encodeToByteArray()))
+                cache.put(SnapshotKey.Platform, SnapshotDocuments.read(PLATFORM.encodeToByteArray()))
                 val admin = checkNotNull(runtime.admin(snapshot))
                 admin.inspect(SnapshotKeyEncoder.PLATFORM).remote.ttl.assert().isNull()
 

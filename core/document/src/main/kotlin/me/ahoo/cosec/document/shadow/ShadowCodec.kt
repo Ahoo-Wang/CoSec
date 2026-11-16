@@ -17,6 +17,7 @@ package me.ahoo.cosec.document.shadow
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
@@ -24,7 +25,6 @@ import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowSample
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
@@ -48,25 +48,23 @@ object ShadowCodec {
     private val factory = JsonNodeFactory.instance
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
+    /**
+     * A candidate as its window, its base and its document, whose header is its own (SNP-12): a record that also states
+     * `schema`, `revision` or `publishedAt` beside the document is refused as an unknown member, and its window is not
+     * compared, as for any unreadable candidate.
+     */
     fun encode(candidate: StoredCandidate): ByteArray = write(
         factory.objectNode().put("window", candidate.window).put("baseRevision", candidate.baseRevision)
-            .put("schema", candidate.document.schema).put("revision", candidate.document.revision)
-            .put("publishedAt", candidate.document.publishedAt.toString())
             .set("document", read(candidate.document.bodyBytes())),
     )
 
     fun decodeCandidate(bytes: ByteArray): StoredCandidate = guarded {
         val node = read(bytes)
-        node.only("window", "baseRevision", "schema", "revision", "publishedAt", "document")
+        node.only("window", "baseRevision", "document")
         StoredCandidate(
             node.need("window").text(),
             node.need("baseRevision").long(),
-            SnapshotDocument(
-                node.need("schema").asInt(),
-                node.need("revision").long(),
-                Instant.parse(node.need("publishedAt").text()),
-                CoSecJson.mapper.writeValueAsBytes(node.need("document")),
-            ),
+            SnapshotDocuments.read(CoSecJson.mapper.writeValueAsBytes(node.need("document"))),
         )
     }
 
