@@ -36,13 +36,13 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.control.ControlCacheSpecs
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Duration
-import java.time.Instant
 
 /**
  * Policy and permission caches are the store of record in Redis, so they must be `Store`s that never expire and whose
@@ -244,7 +244,7 @@ class CacheTtlPolicyTest {
             // The filter that called every key absent, the TTL function and the foreign codec are gone: a written
             // document reads back, and never expires in Redis.
             val body = """{"schema":2,"revision":1,"publishedAt":"2026-11-03T00:00:00Z","policies":[],"bindings":[]}"""
-            val document = SnapshotDocument(2, 1, Instant.parse("2026-11-03T00:00:00Z"), body.encodeToByteArray())
+            val document = SnapshotDocuments.read(body.encodeToByteArray())
             cache.put(SnapshotKey.Platform, document)
             runtime.admin(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME)!!.clearLocal()
             cache.get(SnapshotKey.Platform)!!.revision.assert().isEqualTo(1)

@@ -37,24 +37,19 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import java.time.Instant
 
 /** Documents are written inline, one JSON line each. */
 @Suppress("MaxLineLength")
 class PolicyDocumentCompilerTest {
     private val compiler = PolicyDocumentCompiler()
 
-    private fun stored(body: String, schema: Int = 2) = SnapshotDocument(
-        schema,
-        1,
-        Instant.parse("2026-10-26T00:00:00Z"),
-        """{"schema":$schema,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray(),
+    private fun stored(body: String, schema: Int = 2) = SnapshotDocuments.read(
+        """{"schema":$schema,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()
     )
 
     private fun errors(key: SnapshotKey, body: String): List<String> =

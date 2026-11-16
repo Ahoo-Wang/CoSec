@@ -468,7 +468,6 @@ public final class me/ahoo/cosec/spi/snapshot/SnapshotDigest$Companion {
 public final class me/ahoo/cosec/spi/snapshot/SnapshotDocument {
 	public static final field Companion Lme/ahoo/cosec/spi/snapshot/SnapshotDocument$Companion;
 	public static final field DOCUMENT_SCHEMA I
-	public fun <init> (IJLjava/time/Instant;[B)V
 	public final fun bodyBytes ()[B
 	public final fun bodyStream ()Ljava/io/InputStream;
 	public fun equals (Ljava/lang/Object;)Z

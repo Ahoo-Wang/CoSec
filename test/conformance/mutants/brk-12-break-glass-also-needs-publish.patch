@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassAuthorityTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/PublishRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/PublishRules.kt
-index 04a1f9ce..91a47612 100644
+index 060efe83..a7726909 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/PublishRules.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/PublishRules.kt
-@@ -38,7 +38,7 @@ internal object PublishRules {
+@@ -40,7 +40,7 @@ internal object PublishRules {
       * revoke `cosec:breakglass`, which is all RFC 0007 §8 asks of the person doing either in an emergency.
       */
      fun publishing(change: ChangeRequest): Action =
 -        if (change.kind == ProvenanceKind.BREAK_GLASS) ControlActions.BREAKGLASS else ControlActions.PUBLISH
 +        ControlActions.PUBLISH
  
-     /** That [change] is in one of [allowed]: a 409 otherwise. */
-     fun requireState(change: ChangeRequest, allowed: Set<ChangeState>) {
+     /**
+      * Creating or altering break-glass ([breakGlass], [BreakGlassRules.touches]) needs a REQUIRED change listener to

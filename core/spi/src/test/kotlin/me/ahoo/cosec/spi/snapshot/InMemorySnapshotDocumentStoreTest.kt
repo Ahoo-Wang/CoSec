@@ -11,8 +11,12 @@
  * limitations under the License.
  */
 
+// cosec-spi's tests cannot see cosec-document's SnapshotDocuments: they make a document as it does.
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spi.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant

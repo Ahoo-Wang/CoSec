@@ -778,12 +778,13 @@ A rate limit `key` whose value holds an unpaired surrogate counts in a bucket of
 
 1. `cosec.audit.enabled` must be `true` (the default).
 2. The audit log writes allows at `DEBUG`: set `me.ahoo.cosec.audit` to `DEBUG` to see them.
-3. Events dropped by a full queue: `Dropping decision events: the queue of listener [<name>] is full.` and the
+3. Events dropped by a full queue: `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` and the
    `cosec.listener.dropped` counter. A listener that throws: `Decision listener [<name>] failed.`
 4. Kafka: `Failed to publish audit event to Kafka topic [<topic>].`, or `The Kafka audit queue of [<topic>] is full.`
    ([Audit log and Kafka](./observability.md#audit-log-and-kafka)).
 5. At shutdown, queued events go out for up to
-   [`cosec.observability.listener.drain-timeout`](./configuration.md#decision-listeners) (5 seconds); the rest is dropped
-   (`Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`).
+   [`cosec.observability.listener.drain-timeout`](./configuration.md#decision-listeners) (5 seconds); then no listener call
+   starts, and the rest is dropped and counted
+   (`Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`).
 
 **Next:** move an existing deployment to a newer version, in [Upgrading](./upgrading.md).
