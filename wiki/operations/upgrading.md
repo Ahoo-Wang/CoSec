@@ -239,8 +239,9 @@ The control plane authorizes its own writes with the policies in the snapshot, s
 write. `bootstrap` writes only the platform tenant's document, `Tenant((platform))`; the platform document itself
 comes from `publish`, so publish first. `bootstrap` binds principal `alice` of the platform tenant to the built-in `cosec:platform-admin` policy, in the
 platform tenant's document, and records it as a revision of kind `BOOTSTRAP`. It refuses when that document already
-binds someone to `cosec:platform-admin`; `--force` is for the recovery where every one of them is lost. Anyone with
-the Redis credentials can write anyway; `bootstrap` only leaves a record of it.
+binds someone to `cosec:platform-admin`; `--force` is for the recovery where every one of them is lost. Either way it
+adds its binding and keeps everything else that document holds: its policies, its other bindings, its rate limits and
+its roles. Anyone with the Redis credentials can write anyway; `bootstrap` only leaves a record of it.
 
 The document is compiled as the data plane compiles it, with the limits and the attributes the platform document
 declares, so a recovery keeps the policies that use `ext.*` attributes. A platform document that cannot be read fails

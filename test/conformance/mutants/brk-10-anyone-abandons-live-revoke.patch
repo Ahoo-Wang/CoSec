@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index b2a61126..fd4cc2a7 100644
+index 6be8bc1f..b71c3bcb 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -470,9 +470,6 @@ class Changes(
+@@ -489,9 +489,6 @@ class Changes(
          authority.requireBoundaryOperator(operator, current)
          if (operator.actor != current.author) {
              authority.require(operator, current.key, ControlActions.PUBLISH)

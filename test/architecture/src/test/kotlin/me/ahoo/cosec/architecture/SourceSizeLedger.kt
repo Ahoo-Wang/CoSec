@@ -43,7 +43,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt",
-            934,
+            926,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
@@ -66,11 +66,6 @@ object SourceSizeLedger {
             "core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt",
             756,
             Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt",
-            410,
-            Disposition.Debt(Batch.B5),
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
