@@ -117,7 +117,6 @@ object TypeLedger {
         "core/spi/src/main/kotlin/me/ahoo/cosec/spi/token/TokenFamilyStore.kt" to family(PORT, "TokenFamilyStore and the session family it keeps"),
         "edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt" to family(OWN_EXCEPTION, "the OpenAPI generator"),
         "extensions/ip2region/src/main/kotlin/me/ahoo/cosec/ip2region/Ip2RegionAttributeProvider.kt" to family(OWN_EXCEPTION, "the region provider"),
-        "extensions/opentelemetry/src/main/kotlin/me/ahoo/cosec/opentelemetry/TracingListener.kt" to Disposition.Debt(Batch.B7),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt" to family(OWN_EXCEPTION, "the module check and the Spring condition only it uses"),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/ConditionalOnJwtEnabled.kt" to family(OWN_EXCEPTION, "the annotation and the Spring condition only it uses"),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ClientIp.kt" to family(OWN_EXCEPTION, "the client IP readings and the configuration exception only they throw"),
