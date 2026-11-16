@@ -28,9 +28,9 @@ import java.io.PrintStream
 internal object VerifyChainCommand {
     /** `verify-chain`: one line per document; a broken chain, or one that cannot be read, exits with [FAILED]. */
     fun verifyChain(options: Options, out: PrintStream): Int {
-        val only = options.value("key")?.let { text ->
+        val only = options.value("document")?.let { text ->
             PublishCommand.documentKey(text)
-                ?: throw UsageException("--key is platform, app:<id> or tenant:<id>, not [${Identifiers.printable(text)}].")
+                ?: throw UsageException("--document is platform, app:<id> or tenant:<id>, not [${Identifiers.printable(text)}].")
         }
         val verified = controlStore(options) { store -> ChainVerification(store).run(only) }
         return report(verified, out) { RedisUris.scrub(it, options.redisUris) }

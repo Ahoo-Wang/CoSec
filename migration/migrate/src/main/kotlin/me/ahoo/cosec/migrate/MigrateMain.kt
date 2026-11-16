@@ -32,7 +32,7 @@ import kotlin.system.exitProcess
  * publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --file ./platform.json --document platform
  * bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --platform-admin alice [--force]
  * repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
- * verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--key platform|app:<id>|tenant:<id>]
+ * verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--document platform|app:<id>|tenant:<id>]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
  * api-keys --redis redis://localhost:6379 [--key-prefix cosec] --out ./api-keys
  *          [--memberships ./memberships.json] [--grant-to-principal <ids>|all] [--role-prefix api-key.] [--dry-run]
@@ -64,7 +64,7 @@ object MigrateMain {
         "publish" to setOf("to-redis", "cluster", "key-prefix", "in", "resume", "file", "document"),
         "bootstrap" to setOf("to-redis", "cluster", "key-prefix", "platform-admin", "force"),
         "repair-references" to setOf("to-redis", "cluster", "key-prefix"),
-        "verify-chain" to setOf("to-redis", "cluster", "key-prefix", "key"),
+        "verify-chain" to setOf("to-redis", "cluster", "key-prefix", "document"),
         "partition plan" to setOf("from-redis", "from-files", "key-prefix", "out"),
         "api-keys" to setOf(
             "redis", "key-prefix", "out", "app", "memberships", "grant-to-principal", "role-prefix", "dry-run"
@@ -80,7 +80,7 @@ object MigrateMain {
                   or, in place of --in: --file <document.json> --document platform|app:<id>|tenant:<id>
           bootstrap --to-redis <uri> [--cluster] [--key-prefix <p>] --platform-admin <principal> [--force]
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
-          verify-chain --to-redis <uri> [--cluster] [--key-prefix <p>] [--key platform|app:<id>|tenant:<id>]
+          verify-chain --to-redis <uri> [--cluster] [--key-prefix <p>] [--document platform|app:<id>|tenant:<id>]
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
           api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--app <id>] [--memberships <file>]

@@ -105,9 +105,9 @@ class MigrateMainTest {
             "repair-references --key-prefix cosec",
             "repair-references --cluster",
             "verify-chain",
-            "verify-chain --key platform",
-            "verify-chain --to-redis redis://localhost:6379 --key nope",
-            "verify-chain --to-redis redis://localhost:6379 --key app:",
+            "verify-chain --document platform",
+            "verify-chain --to-redis redis://localhost:6379 --document nope",
+            "verify-chain --to-redis redis://localhost:6379 --document app:",
             "convert --from-files a --out x --cluster",
             "api-keys --redis redis://localhost:6379 --out x --cluster",
             "partition plan --out x",
@@ -344,7 +344,7 @@ class MigrateMainTest {
             output.assert().contains("BROKEN tenant:acme: no record holds revision 1 ($lost)")
                 .contains("ok platform: intact down to revision 1")
         }
-        run("$args --key platform").let { (code, output) ->
+        run("$args --document platform").let { (code, output) ->
             code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
             output.assert().contains("Verified 1 document(s): 0 broken, 0 could not be read.")
         }

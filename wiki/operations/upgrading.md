@@ -305,14 +305,14 @@ another way is in neither.
 #### Verify the revision chains {#verify-the-revision-chains}
 
 ```bash
-cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--key platform|app:<id>|tenant:<id>]
+cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--document platform|app:<id>|tenant:<id>]
 ```
 
 Each revision names its parent revision and that revision's digest, and the control plane keeps a record of every
 revision under its digest ([Storage](./storage.md#revisions-history-and-rollback)). Redis replicates asynchronously,
 so a failover can lose a record it had acknowledged. `verify-chain` walks the chain of every document the store
-lists, or of the one `--key` names, from its head through each parent down to the oldest revision the revision index
-still lists, and prints one line per document:
+lists, or of the one `--document` names, from its head through each parent down to the oldest revision the revision
+index still lists, and prints one line per document:
 
 - `ok <doc>: intact down to revision <n>`, or `ok <doc>: no head` for a document that has none;
 - `BROKEN <doc>: no record holds revision <n> (<digest>): ...` when the record of a revision the chain needs is

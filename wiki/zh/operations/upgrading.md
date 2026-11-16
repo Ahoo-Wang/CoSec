@@ -212,10 +212,10 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 #### 检查修订链 {#verify-the-revision-chains}
 
 ```bash
-cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--key platform|app:<id>|tenant:<id>]
+cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--document platform|app:<id>|tenant:<id>]
 ```
 
-每个修订都记着它的父修订及其摘要，控制面把每个修订的记录按摘要保存（[存储](./storage.md#revisions-history-and-rollback)）。Redis 异步复制，故障切换可能丢失它已经确认过的记录。`verify-chain` 对存储列出的每份文档（或 `--key` 指定的那一份），从头开始沿父修订一路检查到修订索引仍列着的最早修订，每份文档输出一行：
+每个修订都记着它的父修订及其摘要，控制面把每个修订的记录按摘要保存（[存储](./storage.md#revisions-history-and-rollback)）。Redis 异步复制，故障切换可能丢失它已经确认过的记录。`verify-chain` 对存储列出的每份文档（或 `--document` 指定的那一份），从头开始沿父修订一路检查到修订索引仍列着的最早修订，每份文档输出一行：
 
 - `ok <doc>: intact down to revision <n>`；没有头的文档输出 `ok <doc>: no head`；
 - `BROKEN <doc>: no record holds revision <n> (<digest>): ...`：链需要的某个修订的记录不存在，或者存的是另一个修订；
