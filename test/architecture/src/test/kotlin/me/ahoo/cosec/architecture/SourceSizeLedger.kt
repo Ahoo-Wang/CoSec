@@ -31,7 +31,8 @@ object SourceSizeLedger {
     val ENTRIES: List<Entry> = listOf(
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt",
-            444,
+            // +3 (SNP-13): what the futures of revalidate and recompile promise, in their KDoc.
+            447,
             Disposition.Stays(
                 "the read interface with its contract, and the construction and close order in one place"
             ),

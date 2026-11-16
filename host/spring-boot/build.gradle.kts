@@ -84,3 +84,10 @@ dependencies {
     // SuspendingHandlerContextTest: the holder under Spring's context propagation (round 2 M4).
     testImplementation("io.micrometer:context-propagation")
 }
+
+// kapt's output is a function of its inputs only when it runs: a run has come out without the descriptions of two properties
+// from stubs that hold them, and the build cache then returned that run's output to every build with the same inputs (the
+// failing ConfigurationMetadataTest after a branch switch). The processing takes under a second, so nothing is cached.
+tasks.matching { it.name == "kaptKotlin" || it.name == "kaptTestKotlin" }.configureEach {
+    outputs.cacheIf("kapt's output has come out different from the same inputs, and the cache kept it") { false }
+}

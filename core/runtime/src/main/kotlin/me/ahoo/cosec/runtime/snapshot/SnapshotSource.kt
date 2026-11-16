@@ -314,17 +314,20 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * may have compiled with the old ones, so it installs and another load follows it at once; a document installed
      * before is loaded again, [SnapshotOptions.reloadConcurrency] at a time. Until then the previous compilation is
      * served. A document that cannot be compiled again (the store cannot be read, the compile queue is full) fails
-     * closed rather than keep the old compilation, and is retried. The future completes when every idle document has
-     * been loaded again.
+     * closed rather than keep the old compilation, and is retried. The future completes when every app and tenant
+     * document, idle or loading at the call, has been loaded again with the new inputs (`SNP-13`).
      */
     fun recompile(): CompletableFuture<Void> {
         context.compileEpoch.incrementAndGet()
-        val idle = families.flatMap { it.slots.values }.filter { it.markRecompile() }
-        return passes.reloadAll(idle) { it.load() }
+        val outdated = families.flatMap { it.slots.values }.filter { it.markRecompile() }
+        return passes.reloadAll(outdated) { it.reload(force = false) }
     }
 
-    /** Revalidates every installed document with a conditional read, a few at a time. */
-    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.load() }
+    /**
+     * Revalidates every document installed at the call with a conditional read that starts after the call (`SNP-13`), a
+     * few at a time; a document not installed then (failed with nothing installed, or on its first load) is not.
+     */
+    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
 
     /**
      * Stops this source and answers everything waiting on it. Every step runs whatever the ones before it did, so a
