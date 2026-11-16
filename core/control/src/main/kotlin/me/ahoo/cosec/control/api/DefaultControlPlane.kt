@@ -24,6 +24,10 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.Confirmation
+import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ControlStatus.GONE
+import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
@@ -442,9 +446,5 @@ class DefaultControlPlane(
 
     private companion object {
         const val WILDCARD = Match.WILDCARD
-        const val BAD_REQUEST = 400
-        const val NOT_FOUND = 404
-        const val CONFLICT = 409
-        const val GONE = 410
     }
 }

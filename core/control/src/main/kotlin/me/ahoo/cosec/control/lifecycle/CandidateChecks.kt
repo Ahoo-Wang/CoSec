@@ -28,7 +28,7 @@ import java.time.Clock
 /** A change's candidate on a head, and the checks and grant analysis it goes through there (RFC 0007 §6.2, §7.4). */
 internal class CandidateChecks(
     private val checks: ChangeChecks,
-    private val context: ChangeChecks.Context,
+    private val context: CurrentDocuments,
     private val authority: ChangeAuthority,
     private val clock: Clock,
     private val options: ChangeOptions,
@@ -56,7 +56,7 @@ internal class CandidateChecks(
                 escalations = emptyList(),
                 updatedAt = now
             )
-        val recording = RecordingContext(context)
+        val recording = RecordingCurrentDocuments(context)
         val checkedResult = checks.check(
             change.key,
             candidate,

@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.api
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.engine.CoSecEngine
@@ -262,7 +263,6 @@ class Simulator(
     companion object {
         private const val ANONYMOUS = "(0)"
         private const val REQUEST_ID = "simulated"
-        private const val BAD_REQUEST = 400
         private const val AMBIGUOUS_HEADER = "A header the documents of this request's view read arrived with different " +
             "values: enforcement refuses such a request (PIP-12)."
     }

@@ -17,18 +17,15 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
-import me.ahoo.cosec.control.store.AppList
-import me.ahoo.cosec.control.store.Head
-import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.document.RoleExpansion
-import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -68,26 +65,13 @@ class ChangeChecks(
     /** The headers the host reads credentials from besides the fixed ones, which no reference may read (`CND-5`). */
     private val credentialHeaders: Set<String> = emptySet(),
 ) {
-    /**
-     * Reads what the checks and the grant analysis combine a candidate with: current heads, the back-references of the
-     * platform's and apps' policies, and the app list ([me.ahoo.cosec.control.store.ControlStore.apps], RC1-4).
-     */
-    @InternalCoSecApi
-    interface Context {
-        suspend fun head(key: SnapshotKey): Head?
-
-        suspend fun referrers(target: SnapshotKey, policy: PolicyId): Set<SnapshotKey>
-
-        suspend fun apps(): Versioned<AppList>?
-    }
-
     suspend fun check(
         key: SnapshotKey,
         candidate: PolicyDocument,
         kind: ProvenanceKind,
         operations: List<Operation>,
         base: PolicyDocument?,
-        context: Context,
+        context: CurrentDocuments,
     ): CheckResult {
         val findings = ArrayList<Finding>()
         val bytes = PolicyDocumentCodec.encode(candidate)
@@ -130,11 +114,5 @@ class ChangeChecks(
             else -> BindingChecks.unresolved(candidate, platform, context, checkedWith, findings)
         }
         return CheckResult(findings, checkedWith)
-    }
-
-    internal companion object {
-        private const val BAD_REQUEST = 400
-        private const val UNPROCESSABLE = 422
-        val RESERVED = listOf("cosec:", "g:", "r:", RoleExpansion.BINDING_PREFIX)
     }
 }

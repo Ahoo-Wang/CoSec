@@ -29,11 +29,11 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Finding
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.CONFLICT
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.MAX_ATTEMPTS
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.NOT_FOUND
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.UNAVAILABLE
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -171,14 +171,7 @@ internal class ChangeLifecycle(
     }
 
     internal companion object {
-        const val BAD_REQUEST = 400
-        const val FORBIDDEN = 403
-        const val NOT_FOUND = 404
-        const val CONFLICT = 409
-        const val GONE = 410
-        const val UNPROCESSABLE = 422
         const val PRECONDITION_REQUIRED = 428
-        const val UNAVAILABLE = 503
         const val BREAK_GLASS = "BREAK_GLASS"
         const val BREAK_GLASS_EXEMPT = "break-glass has no shadow window (RFC 0007 Q12)"
         const val MAX_ATTEMPTS = 16

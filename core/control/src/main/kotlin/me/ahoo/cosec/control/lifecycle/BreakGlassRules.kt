@@ -16,6 +16,7 @@
 package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.document.PolicyDocument
@@ -143,6 +144,4 @@ internal object BreakGlassRules {
                 UNPROCESSABLE
             )
         }
-
-    private const val UNPROCESSABLE = 422
 }

@@ -17,6 +17,8 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ApplyMode
+import me.ahoo.cosec.control.change.ControlStatus.PRECONDITION_FAILED
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ownerOf
@@ -305,7 +307,4 @@ internal object Operations {
     private fun limitsOf(limits: ConditionLimits): List<Int> = with(limits) {
         listOf(maxNodes, maxDepth, maxInValues, maxCidrBlocks, maxLiteralBytes, maxCost)
     }
-
-    const val UNPROCESSABLE: Int = 422
-    const val PRECONDITION_FAILED: Int = 412
 }
