@@ -13,18 +13,9 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.engine.flat
+package me.ahoo.cosec.engine
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.CoSecEngine
-import me.ahoo.cosec.engine.CompiledDocument
-import me.ahoo.cosec.engine.CompiledPolicy
-import me.ahoo.cosec.engine.EngineRequest
-import me.ahoo.cosec.engine.PolicyCompiler
-import me.ahoo.cosec.engine.ResourceSource
-import me.ahoo.cosec.engine.SnapshotView
-import me.ahoo.cosec.engine.StatementSource
-import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
@@ -79,7 +70,7 @@ import org.openjdk.jmh.annotations.State
  * B/op of the same benchmark without the boundary check (RFC 0007 Q24).
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
-open class FlatAuthorizationBenchmark {
+open class EngineAuthorizationBenchmark {
     @Param("global", "role", "none", "role-heavy", "short-form")
     lateinit var scenario: String
 

@@ -437,14 +437,14 @@ each with its scenarios or guard tests, and `:conformance:mutationCheck` breaks 
 | **Authorization is a pure decision.** The engine does no I/O and keeps no state; rate limits are obligations of a permit, so a denied request never spends a permit. | Keeps evaluation fast, predictable and explainable; denied requests never use up quotas. | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime) |
 | **Snapshot caches never expire and throw on failed reads**, whatever a CoCache customizer or property says. | Redis is the store of record; expiry or a swallowed error would silently drop policies. | `CacheTtlPolicyTest`, `StrictCacheFailureTest` |
 | **One revision per document per evaluation**, installed in load order. | A decision must never mix two revisions of one document. | `SnapshotConsistencyPropertyTest`, `SnapshotInstallOrderPropertyTest` |
-| **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `FlatAuthorizationBenchmark`, `PipelineBenchmark` (review) |
+| **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `EngineAuthorizationBenchmark`, `PipelineBenchmark` (review) |
 | **Public signatures change only on purpose.** Each published module's ABI is in its dump; a change that is not in the dump fails the build. | Applications compile against CoSec and implement its SPIs; a signature change nobody noticed breaks them. | `checkKotlinAbi` (part of `check`), `SpiMarkerTest` |
 
 ## Performance
 
 Two benchmarks measure the hot path:
 
-- **`FlatAuthorizationBenchmark`** (`core/engine/src/jmh`) measures the engine alone: three global policies, two attached
+- **`EngineAuthorizationBenchmark`** (`core/engine/src/jmh`) measures the engine alone: three global policies, two attached
   principal policies and an app with 50 permissions granted to roles, in the scenarios `global` (a global ALLOW
   matches), `role` (a permission near the end of the app's list), `none` (nothing matches) and `role-heavy`, each with
   no platform boundary or a boundary of 1 or 8 statements.
@@ -454,7 +454,7 @@ Two benchmarks measure the hot path:
 
 8.0 must be at least as fast as 7.x in every comparable scenario. That gate is the manual CI workflow
 [`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml): on one runner it
-alternates 7.x's `SimpleAuthorizationBenchmark` and `SecurityPipelineBenchmark` with 8.0's `FlatAuthorizationBenchmark`
+alternates 7.x's `SimpleAuthorizationBenchmark` and `SecurityPipelineBenchmark` with 8.0's `EngineAuthorizationBenchmark`
 (no boundary) and `PipelineBenchmark`, and fails when any scenario's median 8.0/7.x speed ratio is below 100 %. The run
 that admitted the 8.0 path ([40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212)) passed every
 scenario: the engine at 364 to 601 % of 7.x, the pipeline at 126 to 219 %.
@@ -471,7 +471,7 @@ The rounds, conditions and per-scenario numbers are in
 Run a benchmark through Gradle:
 
 ```bash
-./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark
+./gradlew :engine:jmh -PjmhIncludes=EngineAuthorizationBenchmark
 ./gradlew :e2e:jmh -PjmhIncludes=PipelineBenchmark      # needs Redis on localhost:6379
 ```
 
