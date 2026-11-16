@@ -1,0 +1,129 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# The full mutation check (RFC 0008 §3.7): every patch of test/conformance/mutants is applied to the tested ref and
+# its tests must fail, so a patch that stops applying, compiling or being caught shows here instead of at the RC gate.
+# `./gradlew :conformance:mutationCheck` is not part of `check` (each mutant rebuilds), and this is where it runs in
+# full, weekly or on demand. The shards come from the patches' own headers (scripts/ci/mutation_plan.py: one per rule
+# family, cut into chunks), so a new rule family or mutant needs no change here. Run it here, not on a laptop.
+name: Mutation check
+on:
+  workflow_dispatch:
+    inputs:
+      mutants:
+        description: 'Optional comma-separated mutant names (a patch file name without .patch); empty = all'
+        required: false
+        default: ''
+  schedule:
+    - cron: '23 3 * * 1'
+
+permissions:
+  contents: read
+
+# Two full runs never overlap; a second waits for the first.
+concurrency:
+  group: mutation-check
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Test the CI scripts
+        run: python3 -I -m unittest discover -s scripts/ci
+
+      - name: Derive the shards from test/conformance/mutants
+        id: plan
+        env:
+          MUTANTS: ${{ inputs.mutants }}
+        run: python3 -I scripts/ci/mutation_plan.py --mutants "$MUTANTS" --github-output "$GITHUB_OUTPUT"
+
+  mutate:
+    name: Mutate ${{ matrix.name }}
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      # One shard failing must not hide the others.
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      MUTANTS: ${{ matrix.mutants }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Start Redis
+        if: matrix.redis
+        run: |
+          docker run --detach --name redis --publish 6379:6379 redis:7
+          timeout 60 sh -c 'until docker exec redis redis-cli ping; do sleep 1; done'
+
+      - name: Set up Java and Gradle
+        uses: ./.github/actions/setup-java-gradle
+
+      # mutationCheck prints one `<RESULT> <mutant> (<rules>)` line per mutant at its end, and exits 1 when any is not
+      # KILLED.
+      - name: Check ${{ matrix.count }} mutants
+        run: |
+          set -o pipefail
+          ./gradlew :conformance:mutationCheck "-Pmutants=$MUTANTS" --no-daemon --stacktrace 2>&1 | tee mutation.log
+
+      - name: Summary
+        if: always()
+        env:
+          SHARD: ${{ matrix.name }}
+        run: |
+          {
+            echo "### Mutation shard \`$SHARD\`"
+            if grep -qE '^(All [0-9]+ mutants killed|[0-9]+ of [0-9]+ mutant)' mutation.log 2>/dev/null; then
+              if grep -E '^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY) ' mutation.log; then
+                echo
+                echo "The mutants above are not killed."
+              else
+                echo "Every mutant killed."
+              fi
+            else
+              echo "mutationCheck did not finish: see the job log."
+            fi
+          } | sed 's/^\(SURVIVED\|DOES_NOT_COMPILE\|DOES_NOT_APPLY\) /- \1 /' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-log-${{ matrix.name }}
+          path: mutation.log
+          if-no-files-found: ignore
+
+  # Green only when every shard is.
+  mutation:
+    name: Mutation check
+    needs: mutate
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every shard killed its mutants
+        env:
+          RESULT: ${{ needs.mutate.result }}
+        run: |
+          echo "mutate: $RESULT"
+          test "$RESULT" = success
