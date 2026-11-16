@@ -107,31 +107,32 @@ object ShadowCodec {
         }
     }
 
-    // B7: the samples writer extracts into a function of its own
-    @Suppress("NestedBlockDepth")
     private fun report(report: ShadowReport): ObjectNode = factory.objectNode().apply {
         put("window", report.window)
         put("instance", report.instance)
         putObject(
             "counts"
         ).apply { report.counts.toSortedMap().forEach { (outcome, count) -> put(outcome.name, count) } }
-        putObject("samples").apply {
-            report.samples.toSortedMap().forEach { (outcome, samples) ->
-                putArray(outcome.name).apply {
-                    samples.forEach { sample ->
-                        addObject().put(
-                            "tenant",
-                            sample.tenant
-                        ).put("principal", sample.principal).put("app", sample.app)
-                            .put("space", sample.space).put("action", sample.action).put("resource", sample.resource)
-                            .put("enforcedBy", sample.enforcedBy).put("candidateBy", sample.candidateBy)
-                    }
-                }
-            }
-        }
+        putObject("samples").apply { putSamples(report.samples) }
         putArray("baseRevisions").apply { report.baseRevisions.sorted().forEach { add(it) } }
         report.first?.let { put("first", it.toString()) }
         report.last?.let { put("last", it.toString()) }
+    }
+
+    /** The samples of a report, by outcome, in the outcomes' order. */
+    private fun ObjectNode.putSamples(byOutcome: Map<ShadowOutcome, List<ShadowSample>>) {
+        byOutcome.toSortedMap().forEach { (outcome, samples) ->
+            putArray(outcome.name).apply {
+                samples.forEach { sample ->
+                    addObject().put(
+                        "tenant",
+                        sample.tenant
+                    ).put("principal", sample.principal).put("app", sample.app)
+                        .put("space", sample.space).put("action", sample.action).put("resource", sample.resource)
+                        .put("enforcedBy", sample.enforcedBy).put("candidateBy", sample.candidateBy)
+                }
+            }
+        }
     }
 
     private fun report(node: JsonNode): ShadowReport {
