@@ -118,12 +118,32 @@ jobs:
           cp "$GITHUB_WORKSPACE"/scripts/jmh-ab/*.py "$RUNNER_TEMP/"
 
       # Names setup-java's JDKs to Gradle's toolchain detection, whichever ref's gradle.properties is in use.
+      # The Gradle log of each side goes to a file (at --info, with stack traces) and is uploaded when a build fails: the e2e
+      # build has failed at the configuration cache's store of :cocache:compileKotlin's classpath, "Could not find" every jar
+      # of it, on some runs and not on others, and the default log does not say why a download did not happen.
       - name: Build benchmark jars
         run: |
           toolchains="-Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64,JAVA_HOME_21_X64"
           for side in base head; do
-            (cd "$RUNNER_TEMP/$side" && ./gradlew ":$MODULE:jmhJar" "$toolchains" --no-daemon)
+            log="$RUNNER_TEMP/gradle-$side.log"
+            if ! (cd "$RUNNER_TEMP/$side" && ./gradlew ":$MODULE:jmhJar" "$toolchains" --no-daemon --info --stacktrace > "$log" 2>&1); then
+              echo "::error::the $side build failed; its --info log is the build-diagnostics artifact"
+              grep -n -B3 -A60 'What went wrong' "$log" | head -n 200 || true
+              exit 1
+            fi
+            tail -n 5 "$log"
           done
+
+      - name: Upload build diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jmh-ab-build-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/gradle-*.log
+            ${{ runner.temp }}/base/build/reports/**
+            ${{ runner.temp }}/head/build/reports/**
+          if-no-files-found: ignore
 
       # Every @Param combination of every matching benchmark runs once per side and round, so a class with several
       # params multiplies quickly. Narrow `include` and `params` when this prints more than ~60 minutes.
