@@ -40,7 +40,9 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt",
-            757,
+            // +26 (SNP-14): the claimed kind of a removal and its claim, the counts moved where an entry is installed, an
+            // install over the cap evicting before it answers, and where a throw from that pass goes; the code B2b rewrites.
+            783,
             Disposition.Debt(Batch.B2b),
         ),
         Entry(
@@ -52,11 +54,6 @@ object SourceSizeLedger {
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt",
             500,
             Disposition.Stays("migrate's one-off translation of 7.x condition parts"),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt",
-            454,
-            Disposition.Debt(Batch.B4),
         ),
         Entry(
             "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
