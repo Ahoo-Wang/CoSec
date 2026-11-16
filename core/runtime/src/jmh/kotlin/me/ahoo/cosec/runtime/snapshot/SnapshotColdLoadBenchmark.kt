@@ -24,7 +24,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.BenchmarkMode
-import org.openjdk.jmh.annotations.Level
 import org.openjdk.jmh.annotations.Mode
 import org.openjdk.jmh.annotations.OutputTimeUnit
 import org.openjdk.jmh.annotations.Setup
@@ -47,8 +46,9 @@ import java.util.concurrent.atomic.AtomicLong
  * round-robin. Eviction runs on housekeeping, asynchronously, and under a burst a family holds more than its bound, up to
  * about the housekeeping queue's 4,096 more; a slice is larger than that, so a document has been evicted before it
  * comes round again: every request is a miss by construction. The source counts its tenant load outcomes and
- * [tearDown] fails when one was a hit. It also reports the most tenant documents seen installed at an iteration's end,
- * how far eviction ran behind the bound.
+ * [tearDown] fails when one was anything but a cold load (a hit, a failure, a timeout). It also reports the most
+ * tenant documents held during the run, sampled every [SAMPLE_MILLIS] on a thread of its own: how far eviction ran
+ * behind the bound.
  *
  * [coldLoad] is one thread; [coldLoadContended] is [CONTENDED] threads, each on its own slice, contending for the compile
  * pool and the eviction. The "before" of B2b's rewrite, on today's slot.
@@ -64,7 +64,9 @@ open class SnapshotColdLoadBenchmark {
     private val slices = AtomicInteger()
     @Volatile
     private var counting = false
+    @Volatile
     private var largestHeld = 0
+    private lateinit var sampler: Thread
 
     /** The tenant load outcomes, once setup is done: every request must be a miss. */
     private val metrics = object : SnapshotMetrics {
@@ -104,23 +106,40 @@ open class SnapshotColdLoadBenchmark {
         keys.forEach { source.loadAll(listOf(it)).join() }
         println("Setup saw $TENANTS tenants in ${(System.nanoTime() - started) / 1_000_000} ms")
         counting = true
+        sampler = Thread(::sample, "cold-load-held-sampler").apply {
+            isDaemon = true
+            start()
+        }
     }
 
-    /** The most tenant documents seen installed at an iteration's end: how far eviction runs behind the bound. */
-    @TearDown(Level.Iteration)
-    fun sampleHeld() {
-        largestHeld = maxOf(largestHeld, held())
+    /**
+     * The most tenant documents held while the requests run, read every [SAMPLE_MILLIS] on a thread of its own, outside
+     * the measured method: how far eviction runs behind the bound.
+     */
+    private fun sample() {
+        while (!Thread.currentThread().isInterrupted) {
+            largestHeld = maxOf(largestHeld, held())
+            try {
+                Thread.sleep(SAMPLE_MILLIS)
+            } catch (_: InterruptedException) {
+                return
+            }
+        }
     }
 
     private fun held(): Int = source.entries().count { it.key is SnapshotKey.Tenant }
 
     @TearDown
     fun tearDown() {
-        largestHeld = maxOf(largestHeld, held())
+        sampler.interrupt()
+        sampler.join()
         source.close()
         val counts = outcomes.mapValues { it.value.get() }
-        println("Tenant load outcomes: $counts; the most tenant documents held at an iteration's end: $largestHeld (bound $HELD)")
-        check(counts.getValue(LoadOutcome.HIT) == 0L) { "A request was a hit, not a miss: $counts" }
+        println("Tenant load outcomes: $counts; the most tenant documents held during the run: $largestHeld (bound $HELD)")
+        // A request answered FAILED or TIMEOUT is no cold load either: the row measures only misses that load.
+        check(counts.filterKeys { it != LoadOutcome.COLD }.values.all { it == 0L }) {
+            "A request was not a cold load: $counts"
+        }
     }
 
     @Benchmark
@@ -136,5 +155,6 @@ open class SnapshotColdLoadBenchmark {
         const val CONTENDED = 8
         const val SLICE = TENANTS / CONTENDED
         const val HELD = 16
+        const val SAMPLE_MILLIS = 10L
     }
 }
