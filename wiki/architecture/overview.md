@@ -450,7 +450,8 @@ Two benchmarks measure the hot path:
   no platform boundary or a boundary of 1 or 8 statements.
 - **`PipelineBenchmark`** (`test/e2e/src/jmh`) measures `Pipeline.evaluate` end to end, with the same data published to
   Redis and read through CoCache, a warm snapshot, and the scenarios `global`, `role`, `none`, `anonymous`,
-  `blacklist`, `blocked` and `listener`.
+  `blacklist`, `blocked`, `listener` and `routed` (a route map maps the request to a business action, so the
+  route lookup is in the measurement: the only scenario that has one).
 
 8.0 must be at least as fast as 7.x in every comparable scenario. That gate is the manual CI workflow
 [`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml): on one runner it

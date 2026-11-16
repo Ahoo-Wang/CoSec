@@ -230,7 +230,7 @@ sequenceDiagram
 两个基准测试衡量热路径：
 
 - **`FlatAuthorizationBenchmark`**（`core/engine/src/jmh`）只测引擎：三条全局策略、两条附加的主体策略，以及一个有 50 个权限并授予角色的应用；场景有 `global`（全局 ALLOW 匹配）、`role`（应用列表末尾附近的权限）、`none`（什么都不匹配）和 `role-heavy`，每个场景分别在没有平台边界、边界含 1 条或 8 条语句的情况下运行。
-- **`PipelineBenchmark`**（`test/e2e/src/jmh`）端到端地测量 `Pipeline.evaluate`：同样的数据发布到 Redis、经 CoCache 读取，快照已预热；场景有 `global`、`role`、`none`、`anonymous`、`blacklist`、`blocked` 和 `listener`。
+- **`PipelineBenchmark`**（`test/e2e/src/jmh`）端到端地测量 `Pipeline.evaluate`：同样的数据发布到 Redis、经 CoCache 读取，快照已预热；场景有 `global`、`role`、`none`、`anonymous`、`blacklist`、`blocked`、`listener` 和 `routed`（路由映射把请求映射到业务动作，路由查找因此计入测量：唯一带路由查找的场景）。
 
 8.0 在每个可比的场景中都必须不慢于 7.x。这道门槛是手动触发的 CI 工作流 [`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml)：它在同一台 runner 上交替运行 7.x 的 `SimpleAuthorizationBenchmark`、`SecurityPipelineBenchmark` 与 8.0 的 `FlatAuthorizationBenchmark`（无边界）、`PipelineBenchmark`，任何场景的 8.0/7.x 速度比中位数低于 100 % 即失败。让 8.0 路径合入的那次运行（[40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212)）所有场景都通过：引擎为 7.x 的 364 % 到 601 %，Pipeline 为 126 % 到 219 %。
 
