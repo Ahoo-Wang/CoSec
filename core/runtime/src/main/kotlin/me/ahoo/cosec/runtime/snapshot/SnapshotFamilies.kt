@@ -177,13 +177,6 @@ internal class SnapshotFamilies<A : Any>(
          */
         const val MAX_SLACK = 4096
 
-        /**
-         * The most entries of a kind an installing thread evicts in place, in one pass, when its install took the family
-         * over the cap (`SNP-14`); the rest is left to housekeeping and to the next install over the cap. Chosen from
-         * the measurement in the PR that introduced it: see [MAX_SLACK]'s rule.
-         */
-        const val IN_PLACE_BATCH = 64
-
         /** Whether [entry] is for a document the store does not hold: the other kind ([Family.count]). */
         fun isAbsent(entry: SnapshotEntry<*>): Boolean = entry.origin == EntryOrigin.ABSENT
     }

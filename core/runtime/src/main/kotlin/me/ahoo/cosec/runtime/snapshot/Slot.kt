@@ -700,7 +700,8 @@ internal class Slot<T : Any>(
         } else if (install) {
             context.families.firstOrNull { it.spec.kind == key.kind }?.let { family ->
                 if (context.families.overCap(family)) {
-                    context.families.evictBeyond(family, SnapshotFamilies.IN_PLACE_BATCH)
+                    // The whole excess in one pass: the scan dominates a pass's time, whatever it evicts (EvictionPassBenchmark).
+                    context.families.evictBeyond(family)
                 } else {
                     context.threads.offRequestThread { context.families.evictBeyond(family) }
                 }

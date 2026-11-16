@@ -232,6 +232,10 @@ object GuardAllowlist {
             "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
             "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey",
             "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder",
+            "runtime:SnapshotFamilyBoundTest#a burst with housekeeping held never holds more than the cap, and the installer evicted it in place",
+            "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
+            "runtime:SnapshotFamilyBoundTest#two passes at once never take a kind below its bound",
+            "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and the claim goes back",
         ),
     )
 }

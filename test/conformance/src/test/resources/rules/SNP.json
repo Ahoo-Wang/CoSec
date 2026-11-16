@@ -182,6 +182,22 @@
         "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs",
         "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
       ]
+    },
+    {
+      "id": "SNP-14",
+      "source": "RFC 0013 B2b (the family bound under a burst)",
+      "statement": "A family holds at most its bound plus the smaller of its bound and 4,096 entries of each kind (documents; entries for documents the store does not hold), plus the entries being installed or loaded at that moment; an install that finds its kind over that evicts on the installing thread before it answers its waiters, and evictions never take a kind below its bound.",
+      "level": "timing",
+      "properties": [
+        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
+      ],
+      "guards": [
+        "runtime:SnapshotFamilyBoundTest#a burst with housekeeping held never holds more than the cap, and the installer evicted it in place",
+        "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
+        "runtime:SnapshotFamilyBoundTest#two passes at once never take a kind below its bound",
+        "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and the claim goes back"
+      ],
+      "pending": null
     }
   ]
 }

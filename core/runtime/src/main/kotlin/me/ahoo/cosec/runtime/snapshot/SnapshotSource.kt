@@ -441,6 +441,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal fun heldCounts(kind: SnapshotKind): Pair<Int, Int> =
         family(kind).let { it.count(absent = false).get() to it.count(absent = true).get() }
 
+    /** Benchmarks only: one eviction pass over the [kind] family's documents, at most [limit] of them (`SNP-14`). */
+    internal fun evictionPass(kind: SnapshotKind, limit: Int) = families.evictBeyond(family(kind), limit)
+
+    /** Benchmarks only: the scan of an eviction pass alone, choosing [wanted] victims among the [kind] family's documents. */
+    internal fun evictionScan(kind: SnapshotKind, wanted: Int): Int = families.victims(family(kind), false, wanted).size
+
     /** Tests only: one claimed eviction of [key]'s slot, as a pass that chose it as of the kind [absent] would do it. */
     internal fun evictClaiming(key: SnapshotKey, absent: Boolean): Boolean? {
         val family = familyOf(key)
