@@ -61,36 +61,47 @@ import java.util.IdentityHashMap
  * the [CandidateVisitor] of its own enumeration, the [ConditionInput] of every condition and the [IndexLookup] of every
  * index, so none of those allocate. [TracingEvaluator] overrides only [candidate], the step per candidate, so no
  * trace code sits in the untraced one (see `Evaluator` for why).
+ *
+ * Its state is `@JvmField internal`: visible in the module, so that the parts of the evaluation written outside this
+ * class read and write it as a member does, with a field access and no accessor call (RFC 0013 §6).
  */
 // Large by design: the evaluator is its own visitor, condition input, index lookup and scratch source, so that an
 // evaluation allocates nothing for them; splitting it would add an object, or a call, per request.
 // B3: the evaluator splits into its parts, its one allocation unchanged (RFC 0013 §6)
 @Suppress("TooManyFunctions", "LargeClass")
-internal open class Evaluator(protected val request: EngineRequest, protected val view: SnapshotView) :
+internal open class Evaluator(
+    @JvmField internal val request: EngineRequest,
+    @JvmField internal val view: SnapshotView
+) :
     CandidateVisitor,
     ConditionInput,
     IndexLookup,
     ScratchSource {
-    protected val authz: AuthzRequest = request.request
-    private val host: ConditionInput = request.attributes
-    protected val target: ResourceTarget = ResourceTarget(authz.resource)
+    @JvmField internal val authz: AuthzRequest = request.request
+
+    @JvmField internal val host: ConditionInput = request.attributes
+
+    @JvmField internal val target: ResourceTarget = ResourceTarget(authz.resource)
 
     /** The effect whose statements the current pass evaluates. */
-    protected var pass: Effect = Effect.DENY
+    @JvmField internal var pass: Effect = Effect.DENY
 
     /** The pass's first match. */
-    protected var matched: Decision? = null
+    @JvmField internal var matched: Decision? = null
 
     // The first error of the DENY pass.
-    private var errorAt: StatementRef.Policy? = null
-    private var errorInGuard = false
-    private var error: Throwable? = null
+    @JvmField internal var errorAt: StatementRef.Policy? = null
+
+    @JvmField internal var errorInGuard = false
+
+    @JvmField internal var error: Throwable? = null
 
     /** The first ALLOW skipped because an external attribute was missing (RFC 0006 K12). */
-    private var skipped: Cause? = null
+    @JvmField internal var skipped: Cause? = null
 
-    private var missing: MutableSet<PolicyId>? = null
-    private var ambiguous: MutableSet<PolicyId>? = null
+    @JvmField internal var missing: MutableSet<PolicyId>? = null
+
+    @JvmField internal var ambiguous: MutableSet<PolicyId>? = null
 
     // Policy conditions evaluated so far, by identity, and their results; allocated on the first condition. Up to
     // SCAN_GUARDS they are found by scanning these arrays, which allocates nothing and costs less than hashing for the few
@@ -100,40 +111,50 @@ internal open class Evaluator(protected val request: EngineRequest, protected va
     // differently, as an `exists` on one external path declared String by one document's catalog and Bool by another's,
     // or a `time` with another zone table; and comparing texts that differ only late costs their length, up to megabytes
     // for large `in` sets, on every lookup. Policies meant to share a condition share the instance instead.
-    private var guards: Array<CheckedCondition?>? = null
-    private var guardResults: IntArray? = null
-    private var guardErrors: Array<Throwable?>? = null
-    private var guardCount = 0
+    @JvmField internal var guards: Array<CheckedCondition?>? = null
+
+    @JvmField internal var guardResults: IntArray? = null
+
+    @JvmField internal var guardErrors: Array<Throwable?>? = null
+
+    @JvmField internal var guardCount = 0
 
     /** Each condition's result, a small `Int`, or its error: the same facts as the arrays, once there are too many. */
-    private var guardMap: IdentityHashMap<CheckedCondition, Any>? = null
+    @JvmField internal var guardMap: IdentityHashMap<CheckedCondition, Any>? = null
 
     /** The error of the condition [guard] returned [GUARD_ERROR] for last. */
-    private var guardError: Throwable? = null
+    @JvmField internal var guardError: Throwable? = null
 
     /** The error of the last [step] that returned [ERROR] or [GUARD_FAILED]. */
-    protected var stepError: Throwable? = null
+    @JvmField internal var stepError: Throwable? = null
 
     /** The captures of the statement whose condition is being evaluated. */
-    private var captures: Captures? = null
+    @JvmField internal var captures: Captures? = null
 
     // The positions an index lookup collected, merged by [candidates]: the first list alone needs no buffer.
-    private var firstList: IntArray? = null
-    private var lists: Array<IntArray?>? = null
-    private var listCount = 0
+    @JvmField internal var firstList: IntArray? = null
+
+    @JvmField internal var lists: Array<IntArray?>? = null
+
+    @JvmField internal var listCount = 0
 
     /**
      * The glob table and the marks of repeated targets ([BoundEntry.repeat]), made when the evaluation first needs
      * either: an evaluation of documents with neither glob segments nor repeated targets makes none.
      */
-    private var scratch: EvaluationScratch? = null
+    @JvmField internal var scratch: EvaluationScratch? = null
 
-    private var pathState = PATH_UNPARSED
-    private var subjectRoles: Set<String>? = null
-    private var scopedRoles: Set<String>? = null
-    private var scopeRoles: Set<String>? = null
-    private var remoteIpParsed = false
-    private var remoteIp: IpAddress? = null
+    @JvmField internal var pathState = PATH_UNPARSED
+
+    @JvmField internal var subjectRoles: Set<String>? = null
+
+    @JvmField internal var scopedRoles: Set<String>? = null
+
+    @JvmField internal var scopeRoles: Set<String>? = null
+
+    @JvmField internal var remoteIpParsed = false
+
+    @JvmField internal var remoteIp: IpAddress? = null
 
     fun evaluate(): Decision {
         val decision = denyPass()
@@ -178,8 +199,8 @@ internal open class Evaluator(protected val request: EngineRequest, protected va
      * Set while [withObligations] decides a permit's obligations: they are part of the decision, so an evaluation that
      * records a trace catches their errors as the untraced one does, although a statement has already matched (`ALG-8`).
      */
-    protected var obligating: Boolean = false
-        private set
+    @JvmField
+    internal var obligating: Boolean = false
 
     private fun obligation(rule: CompiledRateLimit): Obligation? {
         val result = step(rule.policy, rule.statement)
@@ -199,7 +220,7 @@ internal open class Evaluator(protected val request: EngineRequest, protected va
     }
 
     /** The error of the last [bucket] that returned null. */
-    private var bucketError: Throwable? = null
+    @JvmField internal var bucketError: Throwable? = null
 
     /** The bucket [key] names for this request; null when it cannot be read ([bucketError] says why). */
     @Suppress("TooGenericExceptionCaught")

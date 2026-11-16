@@ -36,7 +36,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt",
-            971,
+            992,
             Disposition.Debt(Batch.B3),
         ),
         Entry(
