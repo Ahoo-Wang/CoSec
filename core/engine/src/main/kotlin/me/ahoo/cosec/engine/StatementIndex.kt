@@ -215,7 +215,10 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
                 when (resource) {
                     ResourcePattern.AnyResource -> anyResource += position
                     is ResourcePattern.Typed -> types.getOrPut(resource.type, ::ArrayList) += position
-                    is ResourcePattern.Http -> (http ?: PathBuilder().also { http = it }).add(resource.path.prefix, position)
+                    is ResourcePattern.Http -> (http ?: PathBuilder().also { http = it }).add(
+                        resource.path.prefix,
+                        position
+                    )
                 }
             }
         }
