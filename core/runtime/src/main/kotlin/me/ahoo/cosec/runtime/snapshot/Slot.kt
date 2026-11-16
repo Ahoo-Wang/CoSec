@@ -140,7 +140,8 @@ internal class Slot<T : Any>(
 
     /**
      * For [recompile], after the epoch moved: a load in flight is followed by another, which starts in the new
-     * epoch. True when this slot is idle with a compiled entry, which the caller then loads again.
+     * epoch. True when this slot is to be loaded again: loading, or idle with a compiled entry. The caller then
+     * reloads it, and waits for the load that follows the one in flight.
      */
     fun markRecompile(): Boolean = synchronized(this) {
         if (removed) {
@@ -148,7 +149,7 @@ internal class Slot<T : Any>(
         }
         if (inFlight != null) {
             dirty = true
-            return false
+            return true
         }
         val known = installed ?: return false
         known.origin.compiled

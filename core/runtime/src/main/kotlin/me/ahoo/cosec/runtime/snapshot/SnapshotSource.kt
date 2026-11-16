@@ -314,13 +314,14 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * may have compiled with the old ones, so it installs and another load follows it at once; a document installed
      * before is loaded again, [SnapshotOptions.reloadConcurrency] at a time. Until then the previous compilation is
      * served. A document that cannot be compiled again (the store cannot be read, the compile queue is full) fails
-     * closed rather than keep the old compilation, and is retried. The future completes when every idle document has
-     * been loaded again.
+     * closed rather than keep the old compilation, and is retried. The future completes when every app and tenant
+     * document, idle or loading at the call, has been loaded again with the new inputs: a loading one by the load that
+     * follows it (`SNP-13`).
      */
     fun recompile(): CompletableFuture<Void> {
         context.compileEpoch.incrementAndGet()
-        val idle = families.flatMap { it.slots.values }.filter { it.markRecompile() }
-        return passes.reloadAll(idle) { it.load() }
+        val outdated = families.flatMap { it.slots.values }.filter { it.markRecompile() }
+        return passes.reloadAll(outdated) { it.reload(force = false) }
     }
 
     /**
