@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceConstructionTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index fdf609f5..010c32e4 100644
+index 3996eedb..d30d933a 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -139,7 +139,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-     // #1383: a step that throws releases what the constructor took before it, so a source that fails to build holds nothing.
-     private val subscription: AutoCloseable = undoing({}) { store.subscribe(ChangeListener()) }
-     private val passes = Passes(shared, this.families, context)
--    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { schedulePeriodic() }
-+    private val periodic: ScheduledFuture<*> = undoing({}) { schedulePeriodic() }
+@@ -128,7 +128,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+     private val prewarms = Prewarms(context, ::usableOf)
+     private val subscription: AutoCloseable =
+         undoing({}) { store.subscribe(SnapshotChanges(sharedKey, shared, this.families, passes)) }
+-    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { passes.schedulePeriodic() }
++    private val periodic: ScheduledFuture<*> = undoing({}) { passes.schedulePeriodic() }
  
      /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
-     val isPrewarmed: Boolean get() = prewarmed
+     val isPrewarmed: Boolean get() = prewarms.prewarmed

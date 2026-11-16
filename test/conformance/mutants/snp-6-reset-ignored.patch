@@ -2,16 +2,15 @@
 # Mutant: a reset of the change channel reloads nothing
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index fdf609f5..f791c829 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -519,7 +519,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotChanges.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotChanges.kt
+index 27129cd0..a47ecd1f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotChanges.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotChanges.kt
+@@ -44,6 +44,6 @@ internal class SnapshotChanges(
  
-         override fun onReset() {
-             log.info { "Snapshot change notifications may have been lost; reloading every installed document." }
--            passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
-+            Unit
-         }
+     override fun onReset() {
+         log.info { "Snapshot change notifications may have been lost; reloading every installed document." }
+-        passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
++        Unit
      }
- 
+ }
