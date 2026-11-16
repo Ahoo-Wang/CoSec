@@ -229,9 +229,13 @@ class BreakGlassAndShadowTest {
         if (key == SnapshotKey.Platform) Candidate.Ready("w", base, document) else null
     }
 
+    /**
+     * What the window counted, once it has counted. A window is visible to `reports()` a moment before its first
+     * sample is merged under its lock, so a report that exists may still count nothing: wait for the count itself.
+     */
     private fun counts(): Map<ShadowOutcome, Long> = runBlocking {
         withTimeout(5.seconds) {
-            while (recorder.reports().isEmpty()) {
+            while (recorder.reports().singleOrNull()?.counts.isNullOrEmpty()) {
                 delay(5)
             }
         }
