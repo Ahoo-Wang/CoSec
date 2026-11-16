@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.spi.snapshot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.io.ByteArrayInputStream
 import java.io.InputStream
 import java.time.Instant
@@ -26,8 +27,12 @@ import java.util.HexFormat
  * alert on, never to ignore (see `SnapshotSource`).
  *
  * The body is copied in and never handed out, so a document can be shared between threads and compiled more than once.
+ *
+ * The body is the record: the whole JSON document, header included, and the header is read from it. Make one with
+ * `SnapshotDocuments.read(bytes)` (`cosec-document`), which reads it; the constructor takes the header as given and is
+ * internal, so that no one states a header the body contradicts (SNP-12).
  */
-class SnapshotDocument(
+class SnapshotDocument @InternalCoSecApi constructor(
     /** The document format version, not the Redis layout marker. */
     val schema: Int,
     val revision: Long,

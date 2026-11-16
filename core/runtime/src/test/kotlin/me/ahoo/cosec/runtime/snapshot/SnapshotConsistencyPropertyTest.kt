@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.engine.flat.CoSecFlatEngine
@@ -67,7 +68,7 @@ class SnapshotConsistencyPropertyTest {
     private fun document(revision: Long, body: String): SnapshotDocument {
         val publishedAt = Instant.parse("2026-10-27T00:00:00Z")
         val json = """{"schema":2,"revision":$revision,"publishedAt":"$publishedAt",$body}"""
-        return SnapshotDocument(SnapshotDocument.DOCUMENT_SCHEMA, revision, publishedAt, json.encodeToByteArray())
+        return SnapshotDocuments.read(json.encodeToByteArray())
     }
 
     private fun policy(id: String, revision: Long) =

@@ -52,6 +52,7 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -74,11 +75,8 @@ class CoCacheControlStoreTest {
 
     private val key = SnapshotKey.Tenant("acme")
 
-    private fun document(revision: Long) = SnapshotDocument(
-        2,
-        revision,
-        Instant.parse("2026-11-01T00:00:00Z"),
-        """{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray(),
+    private fun document(revision: Long) = SnapshotDocuments.read(
+        """{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()
     )
 
     private fun store(
@@ -307,7 +305,7 @@ class CoCacheControlStoreTest {
             val store = store(node)
             val body = """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()
             fun candidate(window: String) =
-                StoredCandidate(window, 4, SnapshotDocument(2, 5, Instant.parse("2026-11-01T00:00:00Z"), body))
+                StoredCandidate(window, 4, SnapshotDocuments.read(body))
             store.stagedCandidate(key).assert().isNull()
             store.putCandidate(key, null, candidate("c1@1")).assert().isTrue()
             // Another stage that read nothing: its write finds the first one there.
