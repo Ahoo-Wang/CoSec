@@ -23,10 +23,13 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * concurrent ones (approve and abandon, say) only one happens.
  *
  * ```
- * DRAFT -> CHECKED -> SHADOWING -> SHADOWED -> (AWAITING_APPROVAL ->) READY -> PUBLISHED
+ * DRAFT -> CHECKED -> SHADOWING -> (AWAITING_APPROVAL ->) READY -> PUBLISHED
  *            \--- skip-shadow ---/
- * SHADOWING, AWAITING_APPROVAL, READY -> CONFLICTED when the base changes; CONFLICTED -> DRAFT by rebase
+ * SHADOWING, AWAITING_APPROVAL, READY -> CONFLICTED when the base changes; CONFLICTED -> CHECKED or DRAFT by rebase
  * ```
+ *
+ * A closed window is not a state: when it closes, the change moves on, and how it closed is the change's
+ * [ChangeRequest.shadow] ([ShadowState.closed]).
  */
 @ExperimentalCoSecApi
 enum class ChangeState {
@@ -39,7 +42,6 @@ enum class ChangeState {
     /** Holding the document's staging slot while its shadow window runs (RFC 0007 §6.4). */
     SHADOWING,
 
-    SHADOWED,
     AWAITING_APPROVAL,
     READY,
 
@@ -58,5 +60,5 @@ enum class ChangeState {
     val terminal: Boolean get() = this == PUBLISHED || this == REJECTED || this == ABANDONED || this == EXPIRED
 
     /** Whether a change in this state holds its document's staging slot (RFC 0007 §5.5). */
-    val staged: Boolean get() = this == SHADOWING || this == SHADOWED || this == AWAITING_APPROVAL || this == READY
+    val staged: Boolean get() = this == SHADOWING || this == AWAITING_APPROVAL || this == READY
 }
