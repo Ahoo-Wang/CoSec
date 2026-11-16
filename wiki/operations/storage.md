@@ -467,6 +467,11 @@ A rollback is a change like any other: it is checked, shadowed and approved as i
 it makes a new revision, so the history only grows and records who rolled back. A rollback that would bring a
 break-glass binding back never checks clean.
 
+Each revision names its parent revision and that revision's digest, and its record is kept under its own digest, so
+the history is a chain from the head down. A write that a Redis failover lost leaves a parent no record holds:
+[`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) walks the chains, reads only, and names
+each document whose chain is broken.
+
 Every control-plane instance runs two maintenance passes while it runs, each first after one interval:
 
 - **Reclaiming revisions**, every [`cosec.control.revisions.reclaim-interval`](./configuration.md#control-plane)
