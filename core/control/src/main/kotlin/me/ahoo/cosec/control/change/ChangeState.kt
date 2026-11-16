@@ -43,7 +43,10 @@ enum class ChangeState {
     AWAITING_APPROVAL,
     READY,
 
-    /** The base changed under it; nothing of it was published. [Changes.rebase] replays it on the new head. */
+    /**
+     * The base changed under it; nothing of it was published.
+     * [me.ahoo.cosec.control.lifecycle.Changes.rebase] replays it on the new head.
+     */
     CONFLICTED,
 
     PUBLISHED,

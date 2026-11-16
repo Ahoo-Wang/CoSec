@@ -2,11 +2,11 @@
 # Mutant: a break-glass approval is recorded without a REQUIRED change listener
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 6be8bc1f..77def48b 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -424,7 +424,6 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+index 87eb42e6..50f9e9aa 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+@@ -440,7 +440,6 @@ class Changes(
          authority.requireApprovable(operator, change, candidate)
          val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
          if (breakGlass) {

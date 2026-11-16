@@ -2,11 +2,11 @@
 # Mutant: the control plane checks candidates against the platform's attributes only, not the host's providers
 # Tests: :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-index 164cd7dd..9fd5f676 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-@@ -177,7 +177,7 @@ class ChangeChecks(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
+index 7a690ee1..e8725ef9 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
+@@ -184,7 +184,7 @@ class ChangeChecks(
              sharesPlatformIds(candidate, platform, findings)
          }
          try {

@@ -42,8 +42,9 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B2b),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt",
-            926,
+            "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt",
+            // +16 (B4 2b): imports of the change values, which were the file's own package before it moved to lifecycle.
+            942,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
@@ -57,9 +58,10 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt",
+            "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt",
             // +1 (IDN-22): a recorded approver's principal names its session, which a recorded one never has.
-            773,
+            // +6 (B4 2b): imports of the change values, which were the file's own package before it moved to lifecycle.
+            779,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
@@ -73,8 +75,9 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt",
-            552,
+            "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt",
+            // +3 (B4 2b): imports of the change values, which were the file's own package before it moved to lifecycle.
+            555,
             Disposition.Debt(Batch.B4),
         ),
         Entry(

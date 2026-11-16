@@ -2,11 +2,11 @@
 # Mutant: a break-glass revoke waits for the change that holds the slot, like any change
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-index 17b299a3..54e35edc 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-@@ -124,9 +124,6 @@ internal class Preemption(private val revisions: Revisions, private val authorit
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
+index 0ad107c9..d30bc148 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
+@@ -189,9 +189,6 @@ internal class Preemption(
          if (head?.digest != change.base.digest) {
              return false
          }

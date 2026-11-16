@@ -2,11 +2,11 @@
 # Mutant: a break-glass change is abandoned without a REQUIRED change listener
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 6be8bc1f..9188e893 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -496,7 +496,6 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+index 87eb42e6..20fa84c3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
+@@ -512,7 +512,6 @@ class Changes(
          val breakGlass = current.kind == ProvenanceKind.BREAK_GLASS
          if (breakGlass) {
              PublishRules.requireState(current, OPEN)

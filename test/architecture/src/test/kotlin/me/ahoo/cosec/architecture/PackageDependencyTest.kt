@@ -72,6 +72,22 @@ class PackageDependencyTest {
     }
 
     @Test
+    fun `a leaf uses no other package of its module`() {
+        val violations = PackageLedger.MODULES.flatMap { module ->
+            val edges = edges(module)
+            module.leaves.flatMap { leaf ->
+                val declared = module.allowed[leaf].orEmpty().map { "${module.name}: $leaf may use $it" }
+                val debt = module.debt.filter { it.from == leaf }.map { "${module.name}: $leaf -> ${it.to} is a debt" }
+                val used = edges.filterKeys { it.first == leaf }.map { (edge, uses) ->
+                    "${module.name}: $leaf -> ${edge.second} (${uses.take(3).joinToString()})"
+                }
+                declared + debt + used
+            }
+        }
+        violations.assert().describedAs("a leaf package of PackageLedger uses another package of its module").isEmpty()
+    }
+
+    @Test
     fun `a debt edge still exists`() {
         val gone = PackageLedger.MODULES.flatMap { module ->
             val edges = edges(module).keys

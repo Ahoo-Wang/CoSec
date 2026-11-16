@@ -2,10 +2,11 @@
 # Mutant: a platform or app change that only removes a DENY needs no second person
 # Tests: :control:test --tests me.ahoo.cosec.control.change.DenyRemovalTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -472,7 +472,7 @@
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
+index 103cfd2b..47bb76db 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
+@@ -480,7 +480,7 @@ class ChangeAuthority(
          if (operations.any { it !is Operation.RemovePolicy && it !is Operation.RemoveBinding && it !is Operation.RemoveRole }) {
              escalations += Escalation("document $key", NOT_ANALYZED, "only the trust root publishes it alone")
          }

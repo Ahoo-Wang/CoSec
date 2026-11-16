@@ -17,7 +17,8 @@ package me.ahoo.cosec.architecture
  * RFC 0013 §3.3 as data: inside a module, which of its packages may use which. A package is the first segment under the
  * module's root package, or [ROOT] for the root package itself. The allowed edges of a module form no cycle, so a
  * module whose code keeps to them has none; [PackageDependencyTest] checks both. An edge the code has today and the
- * table does not allow is a debt, with the batch that removes it: the list only shrinks.
+ * table does not allow is a debt, with the batch that removes it: the list only shrinks. A leaf uses no other package
+ * of its module, and the test says so of it in so many words, not only by its absence from the table.
  */
 object PackageLedger {
     const val ROOT = "(root)"
@@ -28,6 +29,8 @@ object PackageLedger {
         /** Package to the packages it may use. */
         val allowed: Map<String, Set<String>>,
         val debt: List<Edge> = emptyList(),
+        /** Packages that use no other package of the module: the values the others are made of. */
+        val leaves: Set<String> = emptySet(),
     )
 
     class Edge(val from: String, val to: String, val batch: Batch, val why: String)
@@ -37,6 +40,7 @@ object PackageLedger {
     private const val SNAPSHOT = "snapshot"
     private const val IDENTITY = "identity"
     private const val CHANGE = "change"
+    private const val LIFECYCLE = "lifecycle"
     private const val CALL = "call"
     private const val HTTP = "http"
     private const val STAGE = "stage"
@@ -63,19 +67,15 @@ object PackageLedger {
             "control",
             "me.ahoo.cosec.control",
             mapOf(
-                "api" to setOf("audit", "authz", CHANGE, "grant", "store"),
-                CHANGE to setOf("audit", "authz", "grant", "store"),
+                "api" to setOf("audit", "authz", CHANGE, "grant", LIFECYCLE, "store"),
+                LIFECYCLE to setOf("audit", "authz", CHANGE, "grant", "store"),
+                // The store's records, the change events and the authorizer's refusals are made of the change values.
+                "store" to setOf(CHANGE),
+                "audit" to setOf(CHANGE),
+                "authz" to setOf(CHANGE),
             ),
-            listOf(
-                Edge(
-                    "store",
-                    CHANGE,
-                    Batch.B4,
-                    "the store's records name the change values; they move to a values package"
-                ),
-                Edge("audit", CHANGE, Batch.B4, "change events carry the change values"),
-                Edge("authz", CHANGE, Batch.B4, "the authorizer throws ChangeRejectedException"),
-            ),
+            // The change values reach nothing in control: what acts on them is in lifecycle (RFC 0013 §7.1, B4).
+            leaves = setOf(CHANGE),
         ),
         Module(
             "document",

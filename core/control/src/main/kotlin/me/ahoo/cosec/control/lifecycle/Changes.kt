@@ -109,7 +109,7 @@ class Changes(
 
     private val context = ChangeContext(store, revisions)
 
-    /** This instance has reconciled the app list ([me.ahoo.cosec.control.store.ControlMaintenance.reconcileApps]). */
+    /** This instance has reconciled the app list ([me.ahoo.cosec.control.lifecycle.ControlMaintenance.reconcileApps]). */
     internal fun appListReconciled() = context.reconciled()
 
     private val movedHeads = MovedHeads(store, authority, context, clock)
