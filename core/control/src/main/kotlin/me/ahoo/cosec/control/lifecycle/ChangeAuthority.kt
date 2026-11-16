@@ -13,7 +13,7 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.change
+package me.ahoo.cosec.control.lifecycle
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -25,6 +25,11 @@ import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.authz.TenantIsolation
+import me.ahoo.cosec.control.change.Approval
+import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.Escalation
+import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.grant.Dimension
 import me.ahoo.cosec.control.grant.GrantAnalysis
 import me.ahoo.cosec.control.grant.GrantAnalyzer

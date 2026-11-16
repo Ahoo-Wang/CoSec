@@ -20,14 +20,15 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ALICE_OP
 import me.ahoo.cosec.control.change.ChangeId
-import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.PERMIT_ALL
 import me.ahoo.cosec.control.change.allow
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.publication

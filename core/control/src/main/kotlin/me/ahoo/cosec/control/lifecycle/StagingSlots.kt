@@ -13,13 +13,18 @@
 
 @file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.control.change
+package me.ahoo.cosec.control.lifecycle
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ShadowState
+import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.SnapshotDocuments
