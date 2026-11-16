@@ -71,11 +71,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B5),
         ),
         Entry(
-            "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MigrateMain.kt",
-            601,
-            Disposition.Debt(Batch.B6),
-        ),
-        Entry(
             "core/document/src/main/kotlin/me/ahoo/cosec/document/format/PolicyDocumentFormats.kt",
             585,
             Disposition.Debt(Batch.B5),
@@ -87,7 +82,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt",
-            560,
+            545,
             Disposition.Debt(Batch.B6),
         ),
         Entry(

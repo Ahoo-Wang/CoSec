@@ -45,6 +45,15 @@ enum class RejectionKind(val advice: String) {
      */
     INVALID_ID("rename it; `*` matches any app or space in 8.0, so no app or space may be called `*`"),
 
+    /**
+     * A tenant or app id with `/` (#1403): an 8.0 id is one path segment of the resources the control plane authorizes
+     * on, so no 8.0 tenant or app document can be named by it.
+     */
+    SLASH_IN_ID(
+        "rename the tenant or app in the source system so that its id holds no `/`, then convert again: no 8.0 tenant " +
+            "or app id can hold one"
+    ),
+
     /** The same id twice: a policy in an export, or a permission in one app. */
     DUPLICATE_ID("keep one of them"),
 

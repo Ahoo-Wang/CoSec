@@ -3,15 +3,15 @@
 # Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest :conformance:test
 
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-index e04e33f4..56715667 100644
+index a8178f94..46978bae 100644
 --- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
 +++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-@@ -100,7 +100,7 @@ object ScopeResolver {
-         var blank = true
-         for (index in app.indices) {
+@@ -80,7 +80,7 @@ object ScopeResolver {
              val c = app[index]
--            if (c == ':' || c.isISOControl() || Identifiers.isUnpairedSurrogateAt(app, index)) {
-+            if (c == ':' || Identifiers.isUnpairedSurrogateAt(app, index)) {
-                 return false
+             val refused = when (c) {
+                 ':', '/' -> true
+-                else -> c.isISOControl() || Identifiers.isUnpairedSurrogateAt(app, index)
++                else -> Identifiers.isUnpairedSurrogateAt(app, index)
              }
-             blank = blank && c.isWhitespace()
+             if (refused) {
+                 return false

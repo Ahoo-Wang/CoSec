@@ -12,12 +12,9 @@
  */
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.engine.flat
+package me.ahoo.cosec.engine
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.CompiledDocument
-import me.ahoo.cosec.engine.CompiledPolicy
-import me.ahoo.cosec.engine.EngineRequest
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Binding
