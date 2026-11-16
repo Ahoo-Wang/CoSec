@@ -73,7 +73,8 @@ class SnapshotRecompileTest {
         metrics,
         directExecutor,
         null,
-    ) { ticker.incrementAndGet() }
+        { ticker.incrementAndGet() },
+    )
 
     private fun ControllableStore.publish(key: SnapshotKey, revision: Long) = put(key, document(revision))
 
