@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.store
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
@@ -65,7 +66,7 @@ object StoreFixtures {
         policies: List<PolicyDefinition> = emptyList(),
         bindings: List<Binding> = emptyList()
     ): PolicyDocument {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         return PolicyDocument(kind, owner, 1, START, policies, bindings)
     }
 

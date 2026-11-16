@@ -20,6 +20,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.document.ParentRevision
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
@@ -733,9 +734,6 @@ class Revisions(
     companion object {
         private val log = KotlinLogging.logger {}
         const val DEFAULT_MAX_ATTEMPTS: Int = 16
-
-        /** The document kind and owner of [key] ([me.ahoo.cosec.control.change.ownerOf], where the change values read it). */
-        fun ownerOf(key: SnapshotKey): Pair<DocumentKind, String> = me.ahoo.cosec.control.change.ownerOf(key)
 
         private fun requireDocumentKey(key: SnapshotKey): SnapshotKey = key.also { ownerOf(it) }
     }

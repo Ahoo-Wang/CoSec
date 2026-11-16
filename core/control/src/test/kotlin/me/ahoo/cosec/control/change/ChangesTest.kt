@@ -21,7 +21,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.EntryDigest
-import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.Catalog
@@ -353,7 +352,7 @@ class ChangesTest {
             null,
             me.ahoo.cosec.model.decision.RateLimitSpec(10.0),
         )
-        val (kind, owner) = me.ahoo.cosec.control.store.Revisions.ownerOf(ACME)
+        val (kind, owner) = ownerOf(ACME)
         val limited = me.ahoo.cosec.document.PolicyDocument(
             kind,
             owner,
