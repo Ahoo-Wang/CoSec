@@ -2,10 +2,11 @@
 # Mutant: the attribute plan walks every statement of a policy instead of those its index gives, so a path no statement can match still plans, and fetches, their attributes
 # Tests: :engine:test --tests me.ahoo.cosec.engine.ExternalAttributesTest :runtime:test --tests me.ahoo.cosec.runtime.attribute.ExternalAttributesPipelineTest
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlan.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlan.kt
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlan.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlan.kt
-@@ -70,8 +70,7 @@
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlanner.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlanner.kt
+index afd7cbaf..679258d9 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlanner.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlanner.kt
+@@ -56,8 +56,7 @@ internal class AttributePlanner(request: EngineRequest, view: SnapshotView) : Ev
          if (policy.readsExternal) {
              val statements = policy.statements(pass)
              // The statements the evaluation visits: those its index gives (I1), or all of them without one.

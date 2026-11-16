@@ -2,11 +2,11 @@
 # Mutant: every document's rules count in the platform's buckets, so a tenant rule spends the platform's counter of the same id
 # Tests: :engine:test --tests me.ahoo.cosec.engine.RateLimitObligationTest :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt
-index c8aecb7d..80bc4394 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt
-@@ -65,8 +65,8 @@ class CompiledRateLimit internal constructor(
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
+index d9ce0047..f6c39a4b 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
+@@ -88,8 +88,8 @@ class CompiledRateLimit internal constructor(
          /** The id of [id] within the counters, for a rule of the [kind] document of [owner]: `<document>/<id>`. */
          fun counterId(kind: DocumentKind, owner: String, id: String): String = when (kind) {
              DocumentKind.PLATFORM -> "platform/$id"
