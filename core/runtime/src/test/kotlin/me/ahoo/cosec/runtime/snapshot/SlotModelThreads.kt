@@ -72,13 +72,20 @@ internal class SlotModelThreads {
         run(housekeeping.tasks.removeAt(index))
     }
 
-    /** Moves time by [duration], running each task that falls due on the way, in the order they fall due. */
-    fun advance(duration: Duration) {
+    /** Runs before a periodic task (the revalidation pass) runs: what the model counts as a pass that may read anything. */
+    var onPeriodic: () -> Unit = {}
+
+    /**
+     * Moves time by [duration], running each task that falls due on the way, in the order they fall due; without
+     * [periodic], the periodic ones stay due and run at the next move that takes them.
+     */
+    fun advance(duration: Duration, periodic: Boolean = true) {
         val until = nanos + duration.toNanos()
         while (true) {
-            val due = scheduler.nextDue() ?: break
+            val due = scheduler.nextDue(periodic) ?: break
             if (due.at > until) break
             moveTo(due.at)
+            if (due.period != 0L) onPeriodic()
             scheduler.fire(due)
         }
         moveTo(until)
@@ -170,7 +177,8 @@ internal class SlotModelThreads {
         val timers = ArrayList<Timer>()
         private var sequence = 0L
 
-        fun nextDue(): Timer? = timers.minWithOrNull(compareBy<Timer>({ it.at }, { it.sequence }))
+        fun nextDue(periodic: Boolean = true): Timer? =
+            timers.filter { periodic || it.period == 0L }.minWithOrNull(compareBy<Timer>({ it.at }, { it.sequence }))
 
         fun fire(timer: Timer) {
             timers.remove(timer)
