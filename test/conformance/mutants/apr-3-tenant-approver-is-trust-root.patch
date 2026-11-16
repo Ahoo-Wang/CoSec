@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-index 103cfd2b..e1b5c9f4 100644
+index 49d29901..4a4eb633 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-@@ -314,7 +314,7 @@ class ChangeAuthority(
-         breakGlass(base, candidate, escalations)
+@@ -249,7 +249,7 @@ class ChangeAuthority(
+         analyst.breakGlass(base, candidate, escalations)
          // The trust root is the platform's administrators (RFC 0007 §7.3): a tenant principal holding cosec:approve on
          // its own document approves others' changes, and its own are analyzed (RC1-10). A person, never an API key.
--        val trustRoot = operator.platform && !apiKey(operator) && holds(operator, key, ControlActions.APPROVE)
-+        val trustRoot = !apiKey(operator) && holds(operator, key, ControlActions.APPROVE)
+-        val trustRoot = operator.platform && !approvals.apiKey(operator) && holds(operator, key, ControlActions.APPROVE)
++        val trustRoot = !approvals.apiKey(operator) && holds(operator, key, ControlActions.APPROVE)
          if (trustRoot && !options.fourEyes) {
              return escalations
          }

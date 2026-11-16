@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-index 103cfd2b..cb38b2e7 100644
+index 49d29901..225a9cf1 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-@@ -244,9 +244,6 @@ class ChangeAuthority(
+@@ -209,9 +209,6 @@ class ChangeAuthority(
       * tenant principal's to move, whatever it holds (RC1-10).
       */
      private suspend fun boundary(via: ControlAuthorizer, operator: Operator, key: SnapshotKey) {
