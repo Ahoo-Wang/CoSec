@@ -33,9 +33,9 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
 
 /**
  * The threads of a [SnapshotSource] (RFC 0013 B2a): its compile pool and scheduler, each given or started for itself,
- * and the housekeeping thread it always starts ([SnapshotExecutors]). Compilation runs on the compile pool; the
- * scheduler thread only keeps time; eviction, lag reports and log lines with stack traces run on housekeeping, so a slow
- * log appender cannot delay a timeout (#1252).
+ * and the housekeeping thread it starts unless a test gives one ([SnapshotExecutors]). Compilation runs on the compile
+ * pool; the scheduler thread only keeps time; eviction, lag reports and log lines with stack traces run on
+ * housekeeping, so a slow log appender cannot delay a timeout (#1252).
  *
  * The steps that stop them are separate, not one `close()`: the source interleaves them with its own steps, in an order
  * that matters ([SnapshotSource.close]), and a constructor that fails releases them as it does ([SnapshotSource]).
@@ -43,7 +43,9 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
 internal class SnapshotThreads(
     options: SnapshotOptions,
     compileExecutor: Executor?,
-    scheduler: ScheduledExecutorService?
+    scheduler: ScheduledExecutorService?,
+    /** Tests only: what runs housekeeping in place of the thread started here; shut down and awaited as that one is. */
+    housekeeping: ExecutorService?,
 ) {
     /** Set on the threads this source starts: [SnapshotSource.close] does not wait for the thread it runs on. */
     val onOwnThread = ThreadLocal<Boolean>()
@@ -51,7 +53,7 @@ internal class SnapshotThreads(
     val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options, onOwnThread)
     private val ownsScheduler = scheduler == null
     val scheduler: ScheduledExecutorService = scheduler ?: newScheduler(onOwnThread)
-    val housekeeping: ThreadPoolExecutor = newHousekeeping(onOwnThread)
+    val housekeeping: ExecutorService = housekeeping ?: newHousekeeping(onOwnThread)
 
     /** Stops the scheduler, when the source started it: nothing is timed any more. */
     fun stopScheduler() {
