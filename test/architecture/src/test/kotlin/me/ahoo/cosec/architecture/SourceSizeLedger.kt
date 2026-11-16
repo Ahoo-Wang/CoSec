@@ -131,16 +131,6 @@ object SourceSizeLedger {
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
         ),
         Entry(
-            "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt",
-            438,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
-            "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt",
-            430,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt",
             415,
             Disposition.Debt(Batch.B4),
