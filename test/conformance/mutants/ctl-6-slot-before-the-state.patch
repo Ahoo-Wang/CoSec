@@ -2,16 +2,16 @@
 # Mutant: the slot is taken while the change is still CHECKED, so another change takes it from a call still staging
 # Tests: :control:test --tests me.ahoo.cosec.control.change.StageReservationTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-index 87eb42e6..edd0c3f6 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-@@ -345,10 +345,10 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+index 32458882..133b54d5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+@@ -100,10 +100,10 @@ internal class Staging(
          head: Head?,
          next: suspend (ChangeRequest) -> ChangeRequest,
      ): ChangeRequest {
 +        takeSlot(operator, change, head)
-         val reserved = transition(change.id, setOf(ChangeState.CHECKED), next)
+         val reserved = flow.transition(change.id, setOf(ChangeState.CHECKED), next)
          var taken = false
          try {
 -            takeSlot(operator, reserved, head)

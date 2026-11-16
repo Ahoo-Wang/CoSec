@@ -42,12 +42,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B2b),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt",
-            // +16 (B4 2b): imports of the change values, which were the file's own package before it moved to lifecycle.
-            942,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Converter.kt",
             918,
             Disposition.Stays("migrate's one-off conversion of 7.x data, run once per deployment"),
