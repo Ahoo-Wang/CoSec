@@ -18,17 +18,21 @@ package me.ahoo.cosec.control.change
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.change.ChangeState.ABANDONED
 import me.ahoo.cosec.control.change.ChangeState.AWAITING_APPROVAL
-import me.ahoo.cosec.control.change.ChangeState.CHECKED
 import me.ahoo.cosec.control.change.ChangeState.CONFLICTED
-import me.ahoo.cosec.control.change.ChangeState.DRAFT
 import me.ahoo.cosec.control.change.ChangeState.EXPIRED
 import me.ahoo.cosec.control.change.ChangeState.PUBLISHED
 import me.ahoo.cosec.control.change.ChangeState.READY
 import me.ahoo.cosec.control.change.ChangeState.REJECTED
 import me.ahoo.cosec.control.change.ChangeState.SHADOWING
+import me.ahoo.cosec.control.lifecycle.ChangeAuthority
+import me.ahoo.cosec.control.lifecycle.ChangeLifecycle
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.ChangeStep
+import me.ahoo.cosec.control.lifecycle.StagingSlots
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -42,32 +46,29 @@ import java.time.Duration
  * either fails for a reason of its own or leaves the change in one of its to-states.
  */
 class ChangeTransitionTableTest {
-    private class Command(
-        val from: Set<ChangeState>,
-        val to: Set<ChangeState>,
-        val run: suspend (ChangeHarness, ChangeId) -> ChangeRequest,
-    )
+    private class Command(val step: ChangeStep, val run: suspend (ChangeHarness, ChangeId) -> ChangeRequest) {
+        val from: Set<ChangeState> get() = step.from
+        val to: Set<ChangeState> get() = step.to
+    }
 
-    private val open = ChangeState.entries.filterNot { it.terminal }.toSet()
-
-    /** Today's table: command → (from-states, to-states). */
+    /** Each command and its row of the table ([ChangeStep]): the code is held to the table it declares. */
     private val table = linkedMapOf(
-        "rebase" to Command(setOf(CONFLICTED, DRAFT, CHECKED), setOf(CHECKED, DRAFT)) { h, id -> h.changes.rebase(ALICE_OP, id) },
-        "stage" to Command(setOf(CHECKED), setOf(SHADOWING, READY, AWAITING_APPROVAL)) { h, id -> h.changes.stage(ALICE_OP, id) },
-        "skipShadow" to Command(setOf(CHECKED), setOf(READY, AWAITING_APPROVAL)) { h, id ->
+        "rebase" to Command(ChangeStep.REBASE) { h, id -> h.changes.rebase(ALICE_OP, id) },
+        "stage" to Command(ChangeStep.STAGE) { h, id -> h.changes.stage(ALICE_OP, id) },
+        "skipShadow" to Command(ChangeStep.SKIP_SHADOW) { h, id ->
             h.changes.skipShadow(ALICE_OP, id, "hurry")
         },
-        "shadowed" to Command(setOf(SHADOWING), setOf(SHADOWING, CONFLICTED, READY, AWAITING_APPROVAL)) { h, id ->
+        "shadowed" to Command(ChangeStep.SHADOWED) { h, id ->
             h.changes.shadowed(id)
         },
-        "approve" to Command(setOf(AWAITING_APPROVAL), setOf(READY)) { h, id ->
+        "approve" to Command(ChangeStep.APPROVE) { h, id ->
             // A person of the platform with a credential, as an approval records it, approving the candidate it has.
             val approver = EngineAuthority(h.revisions).operator(TenantId.PLATFORM, "pia")
             h.changes.approve(approver, id, checkNotNull(h.changes.get(id).candidate))
         },
-        "reject" to Command(setOf(AWAITING_APPROVAL), setOf(REJECTED)) { h, id -> h.changes.reject(PLATO, id, "no") },
-        "abandon" to Command(open, setOf(ABANDONED)) { h, id -> h.changes.abandon(ALICE_OP, id) },
-        "publish" to Command(setOf(READY), setOf(PUBLISHED, DRAFT, AWAITING_APPROVAL, CONFLICTED)) { h, id ->
+        "reject" to Command(ChangeStep.REJECT) { h, id -> h.changes.reject(PLATO, id, "no") },
+        "abandon" to Command(ChangeStep.ABANDON) { h, id -> h.changes.abandon(ALICE_OP, id) },
+        "publish" to Command(ChangeStep.PUBLISH) { h, id ->
             h.changes.publish(ALICE_OP, id)
         },
     )
@@ -161,6 +162,54 @@ class ChangeTransitionTableTest {
             EXPIRED
         )
         CONFLICTED.terminal.assert().isFalse()
+    }
+
+    /**
+     * A step that would leave a change outside its row's To, or that names a From wider than its row, is a fault: the
+     * transition throws, and nothing is written.
+     */
+    @Test
+    fun `no step writes a change outside its row`() {
+        val (harness, id) = changeIn(AWAITING_APPROVAL)
+        val options = ChangeOptions(shadow = IMMEDIATE_WINDOW)
+        val flow = ChangeLifecycle(
+            harness.memory,
+            harness.clock,
+            options,
+            StagingSlots(harness.memory, harness.clock, options),
+            ChangeListeners.NONE,
+            ChangeAuthority(PERMIT_ALL, options),
+        )
+        val outside = runCatching {
+            runBlocking {
+                flow.transition(
+                    id,
+                    ChangeStep.APPROVE
+                ) { it.copy(state = PUBLISHED) }
+            }
+        }
+        outside.exceptionOrNull().assert().isInstanceOf(IllegalStateException::class.java)
+        val wider = runCatching {
+            runBlocking { flow.transition(id, ChangeStep.APPROVE, setOf(AWAITING_APPROVAL, READY)) { it } }
+        }
+        wider.exceptionOrNull().assert().isInstanceOf(IllegalStateException::class.java)
+        runBlocking { harness.changes.get(id) }.state.assert().isEqualTo(AWAITING_APPROVAL)
+    }
+
+    /**
+     * The table itself, pinned: [ChangeStep] rendered as markdown equals `change-transitions.md`. A transition changes
+     * only with that file, in review; RFC 0007 §5.5 and §6.1 copy from it.
+     */
+    @Test
+    fun `the transition table is the one committed in change-transitions md`() {
+        fun states(states: Set<ChangeState>) = ChangeState.entries.filter { it in states }.joinToString(", ")
+        val rendered = buildString {
+            appendLine("| Step | From | To |")
+            appendLine("|---|---|---|")
+            ChangeStep.entries.forEach { appendLine("| ${it.name} | ${states(it.from)} | ${states(it.to)} |") }
+        }
+        val committed = checkNotNull(javaClass.getResource("/change-transitions.md")).readText()
+        committed.substringAfter("<!-- table -->\n").substringBefore("<!-- end -->").assert().isEqualTo(rendered)
     }
 
     private companion object {

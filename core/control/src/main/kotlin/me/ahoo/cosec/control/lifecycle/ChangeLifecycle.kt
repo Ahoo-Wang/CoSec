@@ -125,15 +125,12 @@ internal class ChangeLifecycle(
     suspend fun settle(
         change: ChangeRequest,
         state: ChangeState,
+        step: ChangeStep,
         findings: List<Finding> = change.findings,
-        published: Long? = null,
-        from: Set<ChangeState> = setOf(ChangeState.READY),
+        from: Set<ChangeState> = step.from,
     ): ChangeRequest {
-        // Once the head is written the change is published, whatever happened to it meanwhile; otherwise only a
-        // change still in [from] moves.
-        val settled = transition(change.id, if (state == ChangeState.PUBLISHED) ChangeState.entries.toSet() else from) {
-            it.copy(state = state, findings = findings, publishedRevision = published ?: it.publishedRevision)
-        }
+        // Only a change still in [from] moves.
+        val settled = transition(change.id, step, from) { it.copy(state = state, findings = findings) }
         slots.release(settled)
         return settled
     }
@@ -146,7 +143,8 @@ internal class ChangeLifecycle(
         if (change.state.terminal || !clock.instant().isAfter(change.createdAt.plus(options.expireAfter))) {
             return change
         }
-        val expired = transition(change.id, setOf(change.state)) { it.copy(state = ChangeState.EXPIRED) }
+        val expired =
+            transition(change.id, ChangeStep.EXPIRE, setOf(change.state)) { it.copy(state = ChangeState.EXPIRED) }
         slots.release(expired)
         return expired
     }
@@ -154,13 +152,17 @@ internal class ChangeLifecycle(
     /** A conditional write of [change] from one of [from] to what [next] makes of it; retried while the change moves. */
     suspend fun transition(
         id: ChangeId,
-        from: Set<ChangeState>,
+        step: ChangeStep,
+        from: Set<ChangeState> = step.from,
         next: suspend (ChangeRequest) -> ChangeRequest
     ): ChangeRequest {
+        check(step.from.containsAll(from)) { "$step moves a change from ${step.from}, not from $from" }
         repeat(MAX_ATTEMPTS) {
             val current = read(id)
             PublishRules.requireState(current.value, from)
             val updated = next(current.value).copy(updatedAt = clock.instant())
+            // The table decides where a step may take a change: anything else is a fault, and nothing is written.
+            check(updated.state in step.to) { "$step leaves a change in ${step.to}, not in ${updated.state}" }
             if (store.putChange(current.digest, updated)) {
                 return updated
             }
@@ -181,10 +183,5 @@ internal class ChangeLifecycle(
         const val BREAK_GLASS_EXEMPT = "break-glass has no shadow window (RFC 0007 Q12)"
         const val MAX_ATTEMPTS = 16
         const val APPROVAL = "APPROVAL"
-        val REBASABLE = setOf(ChangeState.CONFLICTED, ChangeState.DRAFT, ChangeState.CHECKED)
-        val STAGED = ChangeState.entries.filter { it.staged }.toSet()
-        val OPEN = ChangeState.entries.filterNot { it.terminal }.toSet()
-        val UNPUBLISHED = ChangeState.entries.toSet() - ChangeState.PUBLISHED
-        val LOST = setOf(ChangeState.READY, ChangeState.CONFLICTED)
     }
 }
