@@ -45,7 +45,14 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
     override var epoch = 0L
     override var closed = false
     override val startedAfter = HashMap<KeyHandle<String>, Long>()
-    override val config = KeyConfig(key, false, storeReadTimeout, Duration.ofMillis(100), Duration.ofSeconds(1), Duration.ZERO)
+    override val config = KeyConfig(
+        key,
+        false,
+        storeReadTimeout,
+        Duration.ofMillis(100),
+        Duration.ofSeconds(1),
+        Duration.ZERO
+    )
     private val transitions = KeyTransitions<String>(config)
     private val pass = mockk<Pass>(relaxed = true).also { excludeRecords { it.toString() } }
     private val coldLoadTimeout = Duration.ofSeconds(5)
@@ -100,27 +107,48 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
             Kind.PASS -> request(Ask.Load(force = false, pass = pass))
             Kind.RELOAD -> request(Ask.Reload(force = false))
             Kind.RELOAD_FORCED -> request(Ask.Reload(force = true))
+            Kind.RECOMPILE -> recompile()
+            Kind.EVICT -> evict(claims = true)
+            Kind.EVICT_AT_BOUND -> evict(claims = false)
+            Kind.STALE_LOOKUP -> staleLookup()
+            Kind.CLOSE -> close()
+            else -> onWorld(event)
+        }
+    }
+
+    /** What happens around the key: the store, its reads, the compile pool, housekeeping and time. */
+    private fun onWorld(event: KeyModelScript.Event) {
+        when (event.kind) {
             Kind.CHANGED -> changed { store.put(key) }
             Kind.PUT_SILENT -> store.put(key)
             Kind.REMOVE -> changed { store.remove(key) }
             Kind.CORRUPT -> changed { store.corrupt(key) }
             Kind.REGRESS -> changed { store.regress(key) }
-            Kind.RECOMPILE -> recompile()
-            Kind.RELEASE, Kind.RELEASE_LATE -> pick(store.pending.filterNot { it.hung }, event.pick)?.release(atStart = event.kind == Kind.RELEASE)
+            Kind.RELEASE, Kind.RELEASE_LATE -> pick(
+                store.pending.filterNot {
+                    it.hung
+                },
+                event.pick
+            )?.release(atStart = event.kind == Kind.RELEASE)
             Kind.FAIL_READS -> store.failure = IllegalStateException("scripted: the store cannot be read")
             Kind.HEAL_READS -> store.failure = null
             Kind.HANG -> pick(store.pending, event.pick)?.hung = true
             Kind.ADVANCE -> threads.advance(Duration.ofMillis(event.millis))
+            else -> onThreads(event)
+        }
+    }
+
+    private fun onThreads(event: KeyModelScript.Event) {
+        when (event.kind) {
             Kind.COMPILE -> if (threads.compiles.isNotEmpty()) threads.runCompile(event.pick % threads.compiles.size)
             Kind.COMPILE_FAILS -> failNext = true
             Kind.COMPILE_OVERFLOWS -> overflowNext = true
             Kind.REJECT_COMPILES -> threads.rejectCompiles = true
             Kind.ACCEPT_COMPILES -> threads.rejectCompiles = false
-            Kind.HOUSEKEEP -> with(threads.housekeeping.tasks) { if (isNotEmpty()) threads.runHousekeeping(event.pick % size) }
-            Kind.EVICT -> evict(claims = true)
-            Kind.EVICT_AT_BOUND -> evict(claims = false)
-            Kind.STALE_LOOKUP -> staleLookup()
-            Kind.CLOSE -> close()
+            Kind.HOUSEKEEP -> with(
+                threads.housekeeping.tasks
+            ) { if (isNotEmpty()) threads.runHousekeeping(event.pick % size) }
+            else -> error("not an event of the world: $event")
         }
     }
 
@@ -134,7 +162,11 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
     private fun request(ask: Ask, to: KeyModelRunner = runner()) {
         val waiter = Waiter(waiters.size + 1, ask).also { waiters += it }
         if (ask == Ask.Request) {
-            threads.scheduler.schedule(Runnable { waiter.settle("timeout") }, coldLoadTimeout.toNanos(), TimeUnit.NANOSECONDS)
+            threads.scheduler.schedule(
+                Runnable { waiter.settle("timeout") },
+                coldLoadTimeout.toNanos(),
+                TimeUnit.NANOSECONDS
+            )
         }
         to.offer(KeyEvent.Requested(ask, waiter))
     }
@@ -227,7 +259,11 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
 
     private fun afterEvent() {
         for (runner in runners) {
-            if (runner.installed !== runner.state.installed) fail("published ${runner.installed}, but the state holds ${runner.state.installed}")
+            if (runner.installed !== runner.state.installed) {
+                fail(
+                    "published ${runner.installed}, but the state holds ${runner.state.installed}"
+                )
+            }
             val live = store.pending.count { loadOfRead[it]?.let { (r, id) -> r === runner && r.state.load?.id == id } == true }
             if (live > 1) fail("$live live reads of one key")
         }

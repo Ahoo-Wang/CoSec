@@ -52,7 +52,16 @@ internal class KeyStepChecks(
         if (replies != replied) fail("$replies replies to $event")
         if (after.next != null && after.load == null) fail("a next handle with no load to complete it")
         if (before.removed && !after.removed) fail("a removed key came back")
-        if (event == KeyEvent.Close && (after.load != null || after.next != null)) fail("close left a load or a next handle")
+        if (event == KeyEvent.Close && (after.load != null || after.next != null)) {
+            fail(
+                "close left a load or a next handle"
+            )
+        }
+        endedLoad()
+    }
+
+    /** An event about a load that has ended changes nothing, and does nothing but log. */
+    private fun endedLoad() {
         val ofLoad = event.loadId
         if (ofLoad != null && ofLoad != before.load?.id) {
             if (after != before) fail("an event about ended load $ofLoad changed the state")
@@ -83,7 +92,8 @@ internal class KeyStepChecks(
         if (outcomes != 1) fail("$waiter got $outcomes outcomes")
         if (before.removed && effects.none {
                 it is KeyEffect.Skip || it is KeyEffect.Redispatch
-            }) {
+            }
+        ) {
             fail("a removed key served $waiter")
         }
     }
@@ -93,15 +103,19 @@ internal class KeyStepChecks(
         val hang = effects.filterIsInstance<KeyEffect.Hang<String>>().singleOrNull() ?: return
         val ask = (event as KeyEvent.Requested).ask
         if (ask !is Ask.Reload) {
-            if (hang.handle !== after.load?.handle) fail(
-                "${hang.waiter} hangs on ${hang.handle}, not the load in flight"
-            )
+            if (hang.handle !== after.load?.handle) {
+                fail(
+                    "${hang.waiter} hangs on ${hang.handle}, not the load in flight"
+                )
+            }
             return
         }
         val old = before.load
-        if (old != null && (hang.handle === old.handle || hang.handle in old.alsoAnswers)) fail(
-            "a reload joined the load in flight"
-        )
+        if (old != null && (hang.handle === old.handle || hang.handle in old.alsoAnswers)) {
+            fail(
+                "a reload joined the load in flight"
+            )
+        }
         val upcoming = if (old == null) after.load?.handle else after.next
         if (hang.handle !== upcoming) fail("a reload hangs on ${hang.handle}, not on the load that starts next")
     }
@@ -117,15 +131,19 @@ internal class KeyStepChecks(
             val handle = answer.handle
             if (handle !in mine && handle !== before.next) fail("load ${ended.id} answered $handle, not its own")
             val after = world.startedAfter[handle]
-            if (after != null && ended.id <= after && !closedNow) fail(
-                "$handle answered by load ${ended.id}, which started before its reload"
-            )
+            if (after != null && ended.id <= after && !closedNow) {
+                fail(
+                    "$handle answered by load ${ended.id}, which started before its reload"
+                )
+            }
         }
         val own = answers.firstOrNull { it.handle === ended.handle }?.entry
         answers.filter { it.handle in ended.alsoAnswers }.forEach {
-            if (it.entry !== own) fail(
-                "a withheld load's waiters got another answer than the load that compiled for them"
-            )
+            if (it.entry !== own) {
+                fail(
+                    "a withheld load's waiters got another answer than the load that compiled for them"
+                )
+            }
         }
     }
 
@@ -134,9 +152,11 @@ internal class KeyStepChecks(
         if (starts.size > 1) fail("two reads started at once")
         val start = starts.singleOrNull() ?: return
         val load = after.load
-        if (load == null || load.id != start.loadId || load.phase != LoadPhase.Reading) fail(
-            "a read of $start with no such load reading"
-        )
+        if (load == null || load.id != start.loadId || load.phase != LoadPhase.Reading) {
+            fail(
+                "a read of $start with no such load reading"
+            )
+        }
         if (after.removed || closedNow) fail("a read started on a removed or closed key")
         if (effects.any { it is KeyEffect.Compile }) fail("a compile and a read in one step")
     }
@@ -146,9 +166,11 @@ internal class KeyStepChecks(
         val installs = effects.filterIsInstance<KeyEffect.Install<String>>()
         val failure = event is KeyEvent.ReadTimedOut || event is KeyEvent.CompileRejected || event is KeyEvent.EffectFailed ||
             (event is KeyEvent.ReadFailed && installs.none { it.entry.origin == EntryOrigin.UNDECODABLE })
-        if (failure && installs.any { it.entry.origin != EntryOrigin.RECOMPILE_PENDING }) fail(
-            "a failure installed $installs"
-        )
+        if (failure && installs.any { it.entry.origin != EntryOrigin.RECOMPILE_PENDING }) {
+            fail(
+                "a failure installed $installs"
+            )
+        }
         val load = before.load ?: return
         if (installs.any { it.entry.origin == EntryOrigin.DOCUMENT && load.epoch < world.epoch && !world.config.shared }) {
             fail("a document compiled in epoch ${load.epoch} was installed in epoch ${world.epoch}")

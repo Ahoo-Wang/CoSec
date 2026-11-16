@@ -114,7 +114,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
      */
     private fun load(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?, waiter: Waiter?) {
         if (step.moment.closed) {
-            waiter?.let { step.emit(KeyEffect.Serve(it, loads.failedEntry(closedError(), step.moment.instant))) }
+            waiter?.let { step.emit(KeyEffect.Serve(it, failedEntry(config.key, closedError(), step.moment.instant))) }
             return
         }
         val inFlight = step.state.load
@@ -187,7 +187,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     private fun close(step: KeyStepBuilder<T>) {
         val load = step.state.load ?: return
         val outdated = load.recompiles || load.epoch < step.moment.epoch
-        val entry = load.known.takeUnless { outdated } ?: loads.failedEntry(closedError(), step.moment.instant)
+        val entry = load.known.takeUnless { outdated } ?: failedEntry(config.key, closedError(), step.moment.instant)
         loads.finish(step, load, entry, install = false)
     }
 
@@ -224,7 +224,12 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     }
 
     /** What the compile pool did; a read's answer or timeout is about a read this load has moved past. */
-    private fun whileCompiling(step: KeyStepBuilder<T>, load: LoadState<T>, read: SnapshotRead.Present, event: KeyEvent<T>) {
+    private fun whileCompiling(
+        step: KeyStepBuilder<T>,
+        load: LoadState<T>,
+        read: SnapshotRead.Present,
+        event: KeyEvent<T>
+    ) {
         when (event) {
             is KeyEvent.Compiled -> loads.onCompiled(step, load, read, event)
             is KeyEvent.CompileCrashed -> loads.onCompileCrashed(step, load, read, event.failure)

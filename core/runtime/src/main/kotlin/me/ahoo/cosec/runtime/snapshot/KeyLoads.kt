@@ -21,7 +21,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotFamilies.Seen
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
-import java.time.Instant
 import java.util.concurrent.CompletionException
 import java.util.concurrent.ExecutionException
 
@@ -183,7 +182,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             return
         }
         step.emit(KeyEffect.Log(Level.WARN, "Loading snapshot document [$key] failed.", cause))
-        finish(step, load, transientFailure(load.startedAt, cause), install = false)
+        finish(step, load, transientFailure(key, load.startedAt, cause), install = false)
     }
 
     /**
@@ -195,35 +194,33 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
     fun finish(step: KeyStepBuilder<T>, load: LoadState<T>, entry: SnapshotEntry<T>, install: Boolean) {
         // Whatever ended the load (a read that failed to start included), its read is over.
         load.pass?.let { step.emit(KeyEffect.EndPassRead(it)) }
-        val stale = install && !config.shared && load.epoch < step.moment.epoch && entry.origin.compiled
+        val stale = install && config.compiledBefore(load, entry, step.moment)
         val withheld = stale && entry.origin == EntryOrigin.DOCUMENT
         val installs = install && !withheld
         if (installs) {
             recordInstall(step, entry)
         }
         val pending = step.state.next
-        val wanted = step.state.again || stale || (installs && load.fromLocalCopy)
-        val nextLoad = advance(step, load, entry.takeIf { installs }, wanted)
-        val answer = if (withheld && nextLoad == null) {
-            failedEntry(SnapshotUnavailableException(key, "compiled with inputs that changed"), step.moment.instant)
-        } else {
-            entry
-        }
+        val nextLoad = advance(step, load, entry.takeIf { installs }, stale)
+        val answer = if (withheld && nextLoad == null) outdated(key, step.moment) else entry
         housekeep(step, installs)
-        if (nextLoad != null) {
-            startRead(step, nextLoad)
-        } else {
-            pending?.let { step.emit(KeyEffect.Answer(it, answer)) }
-        }
+        if (nextLoad != null) startRead(step, nextLoad) else pending?.let { step.emit(KeyEffect.Answer(it, answer)) }
         answerWaiters(step, load, answer, nextLoad.takeIf { withheld })
     }
 
     /**
-     * `advance`: [installed] is written, the load is over, and, if [wanted] and the key is open, the next load starts in
-     * the same step, with the pending reload's handle, so no other load and no removal can come between them.
+     * `advance`: [installed] is written, the load is over, and, if another load is wanted (a change came, the entry is
+     * [stale], or a local copy answered) and the key is open, the next load starts in the same step, with the pending
+     * reload's handle, so no other load and no removal can come between them.
      */
-    private fun advance(step: KeyStepBuilder<T>, load: LoadState<T>, installed: SnapshotEntry<T>?, wanted: Boolean): LoadState<T>? {
+    private fun advance(
+        step: KeyStepBuilder<T>,
+        load: LoadState<T>,
+        installed: SnapshotEntry<T>?,
+        stale: Boolean
+    ): LoadState<T>? {
         val before = step.state
+        val wanted = before.again || stale || (installed != null && load.fromLocalCopy)
         step.state = before.copy(
             installed = installed ?: before.installed,
             installedEpoch = if (installed != null) load.epoch else before.installedEpoch,
@@ -237,7 +234,12 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
     }
 
     /** `answerWaiters`: [load]'s handles get [answer], or, for a withheld compilation, what [recompiling] ends with. */
-    private fun answerWaiters(step: KeyStepBuilder<T>, load: LoadState<T>, answer: SnapshotEntry<T>, recompiling: LoadState<T>?) {
+    private fun answerWaiters(
+        step: KeyStepBuilder<T>,
+        load: LoadState<T>,
+        answer: SnapshotEntry<T>,
+        recompiling: LoadState<T>?
+    ) {
         val waiting = listOf(load.handle) + load.alsoAnswers
         if (recompiling == null) {
             waiting.forEach { step.emit(KeyEffect.Answer(it, answer)) }
@@ -245,10 +247,6 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         }
         step.state = step.state.copy(load = recompiling.copy(alsoAnswers = recompiling.alsoAnswers + waiting))
     }
-
-    /** A failure as of [at] with nothing behind it: never installed. */
-    fun failedEntry(error: Throwable, at: Instant): SnapshotEntry<T> =
-        SnapshotEntry(key, DocumentState.Failed(error), 0, null, at, EntryOrigin.TRANSIENT)
 
     private fun endRead(step: KeyStepBuilder<T>, load: LoadState<T>): LoadState<T> {
         step.emit(KeyEffect.CancelReadTimeout(load.id))
@@ -284,7 +282,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             return
         }
         val failure = SnapshotUnavailableException(key, "the stored document cannot be decoded", cause)
-        finish(step, load, entryOf(load, DocumentState.Failed(failure), EntryOrigin.UNDECODABLE), install = true)
+        finish(step, load, config.entryOf(load, DocumentState.Failed(failure), EntryOrigin.UNDECODABLE), install = true)
     }
 
     private fun onAbsent(step: KeyStepBuilder<T>, load: LoadState<T>) {
@@ -295,14 +293,14 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         }
         val lastSeen = step.seen
         if (lastSeen == null) {
-            finish(step, load, entryOf(load, DocumentState.Absent, EntryOrigin.ABSENT), install = true)
+            finish(step, load, config.entryOf(load, DocumentState.Absent, EntryOrigin.ABSENT), install = true)
             return
         }
         val error = SnapshotUnavailableException(
             key,
             "the store has no document, but revision ${lastSeen.revision} was seen; it may have lost data",
         )
-        finish(step, load, entryOf(load, DocumentState.Failed(error), EntryOrigin.LOST), install = true)
+        finish(step, load, config.entryOf(load, DocumentState.Failed(error), EntryOrigin.LOST), install = true)
         // After the install: a throwing meter must not keep the lost document in service.
         step.emit(
             KeyEffect.Log(Level.ERROR, "Snapshot document [$key] disappeared from the store; failing closed.", error)
@@ -354,14 +352,6 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             step.state.installed == null -> step.emit(KeyEffect.DropIfEmpty)
             installed -> step.emit(KeyEffect.EvictBeyond)
         }
-    }
-
-    private fun entryOf(load: LoadState<T>, state: DocumentState<T>, origin: EntryOrigin): SnapshotEntry<T> =
-        SnapshotEntry(key, state, 0, null, load.confirmedAt(config.localCopyMaxAge), origin)
-
-    private fun transientFailure(at: Instant, cause: Throwable): SnapshotEntry<T> {
-        val error = cause as? SnapshotUnavailableException ?: SnapshotUnavailableException(key, "the store cannot be read", cause)
-        return failedEntry(error, at)
     }
 }
 

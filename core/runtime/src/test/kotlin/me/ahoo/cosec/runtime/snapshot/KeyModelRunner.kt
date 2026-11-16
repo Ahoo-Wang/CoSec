@@ -54,7 +54,12 @@ internal class KeyModelRunner(
     private val readTimeouts = HashMap<Long, ScheduledFuture<*>>()
 
     /** An eviction as offered: claimed when it is taken (§4b), by [claim] when the key is evictable. */
-    class EvictRequest(val onlyIfEmpty: Boolean, val absent: Boolean?, val claim: () -> Boolean, val reply: CompletableFuture<Boolean>)
+    class EvictRequest(
+        val onlyIfEmpty: Boolean,
+        val absent: Boolean?,
+        val claim: () -> Boolean,
+        val reply: CompletableFuture<Boolean>
+    )
 
     fun offer(event: KeyEvent<String>) = enqueue(event)
 
@@ -104,12 +109,22 @@ internal class KeyModelRunner(
             is KeyEffect.Confirm -> effect.entry.confirm(effect.at)
             is KeyEffect.Install -> install(effect.entry)
             is KeyEffect.Answer -> effect.handle.future.complete(effect.entry)
-            is KeyEffect.Hang -> effect.handle.future.whenComplete { entry, _ -> world.answer(effect.waiter, entry, effect.handle) }
+            is KeyEffect.Hang -> effect.handle.future.whenComplete { entry, _ ->
+                world.answer(
+                    effect.waiter,
+                    entry,
+                    effect.handle
+                )
+            }
             is KeyEffect.Serve -> world.answer(effect.waiter, effect.entry, null)
             is KeyEffect.Refuse -> world.refuse(effect.waiter)
             is KeyEffect.Skip -> world.skip(effect.waiter)
             is KeyEffect.Redispatch -> world.redispatch(effect.event)
-            is KeyEffect.ScheduleRetry -> world.threads.scheduler.schedule(Runnable { offer(KeyEvent.RetryDue) }, effect.delay.toNanos(), TimeUnit.NANOSECONDS)
+            is KeyEffect.ScheduleRetry -> world.threads.scheduler.schedule(
+                Runnable { offer(KeyEvent.RetryDue) },
+                effect.delay.toNanos(),
+                TimeUnit.NANOSECONDS
+            )
             KeyEffect.DropIfEmpty -> world.threads.housekeeping.execute { world.dropIfEmpty(this) }
             KeyEffect.EvictBeyond -> world.threads.housekeeping.execute { world.evictBeyond(this) }
             is KeyEffect.Drop -> dropped = true
@@ -126,7 +141,13 @@ internal class KeyModelRunner(
     /** `StartRead`: the store call only starts the read; its answer is offered back, behind whatever is queued. */
     private fun startRead(effect: KeyEffect.StartRead) {
         val id = effect.loadId
-        val reading = if (effect.fromLocalCopy) world.store.read(world.key) else world.store.readIfChanged(world.key, effect.digest)
+        val reading = if (effect.fromLocalCopy) {
+            world.store.read(
+                world.key
+            )
+        } else {
+            world.store.readIfChanged(world.key, effect.digest)
+        }
         world.readStarted(this, id)
         if (!reading.isDone) {
             readTimeouts[id] = world.threads.scheduler.schedule(
@@ -148,12 +169,21 @@ internal class KeyModelRunner(
                 val compiled = world.compile(effect.read)
                 when (compiled) {
                     is VirtualMachineError -> {
-                        offer(KeyEvent.CompileCrashed(id, SnapshotUnavailableException(world.key, "does not compile", compiled)))
+                        offer(
+                            KeyEvent.CompileCrashed(
+                                id,
+                                SnapshotUnavailableException(world.key, "does not compile", compiled)
+                            )
+                        )
                         throw compiled
                     }
 
                     is Throwable -> offer(
-                        KeyEvent.Compiled(id, DocumentState.Failed(SnapshotUnavailableException(world.key, "does not compile", compiled)), 1)
+                        KeyEvent.Compiled(
+                            id,
+                            DocumentState.Failed(SnapshotUnavailableException(world.key, "does not compile", compiled)),
+                            1
+                        )
                     )
 
                     else -> offer(KeyEvent.Compiled(id, DocumentState.Present(compiled as String), 1))

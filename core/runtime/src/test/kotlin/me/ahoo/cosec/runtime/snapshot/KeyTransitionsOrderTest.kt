@@ -83,67 +83,69 @@ class KeyTransitionsOrderTest {
 
     @Suppress("CyclomaticComplexMethod", "LongMethod")
     private fun events(world: KeyHarness): List<Pair<String, (KeyHarness) -> Unit>> = buildList {
-        add("request" to { it: KeyHarness -> it.request(Ask.Request) })
-        add("usable" to { it: KeyHarness -> it.request(Ask.Usable) })
-        add("load" to { it: KeyHarness -> it.request(Ask.Load(force = false)) })
-        add("pass" to { it: KeyHarness -> it.request(Ask.Load(force = false, pass = pass)) })
-        add("reload" to { it: KeyHarness -> it.request(Ask.Reload(force = false)) })
-        add("reload forced" to { it: KeyHarness -> it.request(Ask.Reload(force = true)) })
-        add("changed" to { it: KeyHarness -> it.offer(KeyEvent.Changed) })
-        if (world.epoch < MAX_EPOCH) add("recompile" to { it: KeyHarness -> it.recompile() })
-        if (world.retries > 0) add("retry" to { it: KeyHarness -> it.offer(KeyEvent.RetryDue) })
+        add("request" to { key: KeyHarness -> key.request(Ask.Request) })
+        add("usable" to { key: KeyHarness -> key.request(Ask.Usable) })
+        add("load" to { key: KeyHarness -> key.request(Ask.Load(force = false)) })
+        add("pass" to { key: KeyHarness -> key.request(Ask.Load(force = false, pass = pass)) })
+        add("reload" to { key: KeyHarness -> key.request(Ask.Reload(force = false)) })
+        add("reload forced" to { key: KeyHarness -> key.request(Ask.Reload(force = true)) })
+        add("changed" to { key: KeyHarness -> key.offer(KeyEvent.Changed) })
+        if (world.epoch < MAX_EPOCH) add("recompile" to { key: KeyHarness -> key.recompile() })
+        if (world.retries > 0) add("retry" to { key: KeyHarness -> key.offer(KeyEvent.RetryDue) })
         if (world.nanos == 0L) {
             add(
-                "time passes" to { it: KeyHarness -> it.nanos = KeyHarness.STORE_READ_TIMEOUT.toNanos() + 1 }
+                "time passes" to { key: KeyHarness -> key.nanos = KeyHarness.STORE_READ_TIMEOUT.toNanos() + 1 }
             )
         }
-        if (!world.closed) add("close" to { it: KeyHarness -> it.offer(KeyEvent.Close) })
+        if (!world.closed) add("close" to { key: KeyHarness -> key.offer(KeyEvent.Close) })
         val load = world.state.load
         if (load != null && load.id in world.reads) {
             val id = load.id
-            add("read r1" to { it: KeyHarness -> it.offer(KeyEvent.ReadDone(id, KeyHarness.present(1))) })
-            add("read r2" to { it: KeyHarness -> it.offer(KeyEvent.ReadDone(id, KeyHarness.present(2))) })
-            add("read absent" to { it: KeyHarness -> it.offer(KeyEvent.ReadDone(id, SnapshotRead.Absent)) })
-            add("read unchanged" to { it: KeyHarness -> it.offer(KeyEvent.ReadDone(id, SnapshotRead.Unchanged)) })
-            add("read fails" to { it: KeyHarness -> it.offer(KeyEvent.ReadFailed(id, IllegalStateException("down"))) })
+            add("read r1" to { key: KeyHarness -> key.offer(KeyEvent.ReadDone(id, KeyHarness.present(1))) })
+            add("read r2" to { key: KeyHarness -> key.offer(KeyEvent.ReadDone(id, KeyHarness.present(2))) })
+            add("read absent" to { key: KeyHarness -> key.offer(KeyEvent.ReadDone(id, SnapshotRead.Absent)) })
+            add("read unchanged" to { key: KeyHarness -> key.offer(KeyEvent.ReadDone(id, SnapshotRead.Unchanged)) })
             add(
-                "read undecodable" to { it: KeyHarness -> it.offer(KeyEvent.ReadFailed(id, SnapshotFormatException("bad"))) }
+                "read fails" to { key: KeyHarness -> key.offer(KeyEvent.ReadFailed(id, IllegalStateException("down"))) }
             )
-            add("read times out" to { it: KeyHarness -> it.offer(KeyEvent.ReadTimedOut(id)) })
+            add(
+                "read undecodable" to { key: KeyHarness -> key.offer(KeyEvent.ReadFailed(id, SnapshotFormatException("bad"))) }
+            )
+            add("read times out" to { key: KeyHarness -> key.offer(KeyEvent.ReadTimedOut(id)) })
         }
         world.reads.firstOrNull { it != load?.id }?.let { old ->
-            add("old read answers" to { it: KeyHarness -> it.offer(KeyEvent.ReadDone(old, KeyHarness.present(1))) })
+            add("old read answers" to { key: KeyHarness -> key.offer(KeyEvent.ReadDone(old, KeyHarness.present(1))) })
         }
         if (load != null && load.id in world.compiles) {
             val id = load.id
-            add("compiled" to { it: KeyHarness -> it.offer(KeyEvent.Compiled(id, DocumentState.Present("c$id"), 1)) })
+            add("compiled" to { key: KeyHarness -> key.offer(KeyEvent.Compiled(id, DocumentState.Present("c$id"), 1)) })
             add(
-                "compile fails" to { it: KeyHarness ->
-                    it.offer(KeyEvent.Compiled(id, DocumentState.Failed(IllegalStateException("no")), 1))
+                "compile fails" to { key: KeyHarness ->
+                    key.offer(KeyEvent.Compiled(id, DocumentState.Failed(IllegalStateException("no")), 1))
                 }
             )
             add(
-                "compile crashes" to { it: KeyHarness ->
-                    it.offer(KeyEvent.CompileCrashed(id, SnapshotUnavailableException(KeyHarness.KEY, "overflow")))
+                "compile crashes" to { key: KeyHarness ->
+                    key.offer(KeyEvent.CompileCrashed(id, SnapshotUnavailableException(KeyHarness.KEY, "overflow")))
                 }
             )
             add(
-                "compile rejected" to { it: KeyHarness -> it.offer(KeyEvent.CompileRejected(id, RejectedExecutionException())) }
+                "compile rejected" to { key: KeyHarness -> key.offer(KeyEvent.CompileRejected(id, RejectedExecutionException())) }
             )
         }
         if (load != null) {
             add(
-                "effect fails" to { it: KeyHarness -> it.offer(KeyEvent.EffectFailed(load.id, IllegalStateException("x"))) }
+                "effect fails" to { key: KeyHarness -> key.offer(KeyEvent.EffectFailed(load.id, IllegalStateException("x"))) }
             )
         }
-        add("drop if empty" to { it: KeyHarness -> it.offer(evict(onlyIfEmpty = true, Claim.UNCLAIMED)) })
-        add("evict unclaimed" to { it: KeyHarness -> it.offer(evict(onlyIfEmpty = false, Claim.UNCLAIMED)) })
+        add("drop if empty" to { key: KeyHarness -> key.offer(evict(onlyIfEmpty = true, Claim.UNCLAIMED)) })
+        add("evict unclaimed" to { key: KeyHarness -> key.offer(evict(onlyIfEmpty = false, Claim.UNCLAIMED)) })
         if (world.transitions.evictable(world.state, absent = null, onlyIfEmpty = false)) {
-            add("evict claimed" to { it: KeyHarness -> it.offer(evict(onlyIfEmpty = false, Claim.CLAIMED)) })
-            add("evict at bound" to { it: KeyHarness -> it.offer(evict(onlyIfEmpty = false, Claim.AT_BOUND)) })
+            add("evict claimed" to { key: KeyHarness -> key.offer(evict(onlyIfEmpty = false, Claim.CLAIMED)) })
+            add("evict at bound" to { key: KeyHarness -> key.offer(evict(onlyIfEmpty = false, Claim.AT_BOUND)) })
         } else {
             add(
-                "evict not evictable" to { it: KeyHarness -> it.offer(evict(onlyIfEmpty = false, Claim.NOT_EVICTABLE)) }
+                "evict not evictable" to { key: KeyHarness -> key.offer(evict(onlyIfEmpty = false, Claim.NOT_EVICTABLE)) }
             )
         }
     }
@@ -153,7 +155,11 @@ class KeyTransitionsOrderTest {
     /** Which kinds of situation the search got to, so that it cannot pass by never reaching them. */
     private fun note(name: String, before: KeyHarness, after: KeyHarness) {
         val loading = before.state.load != null
-        SITUATIONS.filter { (_, holds) -> holds(Moved(name, before, after, loading)) }.forEach { (situation, _) -> reached += situation }
+        SITUATIONS.filter { (_, holds) ->
+            holds(
+                Moved(name, before, after, loading)
+            )
+        }.forEach { (situation, _) -> reached += situation }
     }
 
     /** One event of the search, for [SITUATIONS]: its name, the world before and after it, and whether a load was in flight. */
@@ -195,7 +201,9 @@ class KeyTransitionsOrderTest {
 
         /** What the search must get to, each with how a step shows it got there. */
         private val SITUATIONS: List<Pair<String, (Moved) -> Boolean>> = listOf(
-            "withheld compilation answered by the next load" to { it.loading && it.after.state.load?.alsoAnswers?.isNotEmpty() == true },
+            "withheld compilation answered by the next load" to {
+                it.loading && it.after.state.load?.alsoAnswers?.isNotEmpty() == true
+            },
             "reload during a load" to { it.loading && it.name.startsWith("reload") },
             "pass skips a stuck load" to { it.loading && it.name == "pass" && it.after.direct.size > it.before.direct.size },
             "eviction at bound" to { it.name == "evict at bound" },

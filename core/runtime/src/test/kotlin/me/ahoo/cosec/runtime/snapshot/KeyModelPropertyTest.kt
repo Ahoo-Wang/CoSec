@@ -39,7 +39,13 @@ class KeyModelPropertyTest {
 
     private fun runSeeds() {
         val only = System.getProperty("cosec.property.seed")?.toInt()
-        val seeds = if (only != null) listOf(only) else (0 until maxOf(SEEDS, Integer.getInteger("cosec.property.iterations", 0) / 10)).toList()
+        val seeds = if (only != null) {
+            listOf(
+                only
+            )
+        } else {
+            (0 until maxOf(SEEDS, Integer.getInteger("cosec.property.iterations", 0) / 10)).toList()
+        }
         val totals = sortedMapOf<String, Int>()
         for (seed in seeds) {
             val run = KeyModelRun(KeyModelScript.generate(seed, EVENTS)).run()
@@ -48,7 +54,9 @@ class KeyModelPropertyTest {
                     buildString {
                         appendLine("Seed $seed: $failure")
                         run.log.forEach { appendLine("  $it") }
-                        append("Replay: ./gradlew :runtime:test --tests '${KeyModelPropertyTest::class.qualifiedName}' -PpropertySeed=$seed")
+                        append(
+                            "Replay: ./gradlew :runtime:test --tests '${KeyModelPropertyTest::class.qualifiedName}' -PpropertySeed=$seed"
+                        )
                     }
                 )
             }
