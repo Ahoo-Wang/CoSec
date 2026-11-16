@@ -2,10 +2,11 @@
 # Mutant: a simulated, explained or analyzed resource is decided as given: neither normalized nor bounded
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -266,15 +266,9 @@
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+index 8d0652e8..63d2c2d9 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+@@ -145,14 +145,8 @@ internal class DecisionQueries(
          )
  
      /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
@@ -18,8 +19,7 @@ diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultContr
 -                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
 -        )
 +    private fun enforceable(resource: Resource): Resource = resource
- 
 +
-     /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
-     private suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }
+ 
+     private fun resolved(request: SimulatedRequest) = (simulator.scope(request) as? ScopeResolution.Resolved)?.scope
  

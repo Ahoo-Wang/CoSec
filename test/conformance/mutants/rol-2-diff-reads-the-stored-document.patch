@@ -2,11 +2,12 @@
 # Mutant: the diff lists the stored bindings: what a role derives is not shown
 # Tests: :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -88,7 +88,7 @@
-         val after = retained(key, to)
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
+index 22c185cb..cc9ef7c0 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentReads.kt
+@@ -65,7 +65,7 @@ internal class DocumentReads(
+         val after = retained.retained(key, to)
          val (kind, owner) = ownerOf(key)
          val expandedBefore = RoleExpansion.effective(before)
 -        val expandedAfter = RoleExpansion.effective(after)

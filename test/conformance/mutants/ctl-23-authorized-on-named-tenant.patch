@@ -2,10 +2,11 @@
 # Mutant: simulate and explain are authorized on the tenant the request names, not the one that decides it
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -243,7 +243,7 @@
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+index 8d0652e8..a0b03330 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+@@ -122,7 +122,7 @@ internal class DecisionQueries(
      private suspend fun decidable(operator: Operator, request: SimulatedRequest, action: Action): Decidable {
          val tenant = simulator.tenantOf(request)
          val key = SnapshotKey.Tenant(tenant.value)

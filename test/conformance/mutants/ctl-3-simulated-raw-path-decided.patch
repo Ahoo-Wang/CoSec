@@ -2,10 +2,11 @@
 # Mutant: a simulated http path is checked against enforcement's normalization, then decided as given
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -266,7 +266,7 @@
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+index 8d0652e8..d151e324 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+@@ -145,7 +145,7 @@ internal class DecisionQueries(
          )
  
      /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */

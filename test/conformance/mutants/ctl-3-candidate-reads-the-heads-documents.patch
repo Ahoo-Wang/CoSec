@@ -2,15 +2,16 @@
 # Mutant: a simulated tenant change is decided on the documents its head reads, not those the candidate makes the request read
 # Tests: :control:test --tests me.ahoo.cosec.control.api.AppDocumentDecisionsTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -182,7 +182,7 @@
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+index 8d0652e8..2a76c5ea 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
+@@ -61,7 +61,7 @@ internal class DecisionQueries(
              }
              val document = changes.candidateOf(id) ?: throw ChangeRejectedException(CONFLICT, "change ${id.value} no longer applies")
              // A tenant change may make the request read another app document, or none (RC1-17): as once it publishes.
 -            val fetched = if (change.key == tenant) simulator.keys(scope, document) else keys
 +            val fetched = keys
              // The candidate is no stored content: compiled once, here; the heads come from the cache.
-             val proposedHeads = fetched.associateWith { heads[it] ?: held(it) } + (change.key to Held(document, null))
+             val proposedHeads = fetched.associateWith { heads[it] ?: retained.held(it) } + (change.key to Held(document, null))
              simulator.decide(simulated, scope, documents(proposedHeads))
