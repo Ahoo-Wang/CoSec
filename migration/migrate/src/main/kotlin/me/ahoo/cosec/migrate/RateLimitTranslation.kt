@@ -17,7 +17,6 @@ package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.RateLimitSource
-import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.migrate.v7.limiter.RateLimitRule
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
