@@ -20,9 +20,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.runtime.PipelineFixtures
@@ -102,7 +102,7 @@ class BoundaryAttributesPipelineTest {
         val attributes = AttributeProviders(listOf(geo))
         val pipeline = PipelineFixtures.pipeline(
             authenticator = authenticator(authenticated()),
-            engine = CoSecFlatEngine,
+            engine = CoSecEngine,
             views = Views(PolicyDocumentCompiler(attributes.catalog), fenceOnMissing, tenantBoundary),
         ) {
             options(PipelineOptions(attributeTimeout = 50.milliseconds))

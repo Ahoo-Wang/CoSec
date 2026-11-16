@@ -26,7 +26,7 @@ Every request goes through one pipeline, whatever the adapter. Before the engine
    policies to `Anyone` or to a principal. A blocked request reads the platform document only;
 6. fetches the external attributes the candidate statements need.
 
-The engine (`FlatEvaluator`) then decides in two passes over the **candidates**, the policies that apply to the
+The engine (`Evaluator`) then decides in two passes over the **candidates**, the policies that apply to the
 request:
 
 1. **The DENY pass.** It visits every candidate's DENY statements. The first one that matches is the decision:

@@ -23,7 +23,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.document.Actor
-import me.ahoo.cosec.engine.flat.SubjectAttributes
+import me.ahoo.cosec.engine.SubjectAttributes
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Match

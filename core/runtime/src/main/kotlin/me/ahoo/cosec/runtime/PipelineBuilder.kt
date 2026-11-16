@@ -18,8 +18,8 @@ package me.ahoo.cosec.runtime
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.FlatEngine
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.Engine
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -67,7 +67,7 @@ class PipelineBuilder internal constructor(
     private var clock: Clock = Clock.systemUTC()
     private var forwarding: IdentityForwardingSettings? = null
     private var identity: IdentityIssuer? = null
-    private var engine: FlatEngine = CoSecFlatEngine
+    private var engine: Engine = CoSecEngine
 
     /** The pipeline's timeouts and how it reads credentials. */
     fun options(block: PipelineSettings.() -> Unit): PipelineBuilder = apply {
@@ -131,7 +131,7 @@ class PipelineBuilder internal constructor(
 
     /** Another engine: for CoSec's own tests. */
     @InternalCoSecApi
-    fun engine(engine: FlatEngine): PipelineBuilder = apply { this.engine = engine }
+    fun engine(engine: Engine): PipelineBuilder = apply { this.engine = engine }
 
     /** The identity issuer the host gave, or the one [forwardIdentity] configures; none without either. */
     private val issuer: IdentityIssuer?

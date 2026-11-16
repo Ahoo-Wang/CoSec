@@ -213,7 +213,9 @@ cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefi
 ```
 
 `publish` reads only an accepted conversion, and only the files `report.json` lists with the SHA-256 recorded there:
-a file edited, missing or added since `convert` stops it. It then compiles every document, checks every app
+a file edited, missing or added since `convert` stops it. A document you wrote yourself, rather than one `convert`
+wrote, publishes with `--file <document.json> --document <platform|app:<id>|tenant:<id>>` in place of `--in`, with
+the same checks. It then compiles every document, checks every app
 document's references against the platform document, and refuses documents that hold a break-glass binding, writing
 nothing (`bootstrap` refuses them too). It writes each document as revision 1 through the control
 plane's store, so the document's revision history starts there, and only when the document does not exist yet: it
@@ -2149,7 +2151,7 @@ what a gateway forwards and to which routes: read them before upgrading a gatewa
   makes the request's `SecurityContext`, and a test mocks or implements the interface. Of the engine's request,
   `AuthzRequest.scope`, the class `me.ahoo.cosec.model.Scope`, and `Subject.roles`, `policies` and `root`, none of
   which the engine read: code that builds an `AuthzRequest` or a `Subject` drops those arguments. The engine's tenant,
-  roles and attachments are in `FlatRequest.scope` and `FlatRequest.memberships`. `Subject.tenantId` stays, for a
+  roles and attachments are in `EngineRequest.scope` and `EngineRequest.memberships`. `Subject.tenantId` stays, for a
   stage-A `AttributeProvider`, which runs before there is a scope.
 
 #### Data written through CoCache 6

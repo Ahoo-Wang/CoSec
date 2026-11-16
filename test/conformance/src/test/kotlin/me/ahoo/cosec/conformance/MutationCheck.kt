@@ -29,7 +29,7 @@ import kotlin.system.exitProcess
  * ```
  * # Rule: ALG-1
  * # Mutant: the DENY scan stops at the first error
- * # Tests: :engine:test --tests me.ahoo.cosec.engine.flat.FlatEnginePropertyTest
+ * # Tests: :engine:test --tests me.ahoo.cosec.engine.EnginePropertyTest
  * ```
  *
  * followed by the diff, as `git diff` writes it (`git apply` skips the header).
@@ -68,8 +68,31 @@ class Mutant(
     }
 }
 
-/** What happened to one mutant. Only [KILLED] passes. */
-enum class MutantResult { KILLED, SURVIVED, DOES_NOT_APPLY, DOES_NOT_COMPILE }
+/**
+ * What happened to one mutant. Only [KILLED] passes. [BUILD_FAILED] is a build that failed without a compiler error or a
+ * failing test (a dependency that could not be resolved, say), twice: it says nothing about the mutant.
+ */
+enum class MutantResult { KILLED, SURVIVED, DOES_NOT_APPLY, DOES_NOT_COMPILE, BUILD_FAILED }
+
+/** One Gradle build of a mutant's worktree: its exit code and what it printed. */
+class Build(val exit: Int, val log: String) {
+    /** Whether the build failed because Kotlin or Java code did not compile, rather than for another reason. */
+    val hasCompilerErrors: Boolean get() = log.lineSequence().any { it.startsWith("e: ") || ": error: " in it }
+}
+
+/**
+ * The verdict on a mutant that applied, from its compile build and its test build ([tests] is null when the compile
+ * build failed). [failedTests] is the number of failed tests in the JUnit result files ([MutationCheck.failedTests]):
+ * only a failed test in a result file is a kill, never an exit code or the text of a log, so a dependency that could not
+ * be downloaded, a crashed daemon or a timeout can never pass for one. A build that is not a clean pass and has no
+ * failed test is [MutantResult.BUILD_FAILED]: run it again, do not write a test for it.
+ */
+fun verdict(compile: Build, tests: Build?, failedTests: Int): MutantResult = when {
+    compile.exit != 0 -> if (compile.hasCompilerErrors) MutantResult.DOES_NOT_COMPILE else MutantResult.BUILD_FAILED
+    failedTests > 0 -> MutantResult.KILLED
+    requireNotNull(tests).exit == 0 -> MutantResult.SURVIVED
+    else -> MutantResult.BUILD_FAILED
+}
 
 /**
  * `./gradlew :conformance:mutationCheck` (RFC 0008 §3.7): applies each mutant of this module's `mutants` to the commit
@@ -108,25 +131,52 @@ object MutationCheck {
             if (command(worktree, git, "apply", "--whitespace=nowarn", mutant.patch.toAbsolutePath().toString()) != 0) {
                 return MutantResult.DOES_NOT_APPLY
             }
-            if (gradle(worktree, mutant.compileTasks) != 0) {
-                return MutantResult.DOES_NOT_COMPILE
+            val compile = retried { gradle(worktree, mutant.compileTasks) }
+            if (compile.exit != 0) {
+                return verdict(compile, null, 0)
             }
-            gradle(worktree, listOf("--continue") + mutant.tests)
-            return if (failedTests(worktree) > 0) MutantResult.KILLED else MutantResult.SURVIVED
+            val tests = retried(
+                unless = { failedTests(worktree) > 0 }
+            ) { gradle(worktree, listOf("--continue") + mutant.tests) }
+            return verdict(compile, tests, failedTests(worktree))
         } finally {
             command(root, git, "worktree", "remove", "--force", worktree.toString())
         }
     }
 
     /** Test failures recorded in the worktree's JUnit reports. */
-    private fun failedTests(worktree: Path): Int = Files.walk(worktree).use { paths ->
+    internal fun failedTests(worktree: Path): Int = Files.walk(worktree).use { paths ->
         paths.filter { it.name.startsWith("TEST-") && it.name.endsWith(".xml") && it.parent.parent.name == "test-results" }
             .toList()
             .sumOf { report -> Regex("<failure").findAll(report.readText()).count() }
     }
 
-    private fun gradle(directory: Path, tasks: List<String>): Int =
-        command(directory, listOf(Executables.gradleWrapper(directory), "--no-daemon", "--build-cache", "-q") + tasks)
+    /**
+     * [build] once more when it failed without a compiler error (and, for [unless], without a result that settles it):
+     * a dependency that cannot be resolved for a moment is not a verdict. A compiler error, and a build that fails
+     * twice, are.
+     */
+    private fun retried(unless: () -> Boolean = { false }, build: () -> Build): Build {
+        val first = build()
+        return if (first.exit == 0 || first.hasCompilerErrors || unless()) first else build()
+    }
+
+    private fun gradle(directory: Path, tasks: List<String>): Build {
+        val log = Files.createTempFile(directory, "mutation-gradle-", ".log")
+        val process = ProcessBuilder(
+            listOf(Executables.gradleWrapper(directory), "--no-daemon", "--build-cache", "-q") + tasks
+        ).directory(directory.toFile()).redirectErrorStream(true).redirectOutput(log.toFile()).start()
+        val exit = if (process.waitFor(BUILD_TIMEOUT_MINUTES, TimeUnit.MINUTES)) {
+            process.exitValue()
+        } else {
+            process.destroyForcibly()
+            -1
+        }
+        val output = log.readText()
+        print(output)
+        Files.delete(log)
+        return Build(exit, output)
+    }
 
     private fun command(directory: Path, vararg command: String): Int = command(directory, command.toList())
 

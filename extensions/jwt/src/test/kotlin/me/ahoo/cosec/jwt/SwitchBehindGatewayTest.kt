@@ -21,12 +21,12 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.login.token.SwitchTenantAuthentication
 import me.ahoo.cosec.login.token.SwitchTenantCredentials
 import me.ahoo.cosec.login.token.TenantMembership
@@ -188,9 +188,9 @@ class SwitchBehindGatewayTest {
     }
 
     private companion object {
-        val PERMITTING = object : FlatEngine {
-            override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
-                FlatEvaluation(
+        val PERMITTING = object : Engine {
+            override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
+                Evaluation(
                     Decision.Permit(
                         StatementRef.Policy(PolicyId("open"), 0, "open", BindingRef.Attached(PolicyId("open")))
                     ),

@@ -18,11 +18,11 @@ package me.ahoo.cosec.document
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.flat.OnMissing
-import me.ahoo.cosec.engine.flat.OnMissingConfirmation
-import me.ahoo.cosec.engine.flat.RateLimitSource
-import me.ahoo.cosec.engine.flat.ResourceSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.OnMissing
+import me.ahoo.cosec.engine.OnMissingConfirmation
+import me.ahoo.cosec.engine.RateLimitSource
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId

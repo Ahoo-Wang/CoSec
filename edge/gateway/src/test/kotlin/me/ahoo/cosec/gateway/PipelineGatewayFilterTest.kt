@@ -19,12 +19,12 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Memberships
@@ -77,9 +77,9 @@ class PipelineGatewayFilterTest {
 
     @Test
     fun aPermitGoesDownstreamWithItsRequestIdAndTheRouteReachesThePipeline() {
-        val engine = object : FlatEngine {
-            override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation {
-                return FlatEvaluation(
+        val engine = object : Engine {
+            override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation {
+                return Evaluation(
                     Decision.Permit(
                         StatementRef.Policy(
                             PolicyId("p"),
@@ -117,9 +117,9 @@ class PipelineGatewayFilterTest {
         PipelineGatewayFilterProbe.read(PipelineGatewayFilter(pipeline), exchange).assert().isEqualTo("orders")
     }
 
-    private val permit = object : FlatEngine {
-        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
-            FlatEvaluation(
+    private val permit = object : Engine {
+        override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
+            Evaluation(
                 Decision.Permit(
                     StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("g"), DocumentKind.PLATFORM))
                 ),
@@ -152,7 +152,7 @@ class PipelineGatewayFilterTest {
         authenticator: Authenticator,
         issuer: IdentityIssuer?,
         options: PipelineOptions = PipelineOptions(),
-        engine: FlatEngine = permit,
+        engine: Engine = permit,
     ) = Pipeline.builder(authenticator, SuspendingSnapshotSource(Views))
         .engine(engine)
         .apply { issuer?.let(::identity) }
@@ -333,8 +333,8 @@ class PipelineGatewayFilterTest {
     @Test
     fun `two routes of different apps are each their own app`() {
         val scopes = CopyOnWriteArrayList<String>()
-        val recording = object : FlatEngine {
-            override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation {
+        val recording = object : Engine {
+            override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation {
                 scopes += request.scope.app.value
                 return permit.evaluate(request, snapshot, trace)
             }

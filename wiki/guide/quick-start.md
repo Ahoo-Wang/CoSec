@@ -102,15 +102,10 @@ Download `cosec-migrate-<version>.zip` from the [GitHub release](https://github.
 # the tool is migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
 ```
 
-`publish` reads a directory the way `convert` writes it: it publishes exactly the files that `report.json` lists,
-each with the SHA-256 recorded there, so that nothing is published that was edited afterwards. It has no option for a
-single file, so a document you wrote yourself needs that report. Two fields are all it reads of one you write
-(`accepted` and `outputSha256`):
+`publish --file` publishes one document you wrote, as the document `--document` names:
 
 ```bash
-SHA=$(sha256sum documents/platform.json | cut -d' ' -f1)   # macOS: shasum -a 256
-printf '{"accepted":true,"outputSha256":{"platform.json":"%s"}}\n' "$SHA" > documents/report.json
-cosec-migrate publish --to-redis redis://localhost:6379 --in documents
+cosec-migrate publish --to-redis redis://localhost:6379 --file documents/platform.json --document platform
 ```
 
 It prints `Published platform` and writes the document as the first revision of the platform document. `publish`

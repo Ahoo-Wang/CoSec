@@ -86,6 +86,9 @@ not apply yet. Nothing checks the title against the dumps: the author and the re
 ```
 
 - **Unit tests**: JUnit 5, MockK, Hamcrest and FluentAssert, next to the code they cover.
+- **Dependencies** resolve from Maven Central only, so that your build and CI's resolve the same jars. To test CoSec
+  against a library you published to `~/.m2` (a local CoCache or CosId, say), pass `-Pcosec.mavenLocal` or set it in
+  `~/.gradle/gradle.properties`: then `mavenLocal()` comes first, and whoever sets it knows the local jar wins.
 - **Integration tests** run against real infrastructure. The Redis-backed modules (`cosec-cocache`,
   `cosec-spring-boot`) expect Redis on `localhost:6379`:
   `docker run -d --name cosec-redis -p 6379:6379 redis:7`.

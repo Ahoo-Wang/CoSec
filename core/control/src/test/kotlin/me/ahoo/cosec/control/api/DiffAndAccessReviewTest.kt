@@ -36,9 +36,9 @@ import me.ahoo.cosec.document.CatalogGroup
 import me.ahoo.cosec.document.CatalogPermission
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.engine.flat.RateLimitSource
-import me.ahoo.cosec.engine.flat.ResourceSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.RateLimitSource
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
