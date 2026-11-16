@@ -19,7 +19,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.FlatRequest
+import me.ahoo.cosec.engine.EngineRequest
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
@@ -228,7 +228,7 @@ class Pipeline internal constructor(
             )
         }
         val authz = with(security.request) { AuthzRequest(subject, action, resource, environment) }
-        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
+        val request = EngineRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
         // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
         // fetched now, from stage A as from stage B (#1209).
         val evaluated = fetching.withPlanned(request, view, fetching.fetched(), everyStage = true)

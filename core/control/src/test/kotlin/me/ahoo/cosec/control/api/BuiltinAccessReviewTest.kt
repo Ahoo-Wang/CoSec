@@ -29,7 +29,7 @@ import me.ahoo.cosec.control.change.PLATO
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.engine.BuiltinPolicies
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId

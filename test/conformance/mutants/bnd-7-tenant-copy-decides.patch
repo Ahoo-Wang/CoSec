@@ -1,11 +1,11 @@
 # Rule: BND-7
 # Mutant: a tenant's copy of a platform policy with the same content is the one evaluated
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.SameContentTest
+# Tests: :engine:test --tests me.ahoo.cosec.engine.SameContentTest
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
 index a8990db0..5ef45773 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
 @@ -237,7 +237,7 @@ internal object CandidateOrder {
                  return local
              }

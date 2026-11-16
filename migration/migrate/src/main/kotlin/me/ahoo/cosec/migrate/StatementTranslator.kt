@@ -16,8 +16,8 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.ResourceSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal

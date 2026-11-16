@@ -6,7 +6,7 @@
       "statement": "An expired binding does not apply.",
       "level": "engine",
       "guards": [
-        "engine:FlatEngineTest#principal bindings apply to their principal in their tenant"
+        "engine:EngineTest#principal bindings apply to their principal in their tenant"
       ],
       "pending": null
     },
@@ -16,7 +16,7 @@
       "statement": "A principal attaches only policies of its own tenant document or of the platform layer that are attachable (C5); any other attachment is missing.",
       "level": "engine",
       "guards": [
-        "engine:FlatEngineTest#only attachable policies attach, and the root policy never does"
+        "engine:EngineTest#only attachable policies attach, and the root policy never does"
       ],
       "pending": null
     },
@@ -36,7 +36,7 @@
       "statement": "An anonymous principal matches no Principal binding and has no roles or attachments: only Anyone bindings apply to it.",
       "level": "engine",
       "guards": [
-        "engine:FlatEngineTest#an anonymous principal has no attachments, principal or break-glass bindings"
+        "engine:EngineTest#an anonymous principal has no attachments, principal or break-glass bindings"
       ],
       "pending": null
     },
@@ -46,7 +46,7 @@
       "statement": "A role binding applies through the roles the principal has in the request's space, and only where its app and space match the scope exactly (case-sensitive, no trimming; * is Any).",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#P10 the binding index agrees with a scan of every binding"
+        "engine:EnginePropertyTest#P10 the binding index agrees with a scan of every binding"
       ],
       "pending": null
     },
@@ -83,11 +83,11 @@
       "statement": "A principal without principal bindings, a credential with a role cap, is granted nothing by what is bound to it by name: no ALLOW of a Principal binding of the platform or the tenant, or of an attached policy, reaches it. Their DENYs still apply to it, as to its principal: a cap removes ALLOW candidates only, so it never lifts a restriction of the principal (RC1-1). Anyone bindings and its roles still apply.",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#P-cap a cap removes allows only"
+        "engine:EnginePropertyTest#P-cap a cap removes allows only"
       ],
       "guards": [
-        "engine:FlatEngineTest#a subject without principal bindings matches none, and anyone bindings still apply",
-        "engine:FlatEngineTest#a subject without principal bindings is still denied by its own denies"
+        "engine:EngineTest#a subject without principal bindings matches none, and anyone bindings still apply",
+        "engine:EngineTest#a subject without principal bindings is still denied by its own denies"
       ],
       "pending": null
     }

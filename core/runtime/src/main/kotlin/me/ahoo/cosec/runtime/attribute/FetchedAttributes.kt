@@ -19,7 +19,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.AttributeStatus
-import me.ahoo.cosec.engine.flat.ExternalValues
+import me.ahoo.cosec.engine.ExternalValues
 
 private val log = KotlinLogging.logger {}
 

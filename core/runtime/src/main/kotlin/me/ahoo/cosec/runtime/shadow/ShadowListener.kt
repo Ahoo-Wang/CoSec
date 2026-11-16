@@ -19,12 +19,12 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.future.await
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -66,7 +66,7 @@ class ShadowListener(
     private val sampleRate: Double,
     private val candidates: CandidateSource,
     private val recorder: ShadowRecorder,
-    private val engine: FlatEngine = CoSecFlatEngine,
+    private val engine: Engine = CoSecEngine,
     /**
      * The installed documents, for the app document a tenant candidate makes a request read that its live view did not
      * ([ViewDocuments.appOf], RC1-17). Without them such a candidate cannot be compared: [ShadowOutcome.CANDIDATE_ERROR].
@@ -266,7 +266,7 @@ class ShadowListener(
     }
 
     /** The fields of a decision event a sample keeps (RFC 0006 §9.2): no header, token or attribute value. */
-    private fun sample(request: FlatRequest, enforced: Decision, candidate: Decision?): ShadowSample = ShadowSample(
+    private fun sample(request: EngineRequest, enforced: Decision, candidate: Decision?): ShadowSample = ShadowSample(
         tenant = request.scope.tenant.value,
         principal = request.request.subject.id,
         app = request.scope.app.value,

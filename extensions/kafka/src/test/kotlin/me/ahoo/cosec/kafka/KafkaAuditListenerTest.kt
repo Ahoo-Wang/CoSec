@@ -28,12 +28,12 @@ import me.ahoo.cosec.api.audit.AuditDocument
 import me.ahoo.cosec.api.audit.AuditReasonCode
 import me.ahoo.cosec.api.audit.AuditVia
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -133,9 +133,9 @@ class KafkaAuditListenerTest {
         decision: Decision = permit,
         context: CoroutineContext = EmptyCoroutineContext,
     ): Outcome {
-        val engine = object : FlatEngine {
-            override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
-                FlatEvaluation(decision, null)
+        val engine = object : Engine {
+            override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel) =
+                Evaluation(decision, null)
         }
         val claims = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val principal = AuthenticatedPrincipal(PrincipalId("alice"), TenantId("acme"), claims)

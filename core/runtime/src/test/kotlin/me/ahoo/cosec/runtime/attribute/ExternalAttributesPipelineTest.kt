@@ -26,9 +26,9 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.BuiltinPolicies
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.decision.Cause
@@ -142,7 +142,7 @@ class ExternalAttributesPipelineTest {
         val views = Views(PolicyDocumentCompiler(attributes.catalog), policies.body)
         val pipeline = PipelineFixtures.pipeline(
             authenticator = authenticator(authenticated(memberships)),
-            engine = me.ahoo.cosec.engine.flat.CoSecFlatEngine,
+            engine = me.ahoo.cosec.engine.CoSecEngine,
             views = views,
         ) {
             membershipProvider?.let(::memberships)

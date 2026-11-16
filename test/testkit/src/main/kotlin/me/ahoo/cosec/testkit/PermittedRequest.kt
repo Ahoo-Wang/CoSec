@@ -19,12 +19,12 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
@@ -107,9 +107,9 @@ object PermittedRequest {
     private val CREDENTIAL_HEADERS = listOf("Authorization", "X-API-Key", "CoSec-Identity")
 
     /** The host's rule, "permit the request": the context is what is tested, not the decision. */
-    private val PERMITTING = object : FlatEngine {
-        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
-            FlatEvaluation(Decision.Permit(StatementRef.Policy(PERMIT, 0, "", BindingRef.Attached(PERMIT))), null)
+    private val PERMITTING = object : Engine {
+        override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
+            Evaluation(Decision.Permit(StatementRef.Policy(PERMIT, 0, "", BindingRef.Attached(PERMIT))), null)
     }
 
     private val PERMIT = PolicyId("testkit-permitted-request")
