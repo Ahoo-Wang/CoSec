@@ -2,11 +2,11 @@
 # Mutant: a boundary change a tenant principal's approval made READY publishes: the approver's tenant is checked at approve only
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-index 103cfd2b..51fbed49 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
-@@ -609,9 +609,6 @@ class ChangeAuthority(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+index 0da6cedc..d261eaf4 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+@@ -171,9 +171,6 @@ internal class ApprovalRules(
          }
          // An approval by a credential without an id counts for nothing: whether it was revoked cannot be checked.
          approval.credentialId ?: return "the approval does not say what credential its approver approved with"
