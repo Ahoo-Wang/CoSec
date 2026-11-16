@@ -253,6 +253,8 @@ class ConversionInputTest {
             "bootstrap --to-redis redis://127.0.0.1:1 --platform-admin a --dry-run",
             "bootstrap --to-redis redis://127.0.0.1:1 --platform-admin a --resume",
             "repair-references --to-redis redis://127.0.0.1:1 --dry-run",
+            "verify-chain --to-redis redis://127.0.0.1:1 --in x",
+            "verify-chain --to-redis redis://127.0.0.1:1 --dry-run",
             "partition plan --from-files a --out x --dry-run",
             "partition plan --from-files a --out x --partition by-owner",
             "api-keys --redis redis://127.0.0.1:1 --out x --resume",
