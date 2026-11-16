@@ -412,7 +412,16 @@ fun Project.kotlinJvm() {
     }
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         compilerOptions {
-            freeCompilerArgs = listOf("-Xjsr305=strict", "-Xjvm-default=all-compatibility")
+            // A local that is never read, or a value assigned to one and never read, is dead code: these three diagnostics
+            // (reported only with -Wextra) are errors, in main and test sources of every module. Not allWarningsAsErrors.
+            freeCompilerArgs = listOf(
+                "-Xjsr305=strict",
+                "-Xjvm-default=all-compatibility",
+                "-Wextra",
+                "-Xwarning-level=UNUSED_VARIABLE:error",
+                "-Xwarning-level=VARIABLE_NEVER_READ:error",
+                "-Xwarning-level=ASSIGNED_VALUE_IS_NEVER_READ:error",
+            )
             javaParameters = true
         }
     }
