@@ -36,8 +36,3 @@ internal open class EvaluationScratch {
         return LongArray(maxOf(size, (current?.size ?: 0) * 2)).also { words = it }
     }
 }
-
-/** Gives an evaluation's [EvaluationScratch], making it on first use; the evaluator itself, so it allocates nothing. */
-internal fun interface ScratchSource {
-    fun scratch(): EvaluationScratch
-}

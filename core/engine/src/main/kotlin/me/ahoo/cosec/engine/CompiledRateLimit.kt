@@ -24,21 +24,6 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.RateLimitSpec
 
 /**
- * A rate limit rule as a document writes it (RFC 0006 §8.1): the requests it limits, as one statement (its action,
- * resource and condition; its effect is irrelevant), the attribute that splits it into buckets, and its quota.
- */
-@InternalCoSecApi
-class RateLimitSource(
-    val id: String,
-    val statement: StatementSource,
-    /** The attribute path whose value names the bucket; null for one bucket shared by every matching request. */
-    val key: String?,
-    val limit: RateLimitSpec,
-    /** Whether a backend that cannot count is a refusal (503) instead of skipping the rule. */
-    val strictFailure: Boolean = false,
-)
-
-/**
  * A compiled rate limit rule. [id] is the rule's id within the counters, its document and its own id ([counterId]), so
  * no document counts against another's buckets.
  */
