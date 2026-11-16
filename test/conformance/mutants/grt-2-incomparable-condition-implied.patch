@@ -1,0 +1,18 @@
+# Rule: GRT-2
+# Mutant: the grant analysis takes a condition it cannot compare as implied, so a fragment is "probably contained" instead of going to approval
+# Tests: :control:test --tests me.ahoo.cosec.control.grant.* :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantImplication.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantImplication.kt
+index a7cac14b..d64a3de1 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantImplication.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantImplication.kt
+@@ -40,7 +40,8 @@ internal object GrantImplication {
+         val specialized = specialization()
+         return when (val folded = specialized.fold(outer)) {
+             Folded.True -> true
+-            Folded.False, is Folded.Incomparable -> false
++            Folded.False -> false
++            is Folded.Incomparable -> true
+             is Folded.Residual -> {
+                 val checked = specialized.check(folded.condition) ?: return false
+                 condition != null && ConditionContainment.implies(condition, checked) == Containment.YES
