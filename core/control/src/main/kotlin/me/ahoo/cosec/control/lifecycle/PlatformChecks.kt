@@ -18,6 +18,8 @@ package me.ahoo.cosec.control.lifecycle
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
@@ -28,8 +30,6 @@ import kotlin.coroutines.cancellation.CancellationException
 
 /** What a platform candidate does to the documents that refer to it (RFC 0007 §5.8, N2, RC1-9, §9.4). */
 internal object PlatformChecks {
-    private const val UNPROCESSABLE = 422
-    private const val UNAVAILABLE = 503
     private val log = KotlinLogging.logger {}
 
     /**
@@ -43,7 +43,7 @@ internal object PlatformChecks {
     suspend fun removedReferences(
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         findings: MutableList<Finding>,
     ) {
         val kept = candidate.policies.associate { it.id to it.boundary }
@@ -67,7 +67,7 @@ internal object PlatformChecks {
     suspend fun sharedIds(
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         findings: MutableList<Finding>,
     ) {
         val existing = base?.policies.orEmpty().associateBy { it.id }
@@ -100,7 +100,7 @@ internal object PlatformChecks {
         before: PolicyDefinition,
         after: PolicyDefinition,
         index: Int,
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         findings: MutableList<Finding>,
     ) {
         if (EntryDigest.of(before) == EntryDigest.of(after)) return
@@ -120,7 +120,7 @@ internal object PlatformChecks {
     /** Whether the head of [tenant] defines [policy] itself; `null` when it cannot be read. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun definesCopy(
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         tenant: SnapshotKey.Tenant,
         policy: PolicyId
     ): Boolean? = try {
@@ -135,7 +135,7 @@ internal object PlatformChecks {
     /** Whether the head of [tenant] defines or binds [policy]; `null` when it cannot be read. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun uses(
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         tenant: SnapshotKey.Tenant,
         policy: PolicyId
     ): Boolean? = try {
@@ -154,7 +154,7 @@ internal object PlatformChecks {
     /** Whether [referrer] is a tenant whose readable head defines [policy] itself and does not name it as its boundary. */
     @Suppress("TooGenericExceptionCaught")
     private suspend fun definesItself(
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         referrer: SnapshotKey,
         policy: PolicyId
     ): Boolean = try {

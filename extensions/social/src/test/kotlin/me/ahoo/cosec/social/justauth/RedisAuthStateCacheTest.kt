@@ -61,6 +61,22 @@ internal class RedisAuthStateCacheTest {
         redisAuthStateCache.containsKey(key).assert().isEqualTo(false)
     }
 
+    /** The state is stored with the time to live that was asked for, in milliseconds, and the default's is three minutes. */
+    @Test
+    fun theTimeToLiveIsTheOneAsked() {
+        val key = RandomIdGenerator.generate()
+        redisAuthStateCache.cache(key, "v", 60_000)
+        val asked = stringRedisTemplate.getExpire("cosec:oauth:state:$key", java.util.concurrent.TimeUnit.MILLISECONDS)
+        asked.assert().isBetween(1L, 60_000L)
+        val other = RandomIdGenerator.generate()
+        redisAuthStateCache.cache(other, "v")
+        val default = stringRedisTemplate.getExpire(
+            "cosec:oauth:state:$other",
+            java.util.concurrent.TimeUnit.MILLISECONDS
+        )
+        default.assert().isBetween(60_001L, 180_000L)
+    }
+
     /** M4: JustAuth may read a state that is not there; that is an empty value, never an exception. */
     @Test
     fun aMissingStateIsEmpty() {

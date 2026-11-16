@@ -26,6 +26,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Reclaimed
 import me.ahoo.cosec.control.store.Revisions
@@ -170,6 +171,5 @@ class ControlMaintenance(
     @InternalCoSecApi
     companion object {
         const val SHADOW_LEASE = "shadow-windows"
-        private const val NOT_FOUND = 404
     }
 }

@@ -1,0 +1,25 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# CodeQL's configuration for code scanning (.github/workflows/codeql.yml); `queries: security-and-quality` is set there.
+name: CoSec code scanning
+
+query-filters:
+  # `java/local-variable-is-never-read` reports the `equals` the compiler generates for a `data object`: CodeQL's Kotlin
+  # extractor sees the members the compiler generates, and that `equals` keeps an unused local (`tmp0_other_with_cast`) at
+  # line 1 of the file the object is in. Every alert it raised was that local (sixteen on 2026-11-16, five of them new in
+  # the two days before), and none was in code anyone wrote; every new `data object` would add one. In hand-written Kotlin
+  # an unused local is the compiler's to refuse: the root build.gradle.kts raises UNUSED_VARIABLE, VARIABLE_NEVER_READ and
+  # ASSIGNED_VALUE_IS_NEVER_READ to errors (-Wextra reports them), so nothing this query reported there can reach main.
+  - exclude:
+      id: java/local-variable-is-never-read

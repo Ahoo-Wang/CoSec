@@ -27,6 +27,8 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.authz.TenantIsolation
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
+import me.ahoo.cosec.control.change.ControlStatus.FORBIDDEN
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Escalation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ownerOf
@@ -242,7 +244,7 @@ class ChangeAuthority(
         operations: List<Operation>,
         base: PolicyDocument?,
         candidate: PolicyDocument,
-        documents: ChangeChecks.Context,
+        documents: CurrentDocuments,
         now: Instant,
     ): List<Escalation> {
         val escalations = ArrayList<Escalation>()
@@ -344,8 +346,6 @@ class ChangeAuthority(
     internal companion object {
         private val log = KotlinLogging.logger {}
 
-        const val FORBIDDEN = 403
-        const val UNAVAILABLE = 503
         const val POLICY = "policy"
         const val BINDING = "binding"
         const val RATE_LIMIT = "rateLimit"

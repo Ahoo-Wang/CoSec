@@ -28,7 +28,7 @@ import me.ahoo.cosec.control.grant.GrantDocuments
 import me.ahoo.cosec.control.lifecycle.Applied
 import me.ahoo.cosec.control.lifecycle.CandidateDigest
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
-import me.ahoo.cosec.control.lifecycle.ChangeChecks
+import me.ahoo.cosec.control.lifecycle.CurrentDocuments
 import me.ahoo.cosec.control.lifecycle.EntryDigest
 import me.ahoo.cosec.control.lifecycle.Narrowing
 import me.ahoo.cosec.control.lifecycle.Operations
@@ -275,7 +275,7 @@ class RolesTest {
             if (action.verb == "approve") ControlDecision.DENY else ControlDecision.PERMIT
         }
         val authority = ChangeAuthority(notTrustRoot)
-        val documents = object : ChangeChecks.Context {
+        val documents = object : CurrentDocuments {
             override suspend fun head(key: SnapshotKey) = null
             override suspend fun referrers(target: SnapshotKey, policy: PolicyId) = emptySet<SnapshotKey>()
             override suspend fun apps() = null

@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.lifecycle
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.document.PolicyDocument
@@ -27,7 +28,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** What a tenant's roles may mean other than what they seem to (RFC 0012 §7.5). */
 internal object RoleChecks {
-    private const val UNPROCESSABLE = 422
 
     /**
      * What a tenant's roles may mean other than what they seem to (RFC 0012 §7.5): one named as a system role of its app
@@ -36,7 +36,7 @@ internal object RoleChecks {
      */
     suspend fun roleWarnings(
         candidate: PolicyDocument,
-        context: ChangeChecks.Context,
+        context: CurrentDocuments,
         checkedWith: MutableMap<SnapshotKey, SnapshotDigest?>,
         findings: MutableList<Finding>,
     ) {

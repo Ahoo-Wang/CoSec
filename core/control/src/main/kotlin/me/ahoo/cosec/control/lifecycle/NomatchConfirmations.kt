@@ -18,6 +18,7 @@ package me.ahoo.cosec.control.lifecycle
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.Confirmation
+import me.ahoo.cosec.control.change.ControlStatus.PRECONDITION_REQUIRED
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDefinition
@@ -86,6 +87,4 @@ internal object NomatchConfirmations {
         statement.onMissing,
         confirmation,
     )
-
-    private const val PRECONDITION_REQUIRED = 428
 }

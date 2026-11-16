@@ -27,14 +27,14 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowState
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.BREAK_GLASS_EXEMPT
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.CONFLICT
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.MAX_ATTEMPTS
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.UNAVAILABLE
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.Revisions

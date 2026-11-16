@@ -23,6 +23,10 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ControlStatus.PRECONDITION_REQUIRED
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ShadowAck
@@ -37,10 +41,6 @@ import me.ahoo.cosec.model.Action
 
 /** What [Changes.publish] and its shadow windows decide from the change and the head alone. */
 internal object PublishRules {
-    private const val CONFLICT = 409
-    private const val UNPROCESSABLE = 422
-    private const val PRECONDITION_REQUIRED = 428
-    private const val UNAVAILABLE = 503
 
     /**
      * The action that stages and publishes [change] on its document: `cosec:publish`, or for a break-glass request or
