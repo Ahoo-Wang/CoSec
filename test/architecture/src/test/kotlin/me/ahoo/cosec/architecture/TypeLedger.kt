@@ -70,8 +70,6 @@ object TypeLedger {
         "core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt" to family(RECORD, "a compiled document and its bound entries"),
         "core/engine/src/main/kotlin/me/ahoo/cosec/engine/ExternalValues.kt" to family(OWN_EXCEPTION, "the external values"),
         "core/engine/src/main/kotlin/me/ahoo/cosec/engine/Engine.kt" to family(PORT, "the engine port with the request it takes and the evaluation it returns"),
-        "core/engine/src/main/kotlin/me/ahoo/cosec/engine/PolicyCompiler.kt" to Disposition.Debt(Batch.B3),
-        "core/engine/src/main/kotlin/me/ahoo/cosec/engine/StatementIndex.kt" to Disposition.Debt(Batch.B3),
         "core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt" to family(RECORD, "a path pattern, its elements and its captures"),
         "core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/ResourcePattern.kt" to family(RECORD, "a resource pattern, its segments and its target"),
         "core/engine/src/main/kotlin/me/ahoo/cosec/engine/trace/EvaluationTrace.kt" to family(RECORD, "an evaluation trace"),

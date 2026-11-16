@@ -16,26 +16,9 @@
 package me.ahoo.cosec.engine
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.pattern.HttpPath
 import me.ahoo.cosec.engine.pattern.ResourcePattern
-import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.IndexKeys
-
-/** What a [StatementIndex] reads from one request, and where it puts the positions it finds. */
-internal interface IndexLookup {
-    val action: Action
-    val resourceType: String
-
-    /** The request path decoded, or null when it does not decode: then the path cannot rule anything out. */
-    fun decodedPath(): HttpPath?
-
-    /** The request's value of an index attribute. Never calls the host. */
-    fun indexValue(attribute: Attribute): String?
-
-    /** Positions of statements that may match; sorted, and never modified by the receiver. */
-    fun add(positions: IntArray)
-}
 
 /**
  * The candidate index over one policy's statements of one effect (RFC 0005 §6.2). A lookup gives a superset of the
