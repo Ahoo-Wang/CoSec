@@ -16,6 +16,15 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.CompiledPolicy
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.engine.pattern.HttpPathPattern
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
@@ -73,7 +82,7 @@ open class GlobBoundBenchmark {
     @Param("literal", "capture-literal", "alternating", "captures", "bindings", "pairs")
     lateinit var scenario: String
 
-    private lateinit var request: FlatRequest
+    private lateinit var request: EngineRequest
     private lateinit var view: SnapshotView
 
     @Setup
@@ -115,9 +124,9 @@ open class GlobBoundBenchmark {
     }
 
     @Benchmark
-    fun evaluate(): FlatEvaluation = CoSecFlatEngine.evaluate(request, view)
+    fun evaluate(): Evaluation = CoSecEngine.evaluate(request, view)
 
-    private fun request(path: String): FlatRequest {
+    private fun request(path: String): EngineRequest {
         val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
         val resolution = ScopeResolver.resolve(subject, "", HostScope(null))
@@ -133,7 +142,7 @@ open class GlobBoundBenchmark {
             resource = Resource("http", path, emptyMap()),
             environment = Environment("127.0.0.1", "request", "device", blocked = false),
         )
-        return FlatRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, time = 0)
+        return EngineRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, time = 0)
     }
 
     private companion object {

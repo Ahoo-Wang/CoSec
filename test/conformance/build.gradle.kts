@@ -90,7 +90,7 @@ val verifyRuleCoverage = tasks.register<JavaExec>("verifyRuleCoverage") {
  */
 tasks.register<JavaExec>("mutationCheck") {
     group = "verification"
-    description = "Fails when a mutant of test/conformance/mutants survives its tests, or no longer applies or compiles."
+    description = "Fails when a mutant of test/conformance/mutants survives its tests, or no longer applies or compiles, or its build fails."
     classpath = sourceSets["test"].runtimeClasspath
     mainClass.set("me.ahoo.cosec.conformance.MutationCheckKt")
     args(

@@ -22,7 +22,7 @@ import me.ahoo.cosec.cocache.control.ReferenceKeyEncoder
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiterTest
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
-import me.ahoo.cosec.engine.flat.CompiledRateLimit
+import me.ahoo.cosec.engine.CompiledRateLimit
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId

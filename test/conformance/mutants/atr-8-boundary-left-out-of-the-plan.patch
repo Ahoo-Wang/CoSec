@@ -1,12 +1,12 @@
 # Rule: ATR-8
 # Mutant: the attribute plan leaves out the boundary that holds the request, as before #1208
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.* :runtime:test --tests me.ahoo.cosec.runtime.attribute.* :conformance:test
+# Tests: :engine:test --tests me.ahoo.cosec.engine.* :runtime:test --tests me.ahoo.cosec.runtime.attribute.* :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlan.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlan.kt
 index 76d7df29..393118c3 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/AttributePlan.kt
-@@ -56,12 +56,6 @@ internal class FlatPlanner(request: FlatRequest, view: SnapshotView) : FlatEvalu
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlan.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/AttributePlan.kt
+@@ -56,12 +56,6 @@ internal class AttributePlanner(request: EngineRequest, view: SnapshotView) : FlatEvalu
                  }
              }
          }

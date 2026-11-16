@@ -19,9 +19,9 @@ import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -294,13 +294,13 @@ class PipelineTest {
                 )
             )
         }
-        pipeline(authenticator(authenticated()), CoSecFlatEngine, foreign).evaluate(facts())
+        pipeline(authenticator(authenticated()), CoSecEngine, foreign).evaluate(facts())
             .assertProblem(ProblemType.INTERNAL_ERROR)
     }
 
     @Test
     fun theRealEngineDeniesImplicitlyOnEmptyDocuments() = runTest {
-        pipeline(authenticator(authenticated()), CoSecFlatEngine).evaluate(facts()).assertProblem(ProblemType.FORBIDDEN)
+        pipeline(authenticator(authenticated()), CoSecEngine).evaluate(facts()).assertProblem(ProblemType.FORBIDDEN)
     }
 
     @Test

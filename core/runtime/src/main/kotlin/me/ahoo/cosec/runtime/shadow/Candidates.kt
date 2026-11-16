@@ -17,7 +17,7 @@ package me.ahoo.cosec.runtime.shadow
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /** A candidate as an instance holds it: compiled, or why it could not be. */

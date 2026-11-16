@@ -27,7 +27,7 @@ import me.ahoo.cosec.document.CatalogGroup
 import me.ahoo.cosec.document.CatalogPermission
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Memberships
@@ -345,9 +345,9 @@ class ChangesTest {
     /** Changes keep a document's rate limit rules (RFC 0006 §8): no operation changes them yet, so nothing drops them. */
     @Test
     fun `publishing a change keeps the document's rate limit rules`() = runBlocking<Unit> {
-        val rule = me.ahoo.cosec.engine.flat.RateLimitSource(
+        val rule = me.ahoo.cosec.engine.RateLimitSource(
             "orders",
-            me.ahoo.cosec.engine.flat.StatementSource("", me.ahoo.cosec.model.Effect.ALLOW, listOf("order:read")),
+            me.ahoo.cosec.engine.StatementSource("", me.ahoo.cosec.model.Effect.ALLOW, listOf("order:read")),
             null,
             me.ahoo.cosec.model.decision.RateLimitSpec(10.0),
         )

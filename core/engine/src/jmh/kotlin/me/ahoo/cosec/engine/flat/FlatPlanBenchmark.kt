@@ -15,6 +15,14 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.AttributePlan
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
@@ -31,7 +39,7 @@ import org.openjdk.jmh.annotations.Setup
 import org.openjdk.jmh.annotations.State
 
 /**
- * `CoSecFlatEngine.plan`: what the pipeline asks the engine before it fetches external attributes (RFC 0006 §5.4.2),
+ * `CoSecEngine.plan`: what the pipeline asks the engine before it fetches external attributes (RFC 0006 §5.4.2),
  * once per request of a deployment whose documents read one (#1211; the other benchmarks of this package never call it).
  * One policy of `statements` ALLOWs on `http:GET` and the path `/private<n>` and below, each with the condition
  * `ext.check.ok == true`, bound to `Anyone`. The request is
@@ -49,7 +57,7 @@ open class FlatPlanBenchmark {
     @Param("16", "1024", "10000")
     var statements: Int = 0
 
-    private lateinit var request: FlatRequest
+    private lateinit var request: EngineRequest
     private lateinit var view: SnapshotView
 
     @Setup
@@ -75,5 +83,5 @@ open class FlatPlanBenchmark {
     }
 
     @Benchmark
-    fun plan(): AttributePlan = CoSecFlatEngine.plan(request, view)
+    fun plan(): AttributePlan = CoSecEngine.plan(request, view)
 }

@@ -105,7 +105,7 @@ value with `?` in its place (`IDN-10`). A limiter of your own gets only buckets 
 
 Rules of different documents never share buckets: a rule counts under its document and its id, `platform/<id>`,
 `app:<appId>/<id>` or `tenant:<tenantId>/<id>`
-([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/RateLimits.kt)).
+([`CompiledRateLimit.counterId`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt)).
 A rule id cannot contain `:` or `/`, so no rule can name another document's counter: a tenant cannot spend, or reset,
 the platform's quotas.
 

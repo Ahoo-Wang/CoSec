@@ -17,8 +17,8 @@ package me.ahoo.cosec.runtime.event
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 
 /**
  * What a shadow listener needs to evaluate the request again (RFC 0006 §9.5.4): the request, the view and the external
@@ -27,7 +27,7 @@ import me.ahoo.cosec.engine.flat.SnapshotView
  */
 @InternalCoSecApi
 class ReplayHandle internal constructor(
-    internal val request: FlatRequest,
+    internal val request: EngineRequest,
     internal val view: SnapshotView,
     internal val sampledBy: Set<String>,
 )
