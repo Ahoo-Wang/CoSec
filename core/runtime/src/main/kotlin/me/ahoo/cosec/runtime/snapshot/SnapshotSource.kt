@@ -15,14 +15,11 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.SnapshotFamilies.Family
-import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.cosec.spi.snapshot.SnapshotStaleException
@@ -30,14 +27,9 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.ExecutionException
 import java.util.concurrent.Executor
-import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
-import java.util.concurrent.TimeUnit
 import java.util.function.LongSupplier
 
 /**
@@ -91,7 +83,7 @@ import java.util.function.LongSupplier
  * retries); eviction, lag reports and log lines with stack traces run on a separate housekeeping thread, so a slow log
  * appender cannot delay a timeout (#1252).
  */
-// B2a: the snapshot source splits into its state, its transitions and its runner
+// stays: the read interface with its contract and its test hooks, and the construction and close order in one place
 @Suppress("TooManyFunctions")
 @InternalCoSecApi
 class SnapshotSource<P : Any, A : Any> internal constructor(
@@ -127,22 +119,19 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val context = SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families)
     private val shared = Slot(sharedKey, sharedCompiler, context)
 
-    private val pendingPrewarms: MutableSet<CompletableFuture<Void>> = ConcurrentHashMap.newKeySet()
-
-    @Volatile
-    private var prewarmed = false
-
     /** Tests only: runs between finding a family's slot and using it, to force an eviction into that gap. */
     @Volatile
     internal var afterSlotLookup: ((SnapshotKey) -> Unit)? = null
 
     // #1383: a step that throws releases what the constructor took before it, so a source that fails to build holds nothing.
-    private val subscription: AutoCloseable = undoing({}) { store.subscribe(ChangeListener()) }
-    private val passes = Passes(shared, this.families, context)
-    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { schedulePeriodic() }
+    private val passes = Passes(shared, this.families, context, lagReports)
+    private val prewarms = Prewarms(context, ::usableOf)
+    private val subscription: AutoCloseable =
+        undoing({}) { store.subscribe(SnapshotChanges(sharedKey, shared, this.families, passes)) }
+    private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { passes.schedulePeriodic() }
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
-    val isPrewarmed: Boolean get() = prewarmed
+    val isPrewarmed: Boolean get() = prewarms.prewarmed
 
     /**
      * The installed snapshot for a request that needs the app document of [appId] (or none when null), or null when a
@@ -274,13 +263,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * Loads [keys] and completes once every one of them is installed and not failed, retrying with backoff from
      * [SnapshotOptions.prewarmInitialBackoff] up to [SnapshotOptions.prewarmMaxBackoff]. [isPrewarmed] turns true then.
      */
-    fun prewarm(keys: Collection<SnapshotKey>): CompletableFuture<Void> {
-        val done = CompletableFuture<Void>()
-        pendingPrewarms.add(done)
-        done.whenComplete { _, _ -> pendingPrewarms.remove(done) }
-        attemptPrewarm(keys.toList(), options.prewarmInitialBackoff, done)
-        return done
-    }
+    fun prewarm(keys: Collection<SnapshotKey>): CompletableFuture<Void> = prewarms.start(keys)
 
     /**
      * Throws [SnapshotStaleException] when [tenantId] is configured to fail closed and [snapshot] lags more than
@@ -368,7 +351,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         { periodic.cancel(false) },
         subscription::close,
         threads::stopScheduler,
-        { pendingPrewarms.forEach { it.completeExceptionally(closedError()) } },
+        prewarms::abort,
         { context.pendingRequests.forEach { it.abort(closedError()) } },
         ::endLoads,
         threads::stopHousekeeping,
@@ -410,10 +393,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * One periodic tick: queue a lag report, then revalidate, unless a pass is in flight ([Passes]). The future
      * completes when a pass that started after this call has ended.
      */
-    internal fun tick(): CompletableFuture<Void> {
-        lagReports.queue()
-        return passes.tick()
-    }
+    internal fun tick(): CompletableFuture<Void> = passes.periodic()
 
     /**
      * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval]
@@ -422,21 +402,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal fun reportLag() = lagReports.report()
 
     private fun closedError() = context.closedError()
-
-    private fun schedulePeriodic(): ScheduledFuture<*> {
-        val millis = options.revalidateInterval.toMillis()
-        return threads.scheduler.scheduleWithFixedDelay(::periodicTick, millis, millis, TimeUnit.MILLISECONDS)
-    }
-
-    /** Never lets anything escape: a throwing task would silently cancel the periodic schedule. */
-    @Suppress("TooGenericExceptionCaught")
-    private fun periodicTick() {
-        try {
-            tick()
-        } catch (error: Throwable) {
-            threads.offTimer { log.error(error) { "Snapshot revalidation pass failed." } }
-        }
-    }
 
     /**
      * Runs [action] on the slot of [key], retrying with a fresh slot when the one found was removed concurrently
@@ -466,77 +431,13 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         families.firstOrNull { it.spec.kind == kind }
             ?: throw IllegalArgumentException("This source has no $kind documents.")
 
-    private fun attemptPrewarm(keys: List<SnapshotKey>, backoff: Duration, done: CompletableFuture<Void>) {
-        if (context.closed.get()) {
-            done.completeExceptionally(closedError())
-            return
-        }
-        val loads = keys.map { usableOf(it) }
-        CompletableFuture.allOf(*loads.toTypedArray()).whenComplete { _, _ ->
-            if (context.closed.get()) {
-                done.completeExceptionally(closedError())
-                return@whenComplete
-            }
-            val answered = loads.filterNot { it.isCompletedExceptionally }.map { it.join() }
-            val failed = answered.filter { it.state is DocumentState.Failed }
-            if (failed.isEmpty() && answered.size == loads.size) {
-                prewarmed = true
-                done.complete(null)
-                return@whenComplete
-            }
-            threads.offRequestThread { log.warn { "Snapshot prewarm failed for ${failed.map { it.key }}; retrying in $backoff." } }
-            val nextBackoff = minOf(backoff.multipliedBy(2), options.prewarmMaxBackoff)
-            try {
-                threads.scheduler.schedule(
-                    { attemptPrewarm(keys, nextBackoff, done) },
-                    backoff.toMillis(),
-                    TimeUnit.MILLISECONDS,
-                )
-            } catch (rejected: RejectedExecutionException) {
-                done.completeExceptionally(rejected)
-            }
-        }
-    }
-
     /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
     internal fun evict(key: SnapshotKey): Boolean {
         val family = familyOf(key)
         return family.slots[family.spec.idOf(key)]?.removeIfIdle(onlyIfEmpty = false) ?: false
     }
 
-    private inner class ChangeListener : SnapshotChangeListener {
-        override fun onChanged(keys: Collection<SnapshotKey>) {
-            for (key in keys) {
-                if (key == sharedKey) {
-                    shared.onChanged()
-                    continue
-                }
-                // A key of no family here is another source's document.
-                val family = families.firstOrNull { it.spec.kind == key.kind } ?: continue
-                family.slots[family.spec.idOf(key)]?.onChanged()
-            }
-        }
-
-        override fun onReset() {
-            log.info { "Snapshot change notifications may have been lost; reloading every installed document." }
-            passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
-        }
-    }
-
     internal companion object {
-        private val log = KotlinLogging.logger {}
-
-        fun unwrap(error: Throwable?): Throwable {
-            var current = error ?: return IllegalStateException("The load completed without a result.")
-            while (current is CompletionException || current is ExecutionException) {
-                current = current.cause ?: return current
-            }
-            return current
-        }
-
-        fun Throwable.isFormatFailure(): Boolean =
-            generateSequence(this) { it.cause }.take(16).any { it is SnapshotFormatException }
-
         /** How long [close] waits for this source's threads to finish what was queued. */
         val CLOSE_TIMEOUT: Duration = Duration.ofSeconds(5)
     }

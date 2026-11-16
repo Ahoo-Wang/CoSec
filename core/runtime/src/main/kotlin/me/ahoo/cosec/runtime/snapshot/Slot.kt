@@ -19,17 +19,18 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.SnapshotFamilies.Seen
-import me.ahoo.cosec.runtime.snapshot.SnapshotSource.Companion.isFormatFailure
-import me.ahoo.cosec.runtime.snapshot.SnapshotSource.Companion.unwrap
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
+import java.util.concurrent.ExecutionException
 import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -743,3 +744,14 @@ internal class Slot<T : Any>(
         }
     }
 }
+
+private fun unwrap(error: Throwable?): Throwable {
+    var current = error ?: return IllegalStateException("The load completed without a result.")
+    while (current is CompletionException || current is ExecutionException) {
+        current = current.cause ?: return current
+    }
+    return current
+}
+
+private fun Throwable.isFormatFailure(): Boolean =
+    generateSequence(this) { it.cause }.take(16).any { it is SnapshotFormatException }

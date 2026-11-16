@@ -18,6 +18,8 @@ package me.ahoo.cosec.runtime.snapshot
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
 // The source's logger: moving the code did not move the name operators configure.
@@ -41,6 +43,7 @@ internal class Passes(
     private val shared: Slot<*>,
     private val families: SnapshotFamilies<*>,
     private val context: SlotContext,
+    private val lagReports: LagReports,
 ) {
     // Guarded by this.
     private var current: Pass? = null
@@ -164,5 +167,30 @@ internal class Passes(
         }
         repeat(minOf(context.options.reloadConcurrency, slots.size)) { lane() }
         return done
+    }
+
+    /**
+     * One periodic tick: queue a lag report, then revalidate, unless a pass is in flight ([tick]). The future
+     * completes when a pass that started after this call has ended.
+     */
+    fun periodic(): CompletableFuture<Void> {
+        lagReports.queue()
+        return tick()
+    }
+
+    /** Schedules [periodic] every [SnapshotOptions.revalidateInterval]; the source does, once, while it is built. */
+    fun schedulePeriodic(): ScheduledFuture<*> {
+        val millis = context.options.revalidateInterval.toMillis()
+        return context.threads.scheduler.scheduleWithFixedDelay(::periodicTick, millis, millis, TimeUnit.MILLISECONDS)
+    }
+
+    /** Never lets anything escape: a throwing task would silently cancel the periodic schedule. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun periodicTick() {
+        try {
+            periodic()
+        } catch (error: Throwable) {
+            context.threads.offTimer { log.error(error) { "Snapshot revalidation pass failed." } }
+        }
     }
 }
