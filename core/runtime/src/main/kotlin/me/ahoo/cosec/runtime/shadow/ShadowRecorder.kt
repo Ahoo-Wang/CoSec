@@ -41,7 +41,7 @@ class ShadowRecorder(
     private val clock: Clock = Clock.systemUTC(),
     private val endedRetention: Duration = DEFAULT_ENDED_RETENTION,
 ) {
-    private class Window(val key: SnapshotKey) {
+    internal class Window(val key: SnapshotKey) {
         val counts = EnumMap<ShadowOutcome, Long>(ShadowOutcome::class.java)
         val samples = EnumMap<ShadowOutcome, MutableList<ShadowSample>>(ShadowOutcome::class.java)
         val bases = HashSet<Long>()
@@ -51,6 +51,29 @@ class ShadowRecorder(
         /** Samples recorded so far: what [forget] compares with what was reported. */
         var recorded = 0L
         var forgotten = false
+
+        /**
+         * This window's report as [window] of [instance], with how many samples it counts; `null` while it has counted
+         * nothing, which is the rule: a window that has counted nothing has nothing to report. It is visible a moment before
+         * its first sample is merged, and a late sample of a forgotten window makes an empty one for a moment, whose
+         * report would replace the window's last numbers. Read under the window's lock, as [record] writes.
+         */
+        fun reported(window: String, instance: String): RecordedWindow? = synchronized(this) {
+            if (recorded == 0L) return null
+            RecordedWindow(
+                key,
+                ShadowReport(
+                    window = window,
+                    instance = instance,
+                    counts = counts.toMap(),
+                    samples = samples.mapValues { it.value.toList() },
+                    baseRevisions = bases.toSet(),
+                    first = first,
+                    last = last,
+                ),
+                recorded,
+            )
+        }
     }
 
     private val windows = ConcurrentHashMap<String, Window>()
@@ -90,27 +113,16 @@ class ShadowRecorder(
         }
     }
 
-    /** This instance's report of each window seen so far. */
+    /** This instance's report of each window that has counted a sample so far. */
     fun reports(): List<ShadowReport> = windows().map { it.report }
 
-    /** Each window seen and not forgotten: its document, its report now, and how many samples that report counts. */
-    fun windows(): List<RecordedWindow> = windows.map { (window, state) ->
-        synchronized(state) {
-            RecordedWindow(
-                state.key,
-                ShadowReport(
-                    window = window,
-                    instance = instance,
-                    counts = state.counts.toMap(),
-                    samples = state.samples.mapValues { it.value.toList() },
-                    baseRevisions = state.bases.toSet(),
-                    first = state.first,
-                    last = state.last,
-                ),
-                state.recorded,
-            )
-        }
-    }
+    /**
+     * Each window seen, not forgotten and counted: its document, its report now, and how many samples that report
+     * counts. A window that has counted nothing has nothing to report: it is visible a moment before its first sample is
+     * merged, and a late sample of a forgotten window makes an empty state for a moment, whose report would replace the
+     * window's last numbers.
+     */
+    fun windows(): List<RecordedWindow> = windows.mapNotNull { (window, state) -> state.reported(window, instance) }
 
     /**
      * Forgets [window] if it has had no sample since its report of [recorded] samples: its candidate is gone and that
