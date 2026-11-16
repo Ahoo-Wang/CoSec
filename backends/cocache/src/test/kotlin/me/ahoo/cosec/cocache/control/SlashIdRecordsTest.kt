@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.cocache.control
 
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.AppenderBase
 import kotlinx.coroutines.future.await
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.core.CacheRuntime
@@ -44,9 +48,11 @@ import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CopyOnWriteArrayList
 
 /**
  * `SCP-10` and `SCP-13` (#1403): a record an 8.0 preview stored under a tenant or app id that holds `/` is a format
@@ -142,6 +148,41 @@ class SlashIdRecordsTest {
             }
             formatError { sink.statuses() }.message.assert()
                 .contains("The status of instance [i1]").contains("[acme/west]")
+        }
+    }
+
+    /**
+     * The documents list is no format error of the whole list: an entry that names no document key, such as one a
+     * preview wrote for `tenant:acme/west`, is left out, the others are listed, and a warning names the entry.
+     */
+    @Test
+    fun `a documents-list entry of a slash id is left out and named`() = runBlocking<Unit> {
+        // The store warns from whichever thread reads the list while the test reads the lines: a list both can share.
+        val logged = CopyOnWriteArrayList<ILoggingEvent>()
+        val appender = object : AppenderBase<ILoggingEvent>() {
+            override fun append(event: ILoggingEvent) {
+                logged += event
+            }
+        }.apply { start() }
+        val logger = LoggerFactory.getLogger(CoCacheControlStore::class.java) as Logger
+        logger.addAppender(appender)
+        try {
+            SnapshotNode(backend, newKeyPrefix()).use { node ->
+                val store = CoCacheControlStore.create(node.factory, node.cache, node.keyPrefix)
+                val listed = Instant.parse("2026-11-01T00:00:00Z")
+                CacheRuntime.builder().backend(backend).build().use { raw ->
+                    raw.create(ControlCacheSpecs.list(node.keyPrefix)).async().put(
+                        "documents",
+                        mapOf("tenant:acme" to listed, "tenant:acme/west" to listed),
+                    ).await()
+                }
+                store.documents().assert().containsExactly(SnapshotKey.Tenant("acme"))
+                logged.filter { it.level == Level.WARN }.map { it.formattedMessage }.assert().containsExactly(
+                    "The documents list names [tenant:acme/west], which is no document key: left out."
+                )
+            }
+        } finally {
+            logger.detachAppender(appender)
         }
     }
 }
