@@ -39,6 +39,10 @@ import me.ahoo.cosec.control.grant.GrantDocuments
 import me.ahoo.cosec.control.grant.GrantVerdict
 import me.ahoo.cosec.control.grant.Grantor
 import me.ahoo.cosec.control.grant.ProtectedEntry
+import me.ahoo.cosec.control.lifecycle.ControlTargets.boundaryOf
+import me.ahoo.cosec.control.lifecycle.ControlTargets.entry
+import me.ahoo.cosec.control.lifecycle.ControlTargets.scopeOf
+import me.ahoo.cosec.control.lifecycle.ControlTargets.section
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
@@ -49,7 +53,6 @@ import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.MembershipSource
@@ -704,35 +707,6 @@ class ChangeAuthority(
         ControlDecision.INDETERMINATE
     }
 
-    private fun entry(key: SnapshotKey, kind: String, id: String): Resource = try {
-        ControlResources.entry(key, kind, id)
-    } catch (e: IllegalArgumentException) {
-        throw ChangeRejectedException(FORBIDDEN, e.message.orEmpty(), e)
-    }
-
-    private fun section(key: SnapshotKey, name: String): Resource = entry(key, name, "")
-
-    /** `doc/tenant/<t>/boundary` for a tenant's boundary, `doc/platform` for the default (RFC 0007 §7.1). */
-    private fun boundaryOf(key: SnapshotKey): Resource =
-        if (key is SnapshotKey.Platform) ControlResources.document(key) else section(key, "boundary")
-
-    /** The scope a binding of [key] grants in: its own tenant's for a tenant document, its subject's otherwise. */
-    private fun scopeOf(key: SnapshotKey, binding: Binding): Resource {
-        val tenant = when (key) {
-            is SnapshotKey.Tenant -> TenantId(key.tenantId)
-            else -> when (val subject = binding.subject) {
-                is SubjectRef.Principal -> subject.tenant
-                is SubjectRef.Role -> subject.tenant
-                SubjectRef.Anyone -> null
-            }
-        }
-        return try {
-            ControlResources.scope(tenant, binding.scope.app, binding.scope.space)
-        } catch (e: IllegalArgumentException) {
-            throw ChangeRejectedException(FORBIDDEN, e.message.orEmpty(), e)
-        }
-    }
-
     private fun breakGlass(base: PolicyDocument?, candidate: PolicyDocument, into: MutableList<Escalation>) {
         val before = base?.bindings.orEmpty().associateBy { it.id }
         val digest = { binding: Binding -> EntryDigest.of(binding, candidate.kind, candidate.owner) }
@@ -744,7 +718,7 @@ class ChangeAuthority(
         }
     }
 
-    private companion object {
+    internal companion object {
         private val log = KotlinLogging.logger {}
 
         /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */
