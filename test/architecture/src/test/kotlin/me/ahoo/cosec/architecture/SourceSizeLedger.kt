@@ -86,11 +86,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt",
-            545,
-            Disposition.Debt(Batch.B6),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt",
             552,
             Disposition.Debt(Batch.B4),

@@ -121,7 +121,6 @@ object TypeLedger {
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/jwt/ConditionalOnJwtEnabled.kt" to family(OWN_EXCEPTION, "the annotation and the Spring condition only it uses"),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/ClientIp.kt" to family(OWN_EXCEPTION, "the client IP readings and the configuration exception only they throw"),
         "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/PipelineProperties.kt" to family(RECORD, "one cosec.* property tree, bound by Spring"),
-        "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt" to Disposition.Debt(Batch.B6),
         "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Bootstrap.kt" to family(OWN_EXCEPTION, "the bootstrap"),
         "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ConversionReport.kt" to family(RECORD, "a conversion report"),
         "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Converter.kt" to Disposition.Debt(Batch.B6),
