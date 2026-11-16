@@ -2,11 +2,11 @@
 # Mutant: anyone holding cosec:publish abandons a revoke of a live break-glass binding, the principal it revokes included
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-index 87eb42e6..a61f733f 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-@@ -505,9 +505,6 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
+index 8d62b68f..405f7bbb 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
+@@ -131,9 +131,6 @@ internal class Approvals(
          authority.requireBoundaryOperator(operator, current)
          if (operator.actor != current.author) {
              authority.require(operator, current.key, ControlActions.PUBLISH)

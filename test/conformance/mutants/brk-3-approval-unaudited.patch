@@ -2,15 +2,15 @@
 # Mutant: a break-glass approval is recorded without a REQUIRED change listener
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-index 87eb42e6..50f9e9aa 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-@@ -440,7 +440,6 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
+index 8d62b68f..762a2945 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
+@@ -66,7 +66,6 @@ internal class Approvals(
          authority.requireApprovable(operator, change, candidate)
          val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
          if (breakGlass) {
 -            PublishRules.requireAudit(true, listeners.hasRequired)
-             audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)
+             flow.audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)
          }
-         return transition(id, setOf(ChangeState.AWAITING_APPROVAL)) { current ->
+         return flow.transition(id, setOf(ChangeState.AWAITING_APPROVAL)) { current ->
