@@ -486,7 +486,8 @@ documents, it is `DRAFT` with the findings. A publish whose revision was written
 `PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
 finishes what followed the write, and records the events as the publisher the revision names. A publish that wrote
 the head and could not finish after it (a store failing or timing out) answers `503`: the revision is in effect, and
-publishing the change again settles it without adding a revision.
+publishing the change again settles it without adding a revision. That holds once the change is `PUBLISHED` too: when
+only releasing its staging slot failed, publishing it again releases the slot and records the publish, once.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
 landing at the same moment for example, can move between the publish's last check and its write; the control plane
@@ -513,7 +514,10 @@ action and resource, with its document,
 subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
 not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
 `hidden`, and bindings to policies in them in `opaque`. A tenant binding scoped to the app asked about finds that
-app's permission policies, as enforcement does, when you may read the app's document. Attachments are not listed: they depend on each principal's
+app's permission policies, as enforcement does, when you may read the app's document. A binding of a built-in
+control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer`) is listed from the
+statements CoSec defines for it, never as `opaque`; the tenant ones are `conditional`, since they grant only on the
+caller's own tenant. Attachments are not listed: they depend on each principal's
 memberships. A binding applies in the tenant as the engine looks it up: a principal binding only to a principal of
 that tenant, a role binding that names a tenant only in that tenant, a role binding without one and `Anyone` in every
 tenant. So a platform binding of `principal:globex/bob` is not listed for `acme`.

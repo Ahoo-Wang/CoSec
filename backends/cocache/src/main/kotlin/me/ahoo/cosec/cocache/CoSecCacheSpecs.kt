@@ -21,16 +21,12 @@ import me.ahoo.cocache.codec.jackson.JacksonCodec
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.KeyEncoder
-import me.ahoo.cocache.core.LayoutField
 import me.ahoo.cocache.core.Locks
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.policy.InvalidateFailureMode
-import me.ahoo.cocache.core.policy.PolicyField
 import me.ahoo.cocache.core.policy.ReadFailureMode
-import me.ahoo.cocache.core.policy.Ttl
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.document.json.CoSecJson
@@ -41,7 +37,6 @@ import me.ahoo.cosec.spi.token.TokenFamily
 import tools.jackson.core.type.TypeReference
 import tools.jackson.databind.ObjectMapper
 import java.time.Duration
-import java.time.temporal.ChronoUnit
 
 /**
  * CoSec's CoCache declarations.
@@ -180,12 +175,6 @@ object CoSecCacheSpecs {
      */
     val CACHE_NAMES: Set<String> = PATHS.keys
 
-    /**
-     * A read timeout CoCache keeps as the store's command timeout: it stores any value of 36,500 days or more as none
-     * (`PolicyField.READ_TIMEOUT`).
-     */
-    private val COMMAND_TIMEOUT: Duration = ChronoUnit.FOREVER.duration
-
     /** Where a cache keeps its entries: `{keyPrefix}{namespace}:{encodedKey}`, in CoCache's terms. */
     @InternalCoSecApi
     data class Layout(val keyPrefix: String, val namespace: String) {
@@ -249,62 +238,7 @@ object CoSecCacheSpecs {
      *
      * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
      */
-    fun locks(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
-        lockLayout(*LayoutField.entries.toTypedArray())
-        when (cacheName) {
-            in STORE_OF_RECORD_CACHE_NAMES -> {
-                verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }
-                lock(PolicyField.TTL, PolicyField.UNKNOWN_READ)
-                constrain(PolicyField.TTL) { Ttl.Forever }
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
-                if (cacheName == POLICY_SNAPSHOT_CACHE_NAME) {
-                    // One local max age, cosec.authorization.snapshot.local-max-age (RFC 0008 §4.4).
-                    lock(PolicyField.LOCAL_MAX_AGE)
-                }
-            }
-
-            in SHADOW_CACHE_NAMES -> {
-                verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
-                lock(PolicyField.UNKNOWN_READ, PolicyField.TTL)
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
-                // The reports outlive any window, and a status counts for a minute (RFC 0007 §6.5): fixed, as on main.
-                val ttl = if (cacheName == INSTANCE_STATUS_CACHE_NAME) ShadowCacheSpecs.STATUS_TTL else ShadowCacheSpecs.REPORT_TTL
-                constrain(PolicyField.TTL) { Ttl.of(ttl) }
-            }
-
-            REVOKED_TOKEN_CACHE_NAME, REVOKED_SUBJECT_CACHE_NAME -> {
-                verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
-                // A failed read is unknown, never absent: absent would read "not revoked" to refresh too (H1).
-                lock(PolicyField.UNKNOWN_READ, PolicyField.READ_TIMEOUT)
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
-                // A read that times out is unavailable, which the pipeline lets through (PIP-7): a timeout shorter than
-                // the store's command timeout, from cocache.defaults.store.read-timeout say, would widen that.
-                constrain(PolicyField.READ_TIMEOUT) { COMMAND_TIMEOUT }
-            }
-
-            TOKEN_FAMILY_CACHE_NAME -> {
-                verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is a Store." } }
-                // A family that cannot be read is no answer, never "no family" (RFC 0009): refresh and logout fail.
-                lock(PolicyField.UNKNOWN_READ)
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
-            }
-
-            MEMBERSHIP_CACHE_NAME -> {
-                verify {
-                    require(it is CacheSpec<*, *> && it.externallySourced) {
-                        "CoSec's ${it.name} is an externally sourced Cache."
-                    }
-                }
-                lock(PolicyField.READ_FAILURE, PolicyField.UNKNOWN_READ)
-                constrain(PolicyField.TTL) { it.finiteOr(DEFAULT_MEMBERSHIP_TTL) }
-                constrain(PolicyField.TTL_JITTER) { Duration.ZERO }
-                constrain(PolicyField.READ_FAILURE) { ReadFailureMode.THROW }
-                constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
-            }
-
-            else -> throw IllegalArgumentException("[$cacheName] is not one of CoSec's caches.")
-        }
-    }.build()
+    fun locks(cacheName: String): Locks = CacheLocks.of(cacheName)
 
     /**
      * The snapshot documents (RFC 0003 §4.1): the store of record like every policy cache ([locks]), keys encoded

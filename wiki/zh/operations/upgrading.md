@@ -848,7 +848,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 ### 从 8.0.0-alpha.4 升级 {#from-8-0-0-alpha-4}
 
 **如果你发布过任一预览版的 `cosec-migrate convert` 写出的文档，请检查其中的 ALLOW 语句**（下面第一条）：转换得到的 7.x"所有动作"授予了控制面。
-8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
+8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。**升级前请关闭或撤回打开的影子窗口**：8.0.0-alpha.4 暂存的候选在文档旁另写了头部，会被当作无法读取而拒绝，于是它的窗口不被比较。
 
 - **安全：租户切换不再从已吊销或已结束的会话签发。** 从 8.0.0-alpha.1 到 8.0.0-alpha.4，切换自己不读取吊销记录：吊销存储无法读取时（请求路径此时把它读作"未吊销"），已登出的令牌，或被吊销主体的令牌，可以被切换成一个没有任何吊销记录指名的新令牌。会话是在 8.0.0-alpha.4 之后才有的；在这次修改之前，切换还会从一个自身会话已被吊销的令牌开始一个有效的会话：会话被刷新之后再次出示的令牌对吊销（`IDN-16`，其访问令牌在 `cosec.jwt.token-validity.access`（10 分钟）之内仍然有效），或被登出吊销。复制了令牌对并抢先刷新的人因此可以持有一个会话，直到用户的会话本该结束时为止，最长 `cosec.jwt.session.lifetime`。这一点不在任何预览版中。现在切换只从有效的会话签发，并严格读取吊销记录，与刷新共用同一个检查（`IDN-22`、`IDN-14`）：从已失效的会话切换回答 `token-revoked` 或 `token-expired`，存储无法读取时回答 503。预览版的切换在吊销存储故障期间签发的令牌，不会被它躲过的那条吊销记录吊销；如果可能存在这样的令牌，请[吊销该主体](../integration/authentication.md#revoking-every-token-of-a-principal)。
 - **安全：转换得到的 7.x"所有动作"不再授予控制面。** 从 8.0.0-alpha.1 到 8.0.0-alpha.4，`convert` 把针对所有 7.x 动作的 ALLOW 写成
@@ -987,6 +987,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
   - `RevocationUnavailableException` 继承 `CoSecException`，与 `MembershipUnavailableException` 一样。把所有 `CoSecException`（一种 `SecurityException`）都答成 `401` 的处理器现在也会捕获它：请先处理它，它表示吊销存储不可用。
   - `RateLimitResult` 不再是 `data class`：没有了 `copy` 和 `componentN`，相等性不变。
   - `SnapshotDocument.DOCUMENT_SCHEMA` 不再是 `const`，已编译的代码读取的是运行时 CoSec 的 schema。用它初始化的 `const val` 不再能编译：改为 `val`。
+  - **`SnapshotDocument` 由它的字节构造**（`SNP-12`）：构造函数现在是内部的。把 `SnapshotDocument(schema, revision, publishedAt, bytes)` 换成 `SnapshotDocuments.read(bytes)`（`cosec-document`），它从字节中读取头部，并拒绝不是文档的字节。存储的字节不变。
   - 以下现在是内部 API（`@InternalCoSecApi`）：`Environment`、条件字面量（`Literal`）、`Attribute` 及其 `Kind`、`ScopeResolver`、`ScopeSubject`、`SubjectRevocation`、`IdentityFormatException`、`IdentityOverflowException` 和 `Identifiers.isUnpairedSurrogateAt`。`ScopeResolution.Resolved` 和 `ScopeResolution.Rejected` 的构造器是内部的；`ScopeResolution.Rejected.Reason` 保留。
 
 - **`cosec-runtime` 和 Web 适配器的公开 API 已按 8.0 归类**（R9）。使用 starter 时运行时没有变化；在代码中：

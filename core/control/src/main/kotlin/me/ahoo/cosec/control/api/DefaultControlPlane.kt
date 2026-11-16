@@ -335,13 +335,13 @@ class DefaultControlPlane(
         SnapshotKey.App(app)
     }
 
-    /** The policy [binding] of [entry] names, as the engine resolves it: its own document, the platform, the app it is scoped to. */
+    /** The policy [binding] of [entry] names, as the engine resolves it: a built-in one, its own document, the platform, the app it is scoped to. */
     private fun analyzed(
         binding: Binding,
         entry: DocumentCache.Entry,
         platform: DocumentCache.Entry?,
         app: DocumentCache.Entry?,
-    ): DocumentCache.AnalyzedPolicy? = entry.analyzed[binding.policy.value]
+    ): DocumentCache.AnalyzedPolicy? = DocumentCache.BUILTIN[binding.policy.value] ?: entry.analyzed[binding.policy.value]
         ?: platform?.analyzed?.get(binding.policy.value)
         ?: app?.takeIf { binding.scope.app.exact { id -> id.value } == it.document.owner }?.analyzed?.get(binding.policy.value)
 

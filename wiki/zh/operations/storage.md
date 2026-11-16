@@ -49,7 +49,7 @@ key 都在它之下（`SNP-9`）。
 
 | Key | 写入者 | 内容 |
 |---|---|---|
-| `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订 |
+| `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订，存储为完整的 JSON 文档，包含其 `schema`、`revision` 和 `publishedAt` |
 | `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址（`SHA-256:` 加 64 位十六进制，与 CoCache 的计算相同） |
 | `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引，以及回收已从中移出、尚未确认删除的记录 |
 | `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档，每个带上它最后一次登记该引用的修订：一个修订只删除它自己或更早的修订登记的引用（`CTL-25`）；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id；[`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 补上各个头引用而索引缺少的条目，并删除未能写入头的发布登记下的条目 |
@@ -58,7 +58,7 @@ key 都在它之下（`SNP-9`）。
 | `<s>:control:apps:all` | 控制面、`cosec-migrate` | app 列表：现有的 app 文档，以及列表是否完整；授出分析在每次租户变更时读取它（[见下文](#publishing-through-the-control-plane)） |
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
 | `<s>:control:stage:<doc>` | 控制面 | 一个文档的暂存槽：哪个变更占用它 |
-| `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选；由它所属的变更删除，且只在它仍是该变更的候选时删除（`CTL-26`） |
+| `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选（它的窗口、基准修订和候选文档，文档的头部是它自己的）；由它所属的变更删除，且只在它仍是该变更的候选时删除（`CTL-26`） |
 | `<s>:shadow:report:<window>:<instance>` | 仅数据面实例 `<instance>` | 该实例对一个影子窗口的累计报告；每次写入替换上一次的；窗口的候选撤回后实例不再写它；最后一次写入 8 天后过期 |
 | `<s>:shadow:reporters:<window>` | 每个数据面实例 | 对 `<window>` 报告过的实例 id；过期时间同上 |
 | `<s>:shadow:status:<instance>` | 仅数据面实例 `<instance>` | 该实例已装入的修订及其滞后；一次心跳只写这一个值，与集群规模无关；最后一次写入 2 分钟后过期，超过一分钟的状态被忽略 |
@@ -249,6 +249,8 @@ CoSec 不改动这个客户端：它由应用共享。
 两者都写入实例读取的那个 Redis，并使用同一个 `cosec.key-prefix`。一次发布先写修订记录，再以
 基准修订的摘要做比较并设置来替换头部，所以读者看到的要么是旧头部、要么是新头部，绝不会是混合；两个发布者也绝不会互相
 覆盖：后一个会被告知基准已经变了。
+
+存储的文档就是它的正文：完整的 JSON 文档，包括头部。实例从正文读取头部（`SnapshotDocuments.read`，`SNP-12`），因此无论哪个存储保存这些字节，实例报告已安装的修订总是它所执行的内容的修订。
 
 ### 最初的文档 {#the-first-documents}
 

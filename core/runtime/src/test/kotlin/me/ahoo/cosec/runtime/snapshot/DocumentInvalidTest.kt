@@ -22,6 +22,7 @@ import ch.qos.logback.core.AppenderBase
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.HostScope
@@ -37,7 +38,6 @@ import me.ahoo.cosec.runtime.http.Unavailability
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
@@ -45,7 +45,6 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
@@ -81,7 +80,7 @@ class DocumentInvalidTest {
         val revision = (revisions[key] ?: 0) + 1
         revisions[key] = revision
         val text = """{"schema":2,"revision":$revision,"publishedAt":"2026-10-26T00:00:00Z"$body}"""
-        store.put(key, SnapshotDocument(2, revision, Instant.parse("2026-10-26T00:00:00Z"), text.encodeToByteArray()))
+        store.put(key, SnapshotDocuments.read(text.encodeToByteArray()))
     }
 
     /** A tenant document that reads an attribute nothing declares: it does not compile. */
