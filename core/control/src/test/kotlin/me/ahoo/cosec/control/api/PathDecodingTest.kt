@@ -90,7 +90,7 @@ class ControlHttpPathDecodingTest {
     fun `an encoded slash is one parameter, and an id with a slash is still refused`() {
         val (status, problem) = get("/documents/tenant:acme%2Fwest", plato)
         status.assert().describedAs("$problem").isEqualTo(400)
-        problem.get("detail").asString().assert().contains("names no document").contains("holds no ':' or '/'")
+        problem.get("detail").asString().assert().contains("names no document")
         get(
             "/documents/tenant:acme%2Fwest"
         ).first.assert().describedAs("a tenant's own principal is refused too").isEqualTo(400)

@@ -160,6 +160,21 @@ class ConverterTest {
         changes.single { it.change == "C3" }.location.assert().isEqualTo("app:role:permission:order:auditor@team")
     }
 
+    /** `SCP-13` (#1403): a tenant or app id with `/` is refused at the id, as a rejection of its own kind. */
+    @Test
+    fun `a tenant or app id with a slash is refused at the id`() {
+        val source = source(
+            policies = listOf("slash" to policy("slash", tenantId = "acme/west")),
+            apps = listOf(app("a/b", appPermission("a/b", permission("p")))),
+        )
+        val report = convert(source, Partition.BY_OWNER).report
+        report.accepted.assert().isFalse()
+        report.rejections.map { it.kind to it.location }.assert().containsExactly(
+            RejectionKind.SLASH_IN_ID to "policy:slash",
+            RejectionKind.SLASH_IN_ID to "app:a/b",
+        )
+    }
+
     @Test
     fun `every rejection kind is reported with its location and nothing is converted`() {
         val source = source(
@@ -210,7 +225,6 @@ class ConverterTest {
         located(RejectionKind.OWNER_TENANT).assert().containsExactly("policy:orphan")
         located(RejectionKind.GLOBAL_INDEX_WITHOUT_CONTENT).assert().containsExactly("global")
         located(RejectionKind.INVALID_ID).assert().containsExactly("app:*")
-        located(RejectionKind.SLASH_IN_ID).assert().containsExactly("policy:slash", "app:a/b")
         located(RejectionKind.UNDEFINED_PERMISSION).assert().containsExactly("app:role:permission:order:clerk")
         located(RejectionKind.SCHEMA_MARKER).assert().containsExactly("meta:schema")
         located(RejectionKind.CONDITION_NOT_TRANSLATED).assert()

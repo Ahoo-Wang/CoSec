@@ -427,7 +427,7 @@ class ApiKeyMigrationTest {
         plan.accepted.assert().isFalse()
         plan.rejections.assert().hasSize(refused.size)
         plan.rejections.single { it.startsWith("API key [k-slash]") }.assert()
-            .contains("its tenant [acme/west] is no 8.0 tenant id").contains("rename the tenant in the source system")
+            .contains("its tenant [acme/west] is no 8.0 tenant id").contains("rename it at its source")
         plan.keys.map { it.key.id }.assert().doesNotContainAnyElementsOf(refused.map { it.id })
         // A per-key role must not take a role a document already binds.
         val taken = object : PublishedDocuments by published {

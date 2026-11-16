@@ -62,7 +62,9 @@ class ApiKey(
         require(
             app == null || ScopeResolver.isValidAppId(app)
         ) {
-            "API key [${Identifiers.printable(id)}] declares an app that cannot be an app id: [${app?.let(Identifiers::printable)}]."
+            "API key [${Identifiers.printable(
+                id
+            )}] declares an app that cannot be an app id: [${app?.let(Identifiers::printable)}]."
         }
     }
 

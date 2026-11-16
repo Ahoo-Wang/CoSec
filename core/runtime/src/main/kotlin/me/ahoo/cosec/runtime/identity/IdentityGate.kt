@@ -147,7 +147,12 @@ class IdentityGate(
         }
         if (!SnapshotKey.Tenant.isValidTenantId(identity.tenant)) {
             // The gateway refuses a token of such a tenant (`SCP-13`), so this one was not forwarded by it.
-            return reject(requestId, ProblemType.INVALID_REQUEST, "the identity's tenant cannot be a tenant id", traceId)
+            return reject(
+                requestId,
+                ProblemType.INVALID_REQUEST,
+                "the identity's tenant cannot be a tenant id",
+                traceId
+            )
         }
         val security = security(identity, requestId, facts, parameters)
             ?: return reject(requestId, ProblemType.INVALID_REQUEST, "the identity's scope does not resolve here", traceId)

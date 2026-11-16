@@ -96,7 +96,11 @@ class ConvertedDirectoryTest {
     /** #1403: an app id with `/` names no 8.0 document, so it is refused at the id, with advice, and nothing is written. */
     @Test
     fun `an app id with a slash is refused, not encoded`() {
-        val directory = export("[]", "[]", """[{"appPermission":${appPermission("a/b", permission("p"))},"grants":{}}]""")
+        val directory = export(
+            "[]",
+            "[]",
+            """[{"appPermission":${appPermission("a/b", permission("p"))},"grants":{}}]"""
+        )
         val conversion = Converter().convert(ExportDirectory.read(directory))
         conversion.report.accepted.assert().isFalse()
         val out = temp.resolve("out")

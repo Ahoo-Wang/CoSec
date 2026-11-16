@@ -419,18 +419,9 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
             )
             return SnapshotKey.Platform
         }
-        if ('/' in tenantId) {
-            reject(
-                RejectionKind.SLASH_IN_ID,
-                location,
-                "policy [${Identifiers.printable(id)}] has tenantId [${Identifiers.printable(tenantId)}], which holds `/` " +
-                    "(--partition by-owner)",
-            )
-            return null
-        }
         if (!SnapshotKey.Tenant.isValidTenantId(tenantId)) {
             reject(
-                RejectionKind.OWNER_TENANT,
+                if ('/' in tenantId) RejectionKind.SLASH_IN_ID else RejectionKind.OWNER_TENANT,
                 location,
                 "policy [${Identifiers.printable(id)}] has tenantId [${Identifiers.printable(tenantId)}], which names no " +
                     "tenant document (--partition by-owner)",
@@ -514,17 +505,13 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
      */
     private fun appPermissionTree(app: Source7x.App): ObjectNode? {
         val appId = app.appId
-        if ('/' in appId) {
-            reject(RejectionKind.SLASH_IN_ID, app.location, "app id [${Identifiers.printable(appId)}] holds `/`")
-            return null
-        }
         if (!SnapshotKey.App.isValidAppId(appId)) {
             reject(
-                RejectionKind.INVALID_ID,
+                if ('/' in appId) RejectionKind.SLASH_IN_ID else RejectionKind.INVALID_ID,
                 app.location,
                 "app id [${Identifiers.printable(appId)}] is `*`, blank, longer than ${ScopeResolver.MAX_APP_ID_LENGTH} " +
-                    "characters, or contains `:`, a control character or an unpaired surrogate: 8.0 reads `*` as any " +
-                    "app, and names no app document by the others",
+                    "characters, or contains `:`, `/`, a control character or an unpaired surrogate: 8.0 reads `*` as " +
+                    "any app, and names no app document by the others",
             )
             return null
         }

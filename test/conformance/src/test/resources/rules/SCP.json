@@ -118,6 +118,7 @@
         "control:UnnamedAppIdsTest#a head that holds one is a format error, so neither a publish nor a repair gets past it",
         "control:UnnamedAppIdsTest#a stored change of such an app is a format error",
         "control:ControlMaintenanceTest#an open change of an app no key can name stops the pass",
+      "control:ControlMaintenanceTest#an open change that cannot be expired stops the pass",
         "control:ControlHttpTest#a change that no longer reads is a 503 to every caller, without detail",
         "control:ChangesB1Test#an app list that is not to be trusted leaves every app unknown - RC1-4",
         "cocache:CoCacheControlStoreTest#an open change of an app no key can name fails the listing",

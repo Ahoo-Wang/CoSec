@@ -549,7 +549,7 @@ class ControlHttp(private val plane: ControlPlane) {
     private fun documentKey(text: String): SnapshotKey = try {
         ChangeRequestCodec.documentKeyOf(text)
     } catch (e: SnapshotFormatException) {
-        throw InvalidControlRequestException("That names no document: platform, app:<id> or tenant:<id>, where an id holds no ':' or '/'.", e)
+        throw InvalidControlRequestException("That names no document: platform, app:<id> or tenant:<id>.", e)
     }
 
     private fun changeIdOf(text: String): ChangeId = field("change", "a change id") { ChangeId(unescaped(text)) }

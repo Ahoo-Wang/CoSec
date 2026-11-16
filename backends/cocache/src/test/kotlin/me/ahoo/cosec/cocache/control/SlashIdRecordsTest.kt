@@ -56,6 +56,7 @@ import java.time.Instant
 class SlashIdRecordsTest {
     private val backend = InMemoryBackend()
 
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun formatError(block: suspend () -> Unit): SnapshotFormatException {
         val error = try {
             block()
@@ -92,13 +93,23 @@ class SlashIdRecordsTest {
                 .replace("\"key\":\"tenant:acme\"", "\"key\":\"tenant:acme/west\"")
             CacheRuntime.builder().backend(backend).build().use { raw ->
                 raw.create(
-                    rawStore("RawReferences", node.keyPrefix, CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME, ReferenceKeyEncoder)
+                    rawStore(
+                        "RawReferences",
+                        node.keyPrefix,
+                        CoSecCacheSpecs.REFERENCE_INDEX_CACHE_NAME,
+                        ReferenceKeyEncoder
+                    )
                 ).async().put(
                     ReferenceKey(SnapshotKey.Platform, PolicyId("shared")),
                     """{"tenant:acme":1,"tenant:acme/west":1}""".encodeToByteArray(),
                 ).await()
                 raw.create(
-                    rawStore("RawChange", node.keyPrefix, CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME, KeyEncoder<ChangeId> { it.value })
+                    rawStore(
+                        "RawChange",
+                        node.keyPrefix,
+                        CoSecCacheSpecs.CHANGE_REQUEST_CACHE_NAME,
+                        KeyEncoder<ChangeId> { it.value }
+                    )
                 ).async().put(ChangeId("c1"), written.encodeToByteArray()).await()
             }
             formatError { store.referrers(SnapshotKey.Platform, PolicyId("shared")) }.message.assert()
@@ -113,14 +124,20 @@ class SlashIdRecordsTest {
     fun `an instance status of a slash id fails the statuses, naming the instance and the id`() = runBlocking<Unit> {
         SnapshotNode(backend, newKeyPrefix()).use { node ->
             val sink = CoCacheShadowReports.create(node.factory, node.keyPrefix, Clock.systemUTC())
-            val installed = mapOf<SnapshotKey, InstalledDocument>(SnapshotKey.Tenant("acme") to InstalledDocument(1, Duration.ZERO))
+            val installed =
+                mapOf<SnapshotKey, InstalledDocument>(SnapshotKey.Tenant("acme") to InstalledDocument(1, Duration.ZERO))
             sink.write(InstanceStatus("i1", Instant.now(), installed))
             val written = ShadowCodec.encodeStatuses(
                 mapOf("i1" to InstanceStatus("i1", Instant.now(), installed))
             ).decodeToString().replace("tenant:acme", "tenant:acme/west")
             CacheRuntime.builder().backend(backend).build().use { raw ->
                 raw.create(
-                    rawStore("RawStatus", node.keyPrefix, CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME, KeyEncoder<String> { it })
+                    rawStore(
+                        "RawStatus",
+                        node.keyPrefix,
+                        CoSecCacheSpecs.INSTANCE_STATUS_CACHE_NAME,
+                        KeyEncoder<String> { it }
+                    )
                 ).async().put("i1", written.encodeToByteArray()).await()
             }
             formatError { sink.statuses() }.message.assert()

@@ -201,11 +201,9 @@ class ApiKeyMigration(
         val claims = MembershipClaims.parse(key.roles, emptyList())
         val ownRole = rolePrefix + key.id
         return when {
-            // #1403: an id that was a 7.x tenant may be none in 8.0, such as one with `/`; checked first, since
-            // everything after it reads the tenant's documents.
+            // #1403: first, since everything after it reads the tenant's documents.
             !SnapshotKey.Tenant.isValidTenantId(key.tenant.value) ->
-                "its tenant [${Identifiers.printable(key.tenant.value)}] is no 8.0 tenant id (no `/`, `:` or control " +
-                    "character): rename the tenant in the source system, then run again"
+                "its tenant [${Identifiers.printable(key.tenant.value)}] is no 8.0 tenant id: rename it at its source"
             key.id.isBlank() || key.id.any { it == '@' || it == '*' || it.isWhitespace() } ->
                 "its id has '@', '*' or a blank, so no principal or role can be named after it"
             key.attributes.isNotEmpty() ->
@@ -543,24 +541,5 @@ class StoredApiKeys(val legacy: List<LegacyApiKey>, val converted: List<String>,
 
         private const val COMPARE_AND_SET =
             "if redis.call('GET', KEYS[1]) == ARGV[1] then redis.call('SET', KEYS[1], ARGV[2]) return 1 else return 0 end"
-    }
-}
-
-/** `--memberships`: a JSON array of `{"tenant": ..., "principal": ..., "roles": ["role", "role@space", ...]}`. */
-object MembershipsExport {
-    fun read(json: ByteArray): Map<Pair<TenantId, String>, Set<String>> {
-        val node = CoSecJson.mapper.readTree(json)
-        require(node.isArray) { "--memberships is a JSON array of {tenant, principal, roles}." }
-        val read = LinkedHashMap<Pair<TenantId, String>, Set<String>>()
-        node.values().forEach { entry ->
-            require(entry.isObject && entry.propertyNames().toSet() == setOf("tenant", "principal", "roles")) {
-                "--memberships entries have exactly tenant, principal and roles, not $entry"
-            }
-            val owner = TenantId(entry.get("tenant").asString()) to entry.get("principal").asString()
-            // Two entries for one principal: which is right is not for the migration to guess.
-            require(owner !in read) { "--memberships names ${owner.second}@${owner.first.value} twice." }
-            read[owner] = entry.get("roles").values().mapTo(LinkedHashSet()) { it.asString() }
-        }
-        return read
     }
 }
