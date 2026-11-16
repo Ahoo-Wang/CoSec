@@ -46,16 +46,26 @@ import java.time.Duration
  * either fails for a reason of its own or leaves the change in one of its to-states.
  */
 class ChangeTransitionTableTest {
-    private class Command(val step: ChangeStep, val run: suspend (ChangeHarness, ChangeId) -> ChangeRequest) {
+    /**
+     * A command, its own row, and the other steps it may take on its way. It accepts its own row's From, and ends in
+     * any To of the steps it takes: a publish ends `PUBLISHED` through [ChangeStep.WRITTEN], a stage that does not get
+     * its slot `CHECKED` through [ChangeStep.UNRESERVE]. Which steps a command takes is a claim about several rows, so
+     * it is made here, in the test, and not in the table.
+     */
+    private class Command(
+        val step: ChangeStep,
+        val also: Set<ChangeStep> = emptySet(),
+        val run: suspend (ChangeHarness, ChangeId) -> ChangeRequest,
+    ) {
         val from: Set<ChangeState> get() = step.from
-        val to: Set<ChangeState> get() = step.to
+        val to: Set<ChangeState> get() = (also + step).flatMapTo(HashSet()) { it.to }
     }
 
     /** Each command and its row of the table ([ChangeStep]): the code is held to the table it declares. */
     private val table = linkedMapOf(
         "rebase" to Command(ChangeStep.REBASE) { h, id -> h.changes.rebase(ALICE_OP, id) },
-        "stage" to Command(ChangeStep.STAGE) { h, id -> h.changes.stage(ALICE_OP, id) },
-        "skipShadow" to Command(ChangeStep.SKIP_SHADOW) { h, id ->
+        "stage" to Command(ChangeStep.STAGE, setOf(ChangeStep.UNRESERVE)) { h, id -> h.changes.stage(ALICE_OP, id) },
+        "skipShadow" to Command(ChangeStep.SKIP_SHADOW, setOf(ChangeStep.UNRESERVE)) { h, id ->
             h.changes.skipShadow(ALICE_OP, id, "hurry")
         },
         "shadowed" to Command(ChangeStep.SHADOWED) { h, id ->
@@ -68,7 +78,7 @@ class ChangeTransitionTableTest {
         },
         "reject" to Command(ChangeStep.REJECT) { h, id -> h.changes.reject(PLATO, id, "no") },
         "abandon" to Command(ChangeStep.ABANDON) { h, id -> h.changes.abandon(ALICE_OP, id) },
-        "publish" to Command(ChangeStep.PUBLISH) { h, id ->
+        "publish" to Command(ChangeStep.PUBLISH, setOf(ChangeStep.UNWRITTEN, ChangeStep.WRITTEN)) { h, id ->
             h.changes.publish(ALICE_OP, id)
         },
     )

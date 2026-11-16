@@ -34,7 +34,8 @@ import me.ahoo.cosec.control.change.ChangeState.SHADOWING
  * [ChangeLifecycle.transition] writes nothing that leaves a change outside its step's [to].
  *
  * The first eight rows are the commands; the others are what those commands do on their way: a reservation undone, a
- * holder preempted, a publish that wrote no head or that did, and the expiry every read applies.
+ * holder preempted, a publish that wrote no head or that did, and the expiry every read applies. A row's [to] holds
+ * exactly the states transitions under that step write: a publish's `PUBLISHED` is [WRITTEN]'s, not [PUBLISH]'s.
  */
 internal enum class ChangeStep(val from: Set<ChangeState>, val to: Set<ChangeState>) {
     REBASE(setOf(CONFLICTED, DRAFT, CHECKED), setOf(CHECKED, DRAFT)),
@@ -44,7 +45,7 @@ internal enum class ChangeStep(val from: Set<ChangeState>, val to: Set<ChangeSta
     APPROVE(setOf(AWAITING_APPROVAL), setOf(READY)),
     REJECT(setOf(AWAITING_APPROVAL), setOf(REJECTED)),
     ABANDON(open(), setOf(ABANDONED)),
-    PUBLISH(setOf(READY), setOf(PUBLISHED, DRAFT, AWAITING_APPROVAL, CONFLICTED)),
+    PUBLISH(setOf(READY), setOf(DRAFT, AWAITING_APPROVAL, CONFLICTED)),
 
     /** A stage or skip that did not get its slot: the change is `CHECKED` again. */
     UNRESERVE(setOf(SHADOWING, READY, AWAITING_APPROVAL), setOf(CHECKED)),
