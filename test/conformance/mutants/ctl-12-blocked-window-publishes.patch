@@ -1,0 +1,16 @@
+# Rule: CTL-12
+# Mutant: a window an instance closed on CANDIDATE_ERROR does not stop the publish: the change publishes as if the window had closed clean
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ShadowWindowTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
+index e837b02f..5dc70ed0 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
+@@ -158,7 +158,6 @@ internal object PublishRules {
+         val state = change.shadow ?: return
+         val problem = when {
+             state.closed == null -> CONFLICT to "the window of change ${change.id.value} is open"
+-            state.closed.blocked -> CONFLICT to "an instance could not compile or evaluate the candidate of change ${change.id.value}"
+             state.closed.needsAck && !matches(ack, state.window, state.closed) ->
+                 PRECONDITION_REQUIRED to "publishing change ${change.id.value} needs an acknowledgement of window ${state.window}: ${state.closed.counts}"
+             else -> null
