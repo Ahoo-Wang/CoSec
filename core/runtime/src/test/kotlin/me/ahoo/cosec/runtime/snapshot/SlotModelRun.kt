@@ -37,6 +37,8 @@ internal class SlotModelRun(private val script: SlotModelScript) {
     private val options = SnapshotOptions(
         maxApps = 1,
         maxTenants = 1,
+        // Absent entries evicted too, so their claims and their set are checked (`SNP-14`, RFC 0013 B2b §4c).
+        maxAbsent = 1,
         reloadConcurrency = script.lanes,
     )
     private val model: SlotModel
