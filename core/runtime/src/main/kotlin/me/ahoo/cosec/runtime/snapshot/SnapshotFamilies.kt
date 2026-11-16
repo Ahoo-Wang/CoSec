@@ -95,17 +95,18 @@ internal class SnapshotFamilies<A : Any>(
     }
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
-    internal fun victims(
-        family: Family<*>,
-        absent: Boolean,
-        wanted: Int,
-        lastAccessOf: (Slot<*>) -> Long = Slot<*>::lastAccess,
-    ): List<Slot<*>> {
-        // Absent entries from their own set, documents from the family's map (a set of them scanned 1.6 times slower at
-        // 100,000: EvictionPassBenchmark); a slot is checked again, since its kind can change after it was listed.
-        val candidates = if (absent) family.absentMembers.asSequence() else family.slots.values.asSequence()
-        val ofKind = candidates.filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
-        return leastRecentlyUsed(ofKind, wanted, lastAccessOf, { it.isIdle() })
+    internal fun victims(family: Family<*>, absent: Boolean, wanted: Int): List<Slot<*>> =
+        leastRecentlyUsed(candidates(family, absent), wanted, { it.lastAccess }, { it.isIdle() })
+
+    /**
+     * What a pass for the kind [absent] names scans: absent entries from their own set, documents from the family's map.
+     * A set of the documents made their warmed scan 1.6 times slower at a bound of 100,000 (2.25-2.42 ms against
+     * 3.7-4.1 ms, `EvictionPassBenchmark`), for nothing their pass uses. A slot is checked again, since its kind can
+     * change after it was listed.
+     */
+    internal fun candidates(family: Family<*>, absent: Boolean): Sequence<Slot<*>> {
+        val listed = if (absent) family.absentMembers.asSequence() else family.slots.values.asSequence()
+        return listed.filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
     }
 
     /** Moves [family]'s counts for an entry replaced by another, either of them null: where `installed` is written. */
