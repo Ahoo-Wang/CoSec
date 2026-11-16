@@ -28,19 +28,15 @@ import me.ahoo.cosec.engine.Evaluation
 import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.ViewVersion
-import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
-import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.condition.AttributeCatalog
-import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -53,53 +49,6 @@ import me.ahoo.cosec.runtime.snapshot.ViewDocuments
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.atomic.AtomicLong
-
-/**
- * A request to decide without making it (RFC 0007 §10.3): who asks, with which memberships, in which scope, for which
- * action and resource, with which headers and request attributes. It describes the principal, so any principal of the
- * caller's reach can be simulated.
- */
-@InternalCoSecApi
-data class SimulatedRequest(
-    val tenant: TenantId,
-    val principal: String?,
-    val roles: List<String> = emptyList(),
-    val policies: List<String> = emptyList(),
-    val app: String = "",
-    val space: String = "",
-    val action: Action,
-    val resource: Resource,
-    val remoteIp: String = "",
-    val time: Long,
-    /** The request's headers by name, each with its values in order: what `http.*` conditions read. */
-    val headers: Map<String, List<String>> = emptyMap(),
-    /** What the host knows besides HTTP, such as a gateway's route id: what `request.attributes.*` conditions read. */
-    val requestAttributes: Map<String, String> = emptyMap(),
-    /**
-     * False for a credential with a role cap: what is bound to its principal by name grants it nothing, and its DENYs
-     * still apply (RFC 0009 §4.2, RC1-1). A token by default.
-     */
-    val principalBindings: Boolean = true,
-    /** False for an API key or any credential but CoSec's own token: break-glass does not apply. A token by default. */
-    val breakGlass: Boolean = true,
-)
-
-/** The documents a decision read, compiled, with their revisions: what [Simulator.evaluate] decides on. */
-@InternalCoSecApi
-class Documents(val platform: PolicyDocument?, val app: PolicyDocument?, val tenant: PolicyDocument?)
-
-/**
- * A document to decide on and, for a stored one (a head, or a retained revision), its [entry] in the [DocumentCache]:
- * then it is compiled once for its content (RC1-41). A candidate has none, and is compiled once per call.
- */
-internal class Held(val document: PolicyDocument, val entry: DocumentCache.Entry?) {
-    companion object {
-        fun of(document: PolicyDocument?): Held? = document?.let { Held(it, null) }
-    }
-}
-
-/** The documents a decision reads, as [Held]. */
-internal class HeldDocuments(val platform: Held?, val app: Held?, val tenant: Held?)
 
 /**
  * The control plane's decisions (RFC 0007 §10.3, Q22, CTL-3): the enforcing flow's parts, not a second evaluator. The
@@ -338,78 +287,3 @@ private fun comparable(decision: Decision): Any = when (decision) {
 }
 
 private fun failure(error: Throwable): Pair<Class<*>, String?> = error.javaClass to error.message
-
-/** A statement as a decision reports it to a caller: by policy, index and the binding it applied through. */
-@InternalCoSecApi
-data class StatementView(
-    val policy: String,
-    val statement: Int,
-    val name: String,
-    val via: String,
-    val document: String?
-)
-
-/**
- * A decision as the control plane answers it (RFC 0007 §10.3): its kind, and the statement that made it only when the
- * caller may read the document that statement came through. An indeterminate decision names its cause's type, never
- * its message.
- */
-@InternalCoSecApi
-data class DecisionView(val decision: String, val by: StatementView?, val cause: String?, val redacted: Boolean)
-
-/** One trace entry, from a document the caller may read; [redacted] counts the entries left out. */
-@InternalCoSecApi
-data class TraceView(val entries: List<TraceEntryView>, val redacted: Int)
-
-@InternalCoSecApi
-data class TraceEntryView(val statement: StatementView, val effect: String, val outcome: String)
-
-/**
- * What a caller may see of a decision and its trace: entries of documents it may read (RFC 0007 §10.3). A statement
- * reached through an attachment may come from the tenant or the platform, so it is shown only when both are readable.
- */
-internal class Redaction(private val readable: Set<DocumentKind>) {
-    fun decision(decision: Decision): DecisionView = when (decision) {
-        is Decision.Permit -> view("Permit", decision.by, null)
-        is Decision.Deny -> view("Deny", decision.by, null)
-        is Decision.Indeterminate -> DecisionView(
-            "Indeterminate",
-            null,
-            decision.cause::class.simpleName,
-            redacted = false
-        )
-    }
-
-    fun trace(evaluation: Evaluation): TraceView? {
-        val trace = evaluation.trace ?: return null
-        val visible = trace.candidates.filter { visible(it.ref.via) }
-        return TraceView(
-            visible.map { TraceEntryView(statement(it.ref), it.effect.name, it.outcome.name) },
-            trace.candidates.size - visible.size,
-        )
-    }
-
-    private fun view(kind: String, by: StatementRef?, cause: String?): DecisionView {
-        val policy = by as? StatementRef.Policy
-        return when {
-            by == null -> DecisionView(kind, null, cause, redacted = false)
-            policy != null && visible(policy.via) -> DecisionView(kind, statement(policy), cause, redacted = false)
-            else -> DecisionView(kind, null, cause, redacted = true)
-        }
-    }
-
-    private fun visible(via: BindingRef): Boolean = when (via) {
-        is BindingRef.Bound -> via.document in readable
-        is BindingRef.Attached -> DocumentKind.TENANT in readable && DocumentKind.PLATFORM in readable
-        else -> DocumentKind.PLATFORM in readable
-    }
-
-    private fun statement(ref: StatementRef.Policy): StatementView {
-        val (via, document) = when (val binding = ref.via) {
-            is BindingRef.Bound -> binding.id.value to binding.document.name.lowercase()
-            is BindingRef.Attached -> "attached:${binding.policy.value}" to null
-            else -> binding.toString() to null
-        }
-        return StatementView(ref.policy.value, ref.index, ref.name, via, document)
-    }
-}
