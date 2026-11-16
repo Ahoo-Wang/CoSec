@@ -158,6 +158,26 @@
         "login:SwitchTenantAuthenticationTest#an app the credentials name and the answer does not return is never issued",
         "login:SwitchTenantAuthenticationTest#an answered app that cannot be an app id refuses the switch"
       ]
+    },
+    {
+      "id": "SCP-13",
+      "source": "#1403 (the maintainer's decision, 2026-11-15)",
+      "statement": "A tenant id and an app id are each one path segment: neither holds '/' (ScopeResolver.isValidAppId, the rule of both, and SnapshotKey.Tenant and SnapshotKey.App with it). The resources the control plane authorizes on put the id between '/' (doc/tenant/<t>/..., scope/<t>/<a>/<s>), where a pattern's one-segment capture and a trailing ** would take a longer id for another tenant's: a platform operator granted doc/tenant/acme/** would reach tenant acme/west's document, as the hard rule lets a platform principal act on any tenant. ControlResources refuses '/' in a segment as a second line. A token of such a tenant or app is an invalid credential (401 token-invalid); a forwarded identity of such a tenant is 400 invalid-request; a principal an authenticator answers in one is unresolved (503); a credential's declared app of one is Rejected(APP_MISMATCH); cosec-migrate refuses such a tenant or app id at the id (SLASH_IN_ID), and an API key of such a tenant, and writes nothing.",
+      "level": "pipeline",
+      "guards": [
+        "model:ScopeResolverTest#a tenant or app id is one path segment",
+        "control:OneSegmentTenantIdTest#an operator delegated one tenant reads no document of a tenant whose id extends it",
+        "control:ControlAuthorizationTest#resources name one document each",
+        "runtime:OneSegmentIdPipelineTest#a token of a tenant or an app with a slash is token-invalid and reads no tenant's documents",
+        "runtime:IdentityGateTest#an identity whose tenant can be no tenant id is refused",
+        "runtime:DocumentSnapshotViewsTest#a tenant id that cannot name a document is unresolved",
+        "migrate:ConverterTest#every rejection kind is reported with its location and nothing is converted",
+        "migrate:ConvertedDirectoryTest#an app id with a slash is refused, not encoded",
+        "migrate:MigrationRecoveryTest#a tenant id with a slash is refused, not planned",
+        "migrate:MigrationRecoveryTest#partition plan on the command line refuses a tenant id with a slash and writes nothing",
+        "migrate:ApiKeyMigrationTest#a key that cannot be converted exactly is refused"
+      ],
+      "pending": null
     }
   ]
 }
