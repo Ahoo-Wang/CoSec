@@ -210,24 +210,15 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
         val types = LinkedHashMap<String, MutableList<Int>>()
         var http: PathBuilder? = null
 
-        // B3: the index builder extracts per key kind
-        @Suppress("NestedBlockDepth")
         fun add(statement: CompiledStatement, position: Int) {
             for (resource in statement.resources) {
                 when (resource) {
                     ResourcePattern.AnyResource -> anyResource += position
                     is ResourcePattern.Typed -> types.getOrPut(resource.type, ::ArrayList) += position
-                    is ResourcePattern.Http -> {
-                        var node = http ?: PathBuilder().also { http = it }
-                        for (element in resource.path.prefix) {
-                            node = if (element == null) {
-                                node.separator ?: PathBuilder().also { node.separator = it }
-                            } else {
-                                node.children.getOrPut(element, ::PathBuilder)
-                            }
-                        }
-                        node.positions += position
-                    }
+                    is ResourcePattern.Http -> (http ?: PathBuilder().also { http = it }).add(
+                        resource.path.prefix,
+                        position
+                    )
                 }
             }
         }
@@ -248,6 +239,19 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
         var separator: PathBuilder? = null
         val children = LinkedHashMap<String, PathBuilder>()
 
+        /** Adds [position] at the node [prefix] leads to from here, making the nodes on the way. */
+        fun add(prefix: Array<String?>, position: Int) {
+            var node = this
+            for (element in prefix) {
+                node = if (element == null) {
+                    node.separator ?: PathBuilder().also { node.separator = it }
+                } else {
+                    node.children.getOrPut(element, ::PathBuilder)
+                }
+            }
+            node.positions += position
+        }
+
         fun build(builder: Builder, leaves: MutableList<Leaf>): PathNode {
             val leaf = positions.takeIf { it.isNotEmpty() }?.let(builder::leaf)
             leaf?.let(leaves::add)
@@ -261,21 +265,24 @@ internal class StatementIndex(statements: Array<CompiledStatement>, options: Ind
 
     companion object {
         /** ASCII lower case, as `ignoreCase` keys are folded (RFC 0005 §3.2). */
-        // B3: the fold extracts its scan
-        @Suppress("NestedBlockDepth")
         fun foldAscii(value: String): String {
             for (i in value.indices) {
                 if (value[i] in 'A'..'Z') {
-                    val chars = value.toCharArray()
-                    for (j in i until chars.size) {
-                        if (chars[j] in 'A'..'Z') {
-                            chars[j] = chars[j] + ('a' - 'A')
-                        }
-                    }
-                    return String(chars)
+                    return foldFrom(value, i)
                 }
             }
             return value
+        }
+
+        /** [value] with each ASCII upper-case letter from [start] on, the first upper-case one, in lower case. */
+        private fun foldFrom(value: String, start: Int): String {
+            val chars = value.toCharArray()
+            for (j in start until chars.size) {
+                if (chars[j] in 'A'..'Z') {
+                    chars[j] = chars[j] + ('a' - 'A')
+                }
+            }
+            return String(chars)
         }
     }
 }

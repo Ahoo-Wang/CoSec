@@ -26,7 +26,7 @@ class DetektSuppressionTest {
         /** The suppressions of each structure rule in main code. Lower a number when a batch removes one. */
         val RECORDED: Map<String, Int> = mapOf(
             "TooManyFunctions" to 17,
-            "NestedBlockDepth" to 8,
+            "NestedBlockDepth" to 5,
             "LongParameterList" to 6,
         )
 
