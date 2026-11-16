@@ -39,6 +39,7 @@ object GuardAllowlist {
             "control:ChangeTransitionTableTest#no step writes a change outside its row",
             "runtime:SnapshotRevalidationTest#revalidationAnswersWithAReadThatStartedAfterTheCall",
             "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs",
+            "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder",
             "document:ShadowCodecTest#a candidate record that states its header beside its document is refused",
             "runtime:CandidateRecordShapeTest#a candidate record in the shape of 8_0_0-alpha_4 is not compared, and the request is answered as without it",
             "runtime:DecisionListenersShutdownTest#a full queue drops without waiting on the log, which is written off the request's thread",
@@ -230,6 +231,7 @@ object GuardAllowlist {
             "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision",
             "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
             "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey",
+            "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder",
         ),
     )
 }

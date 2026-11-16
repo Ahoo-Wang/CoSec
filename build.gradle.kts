@@ -448,6 +448,8 @@ fun Project.junitTests() {
         }
         // fix logging missing code for JacocoPlugin
         jvmArgs = listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback.xml")
+        // A property test's failure names its seed; -PpropertySeed=<seed> runs that seed alone.
+        providers.gradleProperty("propertySeed").orNull?.let { systemProperty("cosec.property.seed", it) }
         // A cache hit would pass CI on another build's results, and give Codecov another build's coverage.
         outputs.doNotCacheIf("CI runs every test") { onCi }
     }
