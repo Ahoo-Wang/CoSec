@@ -17,12 +17,6 @@ package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.ViewVersion
-import java.time.Instant
-
-/** A revision as `history` lists it. */
-@InternalCoSecApi
-data class RevisionSummary(val revision: Long, val digest: String, val publishedAt: Instant)
 
 /**
  * What changed between two revisions, entry by entry (RFC 0007 §10.1): the history of one policy is a view of it.
@@ -45,17 +39,3 @@ data class DocumentDiff(
 
 @InternalCoSecApi
 data class EntryChanges(val added: List<String>, val removed: List<String>, val changed: List<String>)
-
-/** A decision on the current heads, and on a change's candidate when one was asked for (RFC 0007 §10.3). */
-@InternalCoSecApi
-data class Simulation(
-    val enforced: DecisionView,
-    val enforcedTrace: TraceView?,
-    val candidate: DecisionView?,
-    val candidateTrace: TraceView?,
-    val differs: Boolean,
-)
-
-/** A decision at the revisions an audit event recorded, or on the current heads. */
-@InternalCoSecApi
-data class Explanation(val version: ViewVersion, val decision: DecisionView, val trace: TraceView?)

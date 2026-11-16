@@ -29,10 +29,8 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.APPROVAL
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.LOST
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.PRECONDITION_REQUIRED
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.UNAVAILABLE
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.UNPUBLISHED
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.PublishOutcome
 import me.ahoo.cosec.control.store.Revisions
@@ -88,7 +86,7 @@ internal class Publishing(
                 slots.released(change) { flow.audit(PublishRules.outcomeOf(change, change), recorded, publisher.actor) }
             }
         }
-        PublishRules.requireState(change, setOf(ChangeState.READY))
+        PublishRules.requireState(change, ChangeStep.PUBLISH.from)
         PublishRules.acknowledged(change, ack)
         candidates.authorize(publisher, change)
         val head = revisions.head(change.key)
@@ -99,12 +97,12 @@ internal class Publishing(
         }
         val rechecked = candidates.checked(change, head, publisher)
         if (rechecked.state != ChangeState.CHECKED || rechecked.candidate != change.candidate) {
-            return flow.settle(change, ChangeState.DRAFT, rechecked.findings)
+            return flow.settle(change, ChangeState.DRAFT, ChangeStep.PUBLISH, rechecked.findings)
         }
         val problem = authority.approvalProblem(change, rechecked.escalations, publisher, clock.instant())
             ?: authority.approverProblem(change, rechecked.escalations, publisher)
         problem?.let { problem ->
-            return flow.transition(id, setOf(ChangeState.READY)) {
+            return flow.transition(id, ChangeStep.PUBLISH) {
                 it.copy(
                     state = ChangeState.AWAITING_APPROVAL,
                     escalations = rechecked.escalations,
@@ -124,7 +122,7 @@ internal class Publishing(
         // write is conditional on the base, not on the slot. A change preempted within it still publishes, and the one
         // that took the slot conflicts on the moved base ([movedOn]).
         if (!slots.holds(change)) {
-            return flow.settle(change, ChangeState.CONFLICTED)
+            return flow.settle(change, ChangeState.CONFLICTED, ChangeStep.PUBLISH)
         }
         flow.audit(ChangeEvent.Kind.PUBLISHING, change.publishedAgain(publisher, again), publisher.actor)
         var published: ChangeRequest? = null
@@ -161,11 +159,17 @@ internal class Publishing(
             return flow.read(change.id).value
         }
         val settled = if (outcome is PublishOutcome.Referenced) {
-            flow.settle(change, ChangeState.DRAFT, PublishRules.referenced(outcome))
+            flow.settle(
+                change,
+                ChangeState.DRAFT,
+                ChangeStep.UNWRITTEN,
+                PublishRules.referenced(outcome),
+                setOf(ChangeState.READY)
+            )
         } else {
             // A change preempted before its head write is CONFLICTED already, by the one that took its slot, whether
             // it found the slot gone or met the head that change wrote (review N5).
-            flow.settle(change, ChangeState.CONFLICTED, from = LOST)
+            flow.settle(change, ChangeState.CONFLICTED, ChangeStep.UNWRITTEN)
         }
         val note = PublishRules.unwrittenNote(outcome, slotLost) ?: settled.note
         val recorded = settled.copy(note = note).publishedAgain(publisher, again)
@@ -178,7 +182,7 @@ internal class Publishing(
      * the change it took the slot from (review L2), a bootstrap, a migration or an older instance, that is recorded.
      */
     private suspend fun movedOn(change: ChangeRequest, head: Head?, publisher: Operator): ChangeRequest {
-        val settled = flow.settle(change, ChangeState.CONFLICTED)
+        val settled = flow.settle(change, ChangeState.CONFLICTED, ChangeStep.PUBLISH)
         PublishRules.publishedFirst(change, head)?.let {
             flow.audit(ChangeEvent.Kind.FAILED, settled.copy(note = it), publisher.actor)
         }
@@ -245,10 +249,9 @@ internal class Publishing(
      */
     private suspend fun settledPublished(change: ChangeRequest, revision: Long): ChangeRequest? {
         val settled = try {
-            flow.transition(
-                change.id,
-                UNPUBLISHED
-            ) { it.copy(state = ChangeState.PUBLISHED, publishedRevision = revision) }
+            flow.transition(change.id, ChangeStep.WRITTEN) {
+                it.copy(state = ChangeState.PUBLISHED, publishedRevision = revision)
+            }
         } catch (e: ChangeRejectedException) {
             if (flow.read(change.id).value.state == ChangeState.PUBLISHED) return null
             throw e
