@@ -66,11 +66,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B5),
         ),
         Entry(
-            "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MigrateMain.kt",
-            601,
-            Disposition.Debt(Batch.B6),
-        ),
-        Entry(
             "core/document/src/main/kotlin/me/ahoo/cosec/document/format/PolicyDocumentFormats.kt",
             585,
             Disposition.Debt(Batch.B5),
@@ -79,11 +74,6 @@ object SourceSizeLedger {
             "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
             583,
             Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt",
-            560,
-            Disposition.Debt(Batch.B6),
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt",
@@ -117,7 +107,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt",
-            464,
+            454,
             Disposition.Debt(Batch.B4),
         ),
         Entry(

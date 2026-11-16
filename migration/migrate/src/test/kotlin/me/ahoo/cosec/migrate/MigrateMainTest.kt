@@ -141,6 +141,24 @@ class MigrateMainTest {
         run("convert --from-files a --out x --out=y").second.assert().contains("--out is given twice")
     }
 
+    /** A flag is on or off: given twice and given a value are two different mistakes, and each is said as such. */
+    @Test
+    fun `a flag given twice and a flag given a value are told apart`() {
+        val twice = run("publish --to-redis redis://localhost:6379 --in x --resume --resume")
+        twice.first.assert().isEqualTo(MigrateMain.USAGE)
+        twice.second.assert().contains("--resume is given twice.").doesNotContain("takes no value")
+        val valued = run("publish --to-redis redis://localhost:6379 --in x --resume=yes")
+        valued.first.assert().isEqualTo(MigrateMain.USAGE)
+        valued.second.assert().contains("--resume takes no value.").doesNotContain("given twice")
+        // Both mistakes at once: the value is the first to say.
+        run("publish --to-redis redis://localhost:6379 --in x --resume --resume=yes").second.assert()
+            .contains("--resume takes no value.")
+        run("publish --to-redis redis://localhost:6379 --in x --resume=yes --resume").second.assert()
+            .contains("--resume takes no value.")
+        // A flag given once, without a value, is no usage error.
+        run("publish --to-redis redis://localhost:6379 --in x --resume").second.assert().doesNotContain("--resume ")
+    }
+
     @Test
     fun `convert from files writes the documents`() {
         val out = temp.resolve("out")

@@ -17,9 +17,15 @@ package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Resource
+import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.time.Instant
 
 /** Which bindings could permit, and which DENYs could deny, [action] on [resource] in a scope of [tenant] (§10.3). */
 @InternalCoSecApi
@@ -41,8 +47,42 @@ data class AccessEntry(
     val space: String,
     val policy: String,
     val statement: Int,
+    /** A condition, or a binding's window ([expiresAt]), that the review does not evaluate. */
     val conditional: Boolean,
-)
+    /** A break-glass binding: the strongest grant a tenant can hold, for as long as its window is open. */
+    val breakGlass: Boolean = false,
+    /** When the binding stops applying; null for one without a window. */
+    val expiresAt: Instant? = null,
+) {
+    internal companion object {
+        /** [binding] of [document], as a review lists it for statement [index] of [policy] ([conditionalStatement]). */
+        fun of(
+            document: SnapshotKey,
+            binding: Binding,
+            policy: PolicyDefinition,
+            index: Int,
+            conditionalStatement: Boolean
+        ) =
+            AccessEntry(
+                document.toString(),
+                binding.id.value,
+                subjectOf(binding.subject),
+                (binding.scope.app as? Match.Exactly)?.value?.value ?: Match.WILDCARD,
+                (binding.scope.space as? Match.Exactly)?.value?.value ?: Match.WILDCARD,
+                policy.id.value,
+                index,
+                conditionalStatement || policy.condition != null || binding.expiresAt != null,
+                binding.breakGlass,
+                binding.expiresAt?.let(Instant::ofEpochMilli),
+            )
+
+        private fun subjectOf(subject: SubjectRef): String = when (subject) {
+            SubjectRef.Anyone -> Match.WILDCARD
+            is SubjectRef.Principal -> "principal:${subject.tenant.value}/${subject.id.value}"
+            is SubjectRef.Role -> "role:${subject.tenant?.value ?: Match.WILDCARD}/${subject.id.value}"
+        }
+    }
+}
 
 /**
  * [allows] and [denies] from the documents the caller may read. [hidden] counts the documents it may not read, and

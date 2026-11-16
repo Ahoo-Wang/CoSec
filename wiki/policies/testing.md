@@ -85,7 +85,7 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); an id a change puts holds a `/` (`422`; a permission policy's `perm:<app>/<id>` may, and an entry that already holds one can stay or be removed); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
+| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); an id a change puts holds a `/` (`422`; a permission policy's `perm:<app>/<id>` may, and an entry that already holds one can stay or be removed); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, `/`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
 | `REFERENCES` | 422 | A binding names a policy that resolves nowhere, or a platform boundary, which is not bound; a platform change removes a policy another document refers to, or turns one into a boundary or a boundary into a policy (`CTL-30`; a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
@@ -511,8 +511,10 @@ proposal does: the old revision's confirmation was given for another change. Whi
 The answer lists `allows` and `denies`: every binding (in the platform, tenant and, when `app` is given, app document)
 that can apply in the tenant asked about, whose scope fits the query and whose policy has a statement matching the
 action and resource, with its document,
-subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
-not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
+subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, or a
+binding with a window (`expiresAt`), which is not evaluated. `breakGlass` marks a break-glass binding, the strongest
+grant there is, listed with its `expiresAt` as an allow of `cosec:root`: it is a platform principal's, so it is in the
+platform tenant's review. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
 `hidden`, and bindings to policies in them in `opaque`. A tenant binding scoped to the app asked about finds that
 app's permission policies, as enforcement does, when you may read the app's document. A binding of a built-in
 control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer`) is listed from the

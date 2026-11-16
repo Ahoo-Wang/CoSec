@@ -168,7 +168,12 @@ object BuiltinPolicies {
             ),
         ),
     )
-    internal val root = compiler.compile(ROOT, null, listOf(StatementSource("root", Effect.ALLOW, listOf("*"))))
+
+    /** The statement of [ROOT], as written: what a break-glass binding grants while its window is open. */
+    @InternalCoSecApi
+    val ROOT_STATEMENTS: List<StatementSource> = listOf(StatementSource("root", Effect.ALLOW, listOf("*")))
+
+    internal val root = compiler.compile(ROOT, null, ROOT_STATEMENTS)
 
     /** Every control-plane action on every document and scope (RFC 0007 §7.3); bound by `bootstrap`, then by admins. */
     val PLATFORM_ADMIN: PolicyId = PolicyId("cosec:platform-admin")

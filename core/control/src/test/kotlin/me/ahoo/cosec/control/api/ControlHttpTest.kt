@@ -217,7 +217,10 @@ class ControlHttpTest {
         call("POST", "/explain", """{"request":$request,"at":{"platform":1,"tenant":1}}""").second
             .get("decision").get("decision").asString().assert().isEqualTo("Permit")
         val query = """{"tenant":"acme","app":"order","space":"team-a","action":"order:read","resource":"order/1"}"""
-        call("POST", "/analyze", """{"query":$query}""").second.get("allows").size().assert().isEqualTo(1)
+        val allows = call("POST", "/analyze", """{"query":$query}""").second.get("allows")
+        allows.size().assert().isEqualTo(1)
+        allows.single().get("breakGlass").asBoolean().assert().isFalse()
+        allows.single().has("expiresAt").assert().isFalse()
     }
 
     /** RFC 0009 §4.2: a simulated credential states its flags; anything but a boolean is refused, never read as one. */

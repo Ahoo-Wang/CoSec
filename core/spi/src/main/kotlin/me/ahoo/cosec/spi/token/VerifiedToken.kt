@@ -32,7 +32,7 @@ import java.util.Collections
  *
  * - [principal] is not empty and does not begin with `(`, which is CoSec's, as for tenants and spaces (`IDN-12`);
  * - [tenant], when the token has one, is not empty (`IDN-11`): mapped to the default tenant, it would move the principal;
- *   and it names one tenant document, as [SnapshotKey.Tenant.isValidTenantId] takes it: not blank or `*`, no `:` or
+ *   and it names one tenant document, as [SnapshotKey.Tenant.isValidTenantId] takes it: not blank or `*`, no `:`, `/` or
  *   control character, at most 128 characters;
  * - [app], when the token declares one, can be an app id (`SCP-10`);
  * - no id holds an unpaired UTF-16 surrogate (RC1-52, `IDN-10`): a Redis key would hold `?` in its place, so the token

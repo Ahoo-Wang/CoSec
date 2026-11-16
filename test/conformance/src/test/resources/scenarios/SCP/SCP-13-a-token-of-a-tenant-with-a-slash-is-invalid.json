@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "SCP-13"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "#1403: a tenant id is one path segment. A token of tenant acme/west, which a 7.x or preview issuer may hold, is an invalid credential: it is neither tenant acme/west nor acme, whose binding would let alice read.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "alice-reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "alice-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "tenantId": "acme/west"
+    }
+  },
+  "expect": {
+    "status": 401,
+    "type": "token-invalid"
+  }
+}

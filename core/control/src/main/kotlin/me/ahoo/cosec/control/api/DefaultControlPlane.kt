@@ -44,7 +44,6 @@ import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.appliesIn
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.scope.ScopeResolution
@@ -358,15 +357,12 @@ class DefaultControlPlane(
             }
             for (statement in policy.statements) {
                 if (!statement.matches(query.action, target)) continue
-                val entry = AccessEntry(
-                    key.toString(),
-                    binding.id.value,
-                    subjectOf(binding.subject),
-                    binding.scope.app.exact { it.value } ?: WILDCARD,
-                    binding.scope.space.exact { it.value } ?: WILDCARD,
-                    policy.definition.id.value,
+                val entry = AccessEntry.of(
+                    key,
+                    binding,
+                    policy.definition,
                     statement.index,
-                    statement.source.condition != null || policy.definition.condition != null,
+                    statement.source.condition != null
                 )
                 if (statement.source.effect == Effect.DENY) denies += entry else allows += entry
             }
@@ -441,12 +437,6 @@ class DefaultControlPlane(
     private fun inScope(exact: String?, value: String?): Boolean = exact == null || value == null || exact == value
 
     private fun <T> Match<T>.exact(text: (T) -> String): String? = (this as? Match.Exactly<T>)?.value?.let(text)
-
-    private fun subjectOf(subject: SubjectRef): String = when (subject) {
-        SubjectRef.Anyone -> WILDCARD
-        is SubjectRef.Principal -> "principal:${subject.tenant.value}/${subject.id.value}"
-        is SubjectRef.Role -> "role:${subject.tenant?.value ?: WILDCARD}/${subject.id.value}"
-    }
 
     private fun kindOf(key: SnapshotKey): DocumentKind = when (key) {
         SnapshotKey.Platform -> DocumentKind.PLATFORM

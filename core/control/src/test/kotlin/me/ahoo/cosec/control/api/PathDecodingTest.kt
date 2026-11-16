@@ -83,17 +83,17 @@ class ControlHttpPathDecodingTest {
     }
 
     /**
-     * Decoding makes `acme/west` the tenant id, which `ControlAuthorization` still refuses as more than one resource
-     * segment (#1403 is undecided: whether an id may hold `/`). An encoded `/` is never a second route segment.
+     * Decoding makes `acme/west` the tenant id, which no tenant id may hold (#1403): it names no document, for any
+     * principal, before anything is authorized or read. An encoded `/` is never a second route segment.
      */
     @Test
     fun `an encoded slash is one parameter, and an id with a slash is still refused`() {
         val (status, problem) = get("/documents/tenant:acme%2Fwest", plato)
         status.assert().describedAs("$problem").isEqualTo(400)
-        problem.get("detail").asString().assert().contains("acme/west").contains("is not one resource segment")
+        problem.get("detail").asString().assert().contains("names no document")
         get(
             "/documents/tenant:acme%2Fwest"
-        ).first.assert().describedAs("a tenant's own principal is refused too").isEqualTo(403)
+        ).first.assert().describedAs("a tenant's own principal is refused too").isEqualTo(400)
         get("/documents/tenant:acme/west", plato).first.assert().isEqualTo(404)
     }
 

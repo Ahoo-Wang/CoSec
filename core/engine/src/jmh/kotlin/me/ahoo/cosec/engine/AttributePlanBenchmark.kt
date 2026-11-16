@@ -12,17 +12,9 @@
  */
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.engine.flat
+package me.ahoo.cosec.engine
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.AttributePlan
-import me.ahoo.cosec.engine.CoSecEngine
-import me.ahoo.cosec.engine.CompiledDocument
-import me.ahoo.cosec.engine.EngineRequest
-import me.ahoo.cosec.engine.PolicyCompiler
-import me.ahoo.cosec.engine.ResourceSource
-import me.ahoo.cosec.engine.SnapshotView
-import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
@@ -50,7 +42,7 @@ import org.openjdk.jmh.annotations.State
  * - `wide`: every statement's path is any path below `/`, so the index rules none out and the plan reads every statement.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
-open class FlatPlanBenchmark {
+open class AttributePlanBenchmark {
     @Param("path-miss", "action-miss", "hit", "wide")
     lateinit var scenario: String
 
