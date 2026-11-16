@@ -148,10 +148,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /** The last decoded revision read or installed per key, kept across eviction (see the class comment). */
     private val seen = ConcurrentHashMap<SnapshotKey, Seen>()
-    private val lastLagReport = ConcurrentHashMap<SnapshotKey, Instant>()
-
-    /** Whether a lag report waits on the housekeeping thread: a stalled appender must not pile up one per tick. */
-    private val lagReportQueued = AtomicBoolean()
+    private val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     private val pendingPrewarms: MutableSet<CompletableFuture<Void>> = ConcurrentHashMap.newKeySet()
     private val pendingRequests: MutableSet<Slot<*>.RequestView> = ConcurrentHashMap.newKeySet()
 
@@ -440,64 +437,15 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * completes when a pass that started after this call has ended.
      */
     internal fun tick(): CompletableFuture<Void> {
-        queueLagReport()
+        lagReports.queue()
         return passes.tick()
     }
 
-    /** At most one report waits on the housekeeping thread; a tick that finds it there, or no room, leaves it to the next. */
-    private fun queueLagReport() {
-        if (!lagReportQueued.compareAndSet(false, true)) {
-            return
-        }
-        val queued = threads.offTimer {
-            lagReportQueued.set(false)
-            reportLag()
-        }
-        if (!queued) {
-            lagReportQueued.set(false)
-        }
-    }
-
     /**
-     * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval].
-     * Off the scheduler thread: a log appender or a meter may take its time here.
+     * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval]
+     * ([LagReports]). Off the scheduler thread: a log appender or a meter may take its time here.
      */
-    internal fun reportLag() {
-        val now = clock.instant()
-        for (entry in entries()) {
-            if (entry.state is DocumentState.Failed) {
-                continue
-            }
-            val lag = entry.lagAt(now)
-            val escalated = lag > options.lagEscalate
-            if (!escalated && lag <= options.lagWarn) {
-                lastLagReport.remove(entry.key)
-                continue
-            }
-            if (!lagReportDue(entry.key, now)) {
-                continue
-            }
-            metrics.onLagExceeded(entry.key, lag, escalated)
-            if (escalated) {
-                log.error { "Snapshot document [${entry.key}] revision ${entry.revision} is stale: not confirmed for $lag." }
-            } else {
-                log.warn { "Snapshot document [${entry.key}] revision ${entry.revision} has not been confirmed for $lag." }
-            }
-        }
-    }
-
-    private fun lagReportDue(key: SnapshotKey, now: Instant): Boolean {
-        var due = false
-        lastLagReport.compute(key) { _, last ->
-            if (last != null && Duration.between(last, now) < options.lagLogInterval) {
-                last
-            } else {
-                due = true
-                now
-            }
-        }
-        return due
-    }
+    internal fun reportLag() = lagReports.report()
 
     private fun closedError() = IllegalStateException("SnapshotSource is closed.")
 
@@ -812,7 +760,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
                 return
             }
             if (victim.removeIfIdle(onlyIfEmpty = false)) {
-                lastLagReport.remove(victim.key)
+                lagReports.forget(victim.key)
                 log.debug { "Evicted snapshot document [${victim.key}]." }
             }
         }
