@@ -16,7 +16,7 @@ a change that fails to compile. When unsure, deny, and ask.
 ./gradlew :runtime:check                          # tests + detekt for one module (what CI runs per module)
 ./gradlew :engine:test --tests "me.ahoo.cosec.engine.EnginePropertyTest"
 ./gradlew check                                   # every module
-./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark   # also :e2e:jmh -PjmhIncludes=PipelineBenchmark
+./gradlew :engine:jmh -PjmhIncludes=EngineAuthorizationBenchmark   # also :e2e:jmh -PjmhIncludes=PipelineBenchmark
 ./gradlew :code-coverage-report:codeCoverageReport
 ./gradlew :conformance:check                      # spec conformance suite: scenarios + verifyRuleCoverage
 ./gradlew :architecture:check                     # RFC 0011 §5: dependency, source and project-list rules
@@ -36,7 +36,7 @@ gh workflow run mutation.yml                       # every mutant, on CI only: 3
   only when every other job passed; it is the required check. A project whose tests need Redis goes in the script's
   `REDIS`.
 - A module's `jmh` task runs 1 fork × 1 iteration: a smoke run. The benchmarks are the engine's
-  (`FlatAuthorizationBenchmark`, `FlatEngineBenchmark`, `CompiledEngineBenchmark`), the whole pipeline's
+  (`EngineAuthorizationBenchmark`, `EngineBenchmark`, `CompiledEngineBenchmark`), the whole pipeline's
   (`:e2e` `PipelineBenchmark`) and a token's verification (`:jwt:jmh -PjmhIncludes=JwtVerificationBenchmark`). To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
   `-PjmhWarmupIterations`, `-PjmhProfilers` and `-PjmhJavaVersion`, or run the jar from the module's `jmhJar`, as in
   [`wiki/architecture/overview.md#measuring`](wiki/architecture/overview.md#measuring). Run the jar yourself only with
@@ -45,7 +45,7 @@ gh workflow run mutation.yml                       # every mutant, on CI only: 3
 - `gh workflow run jmh-ab.yml -f base=main -f head=<branch> -f module=<m> -f include=<regex>` compares two refs on one CI
   runner as same-job head/base ratios (see `scripts/jmh-ab/README.md`). Use it as a first signal for routine changes.
   `gh workflow run jmh-v7-v8.yml` compares 7.x (`SimpleAuthorizationBenchmark`, `SecurityPipelineBenchmark`) with
-  8.0 (`FlatAuthorizationBenchmark`, `PipelineBenchmark`) on one runner.
+  8.0 (`EngineAuthorizationBenchmark`, `PipelineBenchmark`) on one runner.
 - `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-document`,
   `document/format/`): `./gradlew :document:generateSchemas` writes it, `verifySchemas` (part of `check`)
   fails when it is stale, and `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that
@@ -230,7 +230,7 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 | **No blocking on the event loop**: the data plane's SPIs suspend, and implementations use non-blocking clients; `SnapshotSource.peek` does no I/O; a local cache hit answers on the caller's thread | Blocking a Netty thread stalls every request on it | `SnapshotStoreBlockHoundTest`, `PipelineBlockHoundTest`, `SuspendingRedisRateLimitingTest`, `RuntimeBoundaryTest` |
 | **Authorization is a pure decision**: the engine does no I/O and keeps no state; obligations run only after a permit, so denied requests never spend a rate-limit permit | Keeps evaluation fast, predictable and explainable | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime, OBL-1) |
 | **Snapshot and control-plane caches are CoCache `Store`s that never expire (`ttl` forever) and throw on failed reads (`unknown-read: throw`) and deletes**, locked and constrained by `CoSecCacheSpecs.locks` over any CoCache customizer or property; Redis must run with `maxmemory-policy noeviction` | Redis is the store of record; expiry, eviction or a swallowed error would silently drop policies | `CacheTtlPolicyTest`, `StrictCacheFailureTest`, `CoSecPipelineAutoConfigurationTest` (SNP-3) |
-| **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `FlatAuthorizationBenchmark`, `PipelineBenchmark` |
+| **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `EngineAuthorizationBenchmark`, `PipelineBenchmark` |
 | **Public signatures change only on purpose**: each published module's ABI is in its `api/<project>.api` dump | Applications compile against CoSec and implement its SPIs | `checkKotlinAbi` (in `check`), `SpiMarkerTest` |
 
 Every normative rule of the RFCs has an id in `test/conformance/src/test/resources/rules/` and the tests that guard it;
