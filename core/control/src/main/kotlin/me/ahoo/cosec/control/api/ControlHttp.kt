@@ -656,15 +656,15 @@ class ControlHttp(private val plane: ControlPlane) {
     }
 
     private fun accessEntries(entries: List<AccessEntry>) = factory.arrayNode().apply {
-        entries.forEach {
-            addObject().put(
-                "document",
-                it.document
-            ).put("binding", it.binding).put("subject", it.subject).put("app", it.app)
-                .put(
-                    "space",
-                    it.space
-                ).put("policy", it.policy).put("statement", it.statement).put("conditional", it.conditional)
+        entries.forEach { entry ->
+            val node = addObject()
+            node.put("document", entry.document).put("binding", entry.binding).put("subject", entry.subject)
+            node.put("app", entry.app).put("space", entry.space).put("policy", entry.policy)
+            node.put(
+                "statement",
+                entry.statement
+            ).put("conditional", entry.conditional).put("breakGlass", entry.breakGlass)
+            entry.expiresAt?.let { node.put("expiresAt", it.toString()) }
         }
     }
 

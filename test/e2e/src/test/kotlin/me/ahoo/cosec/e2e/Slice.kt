@@ -80,6 +80,8 @@ class Slice(
     authenticator: Authenticator = TokenAuthenticator,
     /** Where memberships come from: the starter wires `CoCacheMembershipProvider` over it, as it would an application's. */
     membershipLoader: MembershipLoader? = null,
+    /** The location of a route map (`cosec.authorization.routes.location`, RFC 0008 §4.4.3); empty runs without one. */
+    routeMap: String = "",
 ) : AutoCloseable {
     private val context: ConfigurableApplicationContext = SpringApplicationBuilder(SliceConfiguration::class.java)
         .web(WebApplicationType.NONE)
@@ -98,7 +100,7 @@ class Slice(
             "cosec.key-prefix=$keyPrefix",
             "cosec.authorization.snapshot.revalidate-interval=${options.revalidateInterval.toMillis()}ms",
             "cosec.authorization.snapshot.cold-load-timeout=${options.coldLoadTimeout.toMillis()}ms",
-            "cosec.authorization.routes.location=",
+            "cosec.authorization.routes.location=$routeMap",
             "cosec.jwt.enabled=false",
         )
         .run()

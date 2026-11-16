@@ -23,7 +23,7 @@ Scenario mapping (the `scenario` param is identical on both sides):
 |---------------|--------------------------------------------------------|-------------------------------------------------------------|--------------------------|
 | pipeline      | SecurityPipelineBenchmark.evaluate (cosec-core,        | PipelineBenchmark.evaluate (e2e)                            | global, role, none,      |
 |               | docs/perf/e2e-slice/SecurityPipelineBenchmark-v7.0.1.kt)|                                                             | anonymous                |
-| authorization | SimpleAuthorizationBenchmark.authorize (cosec-core)    | FlatAuthorizationBenchmark.authorize (engine), boundary=none | global, role, none       |
+| authorization | SimpleAuthorizationBenchmark.authorize (cosec-core)    | EngineAuthorizationBenchmark.authorize (engine), boundary=none | global, role, none       |
 
 8.0 scenarios with no 7.x counterpart (blacklist, blocked, listener, role-heavy, ...) are not run.
 
