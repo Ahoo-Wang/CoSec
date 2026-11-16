@@ -19,30 +19,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.Containment
 
 /**
- * What [PatternContainment.contains] proved about two resource patterns.
- */
-@InternalCoSecApi
-sealed interface ResourceContainment {
-    val answer: Containment
-
-    /**
-     * Every resource the inner pattern matches, the outer one matches. [variables] maps a variable of the outer pattern
-     * to the variable of the inner one that captures the same value on every such resource; a variable of the outer
-     * pattern that no variable of the inner one corresponds to is absent.
-     */
-    @InternalCoSecApi
-    class Contained(val variables: Map<String, String>) : ResourceContainment {
-        override val answer: Containment get() = Containment.YES
-    }
-
-    /** Not proven. */
-    @InternalCoSecApi
-    class Unknown(val reason: String) : ResourceContainment {
-        override val answer: Containment get() = Containment.UNKNOWN
-    }
-}
-
-/**
  * Containment and disjointness of action and resource patterns (RFC 0005 §5.5, RFC 0007 §3.1 N7), for the grant
  * check of the control plane (RFC 0007 §7.4.3).
  *
