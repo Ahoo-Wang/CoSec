@@ -68,11 +68,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt",
-            410,
-            Disposition.Debt(Batch.B5),
-        ),
-        Entry(
             "core/document/src/main/kotlin/me/ahoo/cosec/document/format/PolicyDocumentFormats.kt",
             585,
             Disposition.Debt(Batch.B5),

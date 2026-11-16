@@ -179,7 +179,7 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-pre
 
 控制面用快照中的策略授权自己的写操作，所以没有管理员时谁都不能写入。`bootstrap` 只写平台租户的文档 `Tenant((platform))`；平台文档本身来自 `publish`，所以先发布。`bootstrap` 在平台租户自己的文档中，把平台租户的主体 `alice`
 绑定到内置策略 `cosec:platform-admin`，并记为一个 `BOOTSTRAP` 种类的修订。当这份文档已经把某人绑定到 `cosec:platform-admin` 时它拒绝执行；
-`--force` 用于这些管理员全部丢失后的恢复。持有 Redis 凭证的人本来就能写入；`bootstrap` 只是留下一条记录。
+`--force` 用于这些管理员全部丢失后的恢复。两种情况下它都只添加自己的绑定，并保留这份文档中的其余内容：策略、其他绑定、限流规则和角色。持有 Redis 凭证的人本来就能写入；`bootstrap` 只是留下一条记录。
 
 文档按数据面的方式编译，用平台文档声明的限额和属性，所以恢复会保留使用 `ext.*` 属性的策略。读不到平台文档时，命令失败。
 
