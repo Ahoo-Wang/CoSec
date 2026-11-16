@@ -31,25 +31,6 @@ import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 
-/** The documents of a scenario, as written. */
-@InternalCoSecApi
-class ScenarioDocuments(val platform: JsonNode?, val apps: Map<String, JsonNode>, val tenants: Map<String, JsonNode>)
-
-/** Every document of a scenario, compiled. */
-@InternalCoSecApi
-class CompiledSnapshot(
-    val platform: CompiledDocument,
-    val apps: Map<String, CompiledDocument>,
-    val tenants: Map<String, CompiledDocument>,
-)
-
-/** Turns scenario documents into what the engine evaluates. */
-@InternalCoSecApi
-fun interface SnapshotCompiler {
-    /** Throws [DocumentException] when a document does not compile. */
-    fun compile(documents: ScenarioDocuments): CompiledSnapshot
-}
-
 /**
  * Compiles scenario documents the way a stored snapshot is compiled: [PolicyDocumentCodec] reads them and
  * [PolicyDocumentCompiler] compiles them (RFC 0004 §7.1). A scenario writes a document's body without the header,
@@ -176,10 +157,6 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
     private val SCHEMA = PolicyDocumentCodec.SCHEMA
     private const val PUBLISHED_AT = "2026-10-26T00:00:00Z"
 }
-
-/** A failure injected by `"fault"`. */
-@ExperimentalCoSecApi
-internal class ScenarioFault(message: String) : RuntimeException(message)
 
 /** The prefix of the request attribute a `"fault"` reads. */
 internal const val FAULT: String = "cosec.fault:"

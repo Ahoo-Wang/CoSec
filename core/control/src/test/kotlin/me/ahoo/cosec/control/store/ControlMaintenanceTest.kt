@@ -243,6 +243,33 @@ class ControlMaintenanceTest {
         store.recordDigests(ACME).assert().contains(first)
     }
 
+    /**
+     * `SCP-10`: an open change past its expiry is read again to be expired. When that read fails, as for a change
+     * stored under an id this version refuses (#1403: a tenant with `/`), the change is not taken as gone: it may rest
+     * on a revision, so the pass stops and reclaims nothing.
+     */
+    @Test
+    fun `an open change that cannot be expired stops the pass`() = runBlocking<Unit> {
+        val unreadable = object : ControlStore by store {
+            override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? = throw SnapshotFormatException(
+                "Change [${id.value}] does not read: Tenant id [acme/west] must not contain '/'."
+            )
+        }
+        val blindRevisions = Revisions(unreadable, clock, revisions.retention)
+        val blindChanges = Changes(unreadable, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
+        val blind = ControlMaintenance(unreadable, blindRevisions, blindChanges, Duration.ofMinutes(1))
+        val first = published().digest
+        published()
+        changes.propose(ALICE_OP, ACME, 2, listOf(Operation.PutPolicy(allow("read"))), "open")
+        published()
+        // Past its expiry: the pass reads it again to expire it, and that read fails.
+        clock.now = clock.now.plus(Duration.ofDays(8))
+
+        blind.reclaim().assert().isEmpty()
+        store.recordDigests(ACME).assert().contains(first)
+        store.openChanges().single().state.terminal.assert().isFalse()
+    }
+
     @Test
     fun `a change nobody finishes expires and leaves the open list`() = runBlocking<Unit> {
         published()

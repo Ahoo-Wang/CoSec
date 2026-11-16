@@ -17,23 +17,16 @@ package me.ahoo.cosec.migrate
 
 import io.lettuce.core.RedisClient
 import io.lettuce.core.RedisURI
-import io.lettuce.core.ScanArgs
-import io.lettuce.core.ScanCursor
 import io.lettuce.core.api.sync.RedisCommands
-import io.lettuce.core.codec.ByteArrayCodec
-import me.ahoo.cocache.core.CacheRuntime
-import me.ahoo.cocache.core.CoCacheFactory
-import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.ApiKeyCodec
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
-import me.ahoo.cosec.cocache.control.CoCacheControlStore
-import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.model.Identifiers
-import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.migrate.ConvertCommand.summarize
+import me.ahoo.cosec.migrate.RedisAccess.controlStore
+import me.ahoo.cosec.migrate.RedisAccess.scan
 import tools.jackson.core.JacksonException
 import tools.jackson.databind.JsonNode
 import java.io.IOException
@@ -74,13 +67,10 @@ import kotlin.system.exitProcess
  * Exit codes: 0 done; 1 the data was rejected, publishing failed, or a document's references could not be repaired
  * (see `report.json` and the console); 2 usage.
  */
-// B6: each command gets a file of its own
-@Suppress("TooManyFunctions")
 object MigrateMain {
     const val OK = 0
     const val FAILED = 1
     const val USAGE = 2
-    private const val SCAN_COUNT = 1000L
 
     /**
      * The options each command reads. One it does not read is a usage error, before anything is read or written: it
@@ -163,245 +153,16 @@ object MigrateMain {
     }
 
     private fun command(command: String?, options: Options, out: PrintStream): Int = when (command) {
-        "convert" -> convert(options, out)
-        "publish" -> publish(options, out)
-        "bootstrap" -> bootstrap(options, out)
-        "repair-references" -> repairReferences(options, out)
-        "partition plan" -> partitionPlan(options, out)
+        "convert" -> ConvertCommand.convert(options, out)
+        "publish" -> PublishCommand.publish(options, out)
+        "bootstrap" -> BootstrapCommand.bootstrap(options, out)
+        "repair-references" -> RepairReferencesCommand.repairReferences(options, out)
+        "partition plan" -> PartitionPlanCommand.partitionPlan(options, out)
         "api-keys" -> apiKeys(options, out)
         else -> {
             out.println(USAGE_TEXT)
             USAGE
         }
-    }
-
-    private class UsageException(message: String) : IllegalArgumentException(message)
-
-    /**
-     * `--name value` and `--name=value` pairs and `--flag`s; a repeated or unknown option is a usage error, and so is a
-     * value that starts with `--` (the next option, with its value forgotten): write `--name=--value` for such a value.
-     * With [readable], reading an option outside it is a defect of the command, never a usage error.
-     */
-    private class Options(
-        private val values: Map<String, String>,
-        private val flags: Set<String>,
-        private val readable: Set<String>? = null,
-    ) {
-        fun value(name: String): String? = values[readable(name)]
-
-        fun required(name: String): String = values[readable(name)] ?: throw UsageException("Missing --$name.")
-
-        fun flag(name: String): Boolean = readable(name) in flags
-
-        /** These options, of which the command may read only [names]: its table in [OPTIONS]. */
-        fun readableOnly(names: Set<String>): Options = Options(values, flags, names)
-
-        private fun readable(name: String): String {
-            check(readable == null || name in readable) { "The command reads --$name, which its table does not list." }
-            return name
-        }
-
-        /** Every option given, valued or not. */
-        val names: Set<String> get() = values.keys + flags
-
-        /**
-         * The Redis URIs given, whatever the command reads: only so that nothing printed shows their credentials
-         * ([RedisUris]), never as input.
-         */
-        val redisUris: List<String> get() = REDIS_URIS.mapNotNull { values[it] }
-
-        companion object {
-            private val VALUED = setOf(
-                "from-redis", "from-files", "key-prefix", "out", "partition", "to-redis", "in",
-                "rate-limit-rules", "platform-admin", "redis", "role-prefix", "app",
-                "memberships", "grant-to-principal", "file", "document",
-            )
-            private val FLAGS = setOf("resume", "force", "dry-run", "cluster")
-            private val REDIS_URIS = listOf("to-redis", "from-redis", "redis")
-
-            /** The options that wrote break-glass, gone with it (RC1-27): what to do instead. */
-            private val REMOVED = setOf("root-enabled", "root-id", "root-expires-at", "break-glass-max-duration")
-
-            fun parse(args: List<String>): Options {
-                val values = HashMap<String, String>()
-                val flags = HashSet<String>()
-                var i = 0
-                while (i < args.size) {
-                    require(args[i].startsWith("--")) { "Unexpected argument [${args[i]}]." }
-                    val (name, attached) = args[i].substring(2).split('=', limit = 2).let { it[0] to it.getOrNull(1) }
-                    when (name) {
-                        in FLAGS -> require(attached == null && flags.add(name)) { "--$name is repeated or valued." }
-                        in VALUED -> {
-                            val value = attached ?: args.getOrNull(i + 1)?.takeUnless { it.startsWith("--") }?.also { i++ }
-                            require(value != null) { "--$name needs a value (--$name=value, if it starts with --)." }
-                            require(values.put(name, value) == null) { "--$name is given twice." }
-                        }
-                        in REMOVED -> throw IllegalArgumentException(
-                            "--$name was removed: cosec-migrate writes no break-glass binding. After the switch, " +
-                                "request break-glass through the control plane, by two people."
-                        )
-
-                        else -> throw IllegalArgumentException("Unknown option [--$name].")
-                    }
-                    i++
-                }
-                return Options(values, flags)
-            }
-        }
-    }
-
-    private fun convert(options: Options, out: PrintStream): Int {
-        val fromRedis = options.value("from-redis")
-        val fromFiles = options.value("from-files")
-        if ((fromRedis == null) == (fromFiles == null)) {
-            throw UsageException("Give exactly one of --from-redis and --from-files.")
-        }
-        val partition = partitionOf(options)
-        val outDirectory = Path.of(options.required("out"))
-        val read = if (fromRedis != null) {
-            readRedis(fromRedis, options.value("key-prefix") ?: DEFAULT_KEY_PREFIX)
-        } else {
-            ExportDirectory.read(Path.of(fromFiles!!))
-        }
-        val source = options.value("rate-limit-rules")?.let { file -> read.withRateLimitRules(ExportDirectory.rateLimitRules(Path.of(file))) } ?: read
-        val conversion = Converter().convert(source, ConvertOptions(partition))
-        ConvertedDirectory.write(conversion, outDirectory)
-        summarize(conversion.report, out)
-        out.println("Wrote ${outDirectory.resolve(ConvertedDirectory.REPORT_FILE)}")
-        return if (conversion.report.accepted) OK else FAILED
-    }
-
-    private fun partitionOf(options: Options): Partition = when (val text = options.value("partition") ?: "platform") {
-        "platform" -> Partition.PLATFORM
-        "by-owner" -> Partition.BY_OWNER
-        else -> throw UsageException("--partition is platform or by-owner, not [$text].")
-    }
-
-    private fun summarize(report: ConversionReport, out: PrintStream) {
-        report.counts.forEach { (name, count) -> out.println("$name: $count") }
-        report.semanticChanges.groupingBy { it.change }.eachCount().toSortedMap().forEach { (change, count) ->
-            out.println("semantic change $change: $count place(s)")
-        }
-        report.warnings.forEach { out.println("WARN   ${it.location}: ${it.message}") }
-        report.rejections.forEach { out.println("REJECT ${it.kind} ${it.location}: ${it.message} (${it.advice})") }
-        out.println(
-            if (report.accepted) {
-                "Converted. Input sha256 ${report.inputSha256}."
-            } else {
-                "Rejected: fix the ${report.rejections.size} rejection(s) and convert again. Nothing else was written."
-            },
-        )
-    }
-
-    /** The 7.x data under [keyPrefix], with its schema marker, read with the same layout as 7.0. */
-    fun readRedis(uri: String, keyPrefix: String): Source7x {
-        val redisUri = RedisURI.create(uri)
-        val client = RedisClient.create(redisUri)
-        try {
-            client.connect().use { connection ->
-                val commands = connection.sync()
-                val markerKey = "${keyPrefix.trimEnd(':')}:meta:schema"
-                val marker = Source7x.Marker(markerKey, commands.get(markerKey))
-                val keys = CoSec7xReader.keys(keyPrefix) { pattern -> scan(commands, pattern) }
-                return client.connect(ByteArrayCodec.INSTANCE).use { raw ->
-                    CoSec7xReader(raw.sync(), keyPrefix).source(keys, marker)
-                }
-            }
-        } finally {
-            client.shutdown()
-        }
-    }
-
-    private fun scan(commands: RedisCommands<String, String>, pattern: String): Sequence<String> {
-        val keys = ArrayList<String>()
-        var cursor: ScanCursor = ScanCursor.INITIAL
-        do {
-            val result = commands.scan(cursor, ScanArgs.Builder.matches(pattern).limit(SCAN_COUNT))
-            keys += result.keys
-            cursor = result
-        } while (!result.isFinished)
-        return keys.asSequence()
-    }
-
-    private fun publish(options: Options, out: PrintStream): Int {
-        val file = options.value("file")
-        if (file != null && (options.value("in") != null || options.flag("resume"))) {
-            throw UsageException("publish takes --file or --in, not both; --resume is for --in.")
-        }
-        if (file == null && options.value("document") != null) {
-            throw UsageException("--document names the document of --file.")
-        }
-        val source = file?.let { fileSource(it, options.required("document")) }
-            ?: PublishCommand.Source.Directory(Path.of(options.required("in")), options.flag("resume"))
-        val target = PublishCommand.Target(
-            options.required("to-redis"),
-            options.value("key-prefix") ?: DEFAULT_KEY_PREFIX,
-            options.flag("cluster"),
-            options.redisUris,
-        )
-        return PublishCommand.run(target, source, out) { block -> controlStore(options, block) }
-    }
-
-    private fun fileSource(file: String, document: String) = PublishCommand.Source.File(
-        Path.of(file),
-        PublishCommand.documentKey(document) ?: throw UsageException(
-            "--document is platform, app:<id> or tenant:<id>, not [${Identifiers.printable(document)}]."
-        ),
-    )
-
-    private fun bootstrap(options: Options, out: PrintStream): Int {
-        val principal = PrincipalId(options.required("platform-admin"))
-        val revision = controlStore(options) { store -> Bootstrap(store).run(principal, options.flag("force")) }
-        out.println(
-            "Bound ${principal.value} of the platform tenant to cosec:platform-admin: ${Bootstrap.KEY} revision $revision."
-        )
-        return OK
-    }
-
-    /** `repair-references`: every document visited, every failed one listed; any failure exits with [FAILED]. */
-    private fun repairReferences(options: Options, out: PrintStream): Int {
-        val result = controlStore(options) { store -> ReferenceRepair(store).run() }
-        result.failed.forEach { (key, message) ->
-            out.println(
-                "FAILED $key: ${RedisUris.scrub(message, options.redisUris)}"
-            )
-        }
-        out.println("Visited ${result.documents} document(s); added ${result.added} reference(s).")
-        out.println("Removed ${result.removed} reference(s) no head refers to.")
-        result.apps?.let { out.println("The app list is complete: $it app(s).") }
-            ?: out.println("FAILED the app list could not be completed: run again.")
-        if (result.failed.isNotEmpty() || result.apps == null) {
-            out.println("Not everything was repaired: fix what failed and run again.")
-            return FAILED
-        }
-        return OK
-    }
-
-    private fun partitionPlan(options: Options, out: PrintStream): Int {
-        val fromRedis = options.value("from-redis")
-        val fromFiles = options.value("from-files")
-        if ((fromRedis == null) == (fromFiles == null)) {
-            throw UsageException("Give exactly one of --from-redis and --from-files.")
-        }
-        val source = if (fromRedis != null) {
-            readRedis(
-                fromRedis,
-                options.value("key-prefix") ?: DEFAULT_KEY_PREFIX
-            )
-        } else {
-            ExportDirectory.read(Path.of(fromFiles!!))
-        }
-        val platform = Converter().convert(source, ConvertOptions(Partition.PLATFORM))
-        val byOwner = Converter().convert(source, ConvertOptions(Partition.BY_OWNER))
-        if (!platform.report.accepted || !byOwner.report.accepted) {
-            summarize(if (platform.report.accepted) byOwner.report else platform.report, out)
-            return FAILED
-        }
-        val plan = PartitionPlan.of(platform, byOwner)
-        val written = PartitionPlan.write(plan, Path.of(options.required("out")))
-        plan.keys.zip(written).forEach { (key, path) -> out.println("Planned $key: $path") }
-        out.println("Planned ${written.size} tenant(s): submit each with apply (merge). Nothing was written to Redis.")
-        return OK
     }
 
     /**
@@ -564,38 +325,6 @@ object MigrateMain {
             principal.newlyGained?.takeIf { it.isNotEmpty() }?.let {
                 out.println("WARN   ${principal.principal}@${principal.tenant.value} newly gains $it.")
             }
-        }
-    }
-
-    /** The control plane's store over the Redis of `--to-redis` (seed nodes of a cluster with `--cluster`), for [block]. */
-    private fun <T> controlStore(options: Options, block: (CoCacheControlStore) -> T): T =
-        controlStore(
-            options.required("to-redis"),
-            options.value("key-prefix") ?: DEFAULT_KEY_PREFIX,
-            options.flag("cluster"),
-            block
-        )
-
-    /** The control plane's store over the Redis at [uri], or the Redis Cluster [uri] names seed nodes of, for [block]. */
-    private fun <T> controlStore(
-        uri: String,
-        keyPrefix: String,
-        cluster: Boolean = false,
-        block: (CoCacheControlStore) -> T
-    ): T = factory(uri, cluster) { factory ->
-        val heads = factory.createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
-        block(CoCacheControlStore.create(factory, heads, keyPrefix))
-    }
-
-    /** CoCache 8 over the Redis at [uri], or the Redis Cluster [uri] names seed nodes of, for [block]. */
-    private fun <T> factory(uri: String, cluster: Boolean, block: (CoCacheFactory) -> T): T {
-        val backend = if (cluster) {
-            RedisBackend.cluster(uri.split(',').map { RedisURI.create(it.trim()) })
-        } else {
-            RedisBackend.standalone(RedisURI.create(uri))
-        }
-        return backend.use { backend ->
-            CacheRuntime.builder().backend(backend).build().use { runtime -> block(CoCacheFactory(runtime)) }
         }
     }
 }

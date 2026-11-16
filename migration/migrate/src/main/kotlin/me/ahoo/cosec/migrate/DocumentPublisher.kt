@@ -36,32 +36,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
-/** `publish` stopped: [written] are the keys it wrote before, exactly; nothing else was written. */
-open class PublishException(message: String, val written: List<SnapshotKey>, cause: Throwable? = null) :
-    IllegalStateException(
-        message + if (written.isEmpty()) {
-            " Nothing was written."
-        } else {
-            " Written before it stopped: $written; " +
-                "run publish again with --resume to finish."
-        },
-        cause,
-    )
-
-/** 8.0 documents already exist for [keys] (and, with resume, differ from the converted ones): never overwritten. */
-class DocumentsExistException(val keys: List<SnapshotKey>, written: List<SnapshotKey>, differ: Boolean = false) :
-    PublishException(
-        if (differ) {
-            "8.0 documents for $keys exist and differ from the converted ones; publish never overwrites."
-        } else {
-            "8.0 documents already exist for $keys; publish never overwrites (--resume skips identical ones)."
-        },
-        written,
-    )
-
-/** What [DocumentPublisher.publish] did: the keys it wrote, and those it found already published identically. */
-class PublishResult(val written: List<SnapshotKey>, val skipped: List<SnapshotKey>)
-
 /**
  * Writes converted documents as their first revisions (RFC 0004 §8.2 `publish`, RFC 0007 §5.9) through the control
  * plane's [ControlStore], so the revision chain starts with them: a revision record, then the head, each only if the

@@ -41,7 +41,7 @@ sealed interface SnapshotKey {
         init {
             require(isValidTenantId(tenantId)) {
                 "Tenant id [${Identifiers.printable(tenantId)}] must not be blank or [${Match.WILDCARD}], contain " +
-                    "'${App.APP_ID_SEPARATOR}', a control character or an unpaired surrogate, or exceed " +
+                    "'${App.APP_ID_SEPARATOR}' or '/', a control character or an unpaired surrogate, or exceed " +
                     "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
             }
         }
@@ -53,7 +53,7 @@ sealed interface SnapshotKey {
         companion object {
             /**
              * A tenant id names exactly one Redis key: the rule of a declared app id (`ScopeResolver.isValidAppId`, #1024:
-             * not blank, not `*`, no `:`, bounded length, no control characters, RC1-15, and no unpaired surrogate, which
+             * not blank, not `*`, no `:` or `/`, bounded length, no control characters, RC1-15, and no unpaired surrogate, which
              * a Redis key holds as `?`, RC1-52), so no id can reach another key, a key pattern or a log line it does not
              * own. `(platform)` and `(0)` are valid and encoded as they are.
              */
@@ -69,7 +69,7 @@ sealed interface SnapshotKey {
         init {
             require(isValidAppId(appId)) {
                 "App id [${Identifiers.printable(appId)}] must not be blank or [${Match.WILDCARD}], contain " +
-                    "'$APP_ID_SEPARATOR', a control character or an unpaired surrogate, or exceed " +
+                    "'$APP_ID_SEPARATOR' or '/', a control character or an unpaired surrogate, or exceed " +
                     "${ScopeResolver.MAX_APP_ID_LENGTH} characters."
             }
         }
@@ -83,7 +83,7 @@ sealed interface SnapshotKey {
 
             /**
              * Whether [appId] can name an app document: the rule of an app id a request declares
-             * (`ScopeResolver.isValidAppId`: not blank, not `*`, no `:`, bounded length, no control character, no unpaired
+             * (`ScopeResolver.isValidAppId`: not blank, not `*`, no `:` or `/`, bounded length, no control character, no unpaired
              * surrogate; RC1-15, RC1-52, R1-6 of #1194's review), so the control plane takes no app key the data plane
              * could never read, and no id reaches a Redis key or a log line it does not own.
              */
