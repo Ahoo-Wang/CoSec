@@ -2,16 +2,16 @@
 # Mutant: a client address that is no address reads as absent, so a DENY on environment.ip does not match
 # Tests: :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-index d0ea6129..6db34fd8 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-@@ -745,7 +745,7 @@ internal open class Evaluator(protected val request: EngineRequest, protected
-         // address could not be read, so it is unavailable, as a missing external attribute is (PIP-17), never absent,
-         // which a DENY would read as "no match". An empty one is absent: nothing was reported, as in a check or a
-         // simulation that names no address.
--        if (remoteIp == null && authz.environment.remoteIp.isNotEmpty()) {
-+        if (false) {
-             throw AttributeMissing(Attribute.Kind.ENVIRONMENT_IP.path)
-         }
-         return remoteIp
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorAttributes.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorAttributes.kt
+index 4f996e55..8e3e7cd2 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorAttributes.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorAttributes.kt
+@@ -164,7 +164,7 @@ internal fun Evaluator.ipOf(attribute: Attribute): IpAddress? {
+     // address could not be read, so it is unavailable, as a missing external attribute is (PIP-17), never absent,
+     // which a DENY would read as "no match". An empty one is absent: nothing was reported, as in a check or a
+     // simulation that names no address.
+-    if (remoteIp == null && authz.environment.remoteIp.isNotEmpty()) {
++    if (false) {
+         throw AttributeMissing(Attribute.Kind.ENVIRONMENT_IP.path)
+     }
+     return remoteIp

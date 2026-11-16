@@ -3,11 +3,11 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.* :conformance:test
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-index 5f88243f..f617cacf 100644
+index f605a791..06ecdff6 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-@@ -104,6 +104,9 @@ internal open class Evaluator(protected val request: EngineRequest, protected
-     private var remoteIp: IpAddress? = null
+@@ -153,6 +153,9 @@ internal open class Evaluator(
+     @JvmField internal var remoteIp: IpAddress? = null
  
      fun evaluate(): Decision {
 +        pass = Effect.ALLOW
