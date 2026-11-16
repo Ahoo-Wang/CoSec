@@ -18,17 +18,14 @@ package me.ahoo.cosec.document
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.DocumentJson.ROOT
-import me.ahoo.cosec.document.DocumentJson.actor
 import me.ahoo.cosec.document.DocumentJson.factory
 import me.ahoo.cosec.document.DocumentJson.nonEmpty
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.RateLimitSource
-import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
-import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -40,7 +37,6 @@ import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
-import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import tools.jackson.core.JacksonException
@@ -94,10 +90,6 @@ object PolicyDocumentCodec {
     )
     private val DOCUMENT_FIELDS =
         arrayOf("schema", "revision", "publishedAt", "provenance", "policies", "bindings", "rateLimits")
-    private val RATE_LIMIT_FIELDS = arrayOf(
-        "id", "action", "resource", "condition", "onMissing", "key", "permitsPerSecond", "windowSeconds", "strictFailure",
-    )
-    private val PROVENANCE_FIELDS = arrayOf("parent", "change", "kind", "publishedBy", "approvedBy", "shadow")
     private val BINDING_FIELDS = arrayOf("id", "subject", "app", "space", "policy", "expiresAt", "breakGlass")
     private val APP_ROLE_FIELDS = arrayOf("id", "name", "description", "permissions")
     private val TENANT_ROLE_FIELDS = APP_ROLE_FIELDS + arrayOf("app", "space")
@@ -136,7 +128,7 @@ object PolicyDocumentCodec {
             publishedAt = root.required("publishedAt").instant(),
             policies = root.field("policies")?.elements()?.map(PolicyCodec::decode).orEmpty(),
             bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
-            catalog = root.field("catalog")?.let(::catalog),
+            catalog = root.field("catalog")?.let(CatalogCodec::decode),
             boundary = when (kind) {
                 DocumentKind.PLATFORM -> root.field("boundaries")?.let { boundaries ->
                     boundaries.requireObject("default")
@@ -146,10 +138,10 @@ object PolicyDocumentCodec {
                 DocumentKind.TENANT -> root.field("boundary")?.let { PolicyId(it.nonEmpty()) }
                 DocumentKind.APP -> null
             },
-            provenance = root.field("provenance")?.let(::provenance),
+            provenance = root.field("provenance")?.let(ProvenanceCodec::decode),
             limits = root.field("limits")?.let(::limits),
             attributes = root.field("attributes")?.let(::attributes),
-            rateLimits = root.field("rateLimits")?.elements()?.map(::rateLimit).orEmpty(),
+            rateLimits = root.field("rateLimits")?.elements()?.map(RateLimitCodec::decode).orEmpty(),
             roles = root.field("roles")?.elements()?.map { role(it, kind) }.orEmpty(),
         )
     }
@@ -190,33 +182,6 @@ object PolicyDocumentCodec {
         return RolePermissions.Listed(node.elements().map { it.text() })
     }
 
-    /** `{"id", "action", "resource", "condition", "onMissing", "key", "permitsPerSecond", "windowSeconds", "strictFailure"}`. */
-    private fun rateLimit(node: DocumentNode): RateLimitSource {
-        node.requireObject(*RATE_LIMIT_FIELDS)
-        val id = node.required("id").text()
-        val permitsPerSecond = node.required("permitsPerSecond")
-        val windowSeconds = node.field("windowSeconds")
-        val limit = try {
-            RateLimitSpec(permitsPerSecond.double(), windowSeconds?.long() ?: 1)
-        } catch (error: IllegalArgumentException) {
-            node.fail(error.message ?: "an invalid quota")
-        }
-        return RateLimitSource(
-            id = id,
-            statement = StatementSource(
-                name = id,
-                effect = Effect.DENY,
-                actions = node.required("action").strings(),
-                resources = node.field("resource")?.let(StatementCodec::decodeResources).orEmpty(),
-                condition = node.field("condition")?.let(ConditionJson::read),
-                onMissing = node.field("onMissing")?.let(StatementCodec::decodeOnMissing),
-            ),
-            key = node.field("key")?.nonEmpty(),
-            limit = limit,
-            strictFailure = node.field("strictFailure")?.bool() ?: false,
-        )
-    }
-
     private fun limits(node: DocumentNode): ConditionLimits {
         node.requireObject(*LIMIT_FIELDS)
         fun limit(name: String, default: Int): Int {
@@ -250,31 +215,6 @@ object PolicyDocumentCodec {
                 ?: type.fail("an external attribute is one of ${ATTRIBUTE_TYPES.keys}, not [${type.text()}]")
             Attribute.external(text, declared)
         }
-    }
-
-    private fun provenance(node: DocumentNode): Provenance {
-        node.requireObject(*PROVENANCE_FIELDS)
-        val kind = node.required("kind")
-        return Provenance(
-            parent = node.field("parent")?.let { parent ->
-                parent.requireObject("revision", "digest")
-                val revision = parent.required("revision")
-                val digest = parent.required("digest")
-                ParentRevision(
-                    revision.long().takeIf { it > 0 } ?: revision.fail("must be positive"),
-                    digest.text().takeIf { ParentRevision.DIGEST.matches(it) } ?: digest.fail("is `SHA-256:` and 64 lowercase hex digits"),
-                )
-            },
-            change = node.required("change").nonEmpty(),
-            kind = ProvenanceKind.entries.firstOrNull { it.name == kind.text() }
-                ?: kind.fail("a kind is one of ${ProvenanceKind.entries}, not [${kind.text()}]"),
-            publishedBy = actor(node.required("publishedBy")),
-            approvedBy = node.field("approvedBy")?.elements()?.map(::actor).orEmpty(),
-            shadow = node.field("shadow")?.let { shadow ->
-                shadow.requireObject("window", "skipped")
-                ShadowWindow(shadow.field("window")?.nonEmpty(), shadow.required("skipped").bool())
-            },
-        )
     }
 
     private fun binding(node: DocumentNode, kind: DocumentKind, owner: String): Binding {
@@ -329,30 +269,6 @@ object PolicyDocumentCodec {
         return Match.Exactly(of(text))
     }
 
-    private fun catalog(node: DocumentNode): Catalog {
-        node.requireObject("groups")
-        return Catalog(
-            node.required("groups").elements().map { group ->
-                group.requireObject("name", "description", "spaced", "permissions")
-                CatalogGroup(
-                    name = group.required("name").text(),
-                    description = group.field("description")?.text(),
-                    spaced = group.field("spaced")?.bool() ?: false,
-                    permissions = group.required("permissions").elements().map { permission ->
-                        permission.requireObject("id", "name", "description", "action", "resource")
-                        CatalogPermission(
-                            id = permission.required("id").text(),
-                            name = permission.field("name")?.text(),
-                            description = permission.field("description")?.text(),
-                            actions = permission.field("action")?.strings(),
-                            resources = permission.field("resource")?.let(StatementCodec::decodeResources).orEmpty(),
-                        )
-                    },
-                )
-            },
-        )
-    }
-
     /** The stored bytes of [document]: its header first, then each section in the order [decode] reads them. */
     /*
      * One entry at a time, as the document holds it: for the control plane's entry-level operations, which name a
@@ -377,7 +293,7 @@ object PolicyDocumentCodec {
         binding(DocumentNode(tree, path), kind, owner)
 
     @InternalCoSecApi
-    fun catalogTree(catalog: Catalog): ObjectNode = catalog(catalog)
+    fun catalogTree(catalog: Catalog): ObjectNode = CatalogCodec.tree(catalog)
 
     @InternalCoSecApi
     fun roleTree(role: RoleDefinition): ObjectNode = role(role)
@@ -388,13 +304,15 @@ object PolicyDocumentCodec {
         role(DocumentNode(tree, path), kind)
 
     @InternalCoSecApi
-    fun rateLimitTree(rule: RateLimitSource): ObjectNode = rateLimit(rule)
+    fun rateLimitTree(rule: RateLimitSource): ObjectNode = RateLimitCodec.tree(rule)
 
     @InternalCoSecApi
-    fun decodeRateLimit(tree: JsonNode, path: String = ROOT): RateLimitSource = rateLimit(DocumentNode(tree, path))
+    fun decodeRateLimit(tree: JsonNode, path: String = ROOT): RateLimitSource = RateLimitCodec.decode(
+        DocumentNode(tree, path)
+    )
 
     @InternalCoSecApi
-    fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = catalog(DocumentNode(tree, path))
+    fun decodeCatalog(tree: JsonNode, path: String = ROOT): Catalog = CatalogCodec.decode(DocumentNode(tree, path))
 
     @InternalCoSecApi
     fun decodeLimits(tree: JsonNode, path: String = ROOT): ConditionLimits = limits(DocumentNode(tree, path))
@@ -417,7 +335,7 @@ object PolicyDocumentCodec {
                 else -> root.put("boundary", boundary.value)
             }
         }
-        document.provenance?.let { root.set("provenance", provenance(it)) }
+        document.provenance?.let { root.set("provenance", ProvenanceCodec.tree(it)) }
         document.limits?.let { limits ->
             root.putObject("limits").put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
                 .put("maxInValues", limits.maxInValues).put("maxCidrBlocks", limits.maxCidrBlocks)
@@ -435,7 +353,7 @@ object PolicyDocumentCodec {
     }
 
     private fun putEntries(root: ObjectNode, document: PolicyDocument) {
-        document.catalog?.let { root.set("catalog", catalog(it)) }
+        document.catalog?.let { root.set("catalog", CatalogCodec.tree(it)) }
         val policies = root.putArray("policies")
         document.policies.forEach { policies.add(PolicyCodec.tree(it)) }
         val bindings = root.putArray("bindings")
@@ -446,38 +364,8 @@ object PolicyDocumentCodec {
         }
         if (document.rateLimits.isNotEmpty()) {
             val rules = root.putArray("rateLimits")
-            document.rateLimits.forEach { rules.add(rateLimit(it)) }
+            document.rateLimits.forEach { rules.add(RateLimitCodec.tree(it)) }
         }
-    }
-
-    private fun rateLimit(rule: RateLimitSource): ObjectNode {
-        val written = StatementCodec.tree(rule.statement)
-        val node = factory.objectNode().put("id", rule.id)
-        listOf("action", "resource", "condition", "onMissing").forEach { field ->
-            written.get(field)?.let { node.set(field, it) }
-        }
-        rule.key?.let { node.put("key", it) }
-        node.put("permitsPerSecond", rule.limit.permitsPerSecond)
-        node.put("windowSeconds", rule.limit.windowSeconds)
-        if (rule.strictFailure) node.put("strictFailure", true)
-        return node
-    }
-
-    private fun provenance(provenance: Provenance): ObjectNode {
-        val node = factory.objectNode()
-        provenance.parent?.let { node.putObject("parent").put("revision", it.revision).put("digest", it.digest) }
-        node.put("change", provenance.change)
-        node.put("kind", provenance.kind.name)
-        node.set("publishedBy", actor(provenance.publishedBy))
-        if (provenance.approvedBy.isNotEmpty()) {
-            node.putArray("approvedBy").also { approvers -> provenance.approvedBy.forEach { approvers.add(actor(it)) } }
-        }
-        provenance.shadow?.let { shadow ->
-            val item = node.putObject("shadow")
-            shadow.window?.let { item.put("window", it) }
-            item.put("skipped", shadow.skipped)
-        }
-        return node
     }
 
     private fun role(role: RoleDefinition): ObjectNode {
@@ -518,28 +406,5 @@ object PolicyDocumentCodec {
     private inline fun <T> Match<T>.text(value: (T) -> String): String = when (this) {
         Match.Any -> WILDCARD
         is Match.Exactly -> value(this.value)
-    }
-
-    private fun catalog(catalog: Catalog): ObjectNode {
-        val node = factory.objectNode()
-        val groups = node.putArray("groups")
-        for (group in catalog.groups) {
-            val item = groups.addObject().put("name", group.name)
-            group.description?.let { item.put("description", it) }
-            if (group.spaced) item.put("spaced", true)
-            val permissions = item.putArray("permissions")
-            for (permission in group.permissions) {
-                val entry = permissions.addObject().put("id", permission.id)
-                permission.name?.let { entry.put("name", it) }
-                permission.description?.let { entry.put("description", it) }
-                permission.actions?.let { actions ->
-                    entry.putArray(
-                        "action"
-                    ).also { array -> actions.forEach(array::add) }
-                }
-                StatementCodec.putResources(entry, permission.resources)
-            }
-        }
-        return node
     }
 }

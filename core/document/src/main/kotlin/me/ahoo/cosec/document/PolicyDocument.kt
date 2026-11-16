@@ -95,13 +95,33 @@ class PolicyDocument @InternalCoSecApi constructor(
         roles.firstNotNullOfOrNull { it.shapeProblem(kind) }?.let { throw IllegalArgumentException(it) }
     }
 
-    /**
-     * This document at [revision], published at [publishedAt], and otherwise the same: every member above is passed on.
-     * The one copy of a document under another header (a shadow candidate is one); a member added to the constructor is
-     * added here, in the same file (`PolicyDocumentAtTest` fails otherwise).
-     */
+    /** This document at [revision], published at [publishedAt], and otherwise the same ([copy]). */
     @InternalCoSecApi
-    fun at(revision: Long, publishedAt: Instant): PolicyDocument = PolicyDocument(
+    fun at(revision: Long, publishedAt: Instant): PolicyDocument = copy(revision = revision, publishedAt = publishedAt)
+
+    /**
+     * This document with the members named changed, and every other one passed on: the one copy of a document. A member
+     * a caller does not name is kept, so a copy that drops one says so. A member added to the constructor is added here,
+     * in the same file (`PolicyDocumentAtTest` fails otherwise).
+     */
+    // stays: one parameter for each field of the record, as its constructor has
+    @Suppress("LongParameterList")
+    @InternalCoSecApi
+    fun copy(
+        kind: DocumentKind = this.kind,
+        owner: String = this.owner,
+        revision: Long = this.revision,
+        publishedAt: Instant = this.publishedAt,
+        policies: List<PolicyDefinition> = this.policies,
+        bindings: List<Binding> = this.bindings,
+        catalog: Catalog? = this.catalog,
+        boundary: PolicyId? = this.boundary,
+        provenance: Provenance? = this.provenance,
+        limits: ConditionLimits? = this.limits,
+        attributes: List<Attribute>? = this.attributes,
+        rateLimits: List<RateLimitSource> = this.rateLimits,
+        roles: List<RoleDefinition> = this.roles,
+    ): PolicyDocument = PolicyDocument(
         kind = kind,
         owner = owner,
         revision = revision,

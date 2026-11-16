@@ -116,19 +116,12 @@ object RoleExpansion {
         val policySources = derivePolicies(document, policies)
         val bindings = ArrayList(document.bindings)
         val bindingSources = deriveBindings(document, bindings)
-        val effective = PolicyDocument(
-            kind = document.kind,
-            owner = document.owner,
-            revision = document.revision,
-            publishedAt = document.publishedAt,
+        // The roles are written out as the policies and bindings above, so the effective document defines none.
+        val effective = document.copy(
             policies = policies,
             bindings = bindings,
             catalog = if (shortForm) document.catalog?.let(::displayOnly) else document.catalog,
-            boundary = document.boundary,
-            provenance = document.provenance,
-            limits = document.limits,
-            attributes = document.attributes,
-            rateLimits = document.rateLimits,
+            roles = emptyList(),
         )
         return Expansion(effective, document.policies.size, policySources, document.bindings.size, bindingSources)
     }
