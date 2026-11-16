@@ -37,7 +37,9 @@ internal class ModelCompiled(val key: SnapshotKey, val revision: Long, val input
  * 1. **Installs never go back**: an install comes from the newest version a live read answered, never older than the
  *    one it replaces; a revision below the one installed last only after a failover, and then reported as a regression.
  * 2. **A failure installs nothing**: every install is what a live read answered (a document, its absence, an undecodable
- *    value), or a failed entry after [recompile]; what is served is always the last install.
+ *    value), or a failed entry after [recompile]; what is served is always the last install. A family document is never
+ *    installed compiled with inputs older than the current ones, and a revision that does not compile leaves no older
+ *    one in service.
  * 3. **At most one live read per key**: a read is live until it is answered, the source gives it up at
  *    `storeReadTimeout`, or the source closes. An answer that comes after that never installs (2).
  * 4. **Every waiter is answered, and correctly**: a request by `coldLoadTimeout`, with entries that were installed and
@@ -74,6 +76,9 @@ internal class SlotModel(
     private val lastRevision = HashMap<SnapshotKey, Long>()
     private val evictedAt = HashMap<SnapshotKey, Long>()
     private val expectedRegressions = mutableListOf<Pair<SnapshotKey, Long>>()
+
+    /** The documents whose compilation failed during the event now running. */
+    private val failedCompiles = mutableListOf<Pair<SnapshotKey, Long>>()
     private val regressions = mutableListOf<Pair<SnapshotKey, Long>>()
     val obligations = mutableListOf<Obligation>()
 
@@ -206,6 +211,10 @@ internal class SlotModel(
             if (content.document.revision < last) expectedRegressions += key to content.document.revision
             lastRevision[key] = content.document.revision
         }
+        val compiled = (entry.state as? DocumentState.Present)?.compiled as? ModelCompiled
+        if (key in familyKeys && compiled != null && compiled.inputs < inputs) {
+            violations += "installed $key compiled with inputs ${compiled.inputs} after they changed to $inputs"
+        }
         versions[entry] = version
         lastVersion[key] = version
         lastInstall[key] = entry
@@ -262,6 +271,14 @@ internal class SlotModel(
         }
         counts.regressions += expectedRegressions.size
         expectedRegressions.clear()
+        // A revision that does not compile is installed failed: the one before it is not served in its place.
+        for ((key, revision) in failedCompiles) {
+            val served = lastInstall[key]?.takeIf { it.state is DocumentState.Present } ?: continue
+            if (closedAt < 0 && served.revision < revision) {
+                violations += "revision $revision of $key failed to compile, and revision ${served.revision} is still served"
+            }
+        }
+        failedCompiles.clear()
         regressions.clear()
     }
 
@@ -323,14 +340,16 @@ internal class SlotModel(
                 recompileDuringNext = false
                 onRecompile()
             }
+            if (overflowNext || failNext) {
+                counts.failures++
+                failedCompiles += key to document.revision
+            }
             if (overflowNext) {
                 overflowNext = false
-                counts.failures++
                 throw StackOverflowError("scripted")
             }
             if (failNext) {
                 failNext = false
-                counts.failures++
                 throw IllegalStateException("scripted compile failure")
             }
             return ModelCompiled(key, document.revision, used)
