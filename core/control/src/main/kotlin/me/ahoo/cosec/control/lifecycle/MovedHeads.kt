@@ -25,47 +25,16 @@ import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.MovedHead
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRequest
-import me.ahoo.cosec.control.change.CheckedApps
 import me.ahoo.cosec.control.change.Escalation
-import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
-import me.ahoo.cosec.control.store.Head
-import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
-
-/**
- * [context], keeping the digest of every head it served first, and of the app list: what one check of a candidate read
- * (RC1-33).
- */
-internal class RecordingContext(private val context: ChangeChecks.Context) : ChangeChecks.Context by context {
-    val read = LinkedHashMap<SnapshotKey, SnapshotDigest?>()
-
-    /** The app list as first read; `null` until it is. */
-    var apps: CheckedApps? = null
-        private set
-
-    override suspend fun head(key: SnapshotKey): Head? = context.head(key).also { read.putIfAbsent(key, it?.digest) }
-
-    override suspend fun apps(): Versioned<AppList>? = context.apps().also {
-        if (apps == null) apps = CheckedApps(it?.digest)
-    }
-}
-
-/** What [MovedHeads.detect] found once a change was published: the event to record (RC1-33). */
-internal class HeadsMoved(
-    val kind: ChangeEvent.Kind,
-    val moved: List<MovedHead>,
-    val escalations: List<Escalation>,
-    val note: String,
-)
 
 /**
  * After a publish (RC1-33). The publish compare-and-sets only the target head: the heads of the other documents the

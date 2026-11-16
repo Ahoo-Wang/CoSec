@@ -11,11 +11,10 @@
  * limitations under the License.
  */
 
-@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+@file:OptIn(InternalCoSecApi::class)
 
 package me.ahoo.cosec.control.lifecycle
 
-import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.Finding
@@ -25,58 +24,12 @@ import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.RoleDefinition
-import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import tools.jackson.databind.JsonNode
-import java.security.MessageDigest
 import java.time.Instant
-import java.util.HexFormat
-
-/**
- * The digest an operation's `ifMatch` names: SHA-256 of the entry as the document encodes it, in lowercase hex. Two
- * entries with the same digest are written the same way, so they mean the same.
- */
-@InternalCoSecApi
-object EntryDigest {
-    fun of(policy: PolicyDefinition): String = sha256(PolicyDocumentCodec.policyTree(policy))
-
-    fun of(binding: Binding, kind: DocumentKind, owner: String): String =
-        sha256(PolicyDocumentCodec.bindingTree(binding, kind, owner))
-
-    fun of(rule: RateLimitSource): String = sha256(PolicyDocumentCodec.rateLimitTree(rule))
-
-    fun of(role: RoleDefinition): String = sha256(PolicyDocumentCodec.roleTree(role))
-
-    internal fun sha256(tree: JsonNode): String = hex(CoSecJson.mapper.writeValueAsBytes(tree))
-
-    internal fun hex(bytes: ByteArray): String =
-        HEX.formatHex(MessageDigest.getInstance("SHA-256").digest(bytes))
-
-    /** Lower-case hex, a byte at a time: the fixed cost of `String.format` per byte showed in the diff of large documents. */
-    private val HEX: HexFormat = HexFormat.of()
-}
-
-/**
- * The digest of a candidate (RFC 0007 §7.5): SHA-256 of its body encoded with a fixed header, so it depends only on
- * the policies, bindings and sections a change would publish. Approvals and shadow reports name it.
- */
-@InternalCoSecApi
-object CandidateDigest {
-    private val EPOCH: Instant = Instant.EPOCH
-
-    fun of(candidate: PolicyDocument): String = EntryDigest.hex(
-        PolicyDocumentCodec.encode(
-            candidate.copy(revision = 1, publishedAt = EPOCH, provenance = null),
-        ),
-    )
-}
-
-/** The candidate a change's operations make of its base, or the findings that keep them from applying. */
-internal class Applied(val candidate: PolicyDocument?, val findings: List<Finding>)
 
 /**
  * Applies entry-level operations to a base document (RFC 0007 §10.1), in order. An operation whose `ifMatch` is not
