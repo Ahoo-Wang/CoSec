@@ -137,21 +137,7 @@ internal object NomatchConfirmations {
             }
             PolicyDefinition(policy.id, policy.attachable, policy.condition, statements, boundary = policy.boundary)
         }
-        return PolicyDocument(
-            kind = candidate.kind,
-            owner = candidate.owner,
-            revision = candidate.revision,
-            publishedAt = candidate.publishedAt,
-            policies = policies,
-            bindings = candidate.bindings,
-            catalog = candidate.catalog,
-            boundary = candidate.boundary,
-            provenance = candidate.provenance,
-            limits = candidate.limits,
-            attributes = candidate.attributes,
-            rateLimits = candidate.rateLimits,
-            roles = candidate.roles,
-        ) to findings
+        return candidate.copy(policies = policies) to findings
     }
 
     private fun confirmedAs(statement: StatementSource, confirmation: OnMissingConfirmation) = StatementSource(

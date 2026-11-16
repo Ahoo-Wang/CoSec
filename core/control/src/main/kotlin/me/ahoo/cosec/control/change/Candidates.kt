@@ -67,20 +67,7 @@ object CandidateDigest {
 
     fun of(candidate: PolicyDocument): String = EntryDigest.hex(
         PolicyDocumentCodec.encode(
-            PolicyDocument(
-                kind = candidate.kind,
-                owner = candidate.owner,
-                revision = 1,
-                publishedAt = EPOCH,
-                policies = candidate.policies,
-                bindings = candidate.bindings,
-                catalog = candidate.catalog,
-                limits = candidate.limits,
-                attributes = candidate.attributes,
-                boundary = candidate.boundary,
-                rateLimits = candidate.rateLimits,
-                roles = candidate.roles,
-            ),
+            candidate.copy(revision = 1, publishedAt = EPOCH, provenance = null),
         ),
     )
 }
