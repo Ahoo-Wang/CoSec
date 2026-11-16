@@ -100,9 +100,10 @@ jobs:
 
       # Each ref compiles with its own Gradle toolchain: 21, or 17 for a ref from before the Java 21 baseline. The benchmark
       # JVMs run on 25. 21 is listed last so it is JAVA_HOME, the JDK Gradle runs on.
-      # No Gradle cache: this job's own cache (keyed by workflow and job, so apart from CI's) served "Could not find <jar>" for
-      # every jar of a classpath, from a cached "missing" answer, while the same build from an empty cache succeeds. The
-      # builds take minutes next to a run of tens of minutes, and a ratio does not depend on a warm build.
+      # No Gradle cache. This job's own cache (keyed by workflow and job, apart from CI's) restored an index
+      # (modules-2/metadata-*) that names jars its files-2.1 did not hold, and Gradle answered "Could not find <jar>" from the
+      # index without asking the repository, for every jar of one classpath; the same build from an empty Gradle home
+      # succeeds. The builds take minutes next to a run of tens of minutes, and a ratio does not depend on a warm build.
       - name: Set up JDK 17, 25 and 21, and Gradle
         uses: ./.github/actions/setup-java-gradle
         with:
