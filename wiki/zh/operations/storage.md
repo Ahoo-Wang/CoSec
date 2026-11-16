@@ -195,6 +195,10 @@ sequenceDiagram
   [`local-max-age`](./configuration.md#snapshot)（30 秒）旧；实例按这个最旧的时间计算它，并立即向 Redis 确认。本地的
   "没有这个文档"从不被信任：只有 Redis 能回答某个文档不存在。
 - **冷加载最多等待** [`cold-load-timeout`](./configuration.md#snapshot)（2 秒）；之后对该请求而言文档算作失败。
+- **持有的文档有上限。** 每个族最多持有 [`max-apps`/`max-tenants`](./configuration.md#snapshot) 个文档和
+  `max-absent` 个"不存在"条目，在一个后台整理线程上丢弃最久未用的。冷加载突发时，它可能短暂地持有最多上限的两倍，且绝不超出上限
+  4,096 个以上，另加正在加载的文档；超过这个数时，加载该文档的线程先驱逐、再回答请求（`SNP-14`）。这次驱逐要扫描整个族：
+  在默认的 1,024 时不到一毫秒，而一个有 100,000 个文档的族要几毫秒，都发生在加载该文档的线程上。
 - **修订只按 Redis 的说法变化。** Redis 故障切换后，由于复制是异步的，Redis 可能返回比已装入的更旧的修订。实例装入
   Redis 中的内容，因为其他实例读到的也一样，并以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`。请重新发布丢失的变更。
