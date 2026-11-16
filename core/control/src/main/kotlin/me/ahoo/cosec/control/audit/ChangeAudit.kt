@@ -29,114 +29,13 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
-import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.change.ChangeId
-import me.ahoo.cosec.control.change.Confirmation
-import me.ahoo.cosec.control.change.Escalation
-import me.ahoo.cosec.control.change.ShadowSummary
-import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.runtime.event.Delivery
-import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
 
 private val log = KotlinLogging.logger {}
-
-/** A revision as an event names it: its number and the digest it is addressed by, or a candidate's digest. */
-data class RevisionRef(val revision: Long, val digest: String?)
-
-/**
- * A head a published change was checked with that is not the same once it is published (RC1-33): its [document]
- * (`platform`, `app:<a>`, `tenant:<t>`, or `list:apps` for the app list), the digest it was checked with ([checked],
- * `null` for none) and the digest it has now ([current], `null` for none, or when it cannot be read: [readable]).
- */
-data class MovedHead(val document: String, val checked: String?, val current: String?, val readable: Boolean = true)
-
-/**
- * What happened to a change (RFC 0007 §10.5). Never carries a document's content: the change id, the document, the
- * base and candidate it was about, what needed approval, the confirmations, the shadow summary and the note; for
- * [Kind.HEADS_MOVED] and [Kind.REVIEW_NEEDED], the heads that [moved] and the escalations the analysis finds now.
- */
-class ChangeEvent(
-    val id: String,
-    val time: Instant,
-    val kind: Kind,
-    val operator: Actor,
-    val change: ChangeId,
-    val document: SnapshotKey,
-    val base: RevisionRef?,
-    val candidate: RevisionRef?,
-    val escalations: List<Escalation> = emptyList(),
-    val confirmations: List<Confirmation> = emptyList(),
-    val shadow: ShadowSummary? = null,
-    val note: String = "",
-    val moved: List<MovedHead> = emptyList(),
-) {
-    /**
-     * A set that grows: a minor release may add a member (RFC 0010 Q6), so a `when` over it needs an `else`.
-     */
-    enum class Kind {
-        PROPOSED,
-        CHECKED,
-        SHADOW_STARTED,
-        SHADOWED,
-        APPROVED,
-        REJECTED,
-        PUBLISHING,
-        PUBLISHED,
-        FAILED,
-        BREAK_GLASS_REQUESTED,
-        BREAK_GLASS_APPROVED,
-        REVOKED,
-        BOOTSTRAP,
-        MIGRATE,
-
-        /**
-         * A change was published while another document it was checked with moved (RC1-33): the analysis, run again on
-         * the current heads, finds nothing the publish did not have approved. Recorded, nothing to do.
-         */
-        HEADS_MOVED,
-
-        /**
-         * As [HEADS_MOVED], but the analysis run again finds an escalation the publish did not have approved, or could
-         * not run: the published change may need a person's review (RC1-33). Nothing was rolled back.
-         */
-        REVIEW_NEEDED,
-
-        /**
-         * A change was abandoned (RC1-51): the operator is who abandoned it, and the note names its author. A
-         * break-glass change's abandon waits for every REQUIRED listener before it takes effect, though the kind is not
-         * [gated]; any other change's reaches the listeners best effort, after.
-         */
-        ABANDONED,
-        ;
-
-        /**
-         * Whether the step waits for every REQUIRED listener before it takes effect (RFC 0007 §10.5, Q21): publishing,
-         * and every step of creating break-glass (§8). Abandoning a break-glass change waits too ([ABANDONED]).
-         */
-        val gated: Boolean get() = this == PUBLISHING || this == BREAK_GLASS_REQUESTED || this == BREAK_GLASS_APPROVED
-    }
-
-    override fun toString(): String = "ChangeEvent($kind, change=${change.value}, document=$document, by=${operator.principal.value})"
-}
-
-/** The control plane's audit SPI (RFC 0007 §10.5); delivery as in RFC 0006 §9.4. */
-@CoSecSpi
-interface ChangeListener {
-    val name: String
-
-    val delivery: Delivery get() = Delivery.BEST_EFFORT
-
-    suspend fun onChange(event: ChangeEvent)
-}
-
-/** A change step a REQUIRED listener could not record: the step did not happen (503). */
-@InternalCoSecApi
-class ChangeAuditException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 
 /**
  * Delivers change events (RFC 0007 §10.5).
@@ -243,61 +142,5 @@ class LoggingChangeListener(override val name: String = "logging") : ChangeListe
                 "${event.operator.tenant.value}: base=${event.base}, candidate=${event.candidate}, " +
                 "escalations=${event.escalations.size}, confirmations=${event.confirmations.size}"
         }
-    }
-}
-
-/**
- * A change event as JSON (RFC 0007 §10.5), as an audit sink stores it: no document content, only what the event
- * carries.
- */
-@InternalCoSecApi
-object ChangeEventJson {
-    private val factory = tools.jackson.databind.node.JsonNodeFactory.instance
-
-    fun write(event: ChangeEvent): String {
-        val root = factory.objectNode()
-            .put("id", event.id)
-            .put("time", event.time.toString())
-            .put("kind", event.kind.name)
-            .put("change", event.change.value)
-            .put("document", event.document.toString())
-            .put("note", event.note)
-        root.putObject(
-            "operator"
-        ).put("tenant", event.operator.tenant.value).put("principal", event.operator.principal.value)
-        event.base?.let { root.putObject("base").put("revision", it.revision).put("digest", it.digest) }
-        event.candidate?.let { root.putObject("candidate").put("revision", it.revision).put("digest", it.digest) }
-        root.putArray("escalations").apply {
-            event.escalations.forEach {
-                addObject().put(
-                    "subject",
-                    it.subject
-                ).put("reason", it.reason).put("detail", it.detail)
-            }
-        }
-        root.putArray("confirmations").apply {
-            event.confirmations.forEach {
-                addObject().put(
-                    "policy",
-                    it.policy.value
-                ).put("statement", it.statement).put("kind", it.kind).put("digest", it.digest)
-            }
-        }
-        if (event.moved.isNotEmpty()) {
-            root.putArray("moved").apply {
-                event.moved.forEach {
-                    addObject().put("document", it.document).put("checked", it.checked)
-                        .put("current", it.current).put("readable", it.readable)
-                }
-            }
-        }
-        event.shadow?.let { shadow ->
-            val node = root.putObject("shadow").put("closedAt", shadow.closedAt.toString())
-                .put("insufficient", shadow.insufficient).put("blocked", shadow.blocked)
-            node.putObject(
-                "counts"
-            ).apply { shadow.counts.toSortedMap().forEach { (outcome, count) -> put(outcome, count) } }
-        }
-        return me.ahoo.cosec.document.json.CoSecJson.mapper.writeValueAsString(root)
     }
 }

@@ -78,10 +78,5 @@ object SourceSizeLedger {
             403,
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
         ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt",
-            415,
-            Disposition.Debt(Batch.B4),
-        ),
     )
 }
