@@ -16,7 +16,6 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.model.Match
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import tools.jackson.databind.node.JsonNodeFactory
@@ -27,9 +26,6 @@ import tools.jackson.databind.node.ObjectNode
  * more than one section holds. It depends on nothing, so a section reads it while any other object is initialising.
  */
 internal object DocumentJson {
-    /** `*`: any app, any space, anyone, or every permission. */
-    internal const val WILDCARD: String = Match.WILDCARD
-
     /** The path of the root of a document, as errors name it. */
     internal const val ROOT = "$"
 

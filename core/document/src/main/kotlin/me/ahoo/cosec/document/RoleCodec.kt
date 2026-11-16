@@ -16,10 +16,10 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.document.DocumentJson.WILDCARD
 import me.ahoo.cosec.document.DocumentJson.factory
 import me.ahoo.cosec.document.DocumentJson.nonEmpty
 import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Match.Companion.WILDCARD
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.decision.DocumentKind

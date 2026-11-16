@@ -199,18 +199,8 @@ object PolicyDocumentCodec {
             }
         }
         document.provenance?.let { root.set("provenance", ProvenanceCodec.tree(it)) }
-        document.limits?.let { limits ->
-            root.putObject("limits").put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
-                .put("maxInValues", limits.maxInValues).put("maxCidrBlocks", limits.maxCidrBlocks)
-                .put("maxLiteralBytes", limits.maxLiteralBytes).put("maxCost", limits.maxCost)
-        }
-        document.attributes?.let { attributes ->
-            val array = root.putArray("attributes")
-            attributes.forEach { attribute ->
-                val type = ATTRIBUTE_TYPES.entries.first { it.value == attribute.type }.key
-                array.addObject().put("path", attribute.path).put("type", type)
-            }
-        }
+        document.limits?.let { root.set("limits", PlatformSettingsCodec.limitsTree(it)) }
+        document.attributes?.let { root.set("attributes", PlatformSettingsCodec.attributesTree(it)) }
         putEntries(root, document)
         return root
     }
