@@ -46,7 +46,7 @@ object TypeLedger {
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Held.kt" to family(RECORD, "the documents a decision read, each as the cache held it"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeAudit.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorizer.kt" to family(PORT, "the control authorizer and the decision it returns"),
-        "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StoreCurrentDocuments.kt" to family(OWN_EXCEPTION, "the current documents read from the store, and the exception its app list raises when it is not reconciled"),
+        "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/StoreCurrentDocuments.kt" to family(OWN_EXCEPTION, "the current documents read from the store, and its unreconciled-app-list exception"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantFragment.kt" to family(RECORD, "a grant fragment and who it is granted to"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdict.kt" to family(SEALED, "what the analysis concluded about a fragment, with why it could not and how far it got"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantorRights.kt" to family(RECORD, "a grantor's rights and the statements it holds them through"),
