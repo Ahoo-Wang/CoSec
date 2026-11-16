@@ -71,7 +71,10 @@ internal class Options(
                 require(args[i].startsWith("--")) { "Unexpected argument [${args[i]}]." }
                 val (name, attached) = args[i].substring(2).split('=', limit = 2).let { it[0] to it.getOrNull(1) }
                 when (name) {
-                    in FLAGS -> require(attached == null && flags.add(name)) { "--$name is repeated or valued." }
+                    in FLAGS -> {
+                        require(attached == null) { "--$name takes no value." }
+                        require(flags.add(name)) { "--$name is given twice." }
+                    }
                     in VALUED -> {
                         val value = attached ?: args.getOrNull(i + 1)?.takeUnless { it.startsWith("--") }?.also { i++ }
                         require(value != null) { "--$name needs a value (--$name=value, if it starts with --)." }
