@@ -45,7 +45,7 @@ internal class SnapshotThreads(
     compileExecutor: Executor?,
     scheduler: ScheduledExecutorService?,
     /** Tests only: what runs housekeeping in place of the thread started here; shut down and awaited as that one is. */
-    housekeeping: ExecutorService? = null,
+    housekeeping: ExecutorService?,
 ) {
     /** Set on the threads this source starts: [SnapshotSource.close] does not wait for the thread it runs on. */
     val onOwnThread = ThreadLocal<Boolean>()
