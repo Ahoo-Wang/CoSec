@@ -32,7 +32,6 @@ import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.APPROVAL
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.BREAK_GLASS
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.CONFLICT
 import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.FORBIDDEN
-import me.ahoo.cosec.control.lifecycle.ChangeLifecycle.Companion.OPEN
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.ProvenanceKind
 import java.time.Clock
@@ -62,14 +61,14 @@ internal class Approvals(
     suspend fun approve(operator: Operator, id: ChangeId, candidate: String): ChangeRequest {
         val change = flow.visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
-        PublishRules.requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
+        PublishRules.requireState(change, ChangeStep.APPROVE.from)
         authority.requireApprovable(operator, change, candidate)
         val breakGlass = change.escalations.any { it.reason == BREAK_GLASS }
         if (breakGlass) {
             PublishRules.requireAudit(true, listeners.hasRequired)
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_APPROVED, change, operator.actor)
         }
-        return flow.transition(id, setOf(ChangeState.AWAITING_APPROVAL)) { current ->
+        return flow.transition(id, ChangeStep.APPROVE) { current ->
             if (current.candidate != candidate) {
                 throw ChangeRejectedException(CONFLICT, "change ${id.value} is not candidate $candidate")
             }
@@ -106,8 +105,8 @@ internal class Approvals(
         val change = flow.visible(operator, id)
         authority.require(operator, change.key, ControlActions.APPROVE)
         authority.requireBoundaryOperator(operator, change)
-        PublishRules.requireState(change, setOf(ChangeState.AWAITING_APPROVAL))
-        val rejected = flow.transition(id, setOf(ChangeState.AWAITING_APPROVAL)) {
+        PublishRules.requireState(change, ChangeStep.REJECT.from)
+        val rejected = flow.transition(id, ChangeStep.REJECT) {
             it.copy(state = ChangeState.REJECTED, findings = it.findings + Finding(APPROVAL, "$", reason, FORBIDDEN))
         }
         slots.release(rejected)
@@ -137,11 +136,11 @@ internal class Approvals(
         }
         val breakGlass = current.kind == ProvenanceKind.BREAK_GLASS
         if (breakGlass) {
-            PublishRules.requireState(current, OPEN)
+            PublishRules.requireState(current, ChangeStep.ABANDON.from)
             PublishRules.requireAudit(true, listeners.hasRequired)
             flow.audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
         }
-        val change = flow.transition(id, OPEN) { it.copy(state = ChangeState.ABANDONED) }
+        val change = flow.transition(id, ChangeStep.ABANDON) { it.copy(state = ChangeState.ABANDONED) }
         slots.release(change)
         if (!breakGlass) {
             flow.audit(ChangeEvent.Kind.ABANDONED, change.abandoned(), operator.actor)
