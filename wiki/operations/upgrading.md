@@ -1280,6 +1280,13 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   | `me.ahoo.cosec.runtime.event.ShadowListener` | `me.ahoo.cosec.runtime.shadow.ShadowListener` |
   | `me.ahoo.cosec.runtime.shadow.Candidates` | `me.ahoo.cosec.runtime.shadow.CachingCandidateSource` |
   | `me.ahoo.cosec.runtime.shadow.ShadowRecorder` | `me.ahoo.cosec.runtime.shadow.ShadowReporter` |
+- **The change log has a logger named on purpose.** `LoggingChangeListener` wrote the change log to the logger
+  `me.ahoo.cosec.control.audit.ChangeAudit`, a name that came from the file it was in; it now writes to
+  `me.ahoo.cosec.control.audit` (`LoggingChangeListener.LOGGER_NAME`), as the decision audit writes to
+  `me.ahoo.cosec.audit`. A logging configuration or a log shipper that routed or filtered the old name uses the new one
+  ([Control-plane change log](./observability.md#control-plane-change-log)). The line itself is unchanged. The dispatcher's
+  own warning, `Change listener [<name>] could not record <event>.`, is now logged by the logger of its own class,
+  `me.ahoo.cosec.control.audit.ChangeListeners`.
 - **A pipeline without Spring is built with `Pipeline.builder`.** `Pipeline.builder(authenticator, store)` compiles and
   installs the documents of a `SnapshotDocumentStore` as the starter does. `memberships`, `attributes`, `listener`,
   `rateLimiter`, `routes`, `ids`, `clock` and `forwardIdentity { … }` set the other parts; `options { … }`,

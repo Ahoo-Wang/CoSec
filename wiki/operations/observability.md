@@ -218,7 +218,7 @@ The control plane emits a change event for every step of a change: `PROPOSED`, `
 revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
 content. Change listeners receive them.
 
-- **The default listener** logs each event at `INFO`, as
+- **The default listener** logs each event at `INFO` to the logger `me.ahoo.cosec.control.audit`, as
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`.
   Change listeners add up: every `ChangeListener` bean is registered, and the log listener is left out only when the
   application declares a `LoggingChangeListener` bean of its own.
@@ -272,7 +272,8 @@ producer with `acks=all`). With `delivery=required`, startup fails when the Kafk
 | `me.ahoo.cosec.runtime` | `Request [<requestId>] failed with an unmodelled exception.` at `ERROR` with the stack trace, for every `500`; `REQUIRED` listener failures; dropped events; attribute providers that fail (`<provider> failed to fetch [...]` at `WARN`, at most every 10 seconds per provider: each decision carries the cause); rate limiters that cannot count |
 | `me.ahoo.cosec.runtime.snapshot` | loading, lag, lost and regressed documents ([Snapshot health](#snapshot-health)) |
 | `me.ahoo.cosec.spring.boot` | the startup checks, such as the `!!!` eviction warning; `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO` when the application declares no `BlacklistSource` ([Blacklist](../guide/security-model.md#blacklist)); `ip2region databases: [<versions>].` at `INFO`, naming the IP versions without a database, whose addresses are unavailable; the `WARN` of a service in gateway mode ([Services behind the gateway](./deployment.md#services-behind-the-gateway)) |
-| `me.ahoo.cosec.control` | the change log, and `Control API <method> <path> failed (request <requestId>).` for every control-plane `500` |
+| `me.ahoo.cosec.control.audit` | the change log: one `INFO` line per change event ([Control-plane change log](#control-plane-change-log)); route it as you route `me.ahoo.cosec.audit` |
+| `me.ahoo.cosec.control` | `Control API <method> <path> failed (request <requestId>).` for every control-plane `500`; and, under the logger of the class that writes it, `Change listener [<name>] could not record <event>.` at `WARN` |
 
 Correlate a response with its log lines, audit event and span through the `CoSec-Request-Id` response header, which is
 also the `requestId` of every problem body.

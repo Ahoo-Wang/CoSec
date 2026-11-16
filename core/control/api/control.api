@@ -52,12 +52,17 @@ public final class me/ahoo/cosec/control/audit/ChangeListener$DefaultImpls {
 }
 
 public final class me/ahoo/cosec/control/audit/LoggingChangeListener : me/ahoo/cosec/control/audit/ChangeListener {
+	public static final field Companion Lme/ahoo/cosec/control/audit/LoggingChangeListener$Companion;
+	public static final field LOGGER_NAME Ljava/lang/String;
 	public fun <init> ()V
 	public fun <init> (Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
 	public fun getName ()Ljava/lang/String;
 	public fun onChange (Lme/ahoo/cosec/control/audit/ChangeEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/control/audit/LoggingChangeListener$Companion {
 }
 
 public final class me/ahoo/cosec/control/audit/MovedHead {

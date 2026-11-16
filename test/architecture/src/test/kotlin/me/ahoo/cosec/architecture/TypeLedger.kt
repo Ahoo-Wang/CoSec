@@ -44,7 +44,6 @@ object TypeLedger {
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionView.kt" to family(RECORD, "a decision as the API shows it, with the statements and the trace entries it is made of"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentDiff.kt" to family(RECORD, "the diff of two revisions and the changes of each section"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Held.kt" to family(RECORD, "the documents a decision read, each as the cache held it"),
-        "core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeAudit.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorizer.kt" to family(PORT, "the control authorizer and the decision it returns"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeContext.kt" to family(OWN_EXCEPTION, "the change context"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantFragment.kt" to family(RECORD, "a grant fragment and who it is granted to"),
