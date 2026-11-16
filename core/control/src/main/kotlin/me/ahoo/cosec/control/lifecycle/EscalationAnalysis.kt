@@ -36,6 +36,7 @@ import me.ahoo.cosec.document.RoleExpansion
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Instant
@@ -239,8 +240,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
      * scoped to the app (N1). The approver sees whom the change reaches in which tenant, not only the app document. An
      * index or a head that cannot be read is a 503: an approval must not be asked for what cannot be shown.
      */
-    // B4: the referrer walk extracts into a function of its own
-    @Suppress("NestedBlockDepth", "TooGenericExceptionCaught")
+    @Suppress("TooGenericExceptionCaught")
     private suspend fun referringBindings(
         key: SnapshotKey.App,
         base: PolicyDocument?,
@@ -251,29 +251,42 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
         val widened = analyzer.widened(GrantDocuments.of(base), GrantDocuments.of(candidate))
         val found = ArrayList<Escalation>()
         for ((policy, statements) in widened) {
-            val referrers = documents.referrers(key, policy)
-            val tenants = referrers.filterIsInstance<SnapshotKey.Tenant>().sortedBy { it.tenantId }
-            for (tenant in tenants) {
-                val bindings = documents.head(
-                    tenant
-                )?.document?.let(RoleExpansion::effective)?.bindings.orEmpty().filter {
-                    it.policy == policy && it.scope.app == Match.Exactly(app)
-                }
-                for (binding in bindings) {
-                    // Only where the binding is: whom another tenant binds, and in which space, is not the author's.
-                    found += Escalation(
-                        "binding ${binding.id.value} of [$tenant]",
-                        Escalation.TENANT_BINDING,
-                        "[${policy.value}] statements $statements widen what this binding grants",
-                    )
-                }
-            }
+            found += referringBindings(key, app, policy, statements, documents)
         }
         found
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
         throw ChangeRejectedException(UNAVAILABLE, "the tenants referring to [$key] could not be read: ${e.message}", e)
+    }
+
+    /** The bindings to [policy] in [app] of each tenant document the back-reference index names, in tenant order. */
+    private suspend fun referringBindings(
+        key: SnapshotKey.App,
+        app: AppId,
+        policy: PolicyId,
+        statements: List<Int>,
+        documents: ChangeChecks.Context,
+    ): List<Escalation> {
+        val found = ArrayList<Escalation>()
+        val referrers = documents.referrers(key, policy)
+        val tenants = referrers.filterIsInstance<SnapshotKey.Tenant>().sortedBy { it.tenantId }
+        for (tenant in tenants) {
+            val bindings = documents.head(
+                tenant
+            )?.document?.let(RoleExpansion::effective)?.bindings.orEmpty().filter {
+                it.policy == policy && it.scope.app == Match.Exactly(app)
+            }
+            for (binding in bindings) {
+                // Only where the binding is: whom another tenant binds, and in which space, is not the author's.
+                found += Escalation(
+                    "binding ${binding.id.value} of [$tenant]",
+                    Escalation.TENANT_BINDING,
+                    "[${policy.value}] statements $statements widen what this binding grants",
+                )
+            }
+        }
+        return found
     }
 
     internal companion object {
