@@ -53,11 +53,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt",
-            499,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt",
             528,
             Disposition.Debt(Batch.B4),
