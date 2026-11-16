@@ -1,0 +1,17 @@
+# Rule: CTL-10
+# Mutant: a window closes as soon as it has enough samples, before its minimum duration
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ShadowWindowTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index 0b3ffb5b..016031b2 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -69,7 +69,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
+         val elapsed = java.time.Duration.between(state.startedAt, now)
+         val summary = when {
+             blocked -> ShadowSummary(counts, now, insufficient = false, blocked = true)
+-            elapsed >= options.minDuration && effective >= options.minSamples ->
++            effective >= options.minSamples ->
+                 ShadowSummary(counts, now, insufficient = false, blocked = false)
+             elapsed >= options.maxDuration -> ShadowSummary(counts, now, insufficient = true, blocked = false)
+             else -> null
