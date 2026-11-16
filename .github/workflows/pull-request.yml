@@ -17,11 +17,16 @@
 # - labels: path labels (.github/labeler.yml) plus a type label derived from the title, matching the
 #   release note categories in .github/release.yml.
 #
-# pull_request_target runs with the base branch's workflow and a write token so labels can be applied to
-# pull requests from forks. It never checks out or executes code from the pull request.
+# Runs on `pull_request`: it needs nothing the pull request's own head must not have, and `pull_request_target`, which
+# runs with a write token and secrets whatever the head is, is being restricted by GitHub (a scheduled brownout of its
+# default protection, enforced for good from December 2, 2026). Neither job checks out or executes pull request code.
+#
+# On a pull request from a fork `pull_request` gives the token no write access, so the Label job runs only for a branch
+# of this repository (it is skipped, not failed, otherwise): a fork's pull request has its title checked as before, and its
+# labels are applied by a maintainer or not at all.
 name: Pull Request
 on:
-  pull_request_target:
+  pull_request:
     types: [ opened, edited, synchronize, reopened ]
 
 permissions:
@@ -59,6 +64,7 @@ jobs:
 
   labels:
     name: Label
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

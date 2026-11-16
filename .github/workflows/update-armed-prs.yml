@@ -17,12 +17,15 @@ name: Update Armed Pull Requests
 # whenever the queue can move, this brings the oldest pull request with auto-merge enabled up to date, and CI then
 # merges it. One at a time: updating them all would rerun CI for every one each time another merges.
 #
-# Never checks out or runs pull request code, so `pull_request_target` is safe here: it reads metadata only.
+# Never checks out or runs pull request code: it reads metadata and updates a branch of this repository. It runs on
+# `pull_request`, not `pull_request_target` (which GitHub is restricting, enforced for good from December 2, 2026): the
+# personal access token below is a secret, which a pull request from a fork never gets, so the job is skipped for one
+# (and a fork's pull request is not updated by this workflow in any case: `armed` leaves cross-repository ones out).
 
 on:
   push:
     branches: [main]
-  pull_request_target:
+  pull_request:
     types: [auto_merge_enabled]
   workflow_run:
     workflows: [CI]
@@ -37,6 +40,7 @@ concurrency:
 
 jobs:
   update:
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
