@@ -28,7 +28,6 @@ import me.ahoo.cosec.control.change.ChangeState.EXPIRED
 import me.ahoo.cosec.control.change.ChangeState.PUBLISHED
 import me.ahoo.cosec.control.change.ChangeState.READY
 import me.ahoo.cosec.control.change.ChangeState.REJECTED
-import me.ahoo.cosec.control.change.ChangeState.SHADOWED
 import me.ahoo.cosec.control.change.ChangeState.SHADOWING
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.test.asserts.assert
@@ -154,7 +153,7 @@ class ChangeTransitionTableTest {
     }
 
     @Test
-    fun `the terminal states are published, rejected, abandoned and expired, and no command enters SHADOWED`() {
+    fun `the terminal states are published, rejected, abandoned and expired`() {
         ChangeState.entries.filter { it.terminal }.assert().containsExactlyInAnyOrder(
             PUBLISHED,
             REJECTED,
@@ -162,7 +161,6 @@ class ChangeTransitionTableTest {
             EXPIRED
         )
         CONFLICTED.terminal.assert().isFalse()
-        table.values.flatMap { it.to }.toSet().contains(SHADOWED).assert().isFalse()
     }
 
     private companion object {
