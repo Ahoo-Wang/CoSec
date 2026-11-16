@@ -43,14 +43,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
-/** A change operation the control API refuses, with the HTTP [status] it answers (RFC 0007 §10.2). */
-@InternalCoSecApi
-class ChangeRejectedException(
-    val status: Int,
-    message: String,
-    cause: Throwable? = null
-) : RuntimeException(message, cause)
-
 /**
  * Change requests and their state machine (RFC 0007 §6.1): propose, check, stage, rebase, publish, abandon, `apply`
  * and rollback, over a [ControlStore] and its [Revisions].

@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index b2a61126..60470587 100644
+index 6be8bc1f..5b9d6c16 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -547,9 +547,6 @@ class Changes(
+@@ -576,9 +576,6 @@ class Changes(
          // round trip between that read and the write, plus any pause of this instance between them (a GC, say); the
          // write is conditional on the base, not on the slot. A change preempted within it still publishes, and the one
          // that took the slot conflicts on the moved base ([movedOn]).
@@ -16,7 +16,7 @@ index b2a61126..60470587 100644
          audit(ChangeEvent.Kind.PUBLISHING, change.publishedAgain(publisher, again), publisher.actor)
          var published: ChangeRequest? = null
          var slotLost = false
-@@ -558,7 +555,6 @@ class Changes(
+@@ -587,7 +584,6 @@ class Changes(
              head,
              candidate,
              PublishRules.publication(change, publisher, rechecked),

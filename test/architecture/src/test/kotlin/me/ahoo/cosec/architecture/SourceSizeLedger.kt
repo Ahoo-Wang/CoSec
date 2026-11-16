@@ -43,7 +43,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt",
-            934,
+            926,
             Disposition.Debt(Batch.B4),
         ),
         Entry(

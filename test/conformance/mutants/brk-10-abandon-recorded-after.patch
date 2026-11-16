@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 3a1cb325..f10edcaf 100644
+index 6be8bc1f..7c49e180 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -505,7 +505,7 @@ class Changes(
+@@ -497,7 +497,7 @@ class Changes(
          if (breakGlass) {
              PublishRules.requireState(current, OPEN)
              PublishRules.requireAudit(true, listeners.hasRequired)

@@ -87,7 +87,3 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
 /** Every instance that has reported on a window so far, and its [summary] once it may close. */
 @InternalCoSecApi
 class ShadowLook(val reporters: Set<String>, val summary: ShadowSummary?)
-
-/** How many of the [recent] instances report [revision] of a document installed. */
-@InternalCoSecApi
-data class Propagation(val revision: Long, val installed: Int, val recent: Int)
