@@ -20,9 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.engine.trace.EvaluationTrace
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
-import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionInput
-import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.Scope
 
@@ -73,47 +71,6 @@ class EngineRequest(
     val external: ExternalValues = ExternalValues.NONE,
 )
 
-/** A host that has no attributes of its own: every read is absent. */
-@InternalCoSecApi
-object AbsentAttributes : ConditionInput {
-    override fun string(attribute: Attribute): String? = null
-
-    override fun bool(attribute: Attribute): Boolean? = null
-
-    override fun stringSet(attribute: Attribute): Set<String>? = null
-
-    override fun ip(attribute: Attribute): IpAddress? = null
-
-    override fun time(attribute: Attribute): Long = ConditionInput.NO_TIME
-}
-
 /** [trace] is null at [TraceLevel.OFF]. */
 @InternalCoSecApi
 class Evaluation(val decision: Decision, val trace: EvaluationTrace?)
-
-/** The default [Engine]: stateless and thread-safe. */
-@InternalCoSecApi
-object CoSecEngine : Engine {
-    internal val IMPLICIT_DENY: Decision = Decision.Deny(null)
-    private val IMPLICIT_DENY_EVALUATION = Evaluation(IMPLICIT_DENY, null)
-
-    override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation {
-        snapshot.checkScope(request.scope)
-        // Two call sites, so the untraced one never shares a type profile with the traced one.
-        if (trace == TraceLevel.OFF) {
-            return untraced(Evaluator(request, snapshot).evaluate())
-        }
-        return TracingEvaluator(request, snapshot, trace).evaluateTraced()
-    }
-
-    override fun plan(request: EngineRequest, snapshot: SnapshotView): AttributePlan {
-        snapshot.checkScope(request.scope)
-        if (!snapshot.readsExternal) {
-            return AttributePlan.EMPTY
-        }
-        return AttributePlanner(request, snapshot).plan()
-    }
-
-    internal fun untraced(decision: Decision): Evaluation =
-        if (decision === IMPLICIT_DENY) IMPLICIT_DENY_EVALUATION else Evaluation(decision, null)
-}

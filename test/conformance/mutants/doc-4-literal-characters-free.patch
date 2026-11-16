@@ -2,11 +2,11 @@
 # Mutant: a glob segment costs only its tokens, so a long literal compared at every position is free
 # Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
-index fa9ba2a3..d46ae21e 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt
-@@ -262,7 +262,7 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/SegmentGlob.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/SegmentGlob.kt
+index 136afa5f..c73c1149 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/SegmentGlob.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/SegmentGlob.kt
+@@ -34,7 +34,7 @@ internal class SegmentGlob(private val tokens: Array<GlobToken>) {
      val size: Int get() = tokens.size
  
      /** What it costs a document's budget (`DOC-4`): its tokens and the characters of its literals. */

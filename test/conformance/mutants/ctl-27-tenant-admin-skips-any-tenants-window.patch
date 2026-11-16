@@ -2,10 +2,11 @@
 # Mutant: cosec:tenant-admin skips the window of any tenant's document, not only its own
 # Tests: :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledPolicy.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledPolicy.kt
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledPolicy.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledPolicy.kt
-@@ -195,7 +195,6 @@ object BuiltinPolicies {
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BuiltinPolicies.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BuiltinPolicies.kt
+index 1ca6c51d..c0e13831 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BuiltinPolicies.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/BuiltinPolicies.kt
+@@ -95,7 +95,6 @@ object BuiltinPolicies {
                  Effect.ALLOW,
                  listOf("cosec:skip-shadow"),
                  listOf(ResourceSource("doc/tenant/{t}")),

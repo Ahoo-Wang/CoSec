@@ -210,16 +210,8 @@ class SchemaConformanceTest {
         if (file.name == DocumentFormats.IDENTITY) {
             (document.get("auth") as? ObjectNode)?.let(::consistentCredential)
         }
-        if (file.name == DocumentFormats.SNAPSHOT_DOCUMENT && document.has("catalog")) {
-            document.get("bindings")?.values()?.map { it.get("subject") }?.filterIsInstance<ObjectNode>()
-                ?.filter { it.has("principal") && !it.has("tenant") }?.forEach { it.put("tenant", "acme") }
-        }
-        val entries = when (file.name) {
-            DocumentFormats.SNAPSHOT_DOCUMENT -> document.get("policies")?.values()?.toList().orEmpty()
-            else -> emptyList()
-        }
-        entries.forEachIndexed { index, entry ->
-            (entry as tools.jackson.databind.node.ObjectNode).put("id", "${entry.get("id").asString()}-$index")
+        if (file.name == DocumentFormats.SNAPSHOT_DOCUMENT) {
+            selfConsistentSnapshotDocument(document)
         }
         return document
     }

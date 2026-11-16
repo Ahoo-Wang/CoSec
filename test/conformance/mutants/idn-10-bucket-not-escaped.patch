@@ -2,11 +2,11 @@
 # Mutant: a rate limit key value with an unpaired surrogate counts in the bucket of the value with ? in its place
 # Tests: :engine:test --tests me.ahoo.cosec.engine.RateLimitObligationTest :cocache:test --tests me.ahoo.cosec.cocache.UnpairedSurrogateKeyTest
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt
-index abb60a5f..21e8dfa3 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/RateLimits.kt
-@@ -74,7 +74,7 @@ class CompiledRateLimit internal constructor(
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
+index d9ce0047..0d81e0a6 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledRateLimit.kt
+@@ -64,7 +64,7 @@ class CompiledRateLimit internal constructor(
           * escape: well formed, and its own.
           */
          fun keyedBucket(value: String): String {
