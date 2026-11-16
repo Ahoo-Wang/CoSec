@@ -41,7 +41,6 @@ object TypeLedger {
         "api/api/src/main/kotlin/me/ahoo/cosec/api/audit/AuditEvent.kt" to family(RECORD, "the audit record"),
         "api/api/src/main/kotlin/me/ahoo/cosec/api/context/SecurityContext.kt" to family(RECORD, "the security context, its scope and the identity a gateway forwarded"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessReport.kt" to family(RECORD, "an access report"),
-        "core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlaneResults.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeAudit.kt" to Disposition.Debt(Batch.B4),

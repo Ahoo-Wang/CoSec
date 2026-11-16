@@ -53,11 +53,6 @@ object SourceSizeLedger {
             Disposition.Stays("migrate's one-off conversion of 7.x data, run once per deployment"),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt",
-            778,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
             583,
             Disposition.Debt(Batch.B4),
