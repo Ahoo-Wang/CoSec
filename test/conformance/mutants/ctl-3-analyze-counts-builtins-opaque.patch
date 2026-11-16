@@ -2,11 +2,11 @@
 # Mutant: an access review counts a binding of a built-in control-plane policy as opaque
 # Tests: :control:test --tests me.ahoo.cosec.control.api.BuiltinAccessReviewTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-index c15df066..7a5eaf55 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -341,7 +341,7 @@ class DefaultControlPlane(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
+index 2c6fc8ac..64ec4753 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
+@@ -80,7 +80,7 @@ internal class AccessAnalysis(
          entry: DocumentCache.Entry,
          platform: DocumentCache.Entry?,
          app: DocumentCache.Entry?,
