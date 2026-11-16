@@ -17,29 +17,30 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.control.change.ApprovalCodec.approval
+import me.ahoo.cosec.control.change.ApprovalCodec.approvalTree
+import me.ahoo.cosec.control.change.ChangeJson.actor
+import me.ahoo.cosec.control.change.ChangeJson.actorTree
+import me.ahoo.cosec.control.change.ChangeJson.factory
+import me.ahoo.cosec.control.change.ChangeJson.malformed
+import me.ahoo.cosec.control.change.ChangeJson.need
+import me.ahoo.cosec.control.change.ChangeJson.only
+import me.ahoo.cosec.control.change.ChangeJson.printable
+import me.ahoo.cosec.control.change.ChangeJson.text
+import me.ahoo.cosec.control.change.OperationCodec.operation
+import me.ahoo.cosec.control.change.OperationCodec.operationTree
+import me.ahoo.cosec.control.change.ShadowStateCodec.shadow
+import me.ahoo.cosec.control.change.ShadowStateCodec.shadowTree
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.model.BindingId
-import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.model.RoleId
-import me.ahoo.cosec.model.SpaceId
-import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.model.condition.Attribute
-import me.ahoo.cosec.model.condition.ConditionLimits
-import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
-import tools.jackson.databind.node.ArrayNode
-import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 import java.time.Instant
 
@@ -49,20 +50,9 @@ import java.time.Instant
  * with the same entries, digests included. Reading is strict: anything else is a [SnapshotFormatException], whose
  * message escapes control characters, a document key of an app no key can name included (SCP-10).
  */
-// B4: the codec splits by record
-@Suppress("TooManyFunctions")
 @ExperimentalCoSecApi
 object ChangeRequestCodec {
     private val SHOWN_APPROVAL_FIELDS = listOf("approver", "at", "candidate", "covers")
-    private val LIMIT_FIELDS = listOf(
-        "maxNodes",
-        "maxDepth",
-        "maxInValues",
-        "maxCidrBlocks",
-        "maxLiteralBytes",
-        "maxCost"
-    )
-    private val factory = JsonNodeFactory.instance
     private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
     fun encode(change: ChangeRequest): ByteArray = CoSecJson.mapper.writeValueAsBytes(tree(change))
@@ -133,6 +123,7 @@ object ChangeRequestCodec {
     }
 
     /** The escalations and the approval of [change] (RFC 0007 §7.5); neither is written while there is none. */
+
     private fun approvalTree(root: ObjectNode, change: ChangeRequest) {
         if (change.escalations.isNotEmpty()) {
             val escalations = root.putArray("escalations")
@@ -143,100 +134,6 @@ object ChangeRequestCodec {
         change.approval?.let { approvalTree(root.putObject("approval"), it) }
     }
 
-    /** Every field, always: `null` where the approver held no memberships or its credential did not say (RC1-11). */
-    private fun approvalTree(node: ObjectNode, approval: Approval) {
-        node.set("approver", actorTree(approval.approver))
-        node.put("at", approval.at.toString()).put("candidate", approval.candidate)
-        node.putArray("covers").apply { approval.covers.forEach { add(it) } }
-        membershipsTree(node, approval.memberships)
-        val attributes = node.putObject("attributes")
-        approval.attributes.forEach { (name, value) -> attributes.set(name, attributeTree(value)) }
-        node.put("principalBindings", approval.principalBindings).put("breakGlass", approval.breakGlass)
-        node.set("credentialId", approval.credentialId?.let(factory::stringNode) ?: factory.nullNode())
-        node.set("issuedAt", approval.issuedAt?.let { factory.stringNode(it.toString()) } ?: factory.nullNode())
-    }
-
-    private fun membershipsTree(node: ObjectNode, memberships: Memberships?) {
-        if (memberships == null) {
-            node.putNull("memberships")
-            return
-        }
-        val written = node.putObject("memberships")
-        val roles = written.putObject("roles")
-        memberships.roles.forEach { (space, spaceRoles) ->
-            roles.putArray(space.value).apply { spaceRoles.forEach { add(it.value) } }
-        }
-        written.putArray("attachments").apply { memberships.attachments.forEach { add(it.value) } }
-        written.put("source", memberships.source.name)
-    }
-
-    /**
-     * An approver's attribute as JSON (round-2 review R2): of its own type where JSON has one, so that it reads back
-     * as the same value; anything else as the text the engine reads of it (`subject.attributes.<name>` is its string).
-     */
-    private fun attributeTree(value: Any?): JsonNode = when (value) {
-        null -> factory.nullNode()
-        is Map<*, *> -> factory.objectNode().apply {
-            value.forEach { (name, item) -> set(name.toString(), attributeTree(item)) }
-        }
-        is Iterable<*> -> factory.arrayNode().apply { value.forEach { add(attributeTree(it)) } }
-        is Array<*> -> factory.arrayNode().apply { value.forEach { add(attributeTree(it)) } }
-        else -> scalarTree(value)
-    }
-
-    private fun scalarTree(value: Any): JsonNode = when (value) {
-        is String -> factory.stringNode(value)
-        is Boolean -> factory.booleanNode(value)
-        is Int, is Short, is Byte -> factory.numberNode((value as Number).toInt())
-        is Long -> factory.numberNode(value)
-        is Float -> factory.numberNode(value)
-        is Double -> factory.numberNode(value)
-        is java.math.BigInteger -> factory.numberNode(value)
-        is java.math.BigDecimal -> factory.numberNode(value)
-        else -> factory.stringNode(value.toString())
-    }
-
-    private fun attribute(node: JsonNode): Any? = when {
-        node.isNull -> null
-        node.isString -> node.text()
-        node.isBoolean -> node.booleanValue()
-        node.isIntegralNumber -> if (node.canConvertToLong()) node.longValue() else node.bigIntegerValue()
-        node.isBigDecimal -> node.decimalValue()
-        node.isFloatingPointNumber -> node.doubleValue()
-        node.isArray -> node.values().map(::attribute)
-        node.isObject -> node.properties().associate { (name, item) -> name to attribute(item) }
-        else -> throw SnapshotFormatException("An approver's attribute is not a JSON value: $node")
-    }
-
-    private fun memberships(node: JsonNode): Memberships {
-        node.only("roles", "attachments", "source")
-        val roles = LinkedHashMap<SpaceId, Set<RoleId>>()
-        node.need("roles").properties().forEach { (space, spaceRoles) ->
-            roles[SpaceId(space)] = spaceRoles.values().mapTo(LinkedHashSet()) { RoleId(it.text()) }
-        }
-        return Memberships(
-            Memberships.Source.valueOf(node.need("source").text()),
-            roles,
-            node.need("attachments").values().map { PolicyId(it.text()) },
-        )
-    }
-
-    private fun shadowTree(shadow: ShadowState): ObjectNode {
-        val node = factory.objectNode().put("window", shadow.window).put("startedAt", shadow.startedAt.toString())
-        shadow.closed?.let { closed ->
-            val summary = node.putObject("closed")
-                .put("closedAt", closed.closedAt.toString())
-                .put("insufficient", closed.insufficient)
-                .put("blocked", closed.blocked)
-            val counts = summary.putObject("counts")
-            closed.counts.toSortedMap().forEach { (outcome, count) -> counts.put(outcome, count) }
-        }
-        if (shadow.reporters.isNotEmpty()) {
-            node.putArray("reporters").apply { shadow.reporters.sorted().forEach { add(it) } }
-        }
-        return node
-    }
-
     private fun confirmation(node: JsonNode): Confirmation {
         node.only("policy", "statement", "digest", "kind")
         return Confirmation(
@@ -245,100 +142,6 @@ object ChangeRequestCodec {
             node.need("digest").text(),
             node.need("kind").text()
         )
-    }
-
-    private fun shadow(node: JsonNode): ShadowState {
-        node.only("window", "startedAt", "closed", "reporters")
-        return ShadowState(
-            node.need("window").text(),
-            Instant.parse(node.need("startedAt").text()),
-            node.get("closed")?.let { closed ->
-                closed.only("counts", "closedAt", "insufficient", "blocked")
-                ShadowSummary(
-                    closed.need("counts").properties().associate { (outcome, count) -> outcome to count.asLong() },
-                    Instant.parse(closed.need("closedAt").text()),
-                    closed.need("insufficient").asBoolean(),
-                    closed.need("blocked").asBoolean(),
-                )
-            },
-            node.get("reporters")?.values()?.mapTo(LinkedHashSet()) { it.text() }.orEmpty(),
-        )
-    }
-
-    private fun actorTree(actor: Actor): ObjectNode =
-        factory.objectNode().put("tenant", actor.tenant.value).put("principal", actor.principal.value)
-
-    private fun actor(node: JsonNode): Actor {
-        node.only("tenant", "principal")
-        return Actor(TenantId(node.need("tenant").text()), PrincipalId(node.need("principal").text()))
-    }
-
-    private fun operationTree(operation: Operation, kind: DocumentKind, owner: String): ObjectNode {
-        val item = factory.objectNode()
-        when (operation) {
-            is Operation.PutPolicy -> item.put(
-                "op",
-                "putPolicy"
-            ).set("policy", PolicyDocumentCodec.policyTree(operation.policy))
-            is Operation.RemovePolicy -> item.put("op", "removePolicy").put("id", operation.id.value)
-            is Operation.PutBinding -> item.put("op", "putBinding")
-                .set("binding", PolicyDocumentCodec.bindingTree(operation.binding, kind, owner))
-
-            is Operation.RemoveBinding -> item.put("op", "removeBinding").put("id", operation.id.value)
-            is Operation.PutRateLimit -> item.put("op", "putRateLimit")
-                .set("rateLimit", PolicyDocumentCodec.rateLimitTree(operation.rule))
-
-            is Operation.RemoveRateLimit -> item.put("op", "removeRateLimit").put("id", operation.id)
-            is Operation.PutRole -> item.put("op", "putRole").set("role", PolicyDocumentCodec.roleTree(operation.role))
-            is Operation.RemoveRole -> item.put("op", "removeRole").put("id", operation.id.value)
-            is Operation.PutCatalog, is Operation.SetLimits, is Operation.SetAttributes, is Operation.SetBoundary ->
-                sectionTree(item, operation)
-        }
-        ifMatchOf(operation)?.let { item.put("ifMatch", it) }
-        return item
-    }
-
-    private fun sectionTree(item: ObjectNode, operation: Operation) {
-        when (operation) {
-            is Operation.PutCatalog -> item.put("op", "putCatalog")
-                .also { operation.catalog?.let { item.set("catalog", PolicyDocumentCodec.catalogTree(it)) } }
-
-            is Operation.SetLimits -> item.put(
-                "op",
-                "setLimits"
-            ).also { operation.limits?.let { item.set("limits", limitsTree(it)) } }
-            is Operation.SetAttributes -> item.put("op", "setAttributes")
-                .also { operation.attributes?.let { item.set("attributes", attributesTree(it)) } }
-
-            is Operation.SetBoundary -> item.put("op", "setBoundary")
-                .also { operation.boundary?.let { item.put("boundary", it.value) } }
-
-            else -> error("Not a section operation: $operation")
-        }
-    }
-
-    private fun ifMatchOf(operation: Operation): String? = when (operation) {
-        is Operation.PutPolicy -> operation.ifMatch
-        is Operation.RemovePolicy -> operation.ifMatch
-        is Operation.PutBinding -> operation.ifMatch
-        is Operation.RemoveBinding -> operation.ifMatch
-        is Operation.PutRateLimit -> operation.ifMatch
-        is Operation.RemoveRateLimit -> operation.ifMatch
-        is Operation.PutRole -> operation.ifMatch
-        is Operation.RemoveRole -> operation.ifMatch
-        else -> null
-    }
-
-    private fun limitsTree(limits: ConditionLimits): ObjectNode = factory.objectNode()
-        .put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
-        .put("maxInValues", limits.maxInValues).put("maxCidrBlocks", limits.maxCidrBlocks)
-        .put("maxLiteralBytes", limits.maxLiteralBytes).put("maxCost", limits.maxCost)
-
-    private fun attributesTree(attributes: List<Attribute>): ArrayNode = factory.arrayNode().apply {
-        attributes.forEach { attribute ->
-            val type = PolicyDocumentCodec.ATTRIBUTE_TYPES.entries.first { it.value == attribute.type }.key
-            addObject().put("path", attribute.path).put("type", type)
-        }
     }
 
     private fun change(node: JsonNode): ChangeRequest {
@@ -390,41 +193,6 @@ object ChangeRequestCodec {
         )
     }
 
-    private fun approval(node: JsonNode): Approval {
-        node.only(
-            "approver",
-            "at",
-            "candidate",
-            "covers",
-            "memberships",
-            "attributes",
-            "principalBindings",
-            "breakGlass",
-            "credentialId",
-            "issuedAt",
-        )
-        return Approval(
-            actor(node.need("approver")),
-            Instant.parse(node.need("at").text()),
-            node.need("candidate").text(),
-            node.need("covers").values().map { covered -> covered.text() },
-            node.need("memberships").takeUnless { it.isNull }?.let(::memberships),
-            node.need("attributes").members().mapNotNull { (name, value) ->
-                attribute(value)?.let { read -> name to read }
-            }.toMap(),
-            principalBindings = node.need("principalBindings").flag(),
-            breakGlass = node.need("breakGlass").flag(),
-            credentialId = node.need("credentialId").textOrNull(),
-            issuedAt = node.need("issuedAt").textOrNull()?.let(Instant::parse),
-        )
-    }
-
-    private fun JsonNode.members() = if (isObject) properties() else malformed("$this is not an object")
-
-    private fun JsonNode.flag(): Boolean = if (isBoolean) booleanValue() else malformed("$this is not a boolean")
-
-    private fun JsonNode.textOrNull(): String? = if (isNull) null else text()
-
     /** An operation as the control API's request bodies write it: the stored form (RFC 0007 §10.2). */
     @InternalCoSecApi
     fun operation(key: SnapshotKey, node: JsonNode): Operation = guarded {
@@ -437,47 +205,6 @@ object ChangeRequestCodec {
 
     /** `platform`, `app:<id>` or `tenant:<id>`, as the control API's paths write a document. */
     fun documentKeyOf(text: String): SnapshotKey = guarded { documentKey(text) }
-
-    private fun operation(node: JsonNode, kind: me.ahoo.cosec.model.decision.DocumentKind, owner: String): Operation {
-        val ifMatch = node.get("ifMatch")?.text()
-        return when (val op = node.need("op").text()) {
-            "putPolicy" -> Operation.PutPolicy(PolicyDocumentCodec.decodePolicy(node.need("policy")), ifMatch)
-            "removePolicy" -> Operation.RemovePolicy(PolicyId(node.need("id").text()), ifMatch)
-            "putBinding" -> Operation.PutBinding(
-                PolicyDocumentCodec.decodeBinding(node.need("binding"), kind, owner),
-                ifMatch
-            )
-            "removeBinding" -> Operation.RemoveBinding(BindingId(node.need("id").text()), ifMatch)
-            "putRateLimit" -> Operation.PutRateLimit(
-                PolicyDocumentCodec.decodeRateLimit(node.need("rateLimit")),
-                ifMatch
-            )
-            "removeRateLimit" -> Operation.RemoveRateLimit(node.need("id").text(), ifMatch)
-            "putRole" -> Operation.PutRole(PolicyDocumentCodec.decodeRole(node.need("role"), kind), ifMatch)
-            "removeRole" -> Operation.RemoveRole(RoleId(node.need("id").text()), ifMatch)
-            else -> section(node, op)
-        }
-    }
-
-    /** The operations on a document's sections, which have no `ifMatch`. */
-    private fun section(node: JsonNode, op: String): Operation {
-        return when (op) {
-            "putCatalog" -> Operation.PutCatalog(node.get("catalog")?.let { PolicyDocumentCodec.decodeCatalog(it) })
-            "setLimits" -> Operation.SetLimits(node.get("limits")?.let(::limits))
-            "setBoundary" -> Operation.SetBoundary(node.get("boundary")?.let { PolicyId(it.text()) })
-            // The document format's rules, so a section never reads a value its document would refuse (#1275).
-            "setAttributes" -> Operation.SetAttributes(
-                node.get("attributes")?.let { PolicyDocumentCodec.decodeAttributes(it, "\$.attributes") }
-            )
-
-            else -> malformed("unknown operation [$op]")
-        }
-    }
-
-    /** Limits as the document format reads them, with none left to its default: an operation states all six. */
-    private fun limits(node: JsonNode): ConditionLimits = PolicyDocumentCodec.decodeLimits(node, "\$.limits").also {
-        LIMIT_FIELDS.forEach { field -> node.need(field) }
-    }
 
     private fun documentKey(text: String): SnapshotKey = when {
         text == "platform" -> SnapshotKey.Platform
@@ -507,21 +234,4 @@ object ChangeRequestCodec {
     } catch (error: IllegalArgumentException) {
         throw SnapshotFormatException("A change request is malformed: ${printable(error.message)}", error)
     }
-
-    private fun JsonNode.need(name: String): JsonNode = get(name) ?: malformed("[$name] is missing")
-
-    private fun JsonNode.text(): String = if (isString) asString() else malformed("$this is not a string")
-
-    private fun JsonNode.only(vararg names: String) {
-        if (!isObject) malformed("$this is not an object")
-        val unknown = properties().map { it.key }.toSet() - names.toSet()
-        if (unknown.isNotEmpty()) malformed("unknown fields $unknown")
-    }
-
-    /** [text], stored content quoted in a message, with its control characters escaped (RC1-15). */
-    private fun printable(text: String?): String = SnapshotKeyText.printable(text.orEmpty())
-
-    private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
-        "A change request is malformed: ${printable(reason)}."
-    )
 }

@@ -59,11 +59,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt",
-            528,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt",
             500,
             Disposition.Stays("migrate's one-off translation of 7.x condition parts"),
