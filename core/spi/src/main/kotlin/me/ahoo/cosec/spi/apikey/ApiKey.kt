@@ -61,7 +61,9 @@ class ApiKey(
         }
         require(
             app == null || ScopeResolver.isValidAppId(app)
-        ) { "API key [$id] declares an app that cannot be an app id." }
+        ) {
+            "API key [${Identifiers.printable(id)}] declares an app that cannot be an app id: [${app?.let(Identifiers::printable)}]."
+        }
     }
 
     /** Whether the key works at [now]: enabled, and not past [expiresAt]. */

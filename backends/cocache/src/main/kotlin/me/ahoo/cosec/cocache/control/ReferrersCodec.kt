@@ -45,15 +45,10 @@ internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
     override fun decode(bytes: ByteArray): Map<SnapshotKey, Long> {
         val root = read(bytes, WHAT)
         if (!root.isObject) malformed(WHAT, "$root is not an object")
-        val referrers = LinkedHashMap<SnapshotKey, Long>()
-        for ((text, revision) in root.properties()) {
+        return root.properties().associateTo(LinkedHashMap()) { (text, revision) ->
             val value = revision.long(WHAT)
             if (value < 0) malformed(WHAT, "revision $value of [$text] is negative")
-            // A document of an id no longer valid (`/`, #1403) is read by nothing, so its reference holds nothing back.
-            val key = SnapshotKeyEncoder.decode(text)
-                ?: if (SnapshotKeyEncoder.retired(text)) continue else malformed(WHAT, "[$text] is not a document key")
-            referrers[key] = value
+            (SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")) to value
         }
-        return referrers
     }
 }

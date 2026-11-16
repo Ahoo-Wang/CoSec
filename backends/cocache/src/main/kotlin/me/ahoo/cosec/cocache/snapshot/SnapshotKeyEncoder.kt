@@ -35,18 +35,6 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
         is SnapshotKey.Tenant -> TENANT_PREFIX + key.tenantId
     }
 
-    /**
-     * Whether [encoded] is an app or tenant key whose id is no longer valid: written by an earlier version, such as an id
-     * with `/` (#1403). It names no document any instance reads.
-     */
-    fun retired(encoded: String): Boolean = when {
-        encoded.startsWith(APP_PREFIX) -> !SnapshotKey.App.isValidAppId(encoded.substring(APP_PREFIX.length))
-        encoded.startsWith(
-            TENANT_PREFIX
-        ) -> !SnapshotKey.Tenant.isValidTenantId(encoded.substring(TENANT_PREFIX.length))
-        else -> false
-    }
-
     /** The key [encoded] names, or null when it names none, such as an invalid app or tenant id. */
     fun decode(encoded: String): SnapshotKey? = when {
         encoded == PLATFORM -> SnapshotKey.Platform

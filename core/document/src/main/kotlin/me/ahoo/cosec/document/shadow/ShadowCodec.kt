@@ -94,9 +94,7 @@ object ShadowCodec {
             instance to InstanceStatus(
                 instance,
                 Instant.parse(node.need("at").text()),
-                // An entry an instance of an earlier version reported for an id no longer valid (`/`, #1403) names no
-                // document any instance can install now: left out, so the other instances' statuses still read.
-                node.need("documents").properties().filterNot { (key, _) -> retired(key) }.associate { (key, document) ->
+                node.need("documents").properties().associate { (key, document) ->
                     document.only("revision", "lagMillis")
                     documentKey(key) to InstalledDocument(document.need("revision").long(), Duration.ofMillis(document.need("lagMillis").long()))
                 },
@@ -217,11 +215,4 @@ object ShadowCodec {
     private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
         "A shadow value is malformed: ${printable(reason)}."
     )
-}
-
-/** A key of an app or tenant whose id is no longer valid: written by an earlier version, read by none. */
-private fun retired(text: String): Boolean = when {
-    text.startsWith("app:") -> !SnapshotKey.App.isValidAppId(text.removePrefix("app:"))
-    text.startsWith("tenant:") -> !SnapshotKey.Tenant.isValidTenantId(text.removePrefix("tenant:"))
-    else -> false
 }

@@ -33,6 +33,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.createLocked
+import me.ahoo.cosec.cocache.readRecord
 import me.ahoo.cosec.cocache.shadow.ShadowCacheSpecs
 import me.ahoo.cosec.cocache.shadow.StoredCandidateCodec
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
@@ -173,7 +174,7 @@ class CoCacheControlStore internal constructor(
         put(appLists, APP_LIST, expected, apps, digest(AppListCodec, apps)) is Put.Written
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
-        read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
+        read(references, ReferenceKey(target, policy), "The back-reference set of [$target] policy [${policy.value}]")?.let { (value, digest) -> Versioned(value, digest) }
 
     /**
      * Emptied referrers are written as empty, not deleted: the next writer always has a digest to name, and absent means
@@ -193,7 +194,7 @@ class CoCacheControlStore internal constructor(
     ) is Put.Written
 
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
-        read(changes, id)?.let { (value, digest) -> Versioned(value, digest) }
+        read(changes, id, "Change [${id.value}]")?.let { (value, digest) -> Versioned(value, digest) }
 
     /**
      * A change is listed open, with the time, before its first write and unlisted after the write that makes it
@@ -223,7 +224,7 @@ class CoCacheControlStore internal constructor(
         val expired = clock.instant().minus(missingGrace)
         val found = listed.entries.chunked(READ_BATCH).flatMap { batch ->
             coroutineScope {
-                batch.map { (id, listedAt) -> async { Triple(id, listedAt, read(changes, ChangeId(id))?.first) } }
+                batch.map { (id, listedAt) -> async { Triple(id, listedAt, read(changes, ChangeId(id), "Change [$id]")?.first) } }
                     .awaitAll()
             }
         }
@@ -394,12 +395,8 @@ class CoCacheControlStore internal constructor(
             null
         }
 
-    private suspend fun <K : Any, V : Any> read(cache: Store<K, V>, key: K): Pair<V, SnapshotDigest>? =
-        when (val read = cache.async().getIfChanged(key, null).await()) {
-            is ConditionalGet.Present -> read.value to snapshotDigest(read.digest)
-            ConditionalGet.Unchanged -> error("An unconditional read of [$key] was answered as unchanged.")
-            ConditionalGet.Absent -> null
-        }
+    private suspend fun <K : Any, V : Any> read(cache: Store<K, V>, key: K, name: String = "[$key]") =
+        cache.readRecord(key, name)?.let { (value, digest) -> value to snapshotDigest(digest) }
 
     companion object {
         private const val DOCUMENTS = "documents"
