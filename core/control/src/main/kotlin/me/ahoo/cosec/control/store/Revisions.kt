@@ -734,12 +734,8 @@ class Revisions(
         private val log = KotlinLogging.logger {}
         const val DEFAULT_MAX_ATTEMPTS: Int = 16
 
-        /** The document kind and owner of [key]: the platform, an app or a tenant document. */
-        fun ownerOf(key: SnapshotKey): Pair<DocumentKind, String> = when (key) {
-            SnapshotKey.Platform -> DocumentKind.PLATFORM to ""
-            is SnapshotKey.App -> DocumentKind.APP to key.appId
-            is SnapshotKey.Tenant -> DocumentKind.TENANT to key.tenantId
-        }
+        /** The document kind and owner of [key] ([me.ahoo.cosec.control.change.ownerOf], where the change values read it). */
+        fun ownerOf(key: SnapshotKey): Pair<DocumentKind, String> = me.ahoo.cosec.control.change.ownerOf(key)
 
         private fun requireDocumentKey(key: SnapshotKey): SnapshotKey = key.also { ownerOf(it) }
     }

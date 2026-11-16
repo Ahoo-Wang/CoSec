@@ -2,11 +2,11 @@
 # Mutant: the grant analysis trusts an app list with an entry that names no app document, so an app document it would miss is taken as none
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index e1898e26..20dde215 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -380,7 +380,7 @@ class ChangeAuthority(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
+index 103cfd2b..33277f85 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeAuthority.kt
+@@ -416,7 +416,7 @@ class ChangeAuthority(
                  }
              }
  

@@ -2,11 +2,11 @@
 # Mutant: a binding the head no longer has is a 404 before a stalled revoke of it is looked for, so a revoke whose answer was lost is never settled
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-index e3196acb..2002806b 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-@@ -105,14 +105,12 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
+index 3c3037ad..f8c3a452 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
+@@ -119,14 +119,12 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
          requireRequest(reason.isNotBlank()) { "Revoking break-glass needs a reason." }
          val operations = listOf(Operation.RemoveBinding(binding))
          changes.authority.authorize(operator, SnapshotKey.Platform, operations, ProvenanceKind.BREAK_GLASS)

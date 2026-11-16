@@ -2,11 +2,11 @@
 # Mutant: publishing or staging a break-glass change needs cosec:publish besides cosec:breakglass
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassAuthorityTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/PublishRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/PublishRules.kt
-index 060efe83..a7726909 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/PublishRules.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/PublishRules.kt
-@@ -40,7 +40,7 @@ internal object PublishRules {
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
+index e837b02f..320a70c7 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
+@@ -47,7 +47,7 @@ internal object PublishRules {
       * revoke `cosec:breakglass`, which is all RFC 0007 §8 asks of the person doing either in an emergency.
       */
      fun publishing(change: ChangeRequest): Action =

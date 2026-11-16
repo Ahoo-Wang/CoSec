@@ -30,8 +30,8 @@ import me.ahoo.cosec.model.condition.ConditionLimits
 
 /**
  * An entry-level operation of a change (RFC 0007 §10.1). [ifMatch], where an operation has one, is the
- * [EntryDigest] of the entry as the author last saw it: the operation applies only if the entry is still that, so a
- * replay on a newer head (a rebase) fails instead of overwriting what someone else changed.
+ * [me.ahoo.cosec.control.lifecycle.EntryDigest] of the entry as the author last saw it: the operation applies only if
+ * the entry is still that, so a replay on a newer head (a rebase) fails instead of overwriting what someone else changed.
  */
 @ExperimentalCoSecApi
 sealed interface Operation {

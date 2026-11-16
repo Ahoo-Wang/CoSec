@@ -26,10 +26,11 @@ import java.time.Instant
 /**
  * A change request (RFC 0007 §6.1): a base and the entry-level operations on it, with what the last check found.
  *
- * [candidate] is the digest of the candidate the last clean check accepted ([CandidateDigest]); approvals and shadow
- * reports are bound to it, so anything that changes the candidate voids them. [checkedWith] are the heads of the other
- * documents the candidate was compiled and analyzed with; publishing checks again on the current heads, and once it has
- * written, looks whether one of them moved in between (RC1-33).
+ * [candidate] is the digest of the candidate the last clean check accepted
+ * ([me.ahoo.cosec.control.lifecycle.CandidateDigest]); approvals and shadow reports are bound to it, so anything that
+ * changes the candidate voids them. [checkedWith] are the heads of the other documents the candidate was compiled and
+ * analyzed with; publishing checks again on the current heads, and once it has written, looks whether one of them moved
+ * in between (RC1-33).
  */
 @ExperimentalCoSecApi
 data class ChangeRequest(
