@@ -3,10 +3,10 @@
 # Tests: :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
-index 05fa2991..77636e39 100644
+index 8abae723..1eea9d6d 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
-@@ -237,7 +237,7 @@ internal object Operations {
+@@ -225,7 +225,7 @@ internal object Operations {
              limits = limits,
              attributes = attributes,
              boundary = boundary,

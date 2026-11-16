@@ -353,13 +353,3 @@ internal object Operations {
     const val UNPROCESSABLE: Int = 422
     const val PRECONDITION_FAILED: Int = 412
 }
-
-/** How [Changes.apply] treats what the desired document leaves out (RFC 0007 §6.7). */
-@InternalCoSecApi
-enum class ApplyMode {
-    /** Adds and changes only: entries and sections the desired document does not mention stay. */
-    MERGE,
-
-    /** The document becomes exactly the desired one. */
-    REPLACE,
-}

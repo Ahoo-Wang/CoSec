@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.StageReservationTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index bdd2a263..a6c822c2 100644
+index 6be8bc1f..b0f45e12 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -327,10 +327,10 @@ class Changes(
+@@ -329,10 +329,10 @@ class Changes(
          head: Head?,
          next: suspend (ChangeRequest) -> ChangeRequest,
      ): ChangeRequest {
