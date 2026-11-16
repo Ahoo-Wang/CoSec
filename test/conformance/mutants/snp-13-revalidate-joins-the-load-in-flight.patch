@@ -3,12 +3,12 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 2abc7dfc..2412185a 100644
+index 74f83fe9..85da13c7 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -330,7 +330,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-      * load ends, since that load may have read before what the caller wants seen (`SNP-13`). A document not installed
-      * at the call (one that failed with nothing installed, or still on its first load) is not part of it.
+@@ -327,7 +327,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+      * Revalidates every document installed at the call with a conditional read that starts after the call (`SNP-13`), a
+      * few at a time; a document not installed then (failed with nothing installed, or on its first load) is not.
       */
 -    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
 +    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.load() }
