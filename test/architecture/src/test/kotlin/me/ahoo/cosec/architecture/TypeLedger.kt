@@ -44,7 +44,7 @@ object TypeLedger {
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlPlaneResults.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/audit/ChangeAudit.kt" to Disposition.Debt(Batch.B4),
-        "core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt" to Disposition.Debt(Batch.B4),
+        "core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorizer.kt" to family(PORT, "the control authorizer and the decision it returns"),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Candidates.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeContext.kt" to family(OWN_EXCEPTION, "the change context"),
