@@ -37,7 +37,7 @@ internal class SlotModelRun(private val script: SlotModelScript) {
     private val options = SnapshotOptions(
         maxApps = 1,
         maxTenants = 1,
-        reloadConcurrency = 2,
+        reloadConcurrency = script.lanes,
     )
     private val model: SlotModel
     private val store: SlotModelStore
@@ -59,6 +59,7 @@ internal class SlotModelRun(private val script: SlotModelScript) {
         store = SlotModelStore({ moment[0] }, { threads.nanos })
         model = SlotModel(store, threads, options, FAMILY)
         compiler = model.Compiler(::recompile)
+        threads.onPeriodic = { model.masks(null) }
     }
 
     /** Runs the script; stops at the first violation. */
@@ -71,6 +72,12 @@ internal class SlotModelRun(private val script: SlotModelScript) {
             if (!step("e$index $event") { apply(event) }) return this
         }
         step("settle") { settle() }
+        if (failure == null) step("resets") { model.checkResets() }
+        if (failure == null && model.closedAt < 0) {
+            step(
+                "lag"
+            ) { SlotModelLag(script, store, threads, model, options, ::checkNow).run() }
+        }
         if (failure == null && model.closedAt < 0) step("converge") { converge() }
         if (failure == null) step("answered") { model.allAnswered("once the run settled") }
         if (store.reads.any { it.failed }) reached += "store read failed"
@@ -135,14 +142,17 @@ internal class SlotModelRun(private val script: SlotModelScript) {
     private fun onStore(event: SlotModelScript.Event) {
         val key = event.key
         when (event.kind) {
-            Kind.PUT -> write { store.put(key!!) }
-            Kind.REMOVE -> write { store.remove(key!!) }
-            Kind.CORRUPT -> write { store.corrupt(key!!) }
-            Kind.REGRESS -> write { if (store.regress(key!!)) reached += "store regressed" }
+            Kind.PUT -> write(key!!) { store.put(key) }
+            Kind.REMOVE -> write(key!!) { store.remove(key) }
+            Kind.CORRUPT -> write(key!!) { store.corrupt(key) }
+            Kind.REGRESS -> write(key!!) { if (store.regress(key)) reached += "store regressed" }
             Kind.FAIL_READS -> store.failure = IllegalStateException("scripted: the store cannot be read")
             Kind.HEAL_READS -> store.failure = null
             Kind.DROP_NEXT_NOTIFICATION -> dropNext = true
-            Kind.RESET -> store.reset()
+            Kind.RESET -> {
+                model.reset()
+                store.reset()
+            }
             Kind.RELEASE, Kind.RELEASE_LATE -> release(event)
             Kind.HANG -> pick(store.pending, event.pick)?.hung = true
             else -> error("not a store event: $event")
@@ -151,6 +161,7 @@ internal class SlotModelRun(private val script: SlotModelScript) {
 
     private fun onSource(event: SlotModelScript.Event) {
         val key = event.key
+        masks(event)
         when (event.kind) {
             Kind.REQUEST -> request(key!!, event.pick)
             Kind.REQUEST_SHARED -> model.handedOut("request", setOf(SHARED), options.coldLoadTimeout) { source.load() }
@@ -189,7 +200,24 @@ internal class SlotModelRun(private val script: SlotModelScript) {
         read.release(atStart = event.kind == Kind.RELEASE)
     }
 
-    private fun write(change: () -> Unit) {
+    /**
+     * What else than a reset may read a key during [event]: a reset is only shown to reload a key when nothing else
+     * started a read of it since ([SlotModel.checkResets]).
+     */
+    private fun masks(event: SlotModelScript.Event) {
+        when (event.kind) {
+            Kind.REVALIDATE, Kind.RECOMPILE, Kind.TICK -> model.masks(null)
+            Kind.REQUEST, Kind.RELOAD, Kind.SETTLED, Kind.PREWARM -> {
+                model.masks(event.key)
+                model.masks(SHARED)
+            }
+            Kind.REQUEST_SHARED -> model.masks(SHARED)
+            else -> Unit
+        }
+    }
+
+    private fun write(key: SnapshotKey, change: () -> Unit) {
+        if (!dropNext) model.masks(key)
         store.dropNotifications = dropNext
         dropNext = false
         change()
@@ -210,6 +238,7 @@ internal class SlotModelRun(private val script: SlotModelScript) {
     /** The family compiler's inputs change: the model's first, then the source is told, as a host does. */
     private fun recompile() {
         val keys = model.recompiledKeys()
+        model.masks(null)
         model.recompile()
         reached += "recompile"
         model.handedOut("recompile", keys) { source.recompile() }
@@ -227,6 +256,14 @@ internal class SlotModelRun(private val script: SlotModelScript) {
         model.allAnswered("after close")
     }
 
+    /** The model's checks after what just ran, between the steps of an event; false once one failed. */
+    private fun checkNow(): Boolean {
+        threads.thrown.filterNot { it is StackOverflowError }.forEach { model.violations += "a task threw $it" }
+        threads.thrown.clear()
+        model.afterEvent(source.entries(), closed)
+        return model.violations.isEmpty()
+    }
+
     /** Lets every read answer and every queued task run, firing each one-shot timer, until nothing waits. */
     private fun settle() {
         store.failure = null
@@ -242,7 +279,8 @@ internal class SlotModelRun(private val script: SlotModelScript) {
                 threads.housekeeping.tasks.isNotEmpty() -> threads.runHousekeeping(0)
                 else -> {
                     val next = threads.nextOneShot()?.takeIf { it <= horizon } ?: return
-                    threads.advance(Duration.ofNanos(next - threads.nanos))
+                    // Without the periodic pass: it would read every key, and hide a reset that read none.
+                    threads.advance(Duration.ofNanos(next - threads.nanos), periodic = false)
                 }
             }
             threads.thrown.filterNot { it is StackOverflowError }.forEach { model.violations += "a task threw $it" }

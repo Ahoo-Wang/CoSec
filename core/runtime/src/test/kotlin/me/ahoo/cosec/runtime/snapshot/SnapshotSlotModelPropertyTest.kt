@@ -59,6 +59,10 @@ class SnapshotSlotModelPropertyTest {
                 totals.coldTimeouts += coldTimeouts
                 totals.evictions += evictions
                 totals.regressions += regressions
+                totals.resetsChecked += resetsChecked
+                totals.lostWritesChecked += lostWritesChecked
+                if (resetsChecked > 0) reached.merge("reset reloads checked", 1, Int::plus)
+                if (lostWritesChecked > 0) reached.merge("lost invalidation installed by a pass", 1, Int::plus)
                 if (readTimeouts > 0) reached.merge("store read timed out", 1, Int::plus)
                 if (coldTimeouts > 0) reached.merge("request answered by its timeout", 1, Int::plus)
                 if (evictions > 0) reached.merge("eviction", 1, Int::plus)
@@ -70,7 +74,8 @@ class SnapshotSlotModelPropertyTest {
             "Slot model: ${seeds.size} seeds; seeds reaching each kind of event: $reached; checked " +
                 "${totals.installs} installs, ${totals.answered} answered waiters, ${totals.failures} compile failures, " +
                 "${totals.readTimeouts} store read timeouts, ${totals.coldTimeouts} request timeouts, " +
-                "${totals.evictions} evictions, ${totals.regressions} regressions"
+                "${totals.evictions} evictions, ${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
+                "${totals.lostWritesChecked} lost invalidations"
         )
         if (only == null) {
             // A property test that rarely gets past the first load proves little: each kind of event is reached.
@@ -132,6 +137,7 @@ class SnapshotSlotModelPropertyTest {
             "store read timed out", "request answered by its timeout", "eviction", "regression installed", "compile failed",
             "listener called in subscribe", "close mid-load", "recompile", "store regressed", "converged",
             "store read failed", "compile rejected", "abandoned read answered",
+            "reset reloads checked", "lost invalidation installed by a pass",
         )
     }
 }

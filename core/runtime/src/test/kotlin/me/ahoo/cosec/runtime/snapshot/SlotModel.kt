@@ -91,7 +91,18 @@ internal class SlotModel(
         var coldTimeouts = 0
         var evictions = 0
         var regressions = 0
+        var resetsChecked = 0
+        var lostWritesChecked = 0
     }
+
+    /** A reset of the change channel at [at]: each of [keys], installed then, is read again after it (`SNP-6`). */
+    private class Reset(val at: Long, val keys: Set<SnapshotKey>) {
+        /** Keys something else may have read since: a read of them proves nothing about the reset. */
+        val masked = HashSet<SnapshotKey>()
+        var maskedAll = false
+    }
+
+    private val resets = mutableListOf<Reset>()
 
     /** A future the source handed out, and what must hold when it completes. */
     inner class Obligation(val kind: String, val keys: Set<SnapshotKey>, private val deadline: Long?) {
@@ -183,6 +194,52 @@ internal class SlotModel(
     fun recompile() {
         inputs++
         recompiles += event
+    }
+
+    /** The store's change channel is reset now. */
+    fun reset() {
+        resets += Reset(event, installedKeys())
+    }
+
+    /**
+     * Something other than a reset may read [key] now, or every key when null (a pass, a revalidation, a recompile, a
+     * notified write, a request): a read after it no longer shows that the reset reloaded the key.
+     */
+    fun masks(key: SnapshotKey?) {
+        for (reset in resets) if (key == null) reset.maskedAll = true else reset.masked += key
+    }
+
+    /** Once the run has settled, before anything reads again: each key a reset covered and nothing else read was read. */
+    fun checkResets() {
+        for (reset in resets) {
+            if (reset.maskedAll || closedAt >= 0) continue
+            for (key in reset.keys - reset.masked) {
+                if ((evictedAt[key] ?: -1) >= reset.at) continue
+                counts.resetsChecked++
+                if (store.reads.none { it.key == key && it.startedAt >= reset.at }) {
+                    violations += "a reset at event ${reset.at} never read $key again"
+                }
+            }
+        }
+        resets.clear()
+    }
+
+    /** What [key] holds in the store now, as its entry should once the passes have reached it. */
+    fun servesCurrent(key: SnapshotKey): Boolean {
+        val entry = lastInstall[key] ?: return true
+        return when (val wanted = store.current(key)) {
+            is Content.Document -> entry.state is DocumentState.Present && entry.digest == wanted.digest
+            Content.Absent -> entry.origin.storedAbsent
+            Content.Undecodable -> entry.origin == EntryOrigin.UNDECODABLE
+        }
+    }
+
+    /** Whether [key] has an entry now (it may have been evicted). */
+    fun isInstalled(key: SnapshotKey): Boolean = key in lastInstall
+
+    /** A write of [key] whose notification was lost was checked to be installed in time. */
+    fun lostWriteChecked() {
+        counts.lostWritesChecked++
     }
 
     val metrics = object : SnapshotMetrics {
@@ -307,10 +364,29 @@ internal class SlotModel(
         }
         for (key in lastInstall.keys.toList()) {
             if (key !in byKey && !closed) {
+                checkEvicted(key)
                 lastInstall.remove(key)
                 evictedAt[key] = event
                 counts.evictions++
             }
+        }
+    }
+
+    /**
+     * `SNP-7`: an entry of a document the store holds goes only while its family holds more such entries than its bound,
+     * and one for a document the store does not hold only while there are more of those than `maxAbsent`: neither kind
+     * evicts the other.
+     */
+    private fun checkEvicted(key: SnapshotKey) {
+        val absent = lastInstall.getValue(key).origin == EntryOrigin.ABSENT
+        val held = lastInstall.values.count { it.key.kind == key.kind && (it.origin == EntryOrigin.ABSENT) == absent }
+        val bound = when {
+            absent -> options.maxAbsent
+            key is SnapshotKey.App -> options.maxApps
+            else -> options.maxTenants
+        }
+        if (held <= bound) {
+            violations += "evicted $key while its family held $held ${if (absent) "absent entries" else "documents"}, within $bound"
         }
     }
 
