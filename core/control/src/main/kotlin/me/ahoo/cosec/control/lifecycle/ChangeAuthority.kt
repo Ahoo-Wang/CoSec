@@ -25,7 +25,6 @@ import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.authz.TenantIsolation
-import me.ahoo.cosec.control.change.Approval
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.Escalation
@@ -55,8 +54,6 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
-import me.ahoo.cosec.spi.authn.MembershipSource
-import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.SubjectRevocation
@@ -93,6 +90,8 @@ class ChangeAuthority(
     /** `cosec.authentication.revocation.skew`, as the host's token authenticator reads revocations with. */
     private val revocationSkew: java.time.Duration = SubjectRevocation.DEFAULT_SKEW,
 ) {
+    private val approvals = ApprovalRules(options, revocations, revocationSkew, ::decideAs)
+
     /** The hard rule: a 403 when [operator] may not act on [key] at all. */
     fun isolate(operator: Operator, key: SnapshotKey) {
         if (!TenantIsolation.allows(operator, key)) {
@@ -207,37 +206,12 @@ class ChangeAuthority(
         }
     }
 
-    /**
-     * Why [approval] no longer counts because its approver's token was revoked since (RC1-11): that token by its id, or
-     * every token of the approver issued by then; `null` when neither is. As the host's token authenticator reads them,
-     * degraded read included. Any other failure to read them is a 503 (review L4): the approval says nothing about the
-     * approver then, so nothing is published, and the change keeps its approval for when the store answers again.
-     */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun revoked(approval: Approval): String? = try {
-        val before = revocations.subjectRevokedBefore(approval.approver.tenant, approval.approver.principal)
-        when {
-            approval.credentialId?.let { revocations.isRevoked(it) } == true ->
-                "the token the approver approved with is revoked"
-
-            SubjectRevocation.revokes(before, approval.issuedAt, revocationSkew) -> "the approver's tokens are revoked"
-            else -> null
-        }
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        throw ChangeRejectedException(UNAVAILABLE, "the revocations of the approver could not be read", e)
-    }
-
     /** A change that sets a tenant's boundary is the platform's (`BDY-2`): only a platform principal ends it. */
     fun requireBoundaryOperator(operator: Operator, change: ChangeRequest) {
         if (!operator.platform && change.operations.any { it is Operation.SetBoundary }) {
             throw ChangeRejectedException(FORBIDDEN, "only a platform principal ends a boundary change")
         }
     }
-
-    /** Whether an API key authenticated [operator], by provenance or by a credential of that name (fail closed). */
-    private fun apiKey(operator: Operator): Boolean = operator.security?.principal?.apiKey == true
 
     /**
      * `cosec:boundary` on [key]'s boundary. A tenant's boundary is the platform's ceiling on it (RFC 0007 §9.1): never a
@@ -250,51 +224,21 @@ class ChangeAuthority(
         require(via, operator, ControlActions.BOUNDARY, boundaryOf(key))
     }
 
-    /** That [operator] may approve [change]'s [candidate]: not its author, a person, and the digest it has now. */
-    fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) {
-        val refusal = when {
-            operator.actor == change.author -> FORBIDDEN to "the author of change ${change.id.value} cannot approve it"
-            else -> approvalRefusal(operator, change)?.let { FORBIDDEN to it }
-                ?: (CONFLICT to "change ${change.id.value} is not candidate $candidate").takeIf { change.candidate != candidate }
-        }
-        refusal?.let { (status, message) -> throw ChangeRejectedException(status, message) }
-    }
+    /** [ApprovalRules.requireApprovable]: that [operator] may approve [change]'s [candidate]. */
+    fun requireApprovable(operator: Operator, change: ChangeRequest, candidate: String) =
+        approvals.requireApprovable(operator, change, candidate)
 
-    /** That [operator] is [change]'s author, who alone [does] it (403). */
-    fun requireAuthor(operator: Operator, change: ChangeRequest, does: String) {
-        if (operator.actor != change.author) {
-            throw ChangeRejectedException(FORBIDDEN, "only the author of change ${change.id.value} $does it")
-        }
-    }
+    /** [ApprovalRules.requireAuthor]: that [operator] is [change]'s author, who alone [does] it. */
+    fun requireAuthor(operator: Operator, change: ChangeRequest, does: String) =
+        approvals.requireAuthor(operator, change, does)
 
-    /**
-     * Why [operator] may not approve [change] whatever it holds (RFC 0007 §7.5); `null` when it may. An approval is a
-     * person's: an API key, a workload's credential, never approves, as break-glass never reaches one (`BRK-8`). A
-     * boundary is the platform's (§9.1): only a platform principal approves a change that sets one (RC1-10). Under
-     * four-eyes, a platform principal's change is approved by another platform principal: the second person of the
-     * trust root is the trust root's.
-     */
-    fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {
-        apiKey(operator) -> "an API key cannot approve: an approval is a person's"
+    /** [ApprovalRules.approvalProblem]: why [change]'s approval does not let [publisher] publish it now. */
+    fun approvalProblem(change: ChangeRequest, escalations: List<Escalation>, publisher: Operator, now: Instant) =
+        approvals.approvalProblem(change, escalations, publisher, now)
 
-        // Publishing would not count it: its revocation could not be checked (review D3).
-        operator.security?.principal?.credential?.id == null ->
-            "an approval names the approver's credential, and this one names none"
-
-        !operator.platform -> approverTenantProblem(change)
-
-        else -> null
-    }
-
-    /** Why an approver outside the platform tenant does not count for [change]; `null` when it may. */
-    private fun approverTenantProblem(change: ChangeRequest): String? = when {
-        change.operations.any { it is Operation.SetBoundary } -> "only a platform principal approves a boundary change"
-
-        options.fourEyes && change.author.tenant == TenantId.PLATFORM ->
-            "under four-eyes, only a platform principal approves a platform principal's change"
-
-        else -> null
-    }
+    /** [ApprovalRules.approverProblem]: why [change]'s approver no longer counts when [publisher] publishes it. */
+    suspend fun approverProblem(change: ChangeRequest, escalations: List<Escalation>, publisher: Operator): String? =
+        approvals.approverProblem(change, escalations, publisher)
 
     /**
      * What [operator] cannot publish alone when [candidate] replaces [base] as [key] (RFC 0007 §7.4, §7.5), read
@@ -314,7 +258,7 @@ class ChangeAuthority(
         breakGlass(base, candidate, escalations)
         // The trust root is the platform's administrators (RFC 0007 §7.3): a tenant principal holding cosec:approve on
         // its own document approves others' changes, and its own are analyzed (RC1-10). A person, never an API key.
-        val trustRoot = operator.platform && !apiKey(operator) && holds(operator, key, ControlActions.APPROVE)
+        val trustRoot = operator.platform && !approvals.apiKey(operator) && holds(operator, key, ControlActions.APPROVE)
         if (trustRoot && !options.fourEyes) {
             return escalations
         }
@@ -563,91 +507,6 @@ class ChangeAuthority(
         throw ChangeRejectedException(UNAVAILABLE, "the tenants referring to [$key] could not be read: ${e.message}", e)
     }
 
-    /**
-     * Why [approval] does not let [publisher] publish [change] now, with [escalations]; null when it does or none needs
-     * it (informational ones never do). Bound to the candidate digest, valid for [ChangeOptions.approvalExpireAfter],
-     * given by neither the author nor the publisher, and covering every escalation that needs it.
-     */
-    fun approvalProblem(
-        change: ChangeRequest,
-        escalations: List<Escalation>,
-        publisher: Operator,
-        now: Instant
-    ): String? {
-        val required = escalations.filterNot { it.informational }
-        if (required.isEmpty()) {
-            return null
-        }
-        val approval = change.approval ?: return "it needs an approval"
-        return when {
-            approval.candidate != change.candidate -> "the approval is for another candidate"
-            now.isAfter(approval.at.plus(options.approvalExpireAfter)) -> "the approval expired"
-            approval.approver == change.author || approval.approver == publisher.actor ->
-                "the approval is the author's or the publisher's own"
-            !approval.covers.containsAll(required.map { it.subject }) -> "the approval does not cover what it now needs"
-            else -> null
-        }
-    }
-
-    /**
-     * Why the approver of [change] no longer counts when [publisher] publishes it, with [escalations]; null when it
-     * does, or none is needed (review K3). The approver is checked again as they approved (their memberships and
-     * attributes), against the current documents, in [publisher]'s request: an approver who has since lost
-     * `cosec:approve` on the document, or whose right cannot be decided, sends the change back for approval.
-     */
-    suspend fun approverProblem(change: ChangeRequest, escalations: List<Escalation>, publisher: Operator): String? {
-        if (escalations.all { it.informational }) {
-            return null
-        }
-        val approval = change.approval ?: return "it needs an approval"
-        val memberships = approval.memberships ?: return "the approval does not say what its approver held"
-        if (publisher.security == null) {
-            return "the approver's right to approve cannot be checked again"
-        }
-        if (!memberships.active) {
-            return "the approver is deactivated"
-        }
-        // An approval by a credential without an id counts for nothing: whether it was revoked cannot be checked.
-        approval.credentialId ?: return "the approval does not say what credential its approver approved with"
-        if (approval.approver.tenant != TenantId.PLATFORM) {
-            approverTenantProblem(change)?.let { return it }
-        }
-        revoked(approval)?.let { return it }
-        // As the approver authenticated: memberships from the provider are asked about again, so an approver it no
-        // longer knows, or knows as deactivated, does not count (RFC 0009 §4.2); claimed ones stand as recorded.
-        val source = if (memberships.source == Memberships.Source.PROVIDER) {
-            MembershipSource.Provider.UNCAPPED
-        } else {
-            MembershipSource.Claims(memberships)
-        }
-        // Under the terms it approved with (review N3): a capped credential's principal bindings, and break-glass for
-        // anything but CoSec's own token, do not count now either. The credential is rebuilt only for those two facts,
-        // under a method of its own: an API key never approved (approvalRefusal).
-        val principal = AuthenticatedPrincipal(
-            approval.approver.principal,
-            approval.approver.tenant,
-            source,
-            approval.attributes,
-            Identity.Credential(
-                if (approval.breakGlass) Identity.Method.JWT else RECORDED_METHOD,
-                RECORDED_APPROVAL,
-                null,
-                capped = !approval.principalBindings,
-            ),
-            breakGlass = approval.breakGlass,
-            issuedAt = approval.issuedAt,
-            apiKeyCredential = false,
-            // An approval is recorded only for a credential of the control plane's app: `decideAs` decides in that app.
-            app = null,
-            session = null,
-        )
-        val approver = Operator(approval.approver, memberships, approval.attributes)
-        val permitted = TenantIsolation.allows(approver, change.key) &&
-            decideAs(publisher, principal, memberships, ControlActions.APPROVE, ControlResources.document(change.key)) ==
-            ControlDecision.PERMIT
-        return if (permitted) null else "the approver no longer holds cosec:approve on the document"
-    }
-
     @Suppress("TooGenericExceptionCaught")
     private suspend fun decideAs(
         publisher: Operator,
@@ -721,11 +580,7 @@ class ChangeAuthority(
     internal companion object {
         private val log = KotlinLogging.logger {}
 
-        /** The id of the credential a recorded approver is checked with again: not a credential anyone presented. */
-        const val RECORDED_APPROVAL = "recorded-approval"
-        private val RECORDED_METHOD = Identity.Method(RECORDED_APPROVAL)
         const val FORBIDDEN = 403
-        const val CONFLICT = 409
         const val UNAVAILABLE = 503
         const val POLICY = "policy"
         const val BINDING = "binding"
