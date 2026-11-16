@@ -318,7 +318,7 @@ How `ScopeResolver` checks the scope:
 - **App.** A host with an app serves only credentials declaring that app; another one, or none, is rejected
   (`APP_MISMATCH`). The host app is, on a gateway, the route's metadata `cosec-app-id`, ahead of
   `cosec.authorization.scope.app-id`; on any other host, that property. Without one, the credential's app applies, and
-  a credential declaring none reads no app document. A client never declares an app. A credential's app that cannot be an app id (blank, `*`, containing `:` or a control character, or longer than 128
+  a credential declaring none reads no app document. A client never declares an app. A credential's app that cannot be an app id (blank, `*`, containing `:`, `/` or a control character, or longer than 128
   characters: the rule of a tenant id) is rejected either way. The app is checked before the space.
 - Matching is exact: no trimming, no case folding.
 

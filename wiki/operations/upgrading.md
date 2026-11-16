@@ -45,7 +45,8 @@ What is different, in short:
 2. **Find what has no 8.0 form.** Search policies and code for: `spel` and `ognl` conditions, custom
    `ActionMatcherFactory` or `ConditionMatcherFactory` types, `#{...}` path templates in actions, `regular` conditions,
    `ignoreCase` in DENY conditions, `BlockingAware`, implementations of `Authorization`, `Statement` or `Policy`,
-   `CoSecAuthorizationCustomizer`, root (`root-enabled`), local shadow files and the `cosecExplain` endpoint.
+   `CoSecAuthorizationCustomizer`, root (`root-enabled`), local shadow files and the `cosecExplain` endpoint, and
+   [tenant and app ids with `/`](#tenant-and-app-ids-hold-no-slash).
    [Converting](#migrating-the-data) reports every policy that cannot be translated.
 3. **Convert the data** with `cosec-migrate convert` and fix every rejection until the conversion is accepted. Read
    the semantic changes in `report.json` against [What 8.0 decides differently](#what-8-0-decides-differently).
@@ -151,6 +152,7 @@ then convert again into a new directory.
 | `UNDECODABLE` | Not valid 7.x JSON, not decodable by 7.x's own model, or it needs a class missing from the classpath (an `ognl` condition, a custom matcher). | Fix the stored JSON. A custom matcher has no 8.0 form; see `CUSTOM_ACTION` and `CUSTOM_CONDITION`. |
 | `RESERVED_POLICY_ID` | A policy id starts with `perm:`, `g:`, `r:` or `cosec:`, which generated ids use. | Rename the policy and every attachment that names it. |
 | `INVALID_ID` | An id 8.0 cannot hold: `*` or empty as an app or space id, `:` in an app id, `@` in a role id, or an unpaired UTF-16 surrogate in any id of a converted document (a JSON escape such as `"\uD800"`, `IDN-10`), located by the document and its JSON path. | Rename it. In 8.0 `*` means any app or space. |
+| `SLASH_IN_ID` | A tenant id (a policy's `tenantId` under `--partition by-owner`) or an app id that holds `/`, which no 8.0 tenant or app id can ([below](#tenant-and-app-ids-hold-no-slash)). | Rename the tenant or app in the source system so that its id holds no `/`, then convert again. |
 | `DUPLICATE_ID` | The same policy twice in an export, the same app twice in an export (one entry would replace the other, and its grants would be lost), the same permission twice in one app, or two app or tenant ids whose converted file names differ only in case (`Order` and `order`: one file on macOS and Windows). Ids that differ in more than their file names, such as `strasse` and `straße`, are not a collision. | Keep one, or rename. |
 | `OWNER_TENANT` | `--partition by-owner`, and a policy whose `tenantId` names no tenant. | Set its `tenantId`, or convert with `--partition platform`. |
 | `CONDITION_NOT_TRANSLATED` | A built-in 7.x condition with no exact translation, such as a `regular` that is not a literal, a literal prefix or a choice of literals, or a `path` condition outside a statement whose action is `all`. Also, on a part only 7.x filled (`request.attributes.*` but the gateway's `cosec.audit.routeId`, set by a `RequestAttributesAppender`, and `resource.*`), always absent in 8.0, so a condition on it is a constant there: one that holds on the absent value, in a DENY or an ALLOW (it would hold for every request, where 7.x held it only when the part was empty), and one that does not, in a DENY or negated in one (the DENY would never hold, or hold for every request). Only an ALLOW that can no longer hold translates, recorded as `NOT-IN-8.0`; a comparison against a template (`eq resource.owner #{principal.id}`) is one, since an absent value equals nothing. 7.x's ip2region `ipRegion` (`country|region|province|city|isp`) translates in one shape only, a country prefix (`startsWith "中国|"`, or a `regular` that says it), which becomes `ext.ip2region.country`; any other condition on it is a part only 7.x filled. And a condition that tells method HEAD from GET where a DENY needs it, since 8.0 decides a HEAD request as GET (`not eq GET` in a DENY included). | Rewrite it with the conditions the message names (`eq`, `in`, `startsWith`, ...); a value an appender set becomes an `ext.*` attribute of an `AttributeProvider` (`ipRegion`: `ext.ip2region.*`). |
@@ -164,6 +166,23 @@ Warnings do not stop a conversion. The current ones: a policy in the global poli
 (converted as an attachable policy, since 7.x did not apply it to everyone), a tenant's policy with DENY statements kept
 in the platform document under `by-owner`, and role grants of an app without an app permission (7.x ignored them, so
 they are dropped).
+
+#### Tenant and app ids hold no slash {#tenant-and-app-ids-hold-no-slash}
+
+8.0 takes a tenant id or an app id as one path segment (`SCP-13`), so neither may hold `/`; 7.x accepted one. The
+control plane authorizes on resources such as `doc/tenant/<tenantId>/…`, where `acme/west` would read as tenant `acme`
+and more of the path. Rename such a tenant or app in the system that owns its id (the issuer that writes `tenantId`
+into tokens, the app's registration) before you upgrade:
+
+- **To find them,** run `cosec-migrate convert` on a copy of the data: it refuses each one with `SLASH_IN_ID`, at the app
+  (`app-role-permissions.json[<i>]`) or, under `--partition by-owner`, at the policy whose `tenantId` holds it. A tenant
+  that only tokens name is not in the 7.x data: search the issuer's tenants for `/`.
+- **`partition plan`** refuses such a tenant the same way and writes nothing; **`api-keys`** refuses a key of one.
+- **Tokens** whose `tenantId` or `aud` holds `/` are answered `401 token-invalid` on every adapter, so such a principal
+  signs in again once its tenant is renamed. Behind a gateway, a forwarded identity of such a tenant is
+  `400 invalid-request`.
+
+Other characters are kept, and file names still encode them: `acme%west` converts to `tenants/acme%25west.json`.
 
 #### Semantic changes in the report
 
@@ -1157,6 +1176,27 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   2. Change each converted one to `http:*` through the control plane: a change that puts the policy again with
      `"action": "http:*"`. If a document has not changed since `publish`, `apply` the file a new `convert` writes for
      it instead; the change it proposes is exactly those statements.
+- **Tenant and app ids hold no `/`** (`SCP-13`). An 8.0 preview accepted `acme/west` as a tenant id and `a/b` as an
+  app id; this version refuses them at every entry, so a preview deployment that stored one must remove its records
+  before upgrading. Find them with `GET /documents` on the preview: any key with `/` after `tenant:` or `app:`. The
+  preview's own control plane cannot remove them, since it refuses such ids too. Stop the control plane, then, for each
+  such document `<doc>` (`tenant:acme/west`), delete these Redis keys under `<s>` ([Redis keys](./storage.md#redis-keys)):
+  - `<s>:snapshot:<doc>` (the head) and `<s>:candidate:<doc>` (a staged candidate);
+  - `<s>:control:revisions:<doc>` and every `<s>:control:revision:<doc>:*` (the revision index and records);
+  - every `<s>:control:refs:<doc>:*` (back-references to its policies);
+  - `<s>:control:stage:<doc>` and `<s>:control:lease:reclaim:<doc>`;
+  - every `<s>:control:change:<id>` whose `"key"` is `<doc>`, and its id in `<s>:control:list:open-changes`;
+  - the entry `<doc>` in `<s>:control:list:documents`, and, for an app, its entry in `<s>:control:apps:all`;
+  - every `<s>:api-key:<sha256>` whose `"tenantId"` or `"app"` holds `/`.
+
+  Then delete each `<s>:control:refs:*` set that names `<doc>` among its referrers, and run
+  [`repair-references`](#repair-the-back-reference-index), which writes back what the remaining heads refer to. Until
+  this is done, this version fails whole on each such record and names it (`SCP-10`): a back-reference set fails the
+  publish over its policy, a change answers `503`, an open change stops every maintenance pass, and an API key fails
+  its lookup (`503`). An instance status of a preview that installed such a document fails the shadow windows' statuses
+  until it expires, two minutes after that instance stops. Rename the tenant or app and publish its documents under the
+  new id; tokens of the old id are `401 token-invalid`
+  ([Tenant and app ids hold no slash](#tenant-and-app-ids-hold-no-slash)).
 - **No CoSec module imports a platform, and `cosec-dependencies` is no longer published** (R11). Until now every library
   module's POM and Gradle module metadata imported `cosec-dependencies`, which imports the Spring Boot, Spring Cloud,
   CoCache, OpenTelemetry, springdoc and fluent-assert BOMs and manages jmh, mockk, archunit, blockhound,

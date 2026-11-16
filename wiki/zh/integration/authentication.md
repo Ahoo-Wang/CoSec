@@ -310,7 +310,7 @@ cosec:
 
 ## 租户 {#tenants}
 
-主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空、不是字符串（数字、`null`、对象），或不能作为租户 id（空白、`*`、含 `:` 或控制字符、超过 128 个字符）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为这样的租户签发令牌。租户不能作为租户 id 的 API key 加载失败（`503`）。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
+主体可以在某个租户内行事。由你的 `Authentication` 返回的 `TokenSubject` 决定：它的 `tenant` 会写入令牌的 `tenantId` 声明；没有该声明的令牌属于默认租户 `(0)`，该声明为空、不是字符串（数字、`null`、对象），或不能作为租户 id（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符）的令牌无效（`token-invalid`、`IDN-11`），所以 `JwtTokenConverter` 拒绝为这样的租户签发令牌。租户不能作为租户 id 的 API key 加载失败（`503`）。租户决定请求读取哪份租户文档，条件通过 `subject.tenant` 或 `scope.tenant` 读取它。CoSec 在租户之间隔离什么、不隔离什么，见[租户隔离](../guide/security-model.md#tenant-isolation)。
 
 ### 切换租户和应用 {#switching-tenant-and-app}
 
@@ -407,7 +407,7 @@ class SelectTenantTest {
 
 匿名请求没有凭证，它的应用取宿主的应用。所以发给一个应用的令牌在另一个应用的服务上没有用，即使签名密钥相同、角色同名；一次登录访问多个应用时，按应用各签发一个令牌，只放该应用的角色。操作控制面的令牌发给控制面的应用 `cosec.control.app-id`。
 
-由签发令牌的一方说明它属于哪个应用：`TokenSubject.app` 没有默认值。刷新令牌时保留它的应用。`aud` 有多个值、不是字符串或不能作为应用 id（空白、`*`、含 `:` 或控制字符、超过 128 个字符）的令牌为 `token-invalid`。
+由签发令牌的一方说明它属于哪个应用：`TokenSubject.app` 没有默认值。刷新令牌时保留它的应用。`aud` 有多个值、不是字符串或不能作为应用 id（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符）的令牌为 `token-invalid`。
 
 **平台租户 `(platform)` 享有特权**：只有它的主体能通过 break-glass 获得 `cosec:root`，也只有它的主体能在控制面中操作平台文档和应用文档（[break-glass](../guide/security-model.md#break-glass)）。请只从用户无法影响的来源签发 `(platform)` 的令牌。
 

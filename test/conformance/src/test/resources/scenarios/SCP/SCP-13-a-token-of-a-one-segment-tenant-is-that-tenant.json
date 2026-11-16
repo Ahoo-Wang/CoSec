@@ -1,0 +1,57 @@
+{
+  "rules": [
+    "SCP-13"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "The same token of tenant acme: its tenant document applies, and alice reads.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "alice-reads",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "http:GET",
+                "resource": "http:path:/orders/**"
+              }
+            ]
+          }
+        ],
+        "bindings": [
+          {
+            "id": "alice-reads",
+            "subject": {
+              "principal": "alice",
+              "tenant": "acme"
+            },
+            "app": "*",
+            "space": "*",
+            "policy": "alice-reads"
+          }
+        ]
+      }
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1",
+    "headers": {
+      "Authorization": "Bearer t1"
+    }
+  },
+  "authentication": {
+    "result": "jwt",
+    "jwt": {
+      "jti": "t1",
+      "sub": "alice",
+      "tenantId": "acme"
+    }
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true
+  }
+}

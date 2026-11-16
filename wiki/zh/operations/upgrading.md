@@ -34,7 +34,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 2. **找出没有 8.0 形式的内容。** 在策略和代码中搜索：`spel` 与 `ognl` 条件、自定义 `ActionMatcherFactory` 或
    `ConditionMatcherFactory` 类型、动作中的 `#{...}` 路径模板、`regular` 条件、DENY 条件中的 `ignoreCase`、`BlockingAware`、
    `Authorization`/`Statement`/`Policy` 的实现、`CoSecAuthorizationCustomizer`、root（`root-enabled`）、本地影子文件和 `cosecExplain`
-   端点。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
+   端点，以及[含 `/` 的租户和应用 id](#tenant-and-app-ids-hold-no-slash)。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
 3. **用 `cosec-migrate convert` 转换数据**，修正每一个拒绝项，直到转换被接受。对照[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
    阅读 `report.json` 中的语义改动。
 4. **更新依赖和代码**：把构建和运行环境换到 JDK 21，用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
@@ -115,6 +115,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 | `UNDECODABLE` | 不是合法的 7.x JSON、7.x 自己的模型无法解码，或需要类路径上缺少的类（`ognl` 条件、自定义匹配器）。 | 修正存储的 JSON。自定义匹配器没有 8.0 形式，见 `CUSTOM_ACTION` 和 `CUSTOM_CONDITION`。 |
 | `RESERVED_POLICY_ID` | 策略 id 以 `perm:`、`g:`、`r:` 或 `cosec:` 开头，这些前缀留给生成的 id。 | 重命名这条策略，以及引用它的每个附加策略。 |
 | `INVALID_ID` | 8.0 无法容纳的 id：应用或空间 id 为 `*` 或空、应用 id 含 `:`、角色 id 含 `@`，或者转换出的文档中任何 id 含落单的 UTF-16 代理项（如 JSON 转义 `"\uD800"`，`IDN-10`），位置为文档及其 JSON 路径。 | 重命名。8.0 中 `*` 表示任意应用或空间。 |
+| `SLASH_IN_ID` | 含 `/` 的租户 id（`--partition by-owner` 时策略的 `tenantId`）或应用 id，任何 8.0 租户或应用 id 都不能含 `/`（[见下文](#tenant-and-app-ids-hold-no-slash)）。 | 在源系统中给该租户或应用改名，使其 id 不含 `/`，然后重新转换。 |
 | `DUPLICATE_ID` | 导出中同一条策略出现两次，导出中同一个应用出现两次（一项会替换另一项，它的授权就丢了），同一个应用中同一个权限出现两次，或两个应用 id 或租户 id 转换后的文件名只有大小写之差（`Order` 与 `order`：在 macOS 和 Windows 上是同一个文件）。文件名不同的 id，例如 `strasse` 与 `straße`，不算冲突。 | 只保留一个，或改名。 |
 | `OWNER_TENANT` | 使用 `--partition by-owner`，而策略的 `tenantId` 不指向任何租户。 | 设置它的 `tenantId`，或改用 `--partition platform` 转换。 |
 | `CONDITION_NOT_TRANSLATED` | 没有精确翻译的 7.x 内置条件，例如不是字面量、字面量前缀或字面量选择的 `regular`，或者动作不是 `all` 的语句中的 `path` 条件。还包括只有 7.x 填写的部件（除网关的 `cosec.audit.routeId` 之外的 `request.attributes.*`，由 `RequestAttributesAppender` 设置；以及 `resource.*`），它们在 8.0 中总是缺失，所以其上的条件在 8.0 中是常量：在缺失值上成立的条件，无论在 DENY 还是 ALLOW 中（它会对每个请求成立，而 7.x 只在该部件为空时成立）；以及在缺失值上不成立的条件，在 DENY 中或在 DENY 中被取反（这条 DENY 永不成立，或对每个请求成立）。只有不再可能成立的 ALLOW 会被翻译，并记录为 `NOT-IN-8.0`；与模板的比较（`eq resource.owner #{principal.id}`）就是一例，因为缺失值不等于任何值。7.x ip2region 的 `ipRegion`（`country|region|province|city|isp`）只有一种形状能翻译：国家前缀（`startsWith "中国|"`，或表达它的 `regular`），翻译为 `ext.ip2region.country`；其上的其他条件按只有 7.x 填写的部件处理。以及在 DENY 需要时区分方法 HEAD 与 GET 的条件，因为 8.0 把 HEAD 请求按 GET 判定（包括 DENY 中的 `not eq GET`）。 | 按消息给出的条件（`eq`、`in`、`startsWith` ……）重写；appender 设置的值改为 `AttributeProvider` 的 `ext.*` 属性（`ipRegion`：`ext.ip2region.*`）。 |
@@ -126,6 +127,21 @@ cosec-migrate convert --from-files ./export --out ./converted
 
 警告不会让转换停止。目前的警告有：全局策略索引中类型不是 `GLOBAL` 的策略（按可附加策略转换，因为 7.x 并不把它应用于所有人）；
 `by-owner` 时留在平台文档中、含 DENY 语句的租户策略；没有应用权限的应用上的角色授权（7.x 忽略它们，所以被丢弃）。
+
+#### 租户和应用 id 不含斜杠 {#tenant-and-app-ids-hold-no-slash}
+
+8.0 把租户 id 和应用 id 都当作一个路径段（`SCP-13`），所以两者都不能含 `/`；7.x 接受过这样的 id。控制面在 `doc/tenant/<tenantId>/…`
+这样的资源上授权，`acme/west` 在那里会读作租户 `acme` 再接一段路径。升级前，请在拥有该 id 的系统里（往令牌写 `tenantId` 的签发方、应用的注册处）
+给这样的租户或应用改名：
+
+- **查找方法：**在数据副本上运行 `cosec-migrate convert`：它对每个这样的 id 给出 `SLASH_IN_ID` 拒绝项，位置在应用
+  （`app-role-permissions.json[<i>]`），或在 `--partition by-owner` 时在 `tenantId` 含 `/` 的策略上。只出现在令牌里的租户不在 7.x 数据中：
+  请在签发方的租户里搜索 `/`。
+- **`partition plan`** 以同样方式拒绝这样的租户，什么也不写；**`api-keys`** 拒绝这类租户的密钥。
+- **令牌**的 `tenantId` 或 `aud` 含 `/` 时，每个适配器都回答 `401 token-invalid`，所以租户改名后，这样的主体需要重新登录。
+  在网关之后，这类租户的转发身份是 `400 invalid-request`。
+
+其他字符保持不变，文件名仍会编码它们：`acme%west` 转换为 `tenants/acme%25west.json`。
 
 #### 报告中的语义改动 {#semantic-changes-in-the-report}
 
@@ -868,6 +884,22 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
      你自己写的 `*` 上的语句由你决定是否保留。
   2. 通过控制面把每一条转换得到的语句改为 `http:*`：提交一个变更，以 `"action": "http:*"` 重新写入该策略。如果某个文档自 `publish` 以来没有变过，
      也可以对它 `apply` 新一次 `convert` 写出的文件，它提出的变更正好是这些语句。
+- **租户和应用 id 不含 `/`**（`SCP-13`）。8.0 预览版接受 `acme/west` 这样的租户 id 和 `a/b` 这样的应用 id；本版本在每个入口都拒绝它们，
+  所以存储过这种 id 的预览版部署必须在升级前删除它们的记录。在预览版上用 `GET /documents` 查找：`tenant:` 或 `app:` 之后含 `/` 的键。
+  预览版自己的控制面无法删除它们，因为它同样拒绝这种 id。先停止控制面，然后对每个这样的文档 `<doc>`（`tenant:acme/west`）删除 `<s>` 下的这些
+  Redis 键（[Redis 键](./storage.md#redis-keys)）：
+  - `<s>:snapshot:<doc>`（头）和 `<s>:candidate:<doc>`（暂存的候选）；
+  - `<s>:control:revisions:<doc>` 以及每个 `<s>:control:revision:<doc>:*`（修订索引与修订记录）；
+  - 每个 `<s>:control:refs:<doc>:*`（指向它的策略的反向引用）；
+  - `<s>:control:stage:<doc>` 和 `<s>:control:lease:reclaim:<doc>`；
+  - 每个 `"key"` 为 `<doc>` 的 `<s>:control:change:<id>`，以及 `<s>:control:list:open-changes` 中它的 id；
+  - `<s>:control:list:documents` 中的条目 `<doc>`；应用还要删除 `<s>:control:apps:all` 中它的条目；
+  - 每个 `"tenantId"` 或 `"app"` 含 `/` 的 `<s>:api-key:<sha256>`。
+
+  然后删除每个在引用方中列出 `<doc>` 的 `<s>:control:refs:*` 集合，再运行 [`repair-references`](#repair-the-back-reference-index)，它会写回其余的头所引用的内容。
+  完成之前，本版本在每条这样的记录上整体失败并指名它（`SCP-10`）：反向引用集合让发布其策略失败，变更回答 `503`，未完成的变更让每轮维护停止，
+  API key 查找失败（`503`）。安装过这种文档的预览版实例，其实例状态会让影子窗口的状态读取失败，直到它过期，即该实例停止两分钟之后。
+  给租户或应用改名，并以新 id 发布它的文档；旧 id 的令牌是 `401 token-invalid`（[租户和应用 id 不含斜杠](#tenant-and-app-ids-hold-no-slash)）。
 - **没有任何 CoSec 模块导入 platform，`cosec-dependencies` 不再发布**（R11）。此前每个库模块的 POM 和 Gradle 模块元数据都导入 `cosec-dependencies`，后者导入 Spring Boot、Spring Cloud、CoCache、OpenTelemetry、springdoc 和 fluent-assert 的 BOM，并管理 jmh、mockk、archunit、blockhound、json-schema-validator 和 detekt-formatting 的版本，所以加入一个模块就会提升应用整个构建中的这些版本，包括 `cosec-cocache` 的 CoCache 8 盖过应用自己的 CoCache 4。现在模块的元数据只写明它需要的库及其构建时的版本（作为最低版本），别无其他；Maven 也不再需要那个导入来解析它们。导入过 `me.ahoo.cosec:cosec-dependencies` 的应用请去掉这个导入，自己管理想要的版本（[CoSec 对构建的要求](../guide/introduction.md#what-cosec-needs-from-your-build)）。`cosec-bom` 列出应用可以依赖的 CoSec 模块（不含 `cosec-migrate`），不导入任何东西。`cosec-cocache` 和 `cosec-kafka` 的 POM 把 `cosec-control` 标为 `provided`：使用控制面的 Maven 应用自己添加 `cosec-control`，此前它们会把它（连同 `cosec-runtime`）带到运行时。
 - **三个包名与其模块名对齐。** `me.ahoo.cosec.cache`（`cosec-cocache`）现在是 `me.ahoo.cosec.cocache`，`me.ahoo.cosec.servlet`（`cosec-webmvc`）是 `me.ahoo.cosec.webmvc`，`me.ahoo.cosec.spring.boot.starter`（`cosec-spring-boot`）是 `me.ahoo.cosec.spring.boot`。子包在新根之下保持原名；没有类名、artifact id、`cosec.*` 属性、bean 名或 Redis key 改变。在应用中需要修改：import；`spring.autoconfigure.exclude` 与 `@ConditionalOnClass(name = ...)` 字符串中的自动配置类名（`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` 现在是 `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`）；以及日志配置中的 logger 名（`logging.level.me.ahoo.cosec.cache` 现在是 `logging.level.me.ahoo.cosec.cocache`）。
 - **策略文档、路由映射和 JSON 格式成为独立模块 `cosec-document`。** `me.ahoo.cosec.runtime.document` 现在是 `me.ahoo.cosec.document`，`me.ahoo.cosec.runtime.document.format` 是 `me.ahoo.cosec.document.format`，`me.ahoo.cosec.runtime.route` 是 `me.ahoo.cosec.document.route`；类（`PolicyDocument`、`PolicyDocumentCodec`、`PolicyDocumentCompiler`、`DocumentCompileException`、`Actor`、`RouteMap`、`RouteMapCodec` 等）保持原名。没有文档、schema、`cosec.*` 属性、bean 或 Redis key 改变。在应用中修改 import 即可。`cosec-runtime` 和 starter 会带上 `cosec-document`，所以依赖不变；只读写文档的代码（生成器、[CI 检查](../policies/testing.md#policies-in-ci)）可以只依赖 `me.ahoo.cosec:cosec-document`，不必依赖 `cosec-runtime`。`cosec-openapi` 现在依赖 `cosec-document` 而不是 `cosec-runtime`：经由它编译依赖管道的应用需要自己添加 `cosec-runtime` 或 starter。
