@@ -21,6 +21,8 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.control.store.Head
@@ -248,8 +250,6 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
     }
 
     private companion object {
-        const val CONFLICT = 409
-        const val NOT_FOUND = 404
 
         /** A revoke that ended `CONFLICTED`, or met a moved head, is made again at most this many more times (R4-1). */
         const val RETRIES = 3

@@ -17,6 +17,7 @@ package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.runtime.http.Enforceable
@@ -44,6 +45,4 @@ internal object EnforceableOrRefused {
                 "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
                 "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
         )
-
-    private const val BAD_REQUEST = 400
 }

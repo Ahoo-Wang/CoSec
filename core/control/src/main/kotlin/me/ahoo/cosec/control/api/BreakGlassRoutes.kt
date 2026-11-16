@@ -17,7 +17,6 @@ package me.ahoo.cosec.control.api
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.api.ControlHttpSupport.CONFLICT
 import me.ahoo.cosec.control.api.ControlHttpSupport.CREATED
 import me.ahoo.cosec.control.api.ControlHttpSupport.DELETE
 import me.ahoo.cosec.control.api.ControlHttpSupport.OK
@@ -34,6 +33,7 @@ import me.ahoo.cosec.control.api.JsonFields.optText
 import me.ahoo.cosec.control.api.JsonFields.text
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId

@@ -23,6 +23,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
+import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.ShadowState
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.ControlStore
@@ -179,7 +181,5 @@ internal class StagingSlots(
     private companion object {
         private val log = KotlinLogging.logger {}
         const val MAX_ATTEMPTS = 16
-        const val CONFLICT = 409
-        const val UNAVAILABLE = 503
     }
 }

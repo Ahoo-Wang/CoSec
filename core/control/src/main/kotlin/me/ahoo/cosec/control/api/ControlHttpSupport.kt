@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.api.JsonFields.wellFormed
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
+import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
 import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.document.PolicyDocumentCodec
@@ -99,7 +100,5 @@ internal object ControlHttpSupport {
     const val DELETE = "DELETE"
     const val OK = 200
     const val CREATED = 201
-    const val NOT_FOUND = 404
-    const val CONFLICT = 409
     val factory: JsonNodeFactory = JsonNodeFactory.instance
 }
