@@ -16,7 +16,7 @@
 package me.ahoo.cosec.control.grant
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.SubjectAttributes
+import me.ahoo.cosec.engine.SubjectAttributes
 import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.engine.pattern.ResourceContainment
 import me.ahoo.cosec.engine.pattern.ResourcePattern

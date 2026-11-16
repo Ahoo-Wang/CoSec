@@ -29,7 +29,7 @@ import kotlin.system.exitProcess
  * ```
  * # Rule: ALG-1
  * # Mutant: the DENY scan stops at the first error
- * # Tests: :engine:test --tests me.ahoo.cosec.engine.flat.FlatEnginePropertyTest
+ * # Tests: :engine:test --tests me.ahoo.cosec.engine.EnginePropertyTest
  * ```
  *
  * followed by the diff, as `git diff` writes it (`git apply` skips the header).

@@ -6,8 +6,8 @@
       "statement": "Any applicable DENY that matches makes the decision Deny, whatever errors, missing or unavailable inputs exist elsewhere (C1b).",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#P1' adding a matching deny always denies",
-        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode"
+        "engine:EnginePropertyTest#P1' adding a matching deny always denies",
+        "engine:EnginePropertyTest#the decision is that of the pseudocode"
       ],
       "pending": null
     },
@@ -17,7 +17,7 @@
       "statement": "Without a matching DENY, a DENY that fails (the statement or its policy's condition) makes the decision Indeterminate(MatcherFailed).",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode"
+        "engine:EnginePropertyTest#the decision is that of the pseudocode"
       ],
       "pending": null
     },
@@ -27,7 +27,7 @@
       "statement": "Without a matching DENY, an unresolved input (a missing attachment or policy, a required document unavailable or not loaded) makes the decision Indeterminate, never Permit.",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#P9 missing and unavailable data never permit"
+        "engine:EnginePropertyTest#P9 missing and unavailable data never permit"
       ],
       "pending": null
     },
@@ -37,7 +37,7 @@
       "statement": "An ALLOW that fails counts as no match (C1a).",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode"
+        "engine:EnginePropertyTest#the decision is that of the pseudocode"
       ],
       "pending": null
     },
@@ -47,7 +47,7 @@
       "statement": "When nothing matches the decision is the implicit deny Deny(null).",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode"
+        "engine:EnginePropertyTest#the decision is that of the pseudocode"
       ],
       "pending": null
     },
@@ -57,7 +57,7 @@
       "statement": "The candidate order decides only which statement is reported (by), never the kind of decision.",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#P8 the decision does not depend on the candidate order"
+        "engine:EnginePropertyTest#P8 the decision does not depend on the candidate order"
       ],
       "pending": null
     },
@@ -67,9 +67,9 @@
       "statement": "A policy's condition is evaluated at most once per evaluation, and only once one of its statements matched its action and resource (or failed matching the resource); untraced, nothing is evaluated after the statement that decided.",
       "level": "engine",
       "guards": [
-        "engine:FlatEngineTest#a condition runs once per evaluation, also when policies share it",
-        "engine:FlatEngineTest#a condition runs once however many others the evaluation reached",
-        "engine:FlatEngineTest#a condition is not evaluated when no statement of the policy matches the action and resource"
+        "engine:EngineTest#a condition runs once per evaluation, also when policies share it",
+        "engine:EngineTest#a condition runs once however many others the evaluation reached",
+        "engine:EngineTest#a condition is not evaluated when no statement of the policy matches the action and resource"
       ],
       "pending": null,
       "properties": [
@@ -86,7 +86,7 @@
         "engine:RateLimitObligationTest#an error of a rule propagates at every trace level"
       ],
       "properties": [
-        "engine:FlatEnginePropertyTest#P2 the decision does not depend on the trace level"
+        "engine:EnginePropertyTest#P2 the decision does not depend on the trace level"
       ],
       "pending": null
     },
@@ -104,8 +104,8 @@
         "engine:RepeatedBindingsTest#the trace lists the later bindings with the first one's outcomes"
       ],
       "properties": [
-        "engine:FlatEnginePropertyTest#the decision is that of the pseudocode",
-        "engine:FlatEnginePropertyTest#P2 the decision does not depend on the trace level"
+        "engine:EnginePropertyTest#the decision is that of the pseudocode",
+        "engine:EnginePropertyTest#P2 the decision does not depend on the trace level"
       ],
       "pending": null
     },

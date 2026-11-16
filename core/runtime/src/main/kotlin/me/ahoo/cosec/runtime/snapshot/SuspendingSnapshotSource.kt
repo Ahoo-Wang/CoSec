@@ -17,8 +17,8 @@ package me.ahoo.cosec.runtime.snapshot
 
 import kotlinx.coroutines.future.await
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.scope.Scope

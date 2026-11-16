@@ -36,7 +36,7 @@ import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.SnapshotDocuments
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -173,7 +173,7 @@ class MigrateMainTest {
             BindingId("root"),
             SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("cosec")),
             BindingScope(Match.Any, Match.Any),
-            me.ahoo.cosec.engine.flat.BuiltinPolicies.ROOT,
+            me.ahoo.cosec.engine.BuiltinPolicies.ROOT,
             expiresAt = Instant.now().plusSeconds(3600).toEpochMilli(),
             breakGlass = true,
         )

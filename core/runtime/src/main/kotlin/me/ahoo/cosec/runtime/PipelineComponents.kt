@@ -17,7 +17,7 @@ package me.ahoo.cosec.runtime
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
-import me.ahoo.cosec.engine.flat.FlatEngine
+import me.ahoo.cosec.engine.Engine
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
@@ -37,7 +37,7 @@ internal class PipelineComponents(
     val snapshots: SuspendingSnapshotSource,
     /** Asked when a token carries the provider marker instead of claims; without one such a request is a 503. */
     val membershipProvider: MembershipProvider?,
-    val engine: FlatEngine,
+    val engine: Engine,
     /** The ids of requests without a plain `CoSec-Request-Id` header, and of decision events. */
     val idGenerator: IdGenerator,
     val clock: Clock,

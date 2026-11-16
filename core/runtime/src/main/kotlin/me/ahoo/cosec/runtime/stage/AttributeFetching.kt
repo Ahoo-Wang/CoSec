@@ -19,10 +19,10 @@ import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.AttributePlan
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.AttributePlan
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.scope.Scope
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.attribute.FetchedAttributes
@@ -44,7 +44,7 @@ import kotlin.time.Duration as KotlinDuration
  */
 internal class AttributeFetching(
     val attributes: AttributeProviders,
-    private val engine: FlatEngine,
+    private val engine: Engine,
     private val timeout: KotlinDuration,
 ) {
     private val failures = Throttle(FAILURE_INTERVAL)
@@ -72,11 +72,11 @@ internal class AttributeFetching(
      * stage-A provider as stage A does: without the scope (#1209).
      */
     suspend fun withPlanned(
-        request: FlatRequest,
+        request: EngineRequest,
         view: SnapshotView,
         fetched: FetchedAttributes,
         everyStage: Boolean,
-    ): FlatRequest {
+    ): EngineRequest {
         if (fetched === FetchedAttributes.NONE) {
             // Nothing fetched reads as ExternalValues.NONE: every external attribute is missing.
             return request
@@ -87,11 +87,11 @@ internal class AttributeFetching(
         }
         return with(
             request
-        ) { FlatRequest(this.request, scope, memberships, time, attributes, fetched.toExternalValues()) }
+        ) { EngineRequest(this.request, scope, memberships, time, attributes, fetched.toExternalValues()) }
     }
 
     private suspend fun fetchPlanned(
-        request: FlatRequest,
+        request: EngineRequest,
         view: SnapshotView,
         fetched: FetchedAttributes,
         everyStage: Boolean,
@@ -147,7 +147,7 @@ internal class AttributeFetching(
         return groups
     }
 
-    private fun attributeRequest(request: FlatRequest, scope: Scope?) = AttributeRequest(
+    private fun attributeRequest(request: EngineRequest, scope: Scope?) = AttributeRequest(
         request.scope.tenant,
         request.request.subject,
         scope,

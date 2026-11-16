@@ -127,11 +127,11 @@ sequenceDiagram
 
 ## 扁平引擎 {#the-flat-engine}
 
-引擎（[`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt)）针对一个 `SnapshotView` 求值一个请求：编译后的平台文档，加上租户的文档，以及作用域在某个应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（编译后的租户文档持有这个应用集合，判断只需一次查找）该应用的文档。它不读时钟（请求自带时间），也不做 I/O（外部属性随请求一起到达）。视图必须属于请求的租户和应用，引擎拒绝其他视图。
+引擎（[`Engine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Engine.kt)）针对一个 `SnapshotView` 求值一个请求：编译后的平台文档，加上租户的文档，以及作用域在某个应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（编译后的租户文档持有这个应用集合，判断只需一次查找）该应用的文档。它不读时钟（请求自带时间），也不做 I/O（外部属性随请求一起到达）。视图必须属于请求的租户和应用，引擎拒绝其他视图。
 
 ### 候选顺序 {#candidate-order}
 
-引擎首先列举适用于请求的策略，即*候选*（[`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt)）：
+引擎首先列举适用于请求的策略，即*候选*（[`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt)）：
 
 | # | 候选 |
 |---|---|
@@ -215,8 +215,8 @@ sequenceDiagram
 
 | 不变量 | 原因 | 守护 |
 |---|---|---|
-| **拒绝优先。** 无论来自哪个文档、哪个绑定、什么顺序，ALLOW 都不能胜过已匹配的 DENY。 | 否则新增一条策略就可能扩大访问范围。 | `FlatEnginePropertyTest`（`P1' adding a matching deny always denies`、`the decision is that of the pseudocode`）、`ALG-1` 场景 |
-| **失败即拒绝。** 缺失或读不到的数据永远不会放行；错误得到 `503` 或 `500`，绝不是 `200`。有文档说明的例外见[安全模型](../guide/security-model.md)。 | 故障不能让请求放行。 | `FlatEnginePropertyTest`（`P9 missing and unavailable data never permit`）、`PipelineTest`（`indeterminateDecisionIs503`、`unmodelledExceptionIs500`、`failingLateOrWrongMembershipsAre503`、`snapshotSourceFailureIs503`） |
+| **拒绝优先。** 无论来自哪个文档、哪个绑定、什么顺序，ALLOW 都不能胜过已匹配的 DENY。 | 否则新增一条策略就可能扩大访问范围。 | `EnginePropertyTest`（`P1' adding a matching deny always denies`、`the decision is that of the pseudocode`）、`ALG-1` 场景 |
+| **失败即拒绝。** 缺失或读不到的数据永远不会放行；错误得到 `503` 或 `500`，绝不是 `200`。有文档说明的例外见[安全模型](../guide/security-model.md)。 | 故障不能让请求放行。 | `EnginePropertyTest`（`P9 missing and unavailable data never permit`）、`PipelineTest`（`indeterminateDecisionIs503`、`unmodelledExceptionIs500`、`failingLateOrWrongMembershipsAre503`、`snapshotSourceFailureIs503`） |
 | **唯一的决策路径。** 状态码和 problem 响应体只在 `StatusMapping` 中产生；适配器看不到决策。 | 三种适配器必须给出相同的应答。 | `OneDecisionPathTest`、`WebAdapterParityTest` |
 | **不阻塞事件循环。** SPI 以挂起代替阻塞；存储读取和摘要计算不在调用方线程上进行。 | 阻塞一个 Netty 线程会卡住其上的所有请求。 | `SnapshotStoreBlockHoundTest`、`RedisSnapshotDocumentStoreTest`（`computesTheDigestOfALocalCopyOffTheCallersThread`）、`PipelineBlockHoundTest`、`SuspendingRedisRateLimitingTest`、`RuntimeBoundaryTest` |
 | **授权是纯粹的决策。** 引擎不做 I/O、不保留状态；限流是 Permit 的义务，所以被拒绝的请求永远不会消耗许可。 | 让求值快速、可预测、可解释；被拒绝的请求不会耗尽配额。 | `EnginePurityTest`、`RateLimitObligationTest`（engine 与 runtime） |
