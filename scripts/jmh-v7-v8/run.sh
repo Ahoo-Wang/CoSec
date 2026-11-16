@@ -25,7 +25,7 @@ set -euo pipefail
 
 PAIRS=(
   "pipeline|cosec-core|SecurityPipelineBenchmark|test/e2e|PipelineBenchmark|"
-  "authorization|cosec-core|SimpleAuthorizationBenchmark|core/engine|FlatAuthorizationBenchmark|boundary=none"
+  "authorization|cosec-core|SimpleAuthorizationBenchmark|core/engine|EngineAuthorizationBenchmark|boundary=none"
 )
 
 jar_of() { # dir module
