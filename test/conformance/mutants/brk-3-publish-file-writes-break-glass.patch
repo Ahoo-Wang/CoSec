@@ -3,11 +3,11 @@
 # Tests: :migrate:test --tests me.ahoo.cosec.migrate.PublishFileTest
 
 diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
-index ec974d44..c8635b62 100644
+index 1228973b..381fb122 100644
 --- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
 +++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
-@@ -107,7 +107,6 @@ class DocumentPublisher(
-         }
+@@ -108,7 +108,6 @@ class DocumentPublisher(
+         val compiler = PolicyDocumentCompiler.forPlatform(platform)
          compiler.compile(document)
          compiler.checkReferences(document, platform)
 -        refusedBreakGlass(listOf(document))?.let { throw PublishException(it, emptyList()) }
