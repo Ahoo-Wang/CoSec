@@ -43,7 +43,7 @@ class LeastRecentlyUsedTest {
             { true },
         )
         reads.all { it == 1 }.assert().isTrue()
-        val expected = (0 until SLOTS).sortedWith(compareBy({ firstRead[it] }, { it })).take(WANTED).map { firstRead[it] }
+        val expected = firstRead.sorted().take(WANTED)
         chosen.map { firstRead[it] }.assert().isEqualTo(expected)
     }
 
@@ -51,24 +51,30 @@ class LeastRecentlyUsedTest {
     fun `only a slot that would be chosen is asked whether it is idle, and a busy one is passed over`() {
         val asked = mutableListOf<Int>()
         // Stamps fall from 10 to 1: every slot would be chosen as it is reached; slot 5 is busy.
-        val chosen = SnapshotFamilies.leastRecentlyUsed(
-            (0 until 10).asSequence(),
-            3,
-            { (10 - it).toLong() },
-            { slot -> asked += slot; slot != 5 },
-        )
-        chosen.assert().containsExactly(9, 8, 7)
+        val falling = SnapshotFamilies.leastRecentlyUsed((0 until 10).asSequence(), 3, { (10 - it).toLong() }) { slot ->
+            asked += slot
+            slot != 5
+        }
+        falling.assert().containsExactly(9, 8, 7)
         asked.assert().isEqualTo((0 until 10).toList())
-        val risingAsked = mutableListOf<Int>()
-        SnapshotFamilies.leastRecentlyUsed((0 until 10).asSequence(), 3, { it.toLong() }, { slot -> risingAsked += slot; true })
-            .assert().containsExactly(0, 1, 2)
+        asked.clear()
+        val rising = SnapshotFamilies.leastRecentlyUsed((0 until 10).asSequence(), 3, { it.toLong() }) { slot ->
+            asked += slot
+            true
+        }
+        rising.assert().containsExactly(0, 1, 2)
         // Once three are chosen, a slot used more recently than all of them is not asked.
-        risingAsked.assert().isEqualTo(listOf(0, 1, 2))
+        asked.assert().isEqualTo(listOf(0, 1, 2))
     }
 
     @Test
     fun `wanting none chooses none and reads nothing`() {
-        SnapshotFamilies.leastRecentlyUsed((0 until 10).asSequence(), 0, { error("read") }, { error("asked") }).assert().isEmpty()
+        val none = SnapshotFamilies.leastRecentlyUsed(
+            (0 until 10).asSequence(),
+            0,
+            { error("read") }
+        ) { error("asked") }
+        none.assert().isEmpty()
     }
 
     private companion object {
