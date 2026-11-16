@@ -29,17 +29,14 @@ import io.opentelemetry.api.trace.Tracer
 import io.opentelemetry.api.trace.propagation.W3CTraceContextPropagator
 import io.opentelemetry.context.Context
 import io.opentelemetry.context.propagation.TextMapGetter
-import io.opentelemetry.extension.kotlin.asContextElement
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.StatementRef
-import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.TraceContext
 import java.util.concurrent.TimeUnit
-import kotlin.coroutines.CoroutineContext
 
 /**
  * Makes the `cosec.authorize` span of each decision event afterwards, from the event's start time and duration, under
@@ -162,43 +159,5 @@ class TracingListener(openTelemetry: OpenTelemetry = GlobalOpenTelemetry.get()) 
 
         /** The jar's `Implementation-Version`; classes that run from a directory have none. */
         internal fun instrumentationVersion(manifestVersion: String?): String = manifestVersion ?: "unknown"
-    }
-}
-
-/**
- * Captures the OpenTelemetry context where the adapter bridges a request (RFC 0006 §7.5), the one place
- * `Context.current()` is still the request's: once the pipeline suspends, another thread may resume it. Its context
- * element makes it current whenever the pipeline resumes, so instrumented clients in providers make child spans of
- * the request's span; the [TraceContext] puts the parent span into decision events and audit records.
- */
-@InternalCoSecApi
-object OpenTelemetryContextContributor : BridgeContextContributor {
-    override fun capture(): CoroutineContext {
-        val context = Context.current()
-        val element = context.asContextElement()
-        val span = Span.fromContext(context).spanContext
-        return if (span.isValid) {
-            element + TraceContext(span.traceId, span.spanId, span.isSampled, headerOf(span.traceState))
-        } else {
-            element
-        }
-    }
-
-    /**
-     * The tracestate in its W3C header form, the SDK's own order. Most requests have none, and for those it is the empty
-     * string and nothing is allocated (#1404); with one, it is the one `String` (and the builder that makes it).
-     */
-    private fun headerOf(state: TraceState): String {
-        if (state.isEmpty) {
-            return ""
-        }
-        val header = StringBuilder()
-        state.forEach { key, value ->
-            if (header.isNotEmpty()) {
-                header.append(',')
-            }
-            header.append(key).append('=').append(value)
-        }
-        return header.toString()
     }
 }

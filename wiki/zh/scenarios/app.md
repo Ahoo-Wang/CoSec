@@ -59,15 +59,11 @@ cosec:
 
 ## 发布，并为应用签发令牌 {#publish-and-issue-tokens-for-the-app}
 
-按[快速开始](../guide/quick-start.md#publish-the-platform-document)的方式发布文档，report 里列出两个文件：
+按[快速开始](../guide/quick-start.md#publish-the-platform-document)的方式发布文档，平台文档在先：
 
 ```bash
-cd documents
-{ printf '{"accepted":true,"outputSha256":{'; sep=""
-  for f in platform.json apps/wms.json; do
-    printf '%s"%s":"%s"' "$sep" "$f" "$(shasum -a 256 "$f" | cut -d' ' -f1)"; sep=","   # Linux: sha256sum
-  done; printf '}}\n'; } > report.json
-cosec-migrate publish --to-redis redis://localhost:6379 --in .
+cosec-migrate publish --to-redis redis://localhost:6379 --file documents/platform.json --document platform
+cosec-migrate publish --to-redis redis://localhost:6379 --file documents/apps/wms.json --document app:wms
 ```
 
 登录时说明令牌是为哪个应用签发的，以及用户在其中持有的角色：

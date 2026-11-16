@@ -148,7 +148,7 @@ cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefi
 ```
 
 `publish` 只读取被接受的转换，而且只读取 `report.json` 列出的文件，并校验其中记录的 SHA-256：`convert` 之后被修改、缺失或新增的文件会让
-它停止。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
+它停止。你自己写的文档（而不是 `convert` 写出的）用 `--file <document.json> --document <platform|app:<id>|tenant:<id>>` 代替 `--in` 发布，检查相同。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
 
 每份文档写一次。如果某一次失败，消息会列出已经写入的文档；用 `--resume` 再运行一次，它跳过内容相同的已发布文档，拒绝内容不同的。
 `--key-prefix` 是部署的前缀，与 [`cosec.key-prefix`](./configuration.md#key-prefix) 相同。`publish` 没有 `--dry-run`；想知道它会做什么，读 `report.json`。

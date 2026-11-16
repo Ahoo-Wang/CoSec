@@ -72,7 +72,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MigrateMain.kt",
-            646,
+            601,
             Disposition.Debt(Batch.B6),
         ),
         Entry(
@@ -126,24 +126,9 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt",
-            454,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
             "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
             403,
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
-        ),
-        Entry(
-            "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt",
-            438,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
-            "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt",
-            430,
-            Disposition.Debt(Batch.B7),
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt",
