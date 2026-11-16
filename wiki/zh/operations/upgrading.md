@@ -884,6 +884,22 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
      你自己写的 `*` 上的语句由你决定是否保留。
   2. 通过控制面把每一条转换得到的语句改为 `http:*`：提交一个变更，以 `"action": "http:*"` 重新写入该策略。如果某个文档自 `publish` 以来没有变过，
      也可以对它 `apply` 新一次 `convert` 写出的文件，它提出的变更正好是这些语句。
+- **租户和应用 id 不含 `/`**（`SCP-13`）。8.0 预览版接受 `acme/west` 这样的租户 id 和 `a/b` 这样的应用 id；本版本在每个入口都拒绝它们，
+  所以存储过这种 id 的预览版部署必须在升级前删除它们的记录。在预览版上用 `GET /documents` 查找：`tenant:` 或 `app:` 之后含 `/` 的键。
+  预览版自己的控制面无法删除它们，因为它同样拒绝这种 id。先停止控制面，然后对每个这样的文档 `<doc>`（`tenant:acme/west`）删除 `<s>` 下的这些
+  Redis 键（[Redis 键](./storage.md#redis-keys)）：
+  - `<s>:snapshot:<doc>`（头）和 `<s>:candidate:<doc>`（暂存的候选）；
+  - `<s>:control:revisions:<doc>` 以及每个 `<s>:control:revision:<doc>:*`（修订索引与修订记录）；
+  - 每个 `<s>:control:refs:<doc>:*`（指向它的策略的反向引用）；
+  - `<s>:control:stage:<doc>` 和 `<s>:control:lease:reclaim:<doc>`；
+  - 每个 `"key"` 为 `<doc>` 的 `<s>:control:change:<id>`，以及 `<s>:control:list:open-changes` 中它的 id；
+  - `<s>:control:list:documents` 中的条目 `<doc>`；应用还要删除 `<s>:control:apps:all` 中它的条目；
+  - 每个 `"tenantId"` 或 `"app"` 含 `/` 的 `<s>:api-key:<sha256>`。
+
+  然后删除每个在引用方中列出 `<doc>` 的 `<s>:control:refs:*` 集合，再运行 [`repair-references`](#repair-the-back-reference-index)，它会写回其余的头所引用的内容。
+  完成之前，本版本在每条这样的记录上整体失败并指名它（`SCP-10`）：反向引用集合让发布其策略失败，变更回答 `503`，未完成的变更让每轮维护停止，
+  API key 查找失败（`503`）。安装过这种文档的预览版实例，其实例状态会让影子窗口的状态读取失败，直到它过期，即该实例停止两分钟之后。
+  给租户或应用改名，并以新 id 发布它的文档；旧 id 的令牌是 `401 token-invalid`（[租户和应用 id 不含斜杠](#tenant-and-app-ids-hold-no-slash)）。
 - **没有任何 CoSec 模块导入 platform，`cosec-dependencies` 不再发布**（R11）。此前每个库模块的 POM 和 Gradle 模块元数据都导入 `cosec-dependencies`，后者导入 Spring Boot、Spring Cloud、CoCache、OpenTelemetry、springdoc 和 fluent-assert 的 BOM，并管理 jmh、mockk、archunit、blockhound、json-schema-validator 和 detekt-formatting 的版本，所以加入一个模块就会提升应用整个构建中的这些版本，包括 `cosec-cocache` 的 CoCache 8 盖过应用自己的 CoCache 4。现在模块的元数据只写明它需要的库及其构建时的版本（作为最低版本），别无其他；Maven 也不再需要那个导入来解析它们。导入过 `me.ahoo.cosec:cosec-dependencies` 的应用请去掉这个导入，自己管理想要的版本（[CoSec 对构建的要求](../guide/introduction.md#what-cosec-needs-from-your-build)）。`cosec-bom` 列出应用可以依赖的 CoSec 模块（不含 `cosec-migrate`），不导入任何东西。`cosec-cocache` 和 `cosec-kafka` 的 POM 把 `cosec-control` 标为 `provided`：使用控制面的 Maven 应用自己添加 `cosec-control`，此前它们会把它（连同 `cosec-runtime`）带到运行时。
 - **三个包名与其模块名对齐。** `me.ahoo.cosec.cache`（`cosec-cocache`）现在是 `me.ahoo.cosec.cocache`，`me.ahoo.cosec.servlet`（`cosec-webmvc`）是 `me.ahoo.cosec.webmvc`，`me.ahoo.cosec.spring.boot.starter`（`cosec-spring-boot`）是 `me.ahoo.cosec.spring.boot`。子包在新根之下保持原名；没有类名、artifact id、`cosec.*` 属性、bean 名或 Redis key 改变。在应用中需要修改：import；`spring.autoconfigure.exclude` 与 `@ConditionalOnClass(name = ...)` 字符串中的自动配置类名（`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` 现在是 `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`）；以及日志配置中的 logger 名（`logging.level.me.ahoo.cosec.cache` 现在是 `logging.level.me.ahoo.cosec.cocache`）。
 - **策略文档、路由映射和 JSON 格式成为独立模块 `cosec-document`。** `me.ahoo.cosec.runtime.document` 现在是 `me.ahoo.cosec.document`，`me.ahoo.cosec.runtime.document.format` 是 `me.ahoo.cosec.document.format`，`me.ahoo.cosec.runtime.route` 是 `me.ahoo.cosec.document.route`；类（`PolicyDocument`、`PolicyDocumentCodec`、`PolicyDocumentCompiler`、`DocumentCompileException`、`Actor`、`RouteMap`、`RouteMapCodec` 等）保持原名。没有文档、schema、`cosec.*` 属性、bean 或 Redis key 改变。在应用中修改 import 即可。`cosec-runtime` 和 starter 会带上 `cosec-document`，所以依赖不变；只读写文档的代码（生成器、[CI 检查](../policies/testing.md#policies-in-ci)）可以只依赖 `me.ahoo.cosec:cosec-document`，不必依赖 `cosec-runtime`。`cosec-openapi` 现在依赖 `cosec-document` 而不是 `cosec-runtime`：经由它编译依赖管道的应用需要自己添加 `cosec-runtime` 或 starter。

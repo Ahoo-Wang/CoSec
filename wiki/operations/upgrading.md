@@ -1174,6 +1174,27 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   2. Change each converted one to `http:*` through the control plane: a change that puts the policy again with
      `"action": "http:*"`. If a document has not changed since `publish`, `apply` the file a new `convert` writes for
      it instead; the change it proposes is exactly those statements.
+- **Tenant and app ids hold no `/`** (`SCP-13`). An 8.0 preview accepted `acme/west` as a tenant id and `a/b` as an
+  app id; this version refuses them at every entry, so a preview deployment that stored one must remove its records
+  before upgrading. Find them with `GET /documents` on the preview: any key with `/` after `tenant:` or `app:`. The
+  preview's own control plane cannot remove them, since it refuses such ids too. Stop the control plane, then, for each
+  such document `<doc>` (`tenant:acme/west`), delete these Redis keys under `<s>` ([Redis keys](./storage.md#redis-keys)):
+  - `<s>:snapshot:<doc>` (the head) and `<s>:candidate:<doc>` (a staged candidate);
+  - `<s>:control:revisions:<doc>` and every `<s>:control:revision:<doc>:*` (the revision index and records);
+  - every `<s>:control:refs:<doc>:*` (back-references to its policies);
+  - `<s>:control:stage:<doc>` and `<s>:control:lease:reclaim:<doc>`;
+  - every `<s>:control:change:<id>` whose `"key"` is `<doc>`, and its id in `<s>:control:list:open-changes`;
+  - the entry `<doc>` in `<s>:control:list:documents`, and, for an app, its entry in `<s>:control:apps:all`;
+  - every `<s>:api-key:<sha256>` whose `"tenantId"` or `"app"` holds `/`.
+
+  Then delete each `<s>:control:refs:*` set that names `<doc>` among its referrers, and run
+  [`repair-references`](#repair-the-back-reference-index), which writes back what the remaining heads refer to. Until
+  this is done, this version fails whole on each such record and names it (`SCP-10`): a back-reference set fails the
+  publish over its policy, a change answers `503`, an open change stops every maintenance pass, and an API key fails
+  its lookup (`503`). An instance status of a preview that installed such a document fails the shadow windows' statuses
+  until it expires, two minutes after that instance stops. Rename the tenant or app and publish its documents under the
+  new id; tokens of the old id are `401 token-invalid`
+  ([Tenant and app ids hold no slash](#tenant-and-app-ids-hold-no-slash)).
 - **No CoSec module imports a platform, and `cosec-dependencies` is no longer published** (R11). Until now every library
   module's POM and Gradle module metadata imported `cosec-dependencies`, which imports the Spring Boot, Spring Cloud,
   CoCache, OpenTelemetry, springdoc and fluent-assert BOMs and manages jmh, mockk, archunit, blockhound,

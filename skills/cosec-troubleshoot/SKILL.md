@@ -276,6 +276,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   segment, so it names neither `acme/west` nor `acme`. Behind a gateway, such a forwarded identity is `400
   invalid-request`; a preview's document of such a tenant is left out of `GET /documents` with a warning. Rename the
   tenant or app; `cosec-migrate convert` lists 7.x ones as `SLASH_IN_ID`.
+- Control-plane `503` logged `... does not read: ...` naming an id with `/`: a record an 8.0 preview stored under
+  such an id fails whole (SCP-10); remove that id's Redis keys as `upgrading.md` (from 8.0.0-alpha.4) lists them.
 - Anonymous callers belong to tenant `(0)` and have no roles: a `subject: "*"` ALLOW must not require
   `subject.authenticated`.
 
