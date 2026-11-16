@@ -41,19 +41,21 @@ internal class SlotModelLag(
     private val check: () -> Boolean,
 ) {
     private val bound: Duration = options.revalidateInterval.plus(options.storeReadTimeout).multipliedBy(2)
+    private var target: SnapshotKey? = null
     private var hung: SlotModelStore.Read? = null
     private var stuck: Runnable? = null
 
     fun run() {
         val written = model.installedKeys()
         val target = script.lagTarget.takeIf { script.lag != Lag.NONE && it in written }
+        this.target = target
         if (target != null) {
             write(target)
-            pilot(target) { hung != null || stuck != null }
+            pilot { hung != null || stuck != null }
         }
         val checked = written.filterNot { it == target && script.lag == Lag.STUCK_COMPILE }
         checked.filterNot { it == target }.forEach(::write)
-        pilot(target) { checked.all(model::servesCurrent) }
+        pilot { checked.all(model::servesCurrent) }
         for (key in checked) {
             if (!model.isInstalled(key)) continue
             model.lostWriteChecked()
@@ -70,10 +72,10 @@ internal class SlotModelLag(
     }
 
     /** Answers reads and runs what is queued, a [STEP] at a time, until [done] or [bound] has passed. */
-    private fun pilot(target: SnapshotKey?, done: () -> Boolean) {
+    private fun pilot(done: () -> Boolean) {
         val until = threads.nanos + bound.toNanos()
         while (threads.nanos < until && !done()) {
-            answer(target)
+            answer()
             while (threads.compiles.any { it !== stuck }) threads.runCompile(
                 threads.compiles.indexOfFirst { it !== stuck }
             )
@@ -84,21 +86,24 @@ internal class SlotModelLag(
         }
     }
 
-    private fun answer(target: SnapshotKey?) {
+    private fun answer() {
         for (read in store.pending.toList()) {
             if (read.hung) continue
-            if (read.key == target && script.lag == Lag.HANG_READ && hung == null) {
+            if (firstOfTarget(read, Lag.HANG_READ) && hung == null) {
                 read.hung = true
                 hung = read
                 continue
             }
             val queued = threads.compiles.size
             read.release(atStart = false)
-            if (read.key == target && script.lag == Lag.STUCK_COMPILE && stuck == null && threads.compiles.size > queued) {
+            if (firstOfTarget(read, Lag.STUCK_COMPILE) && stuck == null && threads.compiles.size > queued) {
                 stuck = threads.compiles.last()
             }
         }
     }
+
+    /** Whether [read] is of the target, in a run whose lag is [lag]. */
+    private fun firstOfTarget(read: SlotModelStore.Read, lag: Lag): Boolean = read.key == target && script.lag == lag
 
     private companion object {
         val STEP: Duration = Duration.ofMillis(500)

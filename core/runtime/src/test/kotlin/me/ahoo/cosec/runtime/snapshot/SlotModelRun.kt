@@ -74,9 +74,8 @@ internal class SlotModelRun(private val script: SlotModelScript) {
         step("settle") { settle() }
         if (failure == null) step("resets") { model.checkResets() }
         if (failure == null && model.closedAt < 0) {
-            step(
-                "lag"
-            ) { SlotModelLag(script, store, threads, model, options, ::checkNow).run() }
+            val lag = SlotModelLag(script, store, threads, model, options, ::checkNow)
+            step("lag") { lag.run() }
         }
         if (failure == null && model.closedAt < 0) step("converge") { converge() }
         if (failure == null) step("answered") { model.allAnswered("once the run settled") }
