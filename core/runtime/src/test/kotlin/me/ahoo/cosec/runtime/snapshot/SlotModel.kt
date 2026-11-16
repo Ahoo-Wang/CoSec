@@ -394,6 +394,32 @@ internal class SlotModel(
         }
     }
 
+    /**
+     * `SNP-14`: after every event, each kind of each family holds at most its cap (its bound plus the smaller of the
+     * bound and `MAX_SLACK`), plus what can still be installed without an eviction having run: the family's reads in
+     * flight and the compilations queued. Once nothing is in flight, that is the cap itself. [counted] is what the source
+     * counts it holds, which must equal a recount of what it serves.
+     */
+    fun checkHeld(served: List<SnapshotEntry<*>>, counted: (SnapshotKind) -> Pair<Int, Int>) {
+        if (closedAt >= 0) return
+        for (kind in listOf(SnapshotKind.APP, SnapshotKind.TENANT)) {
+            val family = served.filter { it.key.kind == kind }
+            val documents = family.count { it.origin != EntryOrigin.ABSENT }
+            val absent = family.size - documents
+            if (counted(kind) != (documents to absent)) {
+                violations += "the $kind family counts ${counted(kind)} (documents, absent) and holds ${documents to absent}"
+            }
+            val loading = store.pending.count { it.key.kind == kind && !ended(it) } + threads.compiles.size
+            val bound = if (kind == SnapshotKind.APP) options.maxApps else options.maxTenants
+            val cap = bound + minOf(bound, SnapshotFamilies.MAX_SLACK) + loading
+            val absentCap = options.maxAbsent + minOf(options.maxAbsent, SnapshotFamilies.MAX_SLACK) + loading
+            if (documents > cap || absent > absentCap) {
+                violations += "the $kind family holds $documents documents and $absent absent entries, over its cap " +
+                    "($cap, $absentCap with $loading loading)"
+            }
+        }
+    }
+
     /** Every future handed out is answered: after close, and once the run has settled. */
     fun allAnswered(moment: String) {
         // A prewarm waits for its documents to load without failing; one that serves a failure keeps it waiting.
