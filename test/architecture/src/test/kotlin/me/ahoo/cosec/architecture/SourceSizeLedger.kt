@@ -31,7 +31,8 @@ object SourceSizeLedger {
     val ENTRIES: List<Entry> = listOf(
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt",
-            444,
+            // +3 (SNP-13): what the futures of revalidate and recompile promise, in their KDoc.
+            447,
             Disposition.Stays(
                 "the read interface with its contract, and the construction and close order in one place"
             ),
@@ -76,11 +77,6 @@ object SourceSizeLedger {
             "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
             403,
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt",
-            415,
-            Disposition.Debt(Batch.B4),
         ),
     )
 }
