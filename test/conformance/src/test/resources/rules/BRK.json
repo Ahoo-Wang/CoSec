@@ -39,6 +39,7 @@
         "control:BreakGlassControlTest#two people create it, each step recorded first",
         "control:BreakGlassControlTest#without a REQUIRED listener, or when it fails, nothing is created",
         "migrate:MigrateMainTest#publish refuses a break-glass binding and writes nothing",
+        "migrate:PublishFileTest#a document the strict reader or the checks refuse writes nothing",
         "migrate:ControlWritesTest#publish starts the revision chain and writes no break-glass binding",
         "control:BreakGlassControlTest#a break-glass binding never replaces another binding",
         "control:BreakGlassControlTest#a request never takes the id of a binding there is"

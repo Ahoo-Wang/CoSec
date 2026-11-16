@@ -1,0 +1,18 @@
+# Rule: CTL-20
+# Mutant: publish --file compiles a tenant document with the default limits and no declared attributes, not the published platform's
+# Tests: :migrate:test --tests me.ahoo.cosec.migrate.PublishFileTest
+
+diff --git a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
+index 1228973b..2998e0d0 100644
+--- a/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
++++ b/migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/DocumentPublisher.kt
+@@ -104,8 +104,7 @@ class DocumentPublisher(
+                 "No platform document is published yet: publish it first (--document platform)."
+             }
+         }
+-        // As every instance compiles it (PlatformCompiler): against the platform's limits and declared attributes.
+-        val compiler = PolicyDocumentCompiler.forPlatform(platform)
++        val compiler = PolicyDocumentCompiler()
+         compiler.compile(document)
+         compiler.checkReferences(document, platform)
+         refusedBreakGlass(listOf(document))?.let { throw PublishException(it, emptyList()) }

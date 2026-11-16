@@ -66,16 +66,12 @@ document for requests that carry a role. It is the app the **service** serves, n
 
 ## Publish, and issue tokens for the app
 
-Publish the documents as in the [Quick start](../guide/quick-start.md#publish-the-platform-document), with both files in
-the report:
+Publish the documents as in the [Quick start](../guide/quick-start.md#publish-the-platform-document), the platform
+document first:
 
 ```bash
-cd documents
-{ printf '{"accepted":true,"outputSha256":{'; sep=""
-  for f in platform.json apps/wms.json; do
-    printf '%s"%s":"%s"' "$sep" "$f" "$(shasum -a 256 "$f" | cut -d' ' -f1)"; sep=","   # Linux: sha256sum
-  done; printf '}}\n'; } > report.json
-cosec-migrate publish --to-redis redis://localhost:6379 --in .
+cosec-migrate publish --to-redis redis://localhost:6379 --file documents/platform.json --document platform
+cosec-migrate publish --to-redis redis://localhost:6379 --file documents/apps/wms.json --document app:wms
 ```
 
 The login says which app the token is for, and the roles the user holds in it:
