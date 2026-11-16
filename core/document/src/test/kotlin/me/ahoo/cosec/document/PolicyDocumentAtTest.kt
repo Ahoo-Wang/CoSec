@@ -21,13 +21,16 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import tools.jackson.databind.node.ObjectNode
+import java.lang.reflect.Field
+import java.lang.reflect.Modifier
 import java.time.Instant
 
 /**
- * [PolicyDocument.at] passes on every member but the header. Two fixtures between them set every constructor parameter to
+ * [PolicyDocument.copy] passes on every member a caller does not name, and [PolicyDocument.at] every member but the header. Two fixtures between them set every constructor parameter to
  * something other than its default (a catalog is an app document's, limits and attributes the platform's), and the
  * constructor's parameter count is pinned: a member added to [PolicyDocument] fails here until the fixtures set it and
- * `at` passes it on. The check compares what a store would hold: the encodings, with the header taken out.
+ * `copy` passes it on. `copy` is checked field by field, by Java reflection over the class's instance fields; `at` by
+ * what a store would hold: the encodings, with the header taken out.
  */
 class PolicyDocumentAtTest {
     private val rule = """{"id":"login","action":"http:POST","resource":"http:path:/login","key":"environment.ip",""" +
@@ -87,6 +90,37 @@ class PolicyDocumentAtTest {
     }
 
     @Test
+    fun `the fixtures set every field of the class`() {
+        fields().map { it.name }.assert().containsExactlyInAnyOrder(*FIELDS)
+        fields().filter { field ->
+            listOf(
+                platform,
+                app
+            ).none { set(field.get(it)) }
+        }.map { it.name }.assert().isEmpty()
+    }
+
+    @Test
+    fun `copy passes on every field it is not told to change`() {
+        listOf(platform, app).forEach { document ->
+            val copy = document.copy()
+            fields().filter { it.get(copy) != it.get(document) }.map { it.name }.assert().isEmpty()
+            stored(copy).assert().isEqualTo(stored(document))
+        }
+    }
+
+    @Test
+    fun `copy changes the fields it is told to change, and nothing else`() {
+        listOf(platform, app).forEach { document ->
+            val copy = document.copy(policies = emptyList(), bindings = emptyList())
+            copy.policies.assert().isEmpty()
+            copy.bindings.assert().isEmpty()
+            fields().filter { it.get(copy) != it.get(document) }.map { it.name }.assert()
+                .containsExactlyInAnyOrder("policies", "bindings")
+        }
+    }
+
+    @Test
     fun `at changes the revision and the time it is published, and nothing else`() {
         val later = Instant.parse("2026-11-01T00:00:00Z")
         listOf(platform, app).forEach { document ->
@@ -98,9 +132,28 @@ class PolicyDocumentAtTest {
         }
     }
 
+    /** Set: not null, not an empty collection, not the platform's empty owner. */
+    private fun set(value: Any?): Boolean = when (value) {
+        null -> false
+        is Collection<*> -> value.isNotEmpty()
+        is String -> value.isNotEmpty()
+        else -> true
+    }
+
+    private fun fields(): List<Field> =
+        PolicyDocument::class.java.declaredFields.filterNot {
+            Modifier.isStatic(
+                it.modifiers
+            )
+        }.onEach { it.isAccessible = true }
+
     private companion object {
         /** kind, owner, revision, publishedAt, policies, bindings, catalog, boundary, provenance, limits, attributes, rateLimits, roles. */
         const val PARAMETERS = 13
+        val FIELDS = arrayOf(
+            "kind", "owner", "revision", "publishedAt", "policies", "bindings", "catalog", "boundary", "provenance",
+            "limits", "attributes", "rateLimits", "roles",
+        )
         val AT: Instant = Instant.parse("2026-10-26T00:00:00Z")
         const val DIGEST = "SHA-256:9f2c0b1e6a6d1f2c3b4a5d6e7f8091a2b3c4d5e6f708192a3b4c5d6e7f809102"
     }

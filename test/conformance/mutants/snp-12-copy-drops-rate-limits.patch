@@ -1,0 +1,17 @@
+# Rule: SNP-12
+# Mutant: the one copy of a document drops its rate limit rules, so a shadow candidate, a confirmation or the effective document of roles loses them
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentAtTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocument.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocument.kt
+index dd4cb8b4..f47a3014 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocument.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocument.kt
+@@ -133,7 +133,7 @@ class PolicyDocument @InternalCoSecApi constructor(
+         provenance = provenance,
+         limits = limits,
+         attributes = attributes,
+-        rateLimits = rateLimits,
++        rateLimits = emptyList(),
+         roles = roles,
+     )
+ }

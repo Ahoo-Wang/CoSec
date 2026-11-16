@@ -157,7 +157,18 @@ internal object Narrowing {
 
     /** [policy] as the document format writes it, so that two definitions compare by what they say. */
     private fun encoded(base: PolicyDocument, policy: PolicyDefinition): String = PolicyDocumentCodec.encode(
-        PolicyDocument(base.kind, base.owner, base.revision, base.publishedAt, listOf(policy), emptyList())
+        // Not a variant of [base]: a document of [policy] alone, under base's header, so every other member is dropped.
+        base.copy(
+            policies = listOf(policy),
+            bindings = emptyList(),
+            catalog = null,
+            boundary = null,
+            provenance = null,
+            limits = null,
+            attributes = null,
+            rateLimits = emptyList(),
+            roles = emptyList(),
+        )
     ).decodeToString()
 }
 

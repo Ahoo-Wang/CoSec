@@ -409,18 +409,13 @@ class DefaultControlPlane(
 
     /** The digest of [document]'s sections: the document encoded with its header fixed and no policies, bindings or roles. */
     private fun sections(document: PolicyDocument): String = CandidateDigest.of(
-        PolicyDocument(
-            kind = document.kind,
-            owner = document.owner,
+        document.copy(
             revision = 1,
             publishedAt = Instant.EPOCH,
             policies = emptyList(),
             bindings = emptyList(),
-            catalog = document.catalog,
-            boundary = document.boundary,
-            limits = document.limits,
-            attributes = document.attributes,
-            rateLimits = document.rateLimits,
+            provenance = null,
+            roles = emptyList(),
         )
     )
 
