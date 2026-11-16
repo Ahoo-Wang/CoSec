@@ -29,54 +29,6 @@ import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.DocumentKind
 
-/** A statement as a document writes it (RFC 0005 §5.1), before it is compiled. */
-@InternalCoSecApi
-class StatementSource(
-    val name: String,
-    val effect: Effect,
-    /** `service:verb`, `service:*` or `*`; at least one. */
-    val actions: List<String>,
-    /** Empty for any resource. */
-    val resources: List<ResourceSource> = emptyList(),
-    val condition: Condition? = null,
-    /** What an external attribute the condition reads that cannot be fetched means; null for the default. */
-    val onMissing: OnMissing? = null,
-    /**
-     * Who confirmed that this DENY may lapse while its attributes cannot be fetched (`onMissing: nomatch`, RFC 0007 §9.5,
-     * N6): the control plane writes it when it publishes a change carrying the confirmation. Null otherwise.
-     */
-    val onMissingConfirmed: OnMissingConfirmation? = null,
-)
-
-/** The control plane's record of a confirmed `nomatch` DENY (RFC 0007 §9.5): by whom, in which change. */
-@InternalCoSecApi
-data class OnMissingConfirmation(val tenant: String, val principal: String, val change: String) {
-    init {
-        require(tenant.isNotEmpty() && principal.isNotEmpty() && change.isNotEmpty()) {
-            "A nomatch confirmation names who confirmed it and the change."
-        }
-    }
-}
-
-/** A resource pattern and the options of `http:path:` patterns (RFC 0005 §5.2). */
-@InternalCoSecApi
-class ResourceSource(
-    val pattern: String,
-    val caseSensitive: Boolean = true,
-    val decodeAndParseSegments: Boolean = true,
-)
-
-/** A reason a policy does not compile, at a JSON [path] relative to the policy, e.g. `$.statements[1].action[0]`. */
-@InternalCoSecApi
-data class CompileError(val path: String, val message: String)
-
-/** The policy [policyId] does not compile. It is never installed (RFC 0003 F4), so it never decides anything. */
-@InternalCoSecApi
-class CompileException(val policyId: String, val errors: List<CompileError>) :
-    IllegalArgumentException(
-        "Policy [$policyId] does not compile: " + errors.joinToString("; ") { "${it.path}: ${it.message}" }
-    )
-
 /**
  * Compiles policies (RFC 0005 §6.1): parses the action and resource patterns, type-checks and bounds the conditions
  * with [checker], extracts the index keys, and reports every error with its path. Stateless and thread-safe.
