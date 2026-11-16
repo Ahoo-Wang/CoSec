@@ -21,43 +21,6 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.condition.Operand
 import tools.jackson.databind.JsonNode
 
-/** A translated condition: one that always holds, one that never does, or an AST. The AST has neither constant. */
-internal sealed interface Translated {
-    data object Always : Translated
-
-    data object Never : Translated
-
-    class Ast(val condition: Condition) : Translated
-
-    companion object {
-        fun and(items: List<Translated>): Translated {
-            if (items.any { it == Never }) return Never
-            val conditions = items.filterIsInstance<Ast>().map { it.condition }
-            return when (conditions.size) {
-                0 -> Always
-                1 -> Ast(conditions.single())
-                else -> Ast(Condition.And(conditions))
-            }
-        }
-
-        fun or(items: List<Translated>): Translated {
-            if (items.any { it == Always }) return Always
-            val conditions = items.filterIsInstance<Ast>().map { it.condition }
-            return when (conditions.size) {
-                0 -> Never
-                1 -> Ast(conditions.single())
-                else -> Ast(Condition.Or(conditions))
-            }
-        }
-
-        fun not(item: Translated): Translated = when (item) {
-            Always -> Never
-            Never -> Always
-            is Ast -> Ast((item.condition as? Condition.Not)?.condition ?: Condition.Not(item.condition))
-        }
-    }
-}
-
 /**
  * Translates 7.x conditions into the condition AST (RFC 0005 §7.1), exactly where the AST can say the same, and
  * otherwise only in the safe direction:

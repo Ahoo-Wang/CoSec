@@ -15,6 +15,9 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.CompiledPolicy
+import me.ahoo.cosec.engine.EngineRequest
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Binding
@@ -33,7 +36,7 @@ import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 
 /** What the policy-shaped benchmarks of this package share: an authenticated request and `Anyone` bindings. */
-internal fun benchmarkRequest(action: Action, resource: Resource, subjectId: String = "user"): FlatRequest {
+internal fun benchmarkRequest(action: Action, resource: Resource, subjectId: String = "user"): EngineRequest {
     val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
     val subject = ScopeSubject(TenantId("acme"), authenticated = true, memberships)
     val resolution = ScopeResolver.resolve(subject, "", HostScope(null))
@@ -43,7 +46,7 @@ internal fun benchmarkRequest(action: Action, resource: Resource, subjectId: Str
         resource = resource,
         environment = Environment("127.0.0.1", "request", "device", blocked = false),
     )
-    return FlatRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, time = 0)
+    return EngineRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, time = 0)
 }
 
 internal fun anyoneBinding(policy: CompiledPolicy) =

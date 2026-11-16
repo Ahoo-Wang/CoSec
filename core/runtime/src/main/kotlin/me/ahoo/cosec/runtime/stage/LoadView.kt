@@ -16,7 +16,7 @@
 package me.ahoo.cosec.runtime.stage
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider

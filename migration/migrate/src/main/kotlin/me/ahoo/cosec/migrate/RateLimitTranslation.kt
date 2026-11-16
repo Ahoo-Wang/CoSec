@@ -16,32 +16,11 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.RateLimitSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.RateLimitSource
 import me.ahoo.cosec.migrate.v7.limiter.RateLimitRule
 import me.ahoo.cosec.migrate.v7.serialization.V7JsonSerializer
-import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import tools.jackson.databind.JsonNode
-
-/**
- * A 7.x rate limit rule translated (RFC 0005 §7.3): its action and condition as an 8.0 statement, its key as an
- * attribute path. `convert` writes them into the platform document's `rateLimits` (RFC 0006 §8.1), where they keep
- * their ids, so the Redis buckets of 7.x carry on.
- */
-class ConvertedRateLimit(
-    val id: String,
-    val statement: StatementSource,
-    /** The attribute whose value names the bucket; null for one bucket. An absent value is the empty bucket, as in 7.x. */
-    val key: String?,
-    val permitsPerSecond: Double,
-    val windowSeconds: Long,
-    val strictFailure: Boolean,
-) {
-    /** As the platform document holds it. */
-    fun toSource(): RateLimitSource =
-        RateLimitSource(id, statement, key, RateLimitSpec(permitsPerSecond, windowSeconds), strictFailure)
-}
 
 /** The rules of the document of [key]: the 7.x rules are global, so the platform's, in their 7.x buckets (§8.1). */
 internal fun List<ConvertedRateLimit>.of(key: SnapshotKey): List<RateLimitSource> =

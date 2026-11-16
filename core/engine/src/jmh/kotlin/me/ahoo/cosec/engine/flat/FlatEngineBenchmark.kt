@@ -16,6 +16,15 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.CompiledPolicy
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
@@ -76,7 +85,7 @@ open class FlatEngineBenchmark {
     @Param("none", "shared")
     lateinit var guard: String
 
-    private lateinit var request: FlatRequest
+    private lateinit var request: EngineRequest
     private lateinit var view: SnapshotView
 
     @Setup
@@ -111,11 +120,11 @@ open class FlatEngineBenchmark {
         request = request(path, roleIds)
         view = SnapshotView(platform, app, tenant)
         // Also loads the tracing evaluator, as an application that explains decisions would.
-        check(evaluate().decision == CoSecFlatEngine.evaluate(request, view, TraceLevel.FULL).decision)
+        check(evaluate().decision == CoSecEngine.evaluate(request, view, TraceLevel.FULL).decision)
     }
 
     @Benchmark
-    fun evaluate(): FlatEvaluation = CoSecFlatEngine.evaluate(request, view)
+    fun evaluate(): Evaluation = CoSecEngine.evaluate(request, view)
 
     private fun path(path: String, effect: Effect) =
         StatementSource(path, effect, listOf("http:*"), listOf(ResourceSource("http:path:$path")))
@@ -138,7 +147,7 @@ open class FlatEngineBenchmark {
             policy,
         )
 
-    private fun request(path: String, roles: List<String>): FlatRequest {
+    private fun request(path: String, roles: List<String>): EngineRequest {
         val memberships = Memberships(
             Memberships.Source.CLAIMS,
             mapOf(SpaceId.DEFAULT to roles.mapTo(LinkedHashSet(), ::RoleId)),
@@ -158,7 +167,7 @@ open class FlatEngineBenchmark {
             resource = Resource("http", path, emptyMap()),
             environment = Environment("127.0.0.1", "request", "device", blocked = false),
         )
-        return FlatRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, time = 0)
+        return EngineRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, time = 0)
     }
 
     private companion object {

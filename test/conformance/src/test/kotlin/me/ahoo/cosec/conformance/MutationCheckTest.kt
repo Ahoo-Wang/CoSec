@@ -67,6 +67,61 @@ class MutationCheckTest {
         stranded.map { it.name }.assert().describedAs("mutants that no longer apply").isEmpty()
     }
 
+    /**
+     * A build that fails for a reason of its own (a dependency that Maven Central refused with a 429 while many jobs
+     * resolved at once) is neither a mutant that does not compile nor one that survived: the first full run on CI
+     * reported such failures as `DOES_NOT_COMPILE` and `SURVIVED`.
+     */
+    @Test
+    fun `a failed build is told from a compile error, a kill and a survivor`() {
+        val ok = Build(0, "")
+        val compileError = Build(1, "e: file:///w/Engine.kt:12:5 Unresolved reference 'x'\nBUILD FAILED")
+        val network = Build(1, "Could not GET 'https://repo.maven.apache.org/x.pom'. Received status code 429")
+        verdict(compileError, null, 0).assert().isEqualTo(MutantResult.DOES_NOT_COMPILE)
+        verdict(network, null, 0).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        verdict(ok, Build(1, "1 test failed"), 2).assert().isEqualTo(MutantResult.KILLED)
+        verdict(ok, ok, 0).assert().isEqualTo(MutantResult.SURVIVED)
+        verdict(ok, network, 0).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        Build(1, "src/A.java:3: error: cannot find symbol").hasCompilerErrors.assert().isTrue()
+    }
+
+    /** The verdict is read from the result files: a non-zero exit with none, or with only passing tests, is no kill. */
+    @Test
+    fun `only a failed test in a result file is a kill`() {
+        fun results(vararg reports: String): Path {
+            val worktree = Files.createTempDirectory(temp, "worktree")
+            reports.forEachIndexed { index, xml ->
+                val directory = Files.createDirectories(worktree.resolve("core/x/build/test-results/test"))
+                Files.writeString(directory.resolve("TEST-$index.xml"), xml)
+            }
+            return worktree
+        }
+        val passing = """<testsuite tests="3" failures="0"><testcase name="a"/></testsuite>"""
+        val failing = """<testsuite tests="3" failures="1"><testcase name="a"><failure message="x"/></testcase></testsuite>"""
+        val crashed = Build(1, "Could not GET 'https://repo.maven.apache.org/x.pom'. Received status code 429")
+        val ok = Build(0, "")
+
+        // Non-zero exit, no result file at all: the test task never ran.
+        MutationCheck.failedTests(results()).assert().isEqualTo(0)
+        verdict(ok, crashed, MutationCheck.failedTests(results())).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        // Non-zero exit, results present and all passing: not a kill either.
+        MutationCheck.failedTests(results(passing)).assert().isEqualTo(0)
+        verdict(ok, crashed, MutationCheck.failedTests(results(passing))).assert().isEqualTo(MutantResult.BUILD_FAILED)
+        // A clean pass is a survivor.
+        verdict(ok, ok, MutationCheck.failedTests(results(passing))).assert().isEqualTo(MutantResult.SURVIVED)
+        // A failed test in a result file is a kill, whatever else the build did.
+        MutationCheck.failedTests(results(passing, failing)).assert().isEqualTo(1)
+        verdict(
+            ok,
+            crashed,
+            MutationCheck.failedTests(results(passing, failing))
+        ).assert().isEqualTo(MutantResult.KILLED)
+        // Reports outside a `test-results` directory are not test results.
+        val stray = Files.createTempDirectory(temp, "stray")
+        Files.writeString(Files.createDirectories(stray.resolve("build/reports")).resolve("TEST-0.xml"), failing)
+        MutationCheck.failedTests(stray).assert().isEqualTo(0)
+    }
+
     @Test
     fun `the header is read before the diff`() {
         val patch = Files.writeString(

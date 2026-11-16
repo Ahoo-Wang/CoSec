@@ -19,12 +19,12 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
@@ -57,7 +57,7 @@ import tools.jackson.databind.JsonNode
 import java.time.Instant
 
 /**
- * The `engine` level of the scenario format (RFC 0008 §3.3): documents → compile → [SnapshotView] → [FlatEngine]. The
+ * The `engine` level of the scenario format (RFC 0008 §3.3): documents → compile → [SnapshotView] → [Engine]. The
  * conformance suite runs its scenarios through it, and [PolicyTestKit] runs a user's scenarios against the user's
  * documents, so both mean the same thing by a scenario.
  *
@@ -87,7 +87,7 @@ import java.time.Instant
 @InternalCoSecApi
 class EngineScenarios(
     private val compiler: SnapshotCompiler = DocumentSnapshotCompiler,
-    private val engine: FlatEngine = CoSecFlatEngine,
+    private val engine: Engine = CoSecEngine,
     /**
      * Whether the request's action and resource are read as enforcement reads a request's ([Enforceable], `PIP-15`,
      * `PIP-18`): `http:HEAD` decided as `http:GET`, a lower-case method and a path the pipeline refuses answered
@@ -200,7 +200,7 @@ class EngineScenarios(
         memberships: Memberships,
         scope: Scope,
         request: JsonNode
-    ): FlatRequest? {
+    ): EngineRequest? {
         val written = action(request)
         val action = if (enforceable) Enforceable.action(written) ?: return null else written
         val asWritten = resource(request.get("resource"))
@@ -238,7 +238,7 @@ class EngineScenarios(
             resource = resource,
             environment = Environment(ip.orEmpty(), "", device.orEmpty(), blocked),
         )
-        return FlatRequest(authz, scope, memberships, time, facts.host)
+        return EngineRequest(authz, scope, memberships, time, facts.host)
     }
 
     private fun resource(node: JsonNode?): Resource {

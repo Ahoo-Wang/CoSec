@@ -20,14 +20,14 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.engine.ViewVersion
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
@@ -110,7 +110,7 @@ internal class HeldDocuments(val platform: Held?, val app: Held?, val tenant: He
  */
 @InternalCoSecApi
 class Simulator(
-    private val engine: FlatEngine = CoSecFlatEngine,
+    private val engine: Engine = CoSecEngine,
     /** The host's `AttributeProvider` catalog, which enforcement compiles against. */
     private val attributes: AttributeCatalog = AttributeCatalog.NONE,
     /** The headers the host reads credentials from besides the fixed ones, as enforcement compiles with them. */
@@ -149,7 +149,7 @@ class Simulator(
             app
         )
 
-    fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): FlatEvaluation =
+    fun evaluate(request: SimulatedRequest, scope: Scope, documents: Documents): Evaluation =
         decide(
             request,
             scope,
@@ -186,7 +186,7 @@ class Simulator(
             throw ChangeRejectedException(BAD_REQUEST, AMBIGUOUS_HEADER)
         }
         val evaluation = engine.evaluate(
-            FlatRequest(authz, scope, memberships, request.time, http),
+            EngineRequest(authz, scope, memberships, request.time, http),
             view,
             TraceLevel.FULL
         )
@@ -194,7 +194,7 @@ class Simulator(
     }
 
     /** An evaluation, and the documents its view read with their revisions. */
-    internal class Decided(val evaluation: FlatEvaluation, scope: Scope, version: ViewVersion) {
+    internal class Decided(val evaluation: Evaluation, scope: Scope, version: ViewVersion) {
         /** The revisions the view read: an app's only when it took the app's document (its revision, 0 for none). */
         val version = ViewVersion(version.platform, version.app, version.tenant ?: 0)
 
@@ -380,7 +380,7 @@ internal class Redaction(private val readable: Set<DocumentKind>) {
         )
     }
 
-    fun trace(evaluation: FlatEvaluation): TraceView? {
+    fun trace(evaluation: Evaluation): TraceView? {
         val trace = evaluation.trace ?: return null
         val visible = trace.candidates.filter { visible(it.ref.via) }
         return TraceView(

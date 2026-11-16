@@ -50,10 +50,10 @@ class SuspendingRedisRateLimitingTest {
     )
 
     private val views = object : me.ahoo.cosec.runtime.snapshot.SnapshotViews {
-        override fun peek(key: me.ahoo.cosec.runtime.snapshot.ViewKey) = me.ahoo.cosec.engine.flat.SnapshotView(
+        override fun peek(key: me.ahoo.cosec.runtime.snapshot.ViewKey) = me.ahoo.cosec.engine.SnapshotView(
             platform,
             null,
-            key.tenant?.let { me.ahoo.cosec.engine.flat.CompiledDocument.tenant(it, emptyList(), emptyList()) },
+            key.tenant?.let { me.ahoo.cosec.engine.CompiledDocument.tenant(it, emptyList(), emptyList()) },
         )
 
         override fun load(key: me.ahoo.cosec.runtime.snapshot.ViewKey) =

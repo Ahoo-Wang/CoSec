@@ -17,7 +17,7 @@ package me.ahoo.cosec.spring.boot.control
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import java.time.Clock
 
