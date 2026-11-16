@@ -50,8 +50,6 @@ object TypeLedger {
         "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeContext.kt" to family(OWN_EXCEPTION, "the change context"),
-        "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeModel.kt" to Disposition.Debt(Batch.B4),
-        "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Confirmations.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/change/MovedHeads.kt" to Disposition.Debt(Batch.B4),
         "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt" to Disposition.Debt(Batch.B4),

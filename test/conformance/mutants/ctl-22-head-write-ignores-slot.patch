@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index b2a61126..d7900b35 100644
+index 6be8bc1f..31b4fb6a 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -558,7 +558,6 @@ class Changes(
+@@ -587,7 +587,6 @@ class Changes(
              head,
              candidate,
              PublishRules.publication(change, publisher, rechecked),

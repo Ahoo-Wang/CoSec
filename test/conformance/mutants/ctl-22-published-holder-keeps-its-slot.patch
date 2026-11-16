@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RetriedPublishTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-index 3a1cb325..f76a92b5 100644
+index 6be8bc1f..affaac67 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt
-@@ -543,12 +543,6 @@ class Changes(
+@@ -535,12 +535,6 @@ class Changes(
      ): ChangeRequest {
          val change = visible(publisher, id)
          authority.require(publisher, change.key, PublishRules.publishing(change))
