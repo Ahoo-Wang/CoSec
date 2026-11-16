@@ -75,7 +75,7 @@ internal fun Evaluator.erred(
 }
 
 /** A DENY statement, or the condition reached through it, failed. Keeps the first. */
-internal fun Evaluator.failed(
+private fun Evaluator.failed(
     policy: CompiledPolicy,
     statement: CompiledStatement,
     via: BindingRef,

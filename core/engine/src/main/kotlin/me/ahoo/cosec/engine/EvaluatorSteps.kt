@@ -96,7 +96,7 @@ internal fun Evaluator.step(policy: CompiledPolicy, statement: CompiledStatement
  * would for each of those statements.
  */
 @Suppress("ReturnCount", "TooGenericExceptionCaught")
-internal fun Evaluator.stepEachPattern(policy: CompiledPolicy, statement: CompiledStatement): Int {
+private fun Evaluator.stepEachPattern(policy: CompiledPolicy, statement: CompiledStatement): Int {
     val condition = statement.condition!!
     val globs = statement.globUnits > 0
     var failure: Throwable? = null
@@ -129,7 +129,7 @@ internal fun Evaluator.stepEachPattern(policy: CompiledPolicy, statement: Compil
 
 /** [MATCHED] when [condition] holds under [captures], [CONDITION_MISS] when not, [ERROR] with [stepError] when it threw. */
 @Suppress("TooGenericExceptionCaught")
-internal fun Evaluator.holdsUnder(condition: CheckedCondition, captures: Captures): Int {
+private fun Evaluator.holdsUnder(condition: CheckedCondition, captures: Captures): Int {
     this.captures = captures
     return try {
         if (condition.evaluate(this)) MATCHED else CONDITION_MISS
@@ -148,7 +148,7 @@ internal fun Evaluator.holdsUnder(condition: CheckedCondition, captures: Capture
  * [stepEachPattern]'s result when no pattern held: a miss without [failure]; otherwise the failure, unless the policy
  * condition, consulted if no pattern [guarded] it yet, rules the statement out, as in [step].
  */
-internal fun Evaluator.eachPatternMissed(policy: CompiledPolicy, failure: Throwable?, guarded: Boolean): Int {
+private fun Evaluator.eachPatternMissed(policy: CompiledPolicy, failure: Throwable?, guarded: Boolean): Int {
     if (failure == null) {
         return if (guarded) CONDITION_MISS else RESOURCE_MISS
     }
@@ -163,7 +163,7 @@ internal fun Evaluator.eachPatternMissed(policy: CompiledPolicy, failure: Throwa
 }
 
 /** [MATCHED] when [policy] has no condition or it holds, else [GUARD_MISS] or [GUARD_FAILED] with [stepError]. */
-internal fun Evaluator.guardOf(policy: CompiledPolicy): Int {
+private fun Evaluator.guardOf(policy: CompiledPolicy): Int {
     val guard = policy.condition ?: return MATCHED
     return when (guard(guard)) {
         GUARD_MISSED -> GUARD_MISS
@@ -182,7 +182,7 @@ internal fun Evaluator.guardOf(policy: CompiledPolicy): Int {
  */
 // stays: one loop over the patterns, each matched with or without captures inside the try that keeps its failure
 @Suppress("NestedBlockDepth", "TooGenericExceptionCaught")
-internal fun Evaluator.resource(statement: CompiledStatement): Captures? {
+private fun Evaluator.resource(statement: CompiledStatement): Captures? {
     var failure: Exception? = null
     // Only glob segments use the evaluation's table: a statement without one matches through the plain calls, as
     // before the table, one call less deep on the hot path.

@@ -54,7 +54,7 @@ internal fun Evaluator.withObligations(decision: Decision): Decision {
     return obligations?.let { Decision.Permit(decision.by, it) } ?: decision
 }
 
-internal fun Evaluator.obligation(rule: CompiledRateLimit): Obligation? {
+private fun Evaluator.obligation(rule: CompiledRateLimit): Obligation? {
     val result = step(rule.policy, rule.statement)
     if (result == ERROR || result == GUARD_FAILED) {
         val missing = stepError is AttributeMissing
@@ -73,7 +73,7 @@ internal fun Evaluator.obligation(rule: CompiledRateLimit): Obligation? {
 
 /** The bucket [key] names for this request; null when it cannot be read ([bucketError] says why). */
 @Suppress("TooGenericExceptionCaught")
-internal fun Evaluator.bucket(rule: CompiledRateLimit, key: Attribute): String? = try {
+private fun Evaluator.bucket(rule: CompiledRateLimit, key: Attribute): String? = try {
     // The statement captures only for its own condition: a key reading a variable matches with captures here.
     captures = if (key.kind == Attribute.Kind.RESOURCE_VAR) {
         keyCaptures(rule.statement)
@@ -98,7 +98,7 @@ internal fun Evaluator.bucket(rule: CompiledRateLimit, key: Attribute): String? 
  * not one under which it holds.
  */
 @Suppress("TooGenericExceptionCaught")
-internal fun Evaluator.keyCaptures(statement: CompiledStatement): Captures? {
+private fun Evaluator.keyCaptures(statement: CompiledStatement): Captures? {
     val condition = statement.condition
     for (pattern in statement.resources) {
         val captures = pattern.match(target, this) ?: continue

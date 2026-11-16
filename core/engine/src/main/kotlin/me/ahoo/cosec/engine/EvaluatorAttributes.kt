@@ -116,7 +116,7 @@ internal fun Evaluator.stringOf(attribute: Attribute): String? =
     }
 
 /** The action, the resource and the captures; the host for the rest. */
-internal fun Evaluator.target(attribute: Attribute): String? =
+private fun Evaluator.target(attribute: Attribute): String? =
     when (attribute.kind) {
         Attribute.Kind.ACTION_SERVICE -> authz.action.namespace
         Attribute.Kind.ACTION_VERB -> authz.action.verb
@@ -171,7 +171,7 @@ internal fun Evaluator.ipOf(attribute: Attribute): IpAddress? {
 }
 
 /** Bare role ids in any space. */
-internal fun Evaluator.subjectRoles(): Set<String> {
+private fun Evaluator.subjectRoles(): Set<String> {
     val roles = HashSet<String>()
     for (spaceRoles in request.memberships.roles.values) {
         spaceRoles.mapTo(roles) { it.value }
@@ -180,7 +180,7 @@ internal fun Evaluator.subjectRoles(): Set<String> {
 }
 
 /** As the token claims them: `role` in the default space, `role@space` elsewhere. */
-internal fun Evaluator.scopedRoles(): Set<String> {
+private fun Evaluator.scopedRoles(): Set<String> {
     val roles = HashSet<String>()
     for ((space, spaceRoles) in request.memberships.roles) {
         for (role in spaceRoles) {

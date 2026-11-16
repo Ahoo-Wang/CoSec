@@ -65,7 +65,7 @@ internal fun Evaluator.guard(guard: CheckedCondition): Int {
 }
 
 /** The result [guard] had in this evaluation, with [guardError] set, or [NOT_REMEMBERED]; for the map. */
-internal fun Evaluator.recalled(guard: CheckedCondition): Int =
+private fun Evaluator.recalled(guard: CheckedCondition): Int =
     when (val outcome = guardMap?.get(guard)) {
         null -> NOT_REMEMBERED
         is Throwable -> {
@@ -79,7 +79,7 @@ internal fun Evaluator.recalled(guard: CheckedCondition): Int =
         }
     }
 
-internal fun Evaluator.remember(guard: CheckedCondition, result: Int, error: Throwable?) {
+private fun Evaluator.remember(guard: CheckedCondition, result: Int, error: Throwable?) {
     var guards = guards
     var results = guardResults
     if (guards == null || results == null) {
@@ -111,7 +111,7 @@ internal fun Evaluator.remember(guard: CheckedCondition, result: Int, error: Thr
 }
 
 /** Remembers the [SCAN_GUARDS] conditions of the arrays and [guard] in a map, and drops the arrays. */
-internal fun Evaluator.moveGuardsToMap(guard: CheckedCondition, outcome: Any) {
+private fun Evaluator.moveGuardsToMap(guard: CheckedCondition, outcome: Any) {
     val map = IdentityHashMap<CheckedCondition, Any>(MAP_GUARDS)
     for (i in 0 until guardCount) {
         map[guards!![i]] = guardErrors?.get(i) ?: guardResults!![i]
