@@ -71,7 +71,7 @@ contain `:`, so a key names one document only.
 
 | Key | Written by | Contents |
 |---|---|---|
-| `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces |
+| `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces, stored as the whole JSON document, its `schema`, `revision` and `publishedAt` included |
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest (`SHA-256:` and 64 hex digits, as CoCache computes it) |
 | `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document, and the records reclamation took out of it and has not yet seen deleted |
 | `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`, each with the revision of it that last indexed the reference: a revision removes only what it or an earlier one indexed (`CTL-25`); for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses, and removes what a publish indexed before a head write it lost |
@@ -80,7 +80,7 @@ contain `:`, so a key names one document only.
 | `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
-| `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open; the change it belongs to removes it, only while it is still its own (`CTL-26`) |
+| `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open (its window, its base revision and the candidate document, whose header is its own); the change it belongs to removes it, only while it is still its own (`CTL-26`) |
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; the instance stops writing it once the window's candidate is withdrawn; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
 | `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's installed revisions and their lag; a heartbeat writes this one value, whatever the size of the cluster; expires 2 minutes after its last write, and a status older than a minute is ignored |
@@ -313,6 +313,10 @@ Both write on the Redis and under the `cosec.key-prefix` the instances read. A p
 the revision record first, then replaces the head with a compare-and-set on the base revision's digest, so a reader
 sees the old head or the new one, never a mix, and two publishers never overwrite each other: the second one is told
 the base moved.
+
+A stored document is its body: the whole JSON document, header included. An instance reads the header from it
+(`SnapshotDocuments.read`, `SNP-12`), so the revision it reports installed is always the revision of the content it
+enforces, whatever store holds the bytes.
 
 ### The first documents
 

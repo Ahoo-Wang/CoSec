@@ -22,9 +22,8 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.document.PolicyDocument
-import me.ahoo.cosec.document.PolicyDocumentCodec
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
 
@@ -47,12 +46,7 @@ internal class StagingSlots(
     /** The candidate [change] stages for its window [state]; 503 when it cannot be made. Nothing is reserved yet. */
     @Suppress("TooGenericExceptionCaught")
     fun candidate(change: ChangeRequest, state: ShadowState, applied: () -> PolicyDocument): StoredCandidate = try {
-        val document = SnapshotDocument(
-            PolicyDocumentCodec.SCHEMA,
-            change.base.revision + 1,
-            state.startedAt,
-            PolicyDocumentCodec.encode(applied()),
-        )
+        val document = SnapshotDocuments.of(applied().at(change.base.revision + 1, state.startedAt))
         StoredCandidate(state.window, change.base.revision, document)
     } catch (e: Exception) {
         throw ChangeRejectedException(UNAVAILABLE, "the candidate of [${change.key}] could not be staged", e)
