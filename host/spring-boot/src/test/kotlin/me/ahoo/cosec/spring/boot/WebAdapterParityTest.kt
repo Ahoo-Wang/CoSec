@@ -24,13 +24,13 @@ import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
@@ -261,11 +261,11 @@ class WebAdapterParityTest {
     private val hostAttributes = CopyOnWriteArrayList<List<String?>>()
 
     /** The engine, except that `/boom` is a defect: the 500 path. */
-    private val engine = object : FlatEngine {
-        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation {
+    private val engine = object : Engine {
+        override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation {
             hostAttributes += HOST_ATTRIBUTES.map(request.attributes::string)
             check(request.request.resource.id != "/boom") { "A defect" }
-            return CoSecFlatEngine.evaluate(request, snapshot, trace)
+            return CoSecEngine.evaluate(request, snapshot, trace)
         }
     }
 

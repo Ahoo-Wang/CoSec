@@ -24,7 +24,7 @@ import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.migrate.v7.api.permission.AppPermission
 import me.ahoo.cosec.migrate.v7.api.permission.AppRolePermission
 import me.ahoo.cosec.migrate.v7.api.policy.Policy

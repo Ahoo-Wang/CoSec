@@ -16,7 +16,7 @@
 package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.ResourceSource
+import me.ahoo.cosec.engine.ResourceSource
 import tools.jackson.databind.JsonNode
 
 /**

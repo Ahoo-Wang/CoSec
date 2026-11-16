@@ -15,6 +15,12 @@
 package me.ahoo.cosec.engine.flat
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.PolicyId
@@ -39,7 +45,7 @@ open class PolicyConditionBenchmark {
     @Param("4", "16", "32", "64", "128", "512", "2048")
     var policies: Int = 0
 
-    private lateinit var request: FlatRequest
+    private lateinit var request: EngineRequest
     private lateinit var view: SnapshotView
 
     @Setup
@@ -56,5 +62,5 @@ open class PolicyConditionBenchmark {
     }
 
     @Benchmark
-    fun evaluate(): Decision = CoSecFlatEngine.evaluate(request, view).decision
+    fun evaluate(): Decision = CoSecEngine.evaluate(request, view).decision
 }

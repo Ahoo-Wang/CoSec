@@ -25,13 +25,13 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.BindingId
@@ -107,7 +107,7 @@ class AuthorizationCheckerTest {
     private val views = Views()
     private val pipeline = PipelineFixtures.pipeline(
         authenticator = authenticator(authenticated(claims())),
-        engine = CoSecFlatEngine,
+        engine = CoSecEngine,
         views = views,
     )
     private val checker = AuthorizationChecker(pipeline)
@@ -116,7 +116,7 @@ class AuthorizationCheckerTest {
     private fun permitted(app: String?): RequestSecurity {
         val pipeline = PipelineFixtures.pipeline(
             authenticator = authenticator(authenticated(claims(), app = app)),
-            engine = CoSecFlatEngine,
+            engine = CoSecEngine,
             views = views,
         )
         return runBlocking { pipeline.evaluate(facts("/orders/1")) }.security!!
@@ -171,12 +171,12 @@ class AuthorizationCheckerTest {
     }
 
     /** Fails on the `fail:*` actions, as a defect or a cancellation from inside the check would; decides the rest. */
-    private object FailingEngine : FlatEngine by CoSecFlatEngine {
-        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
+    private object FailingEngine : Engine by CoSecEngine {
+        override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
             when (request.request.action.verb.takeIf { request.request.action.namespace == "fail" }) {
                 "throw" -> throw IllegalStateException("broken")
                 "cancel" -> throw CancellationException("cancelled inside the check")
-                else -> CoSecFlatEngine.evaluate(request, snapshot, trace)
+                else -> CoSecEngine.evaluate(request, snapshot, trace)
             }
     }
 

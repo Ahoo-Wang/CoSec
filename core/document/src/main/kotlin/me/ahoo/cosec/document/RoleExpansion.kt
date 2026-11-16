@@ -16,8 +16,8 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.CompileError
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.CompileError
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId

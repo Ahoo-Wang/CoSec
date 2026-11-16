@@ -22,7 +22,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
+import me.ahoo.cosec.engine.CoSecEngine
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures
@@ -136,7 +136,7 @@ class ShadowDocumentFailureTest {
         val registered = DecisionListeners(listOfNotNull(shadow)).also { opened += it }
         val pipeline = PipelineFixtures.pipeline(
             authenticator = PipelineFixtures.authenticator(PipelineFixtures.authenticated(app = "order")),
-            engine = CoSecFlatEngine,
+            engine = CoSecEngine,
             views = views,
         ) { listeners(registered) }
         return runBlocking {
