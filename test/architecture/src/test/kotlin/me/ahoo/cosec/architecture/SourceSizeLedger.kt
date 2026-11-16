@@ -117,7 +117,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt",
-            464,
+            454,
             Disposition.Debt(Batch.B4),
         ),
         Entry(
