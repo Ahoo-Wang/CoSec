@@ -82,15 +82,8 @@ class ChangeTransitionTableTest {
         val proposed = harness.changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("p"))), "t")
         val stored = checkNotNull(harness.memory.change(proposed.id))
         val now = harness.clock.now
-        val window = ShadowState("w", now).let {
-            if (state == SHADOWING) {
-                it
-            } else {
-                it.copy(
-                    closed = ShadowSummary(emptyMap(), now, insufficient = false, blocked = false)
-                )
-            }
-        }
+        val closed = ShadowSummary(emptyMap(), now, insufficient = false, blocked = false)
+        val window = if (state == SHADOWING) ShadowState("w", now) else ShadowState("w", now, closed)
         val forced = stored.value.copy(state = state, shadow = if (state.staged) window else null)
         check(harness.memory.putChange(stored.digest, forced))
         harness to proposed.id
