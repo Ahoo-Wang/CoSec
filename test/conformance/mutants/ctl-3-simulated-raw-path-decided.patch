@@ -2,16 +2,16 @@
 # Mutant: a simulated http path is checked against enforcement's normalization, then decided as given
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-index 8d0652e8..d151e324 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-@@ -145,7 +145,7 @@ internal class DecisionQueries(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
+index 065ca669..ce0ad646 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
+@@ -36,7 +36,7 @@ internal object EnforceableOrRefused {
          )
  
      /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
--    private fun enforceable(resource: Resource): Resource = Enforceable.resource(resource)
-+    private fun enforceable(resource: Resource): Resource = Enforceable.resource(resource)?.let { resource }
+-    fun resource(resource: Resource): Resource = Enforceable.resource(resource)
++    fun resource(resource: Resource): Resource = Enforceable.resource(resource)?.let { resource }
          ?: throw ChangeRejectedException(
              BAD_REQUEST,
              "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +

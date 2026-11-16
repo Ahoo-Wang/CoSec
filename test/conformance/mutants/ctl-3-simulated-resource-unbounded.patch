@@ -2,15 +2,15 @@
 # Mutant: a simulated, explained or analyzed resource is decided as given: neither normalized nor bounded
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-index 8d0652e8..63d2c2d9 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DecisionQueries.kt
-@@ -145,14 +145,8 @@ internal class DecisionQueries(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
+index 065ca669..0a6fc59a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
+@@ -36,14 +36,7 @@ internal object EnforceableOrRefused {
          )
  
      /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
--    private fun enforceable(resource: Resource): Resource = Enforceable.resource(resource)
+-    fun resource(resource: Resource): Resource = Enforceable.resource(resource)
 -        ?: throw ChangeRejectedException(
 -            BAD_REQUEST,
 -            "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
@@ -18,8 +18,7 @@ index 8d0652e8..63d2c2d9 100644
 -                "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
 -                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
 -        )
-+    private fun enforceable(resource: Resource): Resource = resource
-+
++    fun resource(resource: Resource): Resource = resource
  
-     private fun resolved(request: SimulatedRequest) = (simulator.scope(request) as? ScopeResolution.Resolved)?.scope
- 
+     private const val BAD_REQUEST = 400
+ }
