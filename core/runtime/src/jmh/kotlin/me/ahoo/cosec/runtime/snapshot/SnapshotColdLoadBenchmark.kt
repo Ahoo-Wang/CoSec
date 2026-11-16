@@ -24,6 +24,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.BenchmarkMode
+import org.openjdk.jmh.annotations.Level
 import org.openjdk.jmh.annotations.Mode
 import org.openjdk.jmh.annotations.OutputTimeUnit
 import org.openjdk.jmh.annotations.Setup
@@ -43,9 +44,11 @@ import java.util.concurrent.atomic.AtomicLong
  * the compilation of an empty document, the install and the eviction it causes.
  *
  * The store holds [TENANTS] tenant documents and the source [HELD]. Each thread requests its own slice of [SLICE] keys
- * round-robin, so a document has been evicted long before it comes round again: every request is a miss by
- * construction. Eviction runs on housekeeping, asynchronously; if it ever lagged, the row would measure hits among the
- * misses, so the source counts its tenant load outcomes and [tearDown] fails when one was a hit.
+ * round-robin. Eviction runs on housekeeping, asynchronously, and under a burst a family holds more than its bound, up to
+ * about the housekeeping queue's 4,096 more; a slice is larger than that, so a document has been evicted before it
+ * comes round again: every request is a miss by construction. The source counts its tenant load outcomes and
+ * [tearDown] fails when one was a hit. It also reports the most tenant documents seen installed at an iteration's end,
+ * how far eviction ran behind the bound.
  *
  * [coldLoad] is one thread; [coldLoadContended] is [CONTENDED] threads, each on its own slice, contending for the compile
  * pool and the eviction. The "before" of B2b's rewrite, on today's slot.
@@ -61,6 +64,7 @@ open class SnapshotColdLoadBenchmark {
     private val slices = AtomicInteger()
     @Volatile
     private var counting = false
+    private var largestHeld = 0
 
     /** The tenant load outcomes, once setup is done: every request must be a miss. */
     private val metrics = object : SnapshotMetrics {
@@ -89,21 +93,33 @@ open class SnapshotColdLoadBenchmark {
         val store = InMemorySnapshotDocumentStore()
         val text = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"}"""
         val keys = List(TENANTS) { SnapshotKey.Tenant("tenant-$it") }
-        (keys + SnapshotKey.Platform).forEach { store.put(it, SnapshotDocuments.read(text.encodeToByteArray())) }
+        // One decoded document under every key, so the store stays small however many tenants it holds.
+        val document = SnapshotDocuments.read(text.encodeToByteArray())
+        (keys + SnapshotKey.Platform).forEach { store.put(it, document) }
         val options = SnapshotOptions(maxTenants = HELD)
         source = DocumentSnapshots.source(store, PolicyDocumentCompiler(), options, Clock.systemUTC(), metrics)
         source.load().join()
         // Every key once, so each is seen: a request reads it from the store of record, as a cold request does.
+        val started = System.nanoTime()
         keys.forEach { source.loadAll(listOf(it)).join() }
+        println("Setup saw $TENANTS tenants in ${(System.nanoTime() - started) / 1_000_000} ms")
         counting = true
     }
 
+    /** The most tenant documents seen installed at an iteration's end: how far eviction runs behind the bound. */
+    @TearDown(Level.Iteration)
+    fun sampleHeld() {
+        largestHeld = maxOf(largestHeld, held())
+    }
+
+    private fun held(): Int = source.entries().count { it.key is SnapshotKey.Tenant }
+
     @TearDown
     fun tearDown() {
-        println("Tenant entries installed at the end: ${source.entries().count { it.key is SnapshotKey.Tenant }}")
+        largestHeld = maxOf(largestHeld, held())
         source.close()
         val counts = outcomes.mapValues { it.value.get() }
-        println("Tenant load outcomes: $counts")
+        println("Tenant load outcomes: $counts; the most tenant documents held at an iteration's end: $largestHeld (bound $HELD)")
         check(counts.getValue(LoadOutcome.HIT) == 0L) { "A request was a hit, not a miss: $counts" }
     }
 
@@ -115,7 +131,8 @@ open class SnapshotColdLoadBenchmark {
     fun coldLoadContended(slice: Slice): SnapshotSet<*, *> = source.loadAll(listOf(slice.next())).join()
 
     private companion object {
-        const val TENANTS = 4096
+        /** Each thread's slice is larger than the documents a family can hold beyond its bound, whatever eviction does. */
+        const val TENANTS = 65_536
         const val CONTENDED = 8
         const val SLICE = TENANTS / CONTENDED
         const val HELD = 16
