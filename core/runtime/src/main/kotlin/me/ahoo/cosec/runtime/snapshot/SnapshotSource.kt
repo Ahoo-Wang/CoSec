@@ -118,7 +118,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     private val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
     private val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
-    private val families = SnapshotFamilies(families, sharedKey.kind, lagReports)
+    internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports)
     private val context = SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families)
     private val shared = Slot(sharedKey, sharedCompiler, context)
 
