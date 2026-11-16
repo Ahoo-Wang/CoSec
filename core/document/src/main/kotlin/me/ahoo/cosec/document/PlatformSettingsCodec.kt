@@ -16,9 +16,12 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.DocumentJson.factory
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
+import tools.jackson.databind.node.ArrayNode
+import tools.jackson.databind.node.ObjectNode
 
 /** The platform document's settings: the condition limits and the external attributes it declares. */
 internal object PlatformSettingsCodec {
@@ -39,6 +42,20 @@ internal object PlatformSettingsCodec {
         "stringSet" to AttributeType.STRING_SET,
         "ip" to AttributeType.IP,
     )
+
+    internal fun limitsTree(limits: ConditionLimits): ObjectNode =
+        factory.objectNode().put("maxNodes", limits.maxNodes).put("maxDepth", limits.maxDepth)
+            .put("maxInValues", limits.maxInValues).put("maxCidrBlocks", limits.maxCidrBlocks)
+            .put("maxLiteralBytes", limits.maxLiteralBytes).put("maxCost", limits.maxCost)
+
+    internal fun attributesTree(attributes: List<Attribute>): ArrayNode {
+        val array = factory.arrayNode()
+        attributes.forEach { attribute ->
+            val type = ATTRIBUTE_TYPES.entries.first { it.value == attribute.type }.key
+            array.addObject().put("path", attribute.path).put("type", type)
+        }
+        return array
+    }
 
     internal fun decodeLimits(node: DocumentNode): ConditionLimits {
         node.requireObject(*LIMIT_FIELDS)

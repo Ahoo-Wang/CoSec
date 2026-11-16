@@ -16,13 +16,13 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.document.DocumentJson.WILDCARD
 import me.ahoo.cosec.document.DocumentJson.factory
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
 import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.Match.Companion.WILDCARD
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
