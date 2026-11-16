@@ -2,11 +2,11 @@
 # Mutant: a tenant or app id may hold '/' again, and a control resource takes it as it is, so a platform operator granted doc/tenant/acme/** reads tenant acme/west's document
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.OneSegmentTenantIdTest :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt
-index cef7b8e8..d5ec4f95 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlAuthorization.kt
-@@ -364,7 +364,7 @@ object ControlResources {
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
+index f68efc07..f2eaf6e3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
+@@ -73,7 +73,7 @@ object ControlResources {
       * valid id never reaches; space ids, which may hold one, still meet it first.
       */
      private fun segment(value: String): String {
@@ -16,10 +16,10 @@ index cef7b8e8..d5ec4f95 100644
      }
  }
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-index a8178f94..85c60ea0 100644
+index 18414cd1..6bce5ea1 100644
 --- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
 +++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-@@ -79,7 +79,7 @@ object ScopeResolver {
+@@ -80,7 +80,7 @@ object ScopeResolver {
          for (index in app.indices) {
              val c = app[index]
              val refused = when (c) {
