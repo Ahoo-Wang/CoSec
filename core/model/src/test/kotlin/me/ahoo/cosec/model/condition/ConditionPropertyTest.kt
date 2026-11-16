@@ -169,7 +169,7 @@ class ConditionPropertyTest {
         )
         visits(condition, input).assert().isEqualTo(15)
         repeat(20_000) { condition.evaluate(input) }
-        val thread = Thread.currentThread().id
+        val thread = Thread.currentThread().threadId()
         val before = bean.getThreadAllocatedBytes(thread)
         var matched = 0
         repeat(100_000) { if (condition.evaluate(input)) matched++ }

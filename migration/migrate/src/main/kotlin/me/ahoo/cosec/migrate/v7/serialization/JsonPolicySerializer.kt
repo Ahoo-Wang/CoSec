@@ -69,18 +69,18 @@ internal object JsonPolicyDeserializer : StdDeserializer<Policy>(Policy::class.j
         return PolicyData(
             id = requireNotNull(jsonNode.get(POLICY_ID_KEY)) {
                 "$POLICY_ID_KEY is required!"
-            }.asText(),
+            }.asString(),
             name = requireNotNull(jsonNode.get(POLICY_NAME_KEY)) {
                 "$POLICY_NAME_KEY is required!"
-            }.asText(),
-            category = jsonNode.get(POLICY_CATEGORY_KEY)?.asText().orEmpty(),
-            description = jsonNode.get(POLICY_DESCRIPTION_KEY)?.asText().orEmpty(),
+            }.asString(),
+            category = jsonNode.get(POLICY_CATEGORY_KEY)?.asString().orEmpty(),
+            description = jsonNode.get(POLICY_DESCRIPTION_KEY)?.asString().orEmpty(),
             type = requireNotNull(jsonNode.get(POLICY_TYPE_KEY)) {
                 "$POLICY_TYPE_KEY is required!"
             }.traverse(p.objectReadContext()).readValueAs(PolicyType::class.java),
             tenantId = requireNotNull(jsonNode.get(TENANT_ID_KEY)) {
                 "$TENANT_ID_KEY is required!"
-            }.asText(),
+            }.asString(),
             condition = condition,
             statements = statements,
         )

@@ -2,14 +2,15 @@
 # Mutant: a simulated, explained or analyzed resource is decided as given: neither normalized nor bounded
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlPlaneTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -266,15 +266,9 @@
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
+index 065ca669..0a6fc59a 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/EnforceableOrRefused.kt
+@@ -36,14 +36,7 @@ internal object EnforceableOrRefused {
          )
  
      /** [resource] as enforcement would decide it (RC1-41, review L5 of #1200): [Enforceable]. */
--    private fun enforceable(resource: Resource): Resource = Enforceable.resource(resource)
+-    fun resource(resource: Resource): Resource = Enforceable.resource(resource)
 -        ?: throw ChangeRejectedException(
 -            BAD_REQUEST,
 -            "The resource is not one enforcement decides: an http path is refused as a request's is (a dot segment, " +
@@ -17,9 +18,7 @@ diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultContr
 -                "resource is at most ${PathNormalizer.MAX_PATH_LENGTH} characters, " +
 -                "${PathNormalizer.MAX_SEGMENT_LENGTH} per segment."
 -        )
-+    private fun enforceable(resource: Resource): Resource = resource
++    fun resource(resource: Resource): Resource = resource
  
-+
-     /** The head of [key] from the cache, decoded and compiled once for its content (RC1-41); null when it has none. */
-     private suspend fun held(key: SnapshotKey): Held? = entry(key)?.let { Held(it.document, it) }
- 
+     private const val BAD_REQUEST = 400
+ }

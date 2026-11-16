@@ -242,6 +242,12 @@ sequenceDiagram
   does not exist.
 - **A cold load waits** at most [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds); after that the
   document counts as failed for that request.
+- **Held documents are bounded.** Each family keeps at most [`max-apps`/`max-tenants`](./configuration.md#snapshot)
+  documents and `max-absent` absent entries, and drops the least recently used ones on a housekeeping thread. During a
+  burst of cold loads it may for a moment hold up to twice the bound, and never more than 4,096 above it, plus the
+  documents being loaded; past that, the thread that loaded a document evicts before it answers the request (`SNP-14`).
+  That eviction scans the family: a fraction of a millisecond at the default 1,024, but several milliseconds for a
+  family of 100,000, on the thread that loaded the document.
 - **Revisions only move as Redis says.** After a Redis failover, Redis may answer an older revision than the one
   installed, because replication is asynchronous. The instance installs what Redis holds, since every other instance
   reads the same, and logs `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`. Publish the

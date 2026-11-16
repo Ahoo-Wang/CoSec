@@ -90,7 +90,7 @@ internal class UnknownProperties(
             val known = HashSet<String>()
             val containers = HashSet<String>()
             val resolver = PathMatchingResourcePatternResolver(classLoader)
-            for (pattern in METADATA) {
+            for (pattern in METADATA_LOCATIONS) {
                 resolver.getResources(pattern).forEach { resource -> read(resource, known, containers) }
             }
             return UnknownProperties(known, containers)
@@ -115,7 +115,7 @@ internal class UnknownProperties(
          */
         private val metadata = CoSecJson.mapper.reader().without(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
 
-        private val METADATA = listOf(
+        private val METADATA_LOCATIONS = listOf(
             "classpath*:META-INF/spring-configuration-metadata.json",
             "classpath*:META-INF/additional-spring-configuration-metadata.json",
         )
