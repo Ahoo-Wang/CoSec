@@ -92,6 +92,28 @@ class DocumentPublisher(
         PublishResult(write(ordered.filterNot { it in existing }, documents), existing.keys.toList())
     }
 
+    /**
+     * Publishes [document], written by hand, as [key] alone and only if [key] has no document yet: the checks of
+     * [publish] for one document. An app or tenant document compiles, and its references resolve, against the platform
+     * document already published, which must be there.
+     */
+    fun publishOne(key: SnapshotKey, document: PolicyDocument): PublishResult = runBlocking {
+        val platform = if (key == SnapshotKey.Platform) {
+            document
+        } else {
+            requireNotNull(revisions.head(SnapshotKey.Platform)?.document) {
+                "No platform document is published yet: publish it first (--document platform)."
+            }
+        }
+        compiler.compile(document)
+        compiler.checkReferences(document, platform)
+        refusedBreakGlass(listOf(document))?.let { throw PublishException(it, emptyList()) }
+        if (revisions.head(key) != null) {
+            throw DocumentsExistException(listOf(key), emptyList())
+        }
+        PublishResult(write(listOf(key), mapOf(key to document)), emptyList())
+    }
+
     private fun checkExisting(existing: Map<SnapshotKey, PolicyDocument>, converted: Map<SnapshotKey, PolicyDocument>, resume: Boolean) {
         if (existing.isNotEmpty() && !resume) {
             throw DocumentsExistException(existing.keys.toList(), emptyList())

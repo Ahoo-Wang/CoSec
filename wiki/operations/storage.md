@@ -346,12 +346,13 @@ must first be permitted by the documents like any other request ([Testing change
 
 #### Seeding documents you wrote by hand {#seeding-documents-you-wrote-by-hand}
 
-`cosec-migrate publish` takes only files that `report.json` lists with their SHA-256: the report is what says the
-bytes are the ones that were checked, so `publish` has no option to skip it. Use it for the one document nothing else
-can create, the platform document, and publish the rest of what you wrote through the control plane, which checks and
-compiles every document it writes:
+`cosec-migrate publish --file <document.json> --document <platform|app:<id>|tenant:<id>>` publishes one document you
+wrote, with the checks a converted directory gets: it decodes strictly, compiles (an app or tenant document against the
+published platform document, which must be there), refuses a break-glass binding, and writes only where no document is
+yet. Use it for the one document nothing else can create, the platform document, and publish the rest of what you wrote
+through the control plane, which checks and compiles every document it writes:
 
-1. **Publish the platform document**, with the report you write for it
+1. **Publish the platform document** with `publish --file … --document platform`
    ([Quick start](../guide/quick-start.md#publish-the-platform-document)). It has to let the administrator reach the
    control API's paths, and it should hold no more than that and your platform-wide policies.
 2. **Name the first administrator** with `cosec-migrate bootstrap`, and issue that principal a token for the tenant

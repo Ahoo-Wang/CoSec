@@ -72,7 +72,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MigrateMain.kt",
-            646,
+            601,
             Disposition.Debt(Batch.B6),
         ),
         Entry(
