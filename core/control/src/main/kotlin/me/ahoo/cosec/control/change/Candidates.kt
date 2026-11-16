@@ -23,7 +23,7 @@ import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.RoleDefinition
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.flat.RateLimitSource
+import me.ahoo.cosec.engine.RateLimitSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind

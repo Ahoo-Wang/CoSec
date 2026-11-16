@@ -1,11 +1,11 @@
 # Rule: PIP-12
 # Mutant: only DENY statements count as reading a header, so a repeated header only an ALLOW reads is decided on one of its values
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.CompiledDocumentTest :conformance:test
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledPolicy.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledPolicy.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledPolicy.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledPolicy.kt
 index d1968f87..291304c1 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledPolicy.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledPolicy.kt
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledPolicy.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledPolicy.kt
 @@ -64,7 +64,7 @@ class CompiledPolicy(
      /** The request headers its condition and its statements' conditions read (`PIP-12`). */
      internal val headers: Array<String> = HeadersRead.merge(

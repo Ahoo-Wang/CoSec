@@ -29,8 +29,8 @@ import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.document.route.RouteMapException
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
 import me.ahoo.cosec.gateway.IdentityStripFilter
 import me.ahoo.cosec.gateway.PipelineGatewayFilter

@@ -1,12 +1,12 @@
 # Rule: ALG-10
 # Mutant: a statement whose condition reads captures tries only the first matching pattern
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.PatternCapturesTest :conformance:test
+# Tests: :engine:test --tests me.ahoo.cosec.engine.PatternCapturesTest :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
 index 832b4108..59faeea1 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt
-@@ -419,7 +419,7 @@ internal open class FlatEvaluator(protected val request: FlatRequest, protected
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
+@@ -419,7 +419,7 @@ internal open class Evaluator(protected val request: EngineRequest, protected
          if (!statement.admits(this)) {
              return CONDITION_MISS
          }

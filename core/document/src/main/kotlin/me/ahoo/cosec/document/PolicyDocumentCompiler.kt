@@ -16,14 +16,14 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
-import me.ahoo.cosec.engine.flat.CompileError
-import me.ahoo.cosec.engine.flat.CompileException
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.CompiledPolicy
-import me.ahoo.cosec.engine.flat.CompiledRateLimit
-import me.ahoo.cosec.engine.flat.PolicyCompiler
-import me.ahoo.cosec.engine.flat.RateLimitSource
+import me.ahoo.cosec.engine.BuiltinPolicies
+import me.ahoo.cosec.engine.CompileError
+import me.ahoo.cosec.engine.CompileException
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.CompiledPolicy
+import me.ahoo.cosec.engine.CompiledRateLimit
+import me.ahoo.cosec.engine.PolicyCompiler
+import me.ahoo.cosec.engine.RateLimitSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.Match
