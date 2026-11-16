@@ -113,16 +113,20 @@ class SnapshotFamilyBoundTest {
     }
 
     @Test
-    fun `a victim whose kind changed between the choice and the removal is not removed, and the claim goes back`() {
+    fun `a victim whose kind changed between the choice and the removal is not removed, and no count moves`() {
         (0 until CAP).forEach { source.load("app-$it").join() }
-        // Chosen as an absent entry, it holds a document by the time it is removed.
+        // Chosen as an absent entry, it holds a document by the time it is removed: refused, before any claim.
+        val before = source.heldCounts(SnapshotKind.APP)
         source.evictClaiming(SnapshotKey.App("app-0"), absent = true).assert().isEqualTo(false)
+        source.heldCounts(SnapshotKind.APP).assert().isEqualTo(before)
         source.evictClaiming(SnapshotKey.App("app-0"), absent = false).assert().isEqualTo(true)
         documentsHeld().assert().isEqualTo(CAP - 1)
         countsAreARecount()
         // An absent entry is not removed on a document's claim either.
         source.load("absent").join()
+        val held = source.heldCounts(SnapshotKind.APP)
         source.evictClaiming(SnapshotKey.App("absent"), absent = false).assert().isEqualTo(false)
+        source.heldCounts(SnapshotKind.APP).assert().isEqualTo(held)
         source.holds(SnapshotKey.App("absent")).assert().isTrue()
         countsAreARecount()
     }

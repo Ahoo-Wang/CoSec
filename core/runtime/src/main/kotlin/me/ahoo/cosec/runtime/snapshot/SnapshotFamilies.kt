@@ -96,30 +96,8 @@ internal class SnapshotFamilies<A : Any>(
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
     internal fun victims(family: Family<*>, absent: Boolean, wanted: Int): List<Slot<*>> {
-        if (wanted <= 0) {
-            return emptyList()
-        }
-        // The most recently used of the chosen on top, so that a less recently used slot replaces it.
-        val chosen = PriorityQueue<Slot<*>>(compareByDescending { it.lastAccess })
-        for (slot in family.slots.values) {
-            val entry = slot.installed ?: continue
-            if (isAbsent(entry) != absent) {
-                continue
-            }
-            // Only a slot that would be chosen is asked whether it is idle: that takes its monitor.
-            val full = chosen.size >= wanted
-            if (full && slot.lastAccess >= chosen.peek().lastAccess) {
-                continue
-            }
-            if (!slot.isIdle()) {
-                continue
-            }
-            chosen.add(slot)
-            if (full) {
-                chosen.poll()
-            }
-        }
-        return chosen.sortedBy { it.lastAccess }
+        val ofKind = family.slots.values.asSequence().filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
+        return leastRecentlyUsed(ofKind, wanted, { it.lastAccess }, { it.isIdle() })
     }
 
     /** Moves [family]'s counts for an entry replaced by another, either of them null: where `installed` is written. */
@@ -184,5 +162,44 @@ internal class SnapshotFamilies<A : Any>(
 
         /** Whether [entry] is for a document the store does not hold: the other kind ([Family.count]). */
         fun isAbsent(entry: SnapshotEntry<*>): Boolean = entry.origin == EntryOrigin.ABSENT
+
+        /**
+         * The [wanted] least recently used of [slots] that are [eligible], least recent first, in one pass. Each slot's
+         * stamp is read once, through [lastAccessOf], and the heap and the final order use that value: requests write the
+         * stamp from any thread as they peek, and ordering by a value that moves under it would choose wrongly or, once
+         * the sort is TimSort (32 elements or more), throw "Comparison method violates its general contract". Only a
+         * slot that would be chosen is asked whether it is [eligible] (idle: that takes its monitor), and only it
+         * allocates.
+         */
+        internal fun <S : Any> leastRecentlyUsed(
+            slots: Sequence<S>,
+            wanted: Int,
+            lastAccessOf: (S) -> Long,
+            eligible: (S) -> Boolean,
+        ): List<S> {
+            if (wanted <= 0) {
+                return emptyList()
+            }
+            // The most recently used of the chosen on top, so that a less recently used slot replaces it.
+            val chosen = PriorityQueue<Stamped<S>>(compareByDescending { it.lastAccess })
+            for (slot in slots) {
+                val lastAccess = lastAccessOf(slot)
+                val full = chosen.size >= wanted
+                if (full && lastAccess >= chosen.peek().lastAccess) {
+                    continue
+                }
+                if (!eligible(slot)) {
+                    continue
+                }
+                chosen.add(Stamped(slot, lastAccess))
+                if (full) {
+                    chosen.poll()
+                }
+            }
+            return chosen.sortedBy { it.lastAccess }.map { it.slot }
+        }
+
+        /** A slot with its stamp as the scan read it, once. */
+        private class Stamped<S>(val slot: S, val lastAccess: Long)
     }
 }

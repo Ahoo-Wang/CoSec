@@ -645,7 +645,7 @@ internal class Slot<T : Any>(
             empty = installed == null
         }
         val answer = answerFor(entry, withheld, nextLoad)
-        // An install over the cap evicts before anyone is answered (`SNP-14`); whatever it throws, the load goes on.
+        // An install over the cap evicts before anyone is answered (`SNP-14`); whatever it throws, the load goes on: see housekeep.
         try {
             housekeep(empty, install)
         } finally {
@@ -691,7 +691,10 @@ internal class Slot<T : Any>(
 
     /**
      * After a load: an empty slot is dropped on housekeeping. An install leaves eviction to housekeeping, unless it took
-     * its family over the cap: then this thread evicts, before the load's waiters are answered (`SNP-14`).
+     * its family over the cap: then this thread evicts, before the load's waiters are answered (`SNP-14`). A throw from
+     * that pass leaves the slot as it is: [advance] still starts the next load and answers the waiters, then the throw
+     * reaches the [guarded] call around the compile task or the read's callback, which logs it at ERROR as a failure
+     * after the load finished, and rethrows a [VirtualMachineError] to that thread. No caller sees it.
      */
     private fun housekeep(empty: Boolean, install: Boolean) {
         if (empty) {
