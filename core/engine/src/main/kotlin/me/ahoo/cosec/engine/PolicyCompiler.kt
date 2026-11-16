@@ -310,8 +310,6 @@ class PolicyCompiler(
         }
     }
 
-    // B3: the variable check extracts into a function of its own
-    @Suppress("NestedBlockDepth")
     private fun checkVariables(
         condition: CheckedCondition,
         resources: List<ResourcePattern>,
@@ -320,11 +318,21 @@ class PolicyCompiler(
     ) {
         val variables = ConditionAttributes.of(condition).filter { it.kind == Attribute.Kind.RESOURCE_VAR }
         for (variable in variables.distinct()) {
-            for ((i, resource) in resources.withIndex()) {
-                if (variable.name !in resource.variableNames) {
-                    val at = if (resource === ResourcePattern.AnyResource) "$path.resource" else "$path.resource[$i]"
-                    errors += CompileError(at, "the condition reads $variable, which [$resource] does not capture")
-                }
+            checkCaptured(variable, resources, path, errors)
+        }
+    }
+
+    /** Each of [resources] that does not capture [variable] is an error at that resource. */
+    private fun checkCaptured(
+        variable: Attribute,
+        resources: List<ResourcePattern>,
+        path: String,
+        errors: MutableList<CompileError>,
+    ) {
+        for ((i, resource) in resources.withIndex()) {
+            if (variable.name !in resource.variableNames) {
+                val at = if (resource === ResourcePattern.AnyResource) "$path.resource" else "$path.resource[$i]"
+                errors += CompileError(at, "the condition reads $variable, which [$resource] does not capture")
             }
         }
     }
