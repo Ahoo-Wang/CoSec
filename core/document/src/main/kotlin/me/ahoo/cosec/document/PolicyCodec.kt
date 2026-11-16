@@ -17,7 +17,6 @@ package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.DocumentJson.factory
-import me.ahoo.cosec.document.StatementCodec.statement
 import me.ahoo.cosec.model.PolicyId
 import tools.jackson.databind.node.ObjectNode
 
@@ -25,25 +24,25 @@ import tools.jackson.databind.node.ObjectNode
 internal object PolicyCodec {
     private val POLICY_FIELDS = arrayOf("id", "attachable", "boundary", "condition", "statements")
 
-    internal fun policy(node: DocumentNode): PolicyDefinition {
+    internal fun decode(node: DocumentNode): PolicyDefinition {
         node.requireObject(*POLICY_FIELDS)
         return PolicyDefinition(
             id = PolicyId(node.required("id").text()),
             attachable = node.field("attachable")?.bool() ?: false,
             condition = node.field("condition")?.let(ConditionJson::read),
-            statements = node.required("statements").elements().map(::statement),
+            statements = node.required("statements").elements().map(StatementCodec::decode),
             boundary = node.field("boundary")?.bool() ?: false,
         )
     }
 
-    internal fun policy(policy: PolicyDefinition): ObjectNode {
+    internal fun tree(policy: PolicyDefinition): ObjectNode {
         val node = factory.objectNode().put("id", policy.id.value)
         if (policy.attachable) node.put("attachable", true)
         if (policy.boundary) node.put("boundary", true)
         policy.condition?.let { node.set("condition", ConditionJson.write(it)) }
         val statements = node.putArray("statements")
         for (statement in policy.statements) {
-            statements.add(statement(statement))
+            statements.add(StatementCodec.tree(statement))
         }
         return node
     }

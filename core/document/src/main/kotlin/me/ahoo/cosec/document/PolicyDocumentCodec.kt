@@ -21,11 +21,6 @@ import me.ahoo.cosec.document.DocumentJson.ROOT
 import me.ahoo.cosec.document.DocumentJson.actor
 import me.ahoo.cosec.document.DocumentJson.factory
 import me.ahoo.cosec.document.DocumentJson.nonEmpty
-import me.ahoo.cosec.document.PolicyCodec.policy
-import me.ahoo.cosec.document.StatementCodec.onMissing
-import me.ahoo.cosec.document.StatementCodec.putResources
-import me.ahoo.cosec.document.StatementCodec.resources
-import me.ahoo.cosec.document.StatementCodec.statement
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.engine.RateLimitSource
 import me.ahoo.cosec.engine.StatementSource
@@ -139,7 +134,7 @@ object PolicyDocumentCodec {
             owner = owner,
             revision = revision,
             publishedAt = root.required("publishedAt").instant(),
-            policies = root.field("policies")?.elements()?.map(::policy).orEmpty(),
+            policies = root.field("policies")?.elements()?.map(PolicyCodec::decode).orEmpty(),
             bindings = root.field("bindings")?.elements()?.map { binding(it, kind, owner) }.orEmpty(),
             catalog = root.field("catalog")?.let(::catalog),
             boundary = when (kind) {
@@ -212,9 +207,9 @@ object PolicyDocumentCodec {
                 name = id,
                 effect = Effect.DENY,
                 actions = node.required("action").strings(),
-                resources = node.field("resource")?.let(::resources).orEmpty(),
+                resources = node.field("resource")?.let(StatementCodec::decodeResources).orEmpty(),
                 condition = node.field("condition")?.let(ConditionJson::read),
-                onMissing = node.field("onMissing")?.let(::onMissing),
+                onMissing = node.field("onMissing")?.let(StatementCodec::decodeOnMissing),
             ),
             key = node.field("key")?.nonEmpty(),
             limit = limit,
@@ -350,7 +345,7 @@ object PolicyDocumentCodec {
                             name = permission.field("name")?.text(),
                             description = permission.field("description")?.text(),
                             actions = permission.field("action")?.strings(),
-                            resources = permission.field("resource")?.let(::resources).orEmpty(),
+                            resources = permission.field("resource")?.let(StatementCodec::decodeResources).orEmpty(),
                         )
                     },
                 )
@@ -365,10 +360,13 @@ object PolicyDocumentCodec {
      */
 
     @InternalCoSecApi
-    fun policyTree(policy: PolicyDefinition): ObjectNode = policy(policy)
+    fun policyTree(policy: PolicyDefinition): ObjectNode = PolicyCodec.tree(policy)
 
     @InternalCoSecApi
-    fun decodePolicy(tree: JsonNode, path: String = ROOT): PolicyDefinition = policy(DocumentNode(tree, path))
+    fun decodePolicy(
+        tree: JsonNode,
+        path: String = ROOT
+    ): PolicyDefinition = PolicyCodec.decode(DocumentNode(tree, path))
 
     /** A binding of a [kind] document of [owner], which decides the subjects' default tenants. */
     @InternalCoSecApi
@@ -439,7 +437,7 @@ object PolicyDocumentCodec {
     private fun putEntries(root: ObjectNode, document: PolicyDocument) {
         document.catalog?.let { root.set("catalog", catalog(it)) }
         val policies = root.putArray("policies")
-        document.policies.forEach { policies.add(policy(it)) }
+        document.policies.forEach { policies.add(PolicyCodec.tree(it)) }
         val bindings = root.putArray("bindings")
         document.bindings.forEach { bindings.add(binding(it, document.kind, document.owner)) }
         if (document.roles.isNotEmpty()) {
@@ -453,7 +451,7 @@ object PolicyDocumentCodec {
     }
 
     private fun rateLimit(rule: RateLimitSource): ObjectNode {
-        val written = statement(rule.statement)
+        val written = StatementCodec.tree(rule.statement)
         val node = factory.objectNode().put("id", rule.id)
         listOf("action", "resource", "condition", "onMissing").forEach { field ->
             written.get(field)?.let { node.set(field, it) }
@@ -539,7 +537,7 @@ object PolicyDocumentCodec {
                         "action"
                     ).also { array -> actions.forEach(array::add) }
                 }
-                putResources(entry, permission.resources)
+                StatementCodec.putResources(entry, permission.resources)
             }
         }
         return node

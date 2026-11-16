@@ -38,7 +38,7 @@ internal object StatementCodec {
     private val CONFIRMATION_FIELDS = arrayOf("by", "change")
     private val RESOURCE_FIELDS = arrayOf("pattern", "caseSensitive", "decodeAndParseSegments")
 
-    internal fun statement(node: DocumentNode): StatementSource {
+    internal fun decode(node: DocumentNode): StatementSource {
         node.requireObject(*STATEMENT_FIELDS)
         val effect = node.required("effect")
         return StatementSource(
@@ -49,28 +49,28 @@ internal object StatementCodec {
                 else -> effect.fail("an effect is allow or deny, not [$text]")
             },
             actions = node.required("action").strings(),
-            resources = node.field("resource")?.let(::resources).orEmpty(),
+            resources = node.field("resource")?.let(::decodeResources).orEmpty(),
             condition = node.field("condition")?.let(ConditionJson::read),
-            onMissing = node.field("onMissing")?.let(::onMissing),
-            onMissingConfirmed = node.field("onMissingConfirmed")?.let(::confirmation),
+            onMissing = node.field("onMissing")?.let(::decodeOnMissing),
+            onMissingConfirmed = node.field("onMissingConfirmed")?.let(::decodeConfirmation),
         )
     }
 
     /** RFC 0007 §9.5: who confirmed a `nomatch` DENY, and in which change. */
-    private fun confirmation(node: DocumentNode): OnMissingConfirmation {
+    private fun decodeConfirmation(node: DocumentNode): OnMissingConfirmation {
         node.requireObject(*CONFIRMATION_FIELDS)
         val by = actor(node.required("by"))
         return OnMissingConfirmation(by.tenant.value, by.principal.value, node.required("change").text())
     }
 
-    internal fun onMissing(node: DocumentNode): OnMissing = when (val text = node.text()) {
+    internal fun decodeOnMissing(node: DocumentNode): OnMissing = when (val text = node.text()) {
         "indeterminate" -> OnMissing.INDETERMINATE
         "nomatch" -> OnMissing.NOMATCH
         else -> node.fail("onMissing is indeterminate or nomatch, not [$text]")
     }
 
     /** A pattern or an object with options, or an array of them. */
-    internal fun resources(node: DocumentNode): List<ResourceSource> {
+    internal fun decodeResources(node: DocumentNode): List<ResourceSource> {
         val items = if (node.json.isArray) {
             node.elements().ifEmpty {
                 node.fail(
@@ -94,7 +94,7 @@ internal object StatementCodec {
         }
     }
 
-    internal fun statement(statement: StatementSource): ObjectNode {
+    internal fun tree(statement: StatementSource): ObjectNode {
         val item = factory.objectNode()
         if (statement.name.isNotEmpty()) item.put("name", statement.name)
         item.put("effect", if (statement.effect == Effect.DENY) "deny" else "allow")
