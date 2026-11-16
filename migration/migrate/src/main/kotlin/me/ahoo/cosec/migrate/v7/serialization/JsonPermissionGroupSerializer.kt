@@ -53,8 +53,8 @@ internal object JsonPermissionGroupDeserializer : StdDeserializer<PermissionGrou
         return PermissionGroupData(
             name = requireNotNull(jsonNode.get(PERMISSION_GROUP_NAME_KEY)) {
                 "$PERMISSION_GROUP_NAME_KEY is required!"
-            }.asText(),
-            description = jsonNode.get(PERMISSION_GROUP_DESCRIPTION_KEY)?.asText().orEmpty(),
+            }.asString(),
+            description = jsonNode.get(PERMISSION_GROUP_DESCRIPTION_KEY)?.asString().orEmpty(),
             permissions = permissions,
         )
     }
