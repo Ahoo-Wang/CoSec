@@ -18,27 +18,44 @@ package me.ahoo.cosec.control.api
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.api.ControlRequestJson.ack
+import me.ahoo.cosec.control.api.ControlRequestJson.changeIdOf
+import me.ahoo.cosec.control.api.ControlRequestJson.confirmations
+import me.ahoo.cosec.control.api.ControlRequestJson.documentKey
+import me.ahoo.cosec.control.api.ControlRequestJson.instantOf
+import me.ahoo.cosec.control.api.ControlRequestJson.query
+import me.ahoo.cosec.control.api.ControlRequestJson.revisionOf
+import me.ahoo.cosec.control.api.ControlRequestJson.simulated
+import me.ahoo.cosec.control.api.ControlRequestJson.version
+import me.ahoo.cosec.control.api.ControlResponseJson.diff
+import me.ahoo.cosec.control.api.ControlResponseJson.entries
+import me.ahoo.cosec.control.api.ControlResponseJson.explanation
+import me.ahoo.cosec.control.api.ControlResponseJson.history
+import me.ahoo.cosec.control.api.ControlResponseJson.report
+import me.ahoo.cosec.control.api.ControlResponseJson.simulation
+import me.ahoo.cosec.control.api.JsonFields.array
+import me.ahoo.cosec.control.api.JsonFields.decoded
+import me.ahoo.cosec.control.api.JsonFields.field
+import me.ahoo.cosec.control.api.JsonFields.long
+import me.ahoo.cosec.control.api.JsonFields.need
+import me.ahoo.cosec.control.api.JsonFields.optText
+import me.ahoo.cosec.control.api.JsonFields.text
+import me.ahoo.cosec.control.api.JsonFields.wellFormed
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
-import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.InvalidControlRequestException
-import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.ViewVersion
-import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
-import me.ahoo.cosec.model.Resource
-import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -48,9 +65,6 @@ import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
-import tools.jackson.databind.node.ObjectNode
-import java.time.DateTimeException
-import java.time.Instant
 import kotlin.coroutines.cancellation.CancellationException
 
 private val log = KotlinLogging.logger {}
@@ -284,15 +298,6 @@ class ControlHttp(private val plane: ControlPlane) {
             }
         }
 
-    private fun history(history: List<RevisionSummary>) = factory.arrayNode().apply {
-        history.forEach {
-            addObject().put(
-                "revision",
-                it.revision
-            ).put("digest", it.digest).put("publishedAt", it.publishedAt.toString())
-        }
-    }
-
     private suspend fun changes(operator: Operator, request: ControlHttpRequest, segments: List<String>): ControlHttpResponse {
         if (segments.isEmpty()) {
             return post(request) {
@@ -390,17 +395,6 @@ class ControlHttp(private val plane: ControlPlane) {
         return block(body)
     }
 
-    /**
-     * Whether every field name and string in [node] holds no unpaired surrogate (RC1-52): every id the body names is
-     * one of them, a document's included, and a JSON escape (`"\uD800"`) can write one.
-     */
-    private fun wellFormed(node: JsonNode): Boolean = when {
-        node.isString -> Identifiers.isWellFormed(node.asString())
-        node.isObject -> node.properties().all { (name, value) -> Identifiers.isWellFormed(name) && wellFormed(value) }
-        node.isArray -> node.values().all(::wellFormed)
-        else -> true
-    }
-
     private inline fun get(request: ControlHttpRequest, block: () -> ControlHttpResponse): ControlHttpResponse =
         if (request.method == GET) block() else methodNotAllowed()
 
@@ -435,238 +429,8 @@ class ControlHttp(private val plane: ControlPlane) {
         return if (separator < 0) segment to null else segment.substring(0, separator) to segment.substring(separator + 1)
     }
 
-    private fun simulated(node: JsonNode): SimulatedRequest {
-        node.only(
-            "request",
-            "tenant",
-            "principal",
-            "roles",
-            "policies",
-            "app",
-            "space",
-            "action",
-            "resource",
-            "remoteIp",
-            "time",
-            "headers",
-            "requestAttributes",
-            "principalBindings",
-            "breakGlass",
-        )
-        return SimulatedRequest(
-            tenant = node.text("tenant").let { field("tenant", "a tenant id") { TenantId(it) } },
-            principal = node.optText("principal"),
-            roles = node.strings("roles"),
-            policies = node.strings("policies"),
-            app = node.optText("app").orEmpty(),
-            space = node.optText("space").orEmpty(),
-            action = action(node),
-            resource = resource(node.text("resource")),
-            remoteIp = node.optText("remoteIp").orEmpty(),
-            time = node.optText("time")?.let { instantOf("time", it).toEpochMilli() } ?: System.currentTimeMillis(),
-            headers = node.get("headers")?.let { headers ->
-                objectOf("headers", headers).properties().associate { (name, value) ->
-                    name to if (value.isArray) value.values().map { it.stringIn("headers") } else listOf(value.stringIn("headers"))
-                }
-            }.orEmpty(),
-            requestAttributes = node.get("requestAttributes")?.let { attributes ->
-                objectOf("requestAttributes", attributes).properties().associate { (name, value) ->
-                    name to value.stringIn("requestAttributes")
-                }
-            }.orEmpty(),
-            principalBindings = node.optBool("principalBindings") ?: true,
-            breakGlass = node.optBool("breakGlass") ?: true,
-        )
-    }
-
-    private fun action(node: JsonNode): Action {
-        val action = node.text("action").split(':', limit = 2).takeIf { it.size == 2 }
-            ?: throw InvalidControlRequestException("An action is service:verb.")
-        return field("action", "service:verb") { Action(action[0], action[1]) }
-    }
-
-    private fun resource(text: String): Resource = field("resource", "a resource") {
-        if (text.startsWith('/')) return@field Resource("http", text, emptyMap())
-        val slash = text.indexOf('/')
-        if (slash < 0) {
-            Resource(
-                text,
-                "",
-                emptyMap()
-            )
-        } else {
-            Resource(text.substring(0, slash), text.substring(slash + 1), emptyMap())
-        }
-    }
-
-    private fun query(node: JsonNode): AccessQuery {
-        node.only("query", "tenant", "app", "space", "action", "resource")
-        return AccessQuery(
-            node.text("tenant").let { field("tenant", "a tenant id") { TenantId(it) } },
-            node.optText("app"),
-            node.optText("space"),
-            action(node),
-            resource(node.text("resource"))
-        )
-    }
-
-    private fun version(node: JsonNode): ViewVersion {
-        node.only("at", "platform", "app", "tenant")
-        return ViewVersion(node.long("platform"), node.optLong("app"), node.optLong("tenant"))
-    }
-
-    /** The `deny-nomatch` confirmations a request carries (RFC 0007 §9.5); none when it has no such field. */
-    private fun confirmations(node: JsonNode): List<Confirmation> =
-        node.get("confirmations")?.let { arrayOf("confirmations", it) }?.map(::confirmation).orEmpty()
-
-    private fun confirmation(node: JsonNode): Confirmation {
-        node.only("confirmations", "policy", "statement", "digest", "kind")
-        val policy = node.text("policy")
-        val statement = node.long("statement")
-        return field("confirmations", "a confirmation") {
-            Confirmation(
-                PolicyId(policy),
-                Math.toIntExact(statement),
-                node.text("digest"),
-                node.optText("kind") ?: Confirmation.DENY_NOMATCH
-            )
-        }
-    }
-
-    private fun ack(node: JsonNode): ShadowAck {
-        node.only("ack", "window", "counts")
-        return field("ack", "a shadow window's acknowledgement") {
-            ShadowAck(
-                node.text("window"),
-                objectOf("counts", node.need("counts")).properties().associate { (outcome, count) ->
-                    outcome to count.longIn("counts")
-                }
-            )
-        }
-    }
-
-    /** `platform`, `app:<id>` or `tenant:<id>`; the text is not echoed, as it may hold control characters. */
-    private fun documentKey(text: String): SnapshotKey = try {
-        ChangeRequestCodec.documentKeyOf(text)
-    } catch (e: SnapshotFormatException) {
-        throw InvalidControlRequestException("That names no document: platform, app:<id> or tenant:<id>.", e)
-    }
-
-    private fun changeIdOf(text: String): ChangeId = field("change", "a change id") { ChangeId(unescaped(text)) }
-
     private fun ControlHttpRequest.revision(name: String): Long =
         query[name]?.let { revisionOf(name, it) } ?: throw InvalidControlRequestException("[$name] is a revision number.")
-
-    private fun revisionOf(name: String, text: String): Long =
-        text.toLongOrNull() ?: throw InvalidControlRequestException("[$name] is a revision number.")
-
-    /** An instant in epoch milliseconds' range: one beyond it parses, and would fail later (review L2 of #1240). */
-    private fun instantOf(name: String, text: String): Instant =
-        field(
-            name,
-            "an ISO-8601 instant such as 2026-01-01T00:00:00Z"
-        ) { Instant.parse(text).also { it.toEpochMilli() } }
-
-    /**
-     * [decode] of the client's own [name]: the codec's format errors describe what the caller sent, by its JSON path, so
-     * they are the request's validation and say so (RC1-39).
-     */
-    private inline fun <T> decoded(name: String, decode: () -> T): T = try {
-        decode()
-    } catch (e: SnapshotFormatException) {
-        throw InvalidControlRequestException("[$name]: ${e.message}", e)
-    }
-
-    /**
-     * [parse] of the client's field [name]. What it throws is not shown, being no message of the control plane's own:
-     * only that [name] is not [what] (RC1-39), unless it is one of those checks.
-     */
-    private inline fun <T> field(name: String, what: String, parse: () -> T): T = try {
-        parse()
-    } catch (e: InvalidControlRequestException) {
-        throw e
-    } catch (e: IllegalArgumentException) {
-        throw InvalidControlRequestException("[$name] is not $what.", e)
-    } catch (e: ArithmeticException) {
-        throw InvalidControlRequestException("[$name] is not $what.", e)
-    } catch (e: DateTimeException) {
-        throw InvalidControlRequestException("[$name] is not $what.", e)
-    }
-
-    private fun simulation(simulation: Simulation): ObjectNode = factory.objectNode().apply {
-        set("enforced", decision(simulation.enforced, simulation.enforcedTrace))
-        simulation.candidate?.let { set("candidate", decision(it, simulation.candidateTrace)) }
-        put("differs", simulation.differs)
-    }
-
-    private fun explanation(explanation: Explanation): ObjectNode = factory.objectNode().apply {
-        // A document the decision did not read has no version: absent, as `at` takes it, never `null` (#1391).
-        putObject("version").apply {
-            put("platform", explanation.version.platform)
-            explanation.version.app?.let { put("app", it) }
-            explanation.version.tenant?.let { put("tenant", it) }
-        }
-        set("decision", decision(explanation.decision, explanation.trace))
-    }
-
-    // B4: the decision view moves to its own writer
-    @Suppress("NestedBlockDepth")
-    private fun decision(decision: DecisionView, trace: TraceView?): ObjectNode = factory.objectNode().apply {
-        put("decision", decision.decision)
-        decision.by?.let { set("by", statement(it)) }
-        decision.cause?.let { put("cause", it) }
-        if (decision.redacted) put("redacted", true)
-        trace?.let { t ->
-            val node = putObject("trace").put("redacted", t.redacted)
-            node.putArray("candidates").apply {
-                t.entries.forEach {
-                    addObject().put(
-                        "effect",
-                        it.effect
-                    ).put("outcome", it.outcome).set("statement", statement(it.statement))
-                }
-            }
-        }
-    }
-
-    private fun statement(statement: StatementView): ObjectNode = factory.objectNode()
-        .put("policy", statement.policy).put("statement", statement.statement).put("name", statement.name)
-        .put("via", statement.via).put("document", statement.document)
-
-    private fun diff(diff: DocumentDiff): ObjectNode = factory.objectNode().apply {
-        put("from", diff.from)
-        put("to", diff.to)
-        set("policies", entries(diff.policies))
-        set("bindings", entries(diff.bindings))
-        set("roles", entries(diff.roles))
-        put("sections", diff.sections)
-    }
-
-    private fun entries(changes: EntryChanges): ObjectNode = factory.objectNode().apply {
-        putArray("added").apply { changes.added.forEach(::add) }
-        putArray("removed").apply { changes.removed.forEach(::add) }
-        putArray("changed").apply { changes.changed.forEach(::add) }
-    }
-
-    private fun report(report: AccessReport): ObjectNode = factory.objectNode().apply {
-        set("allows", accessEntries(report.allows))
-        set("denies", accessEntries(report.denies))
-        put("hidden", report.hidden)
-        put("opaque", report.opaque)
-    }
-
-    private fun accessEntries(entries: List<AccessEntry>) = factory.arrayNode().apply {
-        entries.forEach { entry ->
-            val node = addObject()
-            node.put("document", entry.document).put("binding", entry.binding).put("subject", entry.subject)
-            node.put("app", entry.app).put("space", entry.space).put("policy", entry.policy)
-            node.put(
-                "statement",
-                entry.statement
-            ).put("conditional", entry.conditional).put("breakGlass", entry.breakGlass)
-            entry.expiresAt?.let { node.put("expiresAt", it.toString()) }
-        }
-    }
 
     /** The problems of the control API: RFC 0006's where it has one, the control API's own statuses otherwise. */
     private enum class Problem(val slug: String, val title: String, val status: Int, val detailed: Boolean) {
@@ -700,59 +464,6 @@ class ControlHttp(private val plane: ControlPlane) {
             .put("requestId", requestId)
         if (problem.detailed && !detail.isNullOrBlank()) node.put("detail", detail)
         return ControlHttpResponse(problem.status, PROBLEM_JSON, CoSecJson.mapper.writeValueAsBytes(node))
-    }
-
-    private fun JsonNode.need(name: String): JsonNode = get(name)?.takeUnless {
-        it.isNull
-    } ?: throw InvalidControlRequestException("[$name] is missing.")
-
-    /** The string field [name], required. */
-    private fun JsonNode.text(name: String): String = need(name).stringIn(name)
-
-    /** The string field [name], or null when it is absent. */
-    private fun JsonNode.optText(name: String): String? = get(name)?.stringIn(name)
-
-    private fun JsonNode.long(name: String): Long = need(name).longIn(name)
-
-    private fun JsonNode.optLong(name: String): Long? = get(name)?.longIn(name)
-
-    private fun JsonNode.optBool(name: String): Boolean? = get(name)?.let {
-        requireRequest(it.isBoolean) { "[$name] is not a boolean." }
-        it.asBoolean()
-    }
-
-    private fun JsonNode.strings(name: String): List<String> =
-        get(name)?.let { arrayOf(name, it) }?.map { it.stringIn(name) }.orEmpty()
-
-    private fun JsonNode.array(name: String): List<JsonNode> = arrayOf(name, need(name))
-
-    private fun arrayOf(name: String, node: JsonNode): List<JsonNode> {
-        requireRequest(node.isArray) { "[$name] is not an array." }
-        return node.values().toList()
-    }
-
-    private fun objectOf(name: String, node: JsonNode): JsonNode {
-        requireRequest(node.isObject) { "[$name] is not an object." }
-        return node
-    }
-
-    /** This value, of the field [name], as a string. */
-    private fun JsonNode.stringIn(name: String): String {
-        requireRequest(isString) { "[$name] is not a string." }
-        return asString()
-    }
-
-    /** This value, of the field [name], as an integer. */
-    private fun JsonNode.longIn(name: String): Long {
-        requireRequest(isIntegralNumber && canConvertToLong()) { "[$name] is not an integer." }
-        return asLong()
-    }
-
-    /** This object, the field [name], has only [names]. */
-    private fun JsonNode.only(name: String, vararg names: String) {
-        requireRequest(isObject) { "[$name] is not an object." }
-        val unknown = properties().map { it.key }.toSet() - names.toSet()
-        requireRequest(unknown.isEmpty()) { "Unknown fields $unknown in [$name]." }
     }
 
     @InternalCoSecApi
