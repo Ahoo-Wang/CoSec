@@ -2,17 +2,18 @@
 # Mutant: past the conditions the request-local cache scans, a condition is not remembered, so it runs again for every policy that reaches it
 # Tests: :engine:test --tests me.ahoo.cosec.engine.EngineTest
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-@@ -708,9 +708,7 @@
-         var guards = guards
-         var results = guardResults
-         if (guards == null || results == null) {
--            val map = guardMap
--            if (map != null) {
--                map[guard] = error ?: result
-+            if (guardMap != null) {
-                 return
-             }
-             guards = arrayOfNulls(INITIAL_GUARDS)
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorGuards.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorGuards.kt
+index 692bbaa8..bcb921b5 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorGuards.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorGuards.kt
+@@ -83,9 +83,7 @@ internal fun Evaluator.remember(guard: CheckedCondition, result: Int, error: Thr
+     var guards = guards
+     var results = guardResults
+     if (guards == null || results == null) {
+-        val map = guardMap
+-        if (map != null) {
+-            map[guard] = error ?: result
++        if (guardMap != null) {
+             return
+         }
+         guards = arrayOfNulls(INITIAL_GUARDS)

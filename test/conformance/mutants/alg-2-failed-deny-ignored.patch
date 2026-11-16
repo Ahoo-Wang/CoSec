@@ -2,16 +2,16 @@
 # Mutant: a DENY that fails is ignored instead of making the decision indeterminate
 # Tests: :engine:test --tests me.ahoo.cosec.engine.* :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-index 5f88243f..351eff23 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Evaluator.kt
-@@ -562,7 +562,7 @@ internal open class Evaluator(protected val request: EngineRequest, protected
-             return
-         }
-         if (pass === Effect.DENY) {
--            failed(policy, statement, via, error, guard)
-+            return
-         } else if (missing && skipped == null) {
-             skipped = Cause.AttributeUnavailable(setOf((error as AttributeMissing).path), ref(policy, statement, via))
-         }
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorFailures.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorFailures.kt
+index deb7b852..d0675c88 100644
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorFailures.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/EvaluatorFailures.kt
+@@ -68,7 +68,7 @@ internal fun Evaluator.erred(
+         return
+     }
+     if (pass === Effect.DENY) {
+-        failed(policy, statement, via, error, guard)
++        return
+     } else if (missing && skipped == null) {
+         skipped = Cause.AttributeUnavailable(setOf((error as AttributeMissing).path), ref(policy, statement, via))
+     }
