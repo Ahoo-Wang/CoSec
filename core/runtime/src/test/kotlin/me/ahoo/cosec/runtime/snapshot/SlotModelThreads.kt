@@ -147,10 +147,15 @@ internal class SlotModelThreads {
 
         override fun getDelay(unit: TimeUnit): Long = unit.convert(at - nanos, TimeUnit.NANOSECONDS)
 
-        override fun compareTo(other: Delayed): Int = compareValues(
-            getDelay(TimeUnit.NANOSECONDS),
-            other.getDelay(TimeUnit.NANOSECONDS)
-        )
+        /** By when it falls due, then by when it was set: 0 only for the same timer, as [equals] is identity. */
+        override fun compareTo(other: Delayed): Int {
+            val byDelay = compareValues(getDelay(TimeUnit.NANOSECONDS), other.getDelay(TimeUnit.NANOSECONDS))
+            return if (byDelay != 0 || other !is Timer) byDelay else compareValues(sequence, other.sequence)
+        }
+
+        override fun equals(other: Any?): Boolean = this === other
+
+        override fun hashCode(): Int = System.identityHashCode(this)
 
         override fun cancel(mayInterruptIfRunning: Boolean): Boolean {
             scheduler.timers.remove(this)

@@ -46,65 +46,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import kotlin.coroutines.cancellation.CancellationException
 
-/** The limits of what a change may publish (RFC 0007 §6.2 V2), and how changes expire and are approved. */
-@InternalCoSecApi
-class ChangeOptions(
-    /** RFC 0003 Q14. */
-    val maxDocumentBytes: Int = 8 * 1024 * 1024,
-    /** RFC 0004 Q2; the compiler enforces it. */
-    val principalBindingLimit: Int = PolicyDocumentCompiler.DEFAULT_PRINCIPAL_BINDING_LIMIT,
-    /** How long a change may stay unpublished before it expires (`cosec.control.changes.expire-after`). */
-    val expireAfter: java.time.Duration = java.time.Duration.ofDays(7),
-    /** How long an approval is valid (`cosec.control.approval.expire-after`, RFC 0007 §7.5). */
-    val approvalExpireAfter: java.time.Duration = java.time.Duration.ofHours(72),
-    /**
-     * `cosec.control.approval.four-eyes` (RFC 0007 Q10): the trust root's own changes are analyzed too, and what the
-     * analysis cannot prove needs another administrator.
-     */
-    val fourEyes: Boolean = false,
-    /** When a shadow window may close (`cosec.control.shadow.*`, RFC 0007 §6.4). */
-    val shadow: ShadowOptions = ShadowOptions(),
-    /**
-     * The longest a break-glass binding may live from the moment it publishes (`cosec.control.break-glass.max-duration`,
-     * RFC 0007 §8): 4 hours by default, never more than 24.
-     */
-    val breakGlassMaxDuration: java.time.Duration = java.time.Duration.ofHours(4),
-) {
-    init {
-        require(
-            maxDocumentBytes > 0 && principalBindingLimit >= 0 && !expireAfter.isNegative && !approvalExpireAfter.isNegative &&
-                breakGlassMaxDuration > java.time.Duration.ZERO && breakGlassMaxDuration <= MAX_BREAK_GLASS
-        ) { "Invalid change options." }
-    }
-}
-
 /** RFC 0007 §8: a break-glass binding never lives longer than this, whatever is configured. */
 @InternalCoSecApi
 val MAX_BREAK_GLASS: java.time.Duration = java.time.Duration.ofHours(24)
-
-/**
- * When a shadow window closes (RFC 0007 §6.4, Q1): once [minDuration] has passed and the instances have reported
- * [minSamples] samples that compared (not `BASE_MISMATCH`); or at [maxDuration] with fewer, as insufficient evidence
- * the publisher must acknowledge; or at once when an instance cannot compile or evaluate the candidate.
- */
-@InternalCoSecApi
-class ShadowOptions(
-    val minDuration: java.time.Duration = java.time.Duration.ofMinutes(15),
-    val minSamples: Long = 1_000,
-    val maxDuration: java.time.Duration = java.time.Duration.ofHours(24),
-) {
-    init {
-        require(
-            !minDuration.isNegative && minSamples >= 0 && maxDuration >= minDuration
-        ) { "Invalid shadow window options." }
-    }
-}
-
-/** What [ChangeChecks.check] found, and the heads of the other documents it compiled the candidate with. */
-@InternalCoSecApi
-class CheckResult(val findings: List<Finding>, val checkedWith: Map<SnapshotKey, SnapshotDigest?>) {
-    val clean: Boolean get() = findings.none { it.severity == Severity.ERROR }
-}
 
 /**
  * The checks of a candidate (RFC 0007 §6.2, §6.3), in order: V1 format, V2 size and names, then the strict compile
