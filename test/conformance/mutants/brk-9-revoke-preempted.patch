@@ -2,11 +2,11 @@
 # Mutant: a change that only narrows takes the slot of a break-glass revoke, so the principal it revokes can hold it off
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-index 87eb42e6..fe44cfdb 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-@@ -868,7 +868,7 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+index 32458882..d4668530 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+@@ -212,7 +212,7 @@ internal class Staging(
                          return@repeat
                      }
                      // A revoke of a binding that still grants is taken only by another such revoke (review N1).

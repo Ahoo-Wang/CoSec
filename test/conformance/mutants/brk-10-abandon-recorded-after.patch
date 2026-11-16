@@ -2,16 +2,16 @@
 # Mutant: a break-glass change is abandoned whether or not its REQUIRED change listener records it
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassControlTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-index 87eb42e6..1c10fa2f 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-@@ -513,7 +513,7 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
+index 8d62b68f..2142ee12 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Approvals.kt
+@@ -139,7 +139,7 @@ internal class Approvals(
          if (breakGlass) {
              PublishRules.requireState(current, OPEN)
              PublishRules.requireAudit(true, listeners.hasRequired)
--            audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
-+            audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = false)
+-            flow.audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = true)
++            flow.audit(ChangeEvent.Kind.ABANDONED, current.abandoned(), operator.actor, gated = false)
          }
-         val change = transition(id, OPEN) { it.copy(state = ChangeState.ABANDONED) }
+         val change = flow.transition(id, OPEN) { it.copy(state = ChangeState.ABANDONED) }
          slots.release(change)

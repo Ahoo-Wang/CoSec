@@ -2,18 +2,18 @@
 # Mutant: a PUBLISHED change whose slot release failed is refused when it is published again (409), so its slot stays held
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RetriedPublishTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-index 87eb42e6..8b325eae 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Changes.kt
-@@ -551,12 +551,6 @@ class Changes(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+index f79c2507..b4c4c1fd 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+@@ -82,12 +82,6 @@ internal class Publishing(
      ): ChangeRequest {
-         val change = visible(publisher, id)
+         val change = flow.visible(publisher, id)
          authority.require(publisher, change.key, PublishRules.publishing(change))
 -        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
 -            val recorded = change.publishedAgain(publisher, again)
 -            return afterHead(change, checkNotNull(change.publishedRevision)) {
--                slots.released(change) { audit(PublishRules.outcomeOf(change, change), recorded, publisher.actor) }
+-                slots.released(change) { flow.audit(PublishRules.outcomeOf(change, change), recorded, publisher.actor) }
 -            }
 -        }
          PublishRules.requireState(change, setOf(ChangeState.READY))
