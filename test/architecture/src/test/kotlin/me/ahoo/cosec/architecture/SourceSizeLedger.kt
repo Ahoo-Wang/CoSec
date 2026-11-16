@@ -126,11 +126,6 @@ object SourceSizeLedger {
             Disposition.Debt(Batch.B4),
         ),
         Entry(
-            "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt",
-            454,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
             "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
             403,
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
