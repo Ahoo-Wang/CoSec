@@ -20,7 +20,6 @@ import me.ahoo.cosec.engine.pattern.PatternContainment
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
-import me.ahoo.cosec.model.condition.ConditionContainment
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.condition.ZoneResolver
 
