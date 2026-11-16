@@ -2,11 +2,11 @@
 # Mutant: the grant analysis drops the grantor's attributes that are not strings again, so a negated or exists condition over one counts as held
 # Tests: :control:test --tests me.ahoo.cosec.control.grant.* :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-index 5640fdcc..b030163c 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-@@ -510,7 +510,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+index cc21d980..d7d46a5f 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+@@ -240,7 +240,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
                      )
  
                      // Exactly as the engine reads it: a value of any type is its toString() (RC1-2).

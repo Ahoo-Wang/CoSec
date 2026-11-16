@@ -28,6 +28,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
+import java.util.concurrent.ExecutorService
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.function.LongSupplier
@@ -98,6 +99,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     compileExecutor: Executor?,
     scheduler: ScheduledExecutorService?,
     private val ticker: LongSupplier,
+    /** Tests only (RFC 0013 B2b): housekeeping on an executor the test runs, in place of the thread started here. */
+    housekeeping: ExecutorService? = null,
 ) : AutoCloseable {
 
     private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
@@ -113,7 +116,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         get() = context.nanoTime.get()
         set(value) = context.nanoTime.set(value)
 
-    private val threads = SnapshotThreads(options, compileExecutor, scheduler)
+    private val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
     private val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     private val families = SnapshotFamilies(families, sharedKey.kind, lagReports)
     private val context = SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families)
