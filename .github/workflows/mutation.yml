@@ -26,9 +26,6 @@ on:
         default: ''
   schedule:
     - cron: '23 3 * * 1'
-  # TEMPORARY: a workflow that is not on main cannot be dispatched, so this branch's pushes run it once. Removed before merge.
-  push:
-    branches: [ci/mutation-workflow]
 
 permissions:
   contents: read
