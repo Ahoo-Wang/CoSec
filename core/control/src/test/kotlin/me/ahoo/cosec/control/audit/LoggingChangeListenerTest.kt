@@ -47,9 +47,9 @@ class LoggingChangeListenerTest {
     )
 
     @Test
-    fun `the change log is written to the logger me-ahoo-cosec-control-audit`() {
-        LoggingChangeListener.LOGGER_NAME.assert().isEqualTo("me.ahoo.cosec.control.audit")
-        val logger = LoggerFactory.getLogger("me.ahoo.cosec.control.audit") as Logger
+    fun `the change log is written to the logger me-ahoo-cosec-changelog`() {
+        LoggingChangeListener.LOGGER_NAME.assert().isEqualTo("me.ahoo.cosec.changelog")
+        val logger = LoggerFactory.getLogger("me.ahoo.cosec.changelog") as Logger
         val logged = ListAppender<ILoggingEvent>().also { it.start() }
         logger.addAppender(logged)
         try {
@@ -57,7 +57,7 @@ class LoggingChangeListenerTest {
             // Other tests log through the same listener at the same time: this change's line is the one asked about.
             logged.list.filter { "pins-the-logger-name" in it.formattedMessage }
                 .map { it.loggerName to it.formattedMessage }.assert().singleElement().satisfies({
-                    it.first.assert().isEqualTo("me.ahoo.cosec.control.audit")
+                    it.first.assert().isEqualTo("me.ahoo.cosec.changelog")
                     it.second.assert().startsWith("Change pins-the-logger-name PUBLISHED on ")
                 })
         } finally {

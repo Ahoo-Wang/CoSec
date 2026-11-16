@@ -1282,8 +1282,8 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   | `me.ahoo.cosec.runtime.shadow.ShadowRecorder` | `me.ahoo.cosec.runtime.shadow.ShadowReporter` |
 - **The change log has a logger named on purpose.** `LoggingChangeListener` wrote the change log to the logger
   `me.ahoo.cosec.control.audit.ChangeAudit`, a name that came from the file it was in; it now writes to
-  `me.ahoo.cosec.control.audit` (`LoggingChangeListener.LOGGER_NAME`), as the decision audit writes to
-  `me.ahoo.cosec.audit`. A logging configuration or a log shipper that routed or filtered the old name uses the new one
+  `me.ahoo.cosec.changelog` (`LoggingChangeListener.LOGGER_NAME`), as the decision audit writes to
+  `me.ahoo.cosec.audit`: a name outside every package, so no class logger is a child of it. A logging configuration or a log shipper that routed or filtered the old name uses the new one
   ([Control-plane change log](./observability.md#control-plane-change-log)). The line itself is unchanged. The dispatcher's
   own warning, `Change listener [<name>] could not record <event>.`, is now logged by the logger of its own class,
   `me.ahoo.cosec.control.audit.ChangeListeners`.

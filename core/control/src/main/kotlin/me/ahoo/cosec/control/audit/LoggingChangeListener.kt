@@ -20,7 +20,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * Logs every change event (RFC 0007 §10.5); BEST_EFFORT. The change log is a record an operator routes, as the decision
- * audit is: it goes to the logger [LOGGER_NAME], whatever class writes it.
+ * audit is: it goes to the logger [LOGGER_NAME], whatever class writes it. The name is a sibling of `me.ahoo.cosec.audit`:
+ * no package of any class, and nothing under it, so no class logger is its child and a level set on `me.ahoo.cosec.control`
+ * does not reach it.
  */
 class LoggingChangeListener(override val name: String = "logging") : ChangeListener {
     override suspend fun onChange(event: ChangeEvent) {
@@ -32,7 +34,7 @@ class LoggingChangeListener(override val name: String = "logging") : ChangeListe
     }
 
     companion object {
-        const val LOGGER_NAME: String = "me.ahoo.cosec.control.audit"
+        const val LOGGER_NAME: String = "me.ahoo.cosec.changelog"
         private val log = KotlinLogging.logger(LOGGER_NAME)
     }
 }

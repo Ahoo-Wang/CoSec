@@ -218,10 +218,11 @@ The control plane emits a change event for every step of a change: `PROPOSED`, `
 revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
 content. Change listeners receive them.
 
-- **The default listener** logs each event at `INFO` to the logger `me.ahoo.cosec.control.audit`, as
+- **The default listener** logs each event at `INFO` to the logger `me.ahoo.cosec.changelog`, as
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`.
   Change listeners add up: every `ChangeListener` bean is registered, and the log listener is left out only when the
-  application declares a `LoggingChangeListener` bean of its own.
+  application declares a `LoggingChangeListener` bean of its own. The change log is written at `INFO`: a configuration
+  that sets `me.ahoo.cosec` above `INFO` sets `me.ahoo.cosec.changelog` to `INFO` by name, as for any record you keep.
 - **`PUBLISHING`, `BREAK_GLASS_REQUESTED` and `BREAK_GLASS_APPROVED` are gated:** every `REQUIRED` change listener must
   record the event within [`cosec.control.audit.required-timeout`](./configuration.md#control-plane) (5 seconds, for
   all of them together) before the step takes effect, or the step does not happen and the control API
@@ -272,7 +273,7 @@ producer with `acks=all`). With `delivery=required`, startup fails when the Kafk
 | `me.ahoo.cosec.runtime` | `Request [<requestId>] failed with an unmodelled exception.` at `ERROR` with the stack trace, for every `500`; `REQUIRED` listener failures; dropped events; attribute providers that fail (`<provider> failed to fetch [...]` at `WARN`, at most every 10 seconds per provider: each decision carries the cause); rate limiters that cannot count |
 | `me.ahoo.cosec.runtime.snapshot` | loading, lag, lost and regressed documents ([Snapshot health](#snapshot-health)) |
 | `me.ahoo.cosec.spring.boot` | the startup checks, such as the `!!!` eviction warning; `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO` when the application declares no `BlacklistSource` ([Blacklist](../guide/security-model.md#blacklist)); `ip2region databases: [<versions>].` at `INFO`, naming the IP versions without a database, whose addresses are unavailable; the `WARN` of a service in gateway mode ([Services behind the gateway](./deployment.md#services-behind-the-gateway)) |
-| `me.ahoo.cosec.control.audit` | the change log: one `INFO` line per change event ([Control-plane change log](#control-plane-change-log)); route it as you route `me.ahoo.cosec.audit` |
+| `me.ahoo.cosec.changelog` | the change log: one `INFO` line per change event ([Control-plane change log](#control-plane-change-log)); route it as you route `me.ahoo.cosec.audit` |
 | `me.ahoo.cosec.control` | `Control API <method> <path> failed (request <requestId>).` for every control-plane `500`; and, under the logger of the class that writes it, `Change listener [<name>] could not record <event>.` at `WARN` |
 
 Correlate a response with its log lines, audit event and span through the `CoSec-Request-Id` response header, which is
