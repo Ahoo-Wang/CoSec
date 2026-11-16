@@ -78,14 +78,13 @@ class PublishResult(val written: List<SnapshotKey>, val skipped: List<SnapshotKe
  */
 class DocumentPublisher(
     private val store: ControlStore,
-    private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler(),
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val revisions = Revisions(store, clock)
 
     /** Publishes [documents], the platform document first. */
     fun publish(documents: Map<SnapshotKey, PolicyDocument>, resume: Boolean = false): PublishResult = runBlocking {
-        check(documents, compiler)
+        check(documents)
         val ordered = documents.keys.sortedBy { ORDER.getValue(kindOf(it)) }
         val existing = ordered.mapNotNull { key -> revisions.head(key)?.let { key to it.document } }.toMap()
         checkExisting(existing, documents, resume)
@@ -95,7 +94,7 @@ class DocumentPublisher(
     /**
      * Publishes [document], written by hand, as [key] alone and only if [key] has no document yet: the checks of
      * [publish] for one document. An app or tenant document compiles, and its references resolve, against the platform
-     * document already published, which must be there.
+     * document already published, which must be there: a document this accepts is one every instance compiles.
      */
     fun publishOne(key: SnapshotKey, document: PolicyDocument): PublishResult = runBlocking {
         val platform = if (key == SnapshotKey.Platform) {
@@ -105,6 +104,8 @@ class DocumentPublisher(
                 "No platform document is published yet: publish it first (--document platform)."
             }
         }
+        // As every instance compiles it (PlatformCompiler): against the platform's limits and declared attributes.
+        val compiler = PolicyDocumentCompiler.forPlatform(platform)
         compiler.compile(document)
         compiler.checkReferences(document, platform)
         refusedBreakGlass(listOf(document))?.let { throw PublishException(it, emptyList()) }
@@ -164,14 +165,14 @@ class DocumentPublisher(
     companion object {
         /**
          * What [publish] checks before it writes anything, throwing what it would refuse: a platform document, every
-         * document compiling, every app document's references resolving against it, and no break-glass binding.
+         * document compiling as every instance compiles it (against the platform's condition limits and declared
+         * attributes, `PolicyDocumentCompiler.forPlatform`), every app document's references resolving against it, and
+         * no break-glass binding.
          */
-        fun check(
-            documents: Map<SnapshotKey, PolicyDocument>,
-            compiler: PolicyDocumentCompiler = PolicyDocumentCompiler()
-        ) {
+        fun check(documents: Map<SnapshotKey, PolicyDocument>) {
             val platform =
                 requireNotNull(documents[SnapshotKey.Platform]) { "There is no platform document to publish." }
+            val compiler = PolicyDocumentCompiler.forPlatform(platform)
             documents.values.forEach { document ->
                 compiler.compile(document)
                 compiler.checkReferences(document, platform)

@@ -104,6 +104,38 @@ class PublishFileTest {
         output.assert().contains("Published tenant:acme")
     }
 
+    /**
+     * An app or tenant document compiles at publish as every instance compiles it: against the published platform
+     * document's condition limits and the external attributes it declares.
+     */
+    @Test
+    fun `a tenant document compiles against the published platform, as every instance compiles it`() {
+        val platform = file(
+            "platform.json",
+            """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","limits":{"maxNodes":4},""" +
+                """"attributes":[{"path":"ext.geo.region","type":"string"}]}""",
+        )
+        publish(platform, "platform").first.assert().isEqualTo(MigrateMain.OK)
+        val reads = file(
+            "reads.json",
+            """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","policies":[{"id":"cn","statements":[""" +
+                """{"effect":"allow","action":"http:GET","condition":{"eq":["ext.geo.region","cn"]}}]}]}""",
+        )
+        val (code, output) = publish(reads, "tenant:acme")
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+
+        val large = file(
+            "large.json",
+            """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z","policies":[{"id":"big","statements":[""" +
+                """{"effect":"allow","action":"http:GET","condition":{"and":[{"eq":["subject.id","a"]},""" +
+                """{"eq":["subject.id","b"]},{"eq":["subject.id","c"]},{"eq":["subject.id","d"]}]}}]}]}""",
+        )
+        val (refused, message) = publish(large, "tenant:globex")
+        refused.assert().describedAs(message).isEqualTo(MigrateMain.FAILED)
+        message.assert().contains("does not compile").contains("has more than 4 nodes")
+        revision(SnapshotKey.Tenant("globex")).assert().isNull()
+    }
+
     @Test
     fun `a document the strict reader or the checks refuse writes nothing`() {
         val unknown =
