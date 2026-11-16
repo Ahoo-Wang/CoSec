@@ -349,7 +349,7 @@ header: anonymous. Otherwise never anonymous:
   `lag-warn`, 60s) and `... is stale` (ERROR, over `lag-escalate`, 5m). `Reloading snapshot document [<key>] failed;
   keeping revision <n>` means Redis could not be read: the installed revision stays until a read succeeds.
   `Snapshot document [<key>] regressed from revision <a> to <b>` means the store lost a write (for example a
-  failover).
+  failover); `cosec-migrate verify-chain` names every document whose revision chain lost a record.
 - The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports how many of the recently reporting instances (those with `cosec.authorization.shadow.enabled`) have installed it.
 
 ### Rate limiting

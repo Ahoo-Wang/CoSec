@@ -2,11 +2,11 @@
 # Mutant: the grant analysis ignores the grantor's own DENYs
 # Tests: :control:test --tests me.ahoo.cosec.control.grant.* :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-index 4a58226c..f6c17e0a 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-@@ -240,7 +240,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+index cc21d980..e98baf8e 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+@@ -62,7 +62,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
              )
              is Search.Found -> found.held
          }
