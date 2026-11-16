@@ -40,7 +40,7 @@ class LoggingChangeListenerTest {
         Instant.EPOCH,
         ChangeEvent.Kind.PUBLISHED,
         Actor(TenantId.PLATFORM, PrincipalId("plato")),
-        ChangeId("c1"),
+        ChangeId("pins-the-logger-name"),
         SnapshotKey.Platform,
         RevisionRef(1, "d"),
         null,
@@ -54,10 +54,12 @@ class LoggingChangeListenerTest {
         logger.addAppender(logged)
         try {
             runBlocking { LoggingChangeListener().onChange(event) }
-            logged.list.map { it.loggerName to it.formattedMessage }.assert().singleElement().satisfies({
-                it.first.assert().isEqualTo("me.ahoo.cosec.control.audit")
-                it.second.assert().startsWith("Change c1 PUBLISHED on ")
-            })
+            // Other tests log through the same listener at the same time: this change's line is the one asked about.
+            logged.list.filter { "pins-the-logger-name" in it.formattedMessage }
+                .map { it.loggerName to it.formattedMessage }.assert().singleElement().satisfies({
+                    it.first.assert().isEqualTo("me.ahoo.cosec.control.audit")
+                    it.second.assert().startsWith("Change pins-the-logger-name PUBLISHED on ")
+                })
         } finally {
             logger.detachAppender(logged)
         }
