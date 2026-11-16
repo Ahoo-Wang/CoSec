@@ -20,10 +20,14 @@ import io.lettuce.core.RedisURI
 import io.lettuce.core.cluster.RedisClusterClient
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.DEFAULT_KEY_PREFIX
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.migrate.MigrateMain.FAILED
+import me.ahoo.cosec.migrate.MigrateMain.OK
+import me.ahoo.cosec.migrate.RedisAccess.controlStore
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -150,4 +154,30 @@ internal object PublishCommand {
             client.shutdown()
         }
     }
+
+    fun publish(options: Options, out: PrintStream): Int {
+        val file = options.value("file")
+        if (file != null && (options.value("in") != null || options.flag("resume"))) {
+            throw UsageException("publish takes --file or --in, not both; --resume is for --in.")
+        }
+        if (file == null && options.value("document") != null) {
+            throw UsageException("--document names the document of --file.")
+        }
+        val source = file?.let { fileSource(it, options.required("document")) }
+            ?: PublishCommand.Source.Directory(Path.of(options.required("in")), options.flag("resume"))
+        val target = PublishCommand.Target(
+            options.required("to-redis"),
+            options.value("key-prefix") ?: DEFAULT_KEY_PREFIX,
+            options.flag("cluster"),
+            options.redisUris,
+        )
+        return PublishCommand.run(target, source, out) { block -> controlStore(options, block) }
+    }
+
+    private fun fileSource(file: String, document: String) = PublishCommand.Source.File(
+        Path.of(file),
+        PublishCommand.documentKey(document) ?: throw UsageException(
+            "--document is platform, app:<id> or tenant:<id>, not [${Identifiers.printable(document)}]."
+        ),
+    )
 }
