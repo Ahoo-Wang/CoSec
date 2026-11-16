@@ -1,0 +1,17 @@
+# Rule: SNP-13
+# Mutant: revalidate joins a load already in flight, so its future can complete on a read made before the call
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 2abc7dfc..2412185a 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -330,7 +330,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+      * load ends, since that load may have read before what the caller wants seen (`SNP-13`). A document not installed
+      * at the call (one that failed with nothing installed, or still on its first load) is not part of it.
+      */
+-    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
++    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.load() }
+ 
+     /**
+      * Stops this source and answers everything waiting on it. Every step runs whatever the ones before it did, so a
