@@ -119,22 +119,6 @@ object ShadowCodec {
         report.last?.let { put("last", it.toString()) }
     }
 
-    /** The samples of a report, by outcome, in the outcomes' order. */
-    private fun ObjectNode.putSamples(byOutcome: Map<ShadowOutcome, List<ShadowSample>>) {
-        byOutcome.toSortedMap().forEach { (outcome, samples) ->
-            putArray(outcome.name).apply {
-                samples.forEach { sample ->
-                    addObject().put(
-                        "tenant",
-                        sample.tenant
-                    ).put("principal", sample.principal).put("app", sample.app)
-                        .put("space", sample.space).put("action", sample.action).put("resource", sample.resource)
-                        .put("enforcedBy", sample.enforcedBy).put("candidateBy", sample.candidateBy)
-                }
-            }
-        }
-    }
-
     private fun report(node: JsonNode): ShadowReport {
         node.only("window", "instance", "counts", "samples", "baseRevisions", "first", "last")
         val instance = node.need("instance").text()
@@ -216,4 +200,20 @@ object ShadowCodec {
     private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
         "A shadow value is malformed: ${printable(reason)}."
     )
+}
+
+/** The samples of a report, by outcome, in the outcomes' order. */
+private fun ObjectNode.putSamples(byOutcome: Map<ShadowOutcome, List<ShadowSample>>) {
+    byOutcome.toSortedMap().forEach { (outcome, samples) ->
+        putArray(outcome.name).apply {
+            samples.forEach { sample ->
+                addObject().put(
+                    "tenant",
+                    sample.tenant
+                ).put("principal", sample.principal).put("app", sample.app)
+                    .put("space", sample.space).put("action", sample.action).put("resource", sample.resource)
+                    .put("enforcedBy", sample.enforcedBy).put("candidateBy", sample.candidateBy)
+            }
+        }
+    }
 }
