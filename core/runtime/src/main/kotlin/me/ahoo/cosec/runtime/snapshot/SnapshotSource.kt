@@ -38,7 +38,6 @@ import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
-import java.util.concurrent.atomic.AtomicInteger
 import java.util.function.LongSupplier
 
 /**
@@ -139,7 +138,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     // #1383: a step that throws releases what the constructor took before it, so a source that fails to build holds nothing.
     private val subscription: AutoCloseable = undoing({}) { store.subscribe(ChangeListener()) }
-    private val passes = PeriodicPasses()
+    private val passes = Passes(shared, this.families, context)
     private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { schedulePeriodic() }
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */
@@ -338,11 +337,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     fun recompile(): CompletableFuture<Void> {
         context.compileEpoch.incrementAndGet()
         val idle = families.flatMap { it.slots.values }.filter { it.markRecompile() }
-        return reloadAll(idle) { it.load() }
+        return passes.reloadAll(idle) { it.load() }
     }
 
     /** Revalidates every installed document with a conditional read, a few at a time. */
-    fun revalidate(): CompletableFuture<Void> = reloadAll(installedSlots()) { it.load() }
+    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.load() }
 
     /**
      * Stops this source and answers everything waiting on it. Every step runs whatever the ones before it did, so a
@@ -408,7 +407,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         get() = threads.terminated
 
     /**
-     * One periodic tick: queue a lag report, then revalidate, unless a pass is in flight ([PeriodicPasses]). The future
+     * One periodic tick: queue a lag report, then revalidate, unless a pass is in flight ([Passes]). The future
      * completes when a pass that started after this call has ended.
      */
     internal fun tick(): CompletableFuture<Void> {
@@ -467,144 +466,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         families.firstOrNull { it.spec.kind == kind }
             ?: throw IllegalArgumentException("This source has no $kind documents.")
 
-    private fun installedSlots(): List<Slot<*>> = buildList {
-        if (shared.installed != null) add(shared)
-        families.forEach { family -> family.slots.values.filterTo(this) { it.installed != null } }
-    }
-
-    /**
-     * Runs [reload] on [slots], [SnapshotOptions.reloadConcurrency] at a time; a removed slot counts as done. Each lane
-     * loops while reloads complete inline (a synchronous store), so the stack never grows with the number of slots. For a
-     * periodic [pass], each slot that finishes is progress, and once it is abandoned no lane takes another slot. A lane
-     * holds a read of the pass while it takes a slot, so the pass cannot be abandoned between that check and the read
-     * the slot starts ([Pass.abandonIfStalled]).
-     */
-    private fun reloadAll(
-        slots: List<Slot<*>>,
-        pass: Pass? = null,
-        reload: (Slot<*>) -> CompletableFuture<*>?,
-    ): CompletableFuture<Void> {
-        val done = CompletableFuture<Void>()
-        if (slots.isEmpty()) {
-            done.complete(null)
-            return done
-        }
-        val next = AtomicInteger()
-        val remaining = AtomicInteger(slots.size)
-        fun finishedOne() {
-            pass?.progressed()
-            if (remaining.decrementAndGet() == 0) {
-                done.complete(null)
-            }
-        }
-        fun lane() {
-            while (true) {
-                val holding = pass?.let { it.startRead() ?: return }
-                val index = next.getAndIncrement()
-                if (index >= slots.size) {
-                    holding?.end()
-                    return
-                }
-                val reloading = try {
-                    reload(slots[index])
-                } finally {
-                    holding?.end()
-                }
-                if (reloading == null || reloading.isDone) {
-                    finishedOne()
-                    continue
-                }
-                reloading.whenComplete { _, _ ->
-                    finishedOne()
-                    lane()
-                }
-                return
-            }
-        }
-        repeat(minOf(options.reloadConcurrency, slots.size)) { lane() }
-        return done
-    }
-
-    /**
-     * The periodic passes (#1215): one at a time. A tick that comes while a pass is in flight starts none, so a store
-     * slower than the interval does not get another [SnapshotOptions.reloadConcurrency] reads each interval; it owes a
-     * pass instead, which starts as soon as the one in flight ends, over every document installed by then. However many
-     * ticks come meanwhile, one pass is owed. Nothing here waits: the scheduler thread only starts passes.
-     *
-     * A pass that has finished no document for [SnapshotOptions.storeReadTimeout] and has no read in flight is held only
-     * by compilations. It is abandoned: it takes no more documents, and the tick starts a pass, so a compilation that
-     * never ends does not hold back the revalidation of the documents that pass reaches (`SNP-6`). A pass whose reads are
-     * slow but still finishing is never abandoned, and neither is one with a read in flight, so the reads of an abandoned
-     * pass and of the one that replaced it never add up.
-     */
-    private inner class PeriodicPasses {
-        // Guarded by this.
-        private var current: Pass? = null
-        private var owed: CompletableFuture<Void>? = null
-
-        fun tick(): CompletableFuture<Void> {
-            val now = nanoTime.asLong
-            val stalled: Pass?
-            val started: Pass
-            synchronized(this) {
-                val running = current
-                // Abandoning is atomic with the pass's lanes taking a slot: once it returns true, no lane of it reads.
-                if (running != null && !running.abandonIfStalled(now)) {
-                    return owed ?: CompletableFuture<Void>().also { owed = it }
-                }
-                stalled = running
-                // The pass that starts now is the one owed, if any: it starts after every tick that owed it.
-                started = Pass(owed ?: CompletableFuture(), context)
-                owed = null
-                current = started
-                stalled?.follow(started)
-            }
-            if (stalled != null) {
-                threads.offTimer {
-                    log.warn {
-                        "A snapshot revalidation pass finished no document for ${options.storeReadTimeout} and has no " +
-                            "read in flight: compilations hold it. Starting the next pass without it."
-                    }
-                }
-            }
-            run(started)
-            return started.done
-        }
-
-        @Suppress("TooGenericExceptionCaught")
-        private fun run(pass: Pass) {
-            val reloads = try {
-                reloadAll(installedSlots(), pass) { it.load(pass = pass) }
-            } catch (error: Throwable) {
-                // Never leave a pass in flight that nothing will end: every later tick would only owe one.
-                pass.done.completeExceptionally(error)
-                ended(pass)
-                throw error
-            }
-            reloads.whenComplete { _, error ->
-                if (error != null) pass.done.completeExceptionally(error) else pass.done.complete(null)
-                ended(pass)
-            }
-        }
-
-        /** [pass] ended: the owed pass starts now, if any. An abandoned pass ends with nothing to start. */
-        private fun ended(pass: Pass) {
-            val next = synchronized(this) {
-                if (current !== pass) {
-                    return
-                }
-                val waiting = owed
-                if (waiting == null) {
-                    current = null
-                    return
-                }
-                owed = null
-                Pass(waiting, context).also { current = it }
-            }
-            run(next)
-        }
-    }
-
     private fun attemptPrewarm(keys: List<SnapshotKey>, backoff: Duration, done: CompletableFuture<Void>) {
         if (context.closed.get()) {
             done.completeExceptionally(closedError())
@@ -658,7 +519,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
         override fun onReset() {
             log.info { "Snapshot change notifications may have been lost; reloading every installed document." }
-            reloadAll(installedSlots()) { it.reload(force = false) }
+            passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
         }
     }
 
