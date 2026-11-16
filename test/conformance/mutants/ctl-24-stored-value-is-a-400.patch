@@ -3,10 +3,10 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-index ab09705a..10f8185a 100644
+index ef1614fa..375d5005 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-@@ -164,7 +164,7 @@ class ControlHttp(private val plane: ControlPlane) {
+@@ -118,7 +118,7 @@ class ControlHttp(plane: ControlPlane) {
          log.error(
              e
          ) { "Control API ${request.method} ${request.path} (request $requestId): a stored value does not decode." }
@@ -14,4 +14,4 @@ index ab09705a..10f8185a 100644
 +        return problem(Problem.INVALID_REQUEST, requestId, e.message)
      }
  
-     private suspend fun route(operator: Operator, request: ControlHttpRequest): ControlHttpResponse {
+     /** The problems of the control API: RFC 0006's where it has one, the control API's own statuses otherwise. */

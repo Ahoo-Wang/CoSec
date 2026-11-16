@@ -2,11 +2,11 @@
 # Mutant: a break-glass revoke over HTTP answers 200 whether or not the binding still grants
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-index 121a7968..cd98780b 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-@@ -368,12 +368,6 @@ class ControlHttp(private val plane: ControlPlane) {
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
+index f6821693..2e1feccc 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/BreakGlassRoutes.kt
+@@ -63,12 +63,6 @@ internal class BreakGlassRoutes(private val plane: ControlPlane) : RouteHandler
              val binding = field("binding", "a binding id") { BindingId(unescaped(segments[0])) }
              val change = plane.breakGlass.revoke(operator, binding, reason)
              // An emergency revoke that did not take effect never answers as one that did (R4-1), whoever removed it.
