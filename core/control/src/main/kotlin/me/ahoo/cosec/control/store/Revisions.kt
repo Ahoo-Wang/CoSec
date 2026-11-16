@@ -264,19 +264,9 @@ class Revisions(
     suspend fun completeApps(apps: Set<String>): Boolean = updateApps { AppList(it.entries + apps, complete = true) }
 
     /** The document [publish] writes: the candidate's body at the revision after [base], naming [base] as its parent. */
-    private fun next(base: Head?, candidate: PolicyDocument, publication: Publication): PolicyDocument = PolicyDocument(
-        kind = candidate.kind,
-        owner = candidate.owner,
+    private fun next(base: Head?, candidate: PolicyDocument, publication: Publication): PolicyDocument = candidate.copy(
         revision = (base?.revision ?: 0) + 1,
         publishedAt = clock.instant(),
-        policies = candidate.policies,
-        bindings = candidate.bindings,
-        catalog = candidate.catalog,
-        limits = candidate.limits,
-        attributes = candidate.attributes,
-        boundary = candidate.boundary,
-        rateLimits = candidate.rateLimits,
-        roles = candidate.roles,
         provenance = Provenance(
             parent = base?.let { ParentRevision(it.revision, it.digest.toString()) },
             change = publication.change,
