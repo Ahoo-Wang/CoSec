@@ -272,6 +272,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   which JSON writes as an escape (`"beta\uD800"`), IDN-10: a Redis key would write it as `?` and read another id's
   documents, memberships and revocations. CoSec's own `JwtTokenConverter` refuses to sign one (login fails with
   `holds an unpaired UTF-16 surrogate`). Fix the issuer or the user store; surrogate pairs (emoji) are fine.
+- `token-invalid` for a token whose `tenantId` or `aud` holds `/` (`acme/west`, SCP-13): a tenant or app id is one path
+  segment, so it names neither `acme/west` nor `acme`. Behind a gateway, such a forwarded identity is `400
+  invalid-request`; a preview's document of such a tenant is left out of `GET /documents` with a warning. Rename the
+  tenant or app; `cosec-migrate convert` lists 7.x ones as `SLASH_IN_ID`.
 - Anonymous callers belong to tenant `(0)` and have no roles: a `subject: "*"` ALLOW must not require
   `subject.authenticated`.
 

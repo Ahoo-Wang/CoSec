@@ -91,6 +91,10 @@ tenant, and
   place, so the token would read the documents, memberships and revocations of `beta?`: it is refused before any of
   them is read. CoSec's own issuer refuses to sign one: login fails with `Principal [alice\uD800] holds an unpaired
   UTF-16 surrogate ...`. Fix the issuer, or the user store it reads: an id is Unicode text.
+- **A tenant or app id with `/`:** the token's `tenantId` or `aud` holds `/`, such as `acme/west`, which a 7.x or
+  preview issuer could sign (`SCP-13`). A tenant or app id is one path segment, so the token names neither tenant
+  `acme/west` nor `acme`. Rename the tenant or app where its id is kept, then have the principal sign in again
+  ([Upgrading](./upgrading.md#tenant-and-app-ids-hold-no-slash)).
 - **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
   of one that acts for someone else ([Authentication](../integration/authentication.md#tokens)).
@@ -152,8 +156,8 @@ The scope cannot be granted to this caller:
 
 - the credential declares an app other than the host's, or none: on a gateway, the route's metadata `cosec-app-id`,
   else [`cosec.authorization.scope.app-id`](./configuration.md#authorization). Issue the token for this app (its `aud`,
-  [Apps](../integration/authentication.md#apps)). A credential's app that cannot be an app id (blank, `*`, with `:` or a
-  control character, or longer than 128 characters) is refused too;
+  [Apps](../integration/authentication.md#apps)). A credential's app that cannot be an app id (blank, `*`, with `:`, `/` or
+  a control character, or longer than 128 characters) is refused too;
 - `CoSec-Space-Id` names a space where the principal has no role.
 
 Send the host's app, or none, and a space the principal is a member of
@@ -219,7 +223,7 @@ On a gateway, a permit whose identity cannot be forwarded is a `500` too, logged
 - `The credential of [<subject>] never expires: a service could not bound the identity.`: an API key without
   `expires-at` (or a token without `exp`). Give the key an expiry, or set the route's metadata `cosec-identity: false`.
 
-A route whose metadata `cosec-app-id` cannot be an app id (empty, `*`, with `:` or a control character, or longer than
+A route whose metadata `cosec-app-id` cannot be an app id (empty, `*`, with `:`, `/` or a control character, or longer than
 128 characters) answers `500` on every request, logged as `The cosec-app-id of route [<routeId>] cannot be an app id:
 ...` with the unmodelled-exception line above: fix the metadata ([Gateway](../integration/web.md#gateway)). One that
 is not a string (a number, a boolean, a list or a map) does the same, logged as `The cosec-app-id of route [<routeId>]
@@ -269,7 +273,7 @@ read as anonymous:
 
 | Status | Cause | Fix |
 |---|---|---|
-| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
+| `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
 
@@ -673,7 +677,8 @@ principal sets a tenant's boundary`.
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per segment) or a typed id over those lengths, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. A path with a trailing `/` or an empty segment (`//`) is no route. | Use the route's exact path. |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
-| `503` on one change, or `Could not read the open changes; no revision is reclaimed this pass.` at every maintenance pass | The change's record does not decode: it is of an app that cannot be an app id (blank, `*`, a control character, over 128 characters, `SCP-10`), or an alpha wrote it in a shape this version no longer reads, such as an approval without `principalBindings`. It can be neither shown nor abandoned, and until it is removed nothing is reclaimed. | Remove its record from the control store (with `cosec-cocache`, the key `<key-prefix>:control:change:<id>`), as [Upgrading](./upgrading.md#from-8-0-0-alpha-3) says. |
+| `503` on one change, or `Could not read the open changes; no revision is reclaimed this pass.` at every maintenance pass | The change's record does not decode: it is of an app that cannot be an app id (blank, `*`, `:`, `/`, a control character, over 128 characters, `SCP-10`, `SCP-13`), or an alpha wrote it in a shape this version no longer reads, such as an approval without `principalBindings`. It can be neither shown nor abandoned, and until it is removed nothing is reclaimed. | Remove its record from the control store (with `cosec-cocache`, the key `<key-prefix>:control:change:<id>`), as [Upgrading](./upgrading.md#from-8-0-0-alpha-3) says. |
+| A document a preview published is not in `GET /documents`, logged `The documents list names [tenant:<id>], which is no document key: left out.`, and `/documents/tenant:<id>` answers `400` `That names no document` | Its tenant or app id holds `/` (`acme/west`), which no 8.0 id can (`SCP-13`): no request reads it, and the control plane can name it no more. | Rename the tenant or app, publish its document under the new id, then remove the old key ([Upgrading](./upgrading.md#tenant-and-app-ids-hold-no-slash)). |
 | A publish, or `cosec-migrate repair-references`, fails with `The back-reference set is malformed` | The set is the JSON array of keys 8.0.0-alpha.3 wrote, or names an app that cannot be an app id. `repair-references` reads a set before it writes it, so it cannot get past one. | Stop the control plane, delete the set (`<p>:control:refs:<doc>:<policyId>`), run `cosec-migrate repair-references`, and start it again ([Upgrading](./upgrading.md#from-8-0-0-alpha-3)). |
 | A publish, or `cosec-migrate repair-references`, fails with `A document holds binding [<id>] in app [<app>], which no document key can name` | The document's head, written by an earlier build, holds a binding in an app that cannot be an app id. No change can publish over it. | Remove the binding before you upgrade ([Upgrading](./upgrading.md#from-8-0-0-alpha-2)). |
 | `422` `REFERENCES`: `[<id>] is referred to by [<doc>]`, for a `<doc>` that does not refer to it | A publish of `<doc>` indexed the reference and then lost its head write. | Run [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index). It removes the entry once `<doc>`'s head is at or above the revision that indexed it: when it does not, publish `<doc>` first. |

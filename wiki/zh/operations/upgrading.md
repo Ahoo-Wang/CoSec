@@ -34,7 +34,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 2. **找出没有 8.0 形式的内容。** 在策略和代码中搜索：`spel` 与 `ognl` 条件、自定义 `ActionMatcherFactory` 或
    `ConditionMatcherFactory` 类型、动作中的 `#{...}` 路径模板、`regular` 条件、DENY 条件中的 `ignoreCase`、`BlockingAware`、
    `Authorization`/`Statement`/`Policy` 的实现、`CoSecAuthorizationCustomizer`、root（`root-enabled`）、本地影子文件和 `cosecExplain`
-   端点。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
+   端点，以及[含 `/` 的租户和应用 id](#tenant-and-app-ids-hold-no-slash)。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
 3. **用 `cosec-migrate convert` 转换数据**，修正每一个拒绝项，直到转换被接受。对照[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
    阅读 `report.json` 中的语义改动。
 4. **更新依赖和代码**：把构建和运行环境换到 JDK 21，用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
@@ -115,6 +115,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 | `UNDECODABLE` | 不是合法的 7.x JSON、7.x 自己的模型无法解码，或需要类路径上缺少的类（`ognl` 条件、自定义匹配器）。 | 修正存储的 JSON。自定义匹配器没有 8.0 形式，见 `CUSTOM_ACTION` 和 `CUSTOM_CONDITION`。 |
 | `RESERVED_POLICY_ID` | 策略 id 以 `perm:`、`g:`、`r:` 或 `cosec:` 开头，这些前缀留给生成的 id。 | 重命名这条策略，以及引用它的每个附加策略。 |
 | `INVALID_ID` | 8.0 无法容纳的 id：应用或空间 id 为 `*` 或空、应用 id 含 `:`、角色 id 含 `@`，或者转换出的文档中任何 id 含落单的 UTF-16 代理项（如 JSON 转义 `"\uD800"`，`IDN-10`），位置为文档及其 JSON 路径。 | 重命名。8.0 中 `*` 表示任意应用或空间。 |
+| `SLASH_IN_ID` | 含 `/` 的租户 id（`--partition by-owner` 时策略的 `tenantId`）或应用 id，任何 8.0 租户或应用 id 都不能含 `/`（[见下文](#tenant-and-app-ids-hold-no-slash)）。 | 在源系统中给该租户或应用改名，使其 id 不含 `/`，然后重新转换。 |
 | `DUPLICATE_ID` | 导出中同一条策略出现两次，导出中同一个应用出现两次（一项会替换另一项，它的授权就丢了），同一个应用中同一个权限出现两次，或两个应用 id 或租户 id 转换后的文件名只有大小写之差（`Order` 与 `order`：在 macOS 和 Windows 上是同一个文件）。文件名不同的 id，例如 `strasse` 与 `straße`，不算冲突。 | 只保留一个，或改名。 |
 | `OWNER_TENANT` | 使用 `--partition by-owner`，而策略的 `tenantId` 不指向任何租户。 | 设置它的 `tenantId`，或改用 `--partition platform` 转换。 |
 | `CONDITION_NOT_TRANSLATED` | 没有精确翻译的 7.x 内置条件，例如不是字面量、字面量前缀或字面量选择的 `regular`，或者动作不是 `all` 的语句中的 `path` 条件。还包括只有 7.x 填写的部件（除网关的 `cosec.audit.routeId` 之外的 `request.attributes.*`，由 `RequestAttributesAppender` 设置；以及 `resource.*`），它们在 8.0 中总是缺失，所以其上的条件在 8.0 中是常量：在缺失值上成立的条件，无论在 DENY 还是 ALLOW 中（它会对每个请求成立，而 7.x 只在该部件为空时成立）；以及在缺失值上不成立的条件，在 DENY 中或在 DENY 中被取反（这条 DENY 永不成立，或对每个请求成立）。只有不再可能成立的 ALLOW 会被翻译，并记录为 `NOT-IN-8.0`；与模板的比较（`eq resource.owner #{principal.id}`）就是一例，因为缺失值不等于任何值。7.x ip2region 的 `ipRegion`（`country|region|province|city|isp`）只有一种形状能翻译：国家前缀（`startsWith "中国|"`，或表达它的 `regular`），翻译为 `ext.ip2region.country`；其上的其他条件按只有 7.x 填写的部件处理。以及在 DENY 需要时区分方法 HEAD 与 GET 的条件，因为 8.0 把 HEAD 请求按 GET 判定（包括 DENY 中的 `not eq GET`）。 | 按消息给出的条件（`eq`、`in`、`startsWith` ……）重写；appender 设置的值改为 `AttributeProvider` 的 `ext.*` 属性（`ipRegion`：`ext.ip2region.*`）。 |
@@ -126,6 +127,21 @@ cosec-migrate convert --from-files ./export --out ./converted
 
 警告不会让转换停止。目前的警告有：全局策略索引中类型不是 `GLOBAL` 的策略（按可附加策略转换，因为 7.x 并不把它应用于所有人）；
 `by-owner` 时留在平台文档中、含 DENY 语句的租户策略；没有应用权限的应用上的角色授权（7.x 忽略它们，所以被丢弃）。
+
+#### 租户和应用 id 不含斜杠 {#tenant-and-app-ids-hold-no-slash}
+
+8.0 把租户 id 和应用 id 都当作一个路径段（`SCP-13`），所以两者都不能含 `/`；7.x 接受过这样的 id。控制面在 `doc/tenant/<tenantId>/…`
+这样的资源上授权，`acme/west` 在那里会读作租户 `acme` 再接一段路径。升级前，请在拥有该 id 的系统里（往令牌写 `tenantId` 的签发方、应用的注册处）
+给这样的租户或应用改名：
+
+- **查找方法：**在数据副本上运行 `cosec-migrate convert`：它对每个这样的 id 给出 `SLASH_IN_ID` 拒绝项，位置在应用
+  （`app-role-permissions.json[<i>]`），或在 `--partition by-owner` 时在 `tenantId` 含 `/` 的策略上。只出现在令牌里的租户不在 7.x 数据中：
+  请在签发方的租户里搜索 `/`。
+- **`partition plan`** 以同样方式拒绝这样的租户，什么也不写；**`api-keys`** 拒绝这类租户的密钥。
+- **令牌**的 `tenantId` 或 `aud` 含 `/` 时，每个适配器都回答 `401 token-invalid`，所以租户改名后，这样的主体需要重新登录。
+  在网关之后，这类租户的转发身份是 `400 invalid-request`。
+
+其他字符保持不变，文件名仍会编码它们：`acme%west` 转换为 `tenants/acme%25west.json`。
 
 #### 报告中的语义改动 {#semantic-changes-in-the-report}
 

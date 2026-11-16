@@ -75,6 +75,9 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
   `"beta\uD800"` 这样的转义（`IDN-10`）。Redis key 在它的位置写 `?`，这个令牌会读到 `beta?` 的文档、成员关系与吊销，所以在读取其中任何一项之前就被拒绝。
   CoSec 自己的签发方拒绝签出这样的令牌：登录失败，报 `Principal [alice\uD800] holds an unpaired UTF-16 surrogate ...`。
   修正签发方或它读取的用户存储：id 是 Unicode 文本。
+- **含 `/` 的租户或应用 id：** 令牌的 `tenantId` 或 `aud` 含 `/`，例如 `acme/west`，7.x 或预览版的签发方可能签出过这样的令牌（`SCP-13`）。
+  租户 id 和应用 id 都是一个路径段，所以这个令牌既不指租户 `acme/west`，也不指 `acme`。请在保存该 id 的地方给租户或应用改名，然后让主体重新登录
+  （[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -121,7 +124,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 请求声明的作用域不能授予这个调用方：
 
 - 凭证声明的应用不是宿主的应用，或者没有声明：在网关上是路由元数据 `cosec-app-id`，否则是
-  [`cosec.authorization.scope.app-id`](./configuration.md#authorization)。请为这个应用签发令牌（它的 `aud`，[应用](../integration/authentication.md#apps)）。凭证声明的应用不能作为应用 id（空白、`*`、含 `:` 或控制字符、或超过 128 个字符）时同样被拒绝；
+  [`cosec.authorization.scope.app-id`](./configuration.md#authorization)。请为这个应用签发令牌（它的 `aud`，[应用](../integration/authentication.md#apps)）。凭证声明的应用不能作为应用 id（空白、`*`、含 `:`、`/` 或控制字符、或超过 128 个字符）时同样被拒绝；
 - `CoSec-Space-Id` 指定的空间中主体没有任何角色。
 
 发送宿主的应用或者不发送，并发送主体是其成员的空间（[信任边界](../guide/security-model.md#trust-boundaries)）。
@@ -182,7 +185,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - `The credential of [<subject>] never expires: a service could not bound the identity.`：没有 `expires-at` 的 API key（或没有
   `exp` 的令牌）。给 key 设置过期时间，或把该路由的元数据设为 `cosec-identity: false`。
 
-元数据 `cosec-app-id` 不能作为应用 id（为空、`*`、含 `:` 或控制字符、或超过 128 个字符）的路由，每个请求都回答 `500`，并随上面那条未建模异常的日志记下 `The cosec-app-id of route [<routeId>] cannot be an app id: ...`：修正该元数据（[网关](../integration/web.md#gateway)）。值不是字符串（数字、布尔值、列表或映射）时也是如此，日志为 `The cosec-app-id of route [<routeId>] is a <type>, not a string: ...`：给值加上引号，并只写一个应用。
+元数据 `cosec-app-id` 不能作为应用 id（为空、`*`、含 `:`、`/` 或控制字符、或超过 128 个字符）的路由，每个请求都回答 `500`，并随上面那条未建模异常的日志记下 `The cosec-app-id of route [<routeId>] cannot be an app id: ...`：修正该元数据（[网关](../integration/web.md#gateway)）。值不是字符串（数字、布尔值、列表或映射）时也是如此，日志为 `The cosec-app-id of route [<routeId>] is a <type>, not a string: ...`：给值加上引号，并只写一个应用。
 - `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`、`Claim [<name>] is <n> characters, over 1024.`
   或 `Claim [<name>] is a <type>, not a string, number or boolean.`：减少角色或
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity)，或在网关和服务上都调大 `max-size`。
@@ -219,7 +222,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 
 | 状态 | 原因 | 修复 |
 |---|---|---|
-| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
 
@@ -553,7 +556,8 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
-| 某一个变更回答 `503`，或每轮维护都记录 `Could not read the open changes; no revision is reclaimed this pass.` | 该变更的记录解码失败：它属于不能作为应用 id 的应用（空白、`*`、含控制字符或超过 128 个字符，`SCP-10`），或者是 alpha 写入的、这个版本不再读取的形状，例如不带 `principalBindings` 的批准。它既无法查看也无法放弃，在移除之前什么都不会回收。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-3)。 |
+| 某一个变更回答 `503`，或每轮维护都记录 `Could not read the open changes; no revision is reclaimed this pass.` | 该变更的记录解码失败：它属于不能作为应用 id 的应用（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符，`SCP-10`、`SCP-13`），或者是 alpha 写入的、这个版本不再读取的形状，例如不带 `principalBindings` 的批准。它既无法查看也无法放弃，在移除之前什么都不会回收。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-3)。 |
+| 预览版发布的某个文档不在 `GET /documents` 里，日志记录 `The documents list names [tenant:<id>], which is no document key: left out.`，`/documents/tenant:<id>` 回答 `400` `That names no document` | 它的租户或应用 id 含 `/`（`acme/west`），任何 8.0 id 都不能含 `/`（`SCP-13`）：没有请求读取它，控制面也再无法指名它。 | 给租户或应用改名，以新 id 发布它的文档，然后删除旧 key（[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。 |
 | 发布或 `cosec-migrate repair-references` 以 `The back-reference set is malformed` 失败 | 该集合是 8.0.0-alpha.3 写入的 key 的 JSON 数组，或者指向不能作为应用 id 的应用。`repair-references` 写之前要先读集合，所以也越不过它。 | 停掉控制面，删除该集合（`<p>:control:refs:<doc>:<policyId>`），运行 `cosec-migrate repair-references`，再启动控制面（[升级](./upgrading.md#from-8-0-0-alpha-3)）。 |
 | 发布或 `cosec-migrate repair-references` 以 `A document holds binding [<id>] in app [<app>], which no document key can name` 失败 | 该文档的 head 由之前的构建写入，含有不能作为应用 id 的应用中的绑定。任何变更都无法在它之上发布。 | 升级之前移除这个绑定（[升级](./upgrading.md#from-8-0-0-alpha-2)）。 |
 | `422` `REFERENCES`：`[<id>] is referred to by [<doc>]`，而 `<doc>` 并没有引用它 | `<doc>` 的某次发布登记了这条引用，随后没能写入头。 | 运行 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。`<doc>` 的头不低于登记该条目的修订时，条目才会被删除；否则先发布一次 `<doc>`。 |
