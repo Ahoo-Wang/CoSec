@@ -22,5 +22,6 @@ internal object ControlStatus {
     const val GONE = 410
     const val PRECONDITION_FAILED = 412
     const val UNPROCESSABLE = 422
+    const val PRECONDITION_REQUIRED = 428
     const val UNAVAILABLE = 503
 }
