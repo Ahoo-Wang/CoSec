@@ -101,9 +101,10 @@ internal class SnapshotFamilies<A : Any>(
         wanted: Int,
         lastAccessOf: (Slot<*>) -> Long = Slot<*>::lastAccess,
     ): List<Slot<*>> {
-        // The kind's members; a slot is checked again, since its kind can change between the set and this read.
-        val members = family.members(absent).asSequence()
-        val ofKind = members.filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
+        // Absent entries from their own set, documents from the family's map (a set of them scanned 1.6 times slower at
+        // 100,000: EvictionPassBenchmark); a slot is checked again, since its kind can change after it was listed.
+        val candidates = if (absent) family.absentMembers.asSequence() else family.slots.values.asSequence()
+        val ofKind = candidates.filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
         return leastRecentlyUsed(ofKind, wanted, lastAccessOf, { it.isIdle() })
     }
 
@@ -127,24 +128,23 @@ internal class SnapshotFamilies<A : Any>(
         private val absentEntries = AtomicInteger()
 
         /**
-         * The slots holding an entry of each kind, beside the counts and moved with them: a pass for a kind walks only
-         * that kind's, so it costs what the kind holds, not what the family holds (the absent kind's 512 at most,
-         * whatever the documents number). Read only by eviction passes and tests; `peek` never sees them.
+         * The slots holding an absent entry, beside the counts and moved with them: the absent kind's pass walks these
+         * alone, so it costs what that kind holds (512 at most), however many documents the family holds. The documents'
+         * pass walks the family's map. Read only by eviction passes and tests; `peek` never sees it.
          */
-        private val documentSlots: MutableSet<Slot<*>> = ConcurrentHashMap.newKeySet()
         private val absentSlots: MutableSet<Slot<*>> = ConcurrentHashMap.newKeySet()
+
+        val absentMembers: Set<Slot<*>> get() = absentSlots
 
         fun count(absent: Boolean): AtomicInteger = if (absent) absentEntries else documents
 
-        fun members(absent: Boolean): Set<Slot<*>> = if (absent) absentSlots else documentSlots
-
         fun join(slot: Slot<*>, absent: Boolean) {
-            (if (absent) absentSlots else documentSlots) += slot
+            if (absent) absentSlots += slot
             count(absent).incrementAndGet()
         }
 
         fun leave(slot: Slot<*>, absent: Boolean) {
-            (if (absent) absentSlots else documentSlots) -= slot
+            if (absent) absentSlots -= slot
             count(absent).decrementAndGet()
         }
 
@@ -157,13 +157,13 @@ internal class SnapshotFamilies<A : Any>(
 
         /**
          * Claims the removal of [slot], an entry of the kind [absent] names: its count's decrement, never below the
-         * bound, and its place among that kind's members; false at the bound, and nothing moves.
+         * bound, and for an absent entry its place among [absentMembers]; false at the bound, and nothing moves.
          */
         fun claim(slot: Slot<*>, absent: Boolean): Boolean {
             val bound = bound(absent)
             val claimed = count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound
-            if (claimed) {
-                (if (absent) absentSlots else documentSlots) -= slot
+            if (claimed && absent) {
+                absentSlots -= slot
             }
             return claimed
         }

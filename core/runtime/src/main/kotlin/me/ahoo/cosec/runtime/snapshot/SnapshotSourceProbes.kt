@@ -25,11 +25,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 internal fun SnapshotSource<*, *>.heldCounts(kind: SnapshotKind): Pair<Int, Int> =
     familyOfKind(kind).let { it.count(absent = false).get() to it.count(absent = true).get() }
 
-/** Tests only: the keys the family of [kind] lists as holding each kind, documents then absent entries. */
-internal fun SnapshotSource<*, *>.heldMembers(kind: SnapshotKind): Pair<Set<SnapshotKey>, Set<SnapshotKey>> =
-    familyOfKind(kind).let { family ->
-        family.members(absent = false).mapTo(HashSet()) { it.key } to family.members(absent = true).mapTo(HashSet()) { it.key }
-    }
+/** Tests only: the keys the family of [kind] lists as holding an absent entry. */
+internal fun SnapshotSource<*, *>.heldAbsentMembers(kind: SnapshotKind): Set<SnapshotKey> =
+    familyOfKind(kind).absentMembers.mapTo(HashSet()) { it.key }
 
 /** Tests only: how many slots a pass choosing [wanted] victims of the kind [absent] names reads the stamp of. */
 internal fun SnapshotSource<*, *>.evictionVisits(kind: SnapshotKind, absent: Boolean, wanted: Int): Int {

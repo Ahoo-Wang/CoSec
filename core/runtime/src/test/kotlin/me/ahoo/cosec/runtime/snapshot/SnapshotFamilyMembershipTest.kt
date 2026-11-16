@@ -23,9 +23,9 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
 /**
- * A family lists the slots of each kind beside its counts (RFC 0013 B2b §4c), so that a pass for a kind costs what
- * the kind holds: the absent kind's pass over a family of [DOCUMENTS] documents reads the stamps of its absent entries
- * alone. Housekeeping is a queue this test never runs, so nothing is evicted behind its back.
+ * A family lists the slots holding an absent entry beside its counts (RFC 0013 B2b §4c), so that the absent kind's
+ * pass costs what that kind holds: over a family of [DOCUMENTS] documents it reads the stamps of its absent entries
+ * alone, while the documents' pass reads the documents'. Housekeeping is a queue this test never runs, so nothing is evicted behind its back.
  */
 class SnapshotFamilyMembershipTest {
     private val threads = SlotModelThreads()
@@ -54,9 +54,9 @@ class SnapshotFamilyMembershipTest {
         (0 until DOCUMENTS).forEach { source.load("app-$it").join() }
         (0 until ABSENT).forEach { source.load("made-up-$it").join() }
         source.heldCounts(SnapshotKind.APP).assert().isEqualTo(DOCUMENTS to ABSENT)
-        val (documents, absent) = source.heldMembers(SnapshotKind.APP)
-        documents.size.assert().isEqualTo(DOCUMENTS)
-        absent.assert().isEqualTo((0 until ABSENT).mapTo(HashSet()) { SnapshotKey.App("made-up-$it") })
+        source.heldAbsentMembers(
+            SnapshotKind.APP
+        ).assert().isEqualTo((0 until ABSENT).mapTo(HashSet()) { SnapshotKey.App("made-up-$it") })
         source.evictionVisits(
             SnapshotKind.APP,
             absent = true,
