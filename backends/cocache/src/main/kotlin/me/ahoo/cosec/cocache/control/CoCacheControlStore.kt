@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.cocache.control
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -55,9 +56,12 @@ import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import java.time.Clock
 import java.time.Duration
 import java.time.Instant
+
+private val log = KotlinLogging.logger {}
 
 /**
  * The [ControlStore] over CoCache and Redis (RFC 0007 §5.2). The heads are the snapshot documents the data plane
@@ -147,8 +151,22 @@ class CoCacheControlStore internal constructor(
         return put(indexes, key, expected, index, digest(RevisionIndexCodec, index)) is Put.Written
     }
 
+    /**
+     * The documents listed. An entry that names no document key (an id no longer valid, such as one with `/`, #1403) is
+     * left out and named in a warning: the others are listed.
+     */
     override suspend fun documents(): Set<SnapshotKey> =
-        read(lists, DOCUMENTS)?.first.orEmpty().keys.mapNotNullTo(LinkedHashSet()) { SnapshotKeyEncoder.decode(it) }
+        read(lists, DOCUMENTS)?.first.orEmpty().keys.mapNotNullTo(LinkedHashSet()) { entry ->
+            SnapshotKeyEncoder.decode(entry).also {
+                if (it == null) {
+                    log.warn {
+                        "The documents list names [${SnapshotKeyText.printable(
+                            entry
+                        )}], which is no document key: left out."
+                    }
+                }
+            }
+        }
 
     override suspend fun apps(): Versioned<AppList>? =
         read(appLists, APP_LIST)?.let { (value, digest) -> Versioned(value, digest) }
@@ -157,7 +175,8 @@ class CoCacheControlStore internal constructor(
         put(appLists, APP_LIST, expected, apps, digest(AppListCodec, apps)) is Put.Written
 
     override suspend fun referrers(target: SnapshotKey, policy: PolicyId): Versioned<Map<SnapshotKey, Long>>? =
-        read(references, ReferenceKey(target, policy))?.let { (value, digest) -> Versioned(value, digest) }
+        read(references, ReferenceKey(target, policy), "The back-reference set of [$target] policy [${policy.value}]")
+            ?.let { (value, digest) -> Versioned(value, digest) }
 
     /**
      * Emptied referrers are written as empty, not deleted: the next writer always has a digest to name, and absent means
@@ -177,7 +196,7 @@ class CoCacheControlStore internal constructor(
     ) is Put.Written
 
     override suspend fun change(id: ChangeId): Versioned<ChangeRequest>? =
-        read(changes, id)?.let { (value, digest) -> Versioned(value, digest) }
+        read(changes, id, "Change [${id.value}]")?.let { (value, digest) -> Versioned(value, digest) }
 
     /**
      * A change is listed open, with the time, before its first write and unlisted after the write that makes it
@@ -207,7 +226,9 @@ class CoCacheControlStore internal constructor(
         val expired = clock.instant().minus(missingGrace)
         val found = listed.entries.chunked(READ_BATCH).flatMap { batch ->
             coroutineScope {
-                batch.map { (id, listedAt) -> async { Triple(id, listedAt, read(changes, ChangeId(id))?.first) } }
+                batch.map { (id, listedAt) ->
+                    async { Triple(id, listedAt, read(changes, ChangeId(id), "Change [$id]")?.first) }
+                }
                     .awaitAll()
             }
         }

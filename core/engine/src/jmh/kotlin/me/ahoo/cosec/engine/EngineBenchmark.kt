@@ -13,19 +13,9 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.engine.flat
+package me.ahoo.cosec.engine
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.CoSecEngine
-import me.ahoo.cosec.engine.CompiledDocument
-import me.ahoo.cosec.engine.CompiledPolicy
-import me.ahoo.cosec.engine.EngineRequest
-import me.ahoo.cosec.engine.Evaluation
-import me.ahoo.cosec.engine.PolicyCompiler
-import me.ahoo.cosec.engine.ResourceSource
-import me.ahoo.cosec.engine.SnapshotView
-import me.ahoo.cosec.engine.StatementSource
-import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
@@ -72,7 +62,7 @@ import org.openjdk.jmh.annotations.State
  * evaluator, its resource target, the parsed path and, for `allow` and `deny`, the decision.
  */
 @State(org.openjdk.jmh.annotations.Scope.Benchmark)
-open class FlatEngineBenchmark {
+open class EngineBenchmark {
     @Param("allow", "deny", "none")
     lateinit var scenario: String
 
