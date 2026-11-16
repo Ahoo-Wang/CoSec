@@ -209,7 +209,6 @@ public final class me/ahoo/cosec/control/change/ChangeState : java/lang/Enum {
 	public static final field PUBLISHED Lme/ahoo/cosec/control/change/ChangeState;
 	public static final field READY Lme/ahoo/cosec/control/change/ChangeState;
 	public static final field REJECTED Lme/ahoo/cosec/control/change/ChangeState;
-	public static final field SHADOWED Lme/ahoo/cosec/control/change/ChangeState;
 	public static final field SHADOWING Lme/ahoo/cosec/control/change/ChangeState;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public final fun getStaged ()Z
