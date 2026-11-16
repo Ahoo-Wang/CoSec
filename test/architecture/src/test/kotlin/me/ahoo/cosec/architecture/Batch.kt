@@ -35,6 +35,6 @@ enum class Batch {
          * The batches that have landed. The last PR of a batch adds it here, and [LandedBatchTest] then fails on every
          * ledger entry or suppression that still names it: that PR is where the batch is checked complete.
          */
-        val LANDED: Set<Batch> = setOf(B1, B2a, B6, B7)
+        val LANDED: Set<Batch> = setOf(B1, B2a, B3, B5, B6, B7)
     }
 }
