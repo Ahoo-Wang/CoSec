@@ -432,6 +432,15 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 - **代价**：标准路径上，一份文档每小时最多发布约 4 次（窗口默认 15 分钟，§6.4）。一个变更可以包含任意多个操作；租户之间互不影响；平台文档是
   唯一会排队的地方（Q5）。
 
+**2026-11-16 修订（与实现对照后；RFC 0013 B4）。** 上面两条按实现更正，实现是更严的读法：
+
+- 暂存槽一直持有到 `READY`，不只到“影子窗口或等待审批”：一个已就绪而尚未发布的变更仍占着槽。释放的时机除了发布、放弃、过期，还有拒绝、
+  发布时落回 `CONFLICTED` 或 `DRAFT`，以及被抢占。
+- 收窄的紧急变更是在**占用暂存槽的那一刻**抢占（`stage` 或 `skip-shadow`），不是在发布时：它照常经过自己的那一步拿到槽，原持有者从
+  `SHADOWING`、`AWAITING_APPROVAL` 或 `READY` 进入 `CONFLICTED`。“可以在槽被占用时直接发布”那半句不成立。
+- 基准在一个变更等待审批期间移动，不会当即把它变成 `CONFLICTED`：它仍可以被批准，在发布时冲突，或在别的变更占槽时被抢占。方向是拒绝，
+  不需要为此监视文档头。
+
 ### 5.6 回滚
 
 `rollback(docKey, toRevision)` 创建一个 `kind = ROLLBACK` 的普通变更：候选的正文取自那条修订记录，头部重写（`revision` = 当前 + 1，`parent` = 当前头）。
@@ -498,24 +507,66 @@ refs:<被引用文档>:<policyId> = { 引用它的 docKey… }      // 例：ref
 
 ```mermaid
 flowchart LR
-    D[DRAFT] -->|检查通过| C[CHECKED]
-    D -->|检查失败| D
-    C -->|占用暂存槽| S[SHADOWING]
-    S -->|窗口关闭| W[SHADOWED]
-    W -->|有 UNKNOWN 片段| A[AWAITING_APPROVAL]
-    A -->|批准| R[READY]
-    W -->|没有 UNKNOWN| R
-    R -->|确认差异并发布| P[PUBLISHED]
-    C -->|跳过窗口<br>cosec:skip-shadow| W
-    S -->|基准变化| X[CONFLICTED]
-    A -->|基准变化| X
-    R -->|基准变化| X
-    X -->|rebase| D
+    N((提议)) -->|检查通过| C[CHECKED]
+    N -->|检查失败| D[DRAFT]
+    D -->|rebase：重做全部检查| C
+    C -->|rebase| C
+    C -->|占用暂存槽，开窗口| S[SHADOWING]
+    C -->|不开窗口：cosec:skip-shadow<br>或 break-glass 变更| R[READY]
+    C -->|不开窗口，有 UNKNOWN 片段| A[AWAITING_APPROVAL]
+    S -->|窗口关闭，没有 UNKNOWN| R
+    S -->|窗口关闭，有 UNKNOWN 片段| A
+    S -->|头已移动| X[CONFLICTED]
+    A -->|批准| R
     A -->|拒绝| J[REJECTED]
+    R -->|确认差异，头写入| P[PUBLISHED]
+    R -->|发布时复查失败| D
+    R -->|审批不再覆盖复查结果| A
+    R -->|基准已变，或槽已失| X
+    S -->|被抢占| X
+    A -->|被抢占| X
+    R -->|被抢占| X
+    X -->|rebase| C
+    X -->|rebase，检查失败| D
 ```
 
 所有状态转换都是对 `change:<id>` 的 `putIfMatch`，并发的两个操作（例如同时批准和放弃）只有一个成功。任何非终态都可以 `abandon`；变更超过
 `cosec.control.changes.expire-after`（默认 7 天）未发布即 `EXPIRED`。`REJECTED`、`ABANDONED`、`EXPIRED`、`PUBLISHED` 是终态。
+
+**2026-11-16 修订：转换表是规范（`CTL-33`；RFC 0013 B4）。** 上图按实现重画，原图有四处与实现不符：没有 `SHADOWED` 这个状态（见下）；
+提议直接生成 `CHECKED` 或 `DRAFT`，检查是命令的一部分而不是一次转换；`rebase` 一步到 `CHECKED` 或 `DRAFT`，并且也接受 `DRAFT` 与 `CHECKED`；
+发布可以把变更退回 `DRAFT` 或 `AWAITING_APPROVAL`。准确的定义是下面这张表：它是代码里的 `ChangeStep`，由
+`core/control/src/test/resources/change-transitions.md` 提交，测试把枚举渲染出来与那个文件逐字比较，所以改动任何一格都会出现在评审的 diff 里。
+
+| 步骤 | 起始状态 | 结果状态 |
+|---|---|---|
+| REBASE | DRAFT、CHECKED、CONFLICTED | DRAFT、CHECKED |
+| STAGE | CHECKED | SHADOWING、AWAITING_APPROVAL、READY |
+| SKIP_SHADOW | CHECKED | AWAITING_APPROVAL、READY |
+| SHADOWED | SHADOWING | SHADOWING、AWAITING_APPROVAL、READY、CONFLICTED |
+| APPROVE | AWAITING_APPROVAL | READY |
+| REJECT | AWAITING_APPROVAL | REJECTED |
+| ABANDON | DRAFT、CHECKED、SHADOWING、AWAITING_APPROVAL、READY、CONFLICTED | ABANDONED |
+| PUBLISH | READY | DRAFT、AWAITING_APPROVAL、CONFLICTED |
+| UNRESERVE | SHADOWING、AWAITING_APPROVAL、READY | CHECKED |
+| PREEMPT | SHADOWING、AWAITING_APPROVAL、READY | CONFLICTED |
+| UNWRITTEN | READY、CONFLICTED | DRAFT、CONFLICTED |
+| WRITTEN | 除 PUBLISHED 外的每一个状态 | PUBLISHED |
+| EXPIRE | DRAFT、CHECKED、SHADOWING、AWAITING_APPROVAL、READY、CONFLICTED | EXPIRED |
+
+前八行是命令；其余是命令途中的步骤：UNRESERVE 是没有拿到槽的 `stage` 或 `skip-shadow` 退回；PREEMPT 是槽被别的变更占走；UNWRITTEN 是没有写入头的发布；
+WRITTEN 是头已经写入的发布；EXPIRE 是每次读取都会施加的过期。规则有三条：
+
+- 一行的结果状态恰好是该步骤会写入的状态。`PUBLISHED` 只在 WRITTEN 一行里：只有本变更自己的发布写入了头，才到得了这一步。
+- 命令对起始状态之外的变更答 409。内部步骤不是命令，从不答 409；一个步骤要写入表外的状态是实现的错误，什么都不写入，控制面 API 答服务端错误
+  （500；发生在抢占或头写入之后的收尾里时，那里原有的兜底把它报成 503）。
+- WRITTEN 的起始状态包含终态 `REJECTED`、`ABANDONED`、`EXPIRED`：发布是在变更处于 `READY` 时写入头的，如果在它记下这一点之前另一条命令
+  （拒绝、放弃、过期）先改了状态，头照样已经写入，修订已经生效，记录必须如实写成 `PUBLISHED`。
+
+**没有 `SHADOWED` 状态。** 窗口一关闭，下一个状态立刻可以算出（没有 UNKNOWN 片段就是 `READY`，有就是 `AWAITING_APPROVAL`），中间没有可以停留的地方。
+窗口怎样关闭记在变更的影子摘要里，不是状态：样本足够；到最长时长仍不足（`insufficient`，发布必须确认）；任一实例报告候选出错（`blocked`，
+任何发布都答 409，`CTL-12`）。§6.4 的表里写“`SHADOWED`”的地方读作“窗口关闭”。`ChangeState` 里那个从未被写入过的枚举值已删除；审计事件
+`SHADOWED`（窗口关闭这件事）保留。
 
 "检查"（DRAFT → CHECKED）按顺序是：授权（§7.2）→ 校验（§6.2）→ 编译（§6.3）→ 授出分析（§7.4）。授出分析得到 UNKNOWN 不阻止进入影子窗口：
 影子只是观测，审批人需要看到影子报告再做决定。
