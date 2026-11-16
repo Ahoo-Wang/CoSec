@@ -3,14 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.*
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-index 6b2d91c5..56293ffd 100644
+index aa6244b4..9d208ec4 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-@@ -510,7 +510,6 @@ internal class Slot<T : Any>(
+@@ -521,7 +521,7 @@ internal class Slot<T : Any>(
                  load.confirmedAt,
                  EntryOrigin.UNCOMPILABLE,
              )
 -            finish(load, failed, install = true)
++            onTransientFailure(load, (failed.state as DocumentState.Failed).error)
              throw error
          }
          retryDelay = context.options.rejectedReloadRetry
