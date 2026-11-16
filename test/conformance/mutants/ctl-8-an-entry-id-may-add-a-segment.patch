@@ -2,11 +2,11 @@
 # Mutant: an entry id may hold a slash, which adds a segment to the resource cosec:write is checked on
 # Tests: :control:test --tests me.ahoo.cosec.control.change.EntryIdsTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-index 7a690ee1..070e994d 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
-@@ -257,7 +257,7 @@ class ChangeChecks(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
+index 2a60518b..51d57cee 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
+@@ -87,7 +87,7 @@ internal object EntryChecks {
                  is Operation.PutRateLimit -> operation.rule.id
                  else -> null
              } ?: continue
