@@ -26,9 +26,6 @@ on:
         default: ''
   schedule:
     - cron: '23 3 * * 1'
-  # TEMPORARY: a workflow that is not on main cannot be dispatched, so this branch's pushes run it once. Removed before merge.
-  push:
-    branches: [ci/mutation-workflow]
 
 permissions:
   contents: read
@@ -41,6 +38,8 @@ concurrency:
 jobs:
   plan:
     name: Plan
+    # The weekly schedule also fires on forks: it spends nothing there.
+    if: github.event_name != 'schedule' || github.repository == 'Ahoo-Wang/CoSec'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -66,6 +65,8 @@ jobs:
     strategy:
       # One shard failing must not hide the others.
       fail-fast: false
+      # 36 shards at once would take every runner a pull request's CI needs: eight leave room for it.
+      max-parallel: 8
       matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
     env:
       MUTANTS: ${{ matrix.mutants }}
@@ -93,6 +94,7 @@ jobs:
         if: always()
         env:
           SHARD: ${{ matrix.name }}
+          MUTANTS: ${{ matrix.mutants }}
         run: |
           {
             echo "### Mutation shard \`$SHARD\`"
@@ -104,9 +106,11 @@ jobs:
                 echo "Every mutant killed."
               fi
             else
-              echo "mutationCheck did not finish: see the job log."
+              echo "mutationCheck did not finish: see the job log. These mutants are **not checked**:"
+              echo
+              echo "$MUTANTS" | tr ',' '\n' | sed 's/^/- NOT_CHECKED /'
             fi
-          } | sed 's/^\(SURVIVED\|DOES_NOT_COMPILE\|DOES_NOT_APPLY\) /- \1 /' >> "$GITHUB_STEP_SUMMARY"
+          } | sed -E 's/^(SURVIVED|DOES_NOT_COMPILE|DOES_NOT_APPLY) +/- \1: /' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the log
         if: failure()
@@ -120,7 +124,7 @@ jobs:
   mutation:
     name: Mutation check
     needs: mutate
-    if: always()
+    if: always() && (github.event_name != 'schedule' || github.repository == 'Ahoo-Wang/CoSec')
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
