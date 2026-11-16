@@ -30,7 +30,6 @@ import me.ahoo.cosec.model.condition.Attribute.Kind
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
-import me.ahoo.cosec.model.condition.ConditionContainment
 import me.ahoo.cosec.model.condition.Containment
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.StatementRef
@@ -166,31 +165,6 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val 
                     opaque = { it.kind in SUBJECT_KINDS },
                     renames = containment.variables,
                 )
-            }
-        }
-    }
-
-    /**
-     * Whether [outer] (the condition of a statement one of whose resources contains the inner one), specialized, holds
-     * on every request that matches the inner resource and satisfies [condition].
-     */
-    private fun implied(
-        condition: CheckedCondition?,
-        outer: Condition?,
-        specialization: () -> Specialization,
-    ): Boolean {
-        if (outer == null) {
-            return true
-        }
-        // A statement holds under any of its matching resources' captures (ALG-10): resource [index] contains [inner],
-        // so it matches every request [inner] does, and the condition read under its captures is enough.
-        val specialized = specialization()
-        return when (val folded = specialized.fold(outer)) {
-            Folded.True -> true
-            Folded.False, is Folded.Incomparable -> false
-            is Folded.Residual -> {
-                val checked = specialized.check(folded.condition) ?: return false
-                condition != null && ConditionContainment.implies(condition, checked) == Containment.YES
             }
         }
     }
