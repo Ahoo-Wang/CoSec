@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import io.mockk.excludeRecords
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Ask
@@ -54,13 +53,13 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
         Duration.ZERO
     )
     private val transitions = KeyTransitions<String>(config)
-    private val pass = mockk<Pass>(relaxed = true).also { excludeRecords { it.toString() } }
+    private val pass = mockk<Pass>(relaxed = true)
     private val coldLoadTimeout = Duration.ofSeconds(5)
 
     /** The runner the family's map holds for the key; a dropped one is replaced by a new one on the next request. */
     private var current: KeyModelRunner? = null
     private val runners = mutableListOf<KeyModelRunner>()
-    private val waiters = mutableListOf<Waiter>()
+    private val waiters = mutableListOf<ScriptWaiter>()
     private val loadOfRead = HashMap<SlotModelStore.Read, Pair<KeyModelRunner, Long>>()
     private val random = kotlin.random.Random(script.seed)
     private var failNext = false
@@ -160,7 +159,7 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
     }
 
     private fun request(ask: Ask, to: KeyModelRunner = runner()) {
-        val waiter = Waiter(waiters.size + 1, ask).also { waiters += it }
+        val waiter = ScriptWaiter(waiters.size + 1, ask).also { waiters += it }
         if (ask == Ask.Request) {
             threads.scheduler.schedule(
                 Runnable { waiter.settle("timeout") },
@@ -215,7 +214,9 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
     override fun checkStep(before: KeyState<String>, event: KeyEvent<String>, step: KeyStep<String>) {
         counts.merge("steps checked", 1, Int::plus)
         counts.merge("event ${event.javaClass.simpleName}", 1, Int::plus)
-        step.effects.filterIsInstance<KeyEffect.Hang<String>>().filter { (it.waiter as Waiter).ask is Ask.Reload }.forEach {
+        step.effects.filterIsInstance<KeyEffect.Hang<String>>().filter {
+            (it.waiter as ScriptWaiter).ask is Ask.Reload
+        }.forEach {
             startedAfter.merge(it.handle, before.serial, ::maxOf)
         }
         KeyStepChecks(this, before, event, step).run()
@@ -236,11 +237,11 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
     }
 
     override fun answer(waiter: KeyEvent.Waiter, entry: SnapshotEntry<String>?, handle: KeyHandle<String>?) =
-        (waiter as Waiter).settle(if (handle == null) "directly" else "its handle")
+        (waiter as ScriptWaiter).settle(if (handle == null) "directly" else "its handle")
 
-    override fun refuse(waiter: KeyEvent.Waiter) = (waiter as Waiter).settle("refused")
+    override fun refuse(waiter: KeyEvent.Waiter) = (waiter as ScriptWaiter).settle("refused")
 
-    override fun skip(waiter: KeyEvent.Waiter) = (waiter as Waiter).settle("skipped")
+    override fun skip(waiter: KeyEvent.Waiter) = (waiter as ScriptWaiter).settle("skipped")
 
     override fun redispatch(event: KeyEvent.Requested) {
         counts.merge("redispatched", 1, Int::plus)
@@ -302,7 +303,7 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
     private fun <T> pick(from: List<T>, pick: Int): T? = if (from.isEmpty()) null else from[pick % from.size]
 
     /** One waiter: answered once, by whichever of its handle, its timeout or close comes first, as a view is. */
-    private inner class Waiter(val number: Int, val ask: Ask) : KeyEvent.Waiter {
+    private inner class ScriptWaiter(val number: Int, val ask: Ask) : KeyEvent.Waiter {
         val answered = AtomicBoolean()
         var times = 0
 
@@ -311,7 +312,7 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
             if (answered.compareAndSet(false, true)) counts.merge("answered $by", 1, Int::plus)
         }
 
-        override fun toString(): String = "waiter#$number($ask)"
+        override fun toString(): String = "waiter#$number(${KeyHarness.describe(ask)})"
     }
 
     private companion object {

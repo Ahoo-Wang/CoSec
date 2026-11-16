@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import io.mockk.excludeRecords
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Ask
@@ -37,8 +36,8 @@ import java.util.concurrent.RejectedExecutionException
  * with the load and handle numbers left out, which is all that decides what can follow ([canonical]).
  */
 class KeyTransitionsOrderTest {
-    /** Only its identity is used: what MockK would record of each `toString` in an event's log line is left out. */
-    private val pass = mockk<Pass>().also { excludeRecords { it.toString() } }
+    /** Only its identity is used, and nothing prints it: [KeyHarness] names a pass in its log. */
+    private val pass = mockk<Pass>()
     private val seen = HashMap<String, Int>()
     private val reached = sortedSetOf<String>()
     private var steps = 0

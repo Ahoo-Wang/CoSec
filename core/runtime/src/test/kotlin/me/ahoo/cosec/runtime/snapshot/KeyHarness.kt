@@ -45,8 +45,8 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
     var retries = 0
 
     /** The handle each waiter hangs on, and what was answered to whom directly. */
-    val hung = linkedMapOf<Waiter, KeyHandle<String>>()
-    val direct = linkedMapOf<Waiter, KeyEffect<String>>()
+    val hung = linkedMapOf<HarnessWaiter, KeyHandle<String>>()
+    val direct = linkedMapOf<HarnessWaiter, KeyEffect<String>>()
     val answered = linkedMapOf<KeyHandle<String>, SnapshotEntry<String>>()
 
     /** A reload's handle must be answered by a load numbered above this: one that started after the reload. */
@@ -65,13 +65,13 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
 
     fun moment() = KeyMoment(Instant.EPOCH, nanos, epoch, closed, seen)
 
-    fun waiter(ask: Ask) = Waiter(++waiters, ask)
+    fun waiter(ask: Ask) = HarnessWaiter(++waiters, ask)
 
-    fun request(ask: Ask): Waiter = waiter(ask).also { offer(KeyEvent.Requested(ask, it)) }
+    fun request(ask: Ask): HarnessWaiter = waiter(ask).also { offer(KeyEvent.Requested(ask, it)) }
 
     /** Offers [event] and executes what its transition returns; the checks run on the way. */
     fun offer(event: KeyEvent<String>): KeyStep<String> {
-        log += event.toString()
+        log += describe(event)
         if (event == KeyEvent.Close) closed = true
         if (event is KeyEvent.ReadDone || event is KeyEvent.ReadFailed || event is KeyEvent.ReadTimedOut) reads -= event.loadId!!
         if (event is KeyEvent.Compiled || event is KeyEvent.CompileCrashed || event is KeyEvent.CompileRejected) compiles -= event.loadId!!
@@ -160,7 +160,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
                 answered[effect.handle] = effect.entry
             }
 
-            is KeyEffect.Hang -> hang(effect.waiter as Waiter, effect.handle)
+            is KeyEffect.Hang -> hang(effect.waiter as HarnessWaiter, effect.handle)
             is KeyEffect.Serve -> answerDirectly(effect.waiter, effect)
             is KeyEffect.Refuse -> answerDirectly(effect.waiter, effect)
             is KeyEffect.Skip -> answerDirectly(effect.waiter, effect)
@@ -169,25 +169,36 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
         }
     }
 
-    private fun hang(waiter: Waiter, handle: KeyHandle<String>) {
+    /** [event] for the log: a pass is named, not printed, since a mock records each call made to it, `toString` too. */
+    private fun describe(event: KeyEvent<String>): String = when (event) {
+        is KeyEvent.Requested -> "Requested(ask=${describe(event.ask)}, waiter=${event.waiter})"
+        else -> event.toString()
+    }
+
+    private fun hang(waiter: HarnessWaiter, handle: KeyHandle<String>) {
         if (handle in answered) violations += "$waiter hung on $handle, already answered"
         hung[waiter] = handle
         if (waiter.ask is Ask.Reload) startedAfter.merge(handle, serialBefore, ::maxOf)
     }
 
     private fun answerDirectly(waiter: KeyEvent.Waiter, effect: KeyEffect<String>) {
-        direct[waiter as Waiter] = effect
+        direct[waiter as HarnessWaiter] = effect
     }
 
     /** A waiter in these tests: numbered, and remembering what it asked. */
-    class Waiter(val number: Int, val ask: Ask) : KeyEvent.Waiter {
-        override fun toString(): String = "waiter#$number($ask)"
+    class HarnessWaiter(val number: Int, val ask: Ask) : KeyEvent.Waiter {
+        override fun toString(): String = "waiter#$number(${describe(ask)})"
     }
 
     companion object {
         val KEY: SnapshotKey = SnapshotKey.App("app")
         val STORE_READ_TIMEOUT: Duration = Duration.ofSeconds(3)
         private const val SETTLE_LIMIT = 64
+
+        /** [ask] for a log line, with its pass named rather than printed. */
+        fun describe(
+            ask: Ask
+        ): String = if (ask is Ask.Load && ask.pass != null) "Load(force=${ask.force}, pass)" else ask.toString()
 
         /** An identity hash in a `toString`: two equal steps differ only there. */
         private val HASH = Regex("@[0-9a-f]+")
