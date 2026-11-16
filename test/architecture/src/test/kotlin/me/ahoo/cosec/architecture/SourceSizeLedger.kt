@@ -40,7 +40,9 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt",
-            757,
+            // +24 (SNP-14): the claimed kind of a removal, the counts moved where an entry is installed, an install over
+            // the cap evicting before it answers; the code B2b rewrites.
+            781,
             Disposition.Debt(Batch.B2b),
         ),
         Entry(

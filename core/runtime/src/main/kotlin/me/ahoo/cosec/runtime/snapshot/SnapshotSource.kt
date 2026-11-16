@@ -118,7 +118,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     private val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
     private val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
-    private val families = SnapshotFamilies(families, sharedKey.kind, lagReports)
+    internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports)
     private val context = SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families)
     private val shared = Slot(sharedKey, sharedCompiler, context)
 
@@ -436,23 +436,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun family(kind: SnapshotKind): Family<A> =
         families.firstOrNull { it.spec.kind == kind }
             ?: throw IllegalArgumentException("This source has no $kind documents.")
-
-    /** Tests only: what the family of [kind] counts it holds, documents then absent entries (`SNP-14`). */
-    internal fun heldCounts(kind: SnapshotKind): Pair<Int, Int> =
-        family(kind).let { it.count(absent = false).get() to it.count(absent = true).get() }
-
-    /** Benchmarks only: one eviction pass over the [kind] family's documents, at most [limit] of them (`SNP-14`). */
-    internal fun evictionPass(kind: SnapshotKind, limit: Int) = families.evictBeyond(family(kind), limit)
-
-    /** Benchmarks only: the scan of an eviction pass alone, choosing [wanted] victims among the [kind] family's documents. */
-    internal fun evictionScan(kind: SnapshotKind, wanted: Int): Int = families.victims(family(kind), false, wanted).size
-
-    /** Tests only: one claimed eviction of [key]'s slot, as a pass that chose it as of the kind [absent] would do it. */
-    internal fun evictClaiming(key: SnapshotKey, absent: Boolean): Boolean? {
-        val family = familyOf(key)
-        val slot = family.slots[family.spec.idOf(key)] ?: return false
-        return families.evictOne(family, slot, absent)
-    }
 
     /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
     internal fun evict(key: SnapshotKey): Boolean {

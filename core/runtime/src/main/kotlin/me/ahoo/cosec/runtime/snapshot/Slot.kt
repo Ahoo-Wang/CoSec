@@ -166,7 +166,7 @@ internal class Slot<T : Any>(
      */
     fun removeIfIdle(onlyIfEmpty: Boolean, claimedAbsent: Boolean? = null): Boolean {
         // The shared slot is never removed.
-        val family = context.families.firstOrNull { it.spec.kind == key.kind } ?: return false
+        val family = family() ?: return false
         synchronized(this) {
             val entry = installed
             val holdsDocument = onlyIfEmpty && entry != null
@@ -624,7 +624,7 @@ internal class Slot<T : Any>(
         val empty: Boolean
         synchronized(this) {
             if (install) {
-                context.families.firstOrNull { it.spec.kind == key.kind }?.let { context.families.move(it, installed, entry) }
+                family()?.let { context.families.move(it, installed, entry) }
                 installed = entry
                 installedEpoch = load.epoch
             }
@@ -698,7 +698,7 @@ internal class Slot<T : Any>(
         if (empty) {
             context.threads.offRequestThread { removeIfIdle(onlyIfEmpty = true) }
         } else if (install) {
-            context.families.firstOrNull { it.spec.kind == key.kind }?.let { family ->
+            family()?.let { family ->
                 if (context.families.overCap(family)) {
                     // The whole excess in one pass: the scan dominates a pass's time, whatever it evicts (EvictionPassBenchmark).
                     context.families.evictBeyond(family)
@@ -708,6 +708,9 @@ internal class Slot<T : Any>(
             }
         }
     }
+
+    /** This slot's family; null for the shared slot, which has none. */
+    private fun family(): SnapshotFamilies.Family<*>? = context.families.firstOrNull { it.spec.kind == key.kind }
 
     private fun recordInstall(entry: SnapshotEntry<T>) {
         val regressedFrom = synchronized(this) { context.families.recordSeen(entry) }
