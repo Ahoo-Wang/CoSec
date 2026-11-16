@@ -90,8 +90,9 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 To build it from the CoSec sources instead, run `./gradlew :migrate:installDist`; the tool is then
 `migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`.
 
-Its commands are below. Exit codes: `0` done, `1` the data was rejected or a write failed, `2` a usage error.
-`publish`, `bootstrap` and `repair-references` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
+Its commands are below. Exit codes: `0` done, `1` the data was rejected, a write failed or `verify-chain` found a
+broken chain, `2` a usage error.
+`publish`, `bootstrap`, `repair-references` and `verify-chain` take `--cluster` for a Redis Cluster: `--to-redis` then names seed
 nodes, comma-separated (`redis://node-1:6379,redis://node-2:6379`). The other commands read Redis with clients that
 do not, and refuse it. Each command takes only the options listed for it: another one, `publish --dry-run` for
 example, is a usage error before anything is read or written, never ignored.
@@ -103,6 +104,7 @@ example, is a usage error before anything is read or written, never ignored.
 | `bootstrap` | Binds one principal of the platform tenant to `cosec:platform-admin`, so the control plane has someone who may write. |
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
 | `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, removes what no head has, and completes the app list. |
+| `verify-chain` | Walks each document's revision chain and names a revision whose record is missing, the trace a write lost in a Redis failover leaves. Writes nothing. |
 
 #### Convert
 
@@ -299,6 +301,33 @@ unknown. If the list kept changing under it, it prints `FAILED the app list coul
 `1`: run it again. The list it completes is as good as `<s>:control:list:documents`, which names every document the
 control plane or `cosec-migrate` ever published, as long as that list has not been lost; a document written to Redis
 another way is in neither.
+
+#### Verify the revision chains {#verify-the-revision-chains}
+
+```bash
+cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--key platform|app:<id>|tenant:<id>]
+```
+
+Each revision names its parent revision and that revision's digest, and the control plane keeps a record of every
+revision under its digest ([Storage](./storage.md#revisions-history-and-rollback)). Redis replicates asynchronously,
+so a failover can lose a record it had acknowledged. `verify-chain` walks the chain of every document the store
+lists, or of the one `--key` names, from its head through each parent down to the oldest revision the revision index
+still lists, and prints one line per document:
+
+- `ok <doc>: intact down to revision <n>`, or `ok <doc>: no head` for a document that has none;
+- `BROKEN <doc>: no record holds revision <n> (<digest>): ...` when the record of a revision the chain needs is
+  missing or holds another revision;
+- `FAILED <doc>: <reason>` when the document could not be read; the others are still verified.
+
+Then `Verified <n> document(s): <b> broken, <f> could not be read.` It exits with `1` when any chain is broken or
+could not be read. Revisions that [retention](./storage.md#revisions-history-and-rollback) reclaimed are not a
+break: the walk stops below the oldest revision kept. It only reads, so it may run while the control plane runs, and
+as often as you like.
+
+A broken chain does not change what instances enforce, which is the head. It means Redis lost a write: the history
+of that document misses the revision, and a change published around the failover may be missing from the head too.
+Compare the head with what was published, and publish again what it lacks, as after a regression
+([Troubleshooting](./troubleshooting.md#decisions-use-an-old-revision)).
 
 #### Run it as a Kubernetes Job {#run-as-a-kubernetes-job}
 

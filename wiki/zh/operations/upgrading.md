@@ -62,7 +62,7 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 
 要从 CoSec 源码构建，运行 `./gradlew :migrate:installDist`；工具在 `migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`。
 
-它的命令如下。退出码：`0` 完成，`1` 数据被拒绝或写入失败，`2` 用法错误。`publish`、`bootstrap` 与 `repair-references` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster，会拒绝这个选项。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
+它的命令如下。退出码：`0` 完成，`1` 数据被拒绝、写入失败或 `verify-chain` 发现断链，`2` 用法错误。`publish`、`bootstrap`、`repair-references` 与 `verify-chain` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster，会拒绝这个选项。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
 
 | 命令 | 作用 |
 |---|---|
@@ -71,6 +71,7 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 | `bootstrap` | 把平台租户的一个主体绑定到 `cosec:platform-admin`，让控制面有人可以写入。 |
 | `partition plan` | 分别用 `--partition platform` 和 `by-owner` 转换两次，为每个租户写出一份计划，由控制面提交。不向 Redis 写任何东西。 |
 | `repair-references` | 把每份文档的头所引用、而反向引用索引缺少的条目补进索引，删除没有任何头引用的条目，并补全 app 列表。 |
+| `verify-chain` | 沿每份文档的修订链检查，指出记录缺失的修订，即 Redis 故障切换丢失写入留下的痕迹。不写入任何东西。 |
 
 #### 转换 {#convert}
 
@@ -207,6 +208,22 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 在写这个 Redis 的每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后再运行它，不要在滚动升级期间运行；降级之后要再运行一次。只要还有旧版本实例在运行，它就按旧的分析自行判断：它检查的变更不受 RC1-4 的保护，它发布的 app 文档也不会被列入。每个新实例在启动时对账一次，之后每次回收任务再对账：完整的列表缺了某份有头的 app 文档时，列表被标回不完整（[存储](./storage.md#publishing-through-the-control-plane)），新实例于是让覆盖所有 app 的授出退回审批。升级完成之后运行的那次 `repair-references`，才结束这个窗口。
 
 然后它把文档中的每份 app 文档列入 app 列表，并把列表标记为完整，输出 `The app list is complete: <n> app(s).`；在此之前，授出分析把覆盖所有 app 的每个授出都当作未知。如果列表在它执行期间一直在变，它输出 `FAILED the app list could not be completed` 并以 `1` 退出：再运行一次即可。它补全的列表只和 `<s>:control:list:documents` 一样可靠：只要那个列表没有丢失，它就列着控制面或 `cosec-migrate` 发布过的每一份文档；以其他方式写进 Redis 的文档两个列表里都没有。
+
+#### 检查修订链 {#verify-the-revision-chains}
+
+```bash
+cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--key platform|app:<id>|tenant:<id>]
+```
+
+每个修订都记着它的父修订及其摘要，控制面把每个修订的记录按摘要保存（[存储](./storage.md#revisions-history-and-rollback)）。Redis 异步复制，故障切换可能丢失它已经确认过的记录。`verify-chain` 对存储列出的每份文档（或 `--key` 指定的那一份），从头开始沿父修订一路检查到修订索引仍列着的最早修订，每份文档输出一行：
+
+- `ok <doc>: intact down to revision <n>`；没有头的文档输出 `ok <doc>: no head`；
+- `BROKEN <doc>: no record holds revision <n> (<digest>): ...`：链需要的某个修订的记录不存在，或者存的是另一个修订；
+- `FAILED <doc>: <原因>`：这份文档读不到；其余文档照常检查。
+
+最后输出 `Verified <n> document(s): <b> broken, <f> could not be read.`。只要有链断开或读不到，它就以 `1` 退出。被[保留策略](./storage.md#revisions-history-and-rollback)回收的修订不算断链：检查止于仍保留的最早修订。它只读，所以可以在控制面运行时执行，也可以随时重复执行。
+
+断链不改变实例执行的内容，实例执行的是头。它说明 Redis 丢了写入：这份文档的历史缺了那个修订，故障切换前后发布的变更也可能不在头里。把头与发布过的内容对照，把缺的部分重新发布，做法与修订回退之后相同（[排障](./troubleshooting.md#decisions-use-an-old-revision)）。
 
 #### 以 Kubernetes Job 运行 {#run-as-a-kubernetes-job}
 

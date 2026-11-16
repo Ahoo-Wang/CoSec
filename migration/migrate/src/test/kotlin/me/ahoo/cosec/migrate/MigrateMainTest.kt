@@ -104,6 +104,10 @@ class MigrateMainTest {
             "repair-references",
             "repair-references --key-prefix cosec",
             "repair-references --cluster",
+            "verify-chain",
+            "verify-chain --key platform",
+            "verify-chain --to-redis redis://localhost:6379 --key nope",
+            "verify-chain --to-redis redis://localhost:6379 --key app:",
             "convert --from-files a --out x --cluster",
             "api-keys --redis redis://localhost:6379 --out x --cluster",
             "partition plan --out x",
@@ -312,6 +316,38 @@ class MigrateMainTest {
         val (failed, out) = run(args)
         failed.assert().describedAs(out).isEqualTo(MigrateMain.FAILED)
         out.assert().contains("FAILED tenant:broken").contains("Visited 3 document(s); added 0 reference(s).")
+    }
+
+    /** RFC 0007 §5.4: a revision record a failover lost is reported, and the run fails; nothing is written. */
+    @Test
+    fun `verify-chain names a document whose chain lost a record, and exits with 1`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val acme = SnapshotKey.Tenant("acme")
+        val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+        controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            revisions.publish(SnapshotKey.Platform, null, document(SnapshotKey.Platform, listOf("shared")), publication)
+            repeat(2) { revisions.publish(acme, revisions.head(acme), document(acme, emptyList()), publication) }
+        }
+        val args = "verify-chain --to-redis $REDIS --key-prefix $keyPrefix"
+        run(args).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("ok tenant:acme: intact down to revision 1")
+                .contains("Verified 2 document(s): 0 broken, 0 could not be read.")
+        }
+        val lost = controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            revisions.history(acme).first { it.revision == 1L }.digest.also { store.removeRecord(acme, it) }
+        }
+        run(args).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+            output.assert().contains("BROKEN tenant:acme: no record holds revision 1 ($lost)")
+                .contains("ok platform: intact down to revision 1")
+        }
+        run("$args --key platform").let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("Verified 1 document(s): 0 broken, 0 could not be read.")
+        }
     }
 
     /** RFC 0007 §5.8: a reference a lost publish indexed, which no head has, no longer blocks a removal once repaired. */

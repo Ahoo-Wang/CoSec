@@ -32,6 +32,7 @@ import kotlin.system.exitProcess
  * publish --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --file ./platform.json --document platform
  * bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] --platform-admin alice [--force]
  * repair-references --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec]
+ * verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--key platform|app:<id>|tenant:<id>]
  * partition plan (--from-redis <uri> [--key-prefix cosec] | --from-files ./export) --out ./plan
  * api-keys --redis redis://localhost:6379 [--key-prefix cosec] --out ./api-keys
  *          [--memberships ./memberships.json] [--grant-to-principal <ids>|all] [--role-prefix api-key.] [--dry-run]
@@ -39,13 +40,14 @@ import kotlin.system.exitProcess
  *
  * `publish` and `bootstrap` write through the control plane's store, so each document's revision chain starts with
  * what they write (RFC 0007 §5.9). `repair-references` brings the back-reference index in line with what the heads refer
- * to ([ReferenceRepair]). With `--cluster`, `--to-redis` names seed nodes of a Redis Cluster, comma-separated.
+ * to ([ReferenceRepair]). `verify-chain` reads each document's revision chain and reports a record a failover lost
+ * ([ChainVerification]); it writes nothing. With `--cluster`, `--to-redis` names seed nodes of a Redis Cluster, comma-separated.
  *
  * It writes no break-glass binding (RC1-27): `publish` and `bootstrap` refuse documents that hold one, and a 7.x root
  * is not converted. After the switch, break-glass is requested through the control plane, by two people (RFC 0007 §8).
  *
- * Exit codes: 0 done; 1 the data was rejected, publishing failed, or a document's references could not be repaired
- * (see `report.json` and the console); 2 usage.
+ * Exit codes: 0 done; 1 the data was rejected, publishing failed, a document's references could not be repaired, or a
+ * revision chain is broken or could not be read (see `report.json` and the console); 2 usage.
  */
 object MigrateMain {
     const val OK = 0
@@ -55,13 +57,14 @@ object MigrateMain {
     /**
      * The options each command reads. One it does not read is a usage error, before anything is read or written: it
      * would otherwise be accepted and ignored, as `publish --dry-run` was, which published for real (#1225). `--cluster`
-     * is for the commands that write through the control plane's store; the others use plain Redis clients.
+     * is for the commands that use the control plane's store; the others use plain Redis clients.
      */
     internal val OPTIONS = mapOf(
         "convert" to setOf("from-redis", "from-files", "key-prefix", "out", "partition", "rate-limit-rules"),
         "publish" to setOf("to-redis", "cluster", "key-prefix", "in", "resume", "file", "document"),
         "bootstrap" to setOf("to-redis", "cluster", "key-prefix", "platform-admin", "force"),
         "repair-references" to setOf("to-redis", "cluster", "key-prefix"),
+        "verify-chain" to setOf("to-redis", "cluster", "key-prefix", "key"),
         "partition plan" to setOf("from-redis", "from-files", "key-prefix", "out"),
         "api-keys" to setOf(
             "redis", "key-prefix", "out", "app", "memberships", "grant-to-principal", "role-prefix", "dry-run"
@@ -77,6 +80,7 @@ object MigrateMain {
                   or, in place of --in: --file <document.json> --document platform|app:<id>|tenant:<id>
           bootstrap --to-redis <uri> [--cluster] [--key-prefix <p>] --platform-admin <principal> [--force]
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
+          verify-chain --to-redis <uri> [--cluster] [--key-prefix <p>] [--key platform|app:<id>|tenant:<id>]
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
           api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--app <id>] [--memberships <file>]
@@ -119,7 +123,7 @@ object MigrateMain {
             if (unused.isNotEmpty()) {
                 throw UsageException(
                     "$command does not take ${unused.sorted().joinToString { "--$it" }}" +
-                        (if ("cluster" in unused) " (--cluster is for the commands that write through the control plane's store)" else "") +
+                        (if ("cluster" in unused) " (--cluster is for the commands that use the control plane's store)" else "") +
                         ". It takes ${allowed.sorted().joinToString { "--$it" }}."
                 )
             }
@@ -134,6 +138,7 @@ object MigrateMain {
         "publish" -> PublishCommand.publish(options, out)
         "bootstrap" -> BootstrapCommand.bootstrap(options, out)
         "repair-references" -> RepairReferencesCommand.repairReferences(options, out)
+        "verify-chain" -> VerifyChainCommand.verifyChain(options, out)
         "partition plan" -> PartitionPlanCommand.partitionPlan(options, out)
         "api-keys" -> ApiKeysCommand.apiKeys(options, out)
         else -> {
