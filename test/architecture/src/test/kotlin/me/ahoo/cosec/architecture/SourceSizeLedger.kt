@@ -32,7 +32,8 @@ object SourceSizeLedger {
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt",
             // +3 (SNP-13): what the futures of revalidate and recompile promise, in their KDoc.
-            447,
+            // +3 (B2b gate 1): the test seam for housekeeping, a parameter with its KDoc and its import.
+            450,
             Disposition.Stays(
                 "the read interface with its contract, and the construction and close order in one place"
             ),
@@ -46,11 +47,6 @@ object SourceSizeLedger {
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Converter.kt",
             918,
             Disposition.Stays("migrate's one-off conversion of 7.x data, run once per deployment"),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
-            583,
-            Disposition.Debt(Batch.B4),
         ),
         Entry(
             "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt",
