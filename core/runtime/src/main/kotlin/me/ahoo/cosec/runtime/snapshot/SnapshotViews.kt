@@ -1,0 +1,92 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class)
+
+package me.ahoo.cosec.runtime.snapshot
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.model.scope.Scope
+import java.util.concurrent.CompletableFuture
+
+/**
+ * The documents one evaluation needs (RFC 0004 §7.4): always the platform document; unless the request is blocked,
+ * the [tenant]'s; and the [app]'s when the scope has roles in an app, or when the tenant's document binds one of that
+ * app's permission policies to `Anyone` or to a principal ([withAppFor], RC1-17). Null means not needed.
+ */
+@InternalCoSecApi
+class ViewKey private constructor(val tenant: TenantId?, val app: AppId?) {
+    override fun equals(other: Any?): Boolean = other is ViewKey && other.tenant == tenant && other.app == app
+
+    override fun hashCode(): Int = 31 * tenant.hashCode() + app.hashCode()
+
+    override fun toString(): String = "ViewKey(tenant=${tenant?.value}, app=${app?.value})"
+
+    /**
+     * This key with [scope]'s app, when this key reads no app and [tenantDocument], the tenant's document it read,
+     * needs that app's document whatever the roles; null otherwise. The rule is [ViewDocuments.appOf], which the control
+     * plane applies too; here it is one set lookup on the compiled document ([CompiledDocument.needsApp]): no I/O, and the
+     * client's app alone never loads a document.
+     */
+    internal fun withAppFor(scope: Scope, tenantDocument: CompiledDocument?): ViewKey? {
+        // Most keys already read the app (a scope with roles): one field read, and done.
+        if (app != null || tenantDocument == null) {
+            return null
+        }
+        val tenant = tenant ?: return null
+        val wanted = ViewDocuments.appOf(scope) { tenantDocument.needsApp(it) } ?: return null
+        return ViewKey(tenant, wanted)
+    }
+
+    @InternalCoSecApi
+    companion object {
+        /** A blocked request reads only the platform document, where the blacklist rule is (RFC 0004 §4.7). */
+        val BLOCKED = ViewKey(null, null)
+
+        /**
+         * The documents [scope] reads as far as its roles decide ([ViewDocuments.appOf] before the tenant's document is
+         * read); [withAppFor] completes it once that document is.
+         */
+        fun of(scope: Scope, blocked: Boolean): ViewKey {
+            if (blocked) {
+                return BLOCKED
+            }
+            return ViewKey(scope.tenant, ViewDocuments.appOf(scope) { false })
+        }
+
+        /** The view of [tenant] with [app]'s document: what the shadow comparison reads for a tenant candidate. */
+        internal fun of(tenant: TenantId, app: AppId): ViewKey = ViewKey(tenant, app)
+    }
+}
+
+/**
+ * Composes snapshot views from installed documents: the RFC 0003 `SnapshotSource` contract over the platform, app and
+ * tenant documents of RFC 0004, which implement it. The SPI stays future-based (RFC 0003 Q10);
+ * [SuspendingSnapshotSource] is the pipeline's view of it.
+ */
+@InternalCoSecApi
+interface SnapshotViews {
+    /** The view when every document [key] needs is installed, else null. No I/O, no future, on the caller's thread. */
+    fun peek(key: ViewKey): SnapshotView?
+
+    /**
+     * Loads what [key] needs. Never blocks; each caller gets its own future, so cancelling it leaves a shared load
+     * running. A document that cannot be read or does not load in time completes the future normally, as
+     * [SnapshotView.unresolved]; the future fails only when the source is closed.
+     */
+    fun load(key: ViewKey): CompletableFuture<SnapshotView>
+}
