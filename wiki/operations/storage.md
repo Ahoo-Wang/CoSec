@@ -67,7 +67,7 @@ while Redis could not store them, which only it holds and no invalidation reache
 
 `<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) with a trailing `:` removed: every
 key a deployment writes lives under it (`SNP-9`). `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
-contain `:`, so a key names one document only.
+contain `:` or `/`, so a key names one document only.
 
 | Key | Written by | Contents |
 |---|---|---|

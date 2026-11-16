@@ -29,6 +29,13 @@ to anyone or to a principal; a request the blacklist blocks reads only the platf
 published reads as empty. Which candidates apply, and in which order, is in the
 [security model](../guide/security-model.md).
 
+A tenant id or an app id is one path segment. It is not blank or `*`, holds at most 128 characters, and holds no `:`,
+no `/`, no control character and no unpaired UTF-16 surrogate. The control plane authorizes on resources such as
+`doc/tenant/<tenantId>/…` and `scope/<tenantId>/<appId>/<space>`, where an id with `/` would read as another
+tenant's id followed by more of the path (`SCP-13`). Every other character is an ordinary one: `acme.west`,
+`acme-west` and `acme west` are tenant ids. A token whose tenant or app breaks the rule is `token-invalid`
+([upgrading](../operations/upgrading.md#tenant-and-app-ids-hold-no-slash)).
+
 A tenant document:
 
 ```json

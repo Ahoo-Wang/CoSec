@@ -23,6 +23,7 @@ import me.ahoo.cocache.api.ConditionalGet
 import me.ahoo.cocache.api.ConditionalPut
 import me.ahoo.cocache.api.Store
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.readRecord
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.cocacheDigest
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore.Companion.snapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -125,10 +126,7 @@ internal object ConditionalStores {
             null
         }
 
-    suspend fun <K : Any, V : Any> read(cache: Store<K, V>, key: K): Pair<V, SnapshotDigest>? =
-        when (val read = cache.async().getIfChanged(key, null).await()) {
-            is ConditionalGet.Present -> read.value to snapshotDigest(read.digest)
-            ConditionalGet.Unchanged -> error("An unconditional read of [$key] was answered as unchanged.")
-            ConditionalGet.Absent -> null
-        }
+    /** [key]'s value and digest; a value that does not decode fails naming the record, [name] ([readRecord]). */
+    suspend fun <K : Any, V : Any> read(cache: Store<K, V>, key: K, name: String = "[$key]"): Pair<V, SnapshotDigest>? =
+        cache.readRecord(key, name)?.let { (value, digest) -> value to snapshotDigest(digest) }
 }

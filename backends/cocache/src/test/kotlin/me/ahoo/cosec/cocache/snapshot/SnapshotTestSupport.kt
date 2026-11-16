@@ -31,6 +31,7 @@ import me.ahoo.cocache.api.spi.NodeId
 import me.ahoo.cocache.api.spi.Subscription
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.CoCacheFactory
+import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.redis.RedisBackend
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -270,3 +271,14 @@ class DocumentWriter(private val cache: PolicySnapshotCache, private val store: 
         return SnapshotDocuments.read(body.encodeToByteArray())
     }
 }
+
+/** A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would. */
+fun <K : Any> rawStore(name: String, keyPrefix: String, cacheName: String, keyEncoder: KeyEncoder<K>) =
+    CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->
+        StoreSpec.builder<K, ByteArray>(name)
+            .keyPrefix(layout.keyPrefix)
+            .namespace(layout.namespace)
+            .keyEncoder(keyEncoder)
+            .codec(RawCodec)
+            .build()
+    }

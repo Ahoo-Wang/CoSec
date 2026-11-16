@@ -526,7 +526,7 @@ With API keys enabled and neither the in-memory store nor an `ApiKeyReader`, sta
 
 A principal may act within a tenant. The `TokenSubject` your `Authentication` returns decides it: its `tenant` goes in
 the token's `tenantId` claim; a token without the claim belongs to the default tenant `(0)`, and one whose claim is empty or not a string (a number,
-`null`, an object), or cannot be a tenant id (blank, `*`, with a `:` or a control character, longer than 128
+`null`, an object), or cannot be a tenant id (blank, `*`, with a `:`, a `/` or a control character, longer than 128
 characters), is invalid (`token-invalid`, `IDN-11`), so `JwtTokenConverter` refuses such a tenant id. An API key whose
 tenant cannot be one fails to load (`503`). The tenant decides which tenant
 document a request reads, and conditions read it as `subject.tenant` or `scope.tenant`. What CoSec does and does not
@@ -669,8 +669,8 @@ issues one token per app, with the roles of that app. A token that operates the 
 plane's app, `cosec.control.app-id`.
 
 Whoever issues the token says which app it is for: `TokenSubject.app` has no default. Refreshing a token keeps its app.
-A token whose `aud` is several values, not a string, or not a possible app id (blank, `*`, with `:` or a control
-character, longer than 128 characters) is `token-invalid`.
+A token whose `aud` is several values, not a string, or not a possible app id (blank, `*`, with `:`, `/` or a
+control character, longer than 128 characters) is `token-invalid`.
 
 **The platform tenant `(platform)` is privileged**: only its principals can be granted `cosec:root` through
 break-glass, and only they act on the platform and app documents in the control plane
