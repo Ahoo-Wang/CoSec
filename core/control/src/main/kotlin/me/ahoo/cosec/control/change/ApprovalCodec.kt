@@ -32,7 +32,7 @@ import java.time.Instant
 /** An approval and what it records of its approver: memberships and attributes, both ways. */
 internal object ApprovalCodec {
     /** Every field, always: `null` where the approver held no memberships or its credential did not say (RC1-11). */
-    internal fun approvalTree(node: ObjectNode, approval: Approval) {
+    internal fun tree(node: ObjectNode, approval: Approval) {
         node.set("approver", actorTree(approval.approver))
         node.put("at", approval.at.toString()).put("candidate", approval.candidate)
         node.putArray("covers").apply { approval.covers.forEach { add(it) } }
@@ -109,7 +109,7 @@ internal object ApprovalCodec {
         )
     }
 
-    internal fun approval(node: JsonNode): Approval {
+    internal fun decode(node: JsonNode): Approval {
         node.only(
             "approver",
             "at",

@@ -42,7 +42,7 @@ internal object OperationCodec {
         "maxCost"
     )
 
-    internal fun operationTree(operation: Operation, kind: DocumentKind, owner: String): ObjectNode {
+    internal fun tree(operation: Operation, kind: DocumentKind, owner: String): ObjectNode {
         val item = factory.objectNode()
         when (operation) {
             is Operation.PutPolicy -> item.put(
@@ -110,7 +110,7 @@ internal object OperationCodec {
         }
     }
 
-    internal fun operation(node: JsonNode, kind: me.ahoo.cosec.model.decision.DocumentKind, owner: String): Operation {
+    internal fun decode(node: JsonNode, kind: me.ahoo.cosec.model.decision.DocumentKind, owner: String): Operation {
         val ifMatch = node.get("ifMatch")?.text()
         return when (val op = node.need("op").text()) {
             "putPolicy" -> Operation.PutPolicy(PolicyDocumentCodec.decodePolicy(node.need("policy")), ifMatch)

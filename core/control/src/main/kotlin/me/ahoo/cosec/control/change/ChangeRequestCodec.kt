@@ -17,8 +17,6 @@ package me.ahoo.cosec.control.change
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.change.ApprovalCodec.approval
-import me.ahoo.cosec.control.change.ApprovalCodec.approvalTree
 import me.ahoo.cosec.control.change.ChangeJson.actor
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeJson.factory
@@ -27,10 +25,6 @@ import me.ahoo.cosec.control.change.ChangeJson.need
 import me.ahoo.cosec.control.change.ChangeJson.only
 import me.ahoo.cosec.control.change.ChangeJson.printable
 import me.ahoo.cosec.control.change.ChangeJson.text
-import me.ahoo.cosec.control.change.OperationCodec.operation
-import me.ahoo.cosec.control.change.OperationCodec.operationTree
-import me.ahoo.cosec.control.change.ShadowStateCodec.shadow
-import me.ahoo.cosec.control.change.ShadowStateCodec.shadowTree
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
 import me.ahoo.cosec.document.json.CoSecJson
@@ -92,7 +86,7 @@ object ChangeRequestCodec {
             change.base.digest?.let { put("digest", it.toString()) }
         }
         val operations = root.putArray("operations")
-        change.operations.forEach { operations.add(operationTree(it, kind, owner)) }
+        change.operations.forEach { operations.add(OperationCodec.tree(it, kind, owner)) }
         root.set("author", actorTree(change.author))
         root.put("note", change.note)
         root.put("kind", change.kind.name)
@@ -111,7 +105,7 @@ object ChangeRequestCodec {
         change.skipShadow?.let { root.put("skipShadow", it) }
         change.publishedRevision?.let { root.put("publishedRevision", it) }
         approvalTree(root, change)
-        change.shadow?.let { root.set("shadow", shadowTree(it)) }
+        change.shadow?.let { root.set("shadow", ShadowStateCodec.tree(it)) }
         if (change.confirmations.isNotEmpty()) {
             val confirmations = root.putArray("confirmations")
             change.confirmations.forEach {
@@ -131,7 +125,7 @@ object ChangeRequestCodec {
                 escalations.addObject().put("subject", it.subject).put("reason", it.reason).put("detail", it.detail)
             }
         }
-        change.approval?.let { approvalTree(root.putObject("approval"), it) }
+        change.approval?.let { ApprovalCodec.tree(root.putObject("approval"), it) }
     }
 
     private fun confirmation(node: JsonNode): Confirmation {
@@ -157,7 +151,7 @@ object ChangeRequestCodec {
             id = ChangeId(node.need("id").text()),
             key = key,
             base = Base(base.need("revision").asLong(), base.get("digest")?.let { digest(it.text()) }),
-            operations = node.need("operations").values().map { operation(it, kind, owner) },
+            operations = node.need("operations").values().map { OperationCodec.decode(it, kind, owner) },
             author = actor(node.need("author")),
             note = node.need("note").text(),
             kind = ProvenanceKind.valueOf(node.need("kind").text()),
@@ -183,9 +177,9 @@ object ChangeRequestCodec {
                 it.only("subject", "reason", "detail")
                 Escalation(it.need("subject").text(), it.need("reason").text(), it.need("detail").text())
             }.orEmpty(),
-            shadow = node.get("shadow")?.let(::shadow),
+            shadow = node.get("shadow")?.let(ShadowStateCodec::decode),
             confirmations = node.get("confirmations")?.values()?.map(::confirmation).orEmpty(),
-            approval = node.get("approval")?.let(::approval),
+            approval = node.get("approval")?.let(ApprovalCodec::decode),
             checkedApps = node.get("checkedApps")?.let { apps ->
                 apps.only("digest")
                 CheckedApps(apps.get("digest")?.takeUnless { it.isNull }?.let { digest(it.text()) })
@@ -200,7 +194,7 @@ object ChangeRequestCodec {
         node.only(
             "op", "policy", "id", "binding", "rateLimit", "role", "catalog", "limits", "attributes", "boundary", "ifMatch",
         )
-        operation(node, kind, owner)
+        OperationCodec.decode(node, kind, owner)
     }
 
     /** `platform`, `app:<id>` or `tenant:<id>`, as the control API's paths write a document. */

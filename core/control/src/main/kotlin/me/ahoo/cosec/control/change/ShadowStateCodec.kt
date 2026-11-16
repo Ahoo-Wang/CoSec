@@ -23,7 +23,7 @@ import java.time.Instant
 
 /** A change's shadow window state, both ways. */
 internal object ShadowStateCodec {
-    internal fun shadowTree(shadow: ShadowState): ObjectNode {
+    internal fun tree(shadow: ShadowState): ObjectNode {
         val node = factory.objectNode().put("window", shadow.window).put("startedAt", shadow.startedAt.toString())
         shadow.closed?.let { closed ->
             val summary = node.putObject("closed")
@@ -39,7 +39,7 @@ internal object ShadowStateCodec {
         return node
     }
 
-    internal fun shadow(node: JsonNode): ShadowState {
+    internal fun decode(node: JsonNode): ShadowState {
         node.only("window", "startedAt", "closed", "reporters")
         return ShadowState(
             node.need("window").text(),
