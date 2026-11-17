@@ -752,7 +752,7 @@ indeterminate in 8.0, and dropping it could drop a DENY: fix the documents or th
 ids unique, so a key is also rejected when another key of its tenant has the same id (both would become one principal,
 or share one per-key role), and an `own-principal` key when its `apikey:<key id>` principal already exists: a document
 binds it by name, or `--memberships` lists it. The key would gain what that principal holds. A `--memberships` file
-that lists a principal twice is refused. A key without a tenant goes to the default tenant (`defaultTenant`).
+that lists a principal twice, or has a `tenant`, `principal` or `roles` of the wrong type (`roles` is an array of strings; only `[]` means no roles), is refused. A key without a tenant goes to the default tenant (`defaultTenant`).
 
 An `own-principal` key with no roles is still listed in `memberships`, with `roles: []`. Its principal must exist in
 your `MembershipProvider` all the same, with no roles: a principal the provider does not know is refused, so every
@@ -1666,6 +1666,15 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   migration write their revisions through the store, and are recorded in the revision's `provenance.kind` (`BOOTSTRAP`,
   `MIGRATE`). A `when` over `ChangeEvent.Kind` that names them stops compiling; delete the branches, nothing was ever
   delivered to them.
+- **A preflight is no longer seen by policies, rate limits or the audit when the application declares a
+  `CorsConfigurationSource` bean** (`STA-5`, [CORS](../integration/web.md#cors)). The starter now registers a CORS
+  filter before CoSec's on Spring MVC and WebFlux when the application declares the stack's `CorsConfigurationSource`
+  and no `CorsFilter` or `CorsWebFilter` of its own: a preflight is answered by it from the source alone, so a statement
+  on `http:OPTIONS`, a rate limit, the blacklist, the audit, a decision event or a metric never sees one; an origin the
+  source does not allow gets a plain `403` before the pipeline, without a problem body or a `CoSec-Request-Id`; and a
+  refusal now carries the CORS headers. `@CrossOrigin` and `addCorsMappings` no longer answer a preflight: put every
+  origin, method and header in the bean. A statement written only to let a preflight through (`http:OPTIONS`) is not
+  needed any more and can stay. An application without the bean, or with a filter of its own, is unchanged.
 - **Removing a DENY from the platform or an app document needs a second person** (RFC 0007 §7.4.4, `CTL-31`). Until
   now, a platform principal without `cosec:approve` could publish alone a change that only removed entries. A removal
   that takes away a DENY, a policy that holds one or a binding whose policy holds one (also through a role removed or put

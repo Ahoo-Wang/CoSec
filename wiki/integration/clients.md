@@ -168,9 +168,10 @@ endpoint and stores the pair it answers; it never rewrites a header ([Apps](./au
 
 ## CORS
 
-A browser client needs the application to configure CORS: CoSec sets no `Access-Control-*` header and wires no CORS
-filter. [CORS](./web.md#cors) says what happens to a preflight on each stack, the one arrangement that makes both a
-preflight and a refusal readable by a script (a CORS filter before CoSec), and the request headers to allow and the
-response headers to expose: `CoSec-Request-Id`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and
-`Retry-After`, which a client reads. A client that sees a network error where it expects a `401` is looking at a refusal
-without CORS headers.
+A browser client needs the application to configure CORS: CoSec sets no `Access-Control-*` header itself, and the starter
+registers a CORS filter before the pipeline only when the application declares a `CorsConfigurationSource` bean.
+[CORS](./web.md#cors) says what happens to a preflight on each stack (with the bean it is answered and never decided,
+without it it is decided as `http:OPTIONS` for an anonymous caller), what `@CrossOrigin` and `addCorsMappings` still do,
+and the request headers to allow and the response headers to expose: `CoSec-Request-Id`, `RateLimit-Limit`,
+`RateLimit-Remaining`, `RateLimit-Reset` and `Retry-After`, which a client reads. A client that sees a network error where
+it expects a `401` is looking at a refusal without CORS headers.

@@ -19,9 +19,13 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
 
-/** What [KeyTransitions] knows of its key and the source's options; fixed for the key's life. */
+/** What [KeyTransitions] knows of the source's options, and of its key when it serves one; fixed for its life. */
 internal data class KeyConfig(
-    val key: SnapshotKey,
+    /**
+     * The key of the steps [KeyTransitions.next] makes alone. Null for transitions a source's runners share, whose
+     * steps each carry their runner's key (RFC 0013 B2b step 3).
+     */
+    val key: SnapshotKey?,
     /** The document every request needs: never recompiled as a family entry, never removed. */
     val shared: Boolean,
     val storeReadTimeout: Duration,
