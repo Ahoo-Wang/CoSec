@@ -45,11 +45,24 @@ internal class DrainHandOffs(
         if (closed.get()) runPending()
     }
 
-    /** Runs every pending hand-off on this thread, unbounded: close's, once its keys are ended, and an offerer's after. */
+    /**
+     * Runs every pending hand-off on this thread, unbounded: close's, once its keys are ended, and an offerer's after.
+     * One that throws does not leave the rest queued with their waiters: they all run, and the first failure is thrown
+     * at the end with the others suppressed in it, as [SnapshotSource.close] does with its steps.
+     */
+    @Suppress("TooGenericExceptionCaught")
     fun runPending() {
+        var failure: Throwable? = null
         while (true) {
-            (waiting.poll() ?: return).run()
+            val drain = waiting.poll() ?: break
+            try {
+                drain.run()
+            } catch (error: Throwable) {
+                failure?.addSuppressed(error)
+                failure = failure ?: error
+            }
         }
+        failure?.let { throw it }
     }
 
     private fun schedule() {

@@ -20,6 +20,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
 
@@ -33,9 +34,15 @@ class KeyRunnerCloseTest {
     private val store = ControllableStore().apply {
         put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1))
+        put(APP_B, document(1))
     }
     private val compiler = FakeCompiler()
     private val held = CopyOnWriteArrayList<Runnable>()
+
+    /** `app-a`'s drain throws once it has released its flag: a hand-off that fails after it answered its requests. */
+    @Volatile
+    private var failing = false
+    private val failingA = KeyDrain.Hooks(afterRelease = { if (failing) error("app-a's hand-off failed") })
 
     @Volatile
     private var holding = false
@@ -44,18 +51,20 @@ class KeyRunnerCloseTest {
     private val source = SnapshotSource(
         store, SnapshotKey.Platform, compiler,
         listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent)),
-        options, ManualClock(), SnapshotMetrics.NOOP, pool, null, { 0L }, null, keyRunners(),
+        options, ManualClock(), SnapshotMetrics.NOOP, pool, null, { 0L }, null,
+        keyRunners(hooks = failingA, hooked = { it == APP_A }),
     )
 
-    /** `app-a` installed, then evicted: the runner a pass listed before the eviction. */
-    private fun removedA(): KeySlot<*> {
-        source.load("app-a").join()
-        val slot = source.families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue("app-a")
-        source.evict(APP_A).assert().isTrue()
+    /** [key] installed, then evicted: the runner a pass listed before the eviction. */
+    private fun removed(key: SnapshotKey.App): KeySlot<*> {
+        source.load(key.appId).join()
+        val slot = source.families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue(key.appId)
+        source.evict(key).assert().isTrue()
         slot.removed.assert().isTrue()
-        holding = true
         return slot
     }
+
+    private fun removedA(): KeySlot<*> = removed(APP_A).also { holding = true }
 
     @Test
     fun `close answers a request a removed key handed off before it`() {
@@ -76,5 +85,19 @@ class KeyRunnerCloseTest {
         val reloading = DrainBudget.within(0) { slot.reloadIfHeld(force = false) }
         reloading.isDone.assert().isTrue()
         reloading.join().assert().isEqualTo(Reloaded.Skipped)
+    }
+
+    @Test
+    fun `close runs every pending hand-off when one throws, and reports the failure`() {
+        val a = removed(APP_A)
+        val b = removed(APP_B)
+        holding = true
+        DrainBudget.within(0) { a.reloadIfHeld(force = false) }
+        val reloadingB = DrainBudget.within(0) { b.reloadIfHeld(force = false) }
+        reloadingB.isDone.assert().isFalse()
+        failing = true
+        assertThrows<IllegalStateException> { source.close() }.message.assert().isEqualTo("app-a's hand-off failed")
+        reloadingB.isDone.assert().isTrue()
+        reloadingB.join().assert().isEqualTo(Reloaded.Skipped)
     }
 }
