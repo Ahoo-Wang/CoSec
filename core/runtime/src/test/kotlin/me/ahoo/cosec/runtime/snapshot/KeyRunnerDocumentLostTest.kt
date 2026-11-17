@@ -43,6 +43,14 @@ class KeyRunnerDocumentLostTest {
         store.hold = true
     }
 
+    private fun awaitReported() {
+        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
+        while (metrics.lost.isEmpty()) {
+            check(System.nanoTime() < deadline) { "The loss was not reported within 10 seconds." }
+            Thread.sleep(1)
+        }
+    }
+
     private fun lostInstalled() = metrics.installs.filter { it.key == APP_A && it.origin == EntryOrigin.LOST }
 
     @Test
@@ -70,6 +78,8 @@ class KeyRunnerDocumentLostTest {
             // The next load reads Absent again for a key it has seen: the loss is reported then.
             store.hold = false
             source.reload(APP_A).get(10, TimeUnit.SECONDS)
+            // The step answers its waiters, then reports the loss: the drainer may be another thread still finishing it.
+            awaitReported()
             metrics.lost.assert().containsExactly(APP_A to 1L)
             lostInstalled().assert().hasSize(1)
         }
