@@ -52,20 +52,24 @@
     "build": "vite build",
     "test:ui": "vitest --ui",
     "test": "vitest run --coverage",
-    "lint": "eslint . --fix",
+    "lint": "eslint --max-warnings 56 .",
     "clean": "rm -rf dist",
     "analyze": "npx vite-bundle-analyzer -p auto",
-    "test:no-coverage": "vitest run --coverage.enabled=false"
+    "test:no-coverage": "vitest run --coverage.enabled=false",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "peerDependencies": {
-    "@ahoo-wang/fetcher": "workspace:^",
-    "@ahoo-wang/fetcher-eventbus": "workspace:^",
-    "@ahoo-wang/fetcher-storage": "workspace:^"
+    "@ahoo-wang/fetcher": "catalog:peers",
+    "@ahoo-wang/fetcher-eventbus": "catalog:peers",
+    "@ahoo-wang/fetcher-storage": "catalog:peers"
   },
   "dependencies": {
     "nanoid": "catalog:"
   },
   "devDependencies": {
+    "@ahoo-wang/fetcher": "catalog:",
+    "@ahoo-wang/fetcher-eventbus": "catalog:",
+    "@ahoo-wang/fetcher-storage": "catalog:",
     "@eslint/js": "catalog:",
     "@vitest/coverage-v8": "catalog:",
     "@vitest/ui": "catalog:",

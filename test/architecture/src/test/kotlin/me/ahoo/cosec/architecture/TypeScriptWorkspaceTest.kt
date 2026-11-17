@@ -92,7 +92,8 @@ class TypeScriptWorkspaceTest {
             manifest["version"].asString().assert().describedAs("${directory.name}'s version").isEqualTo(version())
             manifest["license"].asString().assert().isEqualTo("Apache-2.0")
             manifest["private"]?.asBoolean().assert().isNotEqualTo(true)
-            manifest["engines"]?.get("node")?.asString().assert().isEqualTo(">=22.12.0")
+            // nanoid 6, which the client uses, supports Node 22.12 and later, 24 and 26 and later: the range says so.
+            manifest["engines"]?.get("node")?.asString().assert().isEqualTo("^22.12.0 || ^24.0.0 || >=26.0.0")
         }
     }
 
