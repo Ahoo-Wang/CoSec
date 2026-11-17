@@ -627,7 +627,7 @@ documents as JSON text.
 | `credential` | The principal: `tenant` (default `acme`), `id` (default `alice`), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; `"anonymous": true` for an anonymous caller. |
 | `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
 | `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
-| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate`, `Rejected` or `InvalidRequest`, with `by` (the deciding statement; `null` for the implicit deny), `cause`, `reason` or `refused` (`action`: an `http` method with a lower-case letter; `resource`: a path the pipeline refuses, or a typed id beyond a request path's bounds). Required: an `expect` without a `decision` is an error, since it would pass whatever is decided. |
+| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate`, `Rejected` or `InvalidRequest`, with `by` (the deciding statement; `null` for the implicit deny), `cause`, `reason` or `refused` (`action`: an `http` method with a lower-case letter; `resource`: a path the pipeline refuses, or a typed id beyond a request path's bounds; `header`: a header the documents read, sent with different values). Required: an `expect` without a `decision` is an error, since it would pass whatever is decided. |
 
 `http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or
 `Referer` URL, folded to ASCII lower case, so `https://EXAMPLE.com` is `example.com`. `cosec-testkit` brings what its API
@@ -643,7 +643,8 @@ not compile in the kit, and no provider runs, so a statement that reads `ext.*` 
 `onMissing`. Rate limit rules do not run, and a request names its action and resource: no route map is applied. The
 kit reads them as enforcement reads a request (`PIP-15`, `PIP-18`): `http:HEAD` is decided as `http:GET`, so a statement
 on `http:HEAD` matches nothing, an `http` path is normalized, and what the pipeline answers `400` (a lower-case method, a
-path with a dot segment) is `{"decision": "InvalidRequest"}`.
+path with a dot segment, a header the documents read sent with different values: `PIP-12`; header names that differ only in
+case are one header) is `{"decision": "InvalidRequest"}`.
 Decisions that depend on external values can be tried with [`simulate`](#simulating-a-request), which compiles
 against the control host's providers.
 

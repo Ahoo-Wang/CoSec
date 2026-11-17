@@ -47,6 +47,8 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.runtime.http.Enforceable
+import me.ahoo.cosec.runtime.http.Headers
+import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.stage.MembershipResolver
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
@@ -139,8 +141,14 @@ class EngineScenarios(
             is ScopeResolution.Rejected -> return EngineOutcome.Rejected(resolution.reason)
             is ScopeResolution.Resolved -> resolution.scope
         }
-        val flat = flatRequest(credential, memberships, scope, request) ?: return refused(request)
+        val headers = headers(request)
+        val flat = flatRequest(credential, memberships, scope, request, headers) ?: return refused(request)
         val view = view(snapshot, scope, documents)
+        // PIP-12: a header a document reads, sent with different values, is refused before any decision. At the
+        // engine level it is read as the runtime reads it instead: it has no value, and a statement on it errs.
+        if (enforceable && HttpAttributes(headers).ambiguousHeader(view) != null) {
+            return EngineOutcome.InvalidRequest(EngineOutcome.RequestPart.HEADER)
+        }
         val decisions = TraceLevel.entries.map { engine.evaluate(flat, view, it).decision }
         // Errors are new exceptions at each level, so decisions compare as rendered.
         check(
@@ -199,7 +207,8 @@ class EngineScenarios(
         credential: Credential,
         memberships: Memberships,
         scope: Scope,
-        request: JsonNode
+        request: JsonNode,
+        headers: Headers,
     ): EngineRequest? {
         val written = action(request)
         val action = if (enforceable) Enforceable.action(written) ?: return null else written
@@ -221,9 +230,7 @@ class EngineScenarios(
             time = time,
             device = device,
             blocked = blocked,
-            headers = request.get(
-                "headers"
-            )?.fields().orEmpty().map { (name, value) -> name.lowercase() to value.text() }.toMap(),
+            headers = headers,
             requestAttributes = request.get("attributes")?.fields().orEmpty().mapValues { it.value.text() },
         )
         val authz = AuthzRequest(
@@ -240,6 +247,13 @@ class EngineScenarios(
         )
         return EngineRequest(authz, scope, memberships, time, facts.host)
     }
+
+    /**
+     * The scenario's headers as the pipeline holds them: names that differ only in case are one header with all their
+     * values, so none is dropped by the order of the JSON object (a name written twice is refused by the JSON reader).
+     */
+    private fun headers(request: JsonNode): Headers =
+        Headers.of(request.get("headers")?.fields().orEmpty().mapValues { listOf(it.value.text()) })
 
     private fun resource(node: JsonNode?): Resource {
         if (node == null) return Resource("order", "1", emptyMap())

@@ -146,7 +146,11 @@
       "level": "pipeline",
       "guards": [
         "runtime:HostAttributesPipelineTest#aHeaderWithDifferentValuesIsInvalid",
-        "engine:CompiledDocumentTest#a document knows the headers it reads"
+        "engine:CompiledDocumentTest#a document knows the headers it reads",
+        "testkit:KitHeadersTest#a header sent in two cases with different values is refused, whichever comes last",
+        "testkit:KitHeadersTest#identical repeats are one value, by the kit as by the pipeline",
+        "testkit:KitHeadersTest#a header no document reads is not checked",
+        "testkit:KitHeadersTest#Origin and Referer are checked the same way"
       ],
       "pending": null
     },
