@@ -26,24 +26,24 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
 /** What a [SnapshotSource] does when the store says documents changed (RFC 0013 B2a): reload the slot of each. */
 internal class SnapshotChanges(
     private val sharedKey: SnapshotKey,
-    private val shared: Slot<*>,
+    private val shared: KeySlot<*>,
     private val families: SnapshotFamilies<*>,
     private val passes: Passes,
 ) : SnapshotChangeListener {
     override fun onChanged(keys: Collection<SnapshotKey>) {
         for (key in keys) {
             if (key == sharedKey) {
-                shared.onChanged()
+                shared.changed()
                 continue
             }
             // A key of no family here is another source's document.
             val family = families.firstOrNull { it.spec.kind == key.kind } ?: continue
-            family.slots[family.spec.idOf(key)]?.onChanged()
+            family.slots[family.spec.idOf(key)]?.changed()
         }
     }
 
     override fun onReset() {
         log.info { "Snapshot change notifications may have been lost; reloading every installed document." }
-        passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
+        passes.reloadAll(passes.installedSlots()) { it.reloadIfHeld(force = false) }
     }
 }

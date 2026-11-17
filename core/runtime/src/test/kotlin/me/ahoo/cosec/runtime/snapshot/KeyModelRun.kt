@@ -106,6 +106,7 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
             Kind.PASS -> request(Ask.Load(force = false, pass = pass))
             Kind.RELOAD -> request(Ask.Reload(force = false))
             Kind.RELOAD_FORCED -> request(Ask.Reload(force = true))
+            Kind.RELOAD_IF_HELD -> request(Ask.ReloadIfHeld(force = false))
             Kind.RECOMPILE -> recompile()
             Kind.EVICT -> evict(claims = true)
             Kind.EVICT_AT_BOUND -> evict(claims = false)
@@ -188,7 +189,7 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
         runner().offer(KeyEvent.Recompile(reply))
         if (!reply.isDone) fail("a recompile was not replied to")
         // recompile() reloads what is outdated, as SnapshotSource does.
-        if (reply.getNow(false)) request(Ask.Reload(force = false))
+        if (reply.getNow(false)) request(Ask.ReloadIfHeld(force = false))
     }
 
     private fun evict(claims: Boolean) {
@@ -215,7 +216,7 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
         counts.merge("steps checked", 1, Int::plus)
         counts.merge("event ${event.javaClass.simpleName}", 1, Int::plus)
         step.effects.filterIsInstance<KeyEffect.Hang<String>>().filter {
-            (it.waiter as ScriptWaiter).ask is Ask.Reload
+            (it.waiter as ScriptWaiter).ask.let { ask -> ask is Ask.Reload || ask is Ask.ReloadIfHeld }
         }.forEach {
             startedAfter.merge(it.handle, before.serial, ::maxOf)
         }

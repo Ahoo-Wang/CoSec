@@ -61,4 +61,10 @@ internal class SlotContext(
     val closed = AtomicBoolean()
 
     fun closedError() = IllegalStateException("SnapshotSource is closed.")
+
+    /**
+     * The slot [families] holds for [key] now, made if it holds none: where a removed slot sends a request. Nothing it
+     * reads is set later than this context's construction, and no slot exists before that.
+     */
+    fun current(key: SnapshotKey): KeySlot<*> = families.slotFor(key, this)
 }
