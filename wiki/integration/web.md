@@ -291,6 +291,10 @@ fun currentUser(): Mono<String> =
 val securityContext = exchange.getSecurityContext()
 ```
 
+Where CoSec did not handle the request, the three accessors answer differently: `ContextView.getSecurityContext()` throws an
+`IllegalStateException`, while `ContextView.getSecurityContextOrEmpty()` and `exchange.getSecurityContext()` return `null`,
+which a caller must treat as "no context", never as "no restriction".
+
 **Spring MVC**: in a handler, declare a `SecurityContext` parameter. The starter registers its resolver
 (`SecurityContextArgumentResolver`), which reads the context from the request, so the parameter is the context of the
 handler's own request in every kind of handler: blocking, `suspend` and async. A nullable parameter is null where CoSec
@@ -320,8 +324,9 @@ single-flight cache load). So the holder is:
 
 - **restored**, with Micrometer's `io.micrometer:context-propagation` on the classpath and
   `spring.reactor.context-propagation=auto`: Spring restores it with its other thread-locals on every resumption;
-- **unbound** otherwise, before the handler runs (`PIP-22`): reading it fails at once, before or after any suspension,
-  and the message names the parameter. It stays unbound for whatever runs after the handler on that request's threads:
+- **unbound** otherwise, before the handler runs (`PIP-22`): `requiredContext` fails at once, before or after any
+  suspension, and its message names the parameter; `context` is `null`, which a caller must treat as "no context", never
+  as "no restriction". It stays unbound for whatever runs after the handler on that request's threads:
   other interceptors' `postHandle` and `afterCompletion`, and filters once the chain returns. One case is left: a `suspend` handler resumed on the thread of a request whose
   handler is blocking finds **that request's** context there, so code that reads the holder only after such a
   resumption, and never before a suspension, reads another request's principal.
