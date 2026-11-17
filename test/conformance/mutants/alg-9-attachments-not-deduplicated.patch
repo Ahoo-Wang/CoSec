@@ -3,16 +3,17 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.RepeatedBindingsTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
-index 4cac011d..b0df2013 100644
+index 8229a502..12838db7 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt
-@@ -137,9 +137,6 @@ internal object CandidateOrder {
+@@ -119,9 +119,7 @@ internal object CandidateOrder {
          val claimed = if (attachments.size > PAIRWISE) HashSet<String>(attachments.size * 2) else null
          for (i in attachments.indices) {
              val id = attachments[i].value
 -            if (if (claimed == null) claimedBefore(attachments, i) else !claimed.add(id)) {
 -                continue
 -            }
++            claimed?.add(id)
              val own = tenant?.policy(id)
              val shared = platform.policy(id)
              if (own != null && shared != null && !own.sameContent(shared)) {

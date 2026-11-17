@@ -3,10 +3,15 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.ControlLeaseTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
-index fdc5943b..675fa423 100644
+index 89ab572d..f5555d87 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
-@@ -235,9 +235,7 @@ class CoCacheControlStore internal constructor(
+@@ -270,13 +270,11 @@ class CoCacheControlStore internal constructor(
+             if (async.putIfMatch(name, null, holder, duration).await() is ConditionalPut.Written) {
+                 return true
+             }
+-            val (current, digest) = read(leases, name) ?: return@repeat
++            val (current, _) = read(leases, name) ?: return@repeat
              if (current != holder) {
                  return false
              }

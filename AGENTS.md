@@ -66,6 +66,9 @@ gh workflow run mutation.yml                       # every mutant, on CI only: 3
   demand, never a local run: a mutant it reports as not killed is either a wrong patch or a missing test. `:conformance:check` requires every patch to apply to the working tree
   (`MutationCheckTest`): a refactoring that moves the code a mutant breaks fails `check` and names the patch. Rewrite
   it to break the same property where the code now lives (its header says what it is for), then run it.
+  `check` proves a patch applies, not that the patched tree compiles: a change of compiler flags or lint rules can
+  break mutants without `check` noticing (a mutant that does not compile is not a kill), so the full run
+  (`gh workflow run mutation.yml --ref <branch>`) is part of such a change.
 - Build cache, configuration cache and parallel execution are on in `gradle.properties`. If a task fails with a
   configuration-cache problem, don't capture `Project` in `doFirst`/`doLast`; `--no-configuration-cache` bypasses it.
   A cached `test` run does not hit Redis: use `--rerun` (or `cleanTest`) to force Redis-backed tests.
