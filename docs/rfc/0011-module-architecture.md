@@ -219,10 +219,26 @@ RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保�
 > - **事实。** WebFlux 的管理子上下文收集到了父上下文的 `PipelineWebFilter`；WebMvc 的 `FilterRegistrationBean` 到不了管理服务器。平台文档里加一条对任何人放行两个探针路径的语句，发布后应用端口上两个栈都是 200 / 200；发布之前没有文档可以放行。
 > - **WebFlux 的管理服务器提供应用的函数式路由。** 应用的 `@Controller` 在那里是 404，但子上下文的 `RouterFunctionMapping` 读到父上下文的 `RouterFunction` bean：应用用函数式写的路由在管理端口上有应答，starter 自己的控制面路由也是 `RouterFunction`，带平台令牌在管理端口上能读到文档。今天挡在它们前面的正是这个过滤器。
 > - **撤回的一版（同日，写代码之前）。** 协调者先定的是“闸门只立在应用的服务器上，独立的管理端口在三种宿主上都不经过 CoSec，WebFlux 在 starter 里修正”，依据是“WebFlux 的管理端口不路由应用的控制器”这一格实测。实现方按要求先核对那个服务器还提供什么，查出上一条：照那一版做，匿名请求就能在管理端口上得到应用的函数式路由。那一版的前提是错的，没有任何代码合入。
-> - **定下的。** 被 CoSec 把守的范围不变。在宿主打开的每一个端口上，应用提供的东西都不会不经 CoSec 就应答：WebFlux 的管理服务器在管道之下；WebMvc 与网关的管理服务器只提供 Actuator 的端点。后两者由带真实服务器的测试钉住（应用的控制器、函数式路由与控制面接口在管理端口上是 404），WebFlux 的各格同样逐格断言：Spring Boot 升级改变子上下文继承的东西时，是这些测试先知道。
+> - **定下的。** 被 CoSec 把守的范围不变。在宿主打开的每一个端口上，应用提供的东西都不会不经 CoSec 就应答：WebFlux 应用的管理服务器在管道之下；WebMvc 应用的管理服务器只提供 Actuator 的端点；网关的管理服务器提供 Actuator 的端点，控制面打开时还提供控制面接口，后者在它自己的管道之下。这些由带真实服务器的测试逐格钉住（下面两张表的每一格是一条断言）：Spring Boot 升级改变子上下文继承的东西时，是这些测试先知道。
 > - **否决的做法。** 按路径豁免探针：适配器里的第二条判定路径，路径匹配与路由之间的任何差异都是绕过。在 WebFlux 的管理服务器上跳过过滤器、同时由 starter 清空子上下文的函数式路由映射：应用的路由在那个端口上是否受保护，从此取决于 CoSec 是否跟得上 Spring 的子上下文继承了什么，漏掉一项时的失败方向是放行。
 > - **应用怎样配探针（写进文档）。** 经过 CoSec 的服务器上，探针就是一个请求：就绪探针需要平台文档里一条放行它的语句，文档发布之前回答 `503`，而“还没就绪”正是这时该有的回答。存活与启动探针不能依赖平台文档：WebMvc 用管理端口；WebFlux 不用经过 CoSec 的 HTTP 探针，用应用端口上的 `tcpSocket`。“存活探针不受影响”改为写明它在哪里成立。
-> - **仍在实测的一项。** WebMvc 的管理端口今天不经过 CoSec，已测的只有控制器（404）；应用的 servlet 函数式路由与 starter 的 servlet 控制面路由在那里是否有应答，正在测。若有，那是今天就存在的缺口，先于其他一切修复，结果记在这里。
+> - **WebMvc 与网关的管理端口：没有缺口（同日实测，`management.server.port=8081`）。** WebMvc 的管理端口不经过 CoSec，所以逐项测了应用在那里还能拿到什么：
+>
+>   | WebMvc（Tomcat），管理端口上的请求 | 回答 |
+>   |---|---|
+>   | 应用的 servlet 函数式路由，匿名或带平台令牌 | 404（Spring） |
+>   | 应用的控制器，匿名 | 404（Spring） |
+>   | 控制面接口，匿名或带平台令牌 | 404（Spring） |
+>   | `/actuator/health`，匿名 | 200（Spring） |
+>
+>   | 网关（Netty），管理端口上的请求 | 回答 |
+>   |---|---|
+>   | 网关的一条路由（应用端口上对任何人放行），匿名 | 404（Spring）：网关的路由不在管理端口上 |
+>   | 控制面接口，带平台令牌 | 200：在 `cosecControlPipelineWebFilter` 之下 |
+>   | 控制面接口，匿名 | 401（CoSec） |
+>   | `/actuator/health`、`/actuator/health/liveness`，匿名 | 200（Spring） |
+>
+>   没有测的：Jetty 与 Undertow，真实的 kubelet（重启循环是由存活探针的 `503` 推断的）。
 > - **随测试一起改的文档：** `web.md` 增加“应用上的 Actuator”，`deployment.md` 的就绪一节，`troubleshooting.md` 的新症状，快速启动里讲就绪的那一句。没有破坏性变化，升级文档不动。
 
 > **实现说明（2026-11-04，#1200，RC 修复批次 D1，`DOC-5`，RC1-44）**：D3 的"一个 mapper"同时是一个严格的 mapper：`CoSecJson.mapper` 打开 `STRICT_DUPLICATE_DETECTION`，所以 CoSec 读的每种存储格式（文档、API Key、成员关系、影子报告、吊销、`cosec-migrate` 读的 7.x 输入）与每个控制面请求体都拒绝重复的 key，不再按后出现的值读。吊销缓存改用它，不再用应用的 `ObjectMapper`。唯一的例外是 starter 读 Spring 的配置元数据（`UnknownProperties`）：那不是 CoSec 的格式，用 `without(STRICT_DUPLICATE_DETECTION)` 读，后出现的值生效。
