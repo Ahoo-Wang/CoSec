@@ -239,7 +239,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。
 - **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
 
-`cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。把它加入 readiness 组即可在
+`cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`invalid`、`failed`、`absent` 或 `loading`；`invalid` 是已存储但无法编译的文档）和 `prewarmed`。把它加入 readiness 组即可在
 探针中看到：`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`。
 
 ### `cosecSnapshotEviction` 为 DOWN {#cosecsnapshoteviction-is-down}
@@ -430,8 +430,13 @@ namespace：`cosec.key-prefix` 是每个实例、控制面和 `cosec-migrate` �
 
 ### 通道权限导致启动失败 {#startup-fails-on-a-channel-permission}
 
-拒绝某个缓存失效通道的 Redis ACL 会使该缓存创建失败，抛出的 `IllegalStateException` 指出需要允许的模式，例如
-`[&cosec:control:inv:*]`。允许 CoSec 前缀下的通道，`pubsub` 模式下再允许 CoCache 的探测
+```text
+Redis denied publishing to the invalidation channel[<channel>] of <cache>: allow the channel pattern [<pattern>] in the ACL of this connection's user (atomic broadcast also needs the key pattern [~<prefix>*]). Without it every write would fail at its broadcast after changing L1. Redis replied: <Redis 的错误>
+```
+
+拒绝某个缓存失效通道的 Redis ACL 会使该缓存创建失败，抛出带有这段文字（CoCache 的原文）的 `IllegalStateException`。缓存的通道是它的存储路径，在最后一段之前加上 `inv:`：要允许的模式是存储路径到最后一个 `:` 为止的部分，再加 `inv:*`。默认的
+`cosec.key-prefix` 下，CoSec 创建的缓存需要 `&cosec:inv:*`（快照、成员关系、候选）、`&cosec:token:inv:*`、
+`&cosec:token:subject:inv:*`、`&cosec:control:inv:*` 和 `&cosec:shadow:inv:*`。允许 CoSec 前缀下的通道，`pubsub` 模式下再允许 CoCache 的探测
 （[Redis 要求](./storage.md#redis-requirements)）。
 
 ### 从 Redis 副本读取导致启动失败 {#startup-fails-because-redis-is-read-from-replicas}
@@ -563,7 +568,7 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 | 发布或 `cosec-migrate repair-references` 以 `The back-reference set is malformed` 失败 | 该集合是 8.0.0-alpha.3 写入的 key 的 JSON 数组，或者指向不能作为应用 id 的应用。`repair-references` 写之前要先读集合，所以也越不过它。 | 停掉控制面，删除该集合（`<p>:control:refs:<doc>:<policyId>`），运行 `cosec-migrate repair-references`，再启动控制面（[升级](./upgrading.md#from-8-0-0-alpha-3)）。 |
 | 发布或 `cosec-migrate repair-references` 以 `A document holds binding [<id>] in app [<app>], which no document key can name` 失败 | 该文档的 head 由之前的构建写入，含有不能作为应用 id 的应用中的绑定。任何变更都无法在它之上发布。 | 升级之前移除这个绑定（[升级](./upgrading.md#from-8-0-0-alpha-2)）。 |
 | `422` `REFERENCES`：`[<id>] is referred to by [<doc>]`，而 `<doc>` 并没有引用它 | `<doc>` 的某次发布登记了这条引用，随后没能写入头。 | 运行 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。`<doc>` 的头不低于登记该条目的修订时，条目才会被删除；否则先发布一次 `<doc>`。 |
-| `422` `REFERENCES`：`[<id>] changes between a policy and a boundary, and is referred to by [<doc>]` | 平台变更把 `<doc>` 引用的策略改成边界，或把边界改成策略（`CTL-30`）。 | 先让 `<doc>` 不再引用它，或新建一条所需类型的策略。 |
+| `422` `REFERENCES`：`[<id>] changes between a policy and a boundary, and is referred to by [<doc>]` | 平台或应用变更在 `<doc>` 仍引用某策略或边界时，把它改成另一种类型（`CTL-30`），或删除它（此时消息是 `[<id>] is referred to by [<doc>]`）；应用的简写形式派生出的策略也算。 | 先让 `<doc>` 不再引用它，或新建一条所需类型的策略。 |
 | `422` `REFERENCES`：`[<id>] is a boundary of the platform, and a boundary is not bound` | 绑定指向了平台边界。 | 绑定普通策略；租户通过文档的 `boundary` 受边界约束。 |
 | `422` `V2`：`[<id>]: an entry's id has no [/]` | 变更写入的策略、绑定、角色或限流规则的 id 含 `/`。 | 改名。只有权限策略的 `perm:<app>/<id>` 可以含 `/`。 |
 | `410` | 请求的修订没有保留。 | |

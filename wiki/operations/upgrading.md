@@ -1662,6 +1662,10 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   `422`): a rule ending in `*` did not reach such an entry. A permission policy's `perm:<app>/<id>` may; entries that
   already hold one can stay or be removed. An app change that removes a policy tenants bind, or one its short forms
   derive, is `REFERENCES` when it is checked: it used to reach `CHECKED` and fail only when it was published (`CTL-30`).
+- **`ChangeEvent.Kind` loses `BOOTSTRAP` and `MIGRATE`.** No change event of those kinds was ever emitted: a bootstrap and a
+  migration write their revisions through the store, and are recorded in the revision's `provenance.kind` (`BOOTSTRAP`,
+  `MIGRATE`). A `when` over `ChangeEvent.Kind` that names them stops compiling; delete the branches, nothing was ever
+  delivered to them.
 - **Removing a DENY from the platform or an app document needs a second person** (RFC 0007 §7.4.4, `CTL-31`). Until
   now, a platform principal without `cosec:approve` could publish alone a change that only removed entries. A removal
   that takes away a DENY, a policy that holds one or a binding whose policy holds one (also through a role removed or put
