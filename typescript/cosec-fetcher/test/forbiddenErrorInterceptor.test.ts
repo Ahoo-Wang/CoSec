@@ -168,7 +168,7 @@ describe('ForbiddenErrorInterceptor', () => {
       const exchange = new FetchExchange({
         fetcher: mockFetcher,
         request: mockRequest,
-        response: null as any,
+        response: null as unknown as Response,
       });
 
       await interceptor.intercept(exchange);

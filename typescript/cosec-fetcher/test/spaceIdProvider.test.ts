@@ -26,6 +26,11 @@ import {
 import type { Fetcher, FetchRequest } from '@ahoo-wang/fetcher';
 import { FetchExchange } from '@ahoo-wang/fetcher';
 
+/** The event bus a SpaceIdStorage takes, which the tests replace with a mock. */
+type MockableEventBus = NonNullable<
+  NonNullable<ConstructorParameters<typeof SpaceIdStorage>[0]>['eventBus']
+>;
+
 const mockStorage = {
   getItem: vi.fn(),
   setItem: vi.fn(),
@@ -39,7 +44,7 @@ class MockBroadcastChannel {
   postMessage = vi.fn();
   close = vi.fn();
   onmessage = null;
-  constructor(_name: string) {}
+  constructor(readonly name: string) {}
 }
 
 vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
@@ -210,7 +215,7 @@ describe('SpaceIdStorage', () => {
       serialBusChannels.length = 0;
       const storage = new SpaceIdStorage({
         key: 'my-space-id',
-        storage: mockStorage as any,
+        storage: mockStorage as unknown as Storage,
       });
       expect(storage).toBeDefined();
       expect(serialBusChannels).toContain('my-space-id');
@@ -225,7 +230,9 @@ describe('SpaceIdStorage', () => {
         off: vi.fn(),
         destroy: vi.fn(),
       };
-      const storage = new SpaceIdStorage({ eventBus: mockEventBus as any });
+      const storage = new SpaceIdStorage({
+        eventBus: mockEventBus as unknown as MockableEventBus,
+      });
       expect(storage).toBeDefined();
       storage.destroy();
     });
@@ -253,7 +260,7 @@ describe('SpaceIdStorage', () => {
       };
       const storage = new SpaceIdStorage({
         key: customKey,
-        eventBus: mockEventBus as any,
+        eventBus: mockEventBus as unknown as MockableEventBus,
         storage: mockStorage as unknown as Storage,
       });
       expect(storage).toBeDefined();
@@ -418,7 +425,9 @@ describe('SpaceIdStorage', () => {
         off: vi.fn().mockReturnValue(true),
         destroy: vi.fn(),
       };
-      const storage = new SpaceIdStorage({ eventBus: mockEventBus as any });
+      const storage = new SpaceIdStorage({
+        eventBus: mockEventBus as unknown as MockableEventBus,
+      });
       storage.destroy();
       expect(mockEventBus.off).toHaveBeenCalled();
     });
@@ -735,7 +744,9 @@ describe('SpaceIdProvider interface compliance', () => {
       off: vi.fn(),
       destroy: vi.fn(),
     };
-    const storage = new SpaceIdStorage({ eventBus: mockEventBus as any });
+    const storage = new SpaceIdStorage({
+      eventBus: mockEventBus as unknown as MockableEventBus,
+    });
     const testPredicate: SpacedResourcePredicate = {
       test: () => false,
     };
