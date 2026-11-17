@@ -50,7 +50,9 @@ class AbsentBoundWindowTest {
     private fun SnapshotSource<*, *>.absentHeld(): Int =
         families.first { it.spec.kind == SnapshotKind.APP }.count(absent = true).get()
 
-    private fun release(key: SnapshotKey) = store.pending.filter { it.key == key && !it.future.isDone }.forEach { it.release() }
+    private fun release(key: SnapshotKey) {
+        store.pending.filter { it.key == key && !it.future.isDone }.forEach { it.release() }
+    }
 
     private fun runHousekeeping() {
         while (threads.housekeeping.tasks.isNotEmpty()) threads.runHousekeeping(0)
