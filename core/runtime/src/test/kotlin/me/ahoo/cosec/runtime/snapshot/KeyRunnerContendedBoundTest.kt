@@ -23,16 +23,15 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import kotlin.concurrent.thread
 
 /**
- * `SNP-14` under contention, over the [KeyRunner] (RFC 0013 B2b step 2b): the least recently used keys are held, each
- * by a thread stopped between taking an event and its transition, more of them than the cap's slack. An install over
- * the cap offers them their evictions, which wait for those threads, and evicts others in their place, so it answers
- * within the cap. Once the holders go on, the evictions they find queued never take the family below its bound.
- *
- * Above the cap it could answer only with every other key held at once, each in a drain that loads, reloads or evicts
- * it: the documents SNP-14 already counts as "being loaded or reloaded".
+ * `SNP-14` under contention, over the [KeyRunner] (RFC 0013 B2b step 2b): the least recently used keys, more of them
+ * than the cap's slack, are each being reloaded by a thread stopped between taking its `Reload` and the transition. An
+ * install over the cap offers them their evictions, which wait for those threads, and ends: it answers above the cap by
+ * exactly those keys, the entries SNP-14 already counts as "being loaded or reloaded at that moment". Once the holders
+ * go on, the evictions they find queued take the family back within the cap, and never below its bound.
  */
 class KeyRunnerContendedBoundTest {
     private val store = ControllableStore().apply {
@@ -52,6 +51,9 @@ class KeyRunnerContendedBoundTest {
         }
     })
     private val housekeeping = SlotModelThreads().housekeeping
+
+    /** Orders the keys' last access, so the least recently used are the ones the pass chooses, not a tie's order. */
+    private val ticker = AtomicLong()
     private val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = BOUND)
     private val source = SnapshotSource(
         store,
@@ -63,7 +65,7 @@ class KeyRunnerContendedBoundTest {
         SnapshotMetrics.NOOP,
         directExecutor,
         null,
-        { 0L },
+        ticker::incrementAndGet,
         housekeeping,
         keyRunners(hooks = hooks),
     )
@@ -77,7 +79,7 @@ class KeyRunnerContendedBoundTest {
     }
 
     @Test
-    fun `an install over the cap evicts around victims whose flag another thread holds, and they never go below the bound`() {
+    fun `an install over the cap answers above it only by the keys being reloaded, and their evictions follow`() {
         source.load().join()
         // The cap, installed in order, housekeeping held: app-0 is the least recently used.
         (0 until CAP).forEach { source.load(app(it).appId).join() }
@@ -89,10 +91,11 @@ class KeyRunnerContendedBoundTest {
         holding.await(10, TimeUnit.SECONDS).assert().isTrue()
 
         source.load(app(CAP).appId).join()
-        // The held victims' evictions wait; the others went in their place, on this thread, before it answered.
-        val held = (0 until HOLDERS).map(::app)
-        source.entries().map { it.key }.filterIsInstance<SnapshotKey.App>().assert().containsAll(held)
-        documentsHeld().assert().isLessThanOrEqualTo(CAP)
+        // The pass chose the least recently used, the keys being reloaded; their evictions wait for those threads.
+        val reloading = (0 until HOLDERS).map(::app)
+        source.entries().map { it.key }.filterIsInstance<SnapshotKey.App>().assert().containsAll(reloading)
+        // SNP-14: what the family holds beyond the keys being loaded or reloaded at that moment stays within the cap.
+        (documentsHeld() - reloading.size).assert().isLessThanOrEqualTo(CAP)
         countsAreARecount()
 
         release.countDown()
