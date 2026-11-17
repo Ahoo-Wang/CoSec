@@ -102,7 +102,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     /** Tests only (RFC 0013 B2b): housekeeping on an executor the test runs, in place of the thread started here. */
     housekeeping: ExecutorService? = null,
     /** Tests only (RFC 0013 B2b): what makes each key's slot; [SlotFactory.SLOT] in production. */
-    slots: SlotFactory = SlotFactory.SLOT,
+    slots: SlotFactory = object : SlotFactory {
+        override fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: SlotContext): KeySlot<T> =
+            KeyRunner(key, compiler, context, 4)
+    },
 ) : AutoCloseable {
 
     private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
