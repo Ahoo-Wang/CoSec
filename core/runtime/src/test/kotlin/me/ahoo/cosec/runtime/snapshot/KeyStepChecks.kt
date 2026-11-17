@@ -102,7 +102,7 @@ internal class KeyStepChecks(
     private fun handles() {
         val hang = effects.filterIsInstance<KeyEffect.Hang<String>>().singleOrNull() ?: return
         val ask = (event as KeyEvent.Requested).ask
-        if (ask !is Ask.Reload) {
+        if (ask !is Ask.Reload && ask !is Ask.ReloadIfHeld) {
             if (hang.handle !== after.load?.handle) {
                 fail(
                     "${hang.waiter} hangs on ${hang.handle}, not the load in flight"

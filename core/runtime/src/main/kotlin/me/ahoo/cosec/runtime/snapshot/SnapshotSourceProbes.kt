@@ -32,7 +32,7 @@ internal fun SnapshotSource<*, *>.heldAbsentMembers(kind: SnapshotKind): Set<Sna
 /** Tests only: how many slots a pass choosing [wanted] victims of the kind [absent] names reads the stamp of. */
 internal fun SnapshotSource<*, *>.evictionVisits(kind: SnapshotKind, absent: Boolean, wanted: Int): Int {
     var visits = 0
-    val stamp = { slot: Slot<*> -> slot.lastAccess.also { visits++ } }
+    val stamp = { slot: KeySlot<*> -> slot.lastAccess.also { visits++ } }
     families.victims(familyOfKind(kind), absent, wanted, stamp)
     return visits
 }
@@ -51,12 +51,16 @@ internal fun SnapshotSource<*, *>.evictionScan(kind: SnapshotKind, wanted: Int, 
 internal fun SnapshotSource<*, *>.evictClaiming(key: SnapshotKey, absent: Boolean): Boolean? {
     val family = familyOfKind(key.kind)
     val slot = family.slots[family.spec.idOf(key)] ?: return false
-    return families.evictOne(slot, absent)
+    return when (families.evictOne(slot, absent).join()) {
+        Eviction.REMOVED -> true
+        Eviction.REFUSED -> false
+        Eviction.AT_BOUND, null -> null
+    }
 }
 
 /** Tests only: the [kind] family's slots with a load in flight. */
 internal fun SnapshotSource<*, *>.loadsInFlight(kind: SnapshotKind): Int = familyOfKind(kind).slots.values.count {
-    !it.isIdle()
+    !it.idle()
 }
 
 private fun SnapshotSource<*, *>.familyOfKind(kind: SnapshotKind): SnapshotFamilies.Family<*> =

@@ -22,7 +22,7 @@ import kotlin.random.Random
  */
 internal data class KeyModelScript(val seed: Int, val events: List<Event>) {
     enum class Kind(val weight: Int) {
-        REQUEST(10), USABLE(4), LOAD(3), PASS(3), RELOAD(5), RELOAD_FORCED(2),
+        REQUEST(10), USABLE(4), LOAD(3), PASS(3), RELOAD(5), RELOAD_FORCED(2), RELOAD_IF_HELD(3),
         CHANGED(4), PUT_SILENT(2), REMOVE(2), CORRUPT(1), REGRESS(1), RECOMPILE(3),
         RELEASE(12), RELEASE_LATE(4), FAIL_READS(1), HEAL_READS(2), HANG(1), ADVANCE(6),
         COMPILE(10), COMPILE_FAILS(2), COMPILE_OVERFLOWS(1), REJECT_COMPILES(1), ACCEPT_COMPILES(2),

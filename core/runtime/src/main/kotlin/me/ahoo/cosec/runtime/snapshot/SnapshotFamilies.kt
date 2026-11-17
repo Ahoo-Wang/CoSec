@@ -21,6 +21,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import java.util.PriorityQueue
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
@@ -76,37 +77,42 @@ internal class SnapshotFamilies<A : Any>(
             return
         }
         for (victim in victims(family, absent, minOf(excess, limit))) {
-            evictOne(victim, absent) ?: return
+            // A reply already complete (always, with Slot) at the bound stops the pass; one not yet complete never
+            // holds it back: a claim cannot take a kind below its bound, whatever is offered (§4b, decision B).
+            if (evictOne(victim, absent).getNow(null) == Eviction.AT_BOUND) return
         }
     }
 
     /**
-     * Evicts [victim], an entry of the kind [absent] names when it was chosen, if it is still idle and of that kind; its
-     * removal claims the decrement under the victim's lock ([Slot.removeIfIdle]). Null when the kind is at its bound,
-     * else whether it went.
+     * Offers the eviction of [victim], an entry of the kind [absent] names when it was chosen: removed if it is still idle
+     * and of that kind, the claim taken by the victim itself (`SNP-14`).
      */
-    fun evictOne(victim: Slot<*>, absent: Boolean): Boolean? {
-        val removed = victim.removeIfIdle(onlyIfEmpty = false, claimedAbsent = absent) ?: return null
-        if (removed) {
-            lagReports.forget(victim.key)
-            log.debug { "Evicted snapshot document [${victim.key}]." }
-        }
-        return removed
+    fun evictOne(victim: KeySlot<*>, absent: Boolean): CompletableFuture<Eviction> =
+        victim.evict(onlyIfEmpty = false, claimedAbsent = absent)
+
+    /** [key] left its family: what a removal does besides leaving the map. */
+    fun removed(key: SnapshotKey) {
+        lagReports.forget(key)
+        log.debug { "Removed snapshot document [$key]." }
     }
+
+    /** The slot the family of [key] holds for it now, made if it holds none; for [SlotContext.current]. */
+    fun slotFor(key: SnapshotKey, context: SlotContext): KeySlot<*> =
+        families.first { it.spec.kind == key.kind }.slotFor(key, context)
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
     internal inline fun victims(
         family: Family<*>,
         absent: Boolean,
         wanted: Int,
-        lastAccessOf: (Slot<*>) -> Long = { it.lastAccess },
-    ): List<Slot<*>> = leastRecentlyUsed(
+        lastAccessOf: (KeySlot<*>) -> Long = { it.lastAccess },
+    ): List<KeySlot<*>> = leastRecentlyUsed(
         candidates(family, absent),
         wanted,
         // A slot is checked again, since its kind can change after it was listed.
         { slot -> slot.installed?.let { isAbsent(it) == absent } == true },
         lastAccessOf,
-        { it.isIdle() },
+        { it.idle() },
     )
 
     /**
@@ -114,11 +120,11 @@ internal class SnapshotFamilies<A : Any>(
      * A set of the documents made their warmed scan 1.6 times slower at a bound of 100,000 (2.25-2.42 ms against
      * 3.7-4.1 ms, `EvictionPassBenchmark`), for nothing their pass uses.
      */
-    fun candidates(family: Family<*>, absent: Boolean): Iterable<Slot<*>> =
+    fun candidates(family: Family<*>, absent: Boolean): Iterable<KeySlot<*>> =
         if (absent) family.absentMembers else family.slots.values
 
     /** Moves [family]'s counts for an entry replaced by another, either of them null: where `installed` is written. */
-    fun move(family: Family<*>, slot: Slot<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
+    fun move(family: Family<*>, slot: KeySlot<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
         val from = old?.let(::isAbsent)
         val to = new?.let(::isAbsent)
         if (from == to) {
@@ -130,7 +136,7 @@ internal class SnapshotFamilies<A : Any>(
 
     /** One family's documents, by id, and how many of each kind it holds (`SNP-14`). */
     class Family<A : Any>(val spec: SnapshotFamily<A>) {
-        val slots = ConcurrentHashMap<String, Slot<A>>()
+        val slots = ConcurrentHashMap<String, KeySlot<A>>()
 
         /** The documents held (every failed entry is one) and the entries for documents the store does not hold. */
         private val documents = AtomicInteger()
@@ -141,18 +147,18 @@ internal class SnapshotFamilies<A : Any>(
          * alone, so it costs what that kind holds (512 at most), however many documents the family holds. The documents'
          * pass walks the family's map. Read only by eviction passes and tests; `peek` never sees it.
          */
-        private val absentSlots: MutableSet<Slot<*>> = ConcurrentHashMap.newKeySet()
+        private val absentSlots: MutableSet<KeySlot<*>> = ConcurrentHashMap.newKeySet()
 
-        val absentMembers: Set<Slot<*>> get() = absentSlots
+        val absentMembers: Set<KeySlot<*>> get() = absentSlots
 
         fun count(absent: Boolean): AtomicInteger = if (absent) absentEntries else documents
 
-        fun join(slot: Slot<*>, absent: Boolean) {
+        fun join(slot: KeySlot<*>, absent: Boolean) {
             if (absent) absentSlots += slot
             count(absent).incrementAndGet()
         }
 
-        fun leave(slot: Slot<*>, absent: Boolean) {
+        fun leave(slot: KeySlot<*>, absent: Boolean) {
             if (absent) absentSlots -= slot
             count(absent).decrementAndGet()
         }
@@ -168,7 +174,7 @@ internal class SnapshotFamilies<A : Any>(
          * Claims the removal of [slot], an entry of the kind [absent] names: its count's decrement, never below the
          * bound, and for an absent entry its place among [absentMembers]; false at the bound, and nothing moves.
          */
-        fun claim(slot: Slot<*>, absent: Boolean): Boolean {
+        fun claim(slot: KeySlot<*>, absent: Boolean): Boolean {
             val bound = bound(absent)
             val claimed = count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound
             if (claimed && absent) {
@@ -177,8 +183,21 @@ internal class SnapshotFamilies<A : Any>(
             return claimed
         }
 
+        /**
+         * The slot held for [key], made if none is; a removed one still in the map is dropped here, so that a lookup never
+         * waits for the remover (what `withSlot`'s retry did).
+         */
+        fun slotFor(key: SnapshotKey, context: SlotContext): KeySlot<A> {
+            val id = spec.idOf(key)
+            while (true) {
+                val slot = slots.computeIfAbsent(id) { Slot(key, spec.compiler, context) }
+                if (!slot.removed) return slot
+                slots.remove(id, slot)
+            }
+        }
+
         /** Drops [slot] from the map, if it is still the one held for [id]. */
-        fun drop(id: String, slot: Slot<*>) {
+        fun drop(id: String, slot: KeySlot<*>) {
             slots.computeIfPresent(id) { _, current -> current.takeUnless { it === slot } }
         }
     }
