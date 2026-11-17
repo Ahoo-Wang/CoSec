@@ -9,11 +9,11 @@
 
 ```bash
 pnpm add react @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
-  @ahoo-wang/fetcher-storage @ahoo-wang/fetcher-react \
-  @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react
+  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react
 ```
 
-对等依赖：`react`（19）、`@ahoo-wang/cosec-fetcher` 和 `@ahoo-wang/fetcher-react`（hooks 使用它的 `useKeyStorage` 和 `useLatest`）。
+对等依赖：`react`（19）和 `@ahoo-wang/cosec-fetcher`；fetcher 的各个包是客户端（`cosec-fetcher` 的对等依赖）的，除此之外它不带任何别的东西。特别是它不会带上
+`@ahoo-wang/fetcher-react`，也不会带上 `cosec-fetcher` 所取代的 `@ahoo-wang/fetcher-cosec`。
 应用里必须只有一份 `@ahoo-wang/cosec-fetcher`：hooks 和客户端共用同一个 `TokenStorage` 实例。
 
 构建需要 Node `^22.12.0 || ^24.0.0 || >=26.0.0`。
@@ -63,5 +63,6 @@ function Profile() {
 ## 从 `@ahoo-wang/fetcher-react` 6.x 升级
 
 - 从 `@ahoo-wang/cosec-react` 导入 `SecurityProvider`、`useSecurity`、`useSecurityContext`、`RouteGuard`、`RefreshableRouteGuard` 和
-  `ANONYMOUS_USER`。其余没有变化：代码就是 `@ahoo-wang/fetcher-react` 6.1.0 里的那一份。
+  `ANONYMOUS_USER`。它们做的事没有变化：代码就是 `@ahoo-wang/fetcher-react` 6.1.0 里的那一份，现在不必再为它们安装 `@ahoo-wang/fetcher-react`。`RouteGuard` 和
+  `RefreshableRouteGuard` 返回 `ReactNode`，`signIn` 的参数类型 `CompositeTokenProvider` 现在被导出。
 - `@ahoo-wang/cosec-fetcher` 取代 `@ahoo-wang/fetcher-cosec`（见它的 README）。

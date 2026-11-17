@@ -42,8 +42,12 @@ src/
     RouteGuard.tsx             — Renders children for a signed-in user, else the fallback
     RefreshableRouteGuard.tsx  — The same for a session a JwtTokenManager refreshes first
     index.ts
+  internal/
+    useLatest.ts               — A ref with the latest value (not exported)
+    useStoredToken.ts          — A TokenStorage's pair as React state, over useSyncExternalStore (not exported)
 test/
   cosec/                       — The tests, one file per source file; sessionRaces and renderPurity hold the races
+  internal/                    — The tests of the two internal hooks
   api/cosec-react.api.md       — The API report (api-extractor)
 ```
 
@@ -54,7 +58,7 @@ compiler (`vite.config.ts`: `@vitejs/plugin-react` and `@rolldown/plugin-babel`)
 ## Dependencies
 
 - `@ahoo-wang/cosec-fetcher` (peer, `workspace:~`) — `TokenStorage`, `JwtTokenManager`, `CompositeToken`
-- `@ahoo-wang/fetcher-react` (peer) — `useKeyStorage` and `useLatest`, from its entry
+- nothing else: `src/internal/` holds the two small hooks that were borrowed from `@ahoo-wang/fetcher-react` (`useLatest`, `useStoredToken` over `useSyncExternalStore`), not exported. No shared state with another package: a package of this workspace must not bring `@ahoo-wang/fetcher-react` or `@ahoo-wang/fetcher-cosec` (`scripts/package-check.mjs` fails when the consumer's tree holds the latter)
 - `react` (peer, 19)
 
 ## Code Style

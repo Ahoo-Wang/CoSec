@@ -12,7 +12,7 @@ CoSec's TypeScript packages are the client of a CoSec application and its React 
 | Directory        | Package                    | Published | Built on                                                             |
 | ---------------- | -------------------------- | --------- | -------------------------------------------------------------------- |
 | `cosec-fetcher/` | `@ahoo-wang/cosec-fetcher` | yes       | `@ahoo-wang/fetcher` and its eventbus and storage packages, from npm |
-| `cosec-react/`   | `@ahoo-wang/cosec-react`   | yes       | `cosec-fetcher`, `@ahoo-wang/fetcher-react`, React                   |
+| `cosec-react/`   | `@ahoo-wang/cosec-react`   | yes       | `cosec-fetcher` and React                                            |
 
 A package is added here, to the workspace's members (`cosec-*`), and to `TypeScriptWorkspaceTest` in `:architecture`.
 
