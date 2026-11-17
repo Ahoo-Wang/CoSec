@@ -117,7 +117,7 @@ plane's routes included, so the first platform document always comes from `cosec
 platform document is never read as an empty one, which would silently drop every platform DENY
 ([Fail closed](./security-model.md#fail-closed)). Meanwhile the application reports itself not ready
 (`/actuator/health/readiness`, with Spring Boot Actuator), so a load balancer sends it no traffic
-([Readiness](../operations/deployment.md#readiness)).
+([Readiness](../operations/deployment.md#readiness)). A probe is a request to CoSec too, so over HTTP it needs a statement that permits it ([Actuator on an application](../integration/web.md#actuator-on-an-application)).
 
 ## Issue a token
 

@@ -325,6 +325,25 @@ timing out, or no node to ask) under `eviction-check=fail`: allow `INFO` (`+info
 The indicator is an alert: keep it out of the readiness group, which `cosecSnapshot` alone serves. In it, one change to
 Redis would take every instance out of rotation at once.
 
+## Probes answer 401 or 503, or pods restart before the first publish {#probes-answer-401-or-503}
+
+A readiness or liveness probe answers CoSec's `application/problem+json`: `503` `unavailable` before the first platform
+document is installed, `401` `unauthorized` after it; or pods restart in a loop on a new deployment, before the first
+document was published.
+
+To CoSec a probe is a request like any other (`STA-4`, [Actuator on an application](../integration/web.md#actuator-on-an-application)):
+on an application's application port, and on a WebFlux application's management port, it passes the pipeline, which
+answers `503` while no platform document is installed and `401` to an anonymous caller after it unless a statement
+permits the path. Liveness is not touched in Spring's state, but an HTTP liveness probe is a request, so it fails with the
+rest, and the kubelet restarts the pod.
+
+- **Readiness over HTTP:** permit `GET` on the two probe paths for anyone, with one statement
+  ([the policy](../integration/web.md#actuator-on-an-application)). Before the first publish it still answers `503`, the
+  right answer for "not ready". Outside Kubernetes, set `management.endpoint.health.probes.enabled=true`.
+- **Liveness and startup:** on WebMvc, point the probe at `management.server.port`, which is outside CoSec. On WebFlux the
+  management port is under CoSec as well: use a `tcpSocket` probe on the application port. Never an HTTP liveness probe on
+  the application port of an application.
+
 ## A condition does not compile
 
 - `` `<path>` is a credential header, which no attribute reference may read ``: a condition or a rate limit `key`

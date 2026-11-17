@@ -69,6 +69,20 @@
         "spring-boot:StartupTaskTest#the exclusion keeps startup tasks, and only them, eager",
         "spring-boot:StartupTaskTest#every auto-configuration with a check imports the exclusion"
       ]
+    },
+    {
+      "id": "STA-4",
+      "source": "RFC 0011 D2",
+      "statement": "On every port a host opens, nothing the application serves answers without passing CoSec. On WebFlux the management server (management.server.port different from the application's) is under the pipeline: its probes and everything of the application's it inherits, the application's functional routes and the control API among them, are CoSec's 503 before the first platform document and 401 for an anonymous caller after it. On WebMvc and on a gateway it serves actuator's endpoints only, which are Spring's own (liveness 200, readiness 503 until the documents are installed, then 200), and a controller, a servlet or functional route and the control API answer 404 there; a gateway's control API is CoSec's. With one port, or a management port equal to the application's, the probes are requests like any other. The tests assert the answers of real servers (Reactor Netty, Tomcat) cell by cell: they are what shows that a Spring Boot upgrade changed what a management child context inherits.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:ManagementPortTest#WebFlux keeps its management server under the pipeline and serves the application's routes only behind it",
+        "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there",
+        "spring-boot:ManagementPortTest#a gateway leaves its management server outside CoSec too, and gates its own routes and the control API there as on the application port",
+        "spring-boot:ManagementPortTest#the two stacks answer alike on the application port",
+        "spring-boot:ManagementPortTest#with one port nothing changes, the probes are requests like any other"
+      ]
     }
   ]
 }
