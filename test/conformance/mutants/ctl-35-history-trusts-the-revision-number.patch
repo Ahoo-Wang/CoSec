@@ -1,0 +1,17 @@
+# Rule: CTL-35
+# Mutant: the history is taken for the head's when the index's last entry has the head's revision number, whatever its digest
+# Tests: :control:test --tests me.ahoo.cosec.control.store.HistoryForkTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
+index 3de3374e..9a9b3647 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
+@@ -113,7 +113,7 @@ internal class HistoryRepair(
+     companion object {
+         /** Whether [last], the last entry up to the head, is the head's own: its revision and its digest. */
+         fun agrees(last: RevisionEntry?, head: StoredDocument): Boolean =
+-            last != null && last.revision == head.document.revision && last.digest == head.digest
++            last != null && last.revision == head.document.revision
+ 
+         /**
+          * Whether an entry published over [parent] (`null` for a document's first revision) may be appended to [index]:
