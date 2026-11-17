@@ -52,11 +52,12 @@ A bean that is both is registered once, as the `DecisionListener` it is.
   at `WARN`. The Kafka
   audit listener then gets up to the same timeout for the sends it still holds and the broker's answers to them, before
   the producer is closed. At that bound its queued sends are dropped and a send in progress is interrupted, with
-  `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...` at `WARN`.
+  `The Kafka audit queue of [<topic>] did not drain within <timeout>: <n> queued records are dropped and <n> sends are unanswered.` at `WARN`.
 - **The evaluation trace.** A `DecisionEvent` carries `evaluationTrace`, what the engine looked at, to the depth of
   [`cosec.pipeline.trace-level`](./configuration.md#pipeline): `off` (the default, no trace and no cost), `full`
-  (every rule of each layer the decision reaches, including those after the deciding one) or `exhaustive` (also the
-  layers it does not reach). It is null at `off` and when the request did not reach the engine. Only your own
+  (every statement of every candidate is listed, with what ruled it out; evaluation stops where it would without a
+  trace, except that it finishes the pass that decided) or `exhaustive` (also evaluates the ALLOW pass when the DENY
+  pass decided). It is null at `off` and when the request did not reach the engine. Only your own
   listeners read it: the audit events, spans and metrics below do not include it.
 - **Services in gateway mode** (`cosec.pipeline.mode=gateway`) emit no decision events: they decide nothing and
   register no listeners. The gateway in front records the decision
@@ -72,7 +73,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | `eventId`, `timestamp`, `tenantId` | the event; `tenantId` is the principal's tenant |
 | `kind` | `DECIDED`, `BAD_REQUEST` (`400`), `AUTHENTICATION_UNAVAILABLE`, `CANCELLED` or `ERROR` (`500`) |
 | `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope) |
-| `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `device.id` |
+| `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `routeId` (the gateway route the request came through; null on other adapters), `device.id` |
 | `authorization.decision`, `authorization.reasonCode` | see the table below |
 | `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |

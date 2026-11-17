@@ -125,9 +125,11 @@ class KeyTransitionsTest {
         val request = key.request(Ask.Request)
         val pass = key.request(Ask.Load(force = false, pass = mockk()))
         val reload = key.request(Ask.Reload(force = false))
+        val revalidation = key.request(Ask.ReloadIfHeld(force = false))
         (key.direct[request] is KeyEffect.Redispatch).assert().isTrue()
+        (key.direct[reload] is KeyEffect.Redispatch).assert().isTrue()
         (key.direct[pass] is KeyEffect.Skip).assert().isTrue()
-        (key.direct[reload] is KeyEffect.Skip).assert().isTrue()
+        (key.direct[revalidation] is KeyEffect.Skip).assert().isTrue()
         key.reads.assert().isEmpty()
     }
 

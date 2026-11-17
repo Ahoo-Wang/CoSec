@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
-index 1a84acc6..c49588cc 100644
+index eb1b3c20..a827c3ed 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Passes.kt
-@@ -105,7 +105,7 @@ internal class Passes(
+@@ -108,7 +108,7 @@ internal class Passes(
              owed = null
              Pass(waiting, context).also { current = it }
          }
@@ -14,4 +14,4 @@ index 1a84acc6..c49588cc 100644
 +        next.progressed()
      }
  
-     fun installedSlots(): List<Slot<*>> = buildList {
+     fun installedSlots(): List<KeySlot<*>> = buildList {
