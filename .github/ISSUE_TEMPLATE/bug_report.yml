@@ -46,6 +46,7 @@ body:
         - cosec-migrate
         - cosec-gateway-server
         - cosec-fetcher
+        - cosec-react
         - Not sure
     validations:
       required: true
