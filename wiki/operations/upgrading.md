@@ -1559,7 +1559,7 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   roles effective for the request are in `SecurityContext.scope.roles`; `principal.roles` and `principal.policies` are
   removed.
 - **The token contracts are values.** `TokenVerifier.verify(accessToken: String)` and `refresh` return a `VerifiedToken`
-  (`me.ahoo.cosec.spi.token`), with no type parameter; `TokenRevoker.revoke` takes the token string. `TokenConverter`
+  (`me.ahoo.cosec.spi.token`), with no type parameter; `TokenRevoker.revoke` takes the token string, or a `CompositeToken` (below). `TokenConverter`
   takes a `TokenSubject` (`me.ahoo.cosec.login.token`), and `Authentication<C>` answers one. Removed: the
   wrappers `SimplePrincipal`, `SimpleTenantPrincipal`, `TenantPrincipal`, `TokenPrincipal`, `TokenTenantPrincipal`,
   `SimpleTokenPrincipal`, `SimpleTokenTenantPrincipal`, `MembershipMarkedPrincipal`, `Delegated`, `findInDelegationChain`,
