@@ -70,6 +70,12 @@ class TypeScriptWorkspaceTest {
     }
 
     @Test
+    fun `installed dependencies and build output are never tracked`() {
+        val ignored = workspace.resolve(".gitignore").readLines().map { it.trim() }
+        ignored.assert().contains("node_modules/", "dist/", "coverage/")
+    }
+
+    @Test
     fun `the workspace root is private and pins the pnpm the wiki pins`() {
         val root = json(workspace.resolve("package.json"))
         root["private"].asBoolean().assert().isTrue()
