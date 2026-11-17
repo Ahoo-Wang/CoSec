@@ -55,6 +55,9 @@ class MockTokenManager {
 class MockFetchExchange implements Partial<FetchExchange> {
   public requestHeaders: Record<string, string> = {};
   public attributes: Map<string, any> = new Map();
+  // A request to the fetcher's own baseURL: the default trust policy carries credentials to it.
+  public request = { url: '/orders' };
+  public fetcher = { urlBuilder: { baseURL: 'https://api.example.com' } };
 
   ensureRequestHeaders(): Record<string, string> {
     return this.requestHeaders;

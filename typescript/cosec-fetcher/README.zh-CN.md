@@ -22,12 +22,11 @@ Peer 依赖：`fetcher`、`fetcher-eventbus` 和 `fetcher-storage`。
 
 ```ts
 import { Fetcher } from '@ahoo-wang/fetcher';
-import { CoSecConfigurer, sameOriginTrust } from '@ahoo-wang/cosec-fetcher';
+import { CoSecConfigurer } from '@ahoo-wang/cosec-fetcher';
 
 const api = new Fetcher({ baseURL: 'https://api.example.com' });
 
 const cosec = new CoSecConfigurer({
-  isTrusted: sameOriginTrust,
   onUnauthorized: () => window.location.assign('/login'),
   onForbidden: async () => console.error('Access denied'),
 });
@@ -38,8 +37,11 @@ cosec.applyTo(api);
 该最小配置只添加归属请求头，不启用认证。提供 `TokenRefresher` 后会启用令牌存储、
 Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fetcher。
 
-`isTrusted: sameOriginTrust` 让令牌与 CoSec 请求头（含设备 ID）只发往 `baseURL`
-所在源与页面自身的源。不设 `isTrusted` 时，发往任意源绝对 URL 的请求都会收到访问令牌。
+令牌、CoSec 请求头（含设备 ID）以及用来填充路径变量的租户和所有者，只发往绝对 `baseURL` 所在的源和页面自身的源：
+`isTrusted` 默认是 `sameOriginTrust`。发往其他源绝对 URL 的请求（分页链接、下载地址、回调）不带任何凭据，它的 `401`
+既不触发刷新也不结束会话。要信任更多源，传入自己的判断函数，对绝对 URL 它单独决定：
+`isTrusted: (url, exchange) => sameOriginTrust(url, exchange) || new URL(url).origin === 'https://files.example.com'`。
+在 Node 中（没有页面），只有绝对 `baseURL` 的源被信任；`baseURL` 是相对的时，绝对 URL 不带凭据。
 
 ## 核心能力
 
@@ -51,7 +53,7 @@ Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fe
   的 401 才刷新；`token-revoked` 与 `token-invalid` 结束会话；`429` 绝不让用户
   退出登录；`scope-rejected` 有自己的回调。
 - 可配置的 401、403 与 `scope-rejected` 回调，并接收 problem。
-- 用 `isTrusted` / `sameOriginTrust` 按源决定是否携带凭据。
+- 按源决定是否携带凭据：默认同源（`sameOriginTrust`），用自己的 `isTrusted` 改变。
 - 为自定义管线提供独立拦截器。
 
 切勿记录、嵌入或提交真实令牌。
@@ -75,6 +77,13 @@ CoSec 不提供登录或刷新端点；应用编写的端点必须：
 [实战文档](https://fetcher.ahoo.me/zh/guides/integrations/cosec)。
 
 ## 从 `@ahoo-wang/fetcher-cosec` 6.x 升级
+
+- **凭据默认只发往受信任的源。** 不设 `isTrusted` 时，6.x 会把令牌、`CoSec-Device-Id`、`CoSec-Request-Id` 和 `CoSec-Space-Id`
+  发往每个绝对 URL，并用令牌填充 `{tenantId}` 和 `{ownerId}`。现在只有绝对 `baseURL` 所在的源和页面自身的源会得到它们。
+  会坏掉的是：依赖令牌的、发往第三个源的调用（另一台主机上的第二个 API、校验令牌的 CDN）现在不带令牌，得到那个源的 `401`。
+  迁移方式：用判断函数写明那个源，
+  `isTrusted: (url, exchange) => sameOriginTrust(url, exchange) || new URL(url).origin === 'https://files.example.com'`。
+  确实要发往所有源的代码写 `isTrusted: () => true`，并自己承担这个决定。在 Node 里没有绝对 `baseURL` 时，绝对 URL 的调用同样不带凭据。
 
 - 包名改为 `@ahoo-wang/cosec-fetcher`：修改 `package.json` 和每一处导入。React hooks 移到了 `@ahoo-wang/cosec-react`。
 - `appId` 已弃用并被忽略：CoSec 8.0 不读取 `CoSec-App-Id`，应用是令牌的 `aud`。
