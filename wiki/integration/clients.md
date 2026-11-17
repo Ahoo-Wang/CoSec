@@ -71,7 +71,7 @@ a default for a type it does not know: act on its status as the table's status c
 | `TOKEN_REVOKED` | `401` | The token, or every token of its principal, was revoked | Signs in. A refresh cannot help: the session ended (`IDN-18`, `IDN-22`) |
 | `TOKEN_INVALID` | `401` | The credential is not accepted: a bad signature or claims, a refresh token where an access token belongs (`IDN-13`), a delegation token (`IDN-4`), a principal its provider no longer knows (`IDN-3`) | Signs in. A refresh cannot help |
 | `FORBIDDEN` | `403` | The caller is authenticated and the decision is deny | Does not retry. Refreshing rarely helps: a refresh carries the old claims unless the application re-reads the user. It shows that the user may not |
-| `SCOPE_REJECTED` | `403` | The app is not the host's, or the space is one the principal has no role in, or begins with `(` (`SCP-1`, `SCP-2`, `SCP-9`) | Drops the `CoSec-Space-Id` it stored (the default space is the fallback) or signs in for the app the host serves; retrying the same request is refused again |
+| `SCOPE_REJECTED` | `403` | The app is not the host's, or the space is one the principal has no role in, or begins with `(` (`SCP-1`, `SCP-2`, `SCP-9`) | Does not retry, and does not choose another space on its own: a different space, or the default one, would move the user's next writes somewhere they did not mean. It tells the application, which lets the user pick a space the principal has a role in, or sign in for the app the host serves. A space the server rejected is not sent again until the application has chosen |
 | `TOO_MANY_REQUESTS` | `429` | The request was permitted and a [rate limit rule](../policies/rate-limiting.md) has no permit left | Waits `Retry-After` seconds and retries. Never treats it as a sign-out, on the refresh route too |
 | `UNAVAILABLE` | `503` | No decision could be made (`fail closed`) | Retries later with a back-off and keeps the session. A `503` never carries `Retry-After` |
 | `INTERNAL_ERROR` | `500` | CoSec failed in a way it does not model | Does not retry blindly; reports the `requestId` |
@@ -102,7 +102,9 @@ that asks of a client:
 - **A refresh whose answer never arrived** (a timeout, a lost connection) may have been recorded or not, and the client
   cannot tell. Presenting the same pair again is answered with a pair of the current generation if it comes within
   `cosec.jwt.session.rotation-leeway` of the move (30 seconds by default, an operator's setting a client cannot read),
-  and moves nothing. After that, presenting it ends the whole session, on every tab and device. So retry within the leeway, or
+  and moves nothing. What follows: the client's own retry window is configuration, and must be at most the server's
+  value. A late retry that finds the refresh already recorded is, to the server, a pair presented again, which an
+  operator may see in the audit. After that, presenting it ends the whole session, on every tab and device. So retry within the leeway, or
   not at all: a late retry is harmless only if the first request never arrived. The worst case of not retrying is a
   sign-in, which is also the worst case of retrying late.
 - **Read the status of the refresh.** `401` means the session is over: discard the pair and sign in. `503`, a network
@@ -141,7 +143,7 @@ headers ([App and space](./web.md#app-and-space)).
 | Header | What to send | What the server does |
 |---|---|---|
 | `Authorization` | `Bearer <access token>` | The token. A refresh call may send the expired one; it is read as anonymous |
-| `CoSec-Space-Id` | One value, only for a request in a space, and only a space the signed-in principal has a role in | Anonymous with a space: `401` (`SCP-3`). A space without a role, or beginning with `(`: `403 scope-rejected` (`SCP-1`, `SCP-9`). Empty or blank means the default space |
+| `CoSec-Space-Id` | One value, only for a request in a space, and only a space the signed-in principal has a role in. **Never on login or refresh, nor on any request that carries no token**: the caller is anonymous there, and a declared space is `401` (`SCP-3`) | Anonymous with a space: `401` (`SCP-3`). A space without a role, or beginning with `(`: `403 scope-rejected` (`SCP-1`, `SCP-9`). Empty or blank means the default space |
 | `CoSec-Device-Id` | One value, stable per installation | Recorded for an authenticated request; read by a policy or the blacklist when one asks |
 | `CoSec-Request-Id` | One value, 1 to 64 characters of `A-Z a-z 0-9 . _ -`, new per request | Kept and echoed; any other value is replaced by a generated one |
 
