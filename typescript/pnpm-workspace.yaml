@@ -1,0 +1,20 @@
+# The workspace of CoSec's TypeScript packages. It is not the workspace of wiki/, which has its own lockfile and its
+# own toolchain (VitePress pins an older vite): pnpm takes the nearest pnpm-workspace.yaml, so neither sees the other.
+packages:
+  - 'cosec-*'
+
+# Dependencies that may run a build script when they install. Everything else is refused (pnpm's default).
+allowBuilds:
+  esbuild: true
+
+# A version npm published less than a day ago is not installed: a malicious release is usually pulled in that time.
+minimumReleaseAge: 1440
+
+# One version per external dependency across the workspace. Packages reference these with `catalog:`; the packages of
+# this workspace reference each other with the `workspace:` protocol.
+catalog:
+  '@eslint/js': ^10.0.1
+  eslint: ^10.15.0
+  globals: ^17.13.0
+  prettier: ^3.9.9
+  typescript: ^6.0.3
