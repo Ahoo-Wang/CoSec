@@ -158,15 +158,57 @@ internal class HistoryRepair(
 
     companion object {
         /**
-         * Whether [entries], the index's entries up to the head's revision, are [head]'s chain from [floor] up: the last
-         * is the head's own (revision and digest), and each entry's parent is the digest of the one below it. What
-         * reclamation kept below the floor is not part of the chain that is left, and is not judged.
+         * Whether [entries], the index's entries up to the head's revision, are [head]'s chain from [floor] up: the same
+         * rule [check] states, the one the read relies on and the tool reports (`CTL-35`).
          */
-        fun agrees(entries: List<RevisionEntry>, floor: Long, head: StoredDocument): Boolean {
+        fun agrees(entries: List<RevisionEntry>, floor: Long, head: StoredDocument): Boolean =
+            check(entries, floor, head) { null } === IndexCheck.Follows
+
+        /**
+         * Whether [entries], the index's entries up to the head's revision, are [head]'s chain from [floor] up, and why
+         * not: the last is the head's own (revision and digest), and each entry's parent is the digest of the one below
+         * it. What reclamation kept below the floor is not part of the chain that is left, and is not judged. Nothing is
+         * read or repaired, and no string is built when the index follows. An entry without a `parent`, which an older
+         * version wrote, cannot be checked ([IndexCheck.Unchecked]); one that names another parent than the entry below
+         * it is a difference. An index that ends exactly at the head's parent, with every link below holding, is behind
+         * by one revision ([IndexCheck.Behind]): what a publication leaves between its head write and its index write;
+         * [parentOfHead] answers the digest the head names as its parent, and is asked only then.
+         */
+        fun check(
+            entries: List<RevisionEntry>,
+            floor: Long,
+            head: StoredDocument,
+            parentOfHead: () -> SnapshotDigest?,
+        ): IndexCheck {
+            val revision = head.document.revision
             val live = entries.filter { it.revision >= floor }
-            val last = live.lastOrNull() ?: return false
-            return last.revision == head.document.revision && last.digest == head.digest &&
-                soundPrefix(live) == live.size
+            val last = live.lastOrNull()
+                ?: return if (revision == 1L) {
+                    IndexCheck.Behind(revision)
+                } else {
+                    IndexCheck.Differs("the index lists no revision, and the head is revision $revision")
+                }
+            var unchecked = 0
+            for (i in 1 until live.size) {
+                val parent = live[i].parent
+                when {
+                    parent == live[i - 1].digest -> Unit
+                    parent == null -> unchecked++
+                    else -> return IndexCheck.Differs(
+                        "revision ${live[i].revision} names $parent as its parent, but the entry below it is " +
+                            "revision ${live[i - 1].revision} (${live[i - 1].digest})"
+                    )
+                }
+            }
+            return when {
+                last.revision == revision && last.digest == head.digest ->
+                    if (unchecked > 0) IndexCheck.Unchecked(unchecked) else IndexCheck.Follows
+                last.revision == revision - 1 && last.digest == parentOfHead() -> IndexCheck.Behind(revision)
+                else -> IndexCheck.Differs(
+                    "the index ends at revision ${last.revision} (${last.digest}), the head is revision " +
+                        "$revision (${head.digest})"
+                )
+            }
         }
 
         /** How many entries from the lowest hold: the lowest, and each next one whose parent is the one before. */

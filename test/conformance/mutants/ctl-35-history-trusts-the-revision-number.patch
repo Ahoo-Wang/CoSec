@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.store.HistoryForkTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
-index 70698cca..02812436 100644
+index 1b6c8b30..bf0a5c89 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
-@@ -165,7 +165,7 @@ internal class HistoryRepair(
-         fun agrees(entries: List<RevisionEntry>, floor: Long, head: StoredDocument): Boolean {
-             val live = entries.filter { it.revision >= floor }
-             val last = live.lastOrNull() ?: return false
--            return last.revision == head.document.revision && last.digest == head.digest &&
-+            return last.revision == head.document.revision &&
-                 soundPrefix(live) == live.size
-         }
- 
+@@ -201,7 +201,7 @@ internal class HistoryRepair(
+                 }
+             }
+             return when {
+-                last.revision == revision && last.digest == head.digest ->
++                last.revision == revision ->
+                     if (unchecked > 0) IndexCheck.Unchecked(unchecked) else IndexCheck.Follows
+                 last.revision == revision - 1 && last.digest == parentOfHead() -> IndexCheck.Behind(revision)
+                 else -> IndexCheck.Differs(

@@ -345,6 +345,22 @@ class Revisions(
     /** [Retention.verifyChain]: walks the `parent` chain of [key]'s head. */
     suspend fun verifyChain(key: SnapshotKey): ChainCheck = retained.verifyChain(key)
 
+    /**
+     * Whether the revision index of [key] follows its head's chain (`CTL-35`), as [history] checks it before it
+     * returns the index, but only read: nothing is rebuilt, so `verify-chain` may run beside the control plane. An index one
+     * revision behind the head is a publication settling, or one whose index write failed: [IndexCheck.Behind], not a
+     * difference (as a reclamation during a walk is not a lost write, #1532).
+     */
+    suspend fun verifyIndex(key: SnapshotKey): IndexCheck {
+        val stored = store.head(requireDocumentKey(key)) ?: return IndexCheck.Follows
+        val indexed = store.index(key)?.value ?: RevisionIndex.EMPTY
+        val entries = indexed.entries.filter { it.revision <= stored.document.revision }
+        // The head is decoded once, and only to tell a publication that is settling from a difference.
+        return HistoryRepair.check(entries, indexed.floor, stored) {
+            decode(key, stored.document).provenance?.parent?.digest?.let(SnapshotDigest::parse)
+        }
+    }
+
     /** [Retention.reclaim]: removes the records of [key] the [retention] no longer keeps. */
     suspend fun reclaim(key: SnapshotKey, keep: Set<SnapshotDigest> = emptySet()): Reclaimed = retained.reclaim(
         key,

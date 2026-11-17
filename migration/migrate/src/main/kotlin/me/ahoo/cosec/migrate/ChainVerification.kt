@@ -28,6 +28,9 @@ import kotlin.coroutines.cancellation.CancellationException
  * reports a revision whose record is missing, the trace a write lost in a Redis failover leaves. It reads, and writes
  * nothing, so it may run while the control plane runs.
  *
+ * It also reports a revision index that does not follow the head's chain (a failover or a partial restore left it
+ * behind, or on another branch): read only, like the walk, and repaired by the next read of the document's history.
+ *
  * Every document [ControlStore.documents] lists is verified, or only [only]; one that cannot be read is reported with
  * why, never skipped silently.
  */
@@ -39,7 +42,7 @@ class ChainVerification(private val store: ControlStore) {
         val keys = only?.let(::listOf) ?: store.documents().sortedBy { it.toString() }
         keys.map { key ->
             try {
-                VerifiedChain(key, revisions.verifyChain(key), null)
+                VerifiedChain(key, revisions.verifyChain(key), null, revisions.verifyIndex(key))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
