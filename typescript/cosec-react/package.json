@@ -1,0 +1,96 @@
+{
+  "name": "@ahoo-wang/cosec-react",
+  "version": "8.0.0-alpha.4",
+  "description": "React hooks and components for a CoSec application: the security context, the signed-in state and route guards, on top of @ahoo-wang/cosec-fetcher.",
+  "keywords": [
+    "react",
+    "hooks",
+    "cosec",
+    "authentication",
+    "security",
+    "route-guard",
+    "token-management"
+  ],
+  "author": "Ahoo-Wang",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/Ahoo-Wang/CoSec/tree/main/typescript/cosec-react",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ahoo-Wang/CoSec.git",
+    "directory": "typescript/cosec-react"
+  },
+  "bugs": {
+    "url": "https://github.com/Ahoo-Wang/CoSec/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+  },
+  "main": "./dist/index.umd.cjs",
+  "module": "./dist/index.es.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.es.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.umd.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "vite build",
+    "test:ui": "vitest --ui",
+    "test": "vitest run --coverage && pnpm test:api",
+    "lint": "eslint .",
+    "clean": "rm -rf dist",
+    "analyze": "npx vite-bundle-analyzer -p auto",
+    "test:no-coverage": "vitest run --coverage.enabled=false && pnpm test:api",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "test:api": "node ../scripts/api-report.mjs"
+  },
+  "peerDependencies": {
+    "@ahoo-wang/cosec-fetcher": "workspace:~",
+    "@ahoo-wang/fetcher-react": "catalog:peers",
+    "react": "catalog:peers"
+  },
+  "devDependencies": {
+    "@ahoo-wang/cosec-fetcher": "workspace:*",
+    "@ahoo-wang/fetcher": "catalog:",
+    "@ahoo-wang/fetcher-eventbus": "catalog:",
+    "@ahoo-wang/fetcher-react": "catalog:",
+    "@ahoo-wang/fetcher-storage": "catalog:",
+    "@eslint/js": "catalog:",
+    "@rolldown/plugin-babel": "catalog:",
+    "@testing-library/react": "catalog:",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "@vitejs/plugin-react": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@vitest/ui": "catalog:",
+    "babel-plugin-react-compiler": "catalog:",
+    "eslint": "catalog:",
+    "eslint-plugin-react-compiler": "catalog:",
+    "eslint-plugin-react-hooks": "catalog:",
+    "globals": "catalog:",
+    "jsdom": "catalog:",
+    "prettier": "catalog:",
+    "react": "catalog:",
+    "react-compiler-runtime": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "unplugin-dts": "catalog:",
+    "vite": "catalog:",
+    "vite-bundle-analyzer": "catalog:",
+    "vitest": "catalog:"
+  }
+}

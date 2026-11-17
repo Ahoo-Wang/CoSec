@@ -1,0 +1,62 @@
+{
+  "rules": [
+    "CTL-35"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The head moved back to revision 1 (the index and the records as they were), and revision 2 is published again on another branch; the index write that follows fails, and a revision 3 follows. The history is the head's chain: the old branch's revision 2 is not listed, however the number matches.",
+  "publishes": [
+    {
+      "policies": [
+        "base"
+      ]
+    },
+    {
+      "policies": [
+        "old-branch"
+      ]
+    },
+    {
+      "restoreHead": 1,
+      "failIndex": true,
+      "policies": [
+        "new-branch"
+      ]
+    },
+    {
+      "policies": [
+        "third"
+      ]
+    }
+  ],
+  "history": true,
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published",
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 3,
+      "parent": 2,
+      "parentRecord": true
+    },
+    "records": 4,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head",
+      "record",
+      "head"
+    ],
+    "history": [
+      "1:base",
+      "2:new-branch",
+      "3:third"
+    ]
+  }
+}

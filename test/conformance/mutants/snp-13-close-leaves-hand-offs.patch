@@ -1,0 +1,16 @@
+# Rule: SNP-13
+# Mutant: close does not run the pending hand-offs, so a request a removed key handed off before close waits after it
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyRunnerCloseTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+index 4e0ab16e..58a8ee45 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
+@@ -365,7 +365,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
+         prewarms::abort,
+         { context.pendingRequests.forEach { it.abort(closedError()) } },
+         ::endLoads,
+-        context.handOffs::runPending,
+         threads::stopHousekeeping,
+         threads::stopCompiling,
+         { threads.awaitOwned(closeTimeout) },

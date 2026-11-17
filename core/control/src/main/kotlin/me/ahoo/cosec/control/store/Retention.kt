@@ -102,6 +102,7 @@ internal class Retention(
         val entries = history(key)
         val now = clock.instant()
         val recent = entries.takeLast(retention.maxCount).map { it.digest }.toSet()
+        val retained = entries.map { it.digest }
         val head = head(key)?.digest
         val removed = entries.filter { entry ->
             entry.digest !in recent && entry.digest !in keep && entry.digest != head &&
@@ -117,7 +118,9 @@ internal class Retention(
             }.map { it.digest }
             val entries = index.entries.filter { entry -> removed.none { it.digest == entry.digest } }
             val pending = index.pending.filter { it.digest !in orphans }
-            val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head)
+            // What the verified history keeps is live too: a digest it lists is never left to delete (#1536).
+            val live = entries.map { it.digest }.toSet() + pending.map { it.digest } + keep + listOfNotNull(head) +
+                retained.filter { digest -> removed.none { it.digest == digest } }
             // What an earlier pass could not delete, unless it is live again; then what this pass takes out.
             reclaiming = (index.reclaiming + removed.map { it.digest } + orphans).distinct().filter { it !in live }
             index.copy(
