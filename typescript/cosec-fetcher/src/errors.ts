@@ -12,7 +12,6 @@
  */
 
 import { FetcherError } from '@ahoo-wang/fetcher';
-import type { JwtCompositeToken } from './jwtToken.js';
 import { getCoSecProblem, type CoSecProblem } from './problem.js';
 
 export class RefreshTokenError extends FetcherError {
@@ -23,10 +22,7 @@ export class RefreshTokenError extends FetcherError {
    */
   readonly problem?: CoSecProblem;
 
-  constructor(
-    public readonly token: JwtCompositeToken,
-    cause?: Error | any,
-  ) {
+  constructor(cause?: unknown) {
     super(`Refresh token failed.`, cause);
     this.problem = getCoSecProblem(cause);
     this.name = 'RefreshTokenError';
@@ -52,10 +48,7 @@ export class RefreshUnavailableError extends FetcherError {
   /** What CoSec answered (`too-many-requests`, `unavailable`, ...), when it said. */
   readonly problem?: CoSecProblem;
 
-  constructor(
-    public readonly token: JwtCompositeToken,
-    cause?: Error | any,
-  ) {
+  constructor(cause?: unknown) {
     super('Refresh token is unavailable; the session is kept.', cause);
     this.problem = getCoSecProblem(cause);
     this.name = 'RefreshUnavailableError';

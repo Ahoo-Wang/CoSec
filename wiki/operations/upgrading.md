@@ -1172,6 +1172,14 @@ service with an app refuses it** (below): plan a re-login, or have tokens expire
 and have to be provisioned again. **Close or withdraw open shadow windows before you upgrade**: a candidate staged by
 8.0.0-alpha.4 states its header beside its document, and is refused as unreadable, so its window is not compared.
 
+- **The revision index entries gain a `parent`, and the first read of each document rewrites an index an alpha
+  wrote** (`CTL-35`). An entry of `<s>:control:revisions:<doc>` carries the digest its document names as its parent,
+  and a document's history is returned only when its last entry is the head and each entry names the one below it. An
+  index written before has no `parent`: the first read of each document (a control API call, or the maintenance
+  pass) walks the head's chain once, decoding each retained record, and rewrites the entries with it; no migration is
+  needed, and nothing is lost. `RevisionEntry`'s constructor has a fourth parameter, `parent` (default `null`), for
+  code that builds one. The same read repairs a head that moved back and a reused revision number, which used to
+  read the old branch's document; see [Revisions, history and rollback](./storage.md#revisions-history-and-rollback).
 - **Security: a tenant switch no longer issues from a revoked or ended session.** From 8.0.0-alpha.1 to
   8.0.0-alpha.4, a switch read no revocation itself: while the revocation store could not be read, which the request
   path then read as "not revoked", a logged-out token, or one of a revoked principal, could be switched into a new token

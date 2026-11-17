@@ -34,7 +34,6 @@ export default defineConfig({
         'react/compiler-runtime',
         'react-compiler-runtime',
         '@ahoo-wang/cosec-fetcher',
-        '@ahoo-wang/fetcher-react',
       ],
       output: {
         keepNames: true,
@@ -46,7 +45,6 @@ export default defineConfig({
           'react/compiler-runtime': 'ReactCompilerRuntime',
           'react-compiler-runtime': 'ReactCompilerRuntime',
           '@ahoo-wang/cosec-fetcher': 'FetcherCoSec',
-          '@ahoo-wang/fetcher-react': 'FetcherReact',
         },
       },
     },

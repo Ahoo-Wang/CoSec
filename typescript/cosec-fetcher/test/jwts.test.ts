@@ -17,10 +17,17 @@ import { parseJwtPayload } from '../src';
 import { isTokenExpired } from '../src';
 
 describe('jwts', () => {
-  const consoleErrorSpy = vi
-    .spyOn(console, 'error')
-    .mockImplementation(() => {});
   describe('parseJwtPayload', () => {
+    it('logs nothing when a token cannot be parsed', () => {
+      const logged = ['error', 'warn', 'log', 'info'].map(method =>
+        vi.spyOn(console, method as 'error').mockImplementation(() => {}),
+      );
+      // A payload that is not JSON: an engine's SyntaxError quotes part of it.
+      const token = `e30.${btoa('{"secret": oops')}.signature`;
+      expect(parseJwtPayload(token)).toBeNull();
+      for (const spy of logged) expect(spy).not.toHaveBeenCalled();
+    });
+
     it('should parse a valid JWT token and return its payload', () => {
       // A JWT token with payload: {"sub": "1234567890", "name": "John Doe", "iat": 1516239022}
       const token =
@@ -223,7 +230,6 @@ describe('jwts', () => {
 
 describe('parseJwtPayload rejects a claims set that is not an object', () => {
   it.each(['123', '"text"', '[1]', 'null'])('payload %s', json => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
     const token = `e30.${btoa(json)}.signature`;
     expect(parseJwtPayload(token)).toBeNull();
     // So it reads as expired, not as a token that never expires.

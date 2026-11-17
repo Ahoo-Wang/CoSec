@@ -30,7 +30,7 @@ export function RefreshableRouteGuard({
   fallback,
   refreshing,
   tokenManager,
-}: RefreshableRouteGuardProps) {
+}: RefreshableRouteGuardProps): ReactNode {
   const { authenticated } = useSecurityContext();
   const refreshable =
     tokenManager.isRefreshNeeded && tokenManager.isRefreshable;

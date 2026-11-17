@@ -8,18 +8,18 @@ import { CompositeToken } from '@ahoo-wang/cosec-fetcher';
 import { Context } from 'react';
 import { CoSecJwtPayload } from '@ahoo-wang/cosec-fetcher';
 import { JSX } from 'react';
-import { JSXElementConstructor } from 'react';
 import { JwtTokenManager } from '@ahoo-wang/cosec-fetcher';
-import { ReactElement } from 'react';
 import { ReactNode } from 'react';
-import { ReactPortal } from 'react';
 import { TokenStorage } from '@ahoo-wang/cosec-fetcher';
 
 // @public (undocumented)
 export const ANONYMOUS_USER: CoSecJwtPayload;
 
+// @public
+export type CompositeTokenProvider = CompositeToken | (() => Promise<CompositeToken>);
+
 // @public (undocumented)
-export function RefreshableRouteGuard(input: RefreshableRouteGuardProps): JSX.Element;
+export function RefreshableRouteGuard(input: RefreshableRouteGuardProps): ReactNode;
 
 // @public (undocumented)
 export interface RefreshableRouteGuardProps extends Omit<RouteGuardProps, 'onUnauthorized'> {
@@ -30,7 +30,7 @@ export interface RefreshableRouteGuardProps extends Omit<RouteGuardProps, 'onUna
 }
 
 // @public
-export function RouteGuard(input: RouteGuardProps): string | number | bigint | boolean | Iterable<ReactNode> | Promise<string | number | bigint | boolean | ReactPortal | ReactElement<unknown, string | JSXElementConstructor<any>> | Iterable<ReactNode> | null | undefined> | JSX.Element | null | undefined;
+export function RouteGuard(input: RouteGuardProps): ReactNode;
 
 // @public
 export interface RouteGuardProps {

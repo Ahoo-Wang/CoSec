@@ -117,17 +117,38 @@ function readManifest(tarball) {
   return { text, manifest: JSON.parse(text) };
 }
 
-function isOnNpm(name, version) {
+/**
+ * Whether `name@version` is on npm. "Yes" needs positive evidence: `npm view` printing exactly that version. Only an
+ * `E404` is "no". Anything else (a registry that cannot be reached, exit 0 with no or other output, as an older npm or a
+ * mirror may give) throws: a skipped publish that nobody notices is a release without the package.
+ */
+export function isOnNpm(name, version) {
+  let output;
   try {
-    execFileSync('npm', ['view', `${name}@${version}`, 'version'], {
+    output = execFileSync('npm', ['view', `${name}@${version}`, 'version'], {
       encoding: 'utf8',
       stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    return true;
+    }).trim();
   } catch (error) {
-    // Only "no such version" means not published: a registry that cannot be reached must not read as "go on".
     if (/E404/.test(String(error.stderr))) return false;
     throw error;
+  }
+  if (output === version) return true;
+  throw new Error(
+    `npm view ${name}@${version} exited 0 and printed ${JSON.stringify(output)}, not the version: it cannot be told whether it is published`,
+  );
+}
+
+/** What npm says the dist-tags are now. Logged, never asserted: the registry can lag for minutes after a publish. */
+export function printDistTags(name) {
+  try {
+    const tags = execFileSync('npm', ['view', name, 'dist-tags', '--json'], {
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'pipe'],
+    }).trim();
+    console.log(`${name} dist-tags now: ${tags}`);
+  } catch (error) {
+    console.log(`${name}: dist-tags could not be read (${error.message})`);
   }
 }
 
@@ -171,10 +192,18 @@ function publish(directory, dryRun) {
   for (const name of PUBLISH_ORDER) {
     const { tarball, manifest } = byName.get(name);
     const tag = distTag(manifest.version);
-    const published = isOnNpm(name, manifest.version);
+    let published;
+    try {
+      published = isOnNpm(name, manifest.version);
+    } catch (error) {
+      fail(error.message);
+    }
     if (published) {
       console.log(`${name}@${manifest.version} is already on npm`);
-      if (!dryRun) continue;
+      if (!dryRun) {
+        printDistTags(name);
+        continue;
+      }
     }
     const args = ['publish', tarball, '--tag', tag, '--access', 'public'];
     if (dryRun) args.push('--dry-run');
@@ -184,27 +213,32 @@ function publish(directory, dryRun) {
     console.log(
       `${name}@${manifest.version} ${dryRun ? 'would be published' : 'published'} with dist-tag ${tag}`,
     );
+    if (!dryRun) printDistTags(name);
   }
 }
 
-const [command, ...rest] = process.argv.slice(2);
-switch (command) {
-  case 'env':
-    checkEnvironment();
-    break;
-  case 'check':
-    if (!rest[0]) fail('usage: release.mjs check <tag>');
-    checkVersions(rest[0]);
-    break;
-  case 'publish': {
-    const at = rest.indexOf('--tarballs');
-    if (at < 0 || !rest[at + 1])
-      fail('usage: release.mjs publish --tarballs <dir> [--dry-run]');
-    publish(resolve(rest[at + 1]), rest.includes('--dry-run'));
-    break;
+function main() {
+  const [command, ...rest] = process.argv.slice(2);
+  switch (command) {
+    case 'env':
+      checkEnvironment();
+      break;
+    case 'check':
+      if (!rest[0]) fail('usage: release.mjs check <tag>');
+      checkVersions(rest[0]);
+      break;
+    case 'publish': {
+      const at = rest.indexOf('--tarballs');
+      if (at < 0 || !rest[at + 1])
+        fail('usage: release.mjs publish --tarballs <dir> [--dry-run]');
+      publish(resolve(rest[at + 1]), rest.includes('--dry-run'));
+      break;
+    }
+    default:
+      fail(
+        'usage: release.mjs env | check <tag> | publish --tarballs <dir> [--dry-run]',
+      );
   }
-  default:
-    fail(
-      'usage: release.mjs env | check <tag> | publish --tarballs <dir> [--dry-run]',
-    );
 }
+
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();

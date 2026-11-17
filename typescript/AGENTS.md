@@ -12,7 +12,7 @@ CoSec's TypeScript packages are the client of a CoSec application and its React 
 | Directory        | Package                    | Published | Built on                                                             |
 | ---------------- | -------------------------- | --------- | -------------------------------------------------------------------- |
 | `cosec-fetcher/` | `@ahoo-wang/cosec-fetcher` | yes       | `@ahoo-wang/fetcher` and its eventbus and storage packages, from npm |
-| `cosec-react/`   | `@ahoo-wang/cosec-react`   | yes       | `cosec-fetcher`, `@ahoo-wang/fetcher-react`, React                   |
+| `cosec-react/`   | `@ahoo-wang/cosec-react`   | yes       | `cosec-fetcher` and React                                            |
 
 A package is added here, to the workspace's members (`cosec-*`), and to `TypeScriptWorkspaceTest` in `:architecture`.
 
@@ -83,7 +83,10 @@ Publishing the GitHub release `vX.Y.Z` publishes the packages to npm, from the `
    pre-release never gets `latest`, and a pre-release this table does not know fails. Install one with
    `pnpm add @ahoo-wang/cosec-fetcher@beta`.
 5. A version already on npm is skipped with a message, so re-running the job after a partial failure goes on with the
-   next package.
+   next package. "Already on npm" needs positive evidence: `npm view <name>@<version> version` printing exactly that
+   version; an `E404` means "not published", and anything else (an error, exit 0 with other or no output) fails the job.
+   After each package the log shows `npm view <name> dist-tags` (not asserted: the registry can lag), so the run records
+   the tag the version got and that `latest` did not move.
 
 There is no npm token: each package has a **trusted publisher** on npm, bound to this repository, to the file name
 `package-deploy.yml` and to the environment `npm-publish`, and npm writes the provenance. Renaming the file or the

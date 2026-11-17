@@ -52,7 +52,7 @@
     "build": "vite build",
     "test:ui": "vitest --ui",
     "test": "vitest run --coverage && pnpm test:api",
-    "lint": "eslint --max-warnings 53 .",
+    "lint": "eslint --max-warnings 45 .",
     "clean": "rm -rf dist",
     "analyze": "npx vite-bundle-analyzer -p auto",
     "test:no-coverage": "vitest run --coverage.enabled=false && pnpm test:api",
