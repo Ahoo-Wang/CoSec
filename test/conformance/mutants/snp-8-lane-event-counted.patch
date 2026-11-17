@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
-index 705674ef..2bc3f173 100644
+index 3a5dab47..2061e8c8 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
-@@ -109,7 +109,7 @@ internal class KeyDrain<T : Any>(
+@@ -99,7 +99,7 @@ internal class KeyDrain<T : Any>(
       * a lane event is uncounted, so its offerer opens a budget of K: what it brought, plus at most K caller events.
       */
      fun offer(item: Any) {
--        val events = if (item is KeyEvent.LaneEvent<*>) {
-+        val events = if (item is KeyEvent.LaneEvent<*> && k < 0) {
-             push(item)
-             k
-         } else {
+-        val lane = item is KeyEvent.LaneEvent<*>
++        val lane = item is KeyEvent.LaneEvent<*> && k < 0
+         if (lane) push(item as KeyEvent.LaneEvent<*>) else queue.add(item)
+         val events = if (lane) k else k + 1
+         DrainBudget.within(if (context.threads.drainsUnbounded.get() == true) Int.MAX_VALUE else events) { drain() }
