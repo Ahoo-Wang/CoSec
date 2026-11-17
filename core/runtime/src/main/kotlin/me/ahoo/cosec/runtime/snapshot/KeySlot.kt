@@ -57,6 +57,12 @@ internal abstract class KeySlot<T : Any>(val key: SnapshotKey, private val ticke
      */
     abstract fun idle(): Boolean
 
+    /** Tests only: nothing of this key in motion: no load in flight, and for a runner no event queued, no drain. */
+    fun quiescent(): Boolean = idle() && !draining
+
+    /** Tests only: a runner's event queued or its drain under way; a [Slot] has neither. */
+    protected open val draining: Boolean get() = false
+
     /** What one request waits for: the installed entry, or its own view of the load, bounded by the cold load timeout. */
     abstract fun request(): CompletableFuture<SnapshotEntry<T>>
 

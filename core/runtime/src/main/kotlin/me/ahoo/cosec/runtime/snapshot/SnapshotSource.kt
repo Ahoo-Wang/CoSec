@@ -118,12 +118,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         get() = context.nanoTime.get()
         set(value) = context.nanoTime.set(value)
 
-    private val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
+    internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
     private val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports)
     private val context =
         SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, slots)
-    private val shared = slots.create(sharedKey, sharedCompiler, context)
+    internal val shared = slots.create(sharedKey, sharedCompiler, context)
 
     /** Tests only: runs between finding a family's slot and using it, to force an eviction into that gap. */
     @Volatile

@@ -107,6 +107,10 @@ internal class SnapshotThreads(
         }
     }
 
+    /** Tests only: housekeeping has nothing queued and nothing running (a test's own housekeeping counts as idle). */
+    val housekeepingIdle: Boolean
+        get() = (housekeeping as? ThreadPoolExecutor)?.let { it.queue.isEmpty() && it.activeCount == 0 } ?: true
+
     /** Whether every thread this source started has finished. */
     val terminated: Boolean
         get() = (!ownsScheduler || scheduler.isTerminated) && housekeeping.isTerminated &&
