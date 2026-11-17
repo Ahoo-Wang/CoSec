@@ -1,0 +1,17 @@
+# Rule: CTL-35
+# Mutant: the history is taken for the head's when its last entry is the head's, whatever the entries below name as their parents
+# Tests: :control:test --tests me.ahoo.cosec.control.store.HistoryForkTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
+index 70698cca..dba1b533 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
+@@ -166,7 +166,7 @@ internal class HistoryRepair(
+             val live = entries.filter { it.revision >= floor }
+             val last = live.lastOrNull() ?: return false
+             return last.revision == head.document.revision && last.digest == head.digest &&
+-                soundPrefix(live) == live.size
++                true
+         }
+ 
+         /** How many entries from the lowest hold: the lowest, and each next one whose parent is the one before. */

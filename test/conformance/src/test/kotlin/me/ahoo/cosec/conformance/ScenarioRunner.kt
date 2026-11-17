@@ -89,5 +89,7 @@ sealed interface Outcome {
         val parentRecord: Boolean?,
         val records: Int,
         val writes: List<String>,
+        /** The history of the last document as `<revision>:<policies>`, when the scenario asks for it. */
+        val history: List<String>? = null,
     ) : Outcome
 }
