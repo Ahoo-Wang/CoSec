@@ -126,8 +126,8 @@ key 都在它之下（`SNP-9`）。
 让两边各守其位：
 
 - 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 可读可写，对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
-  不能只读：CoCache 用脚本读取每个值，而 Redis 会按写权限检查脚本指明的 key，所以对它们只给 `%R~` 的用户在启动时和每次
-  读取时都失败（`NOPERM`）。因此数据面凭证能够覆盖实例读取的文档，ACL 无法阻止。
+  在 CoCache 8.0.0 下不能只读：它以 `EVALSHA` 发送每个脚本，Redis 对这种调用要求对脚本指明的 key 有写权限，所以对它们只给
+  `%R~` 的用户在启动时和每次读取时都失败（`NOPERM`）。因此数据面凭证能够覆盖实例读取的文档，ACL 无法阻止。
 - 控制面凭证：`<s>:` 下的所有 key。
 - 要防止一个实例写另一个实例的报告，给每个实例一个独立的用户，只允许它写自己的报告 key
   （`<s>:shadow:report:*:<instance>`），并设置它的
@@ -149,6 +149,10 @@ key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一�
 ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all ~cosec:snapshot:* ~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
 ACL SETUSER cosec-pod-a +@connection +evalsha +eval +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
+
+这个示例仍然给运营者的：不能访问 `<s>:control:*` 下的任何 key，报告和状态只能写在实例自己的名下。数据面实例需要
+`snapshot`、`candidate` 和 `shadow` 几组 key，这几组是这里测试过的；令牌、成员关系、API key、限流和 OAuth 这几组只有用到
+对应功能时才需要，它们没有用 ACL 试过。
 
 `~cosec:shadow:report:` 和 `~cosec:shadow:status:`（不带 `*`）是 CoCache 创建这两个缓存时用到的 key：没有它们，即使
 实例自己的 key 都允许，启动也会因 `NOPERM` 失败。已在 Redis 8.10 上用这个用户测试：实例创建缓存、读取文档和候选、写入自己的
