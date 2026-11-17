@@ -145,7 +145,10 @@ open class KeyBurstBenchmark {
         println("[$slots] one join, a second key during the burst: ${joins.report()}")
         println("[$slots] bursts: $bursts, second keys: $seconds, tenant load outcomes: $counts")
         // A burst request answered FAILED or TIMEOUT measured no cold load: the trial is void.
-        check(counts.filterKeys { it != LoadOutcome.COLD }.values.all { it == 0L }) { "A request was not a cold load: $counts" }
+        // Measurement only: with the load lane a request still queued when the load ends is served the install (HIT).
+        check(counts.filterKeys { it != LoadOutcome.COLD && it != LoadOutcome.HIT }.values.all { it == 0L }) {
+            "A request was not a cold load: $counts"
+        }
     }
 
     /** Nanosecond samples, reported in microseconds. */
