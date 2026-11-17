@@ -40,7 +40,7 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
  * pass and of the one that replaced it never add up.
  */
 internal class Passes(
-    private val shared: Slot<*>,
+    private val shared: KeySlot<*>,
     private val families: SnapshotFamilies<*>,
     private val context: SlotContext,
     private val lagReports: LagReports,
@@ -81,7 +81,7 @@ internal class Passes(
     @Suppress("TooGenericExceptionCaught")
     private fun run(pass: Pass) {
         val reloads = try {
-            reloadAll(installedSlots(), pass) { it.load(pass = pass) }
+            reloadAll(installedSlots(), pass) { it.load(pass) }
         } catch (error: Throwable) {
             // Never leave a pass in flight that nothing will end: every later tick would only owe one.
             pass.done.completeExceptionally(error)
@@ -111,22 +111,22 @@ internal class Passes(
         run(next)
     }
 
-    fun installedSlots(): List<Slot<*>> = buildList {
+    fun installedSlots(): List<KeySlot<*>> = buildList {
         if (shared.installed != null) add(shared)
         families.forEach { family -> family.slots.values.filterTo(this) { it.installed != null } }
     }
 
     /**
-     * Runs [reload] on [slots], [SnapshotOptions.reloadConcurrency] at a time; a removed slot counts as done. Each lane
+     * Runs [reload] on [slots], [SnapshotOptions.reloadConcurrency] at a time; a skipped slot counts as done. Each lane
      * loops while reloads complete inline (a synchronous store), so the stack never grows with the number of slots. For a
      * periodic [pass], each slot that finishes is progress, and once it is abandoned no lane takes another slot. A lane
      * holds a read of the pass while it takes a slot, so the pass cannot be abandoned between that check and the read
      * the slot starts ([Pass.abandonIfStalled]).
      */
     fun reloadAll(
-        slots: List<Slot<*>>,
+        slots: List<KeySlot<*>>,
         pass: Pass? = null,
-        reload: (Slot<*>) -> CompletableFuture<*>?,
+        reload: (KeySlot<*>) -> CompletableFuture<out Reloaded<*>>,
     ): CompletableFuture<Void> {
         val done = CompletableFuture<Void>()
         if (slots.isEmpty()) {
@@ -154,7 +154,7 @@ internal class Passes(
                 } finally {
                     holding?.end()
                 }
-                if (reloading == null || reloading.isDone) {
+                if (reloading.isDone) {
                     finishedOne()
                     continue
                 }
