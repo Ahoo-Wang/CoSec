@@ -40,6 +40,9 @@ UNCOVERED = {"conformance", "architecture", "e2e"}
 # Projects run in a job of their own instead of their group's, to even out the jobs' wall time.
 SPLIT = set()
 
+# Uploads to Codecov that come from outside the Gradle matrix: the `typescript-coverage` job of ci.yml.
+EXTERNAL_UPLOADS = 1
+
 REPORT = "build/reports/jacoco/test/jacocoTestReport.xml"
 
 
@@ -101,9 +104,11 @@ def plan(root):
 
     uploads = sum(1 for job in jobs if job["coverage"])
     waits = [int(n) for n in re.findall(r"^\s*after_n_builds:\s*(\d+)\s*$", codecov, re.M)]
-    if len(waits) != 2 or set(waits) != {uploads}:
-        fail(f"codecov.yml must wait for {uploads} uploads, one per job with coverage, in both "
-             f"codecov.notify.after_n_builds and comment.after_n_builds; found {waits}")
+    expected = uploads + EXTERNAL_UPLOADS
+    if len(waits) != 2 or set(waits) != {expected}:
+        fail(f"codecov.yml must wait for {expected} uploads ({uploads} Gradle jobs with coverage and "
+             f"{EXTERNAL_UPLOADS} from outside the matrix), in both codecov.notify.after_n_builds and "
+             f"comment.after_n_builds; found {waits}")
 
     return {"jobs": jobs, "excluded": sorted(EXCLUDED), "uncovered": sorted(UNCOVERED), "uploads": uploads}
 

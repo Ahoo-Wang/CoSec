@@ -122,7 +122,8 @@ class TypeScriptWorkspaceTest {
             .single { "plan" in it && "docs" in it }
         gate.split(',').map { it.trim() }.assert().contains("typescript")
         val job = ci.substringAfter("\n  typescript:\n").substringBefore("\n  # ")
-        job.contains("if:").assert().describedAs("the job has no condition: a skipped job fails the gate").isFalse()
+        Regex("(?m)^    if:").containsMatchIn(job).assert()
+            .describedAs("the job has no condition of its own: a skipped job fails the gate").isFalse()
         val uses = Regex("""uses: (\S+)""").findAll(job).map { it.groupValues[1] }.toList()
         uses.assert().isNotEmpty()
         uses.filterNot { Regex("""[\w./-]+@[0-9a-f]{40}""").matches(it) }

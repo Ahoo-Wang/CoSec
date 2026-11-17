@@ -99,6 +99,10 @@
   - changed-files:
       - any-glob-to-any-file: '.github/**'
 
+'module: cosec-fetcher':
+  - changed-files:
+      - any-glob-to-any-file: 'typescript/cosec-fetcher/**'
+
 'area: typescript':
   - changed-files:
       - any-glob-to-any-file: 'typescript/**'
