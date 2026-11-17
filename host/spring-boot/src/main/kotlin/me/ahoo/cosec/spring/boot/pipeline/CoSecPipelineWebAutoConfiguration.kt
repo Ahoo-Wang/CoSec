@@ -27,6 +27,7 @@ import me.ahoo.cosec.runtime.http.RequestGate
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.webflux.OrderedCorsWebFilter
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webmvc.PipelineServletFilter
 import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
@@ -34,6 +35,7 @@ import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.webmvc.SuspendingHandlerHolderInterceptor
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
@@ -42,12 +44,21 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Condition
+import org.springframework.context.annotation.ConditionContext
+import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.Ordered
+import org.springframework.core.type.AnnotatedTypeMetadata
+import org.springframework.web.cors.CorsConfigurationSource
+import org.springframework.web.cors.reactive.CorsWebFilter
+import org.springframework.web.filter.CorsFilter
 import org.springframework.web.method.support.HandlerMethodArgumentResolver
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer
+import org.springframework.web.servlet.handler.HandlerMappingIntrospector
+import org.springframework.web.cors.reactive.CorsConfigurationSource as ReactiveCorsConfigurationSource
 
 /**
  * The web adapters over the [RequestGate]: the [Pipeline], or a service behind a gateway's `IdentityGate` (RFC 0006 §7.3): they translate the pipeline's outcome and never decide. A
@@ -81,6 +92,38 @@ internal class CoSecPipelineWebAutoConfiguration {
                     hostOf(properties),
                 )
             ).apply { order = SERVLET_FILTER_ORDER }
+
+        /**
+         * `STA-5`: the application declared a [CorsConfigurationSource], so a CORS filter runs right before the pipeline's:
+         * a preflight is answered by it and never decided, and every response, a refusal included, carries the headers.
+         * Without the bean nothing is registered, and a preflight is decided as `http:OPTIONS` for an anonymous caller.
+         *
+         * Spring MVC always has a [CorsConfigurationSource] of its own, the `HandlerMappingIntrospector`, which reads the
+         * handlers' `@CrossOrigin` and `addCorsMappings`: it is not the application's declaration and is ignored, or
+         * every MVC application would have the filter.
+         */
+        @Bean
+        @Conditional(DeclaredCorsSource::class)
+        @ConditionalOnMissingBean(CorsFilter::class)
+        fun cosecCorsFilter(sources: ObjectProvider<CorsConfigurationSource>): FilterRegistrationBean<CorsFilter> {
+            val declared = sources.orderedStream().filter { it !is HandlerMappingIntrospector }.toList()
+            check(declared.size == 1) {
+                "STA-5: ${declared.size} CorsConfigurationSource beans of the application: the CORS filter before CoSec " +
+                    "takes one. Declare a CorsFilter of your own to say which."
+            }
+            return FilterRegistrationBean(CorsFilter(declared.single())).apply { order = CORS_SERVLET_FILTER_ORDER }
+        }
+
+        /** True when the application declared a [CorsConfigurationSource] other than Spring MVC's own introspector. */
+        internal class DeclaredCorsSource : Condition {
+            override fun matches(context: ConditionContext, metadata: AnnotatedTypeMetadata): Boolean {
+                val factory = context.beanFactory ?: return false
+                return factory.getBeanNamesForType(CorsConfigurationSource::class.java, true, false).any {
+                    val type = factory.getType(it, false)
+                    type == null || !HandlerMappingIntrospector::class.java.isAssignableFrom(type)
+                }
+            }
+        }
 
         /** A handler's `SecurityContext` parameter, read from the request (round 2 M4). */
         @Bean
@@ -135,6 +178,13 @@ internal class CoSecPipelineWebAutoConfiguration {
             ReactiveClientIp.of(clientIpOf(context, properties)),
             hostOf(properties),
         )
+
+        /** `STA-5`, as on WebFlux's sibling: the application's reactive [CorsConfigurationSource] answers before the pipeline. */
+        @Bean
+        @ConditionalOnBean(ReactiveCorsConfigurationSource::class)
+        @ConditionalOnMissingBean(CorsWebFilter::class)
+        fun cosecCorsWebFilter(source: ReactiveCorsConfigurationSource): OrderedCorsWebFilter =
+            OrderedCorsWebFilter(source)
     }
 
     /** A gateway decides with policies, always: a gateway behind a gateway is not a mode. */
@@ -174,6 +224,12 @@ internal class CoSecPipelineWebAutoConfiguration {
          * Spring Security (-100), the application's filters. The request-id and tracing filters stay ahead of it.
          */
         const val SERVLET_FILTER_ORDER = HIDDEN_HTTP_METHOD_FILTER_ORDER + 1
+
+        /**
+         * The CORS filter's order (`STA-5`): immediately before the servlet filter of the pipeline, at the position of the
+         * hidden-method filter. A tie with a filter that only acts on a `POST` is harmless: neither rewrites an `OPTIONS`.
+         */
+        const val CORS_SERVLET_FILTER_ORDER = SERVLET_FILTER_ORDER - 1
 
         /** How this host reads the client address: decided once per context, or startup fails ([ClientIpReadings]). */
         fun clientIpOf(context: ApplicationContext, properties: RuntimeAuthorizationProperties): ClientIpReading =
