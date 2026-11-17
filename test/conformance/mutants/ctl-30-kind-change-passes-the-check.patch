@@ -2,11 +2,11 @@
 # Mutant: the check lets a referenced policy change between a policy and a boundary
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-index 551347c8..6e3fe252 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-@@ -53,7 +53,7 @@ internal object PlatformChecks {
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
+index 4b789c25..ab00d49d 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
+@@ -45,7 +45,7 @@ internal object RemovedReferences {
          } catch (_: DocumentCompileException) {
              return
          }
