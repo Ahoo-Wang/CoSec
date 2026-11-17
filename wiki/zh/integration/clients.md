@@ -143,7 +143,8 @@ CoSec 不提供登录、刷新、登出或租户切换端点。应用用 CoSec �
 
 ## CORS {#cors}
 
-浏览器客户端需要应用配置 CORS：CoSec 不设置任何 `Access-Control-*` 头，也不接线 CORS 过滤器。[CORS](./web.md#cors)说明了各个栈上的预检请求会怎样、
-让预检请求和拒绝响应都能被脚本读到的那一种安排（CoSec 之前的 CORS 过滤器），以及要允许的请求头和要暴露的响应头：客户端要读的
+浏览器客户端需要应用配置 CORS：CoSec 自己不设置任何 `Access-Control-*` 头，只有应用声明了 `CorsConfigurationSource` bean 时，启动器才会在管道之前注册 CORS 过滤器。
+[CORS](./web.md#cors)说明了各个栈上的预检请求会怎样（有这个 bean 时被回答、不被判定；没有时按 `http:OPTIONS`、匿名调用方判定）、`@CrossOrigin` 和
+`addCorsMappings` 还剩什么作用，以及要允许的请求头和要暴露的响应头：客户端要读的
 `CoSec-Request-Id`、`RateLimit-Limit`、`RateLimit-Remaining`、`RateLimit-Reset` 和 `Retry-After`。客户端在应该看到 `401` 的地方看到网络错误，
 就是看到了一个没有 CORS 头的拒绝响应。
