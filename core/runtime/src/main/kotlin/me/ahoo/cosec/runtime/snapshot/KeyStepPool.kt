@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
 import java.time.Instant
 
@@ -46,13 +47,15 @@ internal object KeyStepPool {
     inline fun <T : Any> withStep(block: (KeyStepBuilder<T>) -> Unit) {
         val pool = pools.get()
         val depth = pool.depth
-        if (depth == pool.builders.size) pool.builders += KeyStepBuilder(placeholderState, placeholderMoment)
+        if (depth == pool.builders.size) {
+            pool.builders += KeyStepBuilder(placeholderState, placeholderMoment, SnapshotKey.Platform)
+        }
         val step = pool.builders[depth]
         pool.depth = depth + 1
         try {
             block(step as KeyStepBuilder<T>)
         } finally {
-            step.reset(placeholderState, placeholderMoment)
+            step.reset(placeholderState, placeholderMoment, SnapshotKey.Platform)
             pool.depth = depth
         }
     }

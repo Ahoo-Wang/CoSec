@@ -29,7 +29,6 @@ import java.util.concurrent.ExecutionException
  * it ends. Each function names the [Slot] code it replaces, and decides as that code does.
  */
 internal class KeyLoads<T : Any>(private val config: KeyConfig) {
-    private val key = config.key
 
     /** `newLoad`: a load starting now, put in the state; its read starts with [startRead]. */
     fun newLoad(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?, handle: KeyHandle<T>?): LoadState<T> {
@@ -108,7 +107,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         finish(
             step,
             load,
-            SnapshotEntry(key, compiled.state, read.document.revision, read.digest, confirmedAt, origin),
+            SnapshotEntry(step.key, compiled.state, read.document.revision, read.digest, confirmedAt, origin),
             install = true
         )
     }
@@ -126,7 +125,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         val confirmedAt = load.confirmedAt(config.localCopyMaxAge)
         val entry =
             SnapshotEntry(
-                key,
+                step.key,
                 DocumentState.Failed(failure),
                 read.document.revision,
                 read.digest,
@@ -147,15 +146,19 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             step.emit(
                 KeyEffect.Log(
                     Level.WARN,
-                    "Compiling snapshot document [$key] again failed; failing closed until it compiles.",
+                    "Compiling snapshot document [${step.key}] again failed; failing closed until it compiles.",
                     cause
                 )
             )
             val error =
-                SnapshotUnavailableException(key, "compiled with inputs that changed, and not compiled again", cause)
+                SnapshotUnavailableException(
+                    step.key,
+                    "compiled with inputs that changed, and not compiled again",
+                    cause
+                )
             val failed =
                 SnapshotEntry(
-                    key,
+                    step.key,
                     DocumentState.Failed(error),
                     known.revision,
                     known.digest,
@@ -170,7 +173,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             step.emit(
                 KeyEffect.Log(
                     Level.WARN,
-                    "Reloading snapshot document [$key] failed; keeping revision ${known.revision}.",
+                    "Reloading snapshot document [${step.key}] failed; keeping revision ${known.revision}.",
                     cause
                 )
             )
@@ -180,8 +183,8 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             }
             return
         }
-        step.emit(KeyEffect.Log(Level.WARN, "Loading snapshot document [$key] failed.", cause))
-        finish(step, load, transientFailure(key, load.startedAt, cause), install = false)
+        step.emit(KeyEffect.Log(Level.WARN, "Loading snapshot document [${step.key}] failed.", cause))
+        finish(step, load, transientFailure(step.key, load.startedAt, cause), install = false)
     }
 
     /**
@@ -201,7 +204,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         }
         val pending = step.next
         val nextLoad = advance(step, load, entry.takeIf { installs }, stale)
-        val answer = if (withheld && nextLoad == null) outdated(key, step.moment) else entry
+        val answer = if (withheld && nextLoad == null) outdated(step.key, step.moment) else entry
         housekeep(step, installs)
         if (nextLoad != null) startRead(step, nextLoad) else pending?.let { step.emit(KeyEffect.Answer(it, answer)) }
         answerWaiters(step, load, answer, nextLoad.takeIf { withheld })
@@ -281,8 +284,13 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             keep(step, load, known)
             return
         }
-        val failure = SnapshotUnavailableException(key, "the stored document cannot be decoded", cause)
-        finish(step, load, config.entryOf(load, DocumentState.Failed(failure), EntryOrigin.UNDECODABLE), install = true)
+        val failure = SnapshotUnavailableException(step.key, "the stored document cannot be decoded", cause)
+        finish(
+            step,
+            load,
+            config.entryOf(step.key, load, DocumentState.Failed(failure), EntryOrigin.UNDECODABLE),
+            install = true
+        )
     }
 
     private fun onAbsent(step: KeyStepBuilder<T>, load: LoadState<T>) {
@@ -293,17 +301,26 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         }
         val lastSeen = step.seen
         if (lastSeen == null) {
-            finish(step, load, config.entryOf(load, DocumentState.Absent, EntryOrigin.ABSENT), install = true)
+            finish(step, load, config.entryOf(step.key, load, DocumentState.Absent, EntryOrigin.ABSENT), install = true)
             return
         }
         val error = SnapshotUnavailableException(
-            key,
+            step.key,
             "the store has no document, but revision ${lastSeen.revision} was seen; it may have lost data",
         )
-        finish(step, load, config.entryOf(load, DocumentState.Failed(error), EntryOrigin.LOST), install = true)
+        finish(
+            step,
+            load,
+            config.entryOf(step.key, load, DocumentState.Failed(error), EntryOrigin.LOST),
+            install = true
+        )
         // After the install: a throwing meter must not keep the lost document in service.
         step.emit(
-            KeyEffect.Log(Level.ERROR, "Snapshot document [$key] disappeared from the store; failing closed.", error)
+            KeyEffect.Log(
+                Level.ERROR,
+                "Snapshot document [${step.key}] disappeared from the store; failing closed.",
+                error
+            )
         )
         step.emit(KeyEffect.Report(KeyEffect.Metric.DocumentLost(lastSeen.revision)))
     }
@@ -337,7 +354,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             step.emit(
                 KeyEffect.Log(
                     Level.ERROR,
-                    "Snapshot document [$key] regressed from revision ${it.revision} to ${entry.revision}; " +
+                    "Snapshot document [${step.key}] regressed from revision ${it.revision} to ${entry.revision}; " +
                         "the store may have lost a write (for example a Redis failover). Installing what the store holds.",
                 )
             )

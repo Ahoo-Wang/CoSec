@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Ask
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Claim
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Waiter
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.util.concurrent.TimeoutException
@@ -36,14 +37,19 @@ import java.util.concurrent.TimeoutException
 internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     private val loads = KeyLoads<T>(config)
 
-    fun initial(): KeyState<T> = KeyState(retryDelay = config.rejectedReloadRetry)
+    private val initial = KeyState<T>(retryDelay = config.rejectedReloadRetry)
 
-    fun next(state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment): KeyStep<T> =
-        KeyStepBuilder(state, moment).also { next(it, state, event, moment) }.build()
+    /** Every key's first state: one, since a state is a value. */
+    fun initial(): KeyState<T> = initial
 
-    /** [next] into a drain's own [step], reset here: the same decision, its effects read in place. */
-    fun next(step: KeyStepBuilder<T>, state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment) {
-        step.reset(state, if (event == KeyEvent.Close) moment.closing() else moment)
+    fun next(state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment): KeyStep<T> {
+        val key = checkNotNull(config.key) { "Transitions shared by runners take each step's key from the runner." }
+        return KeyStepBuilder(state, moment, key).also { next(it, key, state, event, moment) }.build()
+    }
+
+    /** [next] for [key], into a drain's own [step], reset here: the same decision, its effects read in place. */
+    fun next(step: KeyStepBuilder<T>, key: SnapshotKey, state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment) {
+        step.reset(state, if (event == KeyEvent.Close) moment.closing() else moment, key)
         when (event) {
             is KeyEvent.Requested -> requested(step, event)
             KeyEvent.Changed -> changed(step)
@@ -118,7 +124,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
      */
     private fun load(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?, waiter: Waiter?) {
         if (step.moment.closed) {
-            waiter?.let { step.emit(KeyEffect.Serve(it, failedEntry(config.key, closedError(), step.moment.instant))) }
+            waiter?.let { step.emit(KeyEffect.Serve(it, failedEntry(step.key, closedError(), step.moment.instant))) }
             return
         }
         val inFlight = step.load
@@ -169,7 +175,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
         val removes = when (event.claim) {
             Claim.CLAIMED -> true.also {
                 check(evictable(step.state, absent = null, event.onlyIfEmpty)) {
-                    "An eviction of [${config.key}] was claimed for a key that cannot be evicted."
+                    "An eviction of [${step.key}] was claimed for a key that cannot be evicted."
                 }
             }
 
@@ -190,7 +196,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     private fun close(step: KeyStepBuilder<T>) {
         val load = step.load ?: return
         val outdated = load.recompiles || load.epoch < step.moment.epoch
-        val entry = load.known.takeUnless { outdated } ?: failedEntry(config.key, closedError(), step.moment.instant)
+        val entry = load.known.takeUnless { outdated } ?: failedEntry(step.key, closedError(), step.moment.instant)
         loads.finish(step, load, entry, install = false)
     }
 
@@ -202,7 +208,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
                 step.emit(
                     KeyEffect.Log(
                         KeyEffect.Level.ERROR,
-                        "Snapshot document [${config.key}] failed after its load finished.",
+                        "Snapshot document [${step.key}] failed after its load finished.",
                         event.cause
                     )
                 )
@@ -237,7 +243,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             is KeyEvent.Compiled -> loads.onCompiled(step, load, read, event)
             is KeyEvent.CompileCrashed -> loads.onCompileCrashed(step, load, read, event.failure)
             is KeyEvent.CompileRejected -> {
-                val cause = SnapshotUnavailableException(config.key, "the compile queue is full", event.cause)
+                val cause = SnapshotUnavailableException(step.key, "the compile queue is full", event.cause)
                 loads.onTransientFailure(step, load, cause, rejected = true)
             }
 

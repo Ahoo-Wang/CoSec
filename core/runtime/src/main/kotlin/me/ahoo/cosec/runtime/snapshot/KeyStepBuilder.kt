@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.SnapshotFamilies.Seen
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
 
 /**
@@ -29,7 +30,11 @@ import java.time.Duration
  * whole ([state]) after a change, and none when nothing changed. A write that leaves a field as it was (the same
  * value, the same object) changes nothing.
  */
-internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment) {
+internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, key: SnapshotKey) {
+    /** The key this step is for: the transitions are shared, the step is not. */
+    var key: SnapshotKey = key
+        private set
+
     private var base: KeyState<T> = state
     private var changed = false
 
@@ -97,8 +102,9 @@ internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment) {
     /** The effects so far, in order; read in place by the drain, valid until the next [reset]. */
     val effects: List<KeyEffect<T>> get() = emitted
 
-    /** The next event's step: [state] and [moment] as given, no effects. */
-    fun reset(state: KeyState<T>, moment: KeyMoment) {
+    /** The next event's step: [state], [moment] and [key] as given, no effects. */
+    fun reset(state: KeyState<T>, moment: KeyMoment, key: SnapshotKey) {
+        this.key = key
         installed = state.installed
         installedEpoch = state.installedEpoch
         load = state.load
