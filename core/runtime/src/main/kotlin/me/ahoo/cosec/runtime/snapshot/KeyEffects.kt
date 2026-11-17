@@ -156,7 +156,6 @@ internal class KeyEffects<T : Any>(
         owner.offer(KeyEvent.Compiled(id, state, System.nanoTime() - begin))
         // Between compilations the pool serves the hand-offs: a caller's event left by a spent budget waits at most for
         // the compilation a pool thread is running, not for the compilations queued behind it.
-        context.handOffs.runPending()
     }
 
     private fun recordSeen(effect: KeyEffect.RecordSeen) {
