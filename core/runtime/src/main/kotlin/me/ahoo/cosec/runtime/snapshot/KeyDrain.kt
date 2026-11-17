@@ -54,6 +54,13 @@ internal class KeyDrain<T : Any>(
     private val flag = AtomicBoolean()
     private var state: KeyState<T> = transitions.initial()
 
+    /** The thread holding [flag], so that [close] called inside a drain on it does not wait for itself. */
+    @Volatile
+    private var drainer: Thread? = null
+
+    /** A `VirtualMachineError` an effect threw, handled once the flag is released ([released]). */
+    private var crash: VirtualMachineError? = null
+
     /** An eviction as offered; claimed when it is taken (§4b), so nothing of this key moves in between. */
     class EvictRequest(val onlyIfEmpty: Boolean, val absent: Boolean?, val reply: CompletableFuture<Eviction>)
 
@@ -65,6 +72,8 @@ internal class KeyDrain<T : Any>(
     /** `endLoad`: offers [KeyEvent.Close], then drains this key to empty on the closing thread, waiting out a drainer. */
     fun close() {
         queue.add(KeyEvent.Close)
+        // Closing from inside this key's own drain (a meter, a listener): the drain on this thread takes it.
+        if (drainer === Thread.currentThread()) return
         DrainBudget.unbounded {
             while (true) {
                 drain()
@@ -77,6 +86,7 @@ internal class KeyDrain<T : Any>(
     private fun drain() {
         while (true) {
             if (!flag.compareAndSet(false, true)) return
+            drainer = Thread.currentThread()
             var spent = false
             try {
                 while (queue.isNotEmpty()) {
@@ -87,8 +97,10 @@ internal class KeyDrain<T : Any>(
                     take(queue.poll() ?: break)
                 }
             } finally {
+                drainer = null
                 flag.set(false)
             }
+            released()
             if (spent) return handOff()
             // An offer that lost the flag just before the release is taken here: no event is stranded.
             if (queue.isEmpty()) return
@@ -129,11 +141,24 @@ internal class KeyDrain<T : Any>(
             try {
                 effects.execute(effect)
             } catch (error: VirtualMachineError) {
-                throw error
+                // The rest of the step still runs, so its waiters are answered; the error is handled after the release.
+                crash = crash ?: error
+                queue.add(KeyEvent.EffectFailed(step.state.load?.id ?: before.load?.id ?: NO_LOAD, error))
             } catch (error: Throwable) {
                 queue.add(KeyEvent.EffectFailed(step.state.load?.id ?: before.load?.id ?: NO_LOAD, error))
             }
         }
+    }
+
+    /**
+     * After the release, a `VirtualMachineError` an effect threw: rethrown on CoSec's own threads, as [Slot] rethrows
+     * it to the pool; on any other thread, a caller's, logged, since it is no error of that caller.
+     */
+    private fun released() {
+        val error = crash ?: return
+        crash = null
+        if (context.threads.onOwnThread.get() == true) throw error
+        context.threads.offRequestThread { log.error(error) { "Snapshot document [$key]: an effect failed." } }
     }
 
     /** The page's steps 2 to 4: evictable, then the claim, then the event carrying what was found. */
