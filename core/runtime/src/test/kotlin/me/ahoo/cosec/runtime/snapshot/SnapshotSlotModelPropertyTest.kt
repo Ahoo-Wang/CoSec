@@ -70,9 +70,18 @@ class SnapshotSlotModelPropertyTest {
      * (a compilation that calls `recompile`). Judged after the event, the eviction looked like one within the bound.
      */
     @Test
-    fun anEvictionIsJudgedAtItsClaimNotAfterItsEvent() = quietly {
-        val run = SlotModelRun(SlotModelScript.generate(SEED_9191, EVENTS), ModelSlots.runner(k = 0)).run()
-        run.failure.assert().isNull()
+    fun anEvictionIsJudgedAtItsClaimNotAfterItsEvent() = quietly { fixedCase(SEED_9191) }
+
+    /**
+     * Seed 872 at K = 0, a fixed case: a claim taken when its kind is back at its bound, which the claim refuses. The
+     * first seed of 10,000 at which the model kills a claim that ignores the bound (`snp-7-claim-ignores-the-bound`).
+     */
+    @Test
+    fun aClaimAtItsKindsBoundIsRefused() = quietly { fixedCase(SEED_872) }
+
+    private fun fixedCase(seed: Int) {
+        val run = SlotModelRun(SlotModelScript.generate(seed, EVENTS), ModelSlots.runner(k = 0)).run()
+        run.failure.assert().describedAs("seed $seed").isNull()
         run.counts.evictionsAtClaim.assert().isGreaterThan(0)
         run.counts.evictionsAfterEvent.assert().isZero()
     }
@@ -194,6 +203,7 @@ class SnapshotSlotModelPropertyTest {
         const val SEEDS = 500
         const val EVENTS = 250
         const val SEED_9191 = 9191
+        const val SEED_872 = 872
 
         /** Reached by every run over the runner: an eviction judged at its claim ([SlotModel.claimed]). */
         const val CLAIM_JUDGED = "eviction judged at its claim"
