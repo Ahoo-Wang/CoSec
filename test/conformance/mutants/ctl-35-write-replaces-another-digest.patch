@@ -1,0 +1,17 @@
+# Rule: CTL-35
+# Mutant: the write path replaces a listed revision number that has another digest, as a late settle of an old branch does
+# Tests: :control:test --tests me.ahoo.cosec.control.store.HistoryForkTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+index 3bb28f67..b19aa776 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
+@@ -238,7 +238,7 @@ class Revisions(
+     private suspend fun index(key: SnapshotKey, entry: RevisionEntry): Boolean = writes.updateIndex(key) { index ->
+         val listed = index.entries.firstOrNull { it.revision == entry.revision }
+         index.copy(
+-            entries = if (listed == null || listed.digest == entry.digest) {
++            entries = if (true) {
+                 (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision }
+             } else {
+                 index.entries

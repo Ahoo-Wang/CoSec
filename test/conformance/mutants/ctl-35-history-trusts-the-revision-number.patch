@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.store.HistoryForkTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
-index 3de3374e..9a9b3647 100644
+index 70698cca..02812436 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
-@@ -113,7 +113,7 @@ internal class HistoryRepair(
-     companion object {
-         /** Whether [last], the last entry up to the head, is the head's own: its revision and its digest. */
-         fun agrees(last: RevisionEntry?, head: StoredDocument): Boolean =
--            last != null && last.revision == head.document.revision && last.digest == head.digest
-+            last != null && last.revision == head.document.revision
+@@ -165,7 +165,7 @@ internal class HistoryRepair(
+         fun agrees(entries: List<RevisionEntry>, floor: Long, head: StoredDocument): Boolean {
+             val live = entries.filter { it.revision >= floor }
+             val last = live.lastOrNull() ?: return false
+-            return last.revision == head.document.revision && last.digest == head.digest &&
++            return last.revision == head.document.revision &&
+                 soundPrefix(live) == live.size
+         }
  
-         /**
-          * Whether an entry published over [parent] (`null` for a document's first revision) may be appended to [index]:
