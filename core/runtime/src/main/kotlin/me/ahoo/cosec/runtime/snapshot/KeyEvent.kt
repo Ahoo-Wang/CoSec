@@ -1,0 +1,122 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class)
+
+package me.ahoo.cosec.runtime.snapshot
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.snapshot.SnapshotRead
+import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.RejectedExecutionException
+
+/**
+ * What happens to one key (RFC 0013 B2b): the input of [KeyTransitions.next]. Each event names the [Slot] method it
+ * replaces. An event about a load carries the load's [loadId]; one about a load that has ended, or about a read the
+ * load has moved past, is dropped. [carried] is what the event brought in that must be answered whatever happens: a
+ * waiter or a reply.
+ */
+internal sealed interface KeyEvent<out T : Any> {
+    val loadId: Long? get() = null
+    val carried: Any? get() = null
+
+    /** `forRequest`, `usable`, `load`, `reload`; [waiter] is null when nobody waits (a change, a retry). */
+    data class Requested(val ask: Ask, val waiter: Waiter?) : KeyEvent<Nothing> {
+        override val carried: Any? get() = waiter
+    }
+
+    /** `onChanged`: reload if the key is installed or loading. */
+    data object Changed : KeyEvent<Nothing>
+
+    /** `markRecompile`, after the epoch moved: [reply] says whether the key is to be loaded again. */
+    data class Recompile(val reply: CompletableFuture<Boolean>) : KeyEvent<Nothing> {
+        override val carried: Any? get() = reply
+    }
+
+    /** The store answered load [loadId]'s read. */
+    data class ReadDone(override val loadId: Long, val read: SnapshotRead) : KeyEvent<Nothing>
+
+    /** Load [loadId]'s read failed, or its start threw: undecodable when [cause] is a format failure. */
+    data class ReadFailed(override val loadId: Long, val cause: Throwable) : KeyEvent<Nothing>
+
+    /** The store did not answer load [loadId]'s read within the store read timeout. */
+    data class ReadTimedOut(override val loadId: Long) : KeyEvent<Nothing>
+
+    /** The compile pool compiled load [loadId]'s document into [state], in [nanos]. */
+    data class Compiled<out T : Any>(
+        override val loadId: Long,
+        val state: DocumentState<T>,
+        val nanos: Long
+    ) : KeyEvent<T>
+
+    /** Compiling load [loadId]'s document threw a `VirtualMachineError`, described by [failure] (RC1-43). */
+    data class CompileCrashed(override val loadId: Long, val failure: SnapshotUnavailableException) : KeyEvent<Nothing>
+
+    /** The compile pool refused load [loadId]'s compilation. */
+    data class CompileRejected(override val loadId: Long, val cause: RejectedExecutionException) : KeyEvent<Nothing>
+
+    /** A reload the compile queue rejected tries again. */
+    data object RetryDue : KeyEvent<Nothing>
+
+    /**
+     * `removeIfIdle`: an eviction, or dropping an empty slot ([onlyIfEmpty]). [claim] is what the runner found before
+     * feeding it, under the drain flag: whether it claimed the family's decrement for this removal (`SNP-14`).
+     */
+    data class Evict(
+        val onlyIfEmpty: Boolean,
+        val claim: Claim,
+        val reply: CompletableFuture<Boolean>
+    ) : KeyEvent<Nothing> {
+        override val carried: Any? get() = reply
+    }
+
+    /** `endLoad`: the source is closing, and no load starts after this. */
+    data object Close : KeyEvent<Nothing>
+
+    /** An effect of load [loadId] threw [cause]: the load ends as a transient failure, if it has not ended. */
+    data class EffectFailed(override val loadId: Long, val cause: Throwable) : KeyEvent<Nothing>
+
+    /** What a [Requested] asks for. */
+    sealed interface Ask {
+        /** A request: the installed entry, or the load in flight, bounded by the request's own timeout. */
+        data object Request : Ask
+
+        /** The installed entry if it has not failed, otherwise the load in flight. */
+        data object Usable : Ask
+
+        /** The load in flight, or a new one; a periodic [pass] does not join one older than the store read timeout. */
+        data class Load(val force: Boolean, val pass: Pass? = null) : Ask
+
+        /** A load that starts after this event (`SNP-13`). */
+        data class Reload(val force: Boolean) : Ask
+    }
+
+    /** What the runner found for an [Evict]. */
+    enum class Claim {
+        /** No kind named: dropping an empty slot, or a test's eviction. The removal moves its count itself. */
+        UNCLAIMED,
+
+        /** Evictable, and the family's decrement is claimed: the removal is this claim. */
+        CLAIMED,
+
+        /** Not idle, already removed, or of the other kind by now. */
+        NOT_EVICTABLE,
+
+        /** Evictable, but the kind is at its bound: the pass stops. */
+        AT_BOUND,
+    }
+
+    /** One who waits on a key: the transition says what it gets, the runner answers it. */
+    interface Waiter
+}
