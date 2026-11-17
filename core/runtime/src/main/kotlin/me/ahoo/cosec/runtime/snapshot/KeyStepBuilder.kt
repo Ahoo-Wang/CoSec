@@ -27,8 +27,8 @@ import java.time.Duration
  * its flag, executing the effects in place before the next; nothing of a step outlives it (RFC 0013 B2b step 3).
  *
  * The state is a draft of [KeyState]'s fields, written in place: a step makes one [KeyState] when it is read as a
- * whole ([state]) after a change, and none when nothing changed. A write that leaves a field as it was (the same
- * value, the same object) changes nothing.
+ * whole ([state]) after a change, and none when nothing changed. A write that leaves a field as it was changes
+ * nothing: the same value, or for an entry, a load or a handle the same object.
  */
 internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, key: SnapshotKey) {
     /** The key this step is for: the transitions are shared, the step is not. */
@@ -75,7 +75,7 @@ internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, ke
         }
     var retryDelay: Duration = state.retryDelay
         set(value) {
-            if (field !== value) changed = true
+            if (field != value) changed = true
             field = value
         }
     var serial: Long = state.serial
@@ -87,7 +87,7 @@ internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, ke
     var moment: KeyMoment = moment
         private set
     var seen: Seen? = moment.seen
-    private val emitted = ArrayList<KeyEffect<T>>(EXPECTED_EFFECTS)
+    private var emitted = ArrayList<KeyEffect<T>>(EXPECTED_EFFECTS)
 
     /** The state as the step leaves it so far: the one it started from when nothing changed. */
     val state: KeyState<T>
@@ -118,7 +118,8 @@ internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, ke
         changed = false
         this.moment = moment
         seen = moment.seen
-        emitted.clear()
+        // A step that answered a herd emitted an effect per waiter: a thread keeps no array that large for its life.
+        if (emitted.size > MAX_KEPT_EFFECTS) emitted = ArrayList(EXPECTED_EFFECTS) else emitted.clear()
     }
 
     fun emit(effect: KeyEffect<T>) {
@@ -132,7 +133,10 @@ internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, ke
 
     fun build(): KeyStep<T> = KeyStep(state, emitted.toList())
 
-    private companion object {
+    internal companion object {
         const val EXPECTED_EFFECTS = 6
+
+        /** The most effects a reset keeps room for; a step that emitted more gets a new list. */
+        const val MAX_KEPT_EFFECTS = 64
     }
 }
