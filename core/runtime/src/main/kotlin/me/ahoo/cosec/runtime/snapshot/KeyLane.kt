@@ -48,7 +48,8 @@ internal abstract class KeyLane {
     /**
      * Takes the whole lane, in arrival order: the swap empties it, and the chain it returns, newest first, is reversed
      * in place. A taken event keeps [END] as its link, so offering it again is caught. Should a step throw out of
-     * [takeFromLane], the events after it go back on the lane rather than be lost.
+     * [takeFromLane], the events after it go back on the lane rather than be lost, behind any that came meanwhile: an
+     * order never observed, since the drain's steps catch what they throw.
      */
     protected fun takeLane() {
         var cursor: Any = TOP.getAndSet(this, null) ?: return

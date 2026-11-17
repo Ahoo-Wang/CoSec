@@ -1,4 +1,4 @@
-# Rule: SNP-13
+# Rule: SNP-16
 # Mutant: an EffectFailed's own step raises another when its log throws, so the key loops on that thread and close waits for good
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyEffectFailureTest
 

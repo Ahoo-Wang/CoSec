@@ -172,6 +172,22 @@ class KeyEffectFailureTest {
     }
 
     @Test
+    fun `what an EffectFailed's own step fails is logged in place, and no other EffectFailed comes`() {
+        reloaded(directExecutor) {
+            // The eviction pass fails, so an EffectFailed comes; its step's log effect fails too, and is logged in place.
+            housekeeping.failing = {
+                val inPlace = Thread.currentThread().stackTrace.any { it.methodName == "loggedInPlace" }
+                if (inPlace) null else IllegalStateException("housekeeping")
+            }
+        }.use {
+            failed.assert().hasSize(1)
+            awaitCondition {
+                lines.list.any { "an effect failed while a failed effect was handled" in it.formattedMessage }
+            }
+        }
+    }
+
+    @Test
     fun `a VirtualMachineError from logging what an EffectFailed's step failed is kept and logged, not dropped`() {
         reloaded(directExecutor) {
             // The eviction pass fails, so an EffectFailed comes; its step's log fails, and its log in place overflows.
