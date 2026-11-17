@@ -49,6 +49,7 @@ try {
   const config = ExtractorConfig.prepare({
     configObject: {
       projectFolder: packageRoot,
+      newlineKind: 'lf',
       mainEntryPointFilePath: entry,
       compiler: { tsconfigFilePath: join(packageRoot, 'tsconfig.json') },
       apiReport: {
