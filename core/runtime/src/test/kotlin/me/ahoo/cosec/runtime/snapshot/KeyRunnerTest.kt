@@ -25,8 +25,10 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.CompletionException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
@@ -147,6 +149,26 @@ class KeyRunnerTest {
         val reloadingA = source.reload(APP_A)
         atClose.assert().containsExactly(true)
         reloadingA.isDone.assert().isTrue()
+    }
+
+    @Test
+    fun `a request armed after close, when close comes between load's check and the request, is refused at once`() {
+        lateinit var source: SnapshotSource<Compiled, Compiled>
+        val closing = AtomicBoolean()
+        // `load` checks `closed`, then requests the platform (a hit, counted here) before the app: close in between.
+        val metrics = object : SnapshotMetrics {
+            override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) {
+                if (kind == SnapshotKind.PLATFORM && closing.getAndSet(false)) source.close()
+            }
+        }
+        source = runners(metrics)
+        source.load().join()
+        closing.set(true)
+        val app = source.load("app-a")
+        app.isCompletedExceptionally.assert().isTrue()
+        assertThrows<CompletionException> { app.join() }.cause!!.message.assert().isEqualTo("SnapshotSource is closed.")
+        // Refused in `arm`, before any event is offered: nothing read or compiled the app.
+        compiler.compiled.none { it.first == APP_A }.assert().isTrue()
     }
 
     private fun awaitCondition(condition: () -> Boolean) {

@@ -287,7 +287,7 @@ CoSec 不改动这个客户端：它由应用共享。
    类型为 `BOOTSTRAP` 的修订。若该文档已经把某人绑定到 `cosec:platform-admin`，它会拒绝执行；`--force` 用于所有管理员
    都已丢失时的恢复。
 
-`cosec-migrate` 连接一台 Redis 服务器（`--to-redis`），完成时以 `0` 退出，数据被拒绝或发布失败时以 `1` 退出，用法
+`cosec-migrate` 连接 `--to-redis` 指定的 Redis：一台服务器，加 `--cluster` 时是逗号分隔的 Redis Cluster 种子节点。完成时以 `0` 退出，数据被拒绝或发布失败时以 `1` 退出，用法
 错误时以 `2` 退出。把 7.x 数据转换为文档见[升级](./upgrading.md)。
 
 `cosec-migrate bootstrap` 让管理员可以操作控制面，但访问控制 API 的 HTTP 请求本身必须先像其他请求一样被文档放行
