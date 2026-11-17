@@ -125,6 +125,7 @@ On `main`, the same pull request sets `newTag` in [k8s/base/kustomization.yaml](
 new version: the gateway image is tagged with release versions, never with a `-SNAPSHOT` one.
 Release candidates (`vX.Y.Z-RCn`) are released the same way, and only with the maintainer's confirmation. Publishing the release triggers the
 [Packages Deploy](.github/workflows/package-deploy.yml) workflow (Maven Central and GitHub Packages).
+Publishing the release also publishes the TypeScript packages (`@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react`) to npm under the same version: the `npm-publish` job of that workflow fails before it builds anything unless the tag, `gradle.properties` and both `package.json` files agree, and a pre-release goes to the `alpha`, `beta` or `rc` dist-tag, never `latest` ([`typescript/AGENTS.md`](typescript/AGENTS.md#releasing)).
 Release notes are generated from pull request labels ([.github/release.yml](.github/release.yml)).
 
 ## 8. License

@@ -232,6 +232,20 @@ jobs:
         if: matrix.node-version == '22.23.4'
         run: node scripts/package-check.mjs --tarballs "$RUNNER_TEMP/tarballs"
 
+      # What the release does, short of publishing (package-deploy.yml, job npm-publish): the Node and npm it needs, and
+      # `npm publish --dry-run` of the packed tarballs, in the order and with the dist-tag a release would use.
+      - name: Rehearse the publish
+        if: matrix.node-version == '24.22.2'
+        run: |
+          set -euo pipefail
+          node scripts/release.mjs env
+          mkdir -p "$RUNNER_TEMP/dry-run"
+          for package in cosec-fetcher cosec-react; do
+            (cd "$package" && pnpm pack --pack-destination "$RUNNER_TEMP/dry-run")
+          done
+          node scripts/package-check.mjs --tarballs "$RUNNER_TEMP/dry-run"
+          node scripts/release.mjs publish --tarballs "$RUNNER_TEMP/dry-run" --dry-run
+
       - name: Stage the coverage
         if: matrix.node-version == '24.22.2'
         run: mkdir -p ../coverage-artifact && cp cosec-fetcher/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-fetcher.json && cp cosec-react/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-react.json

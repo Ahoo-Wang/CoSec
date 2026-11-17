@@ -9,7 +9,7 @@
   },
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r test",
+    "test": "node --test scripts/*.test.mjs && pnpm -r test",
     "lint": "eslint --max-warnings 0 eslint.config.js scripts && pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "format:check": "prettier --check .",
