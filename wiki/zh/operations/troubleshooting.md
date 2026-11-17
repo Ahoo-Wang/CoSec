@@ -239,7 +239,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。
 - **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
 
-`cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。把它加入 readiness 组即可在
+`cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`invalid`、`failed`、`absent` 或 `loading`；`invalid` 是已存储但无法编译的文档）和 `prewarmed`。把它加入 readiness 组即可在
 探针中看到：`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`。
 
 ### `cosecSnapshotEviction` 为 DOWN {#cosecsnapshoteviction-is-down}
@@ -563,7 +563,7 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 | 发布或 `cosec-migrate repair-references` 以 `The back-reference set is malformed` 失败 | 该集合是 8.0.0-alpha.3 写入的 key 的 JSON 数组，或者指向不能作为应用 id 的应用。`repair-references` 写之前要先读集合，所以也越不过它。 | 停掉控制面，删除该集合（`<p>:control:refs:<doc>:<policyId>`），运行 `cosec-migrate repair-references`，再启动控制面（[升级](./upgrading.md#from-8-0-0-alpha-3)）。 |
 | 发布或 `cosec-migrate repair-references` 以 `A document holds binding [<id>] in app [<app>], which no document key can name` 失败 | 该文档的 head 由之前的构建写入，含有不能作为应用 id 的应用中的绑定。任何变更都无法在它之上发布。 | 升级之前移除这个绑定（[升级](./upgrading.md#from-8-0-0-alpha-2)）。 |
 | `422` `REFERENCES`：`[<id>] is referred to by [<doc>]`，而 `<doc>` 并没有引用它 | `<doc>` 的某次发布登记了这条引用，随后没能写入头。 | 运行 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。`<doc>` 的头不低于登记该条目的修订时，条目才会被删除；否则先发布一次 `<doc>`。 |
-| `422` `REFERENCES`：`[<id>] changes between a policy and a boundary, and is referred to by [<doc>]` | 平台变更把 `<doc>` 引用的策略改成边界，或把边界改成策略（`CTL-30`）。 | 先让 `<doc>` 不再引用它，或新建一条所需类型的策略。 |
+| `422` `REFERENCES`：`[<id>] changes between a policy and a boundary, and is referred to by [<doc>]` | 平台或应用变更在 `<doc>` 仍引用某策略或边界时，把它改成另一种类型（`CTL-30`），或删除它（此时消息是 `[<id>] is referred to by [<doc>]`）；应用的简写形式派生出的策略也算。 | 先让 `<doc>` 不再引用它，或新建一条所需类型的策略。 |
 | `422` `REFERENCES`：`[<id>] is a boundary of the platform, and a boundary is not bound` | 绑定指向了平台边界。 | 绑定普通策略；租户通过文档的 `boundary` 受边界约束。 |
 | `422` `V2`：`[<id>]: an entry's id has no [/]` | 变更写入的策略、绑定、角色或限流规则的 id 含 `/`。 | 改名。只有权限策略的 `perm:<app>/<id>` 可以含 `/`。 |
 | `410` | 请求的修订没有保留。 | |

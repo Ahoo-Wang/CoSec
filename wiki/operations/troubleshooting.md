@@ -298,8 +298,8 @@ instance that never becomes ready:
 - **A prewarmed document cannot be loaded or compiled.** The logs name it (`Loading snapshot document [<doc>]
   failed.`). Fix or publish the document, or remove it from the prewarm list.
 
-The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `failed`, `absent` or `loading`) and
-`prewarmed`. Add it to the readiness group to see it in the probe:
+The `cosecSnapshot` health indicator shows the state: `platform` (`installed`, `invalid`, `failed`, `absent` or
+`loading`; `invalid` is a stored document that does not compile) and `prewarmed`. Add it to the readiness group to see it in the probe:
 `management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`.
 
 ### `cosecSnapshotEviction` is DOWN {#cosecsnapshoteviction-is-down}
@@ -685,7 +685,7 @@ principal sets a tenant's boundary`.
 | A publish, or `cosec-migrate repair-references`, fails with `The back-reference set is malformed` | The set is the JSON array of keys 8.0.0-alpha.3 wrote, or names an app that cannot be an app id. `repair-references` reads a set before it writes it, so it cannot get past one. | Stop the control plane, delete the set (`<p>:control:refs:<doc>:<policyId>`), run `cosec-migrate repair-references`, and start it again ([Upgrading](./upgrading.md#from-8-0-0-alpha-3)). |
 | A publish, or `cosec-migrate repair-references`, fails with `A document holds binding [<id>] in app [<app>], which no document key can name` | The document's head, written by an earlier build, holds a binding in an app that cannot be an app id. No change can publish over it. | Remove the binding before you upgrade ([Upgrading](./upgrading.md#from-8-0-0-alpha-2)). |
 | `422` `REFERENCES`: `[<id>] is referred to by [<doc>]`, for a `<doc>` that does not refer to it | A publish of `<doc>` indexed the reference and then lost its head write. | Run [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index). It removes the entry once `<doc>`'s head is at or above the revision that indexed it: when it does not, publish `<doc>` first. |
-| `422` `REFERENCES`: `[<id>] changes between a policy and a boundary, and is referred to by [<doc>]` | A platform change turns a policy or a boundary into the other kind while `<doc>` refers to it (`CTL-30`). | Move `<doc>` off it first, or define a new policy of the kind you need. |
+| `422` `REFERENCES`: `[<id>] changes between a policy and a boundary, and is referred to by [<doc>]` | A platform or app change turns a policy or a boundary into the other kind while `<doc>` refers to it (`CTL-30`), or removes it (the message is then `[<id>] is referred to by [<doc>]`); a policy an app's short form derives counts. | Move `<doc>` off it first, or define a new policy of the kind you need. |
 | `422` `REFERENCES`: `[<id>] is a boundary of the platform, and a boundary is not bound` | A binding names a platform boundary. | Bind an ordinary policy; a tenant is held to a boundary through its document's `boundary`. |
 | `422` `V2`: `[<id>]: an entry's id has no [/]` | A change puts a policy, binding, role or rate limit whose id holds `/`. | Rename it. Only a permission policy's `perm:<app>/<id>` holds one. |
 | `410` | The revision asked for is not kept. | |
