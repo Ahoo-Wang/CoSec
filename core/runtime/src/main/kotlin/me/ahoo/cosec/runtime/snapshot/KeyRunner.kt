@@ -25,7 +25,8 @@ import java.util.concurrent.CompletableFuture
  * One key run by [KeyTransitions] (RFC 0013 B2b, step 2b): each [KeySlot] call becomes an event offered to its
  * [KeyDrain], whose effects [KeyEffects] executes. `peek`'s members are [KeySlot]'s, and a request's hit is answered
  * outside the queue, as [Slot] answers it. The constructor starts nothing: no timer, no read, nothing offered.
- * Dependencies go one way: this → [KeyDrain] → [KeyEffects], which reach back only through the functions given here.
+ * Dependencies go one way: this → [KeyDrain] → [KeyEffects], which reach back only through [KeyOwner], which this
+ * implements.
  */
 internal class KeyRunner<T : Any>(
     key: SnapshotKey,
@@ -35,7 +36,7 @@ internal class KeyRunner<T : Any>(
     k: Int = PROVISIONAL_K,
     /** Tests only: where a test interleaves with this key's drain. */
     hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE,
-) : KeySlot<T>(key, context.ticker) {
+) : KeySlot<T>(key, context.ticker), KeyOwner<T> {
     private val family = context.families.firstOrNull { it.spec.kind == key.kind }
 
     @Volatile
@@ -44,20 +45,9 @@ internal class KeyRunner<T : Any>(
     private val drain: KeyDrain<T>
 
     init {
-        val options = context.options
-        val config = KeyConfig(
-            key = key,
-            shared = key == context.sharedKey,
-            storeReadTimeout = options.storeReadTimeout,
-            rejectedReloadRetry = options.rejectedReloadRetry,
-            revalidateInterval = options.revalidateInterval,
-            localCopyMaxAge = context.store.localCopyMaxAge,
-        )
-        val transitions = KeyTransitions<T>(config)
-        val effects = KeyEffects(key, compiler, context, ::offer, ::published, ::dropped, ::redispatched) {
-            offerEviction(true, null)
-        }
-        drain = KeyDrain(key, transitions, effects, context, k, { absent -> family?.claim(this, absent) ?: false }, ::hinted, { absent -> family?.giveBack(this, absent) }, hooks)
+        // The source's transitions, shared by its runners: each step carries this key (RFC 0013 B2b step 3).
+        val transitions = context.transitions<T>(shared = key == context.sharedKey)
+        drain = KeyDrain(key, transitions, KeyEffects(key, compiler, context, this), context, k, this, hooks)
     }
 
     override fun idle(): Boolean = idleHint
@@ -103,34 +93,42 @@ internal class KeyRunner<T : Any>(
 
     override fun close() = drain.close()
 
-    private fun offer(event: KeyEvent<T>) = drain.offer(event)
+    override fun offer(event: KeyEvent<T>) = drain.offer(event)
 
     private fun offerEviction(onlyIfEmpty: Boolean, claimedAbsent: Boolean?): CompletableFuture<Eviction> =
         CompletableFuture<Eviction>().also { drain.offer(KeyDrain.EvictRequest(onlyIfEmpty, claimedAbsent, it)) }
 
-    /** `Install`'s one way in: the family's counts move, then the volatile write `peek` reads. */
-    private fun published(previous: SnapshotEntry<T>?, entry: SnapshotEntry<T>) {
+    override fun published(previous: SnapshotEntry<T>?, entry: SnapshotEntry<T>) {
         family?.let { context.families.move(it, this, previous, entry) }
         installed = entry
     }
 
-    /** `Drop`: the key leaves its family; a removal that was not claimed moves the count itself. */
-    private fun dropped(claimed: Boolean) {
+    override fun dropped(claimed: Boolean) {
         val family = family ?: return
         family.drop(family.spec.idOf(key), this)
         if (!claimed) context.families.move(family, this, installed, null)
         context.families.removed(key)
     }
 
-    /** `Redispatch`: the same event, with the same waiter, to the key's current runner; an offer, not a call chain. */
+    /** An offer to the key's current runner, not a call chain. */
     @Suppress("UNCHECKED_CAST")
-    private fun redispatched(event: KeyEvent.Requested) {
+    override fun redispatched(event: KeyEvent.Requested) {
         val current = context.current(key)
         check(current is KeyRunner<*>) { "A runner's request went to [$current], not a runner." }
         (current as KeyRunner<T>).offer(event)
     }
 
-    private fun hinted(removed: Boolean, idle: Boolean) {
+    override fun dropIfEmpty() {
+        offerEviction(true, null)
+    }
+
+    override fun claim(absent: Boolean): Boolean = family?.claim(this, absent) ?: false
+
+    override fun giveBack(absent: Boolean) {
+        family?.giveBack(this, absent)
+    }
+
+    override fun hinted(removed: Boolean, idle: Boolean) {
         if (removed) this.removed = true
         idleHint = idle
     }

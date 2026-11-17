@@ -42,6 +42,7 @@ internal fun <T : Any> transientFailure(key: SnapshotKey, at: Instant, cause: Th
 
 /** An entry with no decoded document behind it: what the store answered, as of [load]'s confirmation time. */
 internal fun <T : Any> KeyConfig.entryOf(
+    key: SnapshotKey,
     load: LoadState<T>,
     state: DocumentState<T>,
     origin: EntryOrigin

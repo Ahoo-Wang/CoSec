@@ -22,7 +22,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicIntegerFieldUpdater
 import java.util.concurrent.locks.LockSupport
 
 // The source's logger: moving the code did not move the name operators configure.
@@ -45,12 +45,8 @@ internal class KeyDrain<T : Any>(
     private val context: SlotContext,
     /** The events past their own a caller's thread drains: provisional until step 2b-ii measures it. */
     private val k: Int,
-    /** Claims the family's decrement for an eviction of the kind named (`SNP-14`); taken here, under the flag. */
-    private val claim: (absent: Boolean) -> Boolean,
-    /** Publishes what readers outside the drain see: removed, and idle. */
-    private val publish: (removed: Boolean, idle: Boolean) -> Unit,
-    /** Gives back a claim taken for a removal whose transition threw (`SNP-14`'s accounting). */
-    private val giveBack: (absent: Boolean) -> Unit,
+    /** The runner, as far as the drain reaches it: claims and give-backs (`SNP-14`), and what readers see. */
+    private val owner: KeyOwner<T>,
     /** Tests only: called between the steps of a drain; [Hooks.NONE] in production. */
     private val hooks: Hooks = Hooks.NONE,
 ) {
@@ -70,10 +66,17 @@ internal class KeyDrain<T : Any>(
     }
 
     private val queue = ConcurrentLinkedQueue<Any>()
-    private val flag = AtomicBoolean()
+
+    /**
+     * The flag: 1 while a thread drains this key. A field set through [FLAG] rather than an `AtomicBoolean`, so a held
+     * key keeps no object for it (RFC 0013 B2b step 3); public in bytecode only so the updater can reach it.
+     */
+    @JvmField
+    @Volatile
+    internal var flagged: Int = 0
     private var state: KeyState<T> = transitions.initial()
 
-    /** The thread holding [flag], so that [close] called inside a drain on it does not wait for itself. */
+    /** The thread holding the flag ([flagged]), so that [close] called inside a drain on it does not wait for itself. */
     @Volatile
     private var drainer: Thread? = null
 
@@ -103,7 +106,7 @@ internal class KeyDrain<T : Any>(
             var waits = 0
             while (true) {
                 drain()
-                if (queue.isEmpty() && !flag.get()) return
+                if (queue.isEmpty() && flagged == 0) return
                 // Another thread's step is running (an eviction over a large family, a slow meter): spin briefly, then
                 // park for a growing while rather than burn a core.
                 waits++
@@ -124,7 +127,7 @@ internal class KeyDrain<T : Any>(
         var crashed: Pair<String, VirtualMachineError>? = null
         try {
             while (true) {
-                if (!flag.compareAndSet(false, true)) return
+                if (!FLAG.compareAndSet(this, 0, 1)) return
                 drainer = Thread.currentThread()
                 val spent: Boolean
                 try {
@@ -133,7 +136,7 @@ internal class KeyDrain<T : Any>(
                     crashed = crashed ?: crash
                     crash = null
                     drainer = null
-                    flag.set(false)
+                    flagged = 0
                 }
                 if (spent) return handOff()
                 hooks.afterRelease()
@@ -160,23 +163,27 @@ internal class KeyDrain<T : Any>(
         context.handOffs.handOff { DrainBudget.unbounded { drain() } }
     }
 
+    @Suppress("UNCHECKED_CAST")
+    private fun take(item: Any) = KeyStepPool.withStep<T> { step -> take(item, step) }
+
+    /** One event through [step], this thread's builder at this depth (RFC 0013 B2b step 3). */
     @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
-    private fun take(item: Any) {
+    private fun take(item: Any, step: KeyStepBuilder<T>) {
         val request = item as? EvictRequest
         val before = state
         var event: KeyEvent<T>? = if (request == null) item as KeyEvent<T> else null
-        val step = try {
+        try {
             // Inside the guard, so that whatever throws here still has its event answered (§5).
             val taken = event ?: claimed(request!!).also { event = it }
             val moment = KeyMoment(
-                context.clock.instant(),
+                context.clock,
                 context.nanoTime.get().asLong,
                 context.compileEpoch.get(),
                 context.closed.get(),
                 context.families.seen[key],
             )
             hooks.beforeNext(taken)
-            transitions.next(before, taken, moment)
+            transitions.next(step, key, before, taken, moment)
         } catch (error: VirtualMachineError) {
             // As from an effect: never thrown into a thread that only happened to drain this key (§5).
             aborted(before, event, request, error)
@@ -187,15 +194,17 @@ internal class KeyDrain<T : Any>(
             return
         }
         state = step.state
-        publish(step.state.removed, step.state.idle)
-        executed(step, before.load?.id)
+        owner.hinted(step.state.removed, step.state.idle)
+        executed(step.state, step.effects, before.load?.id)
     }
 
     /** The step's effects, in order; one that throws queues an [KeyEvent.EffectFailed] and the rest still run. */
     @Suppress("TooGenericExceptionCaught")
-    private fun executed(step: KeyStep<T>, loadBefore: Long?) {
-        val loadId = step.state.load?.id ?: loadBefore ?: NO_LOAD
-        for (effect in step.effects) {
+    private fun executed(after: KeyState<T>, emitted: List<KeyEffect<T>>, loadBefore: Long?) {
+        val loadId = after.load?.id ?: loadBefore ?: NO_LOAD
+        // By index: the list is the thread's pooled builder's, and an iterator per step is what this saves.
+        for (index in emitted.indices) {
+            val effect = emitted[index]
             try {
                 effects.execute(effect)
             } catch (error: VirtualMachineError) {
@@ -233,7 +242,7 @@ internal class KeyDrain<T : Any>(
         val outcome = when {
             request.absent == null -> Claim.UNCLAIMED
             !transitions.evictable(state, request.absent, request.onlyIfEmpty) -> Claim.NOT_EVICTABLE
-            claim(request.absent) -> Claim.CLAIMED
+            owner.claim(request.absent) -> Claim.CLAIMED
             else -> Claim.AT_BOUND
         }
         val replied = CompletableFuture<Boolean>()
@@ -270,13 +279,13 @@ internal class KeyDrain<T : Any>(
             (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach {
                 guarded { it.future.complete(failed) }
             }
-            guarded { publish(state.removed, state.idle) }
+            guarded { owner.hinted(state.removed, state.idle) }
         }
         if (request != null && event is KeyEvent.Evict && event.claim == Claim.CLAIMED) {
             // The claim taken for a removal that did not happen goes back: the count, and the slot's place among the
             // absent ones. A give-back is what once let concurrent passes stop above the bound (#1527); here it is the
             // lesser harm, which the next install's pass repairs, where a count wrong for good is repaired by nothing.
-            guarded { giveBack(request.absent!!) }
+            guarded { owner.giveBack(request.absent!!) }
         }
         // Answered as every other failure is, with a failed entry, so a request fails closed as unavailable. A recompile
         // mark answers "load it again" and an eviction "not removed": each the side that keeps the key safe.
@@ -312,6 +321,10 @@ internal class KeyDrain<T : Any>(
     }
 
     private companion object {
+        /** Sets [flagged]. */
+        val FLAG: AtomicIntegerFieldUpdater<KeyDrain<*>> =
+            AtomicIntegerFieldUpdater.newUpdater(KeyDrain::class.java, "flagged")
+
         /** An effect failed with no load in flight: its transition logs it as a failure after the load. */
         const val NO_LOAD = -1L
 

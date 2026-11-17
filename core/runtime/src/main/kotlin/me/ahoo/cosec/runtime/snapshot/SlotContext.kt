@@ -68,6 +68,26 @@ internal class SlotContext(
     fun closedError() = IllegalStateException("SnapshotSource is closed.")
 
     /**
+     * The runners' transitions (RFC 0013 B2b step 3): they keep no state, and each step carries its key, so a source
+     * needs two, the shared key's (never recompiled, never removed) and every family key's.
+     */
+    private val sharedTransitions = KeyTransitions<Any>(keyConfig(shared = true))
+    private val familyTransitions = KeyTransitions<Any>(keyConfig(shared = false))
+
+    @Suppress("UNCHECKED_CAST")
+    fun <T : Any> transitions(shared: Boolean): KeyTransitions<T> =
+        (if (shared) sharedTransitions else familyTransitions) as KeyTransitions<T>
+
+    private fun keyConfig(shared: Boolean) = KeyConfig(
+        key = null,
+        shared = shared,
+        storeReadTimeout = options.storeReadTimeout,
+        rejectedReloadRetry = options.rejectedReloadRetry,
+        revalidateInterval = options.revalidateInterval,
+        localCopyMaxAge = store.localCopyMaxAge,
+    )
+
+    /**
      * The slot [families] holds for [key] now, made if it holds none: where a removed slot sends a request. Nothing it
      * reads is set later than this context's construction, and no slot exists before that.
      */
