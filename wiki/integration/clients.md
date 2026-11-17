@@ -104,7 +104,7 @@ that asks of a client:
   `cosec.jwt.session.rotation-leeway` of the move (30 seconds by default, an operator's setting a client cannot read),
   and moves nothing. What follows: the client's own retry window is configuration, and must be at most the server's
   value. A late retry that finds the refresh already recorded is, to the server, a pair presented again, which an
-  operator may see in the audit. After that, presenting it ends the whole session, on every tab and device. So retry within the leeway, or
+  operator may see in the audit. After the leeway, presenting it ends the whole session, on every tab and device. So retry within the leeway, or
   not at all: a late retry is harmless only if the first request never arrived. The worst case of not retrying is a
   sign-in, which is also the worst case of retrying late.
 - **Read the status of the refresh.** `401` means the session is over: discard the pair and sign in. `503`, a network
