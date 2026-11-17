@@ -29,13 +29,13 @@ internal object SnapshotExecutors {
     /** Queued housekeeping beyond this runs in place rather than piling up without bound. */
     const val HOUSEKEEPING_QUEUE = 4096
 
-    fun newCompileExecutor(options: SnapshotOptions, marker: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(
+    fun newCompileExecutor(options: SnapshotOptions, vararg markers: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(
         options.compileThreads,
         options.compileThreads,
         1,
         TimeUnit.MINUTES,
         ArrayBlockingQueue(options.compileQueueCapacity),
-        daemonThreads("cosec-snapshot-compile", marker),
+        daemonThreads("cosec-snapshot-compile", *markers),
         ThreadPoolExecutor.AbortPolicy(),
     ).apply { allowCoreThreadTimeOut(true) }
 
@@ -44,22 +44,22 @@ internal object SnapshotExecutors {
             removeOnCancelPolicy = true
         }
 
-    fun newHousekeeping(marker: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(
+    fun newHousekeeping(vararg markers: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(
         1,
         1,
         1,
         TimeUnit.MINUTES,
         LinkedBlockingQueue(HOUSEKEEPING_QUEUE),
-        daemonThreads("cosec-snapshot-housekeeping", marker),
+        daemonThreads("cosec-snapshot-housekeeping", *markers),
         ThreadPoolExecutor.AbortPolicy(),
     ).apply { allowCoreThreadTimeOut(true) }
 
-    /** Daemon threads named [prefix]-n, each marked through [marker] as the source's own. */
-    fun daemonThreads(prefix: String, marker: ThreadLocal<Boolean>): ThreadFactory {
+    /** Daemon threads named [prefix]-n, each marked through every one of [markers]. */
+    fun daemonThreads(prefix: String, vararg markers: ThreadLocal<Boolean>): ThreadFactory {
         val counter = AtomicInteger()
         return ThreadFactory { runnable ->
             val marked = Runnable {
-                marker.set(true)
+                markers.forEach { it.set(true) }
                 runnable.run()
             }
             Thread(marked, "$prefix-${counter.incrementAndGet()}").apply { isDaemon = true }

@@ -40,6 +40,8 @@ internal class SlotContext(
     val metrics: SnapshotMetrics,
     val threads: SnapshotThreads,
     val families: SnapshotFamilies<*>,
+    /** What makes each key's slot (RFC 0013 B2b): [SlotFactory.SLOT] in production. */
+    val slots: SlotFactory,
 ) {
     /**
      * Monotonic nanoseconds, the time the scheduler's timeouts keep: whether a periodic pass stalled is measured in it,
@@ -55,7 +57,10 @@ internal class SlotContext(
     val compileEpoch = AtomicLong()
 
     /** The requests waiting on a slot, answered when the source closes. */
-    val pendingRequests: MutableSet<Slot<*>.RequestView> = ConcurrentHashMap.newKeySet()
+    val pendingRequests: MutableSet<PendingRequest> = ConcurrentHashMap.newKeySet()
+
+    /** The drains this source's keys hand off: one task in the compile pool at a time (RFC 0013 B2b §3). */
+    val handOffs = DrainHandOffs(threads, metrics)
 
     /** Set once, by [SnapshotSource.close]. */
     val closed = AtomicBoolean()
