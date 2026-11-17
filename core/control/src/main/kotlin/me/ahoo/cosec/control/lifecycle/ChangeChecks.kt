@@ -106,14 +106,14 @@ class ChangeChecks(
         }
         when (candidate.kind) {
             DocumentKind.PLATFORM -> {
-                PlatformChecks.removedReferences(key, base, candidate, context, findings)
+                RemovedReferences.check(key, base, candidate, context, findings)
                 PlatformChecks.sharedIds(base, candidate, context, findings)
                 SectionChecks.sectionWarnings(base, candidate, findings)
             }
 
             else -> {
                 // An app candidate is held to what its policies are referred to by, as the head write holds it (CTL-30).
-                PlatformChecks.removedReferences(key, base, candidate, context, findings)
+                RemovedReferences.check(key, base, candidate, context, findings)
                 BindingChecks.unresolved(candidate, platform, context, checkedWith, findings)
             }
         }

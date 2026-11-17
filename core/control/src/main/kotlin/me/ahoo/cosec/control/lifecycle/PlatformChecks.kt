@@ -21,8 +21,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
-import me.ahoo.cosec.control.store.ReferencedPolicies
-import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
@@ -30,36 +28,9 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import kotlin.coroutines.cancellation.CancellationException
 
-/** What a platform candidate does to the documents that refer to it (RFC 0007 §5.8, N2, RC1-9, §9.4). */
+/** What a platform candidate does to the documents that share its ids (RFC 0007 N2, RC1-9, §9.4). */
 internal object PlatformChecks {
     private val log = KotlinLogging.logger {}
-
-    /**
-     * The policies a platform or app candidate removes, or turns from a policy into a boundary or back (`CTL-30`), that
-     * other documents still refer to (RFC 0007 §5.8): a binding reaches only a policy and a tenant's `boundary` only a
-     * boundary, so one of the other kind is missing to them. The head write asks the same question
-     * ([ReferencedPolicies.of]): a change refused there is refused here, with the same documents. Over the limit of
-     * what the roles derive the compile step has said so, and there is nothing expanded to compare.
-     */
-    suspend fun removedReferences(
-        key: SnapshotKey,
-        base: PolicyDocument?,
-        candidate: PolicyDocument,
-        context: CurrentDocuments,
-        findings: MutableList<Finding>,
-    ) {
-        val referenced = try {
-            ReferencedPolicies.of(key, base, candidate, context::referrers, context::head)
-        } catch (_: DocumentCompileException) {
-            return
-        }
-        if (referenced.isEmpty()) return
-        val kept = RoleExpansion.effective(candidate).policies.mapTo(HashSet()) { it.id }
-        for ((policy, referrers) in referenced) {
-            val what = if (policy in kept) "changes between a policy and a boundary, and is" else "is"
-            findings += Finding("REFERENCES", "$.policies", "[${policy.value}] $what referred to by ${referrers.sorted()}", UNPROCESSABLE)
-        }
-    }
 
     /**
      * The policy ids a platform candidate adds that a tenant document already uses, defining or binding it (RFC 0007
@@ -153,6 +124,4 @@ internal object PlatformChecks {
         log.warn(e) { "The document of [$tenant] could not be read; [${policy.value}] is refused as one it may use." }
         null
     }
-
-    private fun Set<SnapshotKey>.sorted(): List<String> = map { it.toString() }.sorted()
 }

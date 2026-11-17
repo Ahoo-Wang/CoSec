@@ -24,8 +24,9 @@ import me.ahoo.cosec.api.context.SecurityContext
  * - an async dispatch, and a thread the application started, find it empty;
  * - a `suspend` handler goes on, after a suspension, on whatever thread resumed it. Unless Spring restores the holder
  *   there (Micrometer's context propagation with Reactor's automatic propagation, [SecurityContextThreadLocalAccessor]),
- *   it is unbound before such a handler runs ([SuspendingHandlerHolderInterceptor]), so reading it fails at once,
- *   before or after any suspension. One case is left: a `suspend` handler resumed on the thread of a request whose
+ *   it is unbound before such a handler runs ([SuspendingHandlerHolderInterceptor]), so [requiredContext] fails at
+ *   once, before or after any suspension, and [context] is null, which a caller must treat as "no context", never as
+ *   "no restriction". One case is left: a `suspend` handler resumed on the thread of a request whose
  *   handler is blocking finds that request's context there, so code that reads the holder only after such a
  *   resumption, never before a suspension, reads another request's principal.
  *
