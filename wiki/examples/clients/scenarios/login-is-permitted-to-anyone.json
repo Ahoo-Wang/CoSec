@@ -1,0 +1,16 @@
+{
+  "description": "POST /auth/login carries no token: permitted.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/auth/login"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "policies": [
+    {
+      "id": "client-routes",
+      "statements": [
+        {
+          "name": "sign-in-and-refresh",
+          "effect": "allow",
+          "action": "http:POST",
+          "resource": [
+            "http:path:/auth/login",
+            "http:path:/auth/refresh"
+          ]
+        },
+        {
+          "name": "preflight",
+          "effect": "allow",
+          "action": "http:OPTIONS",
+          "resource": "http:path:/orders/**"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "client-routes",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "client-routes"
+    }
+  ]
+}
