@@ -33,7 +33,7 @@ internal interface SlotFactory {
                 compiler: SnapshotCompiler<T>,
                 context: SlotContext
             ): KeySlot<T> =
-                Slot(key, compiler, context)
+                KeyRunner(key, compiler, context)
         }
     }
 }
