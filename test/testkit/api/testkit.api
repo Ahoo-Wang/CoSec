@@ -45,6 +45,7 @@ public final class me/ahoo/cosec/testkit/EngineOutcome$Rejected : me/ahoo/cosec/
 
 public final class me/ahoo/cosec/testkit/EngineOutcome$RequestPart : java/lang/Enum {
 	public static final field ACTION Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
+	public static final field HEADER Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
 	public static final field RESOURCE Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public static fun valueOf (Ljava/lang/String;)Lme/ahoo/cosec/testkit/EngineOutcome$RequestPart;
