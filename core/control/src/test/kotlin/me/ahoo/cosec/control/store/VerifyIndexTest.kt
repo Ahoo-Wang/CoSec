@@ -64,6 +64,21 @@ class VerifyIndexTest {
     }
 
     @Test
+    fun `an index with another digest at the head's revision, or none at all, differs`() = runBlocking<Unit> {
+        publish("a")
+        publish("b")
+        val other = SnapshotDigest(ByteArray(SnapshotDigest.SHA_256_BYTES) { 3 })
+        rewriteEntries { if (it.revision == 2L) it.copy(digest = other) else it }
+        (
+            revisions.verifyIndex(
+                ACME
+            ) as IndexCheck.Differs
+            ).why.assert().contains("the index ends at revision 2 ($other)")
+        memory.dropIndex(ACME)
+        (revisions.verifyIndex(ACME) as IndexCheck.Differs).why.assert().contains("lists no revision")
+    }
+
+    @Test
     fun `a link that is broken differs, and an entry with no parent only cannot be checked`() = runBlocking<Unit> {
         publish("a")
         publish("b")
