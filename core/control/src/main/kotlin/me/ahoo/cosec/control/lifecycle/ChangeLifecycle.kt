@@ -165,9 +165,12 @@ internal class ChangeLifecycle(
         throw ChangeRejectedException(CONFLICT, "change ${change.id.value} kept changing")
     }
 
-    /** Whether [change] is open and past [ChangeOptions.expireAfter]. */
+    /**
+     * Whether [change] is in a state the table lets expire ([ChangeStep.EXPIRE]) and past [ChangeOptions.expireAfter]:
+     * the table, not a second idea of "open", says which states a read may end.
+     */
     private fun due(change: ChangeRequest): Boolean =
-        !change.state.terminal && clock.instant().isAfter(change.createdAt.plus(options.expireAfter))
+        change.state in ChangeStep.EXPIRE.from && clock.instant().isAfter(change.createdAt.plus(options.expireAfter))
 
     /** A conditional write of [change] from one of [from] to what [next] makes of it; retried while the change moves. */
     suspend fun transition(
