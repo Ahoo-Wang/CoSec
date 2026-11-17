@@ -18,6 +18,7 @@ description: "用 CoSec 保护一个 Spring Boot 服务：从添加依赖到看�
   ```
 
 - 你所用 CoSec 版本的 `cosec-migrate` 工具，用来发布第一份策略文档：它的 [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases) 里的 `cosec-migrate-<version>.zip`，解压即可，或从 [CoSec](https://github.com/Ahoo-Wang/CoSec) 源码构建。它需要 Java 21。
+- `curl` 和 `jq`，用于下面的请求。
 
 ## 添加依赖 {#add-the-dependency}
 
@@ -88,7 +89,7 @@ cosec-migrate publish --to-redis redis://localhost:6379 --file documents/platfor
 
 它会输出 `Published platform`，并把文档写为平台文档的第一个修订。`publish` 从不覆盖：平台文档一旦存在，之后的变更都通过控制面进行（[存储](../operations/storage.md)、[策略测试](../policies/testing.md)）。
 
-在平台文档发布之前，CoSec 失败即拒绝：它对每个请求都返回 `503`，控制面的路由也不例外，因此第一份平台文档总是通过 `cosec-migrate publish` 发布。缺失的平台文档绝不当作空文档读取，否则会悄悄丢掉所有平台 DENY（[失败即拒绝](./security-model.md#fail-closed)）。在此期间应用报告自己未就绪（有 Spring Boot Actuator 时为 `/actuator/health/readiness`），负载均衡器不会给它流量（[就绪](../operations/deployment.md#readiness)）。
+在平台文档发布之前，CoSec 失败即拒绝：它对每个请求都返回 `503`，控制面的路由也不例外，因此第一份平台文档总是通过 `cosec-migrate publish` 发布。缺失的平台文档绝不当作空文档读取，否则会悄悄丢掉所有平台 DENY（[失败即拒绝](./security-model.md#fail-closed)）。在此期间应用报告自己未就绪（有 Spring Boot Actuator 时为 `/actuator/health/readiness`），负载均衡器不会给它流量（[就绪](../operations/deployment.md#readiness)）。这条路径对 CoSec 来说是普通请求：用本指南的文档，平台文档发布之后匿名探测得到 `401`，因为没有任何语句允许它；在 Kubernetes 之外，Spring Boot 也只有设置了 `management.endpoint.health.probes.enabled=true` 才提供它。把探测指向它之前，先加一条语句，允许对 `http:path:/actuator/health/**` 的 `GET`。
 
 ## 签发令牌 {#issue-a-token}
 
@@ -195,10 +196,11 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
+   PLATFORM_TOKEN=...   # 应用启动时打印的令牌
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
    ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
-   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
-   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
+   curl -s -X POST "$CONTROL/changes/${ID}:publish" -H "$AUTH"
    ```
 
    影子窗口会先把变更和真实流量比较，没有流量的指南等不起；管理员是信任根，可以跳过它。`GET $CONTROL/documents/platform` 现在返回修订 `2`，带 Alice 普通令牌的 `GET /reports/1` 被放行（这里该路径没有处理器，所以返回 `404`，不是 `403`）。

@@ -23,6 +23,7 @@ For developers adding CoSec to a Spring Boot service for the first time. Follow 
 - The `cosec-migrate` tool of the CoSec version you use, which publishes the first policy document: the
   `cosec-migrate-<version>.zip` of its [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases), unzipped, or built
   from a checkout of [CoSec](https://github.com/Ahoo-Wang/CoSec). It needs Java 21.
+- `curl` and `jq`, for the requests below.
 
 ## Add the dependency
 
@@ -117,7 +118,10 @@ plane's routes included, so the first platform document always comes from `cosec
 platform document is never read as an empty one, which would silently drop every platform DENY
 ([Fail closed](./security-model.md#fail-closed)). Meanwhile the application reports itself not ready
 (`/actuator/health/readiness`, with Spring Boot Actuator), so a load balancer sends it no traffic
-([Readiness](../operations/deployment.md#readiness)).
+([Readiness](../operations/deployment.md#readiness)). That path is an ordinary request to CoSec: with this guide's document
+it is `401` for the anonymous probe once the platform document is published, since no statement permits it, and outside
+Kubernetes Spring Boot serves it only with `management.endpoint.health.probes.enabled=true`. Before you point a probe at
+it, add a statement that permits `GET` on `http:path:/actuator/health/**`.
 
 ## Issue a token
 
@@ -238,10 +242,11 @@ document above already lets signed-in callers reach the control API; without tha
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
+   PLATFORM_TOKEN=...   # the token the application printed at startup
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
    ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
-   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
-   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
+   curl -s -X POST "$CONTROL/changes/${ID}:publish" -H "$AUTH"
    ```
 
    A shadow window would compare the change with live traffic first, which a guide without traffic cannot wait for;
