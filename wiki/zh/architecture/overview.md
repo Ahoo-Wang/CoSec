@@ -60,7 +60,7 @@ flowchart BT
 - **其余每个库模块只适配一种技术**：一种 Web 栈（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`），通过 CoCache 使用 Redis（`cosec-cocache`：快照存储、控制面存储、吊销、限流器、影子报告），Kafka（`cosec-kafka`），登录与签发令牌（`cosec-login`），JWT（`cosec-jwt`），OAuth（`cosec-social`），OpenAPI，CosId 5 的 id（`cosec-cosid`），或决策的观察者（`cosec-opentelemetry`、`cosec-micrometer`、`cosec-ip2region`）。适配器从不做决策，只做翻译。
 - **`cosec-spring-boot`**（目录 `host/spring-boot/`）负责装配。它引入 `cosec-runtime`、`cosec-login` 和 `cosec-jwt`；其他每个模块在 [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts) 中都是 `compileOnly`，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用添加了该模块才会生效。已开启的功能所需的模块会在启动时检查（STA-1，[`CoSecModuleCheckAutoConfiguration`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt)）：否则漏加的适配器会让 Web 宿主没有过滤器，所以启动失败并给出制品名。各模块及其所需依赖列在[简介](../guide/introduction.md#modules)中。
 - **`cosec-testkit`**（目录 `test/testkit/`）用 JUnit 5 针对应用自己的文档运行场景。它依赖 `cosec-runtime` 和 `junit-jupiter-api`（都属于它的 API）。它持有场景格式的引擎层，`conformance` 也运行这一层，所以一致性套件和应用的测试以同一种方式求值场景。
-- **`cosec-migrate`** 把 7.x 的数据转换为 8.0 文档并发布；应用不依赖它。**`cosec-gateway-server`** 是由 starter 构建的、开箱即用的网关，从不发布。**`conformance`**、**`architecture`** 和 **`e2e`** 是仅用于测试的模块，同样从不发布。
+- **`cosec-migrate`** 把 7.x 的数据转换为 8.0 文档并发布；应用不依赖它。**`cosec-gateway-server`** 是由 starter 构建的、开箱即用的网关，从不发布。**`conformance`**、**`architecture`**、**`e2e`** 和 **`client-host`** 是仅用于测试的模块，同样从不发布。**`client-host`**（目录 `test/client-host/`）是一个真实的 CoSec 8 应用：基于 WebFlux 的 starter，CoCache 使用内存后端；TypeScript 客户端的测试针对它运行（在 `typescript/` 中执行 `pnpm test:host` 会启动它）。
 
 `architecture`（目录 `test/architecture/`）持有扫描多个模块的结构规则（RFC 0011 §5）：
 

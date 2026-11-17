@@ -120,14 +120,33 @@ class TypeScriptWorkspaceTest {
             .filter { "plan" in it && "docs" in it }.assert().isNotEmpty()
         val gate = Regex("""(?m)^    needs: \[(.*)]$""").findAll(ci).map { it.groupValues[1] }
             .single { "plan" in it && "docs" in it }
-        gate.split(',').map { it.trim() }.assert().contains("typescript")
-        val job = ci.substringAfter("\n  typescript:\n").substringBefore("\n  # ")
-        Regex("(?m)^    if:").containsMatchIn(job).assert()
-            .describedAs("the job has no condition of its own: a skipped job fails the gate").isFalse()
-        val uses = Regex("""uses: (\S+)""").findAll(job).map { it.groupValues[1] }.toList()
-        uses.assert().isNotEmpty()
-        uses.filterNot { Regex("""[\w./-]+@[0-9a-f]{40}""").matches(it) }
-            .assert().describedAs("actions of the TypeScript job not pinned by commit").isEmpty()
-        job.contains("secrets.").assert().describedAs("no secrets in the TypeScript job").isFalse()
+        // `typescript-host` runs the client against the host of test/client-host (`pnpm test:host`).
+        for (name in listOf("typescript", "typescript-host")) {
+            gate.split(',').map { it.trim() }.assert().contains(name)
+            val job = ci.substringAfter("\n  $name:\n").substringBefore("\n  # ")
+            Regex("(?m)^    if:").containsMatchIn(job).assert()
+                .describedAs("$name has no condition of its own: a skipped job fails the gate").isFalse()
+            val uses = Regex("""uses: (\S+)""").findAll(job).map { it.groupValues[1] }.toList()
+            uses.assert().isNotEmpty()
+            uses.filterNot { Regex("""[\w./-]+@[0-9a-f]{40}""").matches(it) }
+                .assert().describedAs("actions of the $name job not pinned by commit").isEmpty()
+            job.contains("secrets.").assert().describedAs("no secrets in the $name job").isFalse()
+        }
+    }
+
+    @Test
+    fun `the host tests run through one script that starts test client-host, and only the host job runs them`() {
+        json(workspace.resolve("package.json"))["scripts"]["test:host"].asString()
+            .assert().isEqualTo("node scripts/with-host.mjs -- pnpm -r --workspace-concurrency=1 test:host")
+        Projects.root.resolve("test/client-host/build.gradle.kts").exists().assert().isTrue()
+        for (directory in packages()) {
+            json(directory.resolve("package.json"))["scripts"]["test:host"].asString()
+                .assert().describedAs("${directory.name} test:host").contains("vitest.host.config.ts")
+        }
+        val ci = Projects.root.resolve(".github/workflows/ci.yml").readText()
+        val typescript = ci.substringAfter("\n  typescript:\n").substringBefore("\n  # ")
+        val host = ci.substringAfter("\n  typescript-host:\n").substringBefore("\n  # ")
+        host.contains("run: pnpm test:host").assert().isTrue()
+        typescript.contains("test:host").assert().describedAs("the job without a JVM runs no host test").isFalse()
     }
 }

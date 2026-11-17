@@ -12,6 +12,7 @@
     "test": "node --test scripts/*.test.mjs && pnpm -r test",
     "lint": "eslint --max-warnings 0 eslint.config.js scripts && pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
+    "test:host": "node scripts/with-host.mjs -- pnpm -r --workspace-concurrency=1 test:host",
     "format:check": "prettier --check .",
     "check:package": "node scripts/package-check.mjs"
   },

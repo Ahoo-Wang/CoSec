@@ -68,6 +68,27 @@ pnpm test
   and where the two disagree the host is right and the model is fixed. The bodies of `wiki/integration/clients.md` are
   the ones CoSec writes.
 
+## Tests against a real host
+
+`test/client-host` (a Gradle project, test sources only) is a real CoSec 8 application: the starter over WebFlux with
+CoCache in memory (no Redis), one platform document, a login, a refresh route that answers `401` for a refused pair and
+`503` when it cannot decide (`wiki/integration/clients.md`), and `/test` routes that count what reached it, echo the
+headers it received and end a session. Its access tokens live 2 seconds.
+
+```bash
+pnpm test:host     # builds the host with Gradle, starts it, runs every package's host tests, stops it
+```
+
+- The host tests of a package are `test-host/*.host.ts(x)` with a `vitest.host.config.ts`, apart from `pnpm test`: they
+  need the JVM and wait for real tokens to expire. The `typescript-host` job of CI runs them on every pull request.
+- `scripts/with-host.mjs` owns the host process: it prints `READY <url>`, the script sets `COSEC_HOST_URL` for the
+  command, and the host stops when the script closes its standard input, whatever became of the run. On a shared machine,
+  `GRADLE_ARGS="--no-daemon --max-workers=2" pnpm test:host`.
+- Real clocks, no `earlyPeriod` trick. A token the client still thinks valid but the host has expired is a client whose
+  clock is behind: the test sets only `Date` back (`vi.useFakeTimers({ toFake: ['Date'] })`).
+- Add a case here when a package's unit test asserts what CoSec answers; `:client-host:check` keeps the host itself
+  answering as the tests assume.
+
 ## Releasing
 
 Publishing the GitHub release `vX.Y.Z` publishes the packages to npm, from the `npm-publish` job of

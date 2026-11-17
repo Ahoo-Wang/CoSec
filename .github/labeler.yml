@@ -57,6 +57,9 @@
 'module: e2e':
   - changed-files:
       - any-glob-to-any-file: 'test/e2e/**'
+'module: client-host':
+  - changed-files:
+      - any-glob-to-any-file: 'test/client-host/**'
 'module: kafka':
   - changed-files:
       - any-glob-to-any-file: 'extensions/kafka/**'
