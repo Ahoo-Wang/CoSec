@@ -75,6 +75,17 @@ internal class SlotModel(
     /** The revision of the document last installed per key, whatever came between (an absence) and through eviction. */
     private val lastRevision = HashMap<SnapshotKey, Long>()
     private val evictedAt = HashMap<SnapshotKey, Long>()
+
+    /**
+     * Whether evictions are judged at their claims ([claimed]): the runner's, whose hooks report each claim. Then a key
+     * whose install leaves the source with no claim seen is a violation. [Slot] has no claim the model can watch: its
+     * removal happens under its monitor inside the pass, so its evictions are judged after their event, which is weaker:
+     * an install later in the same event changes what the family held, either way. That goes with [Slot] (step 4).
+     */
+    var judgesClaims = false
+
+    /** The entries whose eviction was claimed during the event now running: none of them is served after it. */
+    private val claimedEntries = mutableListOf<SnapshotEntry<*>>()
     private val expectedRegressions = mutableListOf<Pair<SnapshotKey, Long>>()
 
     /** The documents whose compilation failed during the event now running. */
@@ -90,6 +101,10 @@ internal class SlotModel(
         var readTimeouts = 0
         var coldTimeouts = 0
         var evictions = 0
+
+        /** Of [evictions], those judged at the runner's claim ([claimed]), and those judged after their event ([Slot]). */
+        var evictionsAtClaim = 0
+        var evictionsAfterEvent = 0
         var regressions = 0
         var resetsChecked = 0
         var lostWritesChecked = 0
@@ -368,18 +383,49 @@ internal class SlotModel(
         }
         for (key in lastInstall.keys.toList()) {
             if (key !in byKey && !closed) {
-                checkEvicted(key)
+                if (judgesClaims) {
+                    violations += "removed ${lastInstall.getValue(key)} of $key without a claim"
+                } else {
+                    checkEvicted(key)
+                    counts.evictionsAfterEvent++
+                }
                 lastInstall.remove(key)
                 evictedAt[key] = event
                 counts.evictions++
             }
         }
+        for (entry in claimedEntries) {
+            if (served.any { it === entry }) violations += "claimed the eviction of ${entry.key} and still serves $entry"
+        }
+        claimedEntries.clear()
+    }
+
+    /**
+     * The runner claimed the eviction of [key] (its hook, before the `Evict` transition removes it): judged now, against
+     * the installs the metrics have reported so far. The model does not lag the source here: `onInstall` is reported
+     * inside the `Install` effect before the family's counts move (`KeyEffects.installed`, then `KeyRunner.published`),
+     * and `Install` comes before the step's `EvictBeyond` and its answers. Judged after the event instead, an install
+     * later in the same event (a compilation that calls `recompile`: seed 9191) changes what the family held.
+     */
+    fun claimed(key: SnapshotKey) {
+        val entry = lastInstall[key]
+        if (entry == null) {
+            violations += "claimed the eviction of $key, which holds no install reported"
+            return
+        }
+        checkEvicted(key)
+        claimedEntries += entry
+        lastInstall.remove(key)
+        evictedAt[key] = event
+        counts.evictions++
+        counts.evictionsAtClaim++
     }
 
     /**
      * `SNP-7`: an entry of a document the store holds goes only while its family holds more such entries than its bound,
      * and one for a document the store does not hold only while there are more of those than `maxAbsent`: neither kind
-     * evicts the other.
+     * evicts the other. Judged after the claim and before the removal, against the model's installs then ([claimed]);
+     * for [Slot], after the event that removed it ([judgesClaims]).
      */
     private fun checkEvicted(key: SnapshotKey) {
         val absent = lastInstall.getValue(key).origin == EntryOrigin.ABSENT
