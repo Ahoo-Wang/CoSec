@@ -51,12 +51,13 @@
   "scripts": {
     "build": "vite build",
     "test:ui": "vitest --ui",
-    "test": "vitest run --coverage",
+    "test": "vitest run --coverage && pnpm test:api",
     "lint": "eslint --max-warnings 56 .",
     "clean": "rm -rf dist",
     "analyze": "npx vite-bundle-analyzer -p auto",
-    "test:no-coverage": "vitest run --coverage.enabled=false",
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "test:no-coverage": "vitest run --coverage.enabled=false && pnpm test:api",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test:api": "node ../scripts/api-report.mjs"
   },
   "peerDependencies": {
     "@ahoo-wang/fetcher": "catalog:peers",
