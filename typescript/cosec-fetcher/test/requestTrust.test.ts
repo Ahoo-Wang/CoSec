@@ -24,7 +24,7 @@ import {
 } from '../src';
 
 const jwt = (sub: string, exp: number) =>
-  `e30.${btoa(JSON.stringify({ sub, exp }))}.signature`;
+  `e30.${btoa(JSON.stringify({ sub, exp, tenantId: 'tenant-1' }))}.signature`;
 const token: CompositeToken = {
   accessToken: jwt('user', Date.now() / 1000 + 3600),
   refreshToken: jwt('user', Date.now() / 1000 + 7200),
@@ -35,6 +35,7 @@ let sent: Record<string, Headers>;
 function configured(
   isTrusted?: RequestTrust,
   baseURL = 'https://api.example.com/v1',
+  refresh?: () => Promise<CompositeToken>,
 ): Fetcher {
   const fetcher = new Fetcher({ baseURL });
   const tokenStorage = new TokenStorage({
@@ -49,7 +50,8 @@ function configured(
       storage: new InMemoryStorage(),
       eventBus: new SerialTypedEventBus('trust-device'),
     }),
-    tokenRefresher: { refresh: async () => token },
+    tokenRefresher: { refresh: refresh ?? (async () => token) },
+    spaceIdProvider: { resolveSpaceId: () => 'space-1' },
     isTrusted,
   }).applyTo(fetcher);
   return fetcher;
@@ -64,12 +66,135 @@ beforeEach(() => {
 });
 
 describe('request trust', () => {
-  it('sends credentials everywhere by default, as before', async () => {
-    const fetcher = configured();
-    await fetcher.get('https://other.example.net/page');
-    const headers = sent['https://other.example.net/page'];
-    expect(headers.get('authorization')).toMatch(/^Bearer /);
-    expect(headers.get('cosec-device-id')).toBeTruthy();
+  // CoSec 8.0's client keeps the credentials of the user to the origins the application is built against: its
+  // baseURL and its page. Without `isTrusted` that is `sameOriginTrust`, and a request to another origin is sent bare.
+  describe('by default', () => {
+    const CREDENTIAL_HEADERS = [
+      'authorization',
+      'cosec-device-id',
+      'cosec-request-id',
+      'cosec-space-id',
+    ];
+
+    function expectCredentials(headers: Headers) {
+      for (const name of CREDENTIAL_HEADERS) {
+        expect(headers.has(name), name).toBe(true);
+      }
+      expect(headers.get('authorization')).toMatch(/^Bearer /);
+    }
+
+    function expectNone(headers: Headers) {
+      for (const name of CREDENTIAL_HEADERS) {
+        expect(headers.has(name), name).toBe(false);
+      }
+    }
+
+    it('keeps all four headers from an absolute URL on a third origin', async () => {
+      const fetcher = configured();
+      await fetcher.get('https://other.example.net/page');
+      expectNone(sent['https://other.example.net/page']);
+      await fetcher.get('/users');
+      expectCredentials(sent['https://api.example.com/v1/users']);
+    });
+
+    it('fills no tenant or owner path variable of a third origin from the token', async () => {
+      const fetcher = configured();
+      // The variable stays unfilled: nothing of the token is in the URL sent.
+      await fetcher
+        .get('https://other.example.net/t/{tenantId}/u/{ownerId}')
+        .catch(() => undefined);
+      expect(Object.keys(sent).join()).not.toContain('tenant-1');
+      expect(Object.keys(sent).join()).not.toContain('user');
+      // On the baseURL's own origin the same templates are filled.
+      await fetcher.get('https://api.example.com/t/{tenantId}/u/{ownerId}');
+      expect(Object.keys(sent)).toContain(
+        'https://api.example.com/t/tenant-1/u/user',
+      );
+    });
+
+    it('starts no refresh and keeps the session on a 401 of a third origin', async () => {
+      const refresh = vi.fn(async () => token);
+      const fetcher = configured(undefined, undefined, refresh);
+      const requests: string[] = [];
+      vi.stubGlobal('fetch', async (url: string, init: RequestInit) => {
+        requests.push(url);
+        sent[url] = new Headers(init.headers as HeadersInit);
+        return new Response('{}', {
+          status: url.startsWith('https://other.') ? 401 : 200,
+        });
+      });
+      // Fetcher refuses a 401 as an error, as for any status it does not accept.
+      await expect(
+        fetcher.get('https://other.example.net/page'),
+      ).rejects.toMatchObject({ exchange: { response: { status: 401 } } });
+      expect(requests).toEqual(['https://other.example.net/page']);
+      expect(refresh).not.toHaveBeenCalled();
+      // Not signed out: the same user's request to the baseURL still carries the token.
+      sent = {};
+      await fetcher.get('/users');
+      expectCredentials(sent['https://api.example.com/v1/users']);
+    });
+
+    it('sends credentials to a baseURL on another origin than the page, relative and absolute', async () => {
+      vi.stubGlobal('location', new URL('https://app.example.com/page'));
+      const fetcher = configured();
+      await fetcher.get('/users');
+      await fetcher.get('https://api.example.com/v2/users');
+      expectCredentials(sent['https://api.example.com/v1/users']);
+      expectCredentials(sent['https://api.example.com/v2/users']);
+      // The page's own origin is trusted too; another is not.
+      await fetcher.get('https://app.example.com/assets');
+      expectCredentials(sent['https://app.example.com/assets']);
+      await fetcher.get('https://cdn.example.net/file');
+      expectNone(sent['https://cdn.example.net/file']);
+    });
+
+    it('sends credentials to the origin of the page when the baseURL is relative', async () => {
+      vi.stubGlobal('location', new URL('https://app.example.com/page'));
+      const fetcher = configured(undefined, '/api');
+      await fetcher.get('/users');
+      expectCredentials(sent['/api/users']);
+      await fetcher.get('https://app.example.com/other');
+      expectCredentials(sent['https://app.example.com/other']);
+      await fetcher.get('https://api.example.com/users');
+      expectNone(sent['https://api.example.com/users']);
+    });
+
+    // Node and workers have no `location`: only an absolute baseURL names an origin, and an absolute URL with none
+    // is sent bare. A relative URL on a relative baseURL has no host to be sent to: it is the application's own.
+    it('without a page location, trusts the origin of an absolute baseURL and nothing else', async () => {
+      const fetcher = configured();
+      await fetcher.get('https://api.example.com/v3/users');
+      expectCredentials(sent['https://api.example.com/v3/users']);
+      await fetcher.get('https://other.example.net/page');
+      expectNone(sent['https://other.example.net/page']);
+    });
+
+    it('without a page location and without an absolute baseURL, sends an absolute URL bare', async () => {
+      const fetcher = configured(undefined, '');
+      await fetcher.get('https://api.example.com/users');
+      expectNone(sent['https://api.example.com/users']);
+      await fetcher.get('/users');
+      expectCredentials(sent['/users']);
+    });
+
+    it('lets an explicit predicate decide alone', async () => {
+      const fetcher = configured(url => url.startsWith('https://cdn.'));
+      await fetcher.get('https://cdn.example.com/file');
+      expectCredentials(sent['https://cdn.example.com/file']);
+      // The baseURL's origin is not trusted by default's rule once a predicate is given.
+      await fetcher.get('https://api.example.com/v2/users');
+      expectNone(sent['https://api.example.com/v2/users']);
+      // A relative URL on the baseURL is always trusted.
+      await fetcher.get('/users');
+      expectCredentials(sent['https://api.example.com/v1/users']);
+    });
+
+    it('trusts everything only when the application says so', async () => {
+      const fetcher = configured(() => true);
+      await fetcher.get('https://other.example.net/page');
+      expectCredentials(sent['https://other.example.net/page']);
+    });
   });
 
   describe('with sameOriginTrust', () => {

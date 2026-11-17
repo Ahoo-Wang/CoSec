@@ -548,6 +548,7 @@ export class CoSecConfigurer implements FetcherConfigurer {
     fetcher.interceptors.request.use(
       new ResourceAttributionRequestInterceptor({
         tokenStorage: this.tokenStorage,
+        isTrusted: this.config.isTrusted,
       }),
     );
 
