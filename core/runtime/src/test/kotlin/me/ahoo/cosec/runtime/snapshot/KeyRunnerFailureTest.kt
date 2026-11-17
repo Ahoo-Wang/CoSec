@@ -91,13 +91,21 @@ class KeyRunnerFailureTest {
             { ticker.incrementAndGet() },
             housekeeping,
             object : SlotFactory {
-                override fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: SlotContext): KeySlot<T> =
+                override fun <T : Any> create(
+                    key: SnapshotKey,
+                    compiler: SnapshotCompiler<T>,
+                    context: SlotContext
+                ): KeySlot<T> =
                     KeyRunner(key, compiler, context, k, if (everyKey || key == APP_A) hooks else KeyDrain.Hooks.NONE)
             },
         )
     }
 
-    private fun SnapshotSource<*, *>.slot(id: String): KeySlot<*> = families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue(id)
+    private fun SnapshotSource<*, *>.slot(id: String): KeySlot<*> = families.first {
+        it.spec.kind == SnapshotKind.APP
+    }.slots.getValue(
+        id
+    )
 
     @Test
     fun `a crash on the compile pool still lets an offer that lost the flag be taken before the error leaves the drain`() {
@@ -110,7 +118,9 @@ class KeyRunnerFailureTest {
             }
         }
         // Once the crash is in, an offer made on this thread while it holds the flag: it must be taken all the same.
-        val hooks = KeyDrain.Hooks(afterEmpty = { if (crashed.get() && !late.isDone) late.complete(source.slot("app-a").markRecompile()) })
+        val hooks = KeyDrain.Hooks(
+            afterEmpty = { if (crashed.get() && !late.isDone) late.complete(source.slot("app-a").markRecompile()) }
+        )
         source = source(hooks, metrics, compileExecutor = null)
         source.use {
             source.load("app-a").join()
@@ -123,7 +133,9 @@ class KeyRunnerFailureTest {
     @Test
     fun `a VirtualMachineError from a transition on a caller's thread is logged, and its carrier answered`() {
         val armed = AtomicBoolean(true)
-        source(KeyDrain.Hooks({ if (it is KeyEvent.Requested && armed.getAndSet(false)) throw StackOverflowError("next") })).use { source ->
+        source(
+            KeyDrain.Hooks({ if (it is KeyEvent.Requested && armed.getAndSet(false)) throw StackOverflowError("next") })
+        ).use { source ->
             source.load().join()
             (source.load("app-a").join().app is DocumentState.Failed).assert().isTrue()
             awaitCondition { lines.list.any { "the transition of Requested" in it.formattedMessage } }
@@ -134,7 +146,10 @@ class KeyRunnerFailureTest {
     @Test
     fun `a VirtualMachineError from a transition on the compile pool is rethrown there, after its waiters are answered`() {
         val armed = AtomicBoolean(true)
-        source(KeyDrain.Hooks({ if (it is KeyEvent.Compiled && armed.getAndSet(false)) throw StackOverflowError("next") }), compileExecutor = null).use { source ->
+        source(
+            KeyDrain.Hooks({ if (it is KeyEvent.Compiled && armed.getAndSet(false)) throw StackOverflowError("next") }),
+            compileExecutor = null
+        ).use { source ->
             source.load().join()
             (source.load("app-a").join().app is DocumentState.Failed).assert().isTrue()
             awaitCondition { uncaught.isNotEmpty() }
@@ -150,12 +165,19 @@ class KeyRunnerFailureTest {
             val armed = AtomicBoolean()
             val held = SlotModelThreads().housekeeping
             val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2, maxAbsent = 2)
-            source(KeyDrain.Hooks({ if (it is KeyEvent.Evict && armed.getAndSet(false)) error("thrown by the test") }), housekeeping = held, options = options, everyKey = true).use { source ->
+            source(
+                KeyDrain.Hooks({ if (it is KeyEvent.Evict && armed.getAndSet(false)) error("thrown by the test") }),
+                housekeeping = held,
+                options = options,
+                everyKey = true
+            ).use { source ->
                 source.load().join()
                 ids.forEach { source.load(it).join() }
                 val counts = source.heldCounts(SnapshotKind.APP)
                 armed.set(true)
-                source.slot(ids.first()).evict(onlyIfEmpty = false, claimedAbsent = absent).join().assert().isEqualTo(Eviction.REFUSED)
+                source.slot(
+                    ids.first()
+                ).evict(onlyIfEmpty = false, claimedAbsent = absent).join().assert().isEqualTo(Eviction.REFUSED)
                 source.heldCounts(SnapshotKind.APP).assert().describedAs("absent=$absent").isEqualTo(counts)
                 if (absent) source.heldAbsentMembers(SnapshotKind.APP).assert().contains(SnapshotKey.App(ids.first()))
                 source.evictionPass(SnapshotKind.APP, Int.MAX_VALUE)
@@ -177,11 +199,27 @@ class KeyRunnerFailureTest {
         }
         val refuse = AtomicBoolean()
         // Accepting until A is installed, so A is held; refusing after, so the hand-off is refused.
-        val refusing = Executor { if (refuse.get()) throw RejectedExecutionException("refused by the test") else it.run() }
+        val refusing = Executor {
+            if (refuse.get()) {
+                throw RejectedExecutionException(
+                    "refused by the test"
+                )
+            } else {
+                it.run()
+            }
+        }
         val more = CopyOnWriteArrayList<CompletableFuture<Boolean>>()
         val armed = AtomicBoolean()
         lateinit var source: SnapshotSource<Compiled, Compiled>
-        val hooks = KeyDrain.Hooks({ if (it is KeyEvent.Recompile && armed.getAndSet(false)) repeat(EXTRA) { more += source.slot("app-a").markRecompile() } })
+        val hooks = KeyDrain.Hooks(
+            {
+                if (it is KeyEvent.Recompile && armed.getAndSet(false)) {
+                    repeat(
+                        EXTRA
+                    ) { more += source.slot("app-a").markRecompile() }
+                }
+            }
+        )
         source = source(hooks, metrics, compileExecutor = refusing, housekeeping = Refusing(), k = 0)
         source.use {
             source.load("app-a").join()

@@ -188,15 +188,22 @@ internal class KeyDrain<T : Any>(
         }
         state = step.state
         publish(step.state.removed, step.state.idle)
+        executed(step, before.load?.id)
+    }
+
+    /** The step's effects, in order; one that throws queues an [KeyEvent.EffectFailed] and the rest still run. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun executed(step: KeyStep<T>, loadBefore: Long?) {
+        val loadId = step.state.load?.id ?: loadBefore ?: NO_LOAD
         for (effect in step.effects) {
             try {
                 effects.execute(effect)
             } catch (error: VirtualMachineError) {
                 // The rest of the step still runs, so its waiters are answered; the error is handled after the release.
                 crash = crash ?: ("the effect ${effect::class.simpleName}" to error)
-                queue.add(KeyEvent.EffectFailed(step.state.load?.id ?: before.load?.id ?: NO_LOAD, error))
+                queue.add(KeyEvent.EffectFailed(loadId, error))
             } catch (error: Throwable) {
-                queue.add(KeyEvent.EffectFailed(step.state.load?.id ?: before.load?.id ?: NO_LOAD, error))
+                queue.add(KeyEvent.EffectFailed(loadId, error))
             }
         }
     }
@@ -248,7 +255,11 @@ internal class KeyDrain<T : Any>(
      */
     private fun aborted(before: KeyState<T>, event: KeyEvent<T>?, request: EvictRequest?, error: Throwable) {
         val failed =
-            failedEntry<T>(key, SnapshotUnavailableException(key, "the snapshot transition failed", error), context.clock.instant())
+            failedEntry<T>(
+                key,
+                SnapshotUnavailableException(key, "the snapshot transition failed", error),
+                context.clock.instant()
+            )
         // The load first, each part in its own guard: a meter that throws while a carrier is answered skips nothing.
         val load = before.load
         if (load != null && event != null && event.loadId == load.id) {
@@ -256,7 +267,13 @@ internal class KeyDrain<T : Any>(
             guarded { effects.cancelReadTimeout(load.id) }
             // Whatever ended the load, its pass's read is over (SNP-6), as Slot's finish ends it.
             guarded { load.pass?.read?.end() }
-            (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach { guarded { it.future.complete(failed) } }
+            (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach {
+                guarded {
+                    it.future.complete(
+                        failed
+                    )
+                }
+            }
             guarded { publish(state.removed, state.idle) }
         }
         if (request != null && event is KeyEvent.Evict && event.claim == Claim.CLAIMED) {
@@ -269,12 +286,18 @@ internal class KeyDrain<T : Any>(
         // mark answers "load it again" and an eviction "not removed": each the side that keeps the key safe.
         guarded {
             when (val carried = event?.carried) {
-                is KeyWaiter<*, *> -> @Suppress("UNCHECKED_CAST") (carried as KeyWaiter<T, *>).failed(failed)
-                is CompletableFuture<*> -> @Suppress("UNCHECKED_CAST") (carried as CompletableFuture<Boolean>).complete(event is KeyEvent.Recompile)
+                is KeyWaiter<*, *> ->
+                    @Suppress("UNCHECKED_CAST")
+                    (carried as KeyWaiter<T, *>).failed(failed)
+                is CompletableFuture<*> ->
+                    @Suppress("UNCHECKED_CAST")
+                    (carried as CompletableFuture<Boolean>).complete(event is KeyEvent.Recompile)
                 null -> request?.reply?.complete(Eviction.REFUSED)
             }
         }
-        context.threads.offRequestThread { log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." } }
+        context.threads.offRequestThread {
+            log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." }
+        }
     }
 
     private companion object {
