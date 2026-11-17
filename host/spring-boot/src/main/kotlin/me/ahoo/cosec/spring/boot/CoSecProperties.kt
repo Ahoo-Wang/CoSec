@@ -27,6 +27,7 @@ internal const val ENABLED_SUFFIX_KEY = ".enabled"
 @ConfigurationProperties(prefix = CoSecProperties.PREFIX)
 @InternalCoSecApi
 class CoSecProperties(
+    /** Whether CoSec's auto-configurations are on at all; the unknown-key check and a gateway's identity strip hold anyway. */
     @DefaultValue("true") override var enabled: Boolean = true,
     /**
      * The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane

@@ -25,7 +25,9 @@ import org.springframework.core.env.Environment
 @ConfigurationProperties(KafkaAuditProperties.PREFIX)
 @InternalCoSecApi
 class KafkaAuditProperties(
+    /** Whether the Kafka audit listener is on; it needs `cosec-kafka` and a `KafkaOperations` bean. */
     @DefaultValue("true") override var enabled: Boolean = true,
+    /** The Kafka topic of the audit events. */
     @DefaultValue(DEFAULT_TOPIC) var topic: String = DEFAULT_TOPIC,
     /** `required` makes a permit wait for the broker's acknowledgement; best effort by default (RFC 0006 §9.2). */
     @DefaultValue("best-effort") var delivery: Delivery = Delivery.BEST_EFFORT,
