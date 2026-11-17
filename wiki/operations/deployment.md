@@ -125,7 +125,7 @@ Until then it would answer every routed request `503`, so the starter turns Spri
 to restart the instance.
 
 With Spring Boot Actuator, the `cosecSnapshot` health indicator reports `UP` once the same documents are installed,
-`DOWN` before, with the details `platform` (`installed`, `failed`, `absent` or `loading`) and `prewarmed`. To see those
+`DOWN` before, with the details `platform` (`installed`, `invalid`, `failed`, `absent` or `loading`) and `prewarmed`. To see those
 details on the readiness endpoint, add it to the readiness group:
 
 ```yaml
