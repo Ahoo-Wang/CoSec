@@ -131,7 +131,7 @@ application's liveness probe at its management port (outside CoSec), and give a 
 the application port.
 
 With Spring Boot Actuator, the `cosecSnapshot` health indicator reports `UP` once the same documents are installed,
-`DOWN` before, with the details `platform` (`installed`, `failed`, `absent` or `loading`) and `prewarmed`. To see those
+`DOWN` before, with the details `platform` (`installed`, `invalid`, `failed`, `absent` or `loading`) and `prewarmed`. To see those
 details on the readiness endpoint, add it to the readiness group:
 
 ```yaml

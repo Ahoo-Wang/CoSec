@@ -38,6 +38,8 @@ dependencies {
 }
 ```
 
+In a Kotlin project, apply `kotlin("plugin.spring")`, as Spring Initializr does: Spring needs its `@Configuration` classes open.
+
 `cosec-spring-boot` is the auto-configuration; it wires every CoSec module it finds on the classpath, so add the
 modules you need next to it. Which module adds what, and what each needs with it, is listed in
 [Modules](./introduction.md#modules). The web adapter is not optional: a WebFlux application without `cosec-webflux`
@@ -219,8 +221,9 @@ document above already lets signed-in callers reach the control API; without tha
    ```
 
 3. **Issue her a token for the control plane.** Control-plane tokens are for the tenant `(platform)` and the app
-   `cosec-control` (`cosec.control.app-id`). For this guide, print one at startup; a real deployment issues
-   `(platform)` tokens only from a source users cannot influence:
+   `cosec-control` (`cosec.control.app-id`). For this guide, print one at startup, from a bean in your
+   `@SpringBootApplication` class (or any `@Configuration` class); a real deployment issues `(platform)` tokens only from
+   a source users cannot influence:
 
    ```kotlin
    @Bean
@@ -238,10 +241,11 @@ document above already lets signed-in callers reach the control API; without tha
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
+   PLATFORM_TOKEN='…'   # the token the application printed after "platform token: "
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
-   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
-   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
-   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | sed -E 's/^\{"id":"([^"]+)".*/\1/')
+   curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
+   curl -s -X POST "$CONTROL/changes/${ID}:publish" -H "$AUTH"
    ```
 
    A shadow window would compare the change with live traffic first, which a guide without traffic cannot wait for;

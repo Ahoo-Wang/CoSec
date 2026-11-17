@@ -33,6 +33,8 @@ dependencies {
 }
 ```
 
+在 Kotlin 项目里，应用 `kotlin("plugin.spring")`（Spring Initializr 会加）：Spring 需要它的 `@Configuration` 类是 open 的。
+
 `cosec-spring-boot` 是自动配置，它会装配在类路径上找到的每个 CoSec 模块，所以在它旁边添加你需要的模块即可。各模块添加了什么、各自还需要什么，见[模块](./introduction.md#modules)。Web 适配器不是可选的：缺少 `cosec-webflux` 的 WebFlux 应用会在启动时失败，报错信息给出制品名（STA-1）。
 
 这里 `cosec-cocache` 同样不是可选的：JWT 默认开启，而没有[令牌吊销](../integration/authentication.md#logout-and-revocation)存储时应用无法启动，`cosec-cocache` 提供了这个存储。
@@ -178,7 +180,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
    cosec-migrate bootstrap --to-redis redis://localhost:6379 --platform-admin alice
    ```
 
-3. **给她签发控制面的令牌。**控制面令牌属于租户 `(platform)` 和应用 `cosec-control`（`cosec.control.app-id`）。本指南在启动时打印一个；真实部署只从用户无法影响的来源签发 `(platform)` 令牌：
+3. **给她签发控制面的令牌。**控制面令牌属于租户 `(platform)` 和应用 `cosec-control`（`cosec.control.app-id`）。本指南在启动时打印一个，由你的 `@SpringBootApplication` 类（或任何 `@Configuration` 类）里的一个 bean 打印；真实部署只从用户无法影响的来源签发 `(platform)` 令牌：
 
    ```kotlin
    @Bean
@@ -195,10 +197,11 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
+   PLATFORM_TOKEN='…'   # 应用在 "platform token: " 之后打印的令牌
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
-   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
-   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
-   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | sed -E 's/^\{"id":"([^"]+)".*/\1/')
+   curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
+   curl -s -X POST "$CONTROL/changes/${ID}:publish" -H "$AUTH"
    ```
 
    影子窗口会先把变更和真实流量比较，没有流量的指南等不起；管理员是信任根，可以跳过它。`GET $CONTROL/documents/platform` 现在返回修订 `2`，带 Alice 普通令牌的 `GET /reports/1` 被放行（这里该路径没有处理器，所以返回 `404`，不是 `403`）。

@@ -110,7 +110,7 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 在此期间不会给它流量，前提是它能访问到那条路径：对 CoSec 来说它是普通请求，所以在应用的应用端口上需要一条语句允许它（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。存活状态不受缺失文档的影响：存活状态保持 `CORRECT`，缺少文档不是重启实例的理由。HTTP 存活探针则是另一回事：在应用的应用端口上，第一份文档发布之前它回答 `503`，WebFlux 应用的管理端口也一样，kubelet 会在 pod 能就绪之前就重启它。WebMvc 应用的存活探针指向它的管理端口（不经 CoSec），WebFlux 应用则在应用端口上用 `tcpSocket` 探针。
 
 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在这些文档安装后报告 `UP`，之前报告 `DOWN`，细节为 `platform`
-（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。要在就绪端点上看到这些细节，把它加入 readiness 组：
+（`installed`、`invalid`、`failed`、`absent` 或 `loading`）和 `prewarmed`。要在就绪端点上看到这些细节，把它加入 readiness 组：
 
 ```yaml
 management:
