@@ -365,10 +365,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         threads::stopScheduler,
         prewarms::abort,
         { context.pendingRequests.forEach { it.abort(closedError()) } },
+        ::endLoads,
         threads::stopHousekeeping,
         threads::stopCompiling,
-        // After the pools stop taking work: a key that drains its queue on this thread leaves nothing stranded (§5).
-        ::endLoads,
         { threads.awaitOwned(closeTimeout) },
     )
 
