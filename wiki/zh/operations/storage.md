@@ -125,7 +125,9 @@ key 都在它之下（`SNP-9`）。
 只有控制面（以及 `cosec-migrate`）写入文档和控制面记录。数据面实例读取文档和候选，只写影子报告和状态。Redis ACL 可以
 让两边各守其位：
 
-- 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 只读，对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
+- 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 可读可写，对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
+  不能只读：CoCache 用脚本读取每个值，而 Redis 会按写权限检查脚本指明的 key，所以对它们只给 `%R~` 的用户在启动时和每次
+  读取时都失败（`NOPERM`）。因此数据面凭证能够覆盖实例读取的文档，ACL 无法阻止。
 - 控制面凭证：`<s>:` 下的所有 key。
 - 要防止一个实例写另一个实例的报告，给每个实例一个独立的用户，只允许它写自己的报告 key
   （`<s>:shadow:report:*:<instance>`），并设置它的
@@ -139,13 +141,18 @@ key 都在它之下（`SNP-9`）。
 key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一个实例的 id：控制面一旦见过那个实例报告，窗口就会保持
 打开直到它的报告回来；但在那之前被删掉的 id 不会被发现，直到那个实例再次写入。
 
-以默认前缀下的实例 `pod-a` 为例（Redis 7 ACL 语法；`%R~` 表示只读）。第一行设置 key 并收回所有命令；第二行授予它
-需要的命令和通道：
+以默认前缀下的实例 `pod-a` 为例（Redis 7 ACL 语法，`channel-mode: pubsub`）。第一行设置 key 并收回所有命令；第二行授予它
+需要的命令和通道，即 [CoCache 列出的那些](https://cocache.ahoo.me/operations/#acl)（`sharded` 模式再加
+`+spublish +ssubscribe +sunsubscribe`）：
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:pod-a ~cosec:shadow:instances:*
-ACL SETUSER cosec-pod-a <CoCache 列出的命令和通道> +info
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all ~cosec:snapshot:* ~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a +@connection +evalsha +eval +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
+
+`~cosec:shadow:report:` 和 `~cosec:shadow:status:`（不带 `*`）是 CoCache 创建这两个缓存时用到的 key：没有它们，即使
+实例自己的 key 都允许，启动也会因 `NOPERM` 失败。已在 Redis 8.10 上用这个用户测试：实例创建缓存、读取文档和候选、写入自己的
+报告和状态、收到失效消息，`ACL LOG` 为空；写 `pod-b` 的报告或状态会被拒绝。
 
 再加上该实例其他功能用到的 key（吊销、API key、限流；见 [Redis key](#redis-keys)）。上生产前用 `ACL DRYRUN` 检查这个
 用户：CoCache 通过 Lua 脚本写入，Redis 会逐个 key 检查。
