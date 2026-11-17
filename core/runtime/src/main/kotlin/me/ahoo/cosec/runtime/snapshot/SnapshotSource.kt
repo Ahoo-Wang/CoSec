@@ -398,6 +398,10 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         families.forEach { family -> family.slots.values.forEach { it.close() } }
     }
 
+    /** Tests only: nothing in motion, no key loading, queued or draining, housekeeping idle (RFC 0013 B2b step 3). */
+    internal fun quiescent(): Boolean =
+        shared.quiescent() && families.all { it.slots.values.all(KeySlot<*>::quiescent) } && threads.housekeepingIdle
+
     /** Whether every thread this source started has finished: true once [close] has returned. */
     internal val threadsTerminated: Boolean
         get() = threads.terminated

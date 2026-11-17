@@ -52,6 +52,8 @@ internal class KeyRunner<T : Any>(
 
     override fun idle(): Boolean = idleHint
 
+    override val draining: Boolean get() = !drain.quiet()
+
     override fun request(): CompletableFuture<SnapshotEntry<T>> {
         if (!removed) {
             installed?.let {

@@ -34,7 +34,8 @@ object SourceSizeLedger {
             // +3 (SNP-13): what the futures of revalidate and recompile promise, in their KDoc.
             // +3 (B2b gate 1): the test seam for housekeeping, a parameter with its KDoc and its import.
             // +2 (B2b step 2b): the SlotFactory seam, a parameter with its KDoc, and the context's construction wrapped.
-            452,
+            // +4 (B2b step 3): the test read of quiescence that a property test settles on instead of a sleep.
+            456,
             Disposition.Stays(
                 "the read interface with its contract, and the construction and close order in one place"
             ),

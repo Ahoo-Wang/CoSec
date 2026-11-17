@@ -86,6 +86,9 @@ internal class KeyDrain<T : Any>(
     /** An eviction as offered; claimed when it is taken (§4b), so nothing of this key moves in between. */
     class EvictRequest(val onlyIfEmpty: Boolean, val absent: Boolean?, val reply: CompletableFuture<Eviction>)
 
+    /** Tests only: no event queued, and no thread draining this key. */
+    fun quiet(): Boolean = queue.isEmpty() && flagged == 0
+
     fun offer(item: Any) {
         queue.add(item)
         DrainBudget.within(if (context.threads.drainsUnbounded.get() == true) Int.MAX_VALUE else k + 1) { drain() }
