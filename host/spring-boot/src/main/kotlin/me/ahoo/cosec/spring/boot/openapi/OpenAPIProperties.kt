@@ -25,7 +25,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  */
 @ConfigurationProperties(prefix = OpenAPIProperties.PREFIX)
 @InternalCoSecApi
-class OpenAPIProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
+class OpenAPIProperties(
+    /** Whether the bearer-auth customizer of the OpenAPI document is on (`cosec-openapi`). */
+    @DefaultValue("true") override var enabled: Boolean = true,
+) : EnabledCapable {
 
     @InternalCoSecApi
     companion object {

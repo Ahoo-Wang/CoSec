@@ -171,7 +171,15 @@ class RuntimeAuthorizationProperties {
     }
 
     @InternalCoSecApi
-    class Timed(var timeout: Duration)
+    class Timed(
+        /**
+         * How long one call of the stage's collaborator may take, the stage being the group this property is under:
+         * `membership` (the `MembershipProvider`; past it, or when it fails, the request is 503), `attributes` (an
+         * `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit`
+         * (the `RateLimiter`; past it the rule's `strictFailure` decides).
+         */
+        var timeout: Duration,
+    )
 
     @InternalCoSecApi
     class Routes {
@@ -204,14 +212,30 @@ class RuntimeAuthorizationProperties {
          * with fail-closed tenants, less than `fail-closed.max-lag`; anything else fails startup.
          */
         var revalidateInterval: Duration = Duration.ofSeconds(10)
+
+        /** How long a document may go unconfirmed before it is logged at WARN; not more than `lag-escalate`. */
         var lagWarn: Duration = Duration.ofSeconds(60)
+
+        /** How long a document may go unconfirmed before it is logged at ERROR as stale. */
         var lagEscalate: Duration = Duration.ofMinutes(5)
         val failClosed = FailClosed()
+
+        /** How long a request waits for a document that is not installed; past it the document counts as failed. Positive. */
         var coldLoadTimeout: Duration = Duration.ofSeconds(2)
+
+        /** The most app documents held in memory (positive); the least recently used one is dropped beyond it. */
         var maxApps: Int = 1024
+
+        /** The most tenant documents held in memory (positive); the platform document is never dropped. */
         var maxTenants: Int = 1024
+
+        /** App documents loaded at startup, after the platform document; readiness waits for them. */
         var prewarmApps: List<String> = emptyList()
+
+        /** Tenant documents loaded at startup, after the platform document; readiness waits for them. */
         var prewarmTenants: List<String> = emptyList()
+
+        /** Threads that compile documents; positive. */
         var compileThreads: Int = 2
 
         /** What a Redis whose `maxmemory-policy` is not `noeviction`, or cannot be read, does to startup (`SNP-3`). */
@@ -219,7 +243,13 @@ class RuntimeAuthorizationProperties {
 
         @InternalCoSecApi
         class FailClosed {
+            /**
+             * Tenants that must not be decided on old documents: a request of one is 503 unless a DENY matches, when the
+             * oldest document it reads was confirmed longer ago than `max-lag`.
+             */
             var tenants: Set<String> = emptySet()
+
+            /** The lag beyond which the tenants above fail closed; not negative. */
             var maxLag: Duration = Duration.ofMinutes(30)
         }
     }
@@ -271,7 +301,10 @@ class RuntimeAuthorizationProperties {
 @ConfigurationProperties(prefix = RevocationProperties.PREFIX)
 @InternalCoSecApi
 class RevocationProperties {
-    /** How much earlier than a subject revocation a token may have been issued and still be revoked by it. */
+    /**
+     * How much later than a subject revocation a token may have been issued and still be revoked by it: room for an
+     * issuer whose clock runs ahead of the revoking one.
+     */
     var skew: Duration = Duration.ofSeconds(5)
 
     /**
