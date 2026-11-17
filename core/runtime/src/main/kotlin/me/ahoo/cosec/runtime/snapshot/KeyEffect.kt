@@ -98,7 +98,7 @@ internal sealed interface KeyEffect<out T : Any> {
     /** `housekeep` of an empty key: drop it, on housekeeping, if it is still empty then. */
     data object DropIfEmpty : KeyEffect<Nothing>
 
-    /** `housekeep` after an install: evict the family beyond its bound, in place when the install took it over its cap. */
+    /** `housekeep` after a load's end: evict the family beyond its bound, in place when an install took it over its cap. */
     data object EvictBeyond : KeyEffect<Nothing>
 
     /** `family.drop`: the key leaves the family's map; unless the removal was [claimed], it moves the count itself. */
