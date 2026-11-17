@@ -1,17 +1,17 @@
 # Rule: SNP-4
-# Mutant: a load that compiled with the old inputs installs and answers its waiters
+# Mutant: a load that compiled with the old inputs installs and answers its waiters (the runner's KeyLoads.finish)
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest :runtime:test --tests me.ahoo.cosec.runtime.snapshot.PlatformCompilerInFlightTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-index 6b2d91c5..e4962177 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-@@ -595,7 +595,7 @@ internal class Slot<T : Any>(
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+index 270a9a56..902efa31 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+@@ -197,7 +197,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
          // Whatever ended the load (a read that failed to start included), its read is over.
-         load.passRead?.end()
-         val stale = install && key != context.sharedKey && load.epoch < context.compileEpoch.get() && entry.origin.compiled
+         load.pass?.let { step.emit(KeyEffect.EndPassRead(it)) }
+         val stale = install && config.compiledBefore(load, entry, step.moment)
 -        val withheld = stale && entry.origin == EntryOrigin.DOCUMENT
-+        val withheld = false
-         try {
-             if (install && !withheld) {
-                 recordInstall(entry)
++        val withheld = stale && false
+         val installs = install && !withheld
+         if (installs) {
+             recordInstall(step, entry)

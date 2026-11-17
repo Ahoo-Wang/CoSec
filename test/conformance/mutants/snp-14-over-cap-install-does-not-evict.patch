@@ -1,17 +1,17 @@
 # Rule: SNP-14
-# Mutant: an install that takes its family over the cap does not evict in place, so a burst holds as many as housekeeping lets it
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
+# Mutant: an install that takes its family over the cap does not evict in place, so a burst holds as many as housekeeping lets it (the runner's KeyEffects.evictBeyond)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundRunnerTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-index 4ed4a270..e2c4d7b5 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-@@ -699,7 +699,7 @@ internal class Slot<T : Any>(
-             context.threads.offRequestThread { removeIfIdle(onlyIfEmpty = true) }
-         } else if (install) {
-             family()?.let { family ->
--                if (context.families.overCap(family)) {
-+                if (false) {
-                     // The whole excess in one pass: the scan dominates a pass's time, whatever it evicts (EvictionPassBenchmark).
-                     context.families.evictBeyond(family)
-                 } else {
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+index 5a2eeaee..d5266e65 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+@@ -224,7 +224,7 @@ internal class KeyEffects<T : Any>(
+     private fun evictBeyond() {
+         val families = context.families
+         val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
+-        if (families.overCap(family)) {
++        if (false) {
+             DrainBudget.unbounded { families.evictBeyond(family) }
+         } else {
+             context.threads.offRequestThread { families.evictBeyond(family) }
