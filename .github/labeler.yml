@@ -99,9 +99,13 @@
   - changed-files:
       - any-glob-to-any-file: '.github/**'
 
+'area: typescript':
+  - changed-files:
+      - any-glob-to-any-file: 'typescript/**'
+
 'area: build':
   - changed-files:
-      - any-glob-to-any-file: ['**/*.gradle.kts', 'gradle/**', 'gradle.properties', 'config/**', 'wiki/package.json', 'wiki/pnpm-lock.yaml']
+      - any-glob-to-any-file: ['**/*.gradle.kts', 'gradle/**', 'gradle.properties', 'config/**', 'wiki/package.json', 'wiki/pnpm-lock.yaml', 'typescript/package.json', 'typescript/pnpm-lock.yaml', 'typescript/pnpm-workspace.yaml']
 
 
 'area: test':
