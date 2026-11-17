@@ -18,7 +18,6 @@ description: "用 CoSec 保护一个 Spring Boot 服务：从添加依赖到看�
   ```
 
 - 你所用 CoSec 版本的 `cosec-migrate` 工具，用来发布第一份策略文档：它的 [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases) 里的 `cosec-migrate-<version>.zip`，解压即可，或从 [CoSec](https://github.com/Ahoo-Wang/CoSec) 源码构建。它需要 Java 21。
-- `curl` 和 `jq`，用于下面的请求。
 
 ## 添加依赖 {#add-the-dependency}
 
@@ -33,6 +32,8 @@ dependencies {
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 }
 ```
+
+在 Kotlin 项目里，应用 `kotlin("plugin.spring")`（Spring Initializr 会加）：Spring 需要它的 `@Configuration` 类是 open 的。
 
 `cosec-spring-boot` 是自动配置，它会装配在类路径上找到的每个 CoSec 模块，所以在它旁边添加你需要的模块即可。各模块添加了什么、各自还需要什么，见[模块](./introduction.md#modules)。Web 适配器不是可选的：缺少 `cosec-webflux` 的 WebFlux 应用会在启动时失败，报错信息给出制品名（STA-1）。
 
@@ -89,7 +90,7 @@ cosec-migrate publish --to-redis redis://localhost:6379 --file documents/platfor
 
 它会输出 `Published platform`，并把文档写为平台文档的第一个修订。`publish` 从不覆盖：平台文档一旦存在，之后的变更都通过控制面进行（[存储](../operations/storage.md)、[策略测试](../policies/testing.md)）。
 
-在平台文档发布之前，CoSec 失败即拒绝：它对每个请求都返回 `503`，控制面的路由也不例外，因此第一份平台文档总是通过 `cosec-migrate publish` 发布。缺失的平台文档绝不当作空文档读取，否则会悄悄丢掉所有平台 DENY（[失败即拒绝](./security-model.md#fail-closed)）。在此期间应用报告自己未就绪（有 Spring Boot Actuator 时为 `/actuator/health/readiness`），负载均衡器不会给它流量（[就绪](../operations/deployment.md#readiness)）。这条路径对 CoSec 来说是普通请求：用本指南的文档，平台文档发布之后匿名探测得到 `401`，因为没有任何语句允许它；在 Kubernetes 之外，Spring Boot 也只有设置了 `management.endpoint.health.probes.enabled=true` 才提供它。把探测指向它之前，先加一条语句，允许对 `http:path:/actuator/health/**` 的 `GET`。
+在平台文档发布之前，CoSec 失败即拒绝：它对每个请求都返回 `503`，控制面的路由也不例外，因此第一份平台文档总是通过 `cosec-migrate publish` 发布。缺失的平台文档绝不当作空文档读取，否则会悄悄丢掉所有平台 DENY（[失败即拒绝](./security-model.md#fail-closed)）。在此期间应用报告自己未就绪（有 Spring Boot Actuator 时为 `/actuator/health/readiness`），负载均衡器不会给它流量（[就绪](../operations/deployment.md#readiness)）。
 
 ## 签发令牌 {#issue-a-token}
 
@@ -179,7 +180,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
    cosec-migrate bootstrap --to-redis redis://localhost:6379 --platform-admin alice
    ```
 
-3. **给她签发控制面的令牌。**控制面令牌属于租户 `(platform)` 和应用 `cosec-control`（`cosec.control.app-id`）。本指南在启动时打印一个；真实部署只从用户无法影响的来源签发 `(platform)` 令牌：
+3. **给她签发控制面的令牌。**控制面令牌属于租户 `(platform)` 和应用 `cosec-control`（`cosec.control.app-id`）。本指南在启动时打印一个，由你的 `@SpringBootApplication` 类（或任何 `@Configuration` 类）里的一个 bean 打印；真实部署只从用户无法影响的来源签发 `(platform)` 令牌：
 
    ```kotlin
    @Bean
@@ -196,9 +197,9 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
-   PLATFORM_TOKEN=...   # 应用启动时打印的令牌
+   PLATFORM_TOKEN='<应用输出中 "platform token: " 之后的令牌>'
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
-   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
+   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | sed -E 's/^\{"id":"([^"]+)".*/\1/')
    curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
    curl -s -X POST "$CONTROL/changes/${ID}:publish" -H "$AUTH"
    ```

@@ -47,8 +47,9 @@ implementation("org.springframework.boot:spring-boot-data-redis")
 implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 ```
 
-Maven takes the same artifacts. The "Also add" column follows the `compileOnly` lines of
-`host/spring-boot/build.gradle.kts` (for `cosec-cosid`, the starter its startup check names); give each its version yourself, with Gradle or Maven: no CoSec module imports a platform
+Maven takes the same artifacts. The "Also add" column is what each module needs next to it. The `compileOnly` lines of
+`host/spring-boot/build.gradle.kts` name the same libraries, except `micrometer-core`, which `cosec-micrometer` brings, and
+the CosId starter, which the startup check of `cosec.cosid.generator` names; give each its version yourself, with Gradle or Maven: no CoSec module imports a platform
 ([what CoSec needs from your build](https://cosec.ahoo.me/guide/introduction#what-cosec-needs-from-your-build): Spring Boot 4.1, CoCache 8 for `cosec-cocache`, JDK 21).
 There are no starter capabilities (`requireCapability(...-support)`) in 8.0: replace each with its module.
 Startup fails with `... needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath ... (STA-1)` when the web stack's
