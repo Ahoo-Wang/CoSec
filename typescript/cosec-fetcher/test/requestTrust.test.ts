@@ -44,7 +44,6 @@ function configured(
   });
   tokenStorage.signIn(token);
   new CoSecConfigurer({
-    appId: 'app',
     tokenStorage,
     deviceIdStorage: new DeviceIdStorage({
       storage: new InMemoryStorage(),

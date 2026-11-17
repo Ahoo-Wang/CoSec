@@ -31,7 +31,6 @@ describe('CoSecConfigurer', () => {
     };
 
     configurer = new CoSecConfigurer({
-      appId: 'test-app-001',
       tokenRefresher,
     });
   });
@@ -39,16 +38,13 @@ describe('CoSecConfigurer', () => {
   describe('constructor', () => {
     it('should create instance with required config', () => {
       expect(configurer).toBeDefined();
-      expect(configurer.config.appId).toBe('test-app-001');
       expect(configurer.tokenStorage).toBeDefined();
       expect(configurer.deviceIdStorage).toBeDefined();
       expect(configurer.tokenManager).toBeDefined();
     });
 
     it('should create instance without tokenRefresher', () => {
-      const configurerWithoutAuth = new CoSecConfigurer({
-        appId: 'test-app',
-      });
+      const configurerWithoutAuth = new CoSecConfigurer({});
 
       expect(configurerWithoutAuth).toBeDefined();
       expect(configurerWithoutAuth.tokenStorage).toBeDefined();
@@ -72,7 +68,6 @@ describe('CoSecConfigurer', () => {
       };
 
       const configurerWithCustom = new CoSecConfigurer({
-        appId: 'test-app',
         tokenStorage: customTokenStorage as any,
         deviceIdStorage: customDeviceStorage as any,
         tokenRefresher,
@@ -117,9 +112,7 @@ describe('CoSecConfigurer', () => {
     });
 
     it('should add only basic interceptors without tokenRefresher', () => {
-      const configurerBasic = new CoSecConfigurer({
-        appId: 'test-app',
-      });
+      const configurerBasic = new CoSecConfigurer({});
 
       const basicFetcher = new Fetcher();
       const initialRequestCount =
@@ -147,7 +140,6 @@ describe('CoSecConfigurer', () => {
     it('should conditionally add error interceptors', () => {
       // Test with unauthorized handler only
       const configurerWithUnauthorized = new CoSecConfigurer({
-        appId: 'test-app',
         tokenRefresher,
         onUnauthorized: vi.fn(),
       });
@@ -163,7 +155,6 @@ describe('CoSecConfigurer', () => {
 
       // Test with forbidden handler only
       const configurerWithForbidden = new CoSecConfigurer({
-        appId: 'test-app',
         tokenRefresher,
         onForbidden: vi.fn(),
       });
@@ -179,7 +170,6 @@ describe('CoSecConfigurer', () => {
 
       // Test with both handlers
       const configurerWithBoth = new CoSecConfigurer({
-        appId: 'test-app',
         tokenRefresher,
         onUnauthorized: vi.fn(),
         onForbidden: vi.fn(),
@@ -196,7 +186,6 @@ describe('CoSecConfigurer', () => {
 
       // Test with no error handlers
       const configurerWithNone = new CoSecConfigurer({
-        appId: 'test-app',
         tokenRefresher,
       });
 
@@ -231,9 +220,7 @@ describe('CoSecConfigurer', () => {
     });
 
     it('should have undefined tokenManager when no tokenRefresher provided', () => {
-      const configurerBasic = new CoSecConfigurer({
-        appId: 'test-app',
-      });
+      const configurerBasic = new CoSecConfigurer({});
 
       expect(configurerBasic.tokenManager).toBeUndefined();
     });

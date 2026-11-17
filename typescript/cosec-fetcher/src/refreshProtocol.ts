@@ -23,7 +23,7 @@ import type { CompositeToken, TokenRefresher } from './tokenRefresher.js';
  * the business request still share a single onUnauthorized notification.
  */
 export const NOTIFICATION_GUARD_REFRESHER = Symbol.for(
-  '@ahoo-wang/fetcher-cosec/notification-guard-refresher',
+  '@ahoo-wang/cosec-fetcher/notification-guard-refresher',
 );
 
 export interface NotificationGuardRefresher extends TokenRefresher {

@@ -26,7 +26,7 @@ import { clearAttempt } from './refreshAttempt.js';
 export const DEFAULT_COSEC_TOKEN_KEY = 'cosec-token';
 
 const SHARED_TOKEN_SERIALIZERS = Symbol.for(
-  '@ahoo-wang/fetcher-cosec/shared-token-serializers',
+  '@ahoo-wang/cosec-fetcher/shared-token-serializers',
 );
 const sharedState = globalThis as typeof globalThis & {
   [SHARED_TOKEN_SERIALIZERS]?: WeakMap<object, JwtCompositeTokenSerializer>;
@@ -118,16 +118,6 @@ export class TokenStorage
     // many users' storages under the same key; a process-wide lock there
     // would queue every user's refresh behind one.
     if (shared) setRefreshLockName(this, key);
-  }
-
-  /**
-   * Sets a composite token in storage.
-   * Converts the composite token to a JwtCompositeToken and stores it.
-   * @deprecated Use signIn() instead for better semantic clarity.
-   * @param compositeToken - The composite token containing access and refresh tokens.
-   */
-  setCompositeToken(compositeToken: CompositeToken) {
-    this.signIn(compositeToken);
   }
 
   /**

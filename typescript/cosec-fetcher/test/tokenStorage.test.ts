@@ -147,20 +147,6 @@ describe('TokenStorage', () => {
     });
   });
 
-  describe('setCompositeToken', () => {
-    it('should set composite token', () => {
-      const compositeToken = {
-        accessToken: 'access-token',
-        refreshToken: 'refresh-token',
-      };
-      tokenStorage.setCompositeToken(compositeToken);
-      expect(mockStorage.setItem).toHaveBeenCalledWith(
-        DEFAULT_COSEC_TOKEN_KEY,
-        JSON.stringify(compositeToken),
-      );
-    });
-  });
-
   describe('signIn', () => {
     it('should sign in with composite token', () => {
       const compositeToken = {
