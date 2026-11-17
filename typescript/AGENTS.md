@@ -81,8 +81,10 @@ cases use `localhost` as the other origin. Never an example of a production host
 pnpm test:host     # builds the host with Gradle, starts it, runs every package's host tests, stops it
 ```
 
-- The host tests of a package are `test-host/*.host.ts(x)` with a `vitest.host.config.ts`, apart from `pnpm test`: they
-  need the JVM and wait for real tokens to expire. The `typescript-host` job of CI runs them on every pull request.
+- The host tests of a package are `test-host/*.host.ts(x)` with a `vitest.host.config.ts`; what they ask of the host over
+  plain HTTP (login, counters, the `/test` switches) is `typescript/test-host/hostApi.ts`, shared by relative import, so
+  no package depends on the other's tests or exports it. They are apart from `pnpm test`: they
+  need the JVM and Gradle. The `typescript-host` job of CI runs them on every pull request.
 - `scripts/with-host.mjs` owns the host process: it prints `READY <port>`, the script sets `COSEC_HOST_URL` for the
   command, and the host stops when the script closes its standard input, whatever became of the run. On a shared machine,
   `GRADLE_ARGS="--no-daemon --max-workers=2" pnpm test:host`.

@@ -15,7 +15,7 @@ import { defineConfig, mergeConfig } from 'vitest/config';
 import viteConfig from './vite.config';
 
 // The hooks against a real CoSec host (`pnpm test:host` starts it: test/client-host), in the browser-like environment
-// the hooks render in. Apart from `pnpm test`: it needs the JVM and Gradle, and it waits for real tokens to expire.
+// the hooks render in. Apart from `pnpm test`: it needs the JVM and Gradle.
 export default mergeConfig(
   viteConfig,
   defineConfig({

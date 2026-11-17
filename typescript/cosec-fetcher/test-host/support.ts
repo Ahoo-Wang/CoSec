@@ -21,22 +21,10 @@ import {
   DeviceIdStorage,
   TokenStorage,
   type CoSecConfig,
-  type CompositeToken,
 } from '../src';
+import { hostUrl } from '../../test-host/hostApi';
 
-// Node's, which vitest runs on: the packages do not depend on @types/node.
-declare const process: { env: Record<string, string | undefined> };
-
-/** The host `pnpm test:host` started (test/client-host). */
-export function hostUrl(): string {
-  const url = process.env.COSEC_HOST_URL;
-  if (!url) {
-    throw new Error(
-      'COSEC_HOST_URL is not set: these tests need the host of test/client-host, which `pnpm test:host` starts.',
-    );
-  }
-  return url;
-}
+export * from '../../test-host/hostApi';
 
 const destroyables: { destroy(): void }[] = [];
 let counter = 0;
@@ -82,32 +70,6 @@ export function createHostClient({
   return { client, tokens, devices };
 }
 
-/** Signs `username` in at the host, as the application's own login does: the pair CoSec issued. */
-export async function login(username: string): Promise<CompositeToken> {
-  const response = await fetch(`${hostUrl()}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username }),
-  });
-  if (!response.ok) throw new Error(`login answered ${response.status}`);
-  return (await response.json()) as CompositeToken;
-}
-
-/**
- * Signs `username` in at the host with an access token that has already expired and a live session and refresh token:
- * what a client holds when its token ran out, with nothing to wait for. The host refuses the token `401 token-expired`.
- */
-export async function loginExpired(username: string): Promise<CompositeToken> {
-  const response = await fetch(`${hostUrl()}/test/login-expired`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username }),
-  });
-  if (!response.ok)
-    throw new Error(`login-expired answered ${response.status}`);
-  return (await response.json()) as CompositeToken;
-}
-
 /**
  * Records `<path> <status>` of every request the client puts on the wire, in order: which path a case took is read from
  * here, not from timing. Call it after `vi.stubGlobal`s of your own, and before the first request.
@@ -121,33 +83,4 @@ export function recordWire(): string[] {
     return response;
   });
   return wire;
-}
-
-export interface HostStats {
-  logins: number;
-  refreshes: number;
-}
-
-/** What reached the host since the last {@link resetStats}. */
-export async function stats(): Promise<HostStats> {
-  return (await (await fetch(`${hostUrl()}/test/stats`)).json()) as HostStats;
-}
-
-/** The next refresh the host serves fails as a store that cannot be read does: `503`, nothing issued, nothing spent. */
-export async function failNextRefresh(): Promise<void> {
-  await fetch(`${hostUrl()}/test/fail-next-refresh`, { method: 'POST' });
-}
-
-export async function resetStats(): Promise<void> {
-  await fetch(`${hostUrl()}/test/reset`, { method: 'POST' });
-}
-
-/** Ends the session of `pair` at the host, as a revocation or a server-side sign-out would. */
-export async function endSession(pair: CompositeToken): Promise<void> {
-  const response = await fetch(`${hostUrl()}/test/end-session`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(pair),
-  });
-  if (!response.ok) throw new Error(`end-session answered ${response.status}`);
 }

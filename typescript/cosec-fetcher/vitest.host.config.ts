@@ -14,7 +14,7 @@
 import { defineConfig } from 'vitest/config';
 
 // The client against a real CoSec host (`pnpm test:host` starts it: test/client-host). Apart from `pnpm test`: it needs
-// the JVM and Gradle, and it waits for real tokens to expire.
+// the JVM and Gradle.
 export default defineConfig({
   test: {
     globals: true,

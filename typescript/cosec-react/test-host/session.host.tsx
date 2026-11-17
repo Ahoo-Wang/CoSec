@@ -18,47 +18,18 @@ import {
   CoSecTokenRefresher,
   JwtTokenManager,
   TokenStorage,
-  type CompositeToken,
 } from '@ahoo-wang/cosec-fetcher';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
+import {
+  endSession,
+  hostUrl,
+  login,
+  loginExpired,
+  resetStats,
+  stats,
+} from '../../test-host/hostApi';
 import { RefreshableRouteGuard, SecurityProvider, useSecurity } from '../src';
-
-// Node's, which vitest runs on: the packages do not depend on @types/node.
-declare const process: { env: Record<string, string | undefined> };
-
-const host = (): string => {
-  const url = process.env.COSEC_HOST_URL;
-  if (!url) {
-    throw new Error(
-      'COSEC_HOST_URL is not set: these tests need the host of test/client-host, which `pnpm test:host` starts.',
-    );
-  }
-  return url;
-};
-
-const post = (path: string, body: unknown) =>
-  fetch(`${host()}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-
-const login = async (username: string): Promise<CompositeToken> =>
-  (await (await post('/auth/login', { username })).json()) as CompositeToken;
-
-const refreshes = async (): Promise<number> =>
-  (
-    (await (await fetch(`${host()}/test/stats`)).json()) as {
-      refreshes: number;
-    }
-  ).refreshes;
-
-/** A sign-in whose access token has already expired and whose session is live (test/client-host): nothing to wait for. */
-const loginExpired = async (username: string): Promise<CompositeToken> =>
-  (await (
-    await post('/test/login-expired', { username })
-  ).json()) as CompositeToken;
 
 let counter = 0;
 const created: TokenStorage[] = [];
@@ -75,7 +46,7 @@ function session() {
   const tokenManager = new JwtTokenManager(
     tokenStorage,
     new CoSecTokenRefresher({
-      fetcher: new Fetcher({ baseURL: host() }),
+      fetcher: new Fetcher({ baseURL: hostUrl() }),
       endpoint: '/auth/refresh',
     }),
   );
@@ -92,7 +63,7 @@ afterEach(() => {
 
 describe('the hooks against a real host', () => {
   it('shows the guarded content after a refresh the host answered', async () => {
-    await post('/test/reset', {});
+    await resetStats();
     const { tokenStorage, tokenManager } = session();
     const pair = await loginExpired('alice');
     tokenStorage.signIn(pair);
@@ -108,15 +79,15 @@ describe('the hooks against a real host', () => {
       </SecurityProvider>,
     );
     expect(await screen.findByText('protected')).toBeTruthy();
-    expect(await refreshes()).toBe(1);
+    expect((await stats()).refreshes).toBe(1);
   });
 
   it('falls back to signed out when the host refuses the refresh', async () => {
-    await post('/test/reset', {});
+    await resetStats();
     const { tokenStorage, tokenManager } = session();
     const pair = await loginExpired('alice');
     tokenStorage.signIn(pair);
-    await post('/test/end-session', pair);
+    await endSession(pair);
     render(
       <SecurityProvider tokenStorage={tokenStorage}>
         <RefreshableRouteGuard
@@ -130,7 +101,7 @@ describe('the hooks against a real host', () => {
     );
     expect(await screen.findByText('signed out')).toBeTruthy();
     expect(screen.queryByText('protected')).toBeNull();
-    expect(await refreshes()).toBe(1);
+    expect((await stats()).refreshes).toBe(1);
   });
 
   it('signs in with a pair the host issued, and signs out', async () => {

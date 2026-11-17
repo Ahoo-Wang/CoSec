@@ -7,9 +7,9 @@
     "emitDeclarationOnly": false,
     "declaration": false,
     "declarationMap": false,
-    "rootDir": "..",
+    "rootDir": "../..",
     "lib": ["ES2021", "DOM", "DOM.Iterable"],
     "types": ["vitest/globals", "react", "react-dom"]
   },
-  "include": ["../src/**/*", "./**/*"]
+  "include": ["../src/**/*", "./**/*", "../../test-host/*.ts"]
 }
