@@ -146,6 +146,7 @@ object GuardAllowlist {
             "spring-boot:ManagementPortTest#with one port nothing changes, the probes are requests like any other",
             "spring-boot:CorsWiringTest#Spring MVC with a source answers a preflight before the pipeline and decides everything else",
             "spring-boot:CorsWiringTest#Spring MVC without a source decides a preflight as before and registers no CORS filter",
+            "spring-boot:CorsWiringTest#Spring MVC with two sources fails startup and says to declare a CorsFilter",
             "spring-boot:CorsWiringTest#Spring MVC leaves the application's own CorsFilter alone",
             "spring-boot:CorsWiringTest#WebFlux with a source answers a preflight before the pipeline and decides everything else",
             "spring-boot:CorsWiringTest#WebFlux without a source decides a preflight as before and registers no CORS filter",

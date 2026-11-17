@@ -26,6 +26,7 @@ import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.webflux.OrderedCorsWebFilter
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertThrows
 import org.springframework.boot.WebApplicationType
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration
@@ -118,6 +119,15 @@ class CorsWiringTest {
     open class MvcWithSource : Mvc() {
         @Bean
         open fun corsConfigurationSource(): org.springframework.web.cors.CorsConfigurationSource = CorsWiringTest().source()
+    }
+
+    @Configuration(proxyBeanMethods = false)
+    open class MvcWithTwoSources : Mvc() {
+        @Bean
+        open fun first(): org.springframework.web.cors.CorsConfigurationSource = CorsWiringTest().source()
+
+        @Bean
+        open fun second(): org.springframework.web.cors.CorsConfigurationSource = CorsWiringTest().source()
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -266,6 +276,13 @@ class CorsWiringTest {
             registeredCorsFilters(context).assert().isEmpty()
             withoutSource(port)
         }
+    }
+
+    @Test
+    fun `Spring MVC with two sources fails startup and says to declare a CorsFilter`() {
+        val failure = assertThrows<Exception> { servlet(MvcWithTwoSources::class.java) { _, _ -> } }
+        generateSequence<Throwable>(failure) { it.cause }.map { it.message.orEmpty() }
+            .any { it.contains("STA-5: 2 CorsConfigurationSource beans") }.assert().isTrue()
     }
 
     @Test
