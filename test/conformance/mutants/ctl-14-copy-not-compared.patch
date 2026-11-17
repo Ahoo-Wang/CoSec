@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.SharedPolicyCopyTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
-index 2a60518b..10df1256 100644
+index a8b7b57a..ccc6c900 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
-@@ -41,7 +41,7 @@ internal object EntryChecks {
+@@ -44,7 +44,7 @@ internal object EntryChecks {
          val shared = platform.policies.associateBy { it.id }
          candidate.policies.withIndex().forEach { (i, policy) ->
              val original = shared[policy.id] ?: return@forEach
 -            if (EntryDigest.of(policy) != EntryDigest.of(original)) {
-+            if (false) {
++            if (EntryDigest.of(original) != EntryDigest.of(original)) {
                  findings += Finding(
                      "V2",
                      "$.policies[$i].id",
