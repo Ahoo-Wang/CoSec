@@ -349,7 +349,7 @@ first platform document always comes from `cosec-migrate publish`:
    document (`tenant:(platform)`), as a revision of kind `BOOTSTRAP`. It refuses when that document already binds
    someone to `cosec:platform-admin`; `--force` is for the recovery where every administrator is lost.
 
-`cosec-migrate` connects to one Redis server (`--to-redis`), and exits with `0` when done, `1` when the data was
+`cosec-migrate` connects to the Redis that `--to-redis` names: one server, or with `--cluster` the comma-separated seed nodes of a Redis Cluster. It exits with `0` when done, `1` when the data was
 rejected or publishing failed, `2` on a usage error. Converting 7.x data into documents is in
 [Upgrading](./upgrading.md).
 
