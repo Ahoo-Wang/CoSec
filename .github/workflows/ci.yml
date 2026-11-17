@@ -169,8 +169,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 22.12.0 is the floor the packages' `engines.node` promises; 24.22.2 is the one the docs job runs on.
-        node-version: [ '22.12.0', '24.22.2' ]
+        # 24.22.2 is the one the docs job runs on. pnpm 11 itself needs Node 22.13 or later, so the Node 22 leg is the
+        # newest 22 and not the 22.12.0 that `engines.node` promises consumers: that floor is checked by importing the
+        # built packages under 22.12.0 (the package check, which arrives with the first package).
+        node-version: [ '22.23.4', '24.22.2' ]
     defaults:
       run:
         working-directory: typescript
