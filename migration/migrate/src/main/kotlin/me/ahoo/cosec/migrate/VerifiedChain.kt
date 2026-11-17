@@ -18,13 +18,20 @@ package me.ahoo.cosec.migrate
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.ChainCheck
+import me.ahoo.cosec.control.store.IndexCheck
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
- * What [ChainVerification] found for the document [key]: its [check], or the [failure] that kept it from reading the
- * chain.
+ * What [ChainVerification] found for the document [key]: its [check] and whether its revision [index] follows it, or
+ * the [failure] that kept it from reading the chain.
  */
-class VerifiedChain(val key: SnapshotKey, val check: ChainCheck?, val failure: String?) {
+class VerifiedChain(
+    val key: SnapshotKey,
+    val check: ChainCheck?,
+    val failure: String?,
+    /** Whether the revision index follows the head's chain; `null` when the chain could not be read. */
+    val index: IndexCheck? = null,
+) {
     /** Whether the chain is intact: read, with no record missing. */
     val intact: Boolean get() = check is ChainCheck.Intact
 }

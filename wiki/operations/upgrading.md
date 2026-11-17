@@ -104,7 +104,7 @@ example, is a usage error before anything is read or written, never ignored.
 | `bootstrap` | Binds one principal of the platform tenant to `cosec:platform-admin`, so the control plane has someone who may write. |
 | `partition plan` | Converts twice, with `--partition platform` and `by-owner`, and writes one plan per tenant to submit through the control plane. Writes nothing to Redis. |
 | `repair-references` | Adds to the back-reference index what every document's head refers to and the index misses, removes what no head has, and completes the app list. |
-| `verify-chain` | Walks each document's revision chain and names a revision whose record is missing, the trace a write lost in a Redis failover leaves. Writes nothing. |
+| `verify-chain` | Walks each document's revision chain and names a revision whose record is missing, the trace a write lost in a Redis failover leaves, and a revision index that does not follow the head's chain. Writes nothing. |
 
 #### Convert
 
@@ -317,10 +317,21 @@ index still lists, and prints one line per document:
 - `ok <doc>: intact down to revision <n>`, or `ok <doc>: no head` for a document that has none;
 - `BROKEN <doc>: no record holds revision <n> (<digest>): ...` when the record of a revision the chain needs is
   missing or holds another revision;
+- `INDEX <doc>: the revision index does not follow the head's chain: ...` when the document's revision index is behind
+  the head by more than a publication in flight, or on another branch (a failover or a partial restore left it so,
+  `CTL-35`): its last entry is not the head's, or an entry names another parent than the entry below it. **A finding:
+  it fails the run.** Nothing is lost: the next read of the document's history rebuilds the index from the head's
+  records, and `verify-chain` repairs nothing itself;
+- `note <doc>: the revision index is one revision behind the head ...` when the index ends exactly at the head's
+  parent: a publication that is settling (its head is written, its index entry not yet), or one whose index write
+  failed. **Not a failure**; the next read adds the entry;
+- `note <doc>: <n> revision index entries predate the parent field ...` for entries an older version wrote: they cannot
+  be checked until the first read rewrites them. **Not a failure**;
 - `FAILED <doc>: <reason>` when the document could not be read; the others are still verified.
 
-Then `Verified <n> document(s): <b> broken, <f> could not be read.` It exits with `1` when any chain is broken or
-could not be read. Revisions that [retention](./storage.md#revisions-history-and-rollback) reclaimed are not a
+Then `Verified <n> document(s): <b> broken, <f> could not be read.`, with `, <i> with a revision index that does not
+follow the head's chain` before the full stop when there is one. It exits with `1` when any chain is broken, any index
+differs, or a document could not be read. Revisions that [retention](./storage.md#revisions-history-and-rollback) reclaimed are not a
 break: the walk stops below the oldest revision kept. It only reads, so it may run while the control plane runs, and
 as often as you like.
 

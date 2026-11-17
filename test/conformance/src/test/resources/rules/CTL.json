@@ -456,7 +456,14 @@
         "control:HistoryForkTest#a record missing below the head hides what cannot be shown to be on the chain",
         "control:HistoryForkTest#a head restored to a replaced digest is listed again and not reclaimed",
         "control:HistoryForkTest#a republication of a number between the walk and the write is not overwritten",
-        "control:HistoryForkTest#a repair that a reclamation overtakes lists nothing below its floor"
+        "control:HistoryForkTest#a repair that a reclamation overtakes lists nothing below its floor",
+        "control:VerifyIndexTest#an index one revision behind the head is a publication settling, two behind differs",
+        "control:VerifyIndexTest#an index with another digest at the head's revision, or none at all, differs",
+        "control:VerifyIndexTest#a verification between a head write and its index write finds a note, not a finding",
+        "control:VerifyIndexTest#a link that is broken differs, and an entry with no parent only cannot be checked",
+        "control:VerifyIndexTest#verifying the index repairs nothing, a read of the history does",
+        "migrate:ChainVerificationTest#an index on another branch than the head is a finding, and verify-chain repairs nothing",
+        "migrate:ChainVerificationTest#an index one revision behind the head is a note, not a failure"
       ],
       "pending": null
     }
