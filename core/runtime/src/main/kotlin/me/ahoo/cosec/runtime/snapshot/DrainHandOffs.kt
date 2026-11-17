@@ -24,14 +24,32 @@ import java.util.concurrent.atomic.AtomicBoolean
  * after it. A pool that refuses the task sends it to housekeeping. When that refuses too, the caller's thread runs the
  * source's hand-offs, for as long as they come: the back-pressure that keeps answering under overload, where deferring
  * them would leave requests waiting without a bound. Each refusal is counted ([SnapshotMetrics.onHandOffRefused]).
+ *
+ * Close owns what the source accepted, and a hand-off may hold a key close does not reach: a removed one, whose
+ * requests a pass or a lane offered after its eviction. So close runs what is pending ([runPending]) once its keys are
+ * ended, and a hand-off made after that is run by its offerer, which re-checks [closed] once it has enqueued.
  */
-internal class DrainHandOffs(private val threads: SnapshotThreads, private val metrics: SnapshotMetrics) {
+internal class DrainHandOffs(
+    private val threads: SnapshotThreads,
+    private val metrics: SnapshotMetrics,
+    private val closed: AtomicBoolean,
+) {
     private val waiting = ConcurrentLinkedQueue<Runnable>()
     private val scheduled = AtomicBoolean()
 
     fun handOff(drain: Runnable) {
         waiting.add(drain)
         schedule()
+        // Enqueue, then re-check: close set [closed] before it ran what was pending, so either it took this one or this
+        // offerer sees [closed] and takes it, whatever the pool did with the task.
+        if (closed.get()) runPending()
+    }
+
+    /** Runs every pending hand-off on this thread, unbounded: close's, once its keys are ended, and an offerer's after. */
+    fun runPending() {
+        while (true) {
+            (waiting.poll() ?: return).run()
+        }
     }
 
     private fun schedule() {
