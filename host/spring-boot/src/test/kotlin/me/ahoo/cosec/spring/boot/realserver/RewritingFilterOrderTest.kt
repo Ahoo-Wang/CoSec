@@ -49,6 +49,9 @@ import java.net.Socket
  * (`spring.mvc.hiddenmethod.filter.enabled`, `spring.webflux.hiddenmethod.filter.enabled`) turns `POST` with
  * `_method=DELETE` into a DELETE; on both stacks it runs before CoSec, so the DELETE is what CoSec decides. Real
  * Spring Boot applications, with Boot's own filter registration and ordering, on Tomcat and Reactor Netty.
+ *
+ * The CORS filter of `STA-5` is no such filter: it rewrites nothing, and it runs right before CoSec's so that a
+ * preflight is answered and not decided (`CorsWiringTest` holds its order).
  */
 class RewritingFilterOrderTest {
     @RestController
