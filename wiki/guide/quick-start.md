@@ -241,7 +241,7 @@ document above already lets signed-in callers reach the control API; without tha
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
-   PLATFORM_TOKEN='<the token after "platform token: " in the application'"'"'s output>'
+   PLATFORM_TOKEN='…'   # the token the application printed after "platform token: "
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
    ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | sed -E 's/^\{"id":"([^"]+)".*/\1/')
    curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'

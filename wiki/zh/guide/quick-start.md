@@ -197,7 +197,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
-   PLATFORM_TOKEN='<应用输出中 "platform token: " 之后的令牌>'
+   PLATFORM_TOKEN='…'   # 应用在 "platform token: " 之后打印的令牌
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
    ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | sed -E 's/^\{"id":"([^"]+)".*/\1/')
    curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
