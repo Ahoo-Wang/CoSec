@@ -190,7 +190,7 @@ internal class SnapshotFamilies<A : Any>(
         fun slotFor(key: SnapshotKey, context: SlotContext): KeySlot<A> {
             val id = spec.idOf(key)
             while (true) {
-                val slot = slots.computeIfAbsent(id) { Slot(key, spec.compiler, context) }
+                val slot = slots.computeIfAbsent(id) { context.slots.create(key, spec.compiler, context) }
                 if (!slot.removed) return slot
                 slots.remove(id, slot)
             }
