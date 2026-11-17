@@ -68,6 +68,35 @@ pnpm test
   and where the two disagree the host is right and the model is fixed. The bodies of `wiki/integration/clients.md` are
   the ones CoSec writes.
 
+## Tests against a real host
+
+`test/client-host` (a Gradle project, test sources only) is a real CoSec 8 application: the starter over WebFlux with
+CoCache in memory (no Redis), one platform document, a login, a refresh route that answers `401` for a refused pair and
+`503` when it cannot decide (`wiki/integration/clients.md`), and `/test` routes that count what reached it, echo the
+headers it received, end a session, sign in with an access token that has already expired and make the next refresh
+answer `503`. It listens on the loopback interface only (127.0.0.1: it signs in whoever names itself), and the trust
+cases use `localhost` as the other origin. Never an example of a production host.
+
+```bash
+pnpm test:host     # builds the host with Gradle, starts it, runs every package's host tests, stops it
+```
+
+- The host tests of a package are `test-host/*.host.ts(x)` with a `vitest.host.config.ts`; what they ask of the host over
+  plain HTTP (login, counters, the `/test` switches) is `typescript/test-host/hostApi.ts`, shared by relative import, so
+  no package depends on the other's tests or exports it. They are apart from `pnpm test`: they
+  need the JVM and Gradle. The `typescript-host` job of CI runs them on every pull request.
+- `scripts/with-host.mjs` owns the host process: it prints `READY <port>`, the script sets `COSEC_HOST_URL` for the
+  command, and the host stops when the script closes its standard input, whatever became of the run. On a shared machine,
+  `GRADLE_ARGS="--no-daemon --max-workers=2" pnpm test:host`.
+- **No case waits for a token, and none races its lifetime.** `/test/login-expired` issues a pair whose access token expired
+  a minute ago (`TokenConverter.toToken` with explicit validities) and whose session and refresh token are live. A client
+  that reads the expiry refreshes before it sends; a client whose clock is behind (the test sets only `Date` back:
+  `vi.useFakeTimers({ toFake: ['Date'] })`) sends it and is refused `401 token-expired`. Which path a case took is asserted
+  from the wire (`recordWire`: `<path> <status>` in order) and the host's counters, never from timing, and there is no
+  `earlyPeriod` trick.
+- Add a case here when a package's unit test asserts what CoSec answers; `:client-host:check` keeps the host itself
+  answering as the tests assume.
+
 ## Releasing
 
 Publishing the GitHub release `vX.Y.Z` publishes the packages to npm, from the `npm-publish` job of

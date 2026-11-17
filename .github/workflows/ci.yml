@@ -13,7 +13,7 @@
 
 # Tests, detekt and coverage: one job per project group, derived from settings.gradle.kts by scripts/ci/plan.py, so a
 # new project needs no change here. Each job uploads its own coverage to Codecov. The docs are checked and built in
-# the `docs` job, the Kubernetes overlays in the `k8s` job, the TypeScript packages in the `typescript` job. The `CI` job is the one required check: it passes only
+# the `docs` job, the Kubernetes overlays in the `k8s` job, the TypeScript packages in the `typescript` job and against a real host in `typescript-host`. The `CI` job is the one required check: it passes only
 # when every other job here passed.
 name: CI
 on:
@@ -259,6 +259,57 @@ jobs:
           retention-days: 1
           if-no-files-found: error
 
+  # The TypeScript client against a real CoSec host (test/client-host: the starter over WebFlux, CoCache in memory), which
+  # `pnpm test:host` starts. A job of its own: it needs the JVM and Gradle beside Node, and runs beside `typescript`
+  # instead of lengthening it. Like it: every pull request, pinned actions, no secrets, read-only Gradle cache off main.
+  typescript-host:
+    name: TypeScript against a real host
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      # Pull requests read main's Gradle cache and never write their own, as the Gradle jobs do.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.28.11
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.2
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The packages import each other through dist.
+      - name: Build
+        run: pnpm build
+
+      # Builds the host with Gradle, starts it, runs both packages' host tests with COSEC_HOST_URL set, and stops it.
+      - name: Test against the host
+        run: pnpm test:host
+
   # The one upload of the TypeScript coverage, with the token the `typescript` job does not have. Its own flag keeps it
   # apart from the Gradle uploads; codecov.yml waits for it and plan.py counts it.
   typescript-coverage:
@@ -316,7 +367,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [ plan, test, actionlint, docs, k8s, typescript, typescript-coverage ]
+    needs: [ plan, test, actionlint, docs, k8s, typescript, typescript-host, typescript-coverage ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
