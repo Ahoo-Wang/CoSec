@@ -74,6 +74,14 @@ class VerifyChainDuringReclaimTest {
         revisions.verifyChain(ACME).assert().isInstanceOf(ChainCheck.Intact::class.java)
     }
 
+    @Test
+    fun `what was reclaimed before the walk began is not a lost revision either`() = runBlocking<Unit> {
+        publishedFour()
+        revisions.reclaim(ACME).records.size.assert().isEqualTo(2)
+
+        (revisions.verifyChain(ACME) as ChainCheck.Intact).oldest.assert().isEqualTo(3)
+    }
+
     /** The negative side: what the floor does not cover is still lost, whenever the walk finds it. */
     @Test
     fun `a record missing above the floor as it is now is still broken`() = runBlocking<Unit> {
