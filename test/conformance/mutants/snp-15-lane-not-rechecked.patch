@@ -1,0 +1,16 @@
+# Rule: SNP-15
+# Mutant: the drain does not take the load lane again after its release, so a load's end offered while the flag was held waits for the next caller
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
+index 3a5dab47..38f71336 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
+@@ -155,7 +155,6 @@ internal class KeyDrain<T : Any>(
+                 hooks.afterRelease()
+                 // An offer that lost the flag just before the release is taken here: no event is stranded. A lane
+                 // event is taken again whatever the budget; only caller events are handed off.
+-                if (laneWaiting) continue
+                 if (spent) return handOff()
+                 if (queue.isEmpty()) return
+             }

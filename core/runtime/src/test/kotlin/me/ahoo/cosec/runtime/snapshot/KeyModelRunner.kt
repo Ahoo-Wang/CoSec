@@ -121,7 +121,7 @@ internal class KeyModelRunner(
             is KeyEffect.Skip -> world.skip(effect.waiter)
             is KeyEffect.Redispatch -> world.redispatch(effect.event)
             is KeyEffect.ScheduleRetry -> world.threads.scheduler.schedule(
-                Runnable { offer(KeyEvent.RetryDue) },
+                Runnable { offer(KeyEvent.RetryDue()) },
                 effect.delay.toNanos(),
                 TimeUnit.NANOSECONDS
             )

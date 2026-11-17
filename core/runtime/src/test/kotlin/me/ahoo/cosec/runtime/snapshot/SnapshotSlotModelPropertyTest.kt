@@ -41,9 +41,31 @@ class SnapshotSlotModelPropertyTest {
 
     @Test
     fun theKeyRunnerKeepsToTheModelInEveryScriptedOrder() = quietly {
-        val counting = keyRunners(hooks = KeyDrain.Hooks(beforeNext = { taken += "took ${it::class.simpleName}" }))
-        runSeeds("KeyRunner model", "theKeyRunnerKeepsToTheModelInEveryScriptedOrder", counting, EVENT_KINDS)
+        runSeeds("KeyRunner model", "theKeyRunnerKeepsToTheModelInEveryScriptedOrder", counting(), EVENT_KINDS)
     }
+
+    /**
+     * K = 0: every caller's drain takes one caller event and hands the rest off, so the hand-off and the load lane carry
+     * as much as they ever do. A load's end left behind a spent budget, or a hand-off close leaves, fails here.
+     */
+    @Test
+    fun theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff() = quietly {
+        runSeeds(
+            "KeyRunner model, K = 0",
+            "theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
+            counting(k = 0),
+            EVENT_KINDS
+        )
+    }
+
+    /** K = 4, the runner's K once it is the default. */
+    @Test
+    fun theKeyRunnerKeepsToTheModelAtKFour() = quietly {
+        runSeeds("KeyRunner model, K = 4", "theKeyRunnerKeepsToTheModelAtKFour", counting(k = 4), EVENT_KINDS)
+    }
+
+    private fun counting(k: Int = KeyRunner.PROVISIONAL_K) =
+        keyRunners(k, KeyDrain.Hooks(beforeNext = { taken += "took ${it::class.simpleName}" }))
 
     private fun quietly(block: () -> Unit) {
         // Every load that fails logs with its stack trace: at the TRACE level tests run with, tens of megabytes.

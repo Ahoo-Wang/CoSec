@@ -1,0 +1,17 @@
+# Rule: SNP-13
+# Mutant: a load's end is not judged by epoch, so a load of an absent key that started before a recompile and ends before its mark is taken is followed by none, and the mark answers that no load is needed
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+index 22fed2ff..d97e0385 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+@@ -223,7 +223,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+     ): LoadState<T>? {
+         // A load that started before a recompile is followed by one in the new epoch, whatever it read: the rule does
+         // not depend on whether the recompile's mark or this end is taken first (RFC 0013 B2b, the load lane).
+-        val recompiled = load.epoch < step.moment.epoch
++        val recompiled = load.epoch < step.moment.epoch && false
+         val wanted = step.again || stale || recompiled || (installed != null && load.fromLocalCopy)
+         val againForced = step.againForced
+         val pending = step.next

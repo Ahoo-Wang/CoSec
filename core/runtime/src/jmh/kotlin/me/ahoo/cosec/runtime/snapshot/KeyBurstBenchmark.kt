@@ -46,6 +46,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executors
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -105,6 +106,8 @@ open class KeyBurstBenchmark {
     @Benchmark
     fun burst() {
         val key = SnapshotKey.Tenant("burst-${bursts++}")
+        // What makes the burst a cold load: its key is not installed when it begins, and one load of it runs.
+        check(source.peekAll(listOf(key)) == null) { "Burst key [$key] was installed when its burst began." }
         val start = CyclicBarrier(OFFERING + 1)
         val offered = CountDownLatch(OFFERING)
         val answers = arrayOfNulls<CompletableFuture<*>>(BURST)
@@ -132,6 +135,8 @@ open class KeyBurstBenchmark {
         second.get()
         store.release(key)
         answers.forEach { it!!.join() }
+        val loads = store.coldReads(key)
+        check(loads == 1) { "Burst key [$key] was loaded cold $loads times in its burst, not once." }
         if (recording) times.forEach(offers::add)
     }
 
@@ -144,8 +149,11 @@ open class KeyBurstBenchmark {
         println("\n[$slots] one offer: ${offers.report()}")
         println("[$slots] one join, a second key during the burst: ${joins.report()}")
         println("[$slots] bursts: $bursts, second keys: $seconds, tenant load outcomes: $counts")
-        // A burst request answered FAILED or TIMEOUT measured no cold load: the trial is void.
-        check(counts.filterKeys { it != LoadOutcome.COLD }.values.all { it == 0L }) { "A request was not a cold load: $counts" }
+        // A burst request answered FAILED or TIMEOUT measured no cold load: the trial is void. One served the burst's
+        // load's install counts as HIT: it was queued when the load ended, and taken after (the runner's load lane).
+        check(counts.filterKeys { it == LoadOutcome.FAILED || it == LoadOutcome.TIMEOUT }.values.all { it == 0L }) {
+            "A request was not answered by its burst's load: $counts"
+        }
     }
 
     /** Nanosecond samples, reported in microseconds. */
@@ -174,15 +182,22 @@ open class KeyBurstBenchmark {
             SnapshotDigest(MessageDigest.getInstance(SnapshotDigest.SHA_256).digest(TEXT.encodeToByteArray())),
         )
         private val held = ConcurrentHashMap<SnapshotKey, CompletableFuture<SnapshotRead>>()
+        private val cold = ConcurrentHashMap<SnapshotKey, AtomicInteger>()
 
-        override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> =
-            if (key is SnapshotKey.Tenant && key.tenantId.startsWith("burst-")) {
-                held.computeIfAbsent(key) { CompletableFuture() }
-            } else {
-                CompletableFuture.completedFuture(present)
-            }
+        /** A key never seen is loaded with a full read, then confirmed with a conditional one: the full reads count. */
+        override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> {
+            if (burst(key)) cold.computeIfAbsent(key) { AtomicInteger() }.incrementAndGet()
+            return answer(key)
+        }
 
-        override fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?): CompletableFuture<SnapshotRead> = read(key)
+        override fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?): CompletableFuture<SnapshotRead> = answer(key)
+
+        private fun answer(key: SnapshotKey): CompletableFuture<SnapshotRead> =
+            if (burst(key)) held.computeIfAbsent(key) { CompletableFuture() } else CompletableFuture.completedFuture(present)
+
+        private fun burst(key: SnapshotKey) = key is SnapshotKey.Tenant && key.tenantId.startsWith("burst-")
+
+        fun coldReads(key: SnapshotKey): Int = cold.remove(key)?.get() ?: 0
 
         override fun subscribe(listener: SnapshotChangeListener): AutoCloseable = AutoCloseable {}
 
