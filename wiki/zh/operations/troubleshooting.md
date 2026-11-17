@@ -430,8 +430,13 @@ namespace：`cosec.key-prefix` 是每个实例、控制面和 `cosec-migrate` �
 
 ### 通道权限导致启动失败 {#startup-fails-on-a-channel-permission}
 
-拒绝某个缓存失效通道的 Redis ACL 会使该缓存创建失败，抛出的 `IllegalStateException` 指出需要允许的模式，例如
-`[&cosec:control:inv:*]`。允许 CoSec 前缀下的通道，`pubsub` 模式下再允许 CoCache 的探测
+```text
+Redis denied publishing to the invalidation channel[<channel>] of <cache>: allow the channel pattern [<pattern>] in the ACL of this connection's user (atomic broadcast also needs the key pattern [~<prefix>*]). Without it every write would fail at its broadcast after changing L1. Redis replied: <Redis 的错误>
+```
+
+拒绝某个缓存失效通道的 Redis ACL 会使该缓存创建失败，抛出带有这段文字（CoCache 的原文）的 `IllegalStateException`。缓存的通道是它的存储路径，在最后一段之前加上 `inv:`：要允许的模式是存储路径到最后一个 `:` 为止的部分，再加 `inv:*`。默认的
+`cosec.key-prefix` 下，CoSec 创建的缓存需要 `&cosec:inv:*`（快照、成员关系、候选）、`&cosec:token:inv:*`、
+`&cosec:token:subject:inv:*`、`&cosec:control:inv:*` 和 `&cosec:shadow:inv:*`。允许 CoSec 前缀下的通道，`pubsub` 模式下再允许 CoCache 的探测
 （[Redis 要求](./storage.md#redis-requirements)）。
 
 ### 从 Redis 副本读取导致启动失败 {#startup-fails-because-redis-is-read-from-replicas}

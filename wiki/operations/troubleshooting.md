@@ -526,8 +526,15 @@ at once ([Redis keys](./storage.md#redis-keys)).
 
 ### Startup fails on a channel permission
 
-A Redis ACL that denies a cache's invalidation channel fails its creation with an `IllegalStateException` naming the
-pattern to allow, such as `[&cosec:control:inv:*]`. Allow the channels under CoSec's prefixes, and CoCache's probe in
+```text
+Redis denied publishing to the invalidation channel[<channel>] of <cache>: allow the channel pattern [<pattern>] in the ACL of this connection's user (atomic broadcast also needs the key pattern [~<prefix>*]). Without it every write would fail at its broadcast after changing L1. Redis replied: <Redis's error>
+```
+
+A Redis ACL that denies a cache's invalidation channel fails the cache's creation with this `IllegalStateException`
+(CoCache's text). A cache's channel is its storage path with `inv:` before the last segment: the pattern to allow is
+the path up to its last `:`, then `inv:*`. With the default `cosec.key-prefix`, the caches CoSec creates need
+`&cosec:inv:*` (snapshots, memberships, candidates), `&cosec:token:inv:*`, `&cosec:token:subject:inv:*`,
+`&cosec:control:inv:*` and `&cosec:shadow:inv:*`. Allow the channels under CoSec's prefixes, and CoCache's probe in
 `pubsub` mode ([Redis requirements](./storage.md#redis-requirements)).
 
 ### Startup fails because Redis is read from replicas {#startup-fails-because-redis-is-read-from-replicas}
