@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-index 6b2d91c5..661d169f 100644
+index aa6244b4..ec54966a 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-@@ -133,7 +133,7 @@ internal class Slot<T : Any>(
+@@ -134,7 +134,7 @@ internal class Slot<T : Any>(
          val known = installed
          // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
          val compiled = known != null && known.origin.compiled
 -        val recompiles = key != context.sharedKey && compiled && installedEpoch < epoch
-+        val recompiles = false
++        val recompiles = key != context.sharedKey && compiled && installedEpoch < Long.MIN_VALUE
          return Load(known, force, result, epoch, recompiles, passRead)
      }
  

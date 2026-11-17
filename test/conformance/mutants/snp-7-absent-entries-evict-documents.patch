@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.*
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
-index 0880130a..500dbdd3 100644
+index f7a40c00..fc47935e 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
-@@ -161,7 +161,7 @@ internal class SnapshotFamilies<A : Any>(
+@@ -204,7 +204,7 @@ internal class SnapshotFamilies<A : Any>(
          const val MAX_SLACK = 4096
  
          /** Whether [entry] is for a document the store does not hold: the other kind ([Family.count]). */
@@ -14,4 +14,4 @@ index 0880130a..500dbdd3 100644
 +        fun isAbsent(entry: SnapshotEntry<*>): Boolean = false
  
          /**
-          * The [wanted] least recently used of [slots] that are [eligible], least recent first, in one pass. Each slot's
+          * The [wanted] least recently used of the [slots] that are [listed] and [eligible], least recent first, in one pass,

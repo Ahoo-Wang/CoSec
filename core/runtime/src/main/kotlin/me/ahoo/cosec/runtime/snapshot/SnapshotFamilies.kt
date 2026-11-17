@@ -95,20 +95,37 @@ internal class SnapshotFamilies<A : Any>(
     }
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
-    internal fun victims(family: Family<*>, absent: Boolean, wanted: Int): List<Slot<*>> {
-        val ofKind = family.slots.values.asSequence().filter { slot -> slot.installed?.let { isAbsent(it) == absent } == true }
-        return leastRecentlyUsed(ofKind, wanted, { it.lastAccess }, { it.isIdle() })
-    }
+    internal inline fun victims(
+        family: Family<*>,
+        absent: Boolean,
+        wanted: Int,
+        lastAccessOf: (Slot<*>) -> Long = { it.lastAccess },
+    ): List<Slot<*>> = leastRecentlyUsed(
+        candidates(family, absent),
+        wanted,
+        // A slot is checked again, since its kind can change after it was listed.
+        { slot -> slot.installed?.let { isAbsent(it) == absent } == true },
+        lastAccessOf,
+        { it.isIdle() },
+    )
+
+    /**
+     * What a pass for the kind [absent] names scans: absent entries from their own set, documents from the family's map.
+     * A set of the documents made their warmed scan 1.6 times slower at a bound of 100,000 (2.25-2.42 ms against
+     * 3.7-4.1 ms, `EvictionPassBenchmark`), for nothing their pass uses.
+     */
+    fun candidates(family: Family<*>, absent: Boolean): Iterable<Slot<*>> =
+        if (absent) family.absentMembers else family.slots.values
 
     /** Moves [family]'s counts for an entry replaced by another, either of them null: where `installed` is written. */
-    fun move(family: Family<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
+    fun move(family: Family<*>, slot: Slot<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
         val from = old?.let(::isAbsent)
         val to = new?.let(::isAbsent)
         if (from == to) {
             return
         }
-        from?.let { family.count(it).decrementAndGet() }
-        to?.let { family.count(it).incrementAndGet() }
+        from?.let { family.leave(slot, it) }
+        to?.let { family.join(slot, it) }
     }
 
     /** One family's documents, by id, and how many of each kind it holds (`SNP-14`). */
@@ -119,7 +136,26 @@ internal class SnapshotFamilies<A : Any>(
         private val documents = AtomicInteger()
         private val absentEntries = AtomicInteger()
 
+        /**
+         * The slots holding an absent entry, beside the counts and moved with them: the absent kind's pass walks these
+         * alone, so it costs what that kind holds (512 at most), however many documents the family holds. The documents'
+         * pass walks the family's map. Read only by eviction passes and tests; `peek` never sees it.
+         */
+        private val absentSlots: MutableSet<Slot<*>> = ConcurrentHashMap.newKeySet()
+
+        val absentMembers: Set<Slot<*>> get() = absentSlots
+
         fun count(absent: Boolean): AtomicInteger = if (absent) absentEntries else documents
+
+        fun join(slot: Slot<*>, absent: Boolean) {
+            if (absent) absentSlots += slot
+            count(absent).incrementAndGet()
+        }
+
+        fun leave(slot: Slot<*>, absent: Boolean) {
+            if (absent) absentSlots -= slot
+            count(absent).decrementAndGet()
+        }
 
         fun bound(absent: Boolean): Int = if (absent) spec.maxAbsent else spec.maxEntries
 
@@ -128,10 +164,17 @@ internal class SnapshotFamilies<A : Any>(
 
         fun overCap(absent: Boolean): Boolean = count(absent).get() > cap(absent)
 
-        /** Claims one removal of a kind's entry: its count's decrement, never below the bound; false at the bound. */
-        fun claim(absent: Boolean): Boolean {
+        /**
+         * Claims the removal of [slot], an entry of the kind [absent] names: its count's decrement, never below the
+         * bound, and for an absent entry its place among [absentMembers]; false at the bound, and nothing moves.
+         */
+        fun claim(slot: Slot<*>, absent: Boolean): Boolean {
             val bound = bound(absent)
-            return count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound
+            val claimed = count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound
+            if (claimed && absent) {
+                absentSlots -= slot
+            }
+            return claimed
         }
 
         /** Drops [slot] from the map, if it is still the one held for [id]. */
@@ -164,16 +207,19 @@ internal class SnapshotFamilies<A : Any>(
         fun isAbsent(entry: SnapshotEntry<*>): Boolean = entry.origin == EntryOrigin.ABSENT
 
         /**
-         * The [wanted] least recently used of [slots] that are [eligible], least recent first, in one pass. Each slot's
+         * The [wanted] least recently used of the [slots] that are [listed] and [eligible], least recent first, in one pass,
+         * inlined into its caller as the plain loop it replaced (a sequence and three function calls per slot cost the scan
+         * up to a fifth, `EvictionPassBenchmark`). Each slot's
          * stamp is read once, through [lastAccessOf], and the heap and the final order use that value: requests write the
          * stamp from any thread as they peek, and ordering by a value that moves under it would choose wrongly or, once
          * the sort is TimSort (32 elements or more), throw "Comparison method violates its general contract". Only a
          * slot that would be chosen is asked whether it is [eligible] (idle: that takes its monitor), and only it
          * allocates.
          */
-        internal fun <S : Any> leastRecentlyUsed(
-            slots: Sequence<S>,
+        internal inline fun <S : Any> leastRecentlyUsed(
+            slots: Iterable<S>,
             wanted: Int,
+            listed: (S) -> Boolean,
             lastAccessOf: (S) -> Long,
             eligible: (S) -> Boolean,
         ): List<S> {
@@ -183,6 +229,9 @@ internal class SnapshotFamilies<A : Any>(
             // The most recently used of the chosen on top, so that a less recently used slot replaces it.
             val chosen = PriorityQueue<Stamped<S>>(compareByDescending { it.lastAccess })
             for (slot in slots) {
+                if (!listed(slot)) {
+                    continue
+                }
                 val lastAccess = lastAccessOf(slot)
                 val full = chosen.size >= wanted
                 if (full && lastAccess >= chosen.peek().lastAccess) {
@@ -200,6 +249,6 @@ internal class SnapshotFamilies<A : Any>(
         }
 
         /** A slot with its stamp as the scan read it, once. */
-        private class Stamped<S>(val slot: S, val lastAccess: Long)
+        internal class Stamped<S>(val slot: S, val lastAccess: Long)
     }
 }

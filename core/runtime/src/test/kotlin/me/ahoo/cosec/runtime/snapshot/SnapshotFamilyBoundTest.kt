@@ -61,6 +61,9 @@ class SnapshotFamilyBoundTest {
 
     private fun countsAreARecount() {
         source.heldCounts(SnapshotKind.APP).assert().describedAs(state()).isEqualTo(documentsHeld() to absentHeld())
+        val app = source.entries().filter { it.key is SnapshotKey.App }
+        val held = app.filter { it.origin == EntryOrigin.ABSENT }.mapTo(HashSet()) { it.key }
+        source.heldAbsentMembers(SnapshotKind.APP).assert().describedAs(state()).isEqualTo(held)
     }
 
     /** What a failure must show: the counts, a recount of what is served, the loads in flight and the queued tasks. */
