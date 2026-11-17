@@ -43,7 +43,11 @@ class KeyRunnerHitTest {
     }
     private val handOffs = CopyOnWriteArrayList<Runnable>()
 
-    /** Compilations run in place; a hand-off is held until the test runs it. */
+    /**
+     * Compilations run in place; a hand-off is held until the test runs it. Told by its class name: `DrainHandOffs`
+     * submits `::run`, which has no type of its own, and a seam in main for this one test would be a tests-only member.
+     * The test goes with [Slot] in step 4.
+     */
     private val pool = Executor { task ->
         if (task.javaClass.name.contains("DrainHandOffs")) handOffs += task else task.run()
     }

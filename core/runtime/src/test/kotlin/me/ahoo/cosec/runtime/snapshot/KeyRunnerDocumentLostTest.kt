@@ -20,6 +20,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.TimeUnit
 
 /**
@@ -33,7 +34,16 @@ class KeyRunnerDocumentLostTest {
         put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1))
     }
-    private val metrics = RecordingMetrics()
+    private val recording = RecordingMetrics()
+
+    /** Completed at the first `onDocumentLost`, after it is recorded: what a test that waits for the report waits on. */
+    private val reported = CompletableFuture<Pair<SnapshotKey, Long>>()
+    private val metrics = object : SnapshotMetrics by recording {
+        override fun onDocumentLost(key: SnapshotKey, lastRevision: Long) {
+            recording.onDocumentLost(key, lastRevision)
+            reported.complete(key to lastRevision)
+        }
+    }
 
     /** `app-a` installed at revision 1, so seen; then gone from the store, quietly, and its next read held. */
     private fun lostAndHeld(source: SnapshotSource<Compiled, Compiled>) {
@@ -43,15 +53,7 @@ class KeyRunnerDocumentLostTest {
         store.hold = true
     }
 
-    private fun awaitReported() {
-        val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(10)
-        while (metrics.lost.isEmpty()) {
-            check(System.nanoTime() < deadline) { "The loss was not reported within 10 seconds." }
-            Thread.sleep(1)
-        }
-    }
-
-    private fun lostInstalled() = metrics.installs.filter { it.key == APP_A && it.origin == EntryOrigin.LOST }
+    private fun lostInstalled() = recording.installs.filter { it.key == APP_A && it.origin == EntryOrigin.LOST }
 
     @Test
     fun `an Absent read for a load that close ended reports nothing and installs nothing`() {
@@ -61,7 +63,7 @@ class KeyRunnerDocumentLostTest {
         source.close()
         reloading.isDone.assert().isTrue()
         store.pending.filter { it.key == APP_A }.forEach { it.release() }
-        metrics.lost.assert().isEmpty()
+        recording.lost.assert().isEmpty()
         lostInstalled().assert().isEmpty()
     }
 
@@ -73,14 +75,14 @@ class KeyRunnerDocumentLostTest {
             // The scheduler ends the load at the read timeout; the read answers Absent only after that.
             source.reload(APP_A).get(10, TimeUnit.SECONDS)
             store.pending.filter { it.key == APP_A }.forEach { it.release() }
-            metrics.lost.assert().isEmpty()
+            recording.lost.assert().isEmpty()
             lostInstalled().assert().isEmpty()
             // The next load reads Absent again for a key it has seen: the loss is reported then.
             store.hold = false
             source.reload(APP_A).get(10, TimeUnit.SECONDS)
             // The step answers its waiters, then reports the loss: the drainer may be another thread still finishing it.
-            awaitReported()
-            metrics.lost.assert().containsExactly(APP_A to 1L)
+            reported.get(10, TimeUnit.SECONDS)
+            recording.lost.assert().containsExactly(APP_A to 1L)
             lostInstalled().assert().hasSize(1)
         }
     }
