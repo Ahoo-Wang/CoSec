@@ -549,7 +549,7 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 没有 key 会获得更多权限；除非在 `--grant-to-principal` 中列出，也没有主体会获得更多权限。key 失去的东西按 key 列出：`lost` 是 key 不再能用到的其主体的主体绑定和 break-glass 绑定；对 `own-principal`，`changes` 是依赖主体 id 的东西（审计主体、`subject.id` 上的条件、按主体计数的限流桶、转发的 `CoSec-Identity` 的 `sub`）。
 
-以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
+以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次，或 `tenant`、`principal`、`roles` 的类型不对（`roles` 是字符串数组，只有 `[]` 表示没有角色）时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
 
 没有角色的 `own-principal` key 也会列在 `memberships` 中，`roles: []`。它的主体同样必须在你的 `MembershipProvider` 中存在，只是没有角色：提供者不认识的主体会被拒绝，带该 key 的每个请求都会得到 `401`。
 
@@ -1028,6 +1028,11 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 - **`ChangeEvent.Kind` 去掉了 `BOOTSTRAP` 和 `MIGRATE`。** 这两种变更事件从未被发出过：bootstrap 和迁移通过存储写入修订，记录在修订的
   `provenance.kind`（`BOOTSTRAP`、`MIGRATE`）里。对 `ChangeEvent.Kind` 做 `when` 且列出了它们的代码不再能编译；删掉这些分支即可，
   它们从未收到过任何东西。
+- **应用声明了 `CorsConfigurationSource` bean 时，预检请求不再被策略、限流或审计看到**（`STA-5`，[CORS](../integration/web.md#cors)）。应用声明了所在栈的
+  `CorsConfigurationSource`、且没有自己的 `CorsFilter` 或 `CorsWebFilter` 时，启动器现在会在 Spring MVC 和 WebFlux 上于 CoSec 之前注册一个 CORS 过滤器：
+  预检请求仅凭 source 由它回答，所以针对 `http:OPTIONS` 的语句、限流、黑名单、审计、判定事件和指标都看不到预检请求；source 不允许的 origin 在管道之前得到一个普通的
+  `403`，没有 problem 体和 `CoSec-Request-Id`；拒绝响应现在带 CORS 头。`@CrossOrigin` 和 `addCorsMappings` 不再回答预检请求：把每个 origin、方法和请求头
+  都写进这个 bean。只为让预检请求通过而写的语句（`http:OPTIONS`）不再需要，留着也无妨。没有这个 bean、或有自己的过滤器的应用不受影响。
 - **从平台或应用文档删除 DENY 需要第二个人**（RFC 0007 §7.4.4、`CTL-31`）。此前，没有 `cosec:approve` 的平台主体可以独自发布只删除条目的变更。现在，拿掉 DENY 的删除（含 DENY 的策略，或所绑策略含 DENY 的绑定，也包括经删除角色或以更少权限 `putRole` 去掉的）会停在 `AWAITING_APPROVAL`，每项带一个 `NOT_ANALYZED` 升级；开启 `four-eyes` 时信任根的这类变更也是如此（[审批](../policies/testing.md#approval)）。删除 ALLOW、租户删除自己的 DENY 以及撤销 break-glass 不变。请为紧急删除平台 DENY 安排好审批人。
 - **`cosec:grant` 看角色实际派生了什么**（RFC 0012 §7.2）：让 `"*"` 角色派生出新绑定的 `putCatalog` 或 `putPolicy`，与 `putRole` 一样需要该角色作用域上的 `cosec:grant`。
 - **break-glass 只需要 `cosec:breakglass`**（RFC 0007 §8）：申请、批准后发布以及撤销都不再额外需要 `cosec:publish`。其他变更不能用 `cosec:breakglass` 代替。

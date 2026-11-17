@@ -138,16 +138,38 @@ internal class ChangeLifecycle(
     suspend fun read(id: ChangeId) =
         store.change(id) ?: throw ChangeRejectedException(NOT_FOUND, "no change ${id.value}")
 
-    /** [change], `EXPIRED` once it is past [ChangeOptions.expireAfter] and not finished. */
+    /**
+     * [change], `EXPIRED` once it is past [ChangeOptions.expireAfter] and not finished. A read that ends a change is
+     * not a command: when another caller moved it first, what the read answers is the change as it is now (the
+     * `EXPIRED` the other made, or the state it was finished in), never the 409 of a command from a state it is not in
+     * (#1545). Only an open change past its time is written, from the state it is in, by the same conditional write.
+     */
     suspend fun expired(change: ChangeRequest): ChangeRequest {
-        if (change.state.terminal || !clock.instant().isAfter(change.createdAt.plus(options.expireAfter))) {
+        if (!due(change)) {
             return change
         }
-        val expired =
-            transition(change.id, ChangeStep.EXPIRE, setOf(change.state)) { it.copy(state = ChangeState.EXPIRED) }
-        slots.release(expired)
-        return expired
+        repeat(MAX_ATTEMPTS) {
+            val current = read(change.id)
+            if (!due(current.value)) {
+                return current.value
+            }
+            val expired = current.value.copy(state = ChangeState.EXPIRED, updatedAt = clock.instant())
+            // The table says where an expiry may end; anything else is a fault and nothing is written.
+            check(expired.state in ChangeStep.EXPIRE.to)
+            if (store.putChange(current.digest, expired)) {
+                slots.release(expired)
+                return expired
+            }
+        }
+        throw ChangeRejectedException(CONFLICT, "change ${change.id.value} kept changing")
     }
+
+    /**
+     * Whether [change] is in a state the table lets expire ([ChangeStep.EXPIRE]) and past [ChangeOptions.expireAfter]:
+     * the table, not a second idea of "open", says which states a read may end.
+     */
+    private fun due(change: ChangeRequest): Boolean =
+        change.state in ChangeStep.EXPIRE.from && clock.instant().isAfter(change.createdAt.plus(options.expireAfter))
 
     /** A conditional write of [change] from one of [from] to what [next] makes of it; retried while the change moves. */
     suspend fun transition(
