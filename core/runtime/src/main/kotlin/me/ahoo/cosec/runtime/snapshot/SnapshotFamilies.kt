@@ -196,6 +196,12 @@ internal class SnapshotFamilies<A : Any>(
             }
         }
 
+        /** A claim of [slot]'s removal given back, its removal not having happened: the count, and its absent place. */
+        fun giveBack(slot: KeySlot<*>, absent: Boolean) {
+            count(absent).incrementAndGet()
+            if (absent) absentSlots += slot
+        }
+
         /** Drops [slot] from the map, if it is still the one held for [id]. */
         fun drop(id: String, slot: KeySlot<*>) {
             slots.computeIfPresent(id) { _, current -> current.takeUnless { it === slot } }

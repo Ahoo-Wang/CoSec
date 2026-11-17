@@ -23,7 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
  * key. Scheduled by a CAS, like a drain: a hand-off made while the task runs is taken by it, or by the task scheduled
  * after it. A pool that refuses the task sends it to housekeeping, and when that refuses too, it runs in place.
  */
-internal class DrainHandOffs(private val threads: SnapshotThreads) {
+internal class DrainHandOffs(private val threads: SnapshotThreads, private val metrics: SnapshotMetrics) {
     private val waiting = ConcurrentLinkedQueue<Runnable>()
     private val scheduled = AtomicBoolean()
 
@@ -37,7 +37,10 @@ internal class DrainHandOffs(private val threads: SnapshotThreads) {
         try {
             threads.compileExecutor.execute(::run)
         } catch (_: RejectedExecutionException) {
-            if (!threads.offTimer(::run)) run()
+            val housekept = threads.offTimer(::run)
+            metrics.onHandOffRefused(ranInPlace = !housekept)
+            // Both refused: this caller's thread runs the source's hand-offs, for as long as they come.
+            if (!housekept) run()
         }
     }
 

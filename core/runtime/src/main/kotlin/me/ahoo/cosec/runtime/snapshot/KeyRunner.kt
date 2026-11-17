@@ -57,7 +57,7 @@ internal class KeyRunner<T : Any>(
         val effects = KeyEffects(key, compiler, context, ::offer, ::published, ::dropped, ::redispatched) {
             offerEviction(true, null)
         }
-        drain = KeyDrain(key, transitions, effects, context, k, { absent -> family?.claim(this, absent) ?: false }, ::hinted, hooks)
+        drain = KeyDrain(key, transitions, effects, context, k, { absent -> family?.claim(this, absent) ?: false }, ::hinted, { absent -> family?.giveBack(this, absent) }, hooks)
     }
 
     override fun idle(): Boolean = idleHint

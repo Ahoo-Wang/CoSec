@@ -60,7 +60,7 @@ internal class SlotContext(
     val pendingRequests: MutableSet<PendingRequest> = ConcurrentHashMap.newKeySet()
 
     /** The drains this source's keys hand off: one task in the compile pool at a time (RFC 0013 B2b §3). */
-    val handOffs = DrainHandOffs(threads)
+    val handOffs = DrainHandOffs(threads, metrics)
 
     /** Set once, by [SnapshotSource.close]. */
     val closed = AtomicBoolean()

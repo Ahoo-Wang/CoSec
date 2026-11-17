@@ -54,6 +54,8 @@ internal class GuardedSnapshotMetrics(private val delegate: SnapshotMetrics) : S
     override fun onLagExceeded(key: SnapshotKey, lag: Duration, escalated: Boolean) =
         guard("onLagExceeded") { delegate.onLagExceeded(key, lag, escalated) }
 
+    override fun onHandOffRefused(ranInPlace: Boolean) = guard("onHandOffRefused") { delegate.onHandOffRefused(ranInPlace) }
+
     private companion object {
         private val log = KotlinLogging.logger {}
     }

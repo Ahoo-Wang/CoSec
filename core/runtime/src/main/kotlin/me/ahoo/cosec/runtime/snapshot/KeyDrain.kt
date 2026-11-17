@@ -49,6 +49,8 @@ internal class KeyDrain<T : Any>(
     private val claim: (absent: Boolean) -> Boolean,
     /** Publishes what readers outside the drain see: removed, and idle. */
     private val publish: (removed: Boolean, idle: Boolean) -> Unit,
+    /** Gives back a claim taken for a removal whose transition threw (`SNP-14`'s accounting). */
+    private val giveBack: (absent: Boolean) -> Unit,
     /** Tests only: called between the steps of a drain; [Hooks.NONE] in production. */
     private val hooks: Hooks = Hooks.NONE,
 ) {
@@ -117,21 +119,29 @@ internal class KeyDrain<T : Any>(
     }
 
     private fun drain() {
-        while (true) {
-            if (!flag.compareAndSet(false, true)) return
-            drainer = Thread.currentThread()
-            val spent: Boolean
-            try {
-                spent = takeWhileBudget()
-            } finally {
-                drainer = null
-                flag.set(false)
+        // A crash is taken into this local while the flag is held, and reported once the loop is done: the hand-off or
+        // the re-check still runs, and no other drainer's crash is read.
+        var crashed: Pair<String, VirtualMachineError>? = null
+        try {
+            while (true) {
+                if (!flag.compareAndSet(false, true)) return
+                drainer = Thread.currentThread()
+                val spent: Boolean
+                try {
+                    spent = takeWhileBudget()
+                } finally {
+                    crashed = crashed ?: crash
+                    crash = null
+                    drainer = null
+                    flag.set(false)
+                }
+                if (spent) return handOff()
+                hooks.afterRelease()
+                // An offer that lost the flag just before the release is taken here: no event is stranded.
+                if (queue.isEmpty()) return
             }
-            released()
-            if (spent) return handOff()
-            hooks.afterRelease()
-            // An offer that lost the flag just before the release is taken here: no event is stranded.
-            if (queue.isEmpty()) return
+        } finally {
+            crashed?.let(::report)
         }
     }
 
@@ -152,25 +162,28 @@ internal class KeyDrain<T : Any>(
 
     @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
     private fun take(item: Any) {
-        val event = if (item is EvictRequest) claimed(item) else item as KeyEvent<T>
+        val request = item as? EvictRequest
         val before = state
-        val moment = KeyMoment(
-            context.clock.instant(),
-            context.nanoTime.get().asLong,
-            context.compileEpoch.get(),
-            context.closed.get(),
-            context.families.seen[key],
-        )
+        var event: KeyEvent<T>? = if (request == null) item as KeyEvent<T> else null
         val step = try {
-            hooks.beforeNext(event)
-            transitions.next(before, event, moment)
+            // Inside the guard, so that whatever throws here still has its event answered (§5).
+            val taken = event ?: claimed(request!!).also { event = it }
+            val moment = KeyMoment(
+                context.clock.instant(),
+                context.nanoTime.get().asLong,
+                context.compileEpoch.get(),
+                context.closed.get(),
+                context.families.seen[key],
+            )
+            hooks.beforeNext(taken)
+            transitions.next(before, taken, moment)
         } catch (error: VirtualMachineError) {
             // As from an effect: never thrown into a thread that only happened to drain this key (§5).
-            aborted(before, event, error)
-            crash = crash ?: ("the transition of ${event::class.simpleName}" to error)
+            aborted(before, event, request, error)
+            crash = crash ?: ("the transition of ${(event ?: item)::class.simpleName}" to error)
             return
         } catch (error: Throwable) {
-            aborted(before, event, error)
+            aborted(before, event, request, error)
             return
         }
         state = step.state
@@ -197,9 +210,8 @@ internal class KeyDrain<T : Any>(
      * ERROR instead: that caller gets its own answer, never another key's `StackOverflowError`. The line goes through
      * housekeeping like every line with a stack trace, and is written in place when housekeeping refuses it.
      */
-    private fun released() {
-        val (what, error) = crash ?: return
-        crash = null
+    private fun report(crashed: Pair<String, VirtualMachineError>) {
+        val (what, error) = crashed
         if (context.threads.drainsUnbounded.get() == true) throw error
         context.threads.offRequestThread {
             log.error(error) {
@@ -234,40 +246,51 @@ internal class KeyDrain<T : Any>(
      * error, and so does the load it belongs to, by one fixed edit that keeps `again` (a later load makes good a change
      * that came meanwhile). The error is logged, and this key goes on taking events.
      */
-    private fun aborted(before: KeyState<T>, event: KeyEvent<T>, error: Throwable) {
+    private fun aborted(before: KeyState<T>, event: KeyEvent<T>?, request: EvictRequest?, error: Throwable) {
         val failed =
-            failedEntry<T>(
-                key,
-                SnapshotUnavailableException(key, "the snapshot transition failed", error),
-                context.clock.instant()
-            )
+            failedEntry<T>(key, SnapshotUnavailableException(key, "the snapshot transition failed", error), context.clock.instant())
+        // The load first, each part in its own guard: a meter that throws while a carrier is answered skips nothing.
+        val load = before.load
+        if (load != null && event != null && event.loadId == load.id) {
+            state = before.copy(load = null, next = null)
+            guarded { effects.cancelReadTimeout(load.id) }
+            // Whatever ended the load, its pass's read is over (SNP-6), as Slot's finish ends it.
+            guarded { load.pass?.read?.end() }
+            (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach { guarded { it.future.complete(failed) } }
+            guarded { publish(state.removed, state.idle) }
+        }
+        if (request != null && event is KeyEvent.Evict && event.claim == Claim.CLAIMED) {
+            // The claim taken for a removal that did not happen goes back: the count, and the slot's place among the
+            // absent ones. A give-back is what once let concurrent passes stop above the bound (#1527); here it is the
+            // lesser harm, which the next install's pass repairs, where a count wrong for good is repaired by nothing.
+            guarded { giveBack(request.absent!!) }
+        }
         // Answered as every other failure is, with a failed entry, so a request fails closed as unavailable. A recompile
         // mark answers "load it again" and an eviction "not removed": each the side that keeps the key safe.
-        when (val carried = event.carried) {
-            is KeyWaiter<*, *> ->
-                @Suppress("UNCHECKED_CAST")
-                (carried as KeyWaiter<T, *>).failed(failed)
-            is CompletableFuture<*> ->
-                @Suppress("UNCHECKED_CAST")
-                (carried as CompletableFuture<Boolean>).complete(event is KeyEvent.Recompile)
+        guarded {
+            when (val carried = event?.carried) {
+                is KeyWaiter<*, *> -> @Suppress("UNCHECKED_CAST") (carried as KeyWaiter<T, *>).failed(failed)
+                is CompletableFuture<*> -> @Suppress("UNCHECKED_CAST") (carried as CompletableFuture<Boolean>).complete(event is KeyEvent.Recompile)
+                null -> request?.reply?.complete(Eviction.REFUSED)
+            }
         }
-        val load = before.load
-        if (load != null && event.loadId == load.id) {
-            state = before.copy(load = null, next = null)
-            effects.cancelReadTimeout(load.id)
-            // Whatever ended the load, its pass's read is over (SNP-6), as Slot's finish ends it.
-            load.pass?.read?.end()
-            (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach { it.future.complete(failed) }
-            publish(state.removed, state.idle)
-        }
-        context.threads.offRequestThread {
-            log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." }
-        }
+        context.threads.offRequestThread { log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." } }
     }
 
     private companion object {
         /** An effect failed with no load in flight: its transition logs it as a failure after the load. */
         const val NO_LOAD = -1L
+
+        @Suppress("TooGenericExceptionCaught")
+        private inline fun guarded(block: () -> Unit) {
+            try {
+                block()
+            } catch (error: VirtualMachineError) {
+                throw error
+            } catch (error: Throwable) {
+                log.error(error) { "Answering an aborted snapshot transition failed." }
+            }
+        }
 
         /** How close waits out another thread's drain step: spins first, then parks from 10 µs, doubling up to 1 ms. */
         const val SPINS = 200
