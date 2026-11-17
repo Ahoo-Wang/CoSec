@@ -24,7 +24,10 @@ import org.springframework.boot.context.properties.bind.DefaultValue
  */
 @ConfigurationProperties(prefix = LoginProperties.PREFIX)
 @InternalCoSecApi
-class LoginProperties(@DefaultValue("true") override var enabled: Boolean = true) : EnabledCapable {
+class LoginProperties(
+    /** Whether the login beans are on, which turn credentials into a token; authenticating requests does not depend on it. */
+    @DefaultValue("true") override var enabled: Boolean = true,
+) : EnabledCapable {
 
     @InternalCoSecApi
     companion object {
