@@ -86,11 +86,19 @@ internal class KeyEffects<T : Any>(
     /** The store call only starts the read; its answer is offered from the store client's thread, behind what is queued. */
     private fun startRead(effect: KeyEffect.StartRead) {
         val id = effect.loadId
-        val reading = if (effect.fromLocalCopy) context.store.read(key) else context.store.readIfChanged(key, effect.digest)
+        val reading = if (effect.fromLocalCopy) {
+            context.store.read(
+                key
+            )
+        } else {
+            context.store.readIfChanged(key, effect.digest)
+        }
         if (!reading.isDone) {
             val bound = context.options.storeReadTimeout
             try {
-                readTimeouts[id] = context.threads.scheduler.schedule({ offer(KeyEvent.ReadTimedOut(id)) }, bound.toNanos(), TimeUnit.NANOSECONDS)
+                readTimeouts[id] = context.threads.scheduler.schedule({
+                    offer(KeyEvent.ReadTimedOut(id))
+                }, bound.toNanos(), TimeUnit.NANOSECONDS)
             } catch (rejected: RejectedExecutionException) {
                 log.debug { "No store read timeout: $rejected" }
             }
@@ -123,7 +131,9 @@ internal class KeyEffects<T : Any>(
             DocumentState.Present(compiler.compile(key, read.document))
         } catch (error: VirtualMachineError) {
             // RC1-43: installed as a document that does not compile, then rethrown to the pool.
-            offer(KeyEvent.CompileCrashed(id, SnapshotUnavailableException(key, report.failedToCompile(revision), error)))
+            offer(
+                KeyEvent.CompileCrashed(id, SnapshotUnavailableException(key, report.failedToCompile(revision), error))
+            )
             throw error
         } catch (error: Throwable) {
             DocumentState.Failed(SnapshotUnavailableException(key, report.failedToCompile(revision), error))
@@ -132,7 +142,14 @@ internal class KeyEffects<T : Any>(
     }
 
     private fun recordSeen(effect: KeyEffect.RecordSeen) {
-        if (effect.ifAbsent) context.families.seen.putIfAbsent(key, effect.seen) else context.families.seen[key] = effect.seen
+        if (effect.ifAbsent) {
+            context.families.seen.putIfAbsent(
+                key,
+                effect.seen
+            )
+        } else {
+            context.families.seen[key] = effect.seen
+        }
     }
 
     /** `recordInstall`: the metrics first, then, whatever they did, the entry is published. */
@@ -151,7 +168,11 @@ internal class KeyEffects<T : Any>(
 
     private fun report(metric: KeyEffect.Metric) {
         when (metric) {
-            is KeyEffect.Metric.Compiled -> context.metrics.onCompile(key.kind, Duration.ofNanos(metric.nanos), metric.present)
+            is KeyEffect.Metric.Compiled -> context.metrics.onCompile(
+                key.kind,
+                Duration.ofNanos(metric.nanos),
+                metric.present
+            )
             is KeyEffect.Metric.DocumentLost -> context.metrics.onDocumentLost(key, metric.revision)
         }
     }
@@ -194,5 +215,4 @@ internal class KeyEffects<T : Any>(
             if (!context.threads.offTimer { families.evictBeyond(family) }) families.evictBeyond(family)
         }
     }
-
 }

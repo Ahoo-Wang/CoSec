@@ -54,7 +54,9 @@ internal class KeyRunner<T : Any>(
             localCopyMaxAge = context.store.localCopyMaxAge,
         )
         val transitions = KeyTransitions<T>(config)
-        val effects = KeyEffects(key, compiler, context, ::offer, ::published, ::dropped, ::redispatched) { offerEviction(true, null) }
+        val effects = KeyEffects(key, compiler, context, ::offer, ::published, ::dropped, ::redispatched) {
+            offerEviction(true, null)
+        }
         drain = KeyDrain(key, transitions, effects, context, k, { absent -> family?.claim(this, absent) ?: false }, ::hinted, hooks)
     }
 
@@ -92,7 +94,9 @@ internal class KeyRunner<T : Any>(
 
     override fun changed() = offer(KeyEvent.Changed)
 
-    override fun markRecompile(): CompletableFuture<Boolean> = CompletableFuture<Boolean>().also { offer(KeyEvent.Recompile(it)) }
+    override fun markRecompile(): CompletableFuture<Boolean> = CompletableFuture<Boolean>().also {
+        offer(KeyEvent.Recompile(it))
+    }
 
     override fun evict(onlyIfEmpty: Boolean, claimedAbsent: Boolean?): CompletableFuture<Eviction> =
         offerEviction(onlyIfEmpty, claimedAbsent)

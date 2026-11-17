@@ -48,7 +48,15 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
     /** `usable`, `reload`: an entry, never skipped. */
     class Entry<T : Any> : KeyWaiter<T, SnapshotEntry<T>>() {
         override fun hang(handle: KeyHandle<T>) {
-            handle.future.whenComplete { entry, error -> if (error != null) completeExceptionally(error) else complete(entry) }
+            handle.future.whenComplete { entry, error ->
+                if (error != null) {
+                    completeExceptionally(
+                        error
+                    )
+                } else {
+                    complete(entry)
+                }
+            }
         }
 
         override fun serve(entry: SnapshotEntry<T>, hit: Boolean) {

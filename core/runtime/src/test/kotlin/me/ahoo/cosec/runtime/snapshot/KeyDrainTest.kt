@@ -57,12 +57,18 @@ class KeyDrainTest {
         { 0L },
         null,
         object : SlotFactory {
-            override fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: SlotContext): KeySlot<T> =
+            override fun <T : Any> create(
+                key: SnapshotKey,
+                compiler: SnapshotCompiler<T>,
+                context: SlotContext
+            ): KeySlot<T> =
                 KeyRunner(key, compiler, context, k, if (key == APP_A) hooks else KeyDrain.Hooks.NONE)
         },
     )
 
-    private fun SnapshotSource<*, *>.slotA(): KeySlot<*> = families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue("app-a")
+    private fun SnapshotSource<*, *>.slotA(): KeySlot<*> = families.first {
+        it.spec.kind == SnapshotKind.APP
+    }.slots.getValue("app-a")
 
     @Test
     fun `an offer that loses the flag between the empty queue and the release is taken before the drainer returns`() =
@@ -79,7 +85,9 @@ class KeyDrainTest {
         val late = CopyOnWriteArrayList<CompletableFuture<Boolean>>()
         lateinit var source: SnapshotSource<Compiled, Compiled>
         val edge = hooks { if (armed.getAndSet(false)) late += source.slotA().markRecompile() }
-        val counting = KeyDrain.Hooks({ if (it is KeyEvent.Recompile) taken.incrementAndGet() }, edge.afterEmpty, edge.afterRelease)
+        val counting = KeyDrain.Hooks({
+            if (it is KeyEvent.Recompile) taken.incrementAndGet()
+        }, edge.afterEmpty, edge.afterRelease)
         source = source(counting)
         source.use {
             source.load("app-a").join()
@@ -123,14 +131,25 @@ class KeyDrainTest {
         )
         for ((name, call) in carriers) {
             val armed = AtomicBoolean()
-            val hooks = KeyDrain.Hooks({ if (it is KeyEvent.Requested || it is KeyEvent.Recompile || it is KeyEvent.Evict) if (armed.getAndSet(false)) error("thrown by the test") })
+            val hooks = KeyDrain.Hooks({
+                if (it is KeyEvent.Requested || it is KeyEvent.Recompile || it is KeyEvent.Evict) if (armed.getAndSet(
+                        false
+                    )
+                ) {
+                    error("thrown by the test")
+                }
+            })
             source(hooks).use { source ->
                 // A request is cold, so its event is offered; every other carrier finds A installed.
                 if (name == "request") source.load().join() else source.load("app-a").join()
                 armed.set(true)
                 val carried = call(source)
-                runCatching { carried.join() }.exceptionOrNull().assert().describedAs(name).isInstanceOf(CompletionException::class.java)
-                source.slotA().reloadIfHeld(force = false).join().assert().describedAs(name).isInstanceOf(Reloaded.Loaded::class.java)
+                runCatching {
+                    carried.join()
+                }.exceptionOrNull().assert().describedAs(name).isInstanceOf(CompletionException::class.java)
+                source.slotA().reloadIfHeld(
+                    force = false
+                ).join().assert().describedAs(name).isInstanceOf(Reloaded.Loaded::class.java)
             }
         }
     }
@@ -138,7 +157,11 @@ class KeyDrainTest {
     @Test
     fun `a transition that throws on the read of a load with waiters ends that load, and its waiters are answered`() {
         val armed = AtomicBoolean()
-        source(KeyDrain.Hooks({ if (it is KeyEvent.ReadDone && armed.getAndSet(false)) error("thrown by the test") })).use { source ->
+        source(
+            KeyDrain.Hooks({
+                if (it is KeyEvent.ReadDone && armed.getAndSet(false)) error("thrown by the test")
+            })
+        ).use { source ->
             source.load().join()
             store.hold = true
             armed.set(true)
@@ -159,7 +182,11 @@ class KeyDrainTest {
         val armed = AtomicBoolean()
         lateinit var source: SnapshotSource<Compiled, Compiled>
         val hooks = KeyDrain.Hooks({
-            if (it is KeyEvent.Recompile && armed.getAndSet(false)) repeat(EXTRA) { more += source.slotA().markRecompile() }
+            if (it is KeyEvent.Recompile && armed.getAndSet(false)) {
+                repeat(
+                    EXTRA
+                ) { more += source.slotA().markRecompile() }
+            }
         })
         source = source(hooks, k = 0, compileExecutor = pool)
         source.load("app-a").join()

@@ -110,16 +110,9 @@ internal class KeyDrain<T : Any>(
         while (true) {
             if (!flag.compareAndSet(false, true)) return
             drainer = Thread.currentThread()
-            var spent = false
+            val spent: Boolean
             try {
-                while (queue.isNotEmpty()) {
-                    if (!DrainBudget.spend()) {
-                        spent = true
-                        break
-                    }
-                    take(queue.poll() ?: break)
-                }
-                if (!spent) hooks.afterEmpty()
+                spent = takeWhileBudget()
             } finally {
                 drainer = null
                 flag.set(false)
@@ -130,6 +123,16 @@ internal class KeyDrain<T : Any>(
             // An offer that lost the flag just before the release is taken here: no event is stranded.
             if (queue.isEmpty()) return
         }
+    }
+
+    /** Takes events while this thread's budget lasts; true when it ran out with events left. */
+    private fun takeWhileBudget(): Boolean {
+        while (queue.isNotEmpty()) {
+            if (!DrainBudget.spend()) return true
+            take(queue.poll() ?: return false)
+        }
+        hooks.afterEmpty()
+        return false
     }
 
     /** The rest goes to the compile pool, else to housekeeping, else this thread drains it without a bound. */
@@ -156,9 +159,11 @@ internal class KeyDrain<T : Any>(
         val step = try {
             hooks.beforeNext(event)
             transitions.next(before, event, moment)
+        } catch (error: VirtualMachineError) {
+            aborted(before, event, error)
+            throw error
         } catch (error: Throwable) {
             aborted(before, event, error)
-            if (error is VirtualMachineError) throw error
             return
         }
         state = step.state
@@ -232,10 +237,18 @@ internal class KeyDrain<T : Any>(
         if (load != null && event.loadId == load.id) {
             state = before.copy(load = null, next = null)
             effects.cancelReadTimeout(load.id)
-            (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach { it.future.completeExceptionally(failure) }
+            (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach {
+                it.future.completeExceptionally(
+                    failure
+                )
+            }
             publish(state.removed, state.idle)
         }
-        context.threads.offRequestThread { log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." } }
+        context.threads.offRequestThread {
+            log.error(
+                error
+            ) { "Snapshot document [$key]: a transition failed; its load ended." }
+        }
     }
 
     private companion object {

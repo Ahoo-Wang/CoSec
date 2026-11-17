@@ -87,8 +87,13 @@ class KeyRunnerTest {
             // The caller's thread drains: the read answers at once and the compile pool runs in place.
             val snapshot = source.load("app-a").join()
             snapshot.appCompiled.revision.assert().isEqualTo(1L)
-            awaitCondition { lines.list.any { "StackOverflowError" in it.formattedMessage && "may not be healthy" in it.formattedMessage } }
-            lines.list.single { "may not be healthy" in it.formattedMessage }.formattedMessage.assert().contains("[app:app-a]", "Install")
+            awaitCondition {
+                lines.list.any { "StackOverflowError" in it.formattedMessage && "may not be healthy" in it.formattedMessage }
+            }
+            lines.list.single { "may not be healthy" in it.formattedMessage }.formattedMessage.assert().contains(
+                "[app:app-a]",
+                "Install"
+            )
             store.put(APP_A, document(2))
             source.reload(APP_A).join().revision.assert().isEqualTo(2L)
         }
@@ -153,7 +158,11 @@ class KeyRunnerTest {
         val OPTIONS = SnapshotOptions(revalidateInterval = QUIET_PASS)
 
         val RUNNERS = object : SlotFactory {
-            override fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: SlotContext): KeySlot<T> =
+            override fun <T : Any> create(
+                key: SnapshotKey,
+                compiler: SnapshotCompiler<T>,
+                context: SlotContext
+            ): KeySlot<T> =
                 KeyRunner(key, compiler, context)
         }
     }

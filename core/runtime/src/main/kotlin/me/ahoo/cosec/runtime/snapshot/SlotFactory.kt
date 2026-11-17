@@ -28,7 +28,11 @@ internal interface SlotFactory {
 
     companion object {
         val SLOT: SlotFactory = object : SlotFactory {
-            override fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: SlotContext): KeySlot<T> =
+            override fun <T : Any> create(
+                key: SnapshotKey,
+                compiler: SnapshotCompiler<T>,
+                context: SlotContext
+            ): KeySlot<T> =
                 Slot(key, compiler, context)
         }
     }
