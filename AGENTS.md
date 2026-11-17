@@ -26,6 +26,7 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
 gh workflow run mutation.yml                       # every mutant, on CI only: 36 shards, about an hour (-f mutants=a,b for a subset; also weekly)
 ./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
 (cd typescript && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test)   # the TypeScript packages: what the `typescript` job of CI runs
+(cd typescript && pnpm test:host)                  # the client against a real host: Gradle builds test/client-host, the script starts it, vitest runs (the `typescript-host` job)
 ```
 
 - `cosec-cocache` and `cosec-spring-boot` tests need Redis on `localhost:6379`
@@ -106,7 +107,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`), `backends/`
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
-  `conformance`, `architecture`, `e2e`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
+  `conformance`, `architecture`, `e2e`, `client-host`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
   (`SourceRulesTest`).
@@ -115,7 +116,10 @@ the adapters, snapshots or the control plane. The parts that take several files 
   version of `gradle.properties`). They are built on fetcher's packages from npm and nothing in fetcher depends on them.
   What a client may rely on is `wiki/integration/clients.md`; the workspace's rules are in
   [`typescript/AGENTS.md`](typescript/AGENTS.md), and `TypeScriptWorkspaceTest` (`:architecture`) holds its names,
-  versions, dependency direction and CI job to them.
+  versions, dependency direction and CI jobs to them. `test/client-host` is the real CoSec 8 host (the starter over
+  WebFlux, CoCache in memory, test sources only, never published) the packages' host tests run against: what a unit
+  test asserts about CoSec's answers against a model is asserted there too, and `:client-host:check` keeps the host
+  answering as those tests assume.
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
