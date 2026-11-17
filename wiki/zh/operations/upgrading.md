@@ -1028,6 +1028,11 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 - **`ChangeEvent.Kind` 去掉了 `BOOTSTRAP` 和 `MIGRATE`。** 这两种变更事件从未被发出过：bootstrap 和迁移通过存储写入修订，记录在修订的
   `provenance.kind`（`BOOTSTRAP`、`MIGRATE`）里。对 `ChangeEvent.Kind` 做 `when` 且列出了它们的代码不再能编译；删掉这些分支即可，
   它们从未收到过任何东西。
+- **应用声明了 `CorsConfigurationSource` bean 时，预检请求不再被策略、限流或审计看到**（`STA-5`，[CORS](../integration/web.md#cors)）。应用声明了所在栈的
+  `CorsConfigurationSource`、且没有自己的 `CorsFilter` 或 `CorsWebFilter` 时，启动器现在会在 Spring MVC 和 WebFlux 上于 CoSec 之前注册一个 CORS 过滤器：
+  预检请求仅凭 source 由它回答，所以针对 `http:OPTIONS` 的语句、限流、黑名单、审计、判定事件和指标都看不到预检请求；source 不允许的 origin 在管道之前得到一个普通的
+  `403`，没有 problem 体和 `CoSec-Request-Id`；拒绝响应现在带 CORS 头。`@CrossOrigin` 和 `addCorsMappings` 不再回答预检请求：把每个 origin、方法和请求头
+  都写进这个 bean。只为让预检请求通过而写的语句（`http:OPTIONS`）不再需要，留着也无妨。没有这个 bean、或有自己的过滤器的应用不受影响。
 - **从平台或应用文档删除 DENY 需要第二个人**（RFC 0007 §7.4.4、`CTL-31`）。此前，没有 `cosec:approve` 的平台主体可以独自发布只删除条目的变更。现在，拿掉 DENY 的删除（含 DENY 的策略，或所绑策略含 DENY 的绑定，也包括经删除角色或以更少权限 `putRole` 去掉的）会停在 `AWAITING_APPROVAL`，每项带一个 `NOT_ANALYZED` 升级；开启 `four-eyes` 时信任根的这类变更也是如此（[审批](../policies/testing.md#approval)）。删除 ALLOW、租户删除自己的 DENY 以及撤销 break-glass 不变。请为紧急删除平台 DENY 安排好审批人。
 - **`cosec:grant` 看角色实际派生了什么**（RFC 0012 §7.2）：让 `"*"` 角色派生出新绑定的 `putCatalog` 或 `putPolicy`，与 `putRole` 一样需要该角色作用域上的 `cosec:grant`。
 - **break-glass 只需要 `cosec:breakglass`**（RFC 0007 §8）：申请、批准后发布以及撤销都不再额外需要 `cosec:publish`。其他变更不能用 `cosec:breakglass` 代替。
