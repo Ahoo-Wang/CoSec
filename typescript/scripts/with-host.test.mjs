@@ -23,12 +23,12 @@ describe('with-host', () => {
     );
   });
 
-  it('reads the URL the host announced, and only a finished line', () => {
+  it('reads the port the host announced, and only a finished line', () => {
     assert.equal(
-      readyUrl('WARN something\nREADY http://localhost:41234\n'),
+      readyUrl('WARN something\nREADY 41234\n'),
       'http://localhost:41234',
     );
-    assert.equal(readyUrl('READY http://localhost:41'), null);
-    assert.equal(readyUrl('not READY http://localhost:41234'), null);
+    assert.equal(readyUrl('READY 412'), null);
+    assert.equal(readyUrl('not READY 41234\n'), null);
   });
 });

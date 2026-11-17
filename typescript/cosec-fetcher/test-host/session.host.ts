@@ -19,9 +19,10 @@ import {
   destroyHostClients,
   endSession,
   login,
+  loginExpired,
+  recordWire,
   resetStats,
   stats,
-  waitForExpiry,
 } from './support';
 
 beforeEach(resetStats);
@@ -79,13 +80,16 @@ describe('a signed-in session against a real host', () => {
     expect((await stats()).refreshes).toBe(0);
   });
 
-  it('refreshes before it sends a call whose access token has expired', async () => {
+  it('refreshes before it sends a call whose access token it sees has expired', async () => {
     const { client, tokens } = createHostClient();
-    const pair = await login('alice');
+    const pair = await loginExpired('alice');
     tokens.signIn(pair);
-    await waitForExpiry(pair);
+    expect(tokens.get()?.access.isExpired).toBe(true);
+    const wire = recordWire();
     const response = await client.get('/orders/1');
     expect(response.status).toBe(200);
+    // No 401 was ever on the wire: the client read the expiry itself.
+    expect(wire).toEqual(['/auth/refresh 200', '/orders/1 200']);
     expect(await stats()).toEqual({ logins: 1, refreshes: 1 });
     expect(tokens.get()?.token.accessToken).not.toBe(pair.accessToken);
   });
@@ -94,23 +98,16 @@ describe('a signed-in session against a real host', () => {
     // The client's clock is behind the host's, so the token still looks valid to it: the one case where only the
     // host's 401 tells the client the token has expired.
     const { client, tokens } = createHostClient();
-    const pair = await login('alice');
+    const pair = await loginExpired('alice');
     tokens.signIn(pair);
-    await waitForExpiry(pair);
-    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() - 60_000 });
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() - 3_600_000 });
     expect(tokens.get()?.access.isExpired).toBe(false);
-    const answers: string[] = [];
-    const send = globalThis.fetch;
-    vi.stubGlobal('fetch', async (...args: Parameters<typeof fetch>) => {
-      const response = await send(...args);
-      answers.push(`${new URL(String(args[0])).pathname} ${response.status}`);
-      return response;
-    });
+    const wire = recordWire();
     const response = await client.get('/orders/1');
     expect(response.status).toBe(200);
     expect(await response.text()).toBe('order-1');
     // The host said 401 to the first try, the refresh renewed the pair, the retry was answered.
-    expect(answers).toEqual([
+    expect(wire).toEqual([
       '/orders/1 401',
       '/auth/refresh 200',
       '/orders/1 200',
@@ -119,29 +116,51 @@ describe('a signed-in session against a real host', () => {
     expect(tokens.get()?.token.accessToken).not.toBe(pair.accessToken);
   });
 
-  it('puts one refresh on the wire for calls that race the expiry', async () => {
+  it('puts one refresh on the wire for calls that find the token expired', async () => {
     const { client, tokens } = createHostClient();
-    const pair = await login('alice');
-    tokens.signIn(pair);
-    await waitForExpiry(pair);
+    tokens.signIn(await loginExpired('alice'));
+    const wire = recordWire();
     const responses = await Promise.all([
       client.get('/orders/1'),
       client.get('/orders/2'),
       client.get('/orders/3'),
     ]);
     expect(responses.map(response => response.status)).toEqual([200, 200, 200]);
+    expect(wire.filter(line => line.startsWith('/auth/refresh'))).toEqual([
+      '/auth/refresh 200',
+    ]);
+    expect(wire.some(line => line.endsWith(' 401'))).toBe(false);
+    expect((await stats()).refreshes).toBe(1);
+  });
+
+  it('puts one refresh on the wire for calls the host refused 401 token-expired', async () => {
+    const { client, tokens } = createHostClient();
+    tokens.signIn(await loginExpired('alice'));
+    vi.useFakeTimers({ toFake: ['Date'], now: Date.now() - 3_600_000 });
+    const wire = recordWire();
+    const responses = await Promise.all([
+      client.get('/orders/1'),
+      client.get('/orders/2'),
+      client.get('/orders/3'),
+    ]);
+    expect(responses.map(response => response.status)).toEqual([200, 200, 200]);
+    expect(wire.filter(line => line.endsWith(' 401'))).toHaveLength(3);
+    expect(wire.filter(line => line.startsWith('/auth/refresh'))).toEqual([
+      '/auth/refresh 200',
+    ]);
     expect((await stats()).refreshes).toBe(1);
   });
 
   it('ends the session when the host refuses the refresh with 401', async () => {
     const onUnauthorized = vi.fn();
     const { client, tokens } = createHostClient({ config: { onUnauthorized } });
-    const pair = await login('alice');
+    const pair = await loginExpired('alice');
     tokens.signIn(pair);
     await endSession(pair);
-    await waitForExpiry(pair);
+    const wire = recordWire();
     const error = await client.get('/orders/1').catch(error => error);
     expect(error).toBeInstanceOf(Error);
+    expect(wire).toEqual(['/auth/refresh 401']);
     expect(tokens.get()).toBeNull();
     expect((await stats()).refreshes).toBe(1);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);

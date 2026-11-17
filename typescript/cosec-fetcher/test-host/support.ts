@@ -12,6 +12,7 @@
  */
 
 import { Fetcher } from '@ahoo-wang/fetcher';
+import { vi } from 'vitest';
 import { SerialTypedEventBus } from '@ahoo-wang/fetcher-eventbus';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import {
@@ -92,6 +93,36 @@ export async function login(username: string): Promise<CompositeToken> {
   return (await response.json()) as CompositeToken;
 }
 
+/**
+ * Signs `username` in at the host with an access token that has already expired and a live session and refresh token:
+ * what a client holds when its token ran out, with nothing to wait for. The host refuses the token `401 token-expired`.
+ */
+export async function loginExpired(username: string): Promise<CompositeToken> {
+  const response = await fetch(`${hostUrl()}/test/login-expired`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username }),
+  });
+  if (!response.ok)
+    throw new Error(`login-expired answered ${response.status}`);
+  return (await response.json()) as CompositeToken;
+}
+
+/**
+ * Records `<path> <status>` of every request the client puts on the wire, in order: which path a case took is read from
+ * here, not from timing. Call it after `vi.stubGlobal`s of your own, and before the first request.
+ */
+export function recordWire(): string[] {
+  const wire: string[] = [];
+  const send = globalThis.fetch;
+  vi.stubGlobal('fetch', async (...args: Parameters<typeof fetch>) => {
+    const response = await send(...args);
+    wire.push(`${new URL(String(args[0])).pathname} ${response.status}`);
+    return response;
+  });
+  return wire;
+}
+
 export interface HostStats {
   logins: number;
   refreshes: number;
@@ -114,14 +145,4 @@ export async function endSession(pair: CompositeToken): Promise<void> {
     body: JSON.stringify(pair),
   });
   if (!response.ok) throw new Error(`end-session answered ${response.status}`);
-}
-
-/** Waits until the access token of `pair` has expired at the host (they live `ACCESS_VALIDITY`, 2 seconds, test/client-host). */
-export async function waitForExpiry(pair: CompositeToken): Promise<void> {
-  const [, payload] = pair.accessToken.split('.');
-  const { exp } = JSON.parse(
-    atob(payload.replaceAll('-', '+').replaceAll('_', '/')),
-  ) as { exp: number };
-  const wait = exp * 1000 - Date.now() + 1500;
-  if (wait > 0) await new Promise(done => setTimeout(done, wait));
 }

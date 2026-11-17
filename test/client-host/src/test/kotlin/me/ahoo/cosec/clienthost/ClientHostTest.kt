@@ -84,6 +84,18 @@ class ClientHostTest {
     }
 
     @Test
+    fun anExpiredSignInIsRefusedAsExpiredAndItsPairStillRefreshes() {
+        val pair = json.readValue(
+            send("POST", "/test/login-expired", """{"username":"dave"}""").body(),
+            Map::class.java,
+        ).mapKeys { it.key.toString() }.mapValues { it.value.toString() }
+        val refused = send("GET", "/orders/1", bearer = pair.getValue("accessToken"))
+        refused.statusCode().assert().isEqualTo(401)
+        refused.body().assert().contains("token-expired")
+        send("POST", "/auth/refresh", json.writeValueAsString(pair)).statusCode().assert().isEqualTo(200)
+    }
+
+    @Test
     fun theHostCountsWhatReachedIt() {
         send("POST", "/test/reset")
         signIn("carol")

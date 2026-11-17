@@ -37,14 +37,13 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 
-/** How long an access token lives: short enough for a test to wait it out, with `earlyPeriod` left at its default. */
-internal const val ACCESS_VALIDITY = "2s"
-
 private const val READY_TIMEOUT_MILLIS = 30_000L
 
 /**
  * A real CoSec 8 host (the starter over WebFlux, CoCache in memory) with [CLIENT_HOST_DOCUMENT] published, running until
  * closed. Ready when its pipeline answers with the document: the snapshot source installs it after it is published.
+ *
+ * Never an example of a production host (see [ClientHostApi]): it is what the TypeScript client is tested against.
  */
 internal class ClientHost private constructor(private val context: ConfigurableApplicationContext) : AutoCloseable {
     val port: Int = checkNotNull((context as ReactiveWebServerApplicationContext).webServer) {
@@ -64,7 +63,6 @@ internal class ClientHost private constructor(private val context: ConfigurableA
                     "server.port=$port",
                     "cocache.backend=memory",
                     "cosec.jwt.secret=client-host-secret-client-host-secret",
-                    "cosec.jwt.token-validity.access=$ACCESS_VALIDITY",
                     "cosec.authorization.routes.location=",
                     "cosec.authorization.snapshot.revalidate-interval=1s",
                     "spring.main.banner-mode=off",
@@ -109,11 +107,11 @@ internal class ClientHost private constructor(private val context: ConfigurableA
 /**
  * Starts the host and runs until its standard input ends or says `stop`: `typescript/scripts/with-host.mjs` owns the
  * process, and closing its end of the pipe is how it stops the host whatever happened to the test run.
- * Prints `READY <url>` once the host serves.
+ * The first argument is the port, none for a free one. Prints `READY <port>` once the host serves.
  */
 fun main(args: Array<String>) {
     ClientHost.start(args.firstOrNull()?.toInt() ?: 0).use { host ->
-        println("READY ${host.url}")
+        println("READY ${host.port}")
         generateSequence(::readlnOrNull).firstOrNull { it.trim() == "stop" }
     }
 }

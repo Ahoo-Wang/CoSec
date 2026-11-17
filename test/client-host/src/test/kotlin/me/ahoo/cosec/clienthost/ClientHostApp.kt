@@ -22,8 +22,11 @@ import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
+import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenVerificationException
@@ -42,6 +45,7 @@ import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 
 /** The sign-in a client posts: whoever names themselves is signed in, because the host tests the client, not a login. */
@@ -64,15 +68,23 @@ internal class ClientHostCounters {
     val refreshes = AtomicInteger()
 }
 
+/** How long ago the access token of `/test/login-expired` expired: a token the host refuses and the client may believe. */
+private val EXPIRED_AGO = Duration.ofMinutes(1)
+
 /**
  * The application: the sign-in and the refresh route CoSec leaves to it, one route the document permits, one it
  * permits to an authenticated caller and one it denies, and the `/test` routes the client's tests ask of the host.
+ *
+ * Never an example of a production host: its login signs in anyone who names themselves, its secret is a constant, and
+ * the `/test` routes (counters, echo, a session ended on request, an expired sign-in) are open to every caller. They
+ * pass CoSec like every other route: the document permits them, and nothing is exempted from the filter (STA-4).
  */
 @RestController
 internal class ClientHostApi(
     private val auth: TokenCompositeAuthentication,
     private val verifier: TokenVerifier,
     private val families: TokenFamilies,
+    private val converter: TokenConverter,
     private val counters: ClientHostCounters,
 ) {
     @GetMapping("/hello")
@@ -109,6 +121,19 @@ internal class ClientHostApi(
     @GetMapping("/test/echo")
     fun echo(@RequestHeader headers: HttpHeaders): Map<String, String> =
         headers.toSingleValueMap().mapKeys { it.key.lowercase() }
+
+    /**
+     * A sign-in whose access token has already expired, and whose session and refresh token are live: what a client holds
+     * when its token ran out. The host refuses it `401 token-expired` whatever its clock, so a test waits for nothing: a
+     * client that reads the expiry refreshes before it sends, one whose clock is behind sends it and is refused.
+     */
+    @PostMapping("/test/login-expired")
+    suspend fun loginExpired(@RequestBody body: Map<String, String>): CompositeToken {
+        counters.logins.incrementAndGet()
+        val subject = TokenSubject(id = body.getValue("username"), app = null)
+        val issued = subject.inSession(families.start(TenantId.DEFAULT, PrincipalId(subject.id)))
+        return converter.toToken(issued, EXPIRED_AGO.negated(), Duration.ofDays(1))
+    }
 
     @GetMapping("/test/stats")
     fun stats(): Map<String, Int> = mapOf("logins" to counters.logins.get(), "refreshes" to counters.refreshes.get())
@@ -148,6 +173,7 @@ internal class ClientHostApplication {
         auth: TokenCompositeAuthentication,
         verifier: TokenVerifier,
         families: TokenFamilies,
+        converter: TokenConverter,
         counters: ClientHostCounters,
-    ) = ClientHostApi(auth, verifier, families, counters)
+    ) = ClientHostApi(auth, verifier, families, converter, counters)
 }

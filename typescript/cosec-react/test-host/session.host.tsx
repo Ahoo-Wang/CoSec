@@ -54,15 +54,11 @@ const refreshes = async (): Promise<number> =>
     }
   ).refreshes;
 
-/** Waits until the access token has expired at the host (they live 2 seconds, test/client-host). */
-const waitForExpiry = async (pair: CompositeToken): Promise<void> => {
-  const payload = pair.accessToken
-    .split('.')[1]
-    .replaceAll('-', '+')
-    .replaceAll('_', '/');
-  const { exp } = JSON.parse(atob(payload)) as { exp: number };
-  await new Promise(done => setTimeout(done, exp * 1000 - Date.now() + 1500));
-};
+/** A sign-in whose access token has already expired and whose session is live (test/client-host): nothing to wait for. */
+const loginExpired = async (username: string): Promise<CompositeToken> =>
+  (await (
+    await post('/test/login-expired', { username })
+  ).json()) as CompositeToken;
 
 let counter = 0;
 const created: TokenStorage[] = [];
@@ -98,9 +94,8 @@ describe('the hooks against a real host', () => {
   it('shows the guarded content after a refresh the host answered', async () => {
     await post('/test/reset', {});
     const { tokenStorage, tokenManager } = session();
-    const pair = await login('alice');
+    const pair = await loginExpired('alice');
     tokenStorage.signIn(pair);
-    await waitForExpiry(pair);
     render(
       <SecurityProvider tokenStorage={tokenStorage}>
         <RefreshableRouteGuard
@@ -119,10 +114,9 @@ describe('the hooks against a real host', () => {
   it('falls back to signed out when the host refuses the refresh', async () => {
     await post('/test/reset', {});
     const { tokenStorage, tokenManager } = session();
-    const pair = await login('alice');
+    const pair = await loginExpired('alice');
     tokenStorage.signIn(pair);
     await post('/test/end-session', pair);
-    await waitForExpiry(pair);
     render(
       <SecurityProvider tokenStorage={tokenStorage}>
         <RefreshableRouteGuard

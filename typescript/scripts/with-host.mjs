@@ -18,7 +18,7 @@
 //   node scripts/with-host.mjs -- <command> [args...]
 //
 // The command runs with COSEC_HOST_URL set (`http://localhost:<port>`), in the directory this script was started from, and
-// its exit code is the script's. The host's output is shown only when it fails to start. GRADLE_ARGS (split on spaces)
+// its exit code is the script's. The host's output is shown when it fails to start and when the command fails. GRADLE_ARGS (split on spaces)
 // goes to Gradle: on a shared machine, `GRADLE_ARGS="--no-daemon --max-workers=2"`.
 import { spawn, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -44,9 +44,10 @@ export function commandOf(argv) {
   return argv.slice(separator + 1);
 }
 
-/** The URL a host announced on its standard output (`READY <url>`), or null. */
+/** The URL of the host that announced its port on its standard output (`READY <port>`), or null: only a whole line counts. */
 export function readyUrl(output) {
-  return /^READY (http:\/\/\S+)\r?\n/m.exec(output)?.[1] ?? null;
+  const port = /^READY (\d+)\r?\n/m.exec(output)?.[1];
+  return port ? `http://localhost:${port}` : null;
 }
 
 function hostClasspath() {
@@ -145,6 +146,8 @@ async function main() {
       });
       child.on('exit', (status, signal) => done(status ?? (signal ? 1 : 0)));
     });
+    // A failed run is often the host's doing: its output is what explains it.
+    if (code !== 0) console.error(`--- output of the host ---\n${output()}`);
     process.exitCode = code;
   } finally {
     await stopHost(host);
