@@ -752,7 +752,7 @@ indeterminate in 8.0, and dropping it could drop a DENY: fix the documents or th
 ids unique, so a key is also rejected when another key of its tenant has the same id (both would become one principal,
 or share one per-key role), and an `own-principal` key when its `apikey:<key id>` principal already exists: a document
 binds it by name, or `--memberships` lists it. The key would gain what that principal holds. A `--memberships` file
-that lists a principal twice is refused. A key without a tenant goes to the default tenant (`defaultTenant`).
+that lists a principal twice, or has a `tenant`, `principal` or `roles` of the wrong type (`roles` is an array of strings; only `[]` means no roles), is refused. A key without a tenant goes to the default tenant (`defaultTenant`).
 
 An `own-principal` key with no roles is still listed in `memberships`, with `roles: []`. Its principal must exist in
 your `MembershipProvider` all the same, with no roles: a principal the provider does not know is refused, so every
