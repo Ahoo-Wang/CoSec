@@ -49,10 +49,17 @@ internal class Retention(
     /**
      * Walks the `parent` chain of [key]'s head (`verify-chain`, RFC 0007 §5.4): every parent at or above the index
      * floor must have its record, holding that revision. A missing one is a lost write.
+     *
+     * The floor read when the walk begins (a store that cannot read the index fails the check, as before) is only the
+     * answer for what it already covers (#1532): the walk runs beside the control plane, whose [reclaim] moves the
+     * floor past a revision before it deletes the record. A record missing at or above that floor is judged by the
+     * floor read again, after the miss. The floor only rises, so that read is at least the floor at the miss: a record
+     * gone from below it was reclaimed, however long the walk took, and one gone from at or above it was never
+     * reclaimable and is lost.
      */
     suspend fun verifyChain(key: SnapshotKey): ChainCheck {
         val head = head(key) ?: return ChainCheck.Intact(0)
-        val floor = store.index(key)?.value?.floor ?: 1
+        val floor = currentFloor(key)
         if (store.record(key, head.digest) == null) {
             return ChainCheck.Broken(ParentRevision(head.revision, head.digest.toString()))
         }
@@ -61,7 +68,11 @@ internal class Retention(
             val parent = document.provenance?.parent ?: return ChainCheck.Intact(document.revision)
             val record = store.record(key, SnapshotDigest.parse(parent.digest))
             if (record == null) {
-                return if (parent.revision >= floor) ChainCheck.Broken(parent) else ChainCheck.Intact(document.revision)
+                return if (parent.revision < floor || parent.revision < currentFloor(key)) {
+                    ChainCheck.Intact(document.revision)
+                } else {
+                    ChainCheck.Broken(parent)
+                }
             }
             document = decode(key, record)
             if (document.revision != parent.revision) {
@@ -69,6 +80,9 @@ internal class Retention(
             }
         }
     }
+
+    /** The index floor as it is now; an index that is gone reads as 1, so that nothing missing is taken for reclaimed. */
+    private suspend fun currentFloor(key: SnapshotKey): Long = store.index(key)?.value?.floor ?: 1
 
     /**
      * Removes the records of [key] that the [retention] no longer keeps (RFC 0007 §5.7): beyond the [RetentionPolicy.maxCount]
