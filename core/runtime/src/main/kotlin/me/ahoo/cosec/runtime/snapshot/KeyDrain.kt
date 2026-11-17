@@ -253,6 +253,21 @@ internal class KeyDrain<T : Any>(
      * error, and so does the load it belongs to, by one fixed edit that keeps `again` (a later load makes good a change
      * that came meanwhile). The error is logged, and this key goes on taking events.
      */
+    /**
+     * One part of answering an aborted transition: a failure skips nothing else. A `VirtualMachineError` is kept as the
+     * drain's crash, so it is rethrown on a pool of ours and logged elsewhere, never thrown into whoever drains.
+     */
+    @Suppress("TooGenericExceptionCaught")
+    private inline fun guarded(block: () -> Unit) {
+        try {
+            block()
+        } catch (error: VirtualMachineError) {
+            crash = crash ?: ("answering an aborted transition" to error)
+        } catch (error: Throwable) {
+            log.error(error) { "Answering an aborted snapshot transition failed." }
+        }
+    }
+
     private fun aborted(before: KeyState<T>, event: KeyEvent<T>?, request: EvictRequest?, error: Throwable) {
         val failed =
             failedEntry<T>(
@@ -303,17 +318,6 @@ internal class KeyDrain<T : Any>(
     private companion object {
         /** An effect failed with no load in flight: its transition logs it as a failure after the load. */
         const val NO_LOAD = -1L
-
-        @Suppress("TooGenericExceptionCaught")
-        private inline fun guarded(block: () -> Unit) {
-            try {
-                block()
-            } catch (error: VirtualMachineError) {
-                throw error
-            } catch (error: Throwable) {
-                log.error(error) { "Answering an aborted snapshot transition failed." }
-            }
-        }
 
         /** How close waits out another thread's drain step: spins first, then parks from 10 µs, doubling up to 1 ms. */
         const val SPINS = 200

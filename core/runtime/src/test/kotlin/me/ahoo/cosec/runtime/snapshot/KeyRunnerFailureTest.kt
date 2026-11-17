@@ -267,6 +267,41 @@ class KeyRunnerFailureTest {
         }
     }
 
+    @Test
+    fun `a hand-off the compile pool refuses goes to housekeeping, counted, and runs there`() {
+        val housekept = AtomicInteger()
+        val metrics = object : SnapshotMetrics {
+            override fun onHandOffRefused(ranInPlace: Boolean) {
+                if (!ranInPlace) housekept.incrementAndGet()
+            }
+        }
+        val refuse = AtomicBoolean()
+        val refusing = Executor { if (refuse.get()) throw RejectedExecutionException(
+            "refused by the test"
+        ) else it.run() }
+        val housekeeping = SlotModelThreads().housekeeping
+        val more = CopyOnWriteArrayList<CompletableFuture<Boolean>>()
+        val armed = AtomicBoolean()
+        lateinit var source: SnapshotSource<Compiled, Compiled>
+        val hooks = KeyDrain.Hooks({
+            if (it is KeyEvent.Recompile && armed.getAndSet(false)) {
+                repeat(EXTRA) {
+                    more += source.slot("app-a").markRecompile()
+                }
+            }
+        })
+        source = source(hooks, metrics, compileExecutor = refusing, housekeeping = housekeeping, k = 0)
+        source.use {
+            source.load("app-a").join()
+            refuse.set(true)
+            armed.set(true)
+            more += source.slot("app-a").markRecompile()
+            housekept.get().assert().isGreaterThan(0)
+            while (housekeeping.tasks.isNotEmpty()) housekeeping.tasks.removeAt(0).run()
+            more.all { it.isDone }.assert().isTrue()
+        }
+    }
+
     /** Housekeeping that refuses everything, so a hand-off the compile pool refused runs in place. */
     private class Refusing : AbstractExecutorService() {
         override fun execute(command: Runnable) = throw RejectedExecutionException("refused by the test")
