@@ -22,8 +22,8 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.locks.LockSupport
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.LockSupport
 
 // The source's logger: moving the code did not move the name operators configure.
 private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
@@ -105,7 +105,13 @@ internal class KeyDrain<T : Any>(
                 // Another thread's step is running (an eviction over a large family, a slow meter): spin briefly, then
                 // park for a growing while rather than burn a core.
                 waits++
-                if (waits < SPINS) Thread.onSpinWait() else LockSupport.parkNanos(minOf(MAX_PARK_NANOS, MIN_PARK_NANOS shl minOf(waits - SPINS, PARK_DOUBLINGS)))
+                if (waits < SPINS) {
+                    Thread.onSpinWait()
+                } else {
+                    LockSupport.parkNanos(
+                        minOf(MAX_PARK_NANOS, MIN_PARK_NANOS shl minOf(waits - SPINS, PARK_DOUBLINGS))
+                    )
+                }
             }
         }
     }
@@ -229,12 +235,21 @@ internal class KeyDrain<T : Any>(
      * that came meanwhile). The error is logged, and this key goes on taking events.
      */
     private fun aborted(before: KeyState<T>, event: KeyEvent<T>, error: Throwable) {
-        val failed = failedEntry<T>(key, SnapshotUnavailableException(key, "the snapshot transition failed", error), context.clock.instant())
+        val failed =
+            failedEntry<T>(
+                key,
+                SnapshotUnavailableException(key, "the snapshot transition failed", error),
+                context.clock.instant()
+            )
         // Answered as every other failure is, with a failed entry, so a request fails closed as unavailable. A recompile
         // mark answers "load it again" and an eviction "not removed": each the side that keeps the key safe.
         when (val carried = event.carried) {
-            is KeyWaiter<*, *> -> @Suppress("UNCHECKED_CAST") (carried as KeyWaiter<T, *>).failed(failed)
-            is CompletableFuture<*> -> @Suppress("UNCHECKED_CAST") (carried as CompletableFuture<Boolean>).complete(event is KeyEvent.Recompile)
+            is KeyWaiter<*, *> ->
+                @Suppress("UNCHECKED_CAST")
+                (carried as KeyWaiter<T, *>).failed(failed)
+            is CompletableFuture<*> ->
+                @Suppress("UNCHECKED_CAST")
+                (carried as CompletableFuture<Boolean>).complete(event is KeyEvent.Recompile)
         }
         val load = before.load
         if (load != null && event.loadId == load.id) {
@@ -245,7 +260,9 @@ internal class KeyDrain<T : Any>(
             (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach { it.future.complete(failed) }
             publish(state.removed, state.idle)
         }
-        context.threads.offRequestThread { log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." } }
+        context.threads.offRequestThread {
+            log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." }
+        }
     }
 
     private companion object {

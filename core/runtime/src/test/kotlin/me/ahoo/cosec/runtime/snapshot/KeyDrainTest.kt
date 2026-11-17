@@ -153,9 +153,15 @@ class KeyDrainTest {
                 if (name in expected) {
                     answered.assert().describedAs(name).isEqualTo(expected[name])
                 } else {
-                    (answered as DocumentState<*>).assert().describedAs(name).isInstanceOf(DocumentState.Failed::class.java)
+                    (answered as DocumentState<*>).assert().describedAs(
+                        name
+                    ).isInstanceOf(DocumentState.Failed::class.java)
                 }
-                (source.slotA().reloadIfHeld(force = false).join() as Reloaded.Loaded).entry.revision.assert().describedAs(name).isEqualTo(1L)
+                (
+                    source.slotA().reloadIfHeld(
+                        force = false
+                    ).join() as Reloaded.Loaded
+                    ).entry.revision.assert().describedAs(name).isEqualTo(1L)
             }
         }
     }
@@ -227,10 +233,14 @@ class KeyDrainTest {
             // A's read hangs; the timer's ReadTimedOut is the scheduler's offer.
             source.load("app-a").join()
             more.assert().hasSize(EXTRA)
+            // The request is answered inside the timer's step; its drain may still hold the flag a moment, and hands
+            // off when it lets go. The held pool's tasks, run here, take what the timer did not.
+            val deadline = System.nanoTime() + java.time.Duration.ofSeconds(10).toNanos()
+            while (!more.all { it.isDone }) {
+                check(System.nanoTime() < deadline) { "the handed-off events were not taken" }
+                if (held.isNotEmpty()) held.removeAt(0).run() else Thread.sleep(1)
+            }
             takenOn.none { it.startsWith("cosec-snapshot-scheduler") }.assert().isTrue()
-            held.assert().hasSize(1)
-            held.single().run()
-            more.all { it.isDone }.assert().isTrue()
         }
     }
 
@@ -240,7 +250,12 @@ class KeyDrainTest {
         val keys = (0 until MANY).map { SnapshotKey.App("app-$it") }
         keys.forEach { store.put(it, document(1)) }
         val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = MANY + 1, compileQueueCapacity = 64)
-        source(KeyDrain.Hooks({ if (it is KeyEvent.CompileRejected) rejected.incrementAndGet() }), compileExecutor = null, options = options, everyKey = true).use { source ->
+        source(
+            KeyDrain.Hooks({ if (it is KeyEvent.CompileRejected) rejected.incrementAndGet() }),
+            compileExecutor = null,
+            options = options,
+            everyKey = true
+        ).use { source ->
             // A cold burst of a thousand overruns a queue of 64 with Slot too; what is measured is the recompile.
             keys.chunked(CHUNK).forEach { source.loadAll(it).join() }
             rejected.set(0)
@@ -254,7 +269,9 @@ class KeyDrainTest {
         val read = mockk<PassRead>(relaxed = true)
         val pass = mockk<Pass> { every { startRead() } returns read }
         val armed = AtomicBoolean()
-        source(KeyDrain.Hooks({ if (it is KeyEvent.ReadDone && armed.getAndSet(false)) error("thrown by the test") })).use { source ->
+        source(
+            KeyDrain.Hooks({ if (it is KeyEvent.ReadDone && armed.getAndSet(false)) error("thrown by the test") })
+        ).use { source ->
             source.load("app-a").join()
             store.hold = true
             armed.set(true)
