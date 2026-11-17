@@ -58,8 +58,8 @@ internal class KeyDrain<T : Any>(
     @Volatile
     private var drainer: Thread? = null
 
-    /** A `VirtualMachineError` an effect threw, handled once the flag is released ([released]). */
-    private var crash: VirtualMachineError? = null
+    /** A `VirtualMachineError` an effect threw, and the effect, handled once the flag is released ([released]). */
+    private var crash: Pair<KeyEffect<T>, VirtualMachineError>? = null
 
     /** An eviction as offered; claimed when it is taken (§4b), so nothing of this key moves in between. */
     class EvictRequest(val onlyIfEmpty: Boolean, val absent: Boolean?, val reply: CompletableFuture<Eviction>)
@@ -69,7 +69,13 @@ internal class KeyDrain<T : Any>(
         DrainBudget.within(if (context.threads.onOwnThread.get() == true) Int.MAX_VALUE else k + 1) { drain() }
     }
 
-    /** `endLoad`: offers [KeyEvent.Close], then drains this key to empty on the closing thread, waiting out a drainer. */
+    /**
+     * `endLoad`: offers [KeyEvent.Close], then drains this key to empty on the closing thread, waiting out a drainer.
+     * Every future handed out is complete when `close()` returns, except when `close()` is called from inside a drain
+     * of this source: then the key being drained is complete when that drain returns, and every other key when
+     * `close()` returns. Called on the thread that holds this key's flag, it only queues [KeyEvent.Close], which that
+     * drain takes; nothing waits on its own flag.
+     */
     fun close() {
         queue.add(KeyEvent.Close)
         // Closing from inside this key's own drain (a meter, a listener): the drain on this thread takes it.
@@ -142,7 +148,7 @@ internal class KeyDrain<T : Any>(
                 effects.execute(effect)
             } catch (error: VirtualMachineError) {
                 // The rest of the step still runs, so its waiters are answered; the error is handled after the release.
-                crash = crash ?: error
+                crash = crash ?: (effect to error)
                 queue.add(KeyEvent.EffectFailed(step.state.load?.id ?: before.load?.id ?: NO_LOAD, error))
             } catch (error: Throwable) {
                 queue.add(KeyEvent.EffectFailed(step.state.load?.id ?: before.load?.id ?: NO_LOAD, error))
@@ -151,14 +157,24 @@ internal class KeyDrain<T : Any>(
     }
 
     /**
-     * After the release, a `VirtualMachineError` an effect threw: rethrown on CoSec's own threads, as [Slot] rethrows
-     * it to the pool; on any other thread, a caller's, logged, since it is no error of that caller.
+     * After the release, a `VirtualMachineError` an effect threw. "Never catch a `VirtualMachineError`" is the rule, and
+     * this is its reasoned exception, `OutOfMemoryError` included: the error belongs to the key whose effect threw, not
+     * to the thread that happened to drain it. So the step's remaining effects ran (its waiters are answered), an
+     * [KeyEvent.EffectFailed] is queued (the load ends as a transient failure), the flag is released, and then it is
+     * rethrown on CoSec's own threads, as [Slot] rethrows it to the pool, and on any other thread, a caller's, logged at
+     * ERROR instead: that caller gets its own answer, never another key's `StackOverflowError`. The line goes through
+     * housekeeping like every line with a stack trace, and is written in place when housekeeping refuses it.
      */
     private fun released() {
-        val error = crash ?: return
+        val (effect, error) = crash ?: return
         crash = null
         if (context.threads.onOwnThread.get() == true) throw error
-        context.threads.offRequestThread { log.error(error) { "Snapshot document [$key]: an effect failed." } }
+        context.threads.offRequestThread {
+            log.error(error) {
+                "Snapshot document [$key]: the effect ${effect::class.simpleName} threw ${error::class.java.name}; the JVM may " +
+                    "not be healthy. Its load ended as a transient failure, and the key goes on."
+            }
+        }
     }
 
     /** The page's steps 2 to 4: evictable, then the claim, then the event carrying what was found. */
