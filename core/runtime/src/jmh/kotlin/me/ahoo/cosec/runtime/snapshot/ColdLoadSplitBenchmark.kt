@@ -22,6 +22,7 @@ import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import org.openjdk.jmh.annotations.Benchmark
 import org.openjdk.jmh.annotations.BenchmarkMode
@@ -58,10 +59,15 @@ open class ColdLoadSplitBenchmark {
     private var recording = false
 
     @Volatile
+    private var readAt = 0L
+
+    @Volatile
     private var compileStart = 0L
 
     @Volatile
     private var compileEnd = 0L
+    private val toRead = LongArray(MAX)
+    private val readToCompile = LongArray(MAX)
     private val calling = LongArray(MAX)
     private val hopping = LongArray(MAX)
     private val before = LongArray(MAX)
@@ -71,9 +77,13 @@ open class ColdLoadSplitBenchmark {
 
     @Setup
     fun setup() {
-        val store = InMemorySnapshotDocumentStore()
+        val memory = InMemorySnapshotDocumentStore()
+        // The time a cold read starts: under both slots, the compile is handed to the pool right after it answers.
+        val store = object : SnapshotDocumentStore by memory {
+            override fun read(key: SnapshotKey) = memory.read(key).also { if (key is SnapshotKey.Tenant) readAt = System.nanoTime() }
+        }
         val document = SnapshotDocuments.read(TEXT.encodeToByteArray())
-        (keys + SnapshotKey.Platform).forEach { store.put(it, document) }
+        (keys + SnapshotKey.Platform).forEach { memory.put(it, document) }
         val delegate = PolicyDocumentCompiler()
         val compiler = object : SnapshotCompiler<CompiledDocument> by delegate {
             override fun compile(key: SnapshotKey, document: SnapshotDocument): CompiledDocument {
@@ -120,6 +130,8 @@ open class ColdLoadSplitBenchmark {
         val set = pending.join()
         val ended = System.nanoTime()
         if (recording && n < MAX) {
+            toRead[n] = readAt - began
+            readToCompile[n] = compileStart - readAt
             calling[n] = returned - began
             hopping[n] = compileStart - returned
             before[n] = compileStart - began
@@ -140,6 +152,8 @@ open class ColdLoadSplitBenchmark {
         }
         println("\n[$slots] n=$n; ${report("before its compilation", before)}; ${report("compiling", compiling)}; " +
             report("after it, to the answer", after))
+        println("[$slots]   from the request to its read: ${report("to read", toRead)}; " +
+            "from the read to the compile's start: ${report("read to compile", readToCompile)}")
         println("[$slots]   of which the request's own call (its thread's drain): ${report("call", calling)}; " +
             "from its return to the compile's start: ${report("hop", hopping)}")
     }
