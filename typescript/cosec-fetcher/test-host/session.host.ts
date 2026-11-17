@@ -38,7 +38,7 @@ describe('a signed-in session against a real host', () => {
     tokens.signIn(await login('alice'));
     const response = await client.get('/orders/1');
     expect(response.status).toBe(200);
-    expect(await response.text()).toBe('order-1');
+    expect(await response.json()).toEqual({ order: '1' });
     expect(tokens.authenticated).toBe(true);
     expect(await stats()).toEqual({ logins: 1, refreshes: 0 });
   });
@@ -106,7 +106,7 @@ describe('a signed-in session against a real host', () => {
     const wire = recordWire();
     const response = await client.get('/orders/1');
     expect(response.status).toBe(200);
-    expect(await response.text()).toBe('order-1');
+    expect(await response.json()).toEqual({ order: '1' });
     // The host said 401 to the first try, the refresh renewed the pair, the retry was answered.
     expect(wire).toEqual([
       '/orders/1 401',

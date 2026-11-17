@@ -94,11 +94,12 @@ internal class ClientHostApi(
     @GetMapping("/hello")
     fun hello(): Map<String, String> = mapOf("message" to "hello")
 
+    // JSON, not text: a path variable echoed as text/html is a cross-site scripting sink (CodeQL).
     @GetMapping("/orders/{id}")
-    fun order(@PathVariable id: String): String = "order-$id"
+    fun order(@PathVariable id: String): Map<String, String> = mapOf("order" to id)
 
     @DeleteMapping("/orders/{id}")
-    fun delete(@PathVariable id: String): String = "deleted $id"
+    fun delete(@PathVariable id: String): Map<String, String> = mapOf("deleted" to id)
 
     @PostMapping("/auth/login")
     suspend fun login(@RequestBody body: Map<String, String>): CompositeToken {
