@@ -193,7 +193,12 @@ class BoundaryReferencesTest {
             head.document.policies.filter { it.id != read.id },
             emptyList(),
         )
-        val refused = harness.revisions.publish(wms, head, candidate, Publication("c", ProvenanceKind.PUBLISH, PLATO.actor))
+        val refused = harness.revisions.publish(
+            wms,
+            head,
+            candidate,
+            Publication("c", ProvenanceKind.PUBLISH, PLATO.actor)
+        )
         (refused as PublishOutcome.Referenced).referrers.assert().isEqualTo(mapOf(read.id to setOf(ACME)))
         harness.revisions.head(wms)!!.revision.assert().isEqualTo(head.revision)
     }

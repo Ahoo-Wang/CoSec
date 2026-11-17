@@ -52,7 +52,11 @@ internal object ReferencedPolicies {
         }
         val kept = RoleExpansion.effective(candidate).policies.associate { it.id to it.boundary }
         return RoleExpansion.effective(base).policies.filter { kept[it.id] != it.boundary }.map { it.id }
-            .associateWith { policy -> (referrers(key, policy) - key).filterNotTo(HashSet()) { definesItself(it, policy, head) } }
+            .associateWith { policy ->
+                (referrers(key, policy) - key).filterNotTo(
+                    HashSet()
+                ) { definesItself(it, policy, head) }
+            }
             .filterValues { it.isNotEmpty() }
     }
 
@@ -61,7 +65,11 @@ internal object ReferencedPolicies {
      * one that cannot be read may refer.
      */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId, head: suspend (SnapshotKey) -> Head?): Boolean = try {
+    private suspend fun definesItself(
+        referrer: SnapshotKey,
+        policy: PolicyId,
+        head: suspend (SnapshotKey) -> Head?
+    ): Boolean = try {
         referrer is SnapshotKey.Tenant && head(referrer)?.document?.let { document ->
             document.boundary != policy && document.policies.any { it.id == policy }
         } == true
