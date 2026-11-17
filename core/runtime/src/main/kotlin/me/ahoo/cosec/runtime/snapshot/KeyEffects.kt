@@ -195,24 +195,18 @@ internal class KeyEffects<T : Any>(
 
     /**
      * After an install: housekeeping evicts beyond the bound, unless the install took the family over its cap. Then the
-     * pass runs before the waiters are answered, here on CoSec's own threads; on another thread the pass (the scan and
-     * its offers, not the answer) goes to the compile pool, so a caller's thread never scans a family (§4c, decision B).
+     * pass runs here, on the installing thread whatever it is, with the drain budget lifted, before the step's answers:
+     * `SNP-14`'s back-pressure is the installer's, as [Slot]'s is, so the bound never depends on a pool being free. The
+     * victims whose flags are free are evicted on this thread; a victim another thread is draining takes its eviction
+     * next, in that drain.
      */
     private fun evictBeyond() {
         val families = context.families
         val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
-        if (!families.overCap(family)) {
+        if (families.overCap(family)) {
+            DrainBudget.unbounded { families.evictBeyond(family) }
+        } else {
             context.threads.offRequestThread { families.evictBeyond(family) }
-            return
-        }
-        if (context.threads.drainsUnbounded.get() == true) {
-            families.evictBeyond(family)
-            return
-        }
-        try {
-            context.threads.compileExecutor.execute { families.evictBeyond(family) }
-        } catch (_: RejectedExecutionException) {
-            if (!context.threads.offTimer { families.evictBeyond(family) }) families.evictBeyond(family)
         }
     }
 }

@@ -232,6 +232,41 @@ class KeyRunnerFailureTest {
         }
     }
 
+    @Test
+    fun `a burst of absent ids installed on a thread not ours never holds more than the cap, and nothing goes to the pool`() {
+        val pooled = CopyOnWriteArrayList<Runnable>()
+        val held = SlotModelThreads().housekeeping
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxAbsent = 4)
+        val cap = 2 * options.maxAbsent
+        source(compileExecutor = { pooled += it }, housekeeping = held, options = options).use { source ->
+            store.hold = true
+            source.load()
+            store.pending.toList().forEach { it.release() }
+            pooled.toList().forEach { it.run() }
+            pooled.clear()
+            // Each id read, answered absent and installed on this releasing thread, then confirmed (a local copy's
+            // answer is), so it is idle before the next: an install over the cap evicts here, not in the pool.
+            val most = AtomicInteger()
+            val releaser = Thread {
+                repeat(BURST) { id ->
+                    source.load("made-up-$id")
+                    while (true) {
+                        // A released read stays in the store's list; the next one is the first not answered yet.
+                        val next = store.pending.firstOrNull { !it.future.isDone } ?: break
+                        next.release()
+                        val held = source.heldCounts(SnapshotKind.APP).second - source.loadsInFlight(SnapshotKind.APP)
+                        most.accumulateAndGet(held, ::maxOf)
+                    }
+                }
+            }
+            releaser.start()
+            releaser.join()
+            most.get().assert().isLessThanOrEqualTo(cap).isGreaterThan(options.maxAbsent)
+            source.heldCounts(SnapshotKind.APP).second.assert().isLessThanOrEqualTo(cap)
+            pooled.assert().isEmpty()
+        }
+    }
+
     /** Housekeeping that refuses everything, so a hand-off the compile pool refused runs in place. */
     private class Refusing : AbstractExecutorService() {
         override fun execute(command: Runnable) = throw RejectedExecutionException("refused by the test")
@@ -259,5 +294,6 @@ class KeyRunnerFailureTest {
         val APP_A = SnapshotKey.App("app-a")
         val OPTIONS = SnapshotOptions(revalidateInterval = QUIET_PASS)
         const val EXTRA = 5
+        const val BURST = 50
     }
 }
