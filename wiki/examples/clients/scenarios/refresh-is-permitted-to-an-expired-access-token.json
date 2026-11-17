@@ -1,0 +1,16 @@
+{
+  "description": "POST /auth/refresh carries the access token that expired. A rejected token is evaluated as anonymous (PIP-6), and a statement lets anyone reach the route: permitted.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/auth/refresh"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

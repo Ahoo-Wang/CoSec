@@ -486,8 +486,10 @@ Before production:
 - Treat write access to Redis as access to every decision: whoever can write CoSec's keys can rewrite the documents
   every request is decided with, and revoke or restore tokens. Connect to Redis over TLS (`rediss://`, or
   `spring.data.redis.ssl.enabled`), so that no one on the network between can read or change what instances read, and
-  give the control plane and the data-plane instances the users of
-  [Who may write which keys](../operations/storage.md#who-may-write-which-keys): the instances only read the documents.
+  give the control plane and the data-plane instances their own users
+  ([Who may write which keys](../operations/storage.md#who-may-write-which-keys)). With CoCache 8.0.0 a data-plane
+  user must be able to write the documents and the candidates, so every data-plane instance's credential is write access
+  to Redis in this sense; a per-instance user narrows only the shadow reports and statuses.
 - Run Redis with `maxmemory-policy noeviction`, and read it from the primary
   ([Redis requirements](../operations/storage.md#redis-requirements)).
 - Limit the control API per tenant with a platform rate limit rule
