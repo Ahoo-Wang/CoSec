@@ -17,6 +17,7 @@ package me.ahoo.cosec.spring.boot.openapi
 
 import io.swagger.v3.oas.models.OpenAPI
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.test.asserts.assert
 import org.assertj.core.api.AssertionsForInterfaceTypes
 import org.junit.jupiter.api.Test
 import org.springdoc.core.customizers.OpenApiCustomizer
@@ -36,6 +37,16 @@ class CoSecOpenAPIAutoConfigurationTest {
                     .hasSingleBean(OpenApiCustomizer::class.java)
                 val openApiCustomizer = context.getBean(OpenApiCustomizer::class.java)
                 openApiCustomizer.customise(OpenAPI())
+            }
+    }
+
+    /** The property has two defaults, the Kotlin one and `@DefaultValue`'s: the binder takes the second, so they must agree. */
+    @Test
+    fun `the Kotlin default is the bound one`() {
+        contextRunner
+            .withUserConfiguration(CoSecOpenAPIAutoConfiguration::class.java)
+            .run { context: AssertableApplicationContext ->
+                context.getBean(OpenAPIProperties::class.java).enabled.assert().isEqualTo(OpenAPIProperties().enabled)
             }
     }
 }
