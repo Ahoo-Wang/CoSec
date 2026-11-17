@@ -475,7 +475,7 @@ export const RESOURCE_ATTRIBUTION_REQUEST_INTERCEPTOR_NAME = "ResourceAttributio
 export const RESOURCE_ATTRIBUTION_REQUEST_INTERCEPTOR_ORDER: number;
 
 // @public
-export interface ResourceAttributionOptions {
+export interface ResourceAttributionOptions extends RequestTrustCapable {
     ownerId?: string;
     tenantId?: string;
     tokenStorage: TokenStorage;
@@ -485,6 +485,8 @@ export interface ResourceAttributionOptions {
 export class ResourceAttributionRequestInterceptor implements RequestInterceptor {
     constructor(input: ResourceAttributionOptions);
     intercept(exchange: FetchExchange): void;
+    // @internal (undocumented)
+    readonly isTrusted?: RequestTrust;
     // (undocumented)
     readonly name = "ResourceAttributionRequestInterceptor";
     // (undocumented)
