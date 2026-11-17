@@ -62,6 +62,8 @@ open class ColdLoadSplitBenchmark {
 
     @Volatile
     private var compileEnd = 0L
+    private val calling = LongArray(MAX)
+    private val hopping = LongArray(MAX)
     private val before = LongArray(MAX)
     private val compiling = LongArray(MAX)
     private val after = LongArray(MAX)
@@ -113,9 +115,13 @@ open class ColdLoadSplitBenchmark {
         val key = keys[next]
         next = (next + 1) % TENANTS
         val began = System.nanoTime()
-        val set = source.loadAll(listOf(key)).join()
+        val pending = source.loadAll(listOf(key))
+        val returned = System.nanoTime()
+        val set = pending.join()
         val ended = System.nanoTime()
         if (recording && n < MAX) {
+            calling[n] = returned - began
+            hopping[n] = compileStart - returned
             before[n] = compileStart - began
             compiling[n] = compileEnd - compileStart
             after[n] = ended - compileEnd
@@ -134,6 +140,8 @@ open class ColdLoadSplitBenchmark {
         }
         println("\n[$slots] n=$n; ${report("before its compilation", before)}; ${report("compiling", compiling)}; " +
             report("after it, to the answer", after))
+        println("[$slots]   of which the request's own call (its thread's drain): ${report("call", calling)}; " +
+            "from its return to the compile's start: ${report("hop", hopping)}")
     }
 
     private companion object {
