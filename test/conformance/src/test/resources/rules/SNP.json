@@ -197,7 +197,10 @@
         "runtime:SnapshotFamilyBoundTest#a burst with housekeeping held never holds more than the cap, and the installer evicted it in place",
         "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
         "runtime:SnapshotFamilyBoundTest#passes at once take a kind exactly to its bound, never below it and never stopping above it",
-        "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and no count moves"
+        "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and no count moves",
+        "runtime:AbsentBoundWindowTest#members loading when the last pass scans are evicted once their loads end absent again",
+        "runtime:AbsentBoundWindowTest#a victim the pass chose that starts a load before its eviction is taken is evicted once that load ends",
+        "runtime:AbsentBoundWindowTest#an eviction whose transition throws is taken back to the bound by the next revalidation"
       ],
       "pending": null
     },

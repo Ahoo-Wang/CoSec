@@ -218,7 +218,8 @@ internal class KeyEffects<T : Any>(
     }
 
     /**
-     * After an install: housekeeping evicts beyond the bound, unless the install took the family over its cap. Then the
+     * After a load's end: nothing when both kinds are within their bounds. Otherwise housekeeping evicts beyond the
+     * bound, unless the install took the family over its cap. Then the
      * pass runs here, on the installing thread whatever it is, with the drain budget lifted, before the step's answers:
      * `SNP-14`'s back-pressure is the installer's, as [Slot]'s is, so the bound never depends on a pool being free. The
      * victims whose flags are free are evicted on this thread; a victim another thread is draining takes its eviction
@@ -227,6 +228,12 @@ internal class KeyEffects<T : Any>(
     private fun evictBeyond() {
         val families = context.families
         val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
+        // Most load ends leave both kinds within their bounds: then there is no pass to run or to queue.
+        if (family.count(absent = false).get() <= family.bound(absent = false) &&
+            family.count(absent = true).get() <= family.bound(absent = true)
+        ) {
+            return
+        }
         if (families.overCap(family)) {
             DrainBudget.unbounded { families.evictBeyond(family) }
         } else {

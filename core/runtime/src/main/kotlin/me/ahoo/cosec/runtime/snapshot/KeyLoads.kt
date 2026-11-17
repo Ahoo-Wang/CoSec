@@ -205,7 +205,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         val pending = step.next
         val nextLoad = advance(step, load, entry.takeIf { installs }, stale)
         val answer = if (withheld && nextLoad == null) outdated(step.key, step.moment) else entry
-        housekeep(step, installs)
+        housekeep(step)
         if (nextLoad != null) startRead(step, nextLoad) else pending?.let { step.emit(KeyEffect.Answer(it, answer)) }
         answerWaiters(step, load, answer, nextLoad.takeIf { withheld })
     }
@@ -365,12 +365,18 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         step.emit(KeyEffect.Install(entry, step.installed, regressedFrom))
     }
 
-    /** `housekeep`: an empty key is dropped, and an install evicts beyond the family's bound; the shared key has no family. */
-    private fun housekeep(step: KeyStepBuilder<T>, installed: Boolean) {
+    /**
+     * `housekeep`: an empty key is dropped; the end of any other load asks for the family's bound, not only an install.
+     * A pass skips a member whose load is in flight, and refuses one that starts a load before its eviction is taken;
+     * that load may end without installing anything (the store answers absent again). The member, idle now, asks for
+     * the pass it missed, or nothing would until the next install (RFC 0013 B2b, the window). The shared key has no
+     * family.
+     */
+    private fun housekeep(step: KeyStepBuilder<T>) {
         when {
             config.shared -> Unit
             step.installed == null -> step.emit(KeyEffect.DropIfEmpty)
-            installed -> step.emit(KeyEffect.EvictBeyond)
+            else -> step.emit(KeyEffect.EvictBeyond)
         }
     }
 }
