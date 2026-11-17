@@ -281,12 +281,13 @@ CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追�
 
 ## CORS {#cors}
 
-CoSec 不设置任何 `Access-Control-*` 头，也不注册 CORS 过滤器。浏览器客户端需要应用自己配置 CORS，而配置在哪里，决定了浏览器看到什么。
-预检请求是不带凭证的 `OPTIONS` 请求，所以管道把它按动作 `http:OPTIONS`、匿名调用方来判定：除非有语句让匿名调用方做这件事，否则是 `401`。
+CoSec 自己不设置任何 `Access-Control-*` 头。浏览器客户端需要应用自己配置 CORS，而配置在哪里，决定了浏览器看到什么。
+预检请求是不带凭证的 `OPTIONS` 请求，所以在没有更多配置时，管道把它按动作 `http:OPTIONS`、匿名调用方来判定：除非有语句让匿名调用方做这件事，否则是 `401`。
 在 Spring MVC 和 WebFlux 上，应用自己的 CORS 配置（`@CrossOrigin`、`addCorsMappings`）运行在处理器映射中，位于 CoSec 的过滤器之后，
-所以默认情况下它没有机会回答预检请求。
+所以默认情况下它没有机会回答预检请求。**应用声明了 `CorsConfigurationSource` bean 时，启动器会在 CoSec 之前注册一个 CORS 过滤器**
+（`STA-5`，见下），预检请求随即被回答，不再被判定。
 
-| 栈 | 默认的 CORS 处理 | 预检请求 | 被拒绝请求的 CORS 头 |
+| 栈 | 没有 `CorsConfigurationSource` bean 时的 CORS 处理 | 预检请求 | 被拒绝请求的 CORS 头 |
 |---|---|---|---|
 | Spring MVC | 在 `DispatcherServlet` 中，位于 CoSec 之后 | 由 CoSec 判定：`http:OPTIONS`，匿名时为 `401` | 没有：浏览器读不到问题体 |
 | WebFlux | 在处理器映射中，位于 `PipelineWebFilter` 之后 | 与 MVC 一样，由 CoSec 判定 | 没有 |
@@ -299,20 +300,39 @@ CoSec 不设置任何 `Access-Control-*` 头，也不注册 CORS 过滤器。浏
 | 什么都没有 | `401`，没有 CORS 头：浏览器拦下请求 | 没有 CORS 头 |
 | 一条让任何人做 `http:OPTIONS` 的语句，**没有** CORS 配置 | `200`，但**没有** `Access-Control-*` 头：浏览器同样拦下 | 没有 CORS 头 |
 | 该语句加上 Spring 自己的 CORS 配置 | `200` 并带这些头，通过 CoSec 之后由 Spring 回答 | 仍然没有：只有被许可的请求带这些头 |
-| **CoSec 之前的 CORS 过滤器** | `200` 并带这些头，任何路径都一样，既不被判定，也不会到达 CoSec 或处理器 | 同样带 CORS 头，脚本能读到这个 `401` 和它的 problem |
+| **一个 `CorsConfigurationSource` bean**（启动器的过滤器），或任何在 CoSec 之前的 CORS 过滤器 | `200` 并带这些头，任何路径都一样，既不被判定，也不会到达 CoSec 或处理器 | 同样带 CORS 头，脚本能读到这个 `401` 和它的 problem |
 
 允许 `http:OPTIONS` 的语句只是让预检请求通过 CoSec：它不是 CORS 配置，仍然需要别的东西来设置这些头。CoSec 之前的过滤器，是同时服务预检请求和拒绝响应的做法，
 各个栈上的安排是一样的：
 
-- **WebFlux：** 注册 `OrderedCorsWebFilter`；它的顺序为 `999`，正好在 `PipelineWebFilter`（`1000`）之前，自己回应预检请求：
+- **Spring MVC 和 WebFlux，用启动器：** 声明所在栈的 source，这个 bean 就是开关（没有属性）。WebFlux 上是
+  `org.springframework.web.cors.reactive.CorsConfigurationSource`，Spring MVC 上是 `org.springframework.web.cors.CorsConfigurationSource`；
+  Spring MVC 自己的 `HandlerMappingIntrospector` 也是一个，但不算。启动器注册顺序为 `999` 的 `OrderedCorsWebFilter`，正好在 `PipelineWebFilter`
+  （`1000`）之前；或者在 CoSec 的 servlet 过滤器前一位注册 `CorsFilter`（顺序 `-10000`，与 Boot 的 hidden-method 过滤器同位，后者只作用于 `POST`）。
+  应用自己声明了 `CorsFilter` 或 `CorsWebFilter` 时，启动器不注册：那一个由应用自己排顺序。
 
 ```kotlin
 @Bean
-fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
+fun corsConfigurationSource(): CorsConfigurationSource = UrlBasedCorsConfigurationSource().apply {
+    registerCorsConfiguration("/**", CorsConfiguration().apply {
+        allowedOrigins = listOf("https://app.example")
+        allowedMethods = listOf("GET", "POST", "PUT", "DELETE")
+        allowedHeaders = listOf("Authorization", "Content-Type", "CoSec-Device-Id", "CoSec-Space-Id", "CoSec-Request-Id")
+        exposedHeaders = listOf("CoSec-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After")
+    })
+}
 ```
 
-- **Spring MVC：** 注册 Spring 的 `CorsFilter`，顺序早于 `-9999`，即 CoSec 过滤器的顺序。
 - **网关：** `globalcors`，网关在自己的过滤器之前应用它。
+
+过滤器对管道意味着什么（`STA-5`）：
+
+- **预检请求**（带 `Origin` 和 `Access-Control-Request-Method` 的 `OPTIONS`）仅凭 source 由过滤器回答，不被判定：策略、限流、黑名单、审计、判定事件和指标都看不到它。
+  没有 `Access-Control-Request-Method` 的 `OPTIONS` 不是预检请求，照旧被判定。
+- **不是预检的请求**照旧被判定，每个响应（包括拒绝）都带 CORS 头。source 不允许的 origin 由过滤器在管道之前用一个普通的 `403` 拒绝：没有 problem 体、
+  没有 `CoSec-Request-Id`、没有判定事件。
+- **`@CrossOrigin` 和 `addCorsMappings`** 作用于预检之后的那个请求，不作用于预检请求：把浏览器会用到的每个 origin、方法和请求头都写进这个 bean。
+- **没有这个 bean** 时什么都不变：不注册过滤器，第一张表就是描述。
 
 过滤器背后的配置要允许客户端发送的请求头（`Authorization`、`Content-Type`、`CoSec-Device-Id`、`CoSec-Space-Id`、`CoSec-Request-Id`），并暴露客户端要读的响应头
 （`CoSec-Request-Id`、`RateLimit-Limit`、`RateLimit-Remaining`、`RateLimit-Reset`、`Retry-After`）：浏览器只把 CORS 安全响应头和被暴露的响应头交给脚本。

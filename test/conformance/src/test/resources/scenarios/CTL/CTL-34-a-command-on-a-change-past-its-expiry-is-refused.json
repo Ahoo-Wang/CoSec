@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "CTL-34"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "c1 is proposed and checked; seven days and a second pass, so the next read finds it EXPIRED. A command on it is refused with a 409 of its own (a read that ends a change never is one: the change is whatever the other reader made it).",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "advance": "P7DT1S"
+    },
+    {
+      "rebase": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "advanced",
+      "refused 409"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}

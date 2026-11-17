@@ -1666,6 +1666,15 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   migration write their revisions through the store, and are recorded in the revision's `provenance.kind` (`BOOTSTRAP`,
   `MIGRATE`). A `when` over `ChangeEvent.Kind` that names them stops compiling; delete the branches, nothing was ever
   delivered to them.
+- **A preflight is no longer seen by policies, rate limits or the audit when the application declares a
+  `CorsConfigurationSource` bean** (`STA-5`, [CORS](../integration/web.md#cors)). The starter now registers a CORS
+  filter before CoSec's on Spring MVC and WebFlux when the application declares the stack's `CorsConfigurationSource`
+  and no `CorsFilter` or `CorsWebFilter` of its own: a preflight is answered by it from the source alone, so a statement
+  on `http:OPTIONS`, a rate limit, the blacklist, the audit, a decision event or a metric never sees one; an origin the
+  source does not allow gets a plain `403` before the pipeline, without a problem body or a `CoSec-Request-Id`; and a
+  refusal now carries the CORS headers. `@CrossOrigin` and `addCorsMappings` no longer answer a preflight: put every
+  origin, method and header in the bean. A statement written only to let a preflight through (`http:OPTIONS`) is not
+  needed any more and can stay. An application without the bean, or with a filter of its own, is unchanged.
 - **Removing a DENY from the platform or an app document needs a second person** (RFC 0007 §7.4.4, `CTL-31`). Until
   now, a platform principal without `cosec:approve` could publish alone a change that only removed entries. A removal
   that takes away a DENY, a policy that holds one or a binding whose policy holds one (also through a role removed or put
