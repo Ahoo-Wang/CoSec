@@ -121,8 +121,14 @@ An instance is ready only once it has installed the platform document and every 
 [`prewarm-apps` and `prewarm-tenants`](./configuration.md#snapshot) (empty lists mean the platform document only).
 Until then it would answer every routed request `503`, so the starter turns Spring Boot's readiness state to
 `REFUSING_TRAFFIC`, and back to `ACCEPTING_TRAFFIC` once the documents are installed. A load balancer that follows
-`/actuator/health/readiness` sends it no traffic meanwhile. Liveness is not touched: a missing document is not a reason
-to restart the instance.
+`/actuator/health/readiness` sends it no traffic meanwhile, provided it can reach that path: to CoSec it is a request like
+any other, so on the application port of an application it needs a statement that permits it
+([Actuator on an application](../integration/web.md#actuator-on-an-application)). Liveness is not touched by the missing
+document: the liveness state stays `CORRECT`, which is not a reason to restart the instance. An HTTP liveness probe is
+another matter: on the application port of an application it answers `503` until the first document is published, and so
+does a WebFlux application's management port, so the kubelet would restart the pod before it can be ready. Point a WebMvc
+application's liveness probe at its management port (outside CoSec), and give a WebFlux application a `tcpSocket` probe on
+the application port.
 
 With Spring Boot Actuator, the `cosecSnapshot` health indicator reports `UP` once the same documents are installed,
 `DOWN` before, with the details `platform` (`installed`, `invalid`, `failed`, `absent` or `loading`) and `prewarmed`. To see those

@@ -1,0 +1,30 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "policies": [
+    {
+      "id": "probes",
+      "statements": [
+        {
+          "name": "probes",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": [
+            "http:path:/actuator/health/liveness",
+            "http:path:/actuator/health/readiness"
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "probes",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "probes"
+    }
+  ]
+}

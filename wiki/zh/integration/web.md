@@ -333,11 +333,31 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
 镜像同时以 `ghcr.io/ahoo-wang/cosec-gateway` 发布。请先发布它的平台文档（[快速开始](../guide/quick-start.md#publish-the-platform-document)）；在此之前每个经路由的请求都是 `503`。路由和 CoSec 通过标准 Spring 配置设置；镜像读取 `config/application.yaml`，默认值见 [`src/dist/config/application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml)。Kubernetes 的 Kustomize 清单在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中：用于试用 CoSec 的 `dev` overlay，和作为起点的 `production` overlay（[Kubernetes](../operations/deployment.md#kubernetes)）。镜像只暴露 `health` 这一个 actuator 端点。
 
+### 应用上的 actuator {#actuator-on-an-application}
+
+在应用（WebFlux 或 WebMvc）上，actuator 端点与其他请求一样：CoSec 的过滤器所在之处，没有任何路径不经策略就放行，第一份平台文档安装之前每个请求都是 `503`。过滤器管辖什么，取决于是哪个服务器（`STA-4`；各格由 `ManagementPortTest` 在真实服务器上断言）：
+
+| 服务器 | 应用端口 | 独立的 `management.server.port` |
+|---|---|---|
+| WebFlux | 经 CoSec：第一份平台文档之前探针是 `503`，之后匿名调用方是 `401` | 同样经 CoSec：Spring Boot 的管理服务器会收集应用的 `WebFilter` 和 `RouterFunction`，所以管道在它前面，应用的函数式路由和控制 API 都在其中（应用的控制器在那里是 `404`） |
+| WebMvc | 经 CoSec，同 WebFlux | 不经 CoSec：actuator 的端点是 Spring 自己的（存活 `200`；就绪在文档安装之前是 `503`，之后 `200`），控制器、函数式路由和控制 API 都是 `404` |
+| 网关（[单独一节](#actuator-on-a-gateway)） | 只有网关的路由 | 不经 CoSec：actuator 的端点是 Spring 自己的，网关的路由不在那里提供；控制平面开启时，控制 API 在那里提供，经它自己的管道 |
+
+只有一个端口，或 `management.server.port` 与应用端口相同时，每一行都是应用端口那一列。
+
+- **通过 HTTP 的就绪探针需要一条语句。** 平台文档安装之后，匿名探针得到 `401`，除非有一条语句允许它的路径。下面这条允许任何人对两个探针路径发 `GET`，actuator 的其他部分都不允许：
+
+  <<< @/examples/probes/documents/platform.json [probes policy and binding]
+
+  第一份文档发布之前，探针仍然回答 `503`，这正是“未就绪”该有的回答。在 Kubernetes 之外，Spring Boot 只有设置了 `management.endpoint.health.probes.enabled=true` 才提供探针。
+- **存活与启动探针不能依赖平台文档。** 应用的应用端口上的 HTTP 存活探针在第一份文档发布之前回答 `503`，kubelet 会在它能就绪之前就重启 pod。WebMvc 上把它指向管理端口，它不经 CoSec。WebFlux 的管理端口同样经 CoSec，所以对应用端口使用 `tcpSocket` 探针。
+- **管理端口上不经 CoSec 的内容由网络保护**，与网关相同：只在那里暴露你愿意让能访问该端口的任何人访问的东西。
+
 ### 网关上的 actuator {#actuator-on-a-gateway}
 
 网关过滤器授权的是网关的路由，因此网关自己的 actuator 端点不受 CoSec 管辖。它们暴露在应用端口上时，任何能访问网关的人都能访问；`gateway` 端点甚至能修改路由，任何人都可以把用户请求的路由连同他们的身份指向自己选择的主机。所以，按策略决策的网关宿主在应用端口上通过 HTTP 暴露了 `health` 以外的 actuator 端点时（`management.server.port` 未设置，或与 `server.port` 相同），无法启动（`STA-2`；[故障排查](../operations/troubleshooting.md#startup-fails-on-an-exposed-actuator-endpoint)）。
 
-- 用 `management.server.port` 把 actuator 放到单独的端口上，并置于网络策略之后；在那里可以暴露任何端点。
+- 用 `management.server.port` 把 actuator 放到单独的端口上，并置于网络策略之后；在那里可以暴露任何端点。给这个端口一个确定的号码：用随机端口（`0`）时，Spring Cloud Gateway 分辨不出管理端口，会在那里也提供它的路由，由 CoSec 像在应用端口上一样授权。
 - 或者只暴露 `health`（`management.endpoints.web.exposure.include`，也是 Spring Boot 的默认值）。
 - 或者在 `cosec.gateway.unprotected-endpoints` 中列出应用端口上已由其他手段保护的端点。它从不接受 `gateway`。
 

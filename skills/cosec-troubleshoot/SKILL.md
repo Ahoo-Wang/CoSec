@@ -352,6 +352,16 @@ header: anonymous. Otherwise never anonymous:
   failover); `cosec-migrate verify-chain` names every document whose revision chain lost a record.
 - The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports how many of the recently reporting instances (those with `cosec.authorization.shadow.enabled`) have installed it.
 
+### Probes answer 401 or 503, or pods restart before the first publish
+
+A readiness or liveness probe that answers CoSec's problem+json (`503` before the first platform document, `401` after it)
+or pods that restart in a loop on a new deployment: to CoSec a probe is a request like any other (`STA-4`), on the
+application port of an application and on a WebFlux application's management port. Readiness over HTTP needs one
+statement permitting `GET` on `/actuator/health/readiness` and `/actuator/health/liveness` for anyone (and, outside
+Kubernetes, `management.endpoint.health.probes.enabled=true`); a liveness or startup probe must not depend on the platform
+document: on WebMvc point it at `management.server.port` (outside CoSec), on WebFlux use a `tcpSocket` probe on the
+application port. https://cosec.ahoo.me/operations/troubleshooting#probes-answer-401-or-503
+
 ### Rate limiting
 
 - Without a `ReactiveStringRedisTemplate`, the limiter is per JVM: N instances allow N times the limit.
