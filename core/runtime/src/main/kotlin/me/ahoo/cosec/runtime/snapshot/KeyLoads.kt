@@ -29,16 +29,14 @@ import java.util.concurrent.ExecutionException
  * it ends. Each function names the [Slot] code it replaces, and decides as that code does.
  */
 internal class KeyLoads<T : Any>(private val config: KeyConfig) {
-    private val key = config.key
 
     /** `newLoad`: a load starting now, put in the state; its read starts with [startRead]. */
     fun newLoad(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?, handle: KeyHandle<T>?): LoadState<T> {
         val id = step.serial()
-        val state = step.state
-        val known = state.installed
+        val known = step.installed
         // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
         val compiled = known != null && known.origin.compiled
-        val recompiles = !config.shared && compiled && state.installedEpoch < step.moment.epoch
+        val recompiles = !config.shared && compiled && step.installedEpoch < step.moment.epoch
         // readFor: see the class comment of SnapshotSource for why seen keys never use a local copy.
         val local = known == null && step.seen == null
         val digest = when {
@@ -60,7 +58,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             phase = LoadPhase.Reading,
             handle = handle ?: step.handle(),
         )
-        step.state = step.state.copy(load = load)
+        step.load = load
         return load
     }
 
@@ -78,7 +76,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
                 val seen = Seen(read.document.revision, read.digest)
                 step.emit(KeyEffect.RecordSeen(seen, ifAbsent = true))
                 step.seen = step.seen ?: seen
-                step.state = step.state.copy(load = reading.copy(phase = LoadPhase.Compiling(read)))
+                step.load = reading.copy(phase = LoadPhase.Compiling(read))
                 step.emit(KeyEffect.Compile(load.id, read))
             }
 
@@ -101,7 +99,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         read: SnapshotRead.Present,
         compiled: KeyEvent.Compiled<T>
     ) {
-        step.state = step.state.copy(retryDelay = config.rejectedReloadRetry)
+        step.retryDelay = config.rejectedReloadRetry
         val present = compiled.state is DocumentState.Present
         step.emit(KeyEffect.Report(KeyEffect.Metric.Compiled(compiled.nanos, present)))
         val origin = if (present) EntryOrigin.DOCUMENT else EntryOrigin.UNCOMPILABLE
@@ -109,7 +107,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         finish(
             step,
             load,
-            SnapshotEntry(key, compiled.state, read.document.revision, read.digest, confirmedAt, origin),
+            SnapshotEntry(step.key, compiled.state, read.document.revision, read.digest, confirmedAt, origin),
             install = true
         )
     }
@@ -127,7 +125,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         val confirmedAt = load.confirmedAt(config.localCopyMaxAge)
         val entry =
             SnapshotEntry(
-                key,
+                step.key,
                 DocumentState.Failed(failure),
                 read.document.revision,
                 read.digest,
@@ -148,15 +146,19 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             step.emit(
                 KeyEffect.Log(
                     Level.WARN,
-                    "Compiling snapshot document [$key] again failed; failing closed until it compiles.",
+                    "Compiling snapshot document [${step.key}] again failed; failing closed until it compiles.",
                     cause
                 )
             )
             val error =
-                SnapshotUnavailableException(key, "compiled with inputs that changed, and not compiled again", cause)
+                SnapshotUnavailableException(
+                    step.key,
+                    "compiled with inputs that changed, and not compiled again",
+                    cause
+                )
             val failed =
                 SnapshotEntry(
-                    key,
+                    step.key,
                     DocumentState.Failed(error),
                     known.revision,
                     known.digest,
@@ -171,7 +173,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             step.emit(
                 KeyEffect.Log(
                     Level.WARN,
-                    "Reloading snapshot document [$key] failed; keeping revision ${known.revision}.",
+                    "Reloading snapshot document [${step.key}] failed; keeping revision ${known.revision}.",
                     cause
                 )
             )
@@ -181,8 +183,8 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             }
             return
         }
-        step.emit(KeyEffect.Log(Level.WARN, "Loading snapshot document [$key] failed.", cause))
-        finish(step, load, transientFailure(key, load.startedAt, cause), install = false)
+        step.emit(KeyEffect.Log(Level.WARN, "Loading snapshot document [${step.key}] failed.", cause))
+        finish(step, load, transientFailure(step.key, load.startedAt, cause), install = false)
     }
 
     /**
@@ -200,9 +202,9 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         if (installs) {
             recordInstall(step, entry)
         }
-        val pending = step.state.next
+        val pending = step.next
         val nextLoad = advance(step, load, entry.takeIf { installs }, stale)
-        val answer = if (withheld && nextLoad == null) outdated(key, step.moment) else entry
+        val answer = if (withheld && nextLoad == null) outdated(step.key, step.moment) else entry
         housekeep(step, installs)
         if (nextLoad != null) startRead(step, nextLoad) else pending?.let { step.emit(KeyEffect.Answer(it, answer)) }
         answerWaiters(step, load, answer, nextLoad.takeIf { withheld })
@@ -219,18 +221,19 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         installed: SnapshotEntry<T>?,
         stale: Boolean
     ): LoadState<T>? {
-        val before = step.state
-        val wanted = before.again || stale || (installed != null && load.fromLocalCopy)
-        step.state = before.copy(
-            installed = installed ?: before.installed,
-            installedEpoch = if (installed != null) load.epoch else before.installedEpoch,
-            load = null,
-            again = false,
-            againForced = false,
-            next = null,
-        )
-        val open = !step.moment.closed && !before.removed
-        return if (wanted && open) newLoad(step, before.againForced, null, before.next) else null
+        val wanted = step.again || stale || (installed != null && load.fromLocalCopy)
+        val againForced = step.againForced
+        val pending = step.next
+        if (installed != null) {
+            step.installed = installed
+            step.installedEpoch = load.epoch
+        }
+        step.load = null
+        step.again = false
+        step.againForced = false
+        step.next = null
+        val open = !step.moment.closed && !step.removed
+        return if (wanted && open) newLoad(step, againForced, null, pending) else null
     }
 
     /** `answerWaiters`: [load]'s handles get [answer], or, for a withheld compilation, what [recompiling] ends with. */
@@ -245,13 +248,13 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             waiting.forEach { step.emit(KeyEffect.Answer(it, answer)) }
             return
         }
-        step.state = step.state.copy(load = recompiling.copy(alsoAnswers = recompiling.alsoAnswers + waiting))
+        step.load = recompiling.copy(alsoAnswers = recompiling.alsoAnswers + waiting)
     }
 
     private fun endRead(step: KeyStepBuilder<T>, load: LoadState<T>): LoadState<T> {
         step.emit(KeyEffect.CancelReadTimeout(load.id))
         load.pass?.let { step.emit(KeyEffect.EndPassRead(it)) }
-        return load.copy(pass = null).also { step.state = step.state.copy(load = it) }
+        return load.copy(pass = null).also { step.load = it }
     }
 
     private fun onUnchanged(step: KeyStepBuilder<T>, load: LoadState<T>) {
@@ -281,8 +284,13 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             keep(step, load, known)
             return
         }
-        val failure = SnapshotUnavailableException(key, "the stored document cannot be decoded", cause)
-        finish(step, load, config.entryOf(load, DocumentState.Failed(failure), EntryOrigin.UNDECODABLE), install = true)
+        val failure = SnapshotUnavailableException(step.key, "the stored document cannot be decoded", cause)
+        finish(
+            step,
+            load,
+            config.entryOf(step.key, load, DocumentState.Failed(failure), EntryOrigin.UNDECODABLE),
+            install = true
+        )
     }
 
     private fun onAbsent(step: KeyStepBuilder<T>, load: LoadState<T>) {
@@ -293,17 +301,26 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         }
         val lastSeen = step.seen
         if (lastSeen == null) {
-            finish(step, load, config.entryOf(load, DocumentState.Absent, EntryOrigin.ABSENT), install = true)
+            finish(step, load, config.entryOf(step.key, load, DocumentState.Absent, EntryOrigin.ABSENT), install = true)
             return
         }
         val error = SnapshotUnavailableException(
-            key,
+            step.key,
             "the store has no document, but revision ${lastSeen.revision} was seen; it may have lost data",
         )
-        finish(step, load, config.entryOf(load, DocumentState.Failed(error), EntryOrigin.LOST), install = true)
+        finish(
+            step,
+            load,
+            config.entryOf(step.key, load, DocumentState.Failed(error), EntryOrigin.LOST),
+            install = true
+        )
         // After the install: a throwing meter must not keep the lost document in service.
         step.emit(
-            KeyEffect.Log(Level.ERROR, "Snapshot document [$key] disappeared from the store; failing closed.", error)
+            KeyEffect.Log(
+                Level.ERROR,
+                "Snapshot document [${step.key}] disappeared from the store; failing closed.",
+                error
+            )
         )
         step.emit(KeyEffect.Report(KeyEffect.Metric.DocumentLost(lastSeen.revision)))
     }
@@ -316,8 +333,8 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
 
     /** `retryLater`: with a delay that doubles while the compile queue stays full, up to the revalidation interval. */
     private fun retryLater(step: KeyStepBuilder<T>) {
-        val delay = step.state.retryDelay
-        step.state = step.state.copy(retryDelay = minOf(delay.multipliedBy(2), config.revalidateInterval))
+        val delay = step.retryDelay
+        step.retryDelay = minOf(delay.multipliedBy(2), config.revalidateInterval)
         step.emit(KeyEffect.ScheduleRetry(delay))
     }
 
@@ -337,19 +354,19 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             step.emit(
                 KeyEffect.Log(
                     Level.ERROR,
-                    "Snapshot document [$key] regressed from revision ${it.revision} to ${entry.revision}; " +
+                    "Snapshot document [${step.key}] regressed from revision ${it.revision} to ${entry.revision}; " +
                         "the store may have lost a write (for example a Redis failover). Installing what the store holds.",
                 )
             )
         }
-        step.emit(KeyEffect.Install(entry, step.state.installed, regressedFrom))
+        step.emit(KeyEffect.Install(entry, step.installed, regressedFrom))
     }
 
     /** `housekeep`: an empty key is dropped, and an install evicts beyond the family's bound; the shared key has no family. */
     private fun housekeep(step: KeyStepBuilder<T>, installed: Boolean) {
         when {
             config.shared -> Unit
-            step.state.installed == null -> step.emit(KeyEffect.DropIfEmpty)
+            step.installed == null -> step.emit(KeyEffect.DropIfEmpty)
             installed -> step.emit(KeyEffect.EvictBeyond)
         }
     }

@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Ask
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Claim
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Waiter
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.util.concurrent.TimeoutException
@@ -36,10 +37,19 @@ import java.util.concurrent.TimeoutException
 internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     private val loads = KeyLoads<T>(config)
 
-    fun initial(): KeyState<T> = KeyState(retryDelay = config.rejectedReloadRetry)
+    private val initial = KeyState<T>(retryDelay = config.rejectedReloadRetry)
+
+    /** Every key's first state: one, since a state is a value. */
+    fun initial(): KeyState<T> = initial
 
     fun next(state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment): KeyStep<T> {
-        val step = KeyStepBuilder(state, if (event == KeyEvent.Close) moment.copy(closed = true) else moment)
+        val key = checkNotNull(config.key) { "Transitions shared by runners take each step's key from the runner." }
+        return KeyStepBuilder(state, moment, key).also { next(it, key, state, event, moment) }.build()
+    }
+
+    /** [next] for [key], into a drain's own [step], reset here: the same decision, its effects read in place. */
+    fun next(step: KeyStepBuilder<T>, key: SnapshotKey, state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment) {
+        step.reset(state, if (event == KeyEvent.Close) moment.closing() else moment, key)
         when (event) {
             is KeyEvent.Requested -> requested(step, event)
             KeyEvent.Changed -> changed(step)
@@ -50,7 +60,6 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             is KeyEvent.ReadDone, is KeyEvent.ReadFailed, is KeyEvent.ReadTimedOut, is KeyEvent.Compiled,
             is KeyEvent.CompileCrashed, is KeyEvent.CompileRejected, is KeyEvent.EffectFailed -> ofLoad(step, event)
         }
-        return step.build()
     }
 
     /**
@@ -72,7 +81,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     private fun requested(step: KeyStepBuilder<T>, event: KeyEvent.Requested) {
         val waiter = event.waiter
-        if (step.state.removed) {
+        if (step.removed) {
             // Never null: a request goes to the key's current runner; a pass or a revalidation skips the key.
             val skips = event.ask is Ask.ReloadIfHeld || (event.ask is Ask.Load && event.ask.pass != null)
             waiter?.let { step.emit(if (skips) KeyEffect.Skip(it) else KeyEffect.Redispatch(event)) }
@@ -90,7 +99,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     /** `forRequest`: what is installed, or its own view of the load; after close, refused as today's view is aborted. */
     private fun request(step: KeyStepBuilder<T>, waiter: Waiter?) {
         waiter ?: return
-        val installed = step.state.installed
+        val installed = step.installed
         when {
             installed != null -> step.emit(KeyEffect.Serve(waiter, installed, hit = true))
             step.moment.closed -> step.emit(KeyEffect.Refuse(waiter, closedError()))
@@ -100,7 +109,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     /** `usable`: the installed entry if it has not failed, otherwise a load. */
     private fun usable(step: KeyStepBuilder<T>, waiter: Waiter?) {
-        val installed = step.state.installed
+        val installed = step.installed
         if (installed != null && installed.state !is DocumentState.Failed) {
             waiter?.let { step.emit(KeyEffect.Serve(it, installed)) }
             return
@@ -115,10 +124,10 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
      */
     private fun load(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?, waiter: Waiter?) {
         if (step.moment.closed) {
-            waiter?.let { step.emit(KeyEffect.Serve(it, failedEntry(config.key, closedError(), step.moment.instant))) }
+            waiter?.let { step.emit(KeyEffect.Serve(it, failedEntry(step.key, closedError(), step.moment.instant))) }
             return
         }
-        val inFlight = step.state.load
+        val inFlight = step.load
         if (inFlight != null && pass != null && step.moment.nanos - inFlight.startedNanos > config.storeReadTimeout.toNanos()) {
             waiter?.let { step.emit(KeyEffect.Skip(it)) }
             return
@@ -129,23 +138,23 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     /** `reload`: a load that starts after this event, even if one is in flight, since a change may postdate its read. */
     private fun reload(step: KeyStepBuilder<T>, force: Boolean, waiter: Waiter?) {
-        val state = step.state
-        if (state.load == null) {
+        if (step.load == null) {
             load(step, force, pass = null, waiter = waiter)
             return
         }
-        val next = state.next ?: step.handle()
-        step.state = step.state.copy(again = true, againForced = state.againForced || force, next = next)
+        val next = step.next ?: step.handle()
+        step.again = true
+        step.againForced = step.againForced || force
+        step.next = next
         waiter?.let { step.emit(KeyEffect.Hang(it, next)) }
     }
 
     /** `onChanged`: reload if this key is installed or loading; otherwise there is nothing to refresh. */
     private fun changed(step: KeyStepBuilder<T>) {
-        val state = step.state
         when {
-            state.removed -> Unit
-            state.load != null -> step.state = state.copy(again = true)
-            state.installed != null -> load(step, force = false, pass = null, waiter = null)
+            step.removed -> Unit
+            step.load != null -> step.again = true
+            step.installed != null -> load(step, force = false, pass = null, waiter = null)
         }
     }
 
@@ -154,11 +163,10 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
      * True when this key is to be loaded again (loading, or idle with a compiled entry): the caller reloads it.
      */
     private fun recompile(step: KeyStepBuilder<T>): Boolean {
-        val state = step.state
         return when {
-            state.removed -> false
-            state.load != null -> true.also { step.state = state.copy(again = true) }
-            else -> state.installed?.origin?.compiled ?: false
+            step.removed -> false
+            step.load != null -> true.also { step.again = true }
+            else -> step.installed?.origin?.compiled ?: false
         }
     }
 
@@ -167,7 +175,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
         val removes = when (event.claim) {
             Claim.CLAIMED -> true.also {
                 check(evictable(step.state, absent = null, event.onlyIfEmpty)) {
-                    "An eviction of [${config.key}] was claimed for a key that cannot be evicted."
+                    "An eviction of [${step.key}] was claimed for a key that cannot be evicted."
                 }
             }
 
@@ -175,7 +183,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             Claim.NOT_EVICTABLE, Claim.AT_BOUND -> false
         }
         if (removes) {
-            step.state = step.state.copy(removed = true)
+            step.removed = true
             step.emit(KeyEffect.Drop(claimed = event.claim == Claim.CLAIMED))
         }
         step.emit(KeyEffect.Reply(event.reply, removes))
@@ -186,21 +194,21 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
      * unless a recompile has outdated it.
      */
     private fun close(step: KeyStepBuilder<T>) {
-        val load = step.state.load ?: return
+        val load = step.load ?: return
         val outdated = load.recompiles || load.epoch < step.moment.epoch
-        val entry = load.known.takeUnless { outdated } ?: failedEntry(config.key, closedError(), step.moment.instant)
+        val entry = load.known.takeUnless { outdated } ?: failedEntry(step.key, closedError(), step.moment.instant)
         loads.finish(step, load, entry, install = false)
     }
 
     /** An event about a load: dropped when that load has ended, or when it has moved past what the event is about. */
     private fun ofLoad(step: KeyStepBuilder<T>, event: KeyEvent<T>) {
-        val load = step.state.load?.takeIf { it.id == event.loadId }
+        val load = step.load?.takeIf { it.id == event.loadId }
         if (load == null) {
             if (event is KeyEvent.EffectFailed) {
                 step.emit(
                     KeyEffect.Log(
                         KeyEffect.Level.ERROR,
-                        "Snapshot document [${config.key}] failed after its load finished.",
+                        "Snapshot document [${step.key}] failed after its load finished.",
                         event.cause
                     )
                 )
@@ -235,7 +243,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             is KeyEvent.Compiled -> loads.onCompiled(step, load, read, event)
             is KeyEvent.CompileCrashed -> loads.onCompileCrashed(step, load, read, event.failure)
             is KeyEvent.CompileRejected -> {
-                val cause = SnapshotUnavailableException(config.key, "the compile queue is full", event.cause)
+                val cause = SnapshotUnavailableException(step.key, "the compile queue is full", event.cause)
                 loads.onTransientFailure(step, load, cause, rejected = true)
             }
 
@@ -245,9 +253,9 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     }
 
     private fun joinOrStart(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?): KeyHandle<T> {
-        step.state.load?.let { return it.handle }
+        step.load?.let { return it.handle }
         val load = loads.newLoad(step, force, pass, handle = null)
-        step.state = step.state.copy(again = false)
+        step.again = false
         loads.startRead(step, load)
         return load.handle
     }
