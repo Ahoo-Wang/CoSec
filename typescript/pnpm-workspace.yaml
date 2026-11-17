@@ -9,8 +9,10 @@ allowBuilds:
 
 # A version npm published less than a day ago is not installed: a malicious release is usually pulled in that time.
 minimumReleaseAge: 1440
-# Fetcher is the maintainer's own: its releases are the ones this workspace is built against, and a release the same day
-# must be installable (6.1.0 was published on 2026-11-17).
+# TEMPORARY. fetcher 6.1.0, which the client needs, was published on 2026-11-17 and the day's wait above refused it. The
+# wait exists for the day a maintainer's npm account is not in the maintainer's hands, and fetcher is the dependency
+# whose compromise would hurt most: remove this exclusion in the first pull request that touches the workspace once 6.1.0
+# is more than a day old (cosec-react's). The lockfile pins what CI installs meanwhile.
 minimumReleaseAgeExclude:
   - '@ahoo-wang/fetcher'
   - '@ahoo-wang/fetcher-*'

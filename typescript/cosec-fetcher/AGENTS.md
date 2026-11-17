@@ -98,3 +98,17 @@ src/
 - 🚫 Changing 401/403 error handling contract — used by react RouteGuard (callbacks receive the exchange, and the problem as a second argument only when there is one)
 - 🚫 Sending a refresh again after its `rotationLeeway` window without saying so in the docs: it revokes the session if the first attempt was recorded
 - 🚫 Removing token refresh retry logic without replacement
+
+## The lint warning ceiling
+
+`pnpm lint` is `eslint --max-warnings 53 .`. The package came in with 53 warnings, no errors, and none was fixed in the
+import (fixing one changes code). The number only ever goes down, and it is zero before the first npm release.
+
+| Rule                                 | In `src/`                                                                                                                                                                         | In `test/` |
+| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
+| `@typescript-eslint/no-explicit-any` | 4: `errors.ts:28` and `:57` (`cause?: Error \| any` of two public constructors), `jwts.ts:54` and `:79` (`Record<string, any>` and an index signature of the public `JwtPayload`) | 35         |
+| `@typescript-eslint/no-unused-vars`  | 1: `cosecConfigurer.ts:25`                                                                                                                                                        | 13         |
+
+None of the 48 in `test/` or the one unused variable changes behaviour or a public signature. The four `any` of `src/` are
+**public declarations**: replacing them changes lines of `test/api/cosec-fetcher.api.md`, so they are a decision for CoSec,
+not a lint fix. The follow-up that brings the ceiling to zero is its own small pull request after `cosec-react`.
