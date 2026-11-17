@@ -234,7 +234,7 @@ jobs:
 
       - name: Stage the coverage
         if: matrix.node-version == '24.22.2'
-        run: mkdir -p ../coverage-artifact && cp cosec-fetcher/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-fetcher.json
+        run: mkdir -p ../coverage-artifact && cp cosec-fetcher/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-fetcher.json && cp cosec-react/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-react.json
 
       - name: Keep the coverage
         if: matrix.node-version == '24.22.2'
@@ -272,7 +272,7 @@ jobs:
           flags: typescript
           name: typescript
           disable_search: true
-          files: coverage-artifact/typescript-cosec-fetcher.json
+          files: coverage-artifact/typescript-cosec-fetcher.json,coverage-artifact/typescript-cosec-react.json
           fail_ci_if_error: true
 
   # Every overlay in k8s/overlays builds, and what it builds is valid for the oldest Kubernetes minor still supported

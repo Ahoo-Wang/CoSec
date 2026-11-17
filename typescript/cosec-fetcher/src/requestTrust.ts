@@ -33,13 +33,16 @@ export type RequestTrust = (url: string, exchange: FetchExchange) => boolean;
 
 export interface RequestTrustCapable {
   /**
-   * Which absolute request URLs may carry CoSec credentials. By default every
-   * request carries them. Pass {@link sameOriginTrust} (or your own
-   * predicate) to keep the token and device ID from reaching other origins —
-   * a pagination link, a download URL, a callback. A relative request URL
-   * that resolves against the fetcher's own `baseURL` is always trusted; one
-   * that the URL parser resolves to another host (such as `\host/path`) is
-   * judged like an absolute URL.
+   * Which absolute request URLs may carry CoSec credentials: the access
+   * token, the device ID and the other CoSec headers, and the token's tenant
+   * and owner in the URL. By default {@link sameOriginTrust}: the origin of an
+   * absolute `baseURL` and the page's own origin, so a pagination link, a
+   * download URL or a callback to another origin gets none. Pass your own
+   * predicate to trust more origins; one that wants every request to carry
+   * them says so, `() => true`. A relative request URL that resolves against
+   * the fetcher's own `baseURL` is always trusted; one that the URL parser
+   * resolves to another host (such as `\host/path`) is judged like an
+   * absolute URL.
    */
   readonly isTrusted?: RequestTrust;
 }
@@ -86,13 +89,21 @@ function isTrustedRelative(
 }
 
 /**
- * Trusts an absolute URL on the origin of the fetcher's `baseURL`, or on the
- * page's own origin. Any other origin — a pagination link, a download URL,
- * a callback — gets no credentials.
+ * The default of `isTrusted`: trusts an absolute URL on the origin of the
+ * fetcher's `baseURL` (when that is absolute), or on the page's own origin
+ * (when there is a page: no `location` in Node or a worker). Any other
+ * origin — a pagination link, a download URL, a callback — gets no
+ * credentials.
  *
  * @example
  * ```typescript
- * new CoSecConfigurer({ tokenRefresher, isTrusted: sameOriginTrust });
+ * // Also trust a second API.
+ * new CoSecConfigurer({
+ *   tokenRefresher,
+ *   isTrusted: (url, exchange) =>
+ *     sameOriginTrust(url, exchange) ||
+ *     new URL(url).origin === 'https://files.example.com',
+ * });
  * ```
  */
 export const sameOriginTrust: RequestTrust = (url, exchange) => {
@@ -106,16 +117,15 @@ export const sameOriginTrust: RequestTrust = (url, exchange) => {
 };
 
 /**
- * Whether `exchange` may carry CoSec credentials: without `isTrusted`, every
- * request may; with it, a relative request URL may when it stays on the
- * configured `baseURL`'s scheme and host, and an absolute one — or a relative
- * one the URL parser takes to another host — when `isTrusted` accepts it.
+ * Whether `exchange` may carry CoSec credentials: a relative request URL may
+ * when it stays on the configured `baseURL`'s scheme and host, and an absolute
+ * one — or a relative one the URL parser takes to another host — when
+ * `isTrusted` accepts it; without `isTrusted`, {@link sameOriginTrust} does.
  */
 export function isTrustedRequest(
   exchange: FetchExchange,
-  isTrusted?: RequestTrust,
+  isTrusted: RequestTrust = sameOriginTrust,
 ): boolean {
-  if (!isTrusted) return true;
   // Trust is decided once per exchange, on its first pass through the request
   // chain: a retry (after a 401 refresh) sees the URL already resolved
   // against the baseURL, and must not lose the credentials the original
