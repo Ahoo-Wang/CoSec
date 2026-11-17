@@ -69,11 +69,8 @@ class VerifyIndexTest {
         publish("b")
         val other = SnapshotDigest(ByteArray(SnapshotDigest.SHA_256_BYTES) { 3 })
         rewriteEntries { if (it.revision == 2L) it.copy(digest = other) else it }
-        (
-            revisions.verifyIndex(
-                ACME
-            ) as IndexCheck.Differs
-            ).why.assert().contains("the index ends at revision 2 ($other)")
+        val differs = revisions.verifyIndex(ACME) as IndexCheck.Differs
+        differs.why.assert().contains("the index ends at revision 2 ($other)")
         memory.dropIndex(ACME)
         (revisions.verifyIndex(ACME) as IndexCheck.Differs).why.assert().contains("lists no revision")
     }
