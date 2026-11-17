@@ -250,7 +250,8 @@
         "runtime:KeyRunnerRequestTimerTest#an offer that throws leaves its request answered, not registered and waiting",
         "runtime:KeyRunnerRequestTimerTest#an offer that throws arms no timer",
         "runtime:KeyRunnerRequestTimerTest#a request still loading when the source closes is answered by close",
-        "runtime:KeyRunnerRequestTimerTest#a timer that fires after the answer, before its cancel, finds the request answered and does nothing"
+        "runtime:KeyRunnerRequestTimerTest#a timer that fires after the answer, before its cancel, finds the request answered and does nothing",
+        "runtime:KeyRunnerRequestTimerTest#a request whose timer the scheduler refuses is answered FAILED once, unregistered, and its load's end changes nothing"
       ],
       "pending": null
     }

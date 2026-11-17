@@ -16,6 +16,7 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -27,6 +28,7 @@ import org.junit.jupiter.api.assertThrows
 import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.RejectedExecutionException
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.ScheduledThreadPoolExecutor
 import java.util.concurrent.TimeUnit
@@ -42,7 +44,12 @@ class KeyRunnerRequestTimerTest {
     private class RecordingScheduler : ScheduledThreadPoolExecutor(1) {
         val scheduled = CopyOnWriteArrayList<Pair<Long, Runnable>>()
 
+        /** While set, a request timer is refused, as by a scheduler that has shut down. */
+        @Volatile
+        var refusing = false
+
         override fun schedule(command: Runnable, delay: Long, unit: TimeUnit): ScheduledFuture<*> {
+            if (refusing && unit.toNanos(delay) <= TIMEOUT.toNanos()) throw RejectedExecutionException("refused")
             scheduled += unit.toNanos(delay) to command
             return super.schedule({}, 1, TimeUnit.DAYS)
         }
@@ -75,6 +82,12 @@ class KeyRunnerRequestTimerTest {
     private val requests = CopyOnWriteArrayList<CompletableFuture<*>>()
     private val throwAfterRelease = AtomicBoolean()
 
+    /** The source's slot context, taken as it makes its first slot: where its registered requests are. */
+    @Volatile
+    private var context: SlotContext? = null
+
+    private fun registered() = requireNotNull(context).pendingRequests
+
     private fun source(): SnapshotSource<Compiled, Compiled> {
         val hooks = KeyDrain.Hooks(
             beforeNext = { event ->
@@ -94,10 +107,21 @@ class KeyRunnerRequestTimerTest {
             scheduler,
             { 0L },
             null,
-            keyRunners(hooks = hooks, hooked = { it == APP_A }),
+            capturing(keyRunners(hooks = hooks, hooked = { it == APP_A })),
         ).also {
             it.nanoTime = nanoTime
             it.load().join()
+        }
+    }
+
+    private fun capturing(runners: SlotFactory) = object : SlotFactory {
+        override fun <T : Any> create(
+            key: SnapshotKey,
+            compiler: SnapshotCompiler<T>,
+            context: SlotContext
+        ): KeySlot<T> {
+            this@KeyRunnerRequestTimerTest.context = context
+            return runners.create(key, compiler, context)
         }
     }
 
@@ -159,6 +183,7 @@ class KeyRunnerRequestTimerTest {
             assertThrows<IllegalStateException> { source.load("app-a") }
             val request = requests.single()
             request.isCompletedExceptionally.assert().isTrue()
+            registered().assert().isEmpty()
         }
     }
 
@@ -169,6 +194,24 @@ class KeyRunnerRequestTimerTest {
             throwAfterRelease.set(true)
             assertThrows<IllegalStateException> { source.load("app-a") }
             scheduler.timers().assert().isEmpty()
+        }
+    }
+
+    @Test
+    fun `a request whose timer the scheduler refuses is answered FAILED once, unregistered, and its load's end changes nothing`() {
+        source().use { source ->
+            backing.hold = true
+            scheduler.refusing = true
+            val answer = source.load("app-a")
+            answer.isDone.assert().isTrue()
+            answer.join().app.assert().isInstanceOf(DocumentState.Failed::class.java)
+            appOutcomes().assert().containsExactly(LoadOutcome.FAILED)
+            registered().assert().isEmpty()
+            // The load goes on, and ends: the request was answered already.
+            backing.pending.single { it.key == APP_A }.release()
+            source.holds(APP_A).assert().isTrue()
+            answer.join().app.assert().isInstanceOf(DocumentState.Failed::class.java)
+            appOutcomes().assert().containsExactly(LoadOutcome.FAILED)
         }
     }
 

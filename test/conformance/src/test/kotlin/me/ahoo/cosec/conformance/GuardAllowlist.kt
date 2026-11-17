@@ -55,6 +55,7 @@ object GuardAllowlist {
             "runtime:KeyRunnerRequestTimerTest#an offer that throws arms no timer",
             "runtime:KeyRunnerRequestTimerTest#a request still loading when the source closes is answered by close",
             "runtime:KeyRunnerRequestTimerTest#a timer that fires after the answer, before its cancel, finds the request answered and does nothing",
+            "runtime:KeyRunnerRequestTimerTest#a request whose timer the scheduler refuses is answered FAILED once, unregistered, and its load's end changes nothing",
             "document:ShadowCodecTest#a candidate record that states its header beside its document is refused",
             "runtime:CandidateRecordShapeTest#a candidate record in the shape of 8_0_0-alpha_4 is not compared, and the request is answered as without it",
             "runtime:DecisionListenersShutdownTest#a full queue drops without waiting on the log, which is written off the request's thread",
