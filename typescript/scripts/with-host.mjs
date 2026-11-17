@@ -47,7 +47,7 @@ export function commandOf(argv) {
 /** The URL of the host that announced its port on its standard output (`READY <port>`), or null: only a whole line counts. */
 export function readyUrl(output) {
   const port = /^READY (\d+)\r?\n/m.exec(output)?.[1];
-  return port ? `http://localhost:${port}` : null;
+  return port ? `http://127.0.0.1:${port}` : null;
 }
 
 function hostClasspath() {

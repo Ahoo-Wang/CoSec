@@ -37,6 +37,9 @@ import java.net.http.HttpRequest
 import java.net.http.HttpResponse
 import java.time.Duration
 
+/** The host signs in whoever names themselves: it listens on the loopback interface only. */
+internal const val ADDRESS = "127.0.0.1"
+
 private const val READY_TIMEOUT_MILLIS = 30_000L
 
 /**
@@ -50,7 +53,7 @@ internal class ClientHost private constructor(private val context: ConfigurableA
         "The host runs no web server."
     }.port
 
-    val url: String get() = "http://localhost:$port"
+    val url: String get() = "http://$ADDRESS:$port"
 
     override fun close() = context.close()
 
@@ -61,6 +64,7 @@ internal class ClientHost private constructor(private val context: ConfigurableA
                 .web(WebApplicationType.REACTIVE)
                 .properties(
                     "server.port=$port",
+                    "server.address=$ADDRESS",
                     "cocache.backend=memory",
                     "cosec.jwt.secret=client-host-secret-client-host-secret",
                     "cosec.authorization.routes.location=",

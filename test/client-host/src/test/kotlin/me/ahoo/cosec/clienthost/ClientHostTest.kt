@@ -15,10 +15,17 @@ package me.ahoo.cosec.clienthost
 
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Assumptions
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.assertThrows
 import tools.jackson.databind.json.JsonMapper
+import java.net.ConnectException
+import java.net.Inet4Address
+import java.net.InetSocketAddress
+import java.net.NetworkInterface
+import java.net.Socket
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -31,6 +38,10 @@ import java.net.http.HttpResponse
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class ClientHostTest {
+    private companion object {
+        const val CONNECT_TIMEOUT_MILLIS = 2_000
+    }
+
     private lateinit var host: ClientHost
     private val http = HttpClient.newHttpClient()
     private val json = JsonMapper()
@@ -74,13 +85,56 @@ class ClientHostTest {
     }
 
     @Test
-    fun theRefreshRouteRotatesAPairAndAnEndedSessionIsRefused() {
+    fun theRefreshRouteRotatesAPair() {
         val pair = signIn("bob")
-        val body = json.writeValueAsString(pair)
-        val refreshed = send("POST", "/auth/refresh", body)
+        val refreshed = send("POST", "/auth/refresh", json.writeValueAsString(pair))
         refreshed.statusCode().assert().isEqualTo(200)
+        refreshed.body().assert().isNotEqualTo(json.writeValueAsString(pair))
+    }
+
+    @Test
+    fun aPairPresentedAgainAfterItsRotationIsRefused() {
+        // Rotated twice, so the first pair is two generations behind: past the rotation leeway's one generation (IDN-16).
+        val first = signIn("erin")
+        val second = refresh(first)
+        refresh(second)
+        send("POST", "/auth/refresh", json.writeValueAsString(first)).statusCode().assert().isEqualTo(401)
+    }
+
+    @Test
+    fun aSessionEndedThroughTheHostRefusesAPairThatWasNeverRotated() {
+        val pair = signIn("frank")
+        val body = json.writeValueAsString(pair)
         send("POST", "/test/end-session", body).statusCode().assert().isEqualTo(200)
         send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(401)
+    }
+
+    @Test
+    fun aRefreshThatCannotReadItsStoreIsUnavailableOnceAndKeepsThePair() {
+        val pair = signIn("gina")
+        val body = json.writeValueAsString(pair)
+        send("POST", "/test/fail-next-refresh").statusCode().assert().isEqualTo(200)
+        send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(503)
+        // Nothing was issued and nothing was spent: the same pair refreshes.
+        send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(200)
+    }
+
+    @Test
+    fun theHostListensOnTheLoopbackInterfaceOnly() {
+        Socket().use { it.connect(InetSocketAddress(ADDRESS, host.port), CONNECT_TIMEOUT_MILLIS) }
+        val other = NetworkInterface.networkInterfaces().toList().flatMap { it.inetAddresses.toList() }
+            .firstOrNull { !it.isLoopbackAddress && !it.isLinkLocalAddress && it is Inet4Address }
+        Assumptions.assumeTrue(other != null, "this machine has no address besides the loopback")
+        assertThrows<ConnectException> {
+            Socket().use { it.connect(InetSocketAddress(other, host.port), CONNECT_TIMEOUT_MILLIS) }
+        }
+    }
+
+    private fun refresh(pair: Map<String, String>): Map<String, String> {
+        val response = send("POST", "/auth/refresh", json.writeValueAsString(pair))
+        response.statusCode().assert().isEqualTo(200)
+        @Suppress("UNCHECKED_CAST")
+        return json.readValue(response.body(), Map::class.java) as Map<String, String>
     }
 
     @Test

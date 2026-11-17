@@ -46,6 +46,7 @@ import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 import java.time.Duration
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /** The sign-in a client posts: whoever names themselves is signed in, because the host tests the client, not a login. */
@@ -66,6 +67,9 @@ internal class ClientHostLoginAuthentication : Authentication<ClientHostLogin> {
 internal class ClientHostCounters {
     val logins = AtomicInteger()
     val refreshes = AtomicInteger()
+
+    /** Set by `/test/fail-next-refresh`: the next refresh fails as a store that cannot be read does. */
+    val failNextRefresh = AtomicBoolean()
 }
 
 /** How long ago the access token of `/test/login-expired` expired: a token the host refuses and the client may believe. */
@@ -105,6 +109,10 @@ internal class ClientHostApi(
     @PostMapping("/auth/refresh")
     suspend fun refresh(@RequestBody body: Map<String, String>): CompositeToken {
         counters.refreshes.incrementAndGet()
+        if (counters.failNextRefresh.compareAndSet(true, false)) {
+            // What RefreshTokenAuthentication throws when the revocations cannot be read (IDN-14): nothing is issued.
+            throw RevocationUnavailableException("The client host was asked to fail this refresh.")
+        }
         return auth.authenticateAsToken(ClientHostRefresh(body.getValue("accessToken"), body.getValue("refreshToken")))
     }
 
@@ -135,6 +143,12 @@ internal class ClientHostApi(
         return converter.toToken(issued, EXPIRED_AGO.negated(), Duration.ofDays(1))
     }
 
+    /** The next refresh answers 503 through the exception a store that cannot be read throws, and the one after succeeds. */
+    @PostMapping("/test/fail-next-refresh")
+    fun failNextRefresh() {
+        counters.failNextRefresh.set(true)
+    }
+
     @GetMapping("/test/stats")
     fun stats(): Map<String, Int> = mapOf("logins" to counters.logins.get(), "refreshes" to counters.refreshes.get())
 
@@ -142,6 +156,7 @@ internal class ClientHostApi(
     fun reset() {
         counters.logins.set(0)
         counters.refreshes.set(0)
+        counters.failNextRefresh.set(false)
     }
 
     /** Ends the session of [body]'s pair, as a server-side sign-out or a revocation would: its next refresh is a 401. */

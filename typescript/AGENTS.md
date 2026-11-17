@@ -73,8 +73,9 @@ pnpm test
 `test/client-host` (a Gradle project, test sources only) is a real CoSec 8 application: the starter over WebFlux with
 CoCache in memory (no Redis), one platform document, a login, a refresh route that answers `401` for a refused pair and
 `503` when it cannot decide (`wiki/integration/clients.md`), and `/test` routes that count what reached it, echo the
-headers it received, end a session and sign in with an access token that has already expired. Never an example of a
-production host.
+headers it received, end a session, sign in with an access token that has already expired and make the next refresh
+answer `503`. It listens on the loopback interface only (127.0.0.1: it signs in whoever names itself), and the trust
+cases use `localhost` as the other origin. Never an example of a production host.
 
 ```bash
 pnpm test:host     # builds the host with Gradle, starts it, runs every package's host tests, stops it

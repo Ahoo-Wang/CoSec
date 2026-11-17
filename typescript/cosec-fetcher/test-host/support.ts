@@ -133,6 +133,11 @@ export async function stats(): Promise<HostStats> {
   return (await (await fetch(`${hostUrl()}/test/stats`)).json()) as HostStats;
 }
 
+/** The next refresh the host serves fails as a store that cannot be read does: `503`, nothing issued, nothing spent. */
+export async function failNextRefresh(): Promise<void> {
+  await fetch(`${hostUrl()}/test/fail-next-refresh`, { method: 'POST' });
+}
+
 export async function resetStats(): Promise<void> {
   await fetch(`${hostUrl()}/test/reset`, { method: 'POST' });
 }

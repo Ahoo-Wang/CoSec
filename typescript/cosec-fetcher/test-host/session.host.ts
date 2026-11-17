@@ -18,6 +18,7 @@ import {
   createHostClient,
   destroyHostClients,
   endSession,
+  failNextRefresh,
   login,
   loginExpired,
   recordWire,
@@ -156,6 +157,7 @@ describe('a signed-in session against a real host', () => {
     const { client, tokens } = createHostClient({ config: { onUnauthorized } });
     const pair = await loginExpired('alice');
     tokens.signIn(pair);
+    // The pair was never rotated, so the 401 answers the ended session, not a pair presented again.
     await endSession(pair);
     const wire = recordWire();
     const error = await client.get('/orders/1').catch(error => error);
@@ -164,6 +166,33 @@ describe('a signed-in session against a real host', () => {
     expect(tokens.get()).toBeNull();
     expect((await stats()).refreshes).toBe(1);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the pair when the host cannot refresh (503), and the next call refreshes', async () => {
+    const onUnauthorized = vi.fn();
+    // No retries inside the call: the first call is the one that sees the 503.
+    const { client, tokens } = createHostClient({
+      config: { onUnauthorized, refreshRetryDelays: [] },
+    });
+    const pair = await loginExpired('alice');
+    tokens.signIn(pair);
+    await failNextRefresh();
+    const wire = recordWire();
+    const error = await client.get('/orders/1').catch(error => error);
+    expect(error).toBeInstanceOf(Error);
+    expect(wire).toEqual(['/auth/refresh 503']);
+    expect(tokens.get()?.token).toEqual(pair);
+    expect(onUnauthorized).not.toHaveBeenCalled();
+
+    const response = await client.get('/orders/1');
+    expect(response.status).toBe(200);
+    expect(wire).toEqual([
+      '/auth/refresh 503',
+      '/auth/refresh 200',
+      '/orders/1 200',
+    ]);
+    expect(await stats()).toEqual({ logins: 1, refreshes: 2 });
+    expect(tokens.get()?.token.accessToken).not.toBe(pair.accessToken);
   });
 });
 
@@ -179,9 +208,10 @@ describe('credentials on the wire', () => {
     expect(own['cosec-device-id']).toBeTruthy();
     expect(own['cosec-request-id']).toBeTruthy();
 
-    // 127.0.0.1 is another origin than localhost, though it is the same host.
+    // The host announces 127.0.0.1 and listens on it only: localhost is another origin for the same host (Node resolves it
+    // to ::1 first, refused, then to 127.0.0.1, which answers).
     const other = new URL('/test/echo', client.urlBuilder.baseURL);
-    other.hostname = '127.0.0.1';
+    other.hostname = 'localhost';
     const bare = (await (await client.get(other.toString())).json()) as Record<
       string,
       string
