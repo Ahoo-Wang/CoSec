@@ -110,7 +110,7 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 在此期间不会给它流量。存活状态不受影响：缺少文档不是重启实例的理由。
 
 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在这些文档安装后报告 `UP`，之前报告 `DOWN`，细节为 `platform`
-（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。要在就绪端点上看到这些细节，把它加入 readiness 组：
+（`installed`、`invalid`、`failed`、`absent` 或 `loading`）和 `prewarmed`。要在就绪端点上看到这些细节，把它加入 readiness 组：
 
 ```yaml
 management:

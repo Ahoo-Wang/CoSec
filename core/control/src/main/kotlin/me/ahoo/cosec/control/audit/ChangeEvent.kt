@@ -60,8 +60,6 @@ class ChangeEvent(
         BREAK_GLASS_REQUESTED,
         BREAK_GLASS_APPROVED,
         REVOKED,
-        BOOTSTRAP,
-        MIGRATE,
 
         /**
          * A change was published while another document it was checked with moved (RC1-33): the analysis, run again on
