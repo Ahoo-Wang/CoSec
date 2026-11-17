@@ -15,7 +15,9 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import io.mockk.every
 import io.mockk.mockk
+import io.mockk.verify
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -23,7 +25,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.CompletionException
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.CyclicBarrier
 import java.util.concurrent.Executor
@@ -44,12 +45,18 @@ class KeyDrainTest {
     }
     private val compiler = FakeCompiler()
 
-    private fun source(hooks: KeyDrain.Hooks, k: Int = KeyRunner.PROVISIONAL_K, compileExecutor: Executor = directExecutor) = SnapshotSource(
+    private fun source(
+        hooks: KeyDrain.Hooks,
+        k: Int = KeyRunner.PROVISIONAL_K,
+        compileExecutor: Executor? = directExecutor,
+        options: SnapshotOptions = OPTIONS,
+        everyKey: Boolean = false,
+    ) = SnapshotSource(
         store,
         SnapshotKey.Platform,
         compiler,
-        listOf(SnapshotFamily(SnapshotKind.APP, compiler, OPTIONS.maxApps, OPTIONS.maxAbsent)),
-        OPTIONS,
+        listOf(SnapshotFamily(SnapshotKind.APP, compiler, options.maxApps, options.maxAbsent)),
+        options,
         ManualClock(),
         SnapshotMetrics.NOOP,
         compileExecutor,
@@ -62,7 +69,7 @@ class KeyDrainTest {
                 compiler: SnapshotCompiler<T>,
                 context: SlotContext
             ): KeySlot<T> =
-                KeyRunner(key, compiler, context, k, if (key == APP_A) hooks else KeyDrain.Hooks.NONE)
+                KeyRunner(key, compiler, context, k, if (everyKey || key == APP_A) hooks else KeyDrain.Hooks.NONE)
         },
     )
 
@@ -120,36 +127,35 @@ class KeyDrainTest {
     }
 
     @Test
-    fun `a transition that throws fails what its event carries, and the key takes the next event`() {
-        val carriers: List<Pair<String, (SnapshotSource<Compiled, Compiled>) -> CompletableFuture<*>>> = listOf(
-            "request" to { it.load("app-a") },
-            "load" to { it.slotA().load(mockk(relaxed = true)) },
-            "reload" to { it.slotA().reload(force = false) },
-            "reload if held" to { it.slotA().reloadIfHeld(force = false) },
-            "recompile" to { it.slotA().markRecompile() },
-            "evict" to { it.slotA().evict(onlyIfEmpty = false, claimedAbsent = null) },
+    fun `a transition that throws answers what its event carries as a failure, and the key takes the next event`() {
+        // What each caller sees: a request fails closed (its document unavailable); an entry is a failed one; a recompile
+        // mark says "load it again"; an eviction says "not removed".
+        val carriers: List<Pair<String, (SnapshotSource<Compiled, Compiled>) -> Any?>> = listOf(
+            "request" to { it.load("app-a").join().app },
+            "load" to { ((it.slotA().load(mockk(relaxed = true)).join() as Reloaded.Loaded).entry.state) },
+            "reload" to { it.slotA().reload(force = false).join().state },
+            "reload if held" to { (it.slotA().reloadIfHeld(force = false).join() as Reloaded.Loaded).entry.state },
+            "recompile" to { it.slotA().markRecompile().join() },
+            "evict" to { it.slotA().evict(onlyIfEmpty = false, claimedAbsent = null).join() },
         )
+        val expected = mapOf("recompile" to true, "evict" to Eviction.REFUSED)
         for ((name, call) in carriers) {
             val armed = AtomicBoolean()
             val hooks = KeyDrain.Hooks({
-                if (it is KeyEvent.Requested || it is KeyEvent.Recompile || it is KeyEvent.Evict) if (armed.getAndSet(
-                        false
-                    )
-                ) {
-                    error("thrown by the test")
-                }
+                val carrying = it is KeyEvent.Requested || it is KeyEvent.Recompile || it is KeyEvent.Evict
+                if (carrying && armed.getAndSet(false)) error("thrown by the test")
             })
             source(hooks).use { source ->
                 // A request is cold, so its event is offered; every other carrier finds A installed.
                 if (name == "request") source.load().join() else source.load("app-a").join()
                 armed.set(true)
-                val carried = call(source)
-                runCatching {
-                    carried.join()
-                }.exceptionOrNull().assert().describedAs(name).isInstanceOf(CompletionException::class.java)
-                source.slotA().reloadIfHeld(
-                    force = false
-                ).join().assert().describedAs(name).isInstanceOf(Reloaded.Loaded::class.java)
+                val answered = call(source)
+                if (name in expected) {
+                    answered.assert().describedAs(name).isEqualTo(expected[name])
+                } else {
+                    (answered as DocumentState<*>).assert().describedAs(name).isInstanceOf(DocumentState.Failed::class.java)
+                }
+                (source.slotA().reloadIfHeld(force = false).join() as Reloaded.Loaded).entry.revision.assert().describedAs(name).isEqualTo(1L)
             }
         }
     }
@@ -200,7 +206,68 @@ class KeyDrainTest {
         (more + revalidating + recompiling).forEach { it.isDone.assert().isTrue() }
     }
 
+    @Test
+    fun `the scheduler drains as a caller does, within its budget, and hands the rest off`() {
+        val held = CopyOnWriteArrayList<Runnable>()
+        val holding = AtomicBoolean()
+        val pool = Executor { task -> if (holding.get()) held += task else task.run() }
+        val takenOn = CopyOnWriteArrayList<String>()
+        val more = CopyOnWriteArrayList<CompletableFuture<Boolean>>()
+        lateinit var source: SnapshotSource<Compiled, Compiled>
+        val hooks = KeyDrain.Hooks({
+            if (it is KeyEvent.Recompile) takenOn += Thread.currentThread().name
+            // On the timer's thread, while it holds A's flag: these are queued behind its own event.
+            if (it is KeyEvent.ReadTimedOut) repeat(EXTRA) { more += source.slotA().markRecompile() }
+        })
+        source = source(hooks, k = 0, compileExecutor = pool, options = SnapshotOptions(revalidateInterval = QUIET_PASS, storeReadTimeout = java.time.Duration.ofMillis(50)))
+        source.use {
+            source.load().join()
+            holding.set(true)
+            store.hold = true
+            // A's read hangs; the timer's ReadTimedOut is the scheduler's offer.
+            source.load("app-a").join()
+            more.assert().hasSize(EXTRA)
+            takenOn.none { it.startsWith("cosec-snapshot-scheduler") }.assert().isTrue()
+            held.assert().hasSize(1)
+            held.single().run()
+            more.all { it.isDone }.assert().isTrue()
+        }
+    }
+
+    @Test
+    fun `a recompile of a thousand keys from a thread not ours rejects no compilation, with a compile queue of 64`() {
+        val rejected = AtomicInteger()
+        val keys = (0 until MANY).map { SnapshotKey.App("app-$it") }
+        keys.forEach { store.put(it, document(1)) }
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = MANY + 1, compileQueueCapacity = 64)
+        source(KeyDrain.Hooks({ if (it is KeyEvent.CompileRejected) rejected.incrementAndGet() }), compileExecutor = null, options = options, everyKey = true).use { source ->
+            // A cold burst of a thousand overruns a queue of 64 with Slot too; what is measured is the recompile.
+            keys.chunked(CHUNK).forEach { source.loadAll(it).join() }
+            rejected.set(0)
+            source.recompile().join()
+            rejected.get().assert().isEqualTo(0)
+        }
+    }
+
+    @Test
+    fun `a transition that throws on a pass's load ends the pass's read`() {
+        val read = mockk<PassRead>(relaxed = true)
+        val pass = mockk<Pass> { every { startRead() } returns read }
+        val armed = AtomicBoolean()
+        source(KeyDrain.Hooks({ if (it is KeyEvent.ReadDone && armed.getAndSet(false)) error("thrown by the test") })).use { source ->
+            source.load("app-a").join()
+            store.hold = true
+            armed.set(true)
+            val loading = source.slotA().load(pass)
+            store.pending.single { it.key == APP_A }.release()
+            loading.join()
+            verify(exactly = 1) { read.end() }
+        }
+    }
+
     private companion object {
+        const val MANY = 1_000
+        const val CHUNK = 32
         val APP_A = SnapshotKey.App("app-a")
         val OPTIONS = SnapshotOptions(revalidateInterval = QUIET_PASS)
         const val THREADS = 8

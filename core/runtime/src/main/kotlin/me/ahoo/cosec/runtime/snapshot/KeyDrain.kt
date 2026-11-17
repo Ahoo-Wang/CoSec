@@ -22,7 +22,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentLinkedQueue
-import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.locks.LockSupport
 import java.util.concurrent.atomic.AtomicBoolean
 
 // The source's logger: moving the code did not move the name operators configure.
@@ -76,14 +76,14 @@ internal class KeyDrain<T : Any>(
     private var drainer: Thread? = null
 
     /** A `VirtualMachineError` an effect threw, and the effect, handled once the flag is released ([released]). */
-    private var crash: Pair<KeyEffect<T>, VirtualMachineError>? = null
+    private var crash: Pair<String, VirtualMachineError>? = null
 
     /** An eviction as offered; claimed when it is taken (§4b), so nothing of this key moves in between. */
     class EvictRequest(val onlyIfEmpty: Boolean, val absent: Boolean?, val reply: CompletableFuture<Eviction>)
 
     fun offer(item: Any) {
         queue.add(item)
-        DrainBudget.within(if (context.threads.onOwnThread.get() == true) Int.MAX_VALUE else k + 1) { drain() }
+        DrainBudget.within(if (context.threads.drainsUnbounded.get() == true) Int.MAX_VALUE else k + 1) { drain() }
     }
 
     /**
@@ -98,10 +98,14 @@ internal class KeyDrain<T : Any>(
         // Closing from inside this key's own drain (a meter, a listener): the drain on this thread takes it.
         if (drainer === Thread.currentThread()) return
         DrainBudget.unbounded {
+            var waits = 0
             while (true) {
                 drain()
                 if (queue.isEmpty() && !flag.get()) return
-                Thread.onSpinWait()
+                // Another thread's step is running (an eviction over a large family, a slow meter): spin briefly, then
+                // park for a growing while rather than burn a core.
+                waits++
+                if (waits < SPINS) Thread.onSpinWait() else LockSupport.parkNanos(minOf(MAX_PARK_NANOS, MIN_PARK_NANOS shl minOf(waits - SPINS, PARK_DOUBLINGS)))
             }
         }
     }
@@ -135,14 +139,9 @@ internal class KeyDrain<T : Any>(
         return false
     }
 
-    /** The rest goes to the compile pool, else to housekeeping, else this thread drains it without a bound. */
+    /** The rest goes to the source's one hand-off task ([DrainHandOffs]), which drains it without a bound. */
     private fun handOff() {
-        val rest = Runnable { DrainBudget.unbounded { drain() } }
-        try {
-            context.threads.compileExecutor.execute(rest)
-        } catch (_: RejectedExecutionException) {
-            if (!context.threads.offTimer { rest.run() }) rest.run()
-        }
+        context.handOffs.handOff { DrainBudget.unbounded { drain() } }
     }
 
     @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
@@ -160,8 +159,10 @@ internal class KeyDrain<T : Any>(
             hooks.beforeNext(event)
             transitions.next(before, event, moment)
         } catch (error: VirtualMachineError) {
+            // As from an effect: never thrown into a thread that only happened to drain this key (§5).
             aborted(before, event, error)
-            throw error
+            crash = crash ?: ("the transition of ${event::class.simpleName}" to error)
+            return
         } catch (error: Throwable) {
             aborted(before, event, error)
             return
@@ -173,7 +174,7 @@ internal class KeyDrain<T : Any>(
                 effects.execute(effect)
             } catch (error: VirtualMachineError) {
                 // The rest of the step still runs, so its waiters are answered; the error is handled after the release.
-                crash = crash ?: (effect to error)
+                crash = crash ?: ("the effect ${effect::class.simpleName}" to error)
                 queue.add(KeyEvent.EffectFailed(step.state.load?.id ?: before.load?.id ?: NO_LOAD, error))
             } catch (error: Throwable) {
                 queue.add(KeyEvent.EffectFailed(step.state.load?.id ?: before.load?.id ?: NO_LOAD, error))
@@ -191,12 +192,12 @@ internal class KeyDrain<T : Any>(
      * housekeeping like every line with a stack trace, and is written in place when housekeeping refuses it.
      */
     private fun released() {
-        val (effect, error) = crash ?: return
+        val (what, error) = crash ?: return
         crash = null
-        if (context.threads.onOwnThread.get() == true) throw error
+        if (context.threads.drainsUnbounded.get() == true) throw error
         context.threads.offRequestThread {
             log.error(error) {
-                "Snapshot document [$key]: the effect ${effect::class.simpleName} threw ${error::class.java.name}; the JVM may " +
+                "Snapshot document [$key]: $what threw ${error::class.java.name}; the JVM may " +
                     "not be healthy. A load of it still in flight ends as a transient failure, and the key goes on."
             }
         }
@@ -228,31 +229,33 @@ internal class KeyDrain<T : Any>(
      * that came meanwhile). The error is logged, and this key goes on taking events.
      */
     private fun aborted(before: KeyState<T>, event: KeyEvent<T>, error: Throwable) {
-        val failure = SnapshotUnavailableException(key, "the snapshot transition failed", error)
+        val failed = failedEntry<T>(key, SnapshotUnavailableException(key, "the snapshot transition failed", error), context.clock.instant())
+        // Answered as every other failure is, with a failed entry, so a request fails closed as unavailable. A recompile
+        // mark answers "load it again" and an eviction "not removed": each the side that keeps the key safe.
         when (val carried = event.carried) {
-            is KeyWaiter<*, *> -> carried.fail(failure)
-            is CompletableFuture<*> -> carried.completeExceptionally(failure)
+            is KeyWaiter<*, *> -> @Suppress("UNCHECKED_CAST") (carried as KeyWaiter<T, *>).failed(failed)
+            is CompletableFuture<*> -> @Suppress("UNCHECKED_CAST") (carried as CompletableFuture<Boolean>).complete(event is KeyEvent.Recompile)
         }
         val load = before.load
         if (load != null && event.loadId == load.id) {
             state = before.copy(load = null, next = null)
             effects.cancelReadTimeout(load.id)
-            (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach {
-                it.future.completeExceptionally(
-                    failure
-                )
-            }
+            // Whatever ended the load, its pass's read is over (SNP-6), as Slot's finish ends it.
+            load.pass?.read?.end()
+            (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach { it.future.complete(failed) }
             publish(state.removed, state.idle)
         }
-        context.threads.offRequestThread {
-            log.error(
-                error
-            ) { "Snapshot document [$key]: a transition failed; its load ended." }
-        }
+        context.threads.offRequestThread { log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." } }
     }
 
     private companion object {
         /** An effect failed with no load in flight: its transition logs it as a failure after the load. */
         const val NO_LOAD = -1L
+
+        /** How close waits out another thread's drain step: spins first, then parks from 10 µs, doubling up to 1 ms. */
+        const val SPINS = 200
+        const val MIN_PARK_NANOS = 10_000L
+        const val MAX_PARK_NANOS = 1_000_000L
+        const val PARK_DOUBLINGS = 7
     }
 }

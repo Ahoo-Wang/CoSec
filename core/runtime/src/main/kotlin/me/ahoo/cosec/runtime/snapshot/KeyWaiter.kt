@@ -40,6 +40,9 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
     /** A pass or a revalidation does not wait for this key. */
     abstract fun skip()
 
+    /** What a transition that threw answers (§5): a failed entry, as every other failure is answered. */
+    abstract fun failed(entry: SnapshotEntry<T>)
+
     /** A request after close, or what the event carried when its transition threw (§5). */
     open fun fail(error: Throwable) {
         completeExceptionally(error)
@@ -66,6 +69,10 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
         override fun skip() {
             completeExceptionally(IllegalStateException("A request for an entry was skipped."))
         }
+
+        override fun failed(entry: SnapshotEntry<T>) {
+            complete(entry)
+        }
     }
 
     /** `reloadIfHeld`, `load(pass)`: the entry, or skipped. */
@@ -82,6 +89,10 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
 
         override fun skip() {
             complete(Reloaded.Skipped)
+        }
+
+        override fun failed(entry: SnapshotEntry<T>) {
+            complete(Reloaded.Loaded(entry))
         }
     }
 
@@ -138,6 +149,8 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
         }
 
         override fun fail(error: Throwable) = abort(error)
+
+        override fun failed(entry: SnapshotEntry<T>) = answer(entry, LoadOutcome.FAILED)
 
         override fun abort(error: Throwable) {
             if (answered.compareAndSet(false, true)) {

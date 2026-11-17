@@ -16,55 +16,52 @@ package me.ahoo.cosec.runtime.snapshot
 /**
  * The events one top-level call may drain on its thread (RFC 0013 B2b §3, amendment 7): K + 1, spent by every event the
  * thread takes on any runner, nested drains included, so that a caller's thread does bounded work whatever it offers
- * to. CoSec's own pool threads and the closing thread drain without a bound. Kept per thread, set by the outermost call.
+ * to. The compile pool and housekeeping drain without a bound, and so do close and a hand-off run in place. Kept in
+ * one cell per thread, reused: a top-level offer allocates nothing.
  */
 internal object DrainBudget {
-    private val left = ThreadLocal<IntArray?>()
+    /** [ACTIVE]: whether a call on this thread set the budget; [LEFT]: the events it has left. */
+    private val cell = ThreadLocal.withInitial { LongArray(2) }
 
     /** Runs [block] with [events] to spend, unless an outer call on this thread set the budget: then it spends that one. */
-    inline fun <R> within(events: Int, block: () -> R): R {
-        if (isSet()) return block()
-        set(events)
+    internal inline fun <R> within(events: Int, block: () -> R): R {
+        val cell = cell()
+        if (cell[ACTIVE] != 0L) return block()
+        cell[ACTIVE] = 1L
+        cell[LEFT] = events.toLong()
         try {
             return block()
         } finally {
-            clear()
+            cell[ACTIVE] = 0L
         }
     }
 
     /**
-     * Runs [block] with no bound, whatever an outer call on this thread set, and restores it after: a hand-off that runs
-     * in place (a direct executor, or every pool refused it), and close, which drains to empty.
+     * Runs [block] with no bound, whatever an outer call on this thread set, and restores it after: a hand-off run in
+     * place, and close, which drains to empty.
      */
-    inline fun <R> unbounded(block: () -> R): R {
-        val saved = take()
+    internal inline fun <R> unbounded(block: () -> R): R {
+        val cell = cell()
+        val active = cell[ACTIVE]
+        cell[ACTIVE] = 0L
         try {
             return block()
         } finally {
-            if (saved != null) restore(saved)
+            cell[ACTIVE] = active
         }
     }
 
     /** Spends one event; false once the budget is spent. A thread outside any call has no bound. */
     fun spend(): Boolean {
-        val cell = left.get() ?: return true
-        if (cell[0] <= 0) return false
-        cell[0]--
+        val cell = cell()
+        if (cell[ACTIVE] == 0L) return true
+        if (cell[LEFT] <= 0L) return false
+        cell[LEFT]--
         return true
     }
 
-    @PublishedApi
-    internal fun isSet(): Boolean = left.get() != null
+    internal fun cell(): LongArray = cell.get()
 
-    @PublishedApi
-    internal fun set(events: Int) = left.set(intArrayOf(events))
-
-    @PublishedApi
-    internal fun clear() = left.remove()
-
-    @PublishedApi
-    internal fun take(): IntArray? = left.get().also { left.remove() }
-
-    @PublishedApi
-    internal fun restore(cell: IntArray) = left.set(cell)
+    internal const val ACTIVE = 0
+    internal const val LEFT = 1
 }

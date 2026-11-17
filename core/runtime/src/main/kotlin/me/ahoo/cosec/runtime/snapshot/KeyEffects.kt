@@ -205,7 +205,7 @@ internal class KeyEffects<T : Any>(
             context.threads.offRequestThread { families.evictBeyond(family) }
             return
         }
-        if (context.threads.onOwnThread.get() == true) {
+        if (context.threads.drainsUnbounded.get() == true) {
             families.evictBeyond(family)
             return
         }
