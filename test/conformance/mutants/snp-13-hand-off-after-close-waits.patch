@@ -3,7 +3,7 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyRunnerCloseTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
-index 5c2aab27..296d7ce9 100644
+index bef97711..8cdb9cd2 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
 @@ -42,7 +42,7 @@ internal class DrainHandOffs(
@@ -14,4 +14,4 @@ index 5c2aab27..296d7ce9 100644
 +        if (closed.get() && false) runPending()
      }
  
-     /** Runs every pending hand-off on this thread, unbounded: close's, once its keys are ended, and an offerer's after. */
+     /**

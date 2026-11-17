@@ -1,0 +1,16 @@
+# Rule: SNP-13
+# Mutant: close stops at the first pending hand-off that throws, and the rest wait with their requests
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyRunnerCloseTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
+index bef97711..70264233 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
+@@ -60,6 +60,7 @@ internal class DrainHandOffs(
+             } catch (error: Throwable) {
+                 failure?.addSuppressed(error)
+                 failure = failure ?: error
++                break
+             }
+         }
+         failure?.let { throw it }
