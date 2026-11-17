@@ -44,22 +44,11 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
 // B2b: the slot's transitions leave it
 @Suppress("TooManyFunctions")
 internal class Slot<T : Any>(
-    val key: SnapshotKey,
+    key: SnapshotKey,
     private val compiler: SnapshotCompiler<T>,
     private val context: SlotContext,
-) {
+) : KeySlot<T>(key, context.ticker) {
     private val report = CompileReport(key, compiler, context.threads::offRequestThread)
-
-    @Volatile
-    var installed: SnapshotEntry<T>? = null
-        private set
-
-    /**
-     * The LRU stamp. A plain field: every hit writes it, and eviction only needs an approximate order, so it does
-     * without the memory barrier a volatile write would cost on the hot path.
-     */
-    var lastAccess: Long = context.ticker.asLong
-        private set
 
     // Guarded by this.
     private var inFlight: Load? = null
@@ -69,15 +58,6 @@ internal class Slot<T : Any>(
 
     /** The [compileEpoch] the load that installed [installed] started in. */
     private var installedEpoch = 0L
-
-    /**
-     * Set, under this slot's lock and together with dropping the slot from the map, when the slot is evicted or
-     * forgotten. Volatile because readers that found the slot before that check it without the lock: a removed
-     * slot gets no notifications and no revalidation, so its entry must never be served again.
-     */
-    @Volatile
-    var removed = false
-        private set
 
     /** The delay before the next retry of a reload the compile queue rejected; doubles while it keeps rejecting. */
     @Volatile
@@ -120,10 +100,6 @@ internal class Slot<T : Any>(
         val isFinished: Boolean get() = finished.get()
     }
 
-    fun touch() {
-        lastAccess = context.ticker.asLong
-    }
-
     /** A load starting now; under this slot's lock. */
     private fun newLoad(
         force: Boolean,
@@ -142,7 +118,7 @@ internal class Slot<T : Any>(
      * For [recompile], after the epoch moved: a load in flight is followed by another, which starts in the new epoch.
      * True when this slot is to be loaded again (loading, or idle with a compiled entry): the caller reloads it.
      */
-    fun markRecompile(): Boolean = synchronized(this) {
+    private fun marksRecompile(): Boolean = synchronized(this) {
         if (removed) {
             return false
         }
@@ -154,7 +130,35 @@ internal class Slot<T : Any>(
         known.origin.compiled
     }
 
-    fun isIdle(): Boolean = synchronized(this) { inFlight == null }
+    override fun idle(): Boolean = synchronized(this) { inFlight == null }
+
+    // KeySlot: today's methods with completed futures. A removed key's request goes to the key's current slot.
+    @Suppress("UNCHECKED_CAST")
+    private fun current(): KeySlot<T> = context.current(key) as KeySlot<T>
+
+    override fun request(): CompletableFuture<SnapshotEntry<T>> = forRequestOrNull() ?: current().request()
+
+    override fun usable(): CompletableFuture<SnapshotEntry<T>> = usableOrNull() ?: current().usable()
+
+    override fun reload(force: Boolean): CompletableFuture<SnapshotEntry<T>> = reloadOrNull(force) ?: current().reload(force)
+
+    override fun reloadIfHeld(force: Boolean): CompletableFuture<Reloaded<T>> = held(reloadOrNull(force))
+
+    override fun load(pass: Pass): CompletableFuture<Reloaded<T>> = held(loadOrNull(pass = pass))
+
+    private fun held(loading: CompletableFuture<SnapshotEntry<T>>?): CompletableFuture<Reloaded<T>> =
+        loading?.thenApply { Reloaded.Loaded(it) } ?: CompletableFuture.completedFuture(Reloaded.Skipped)
+
+    override fun markRecompile(): CompletableFuture<Boolean> = CompletableFuture.completedFuture(marksRecompile())
+
+    override fun evict(onlyIfEmpty: Boolean, claimedAbsent: Boolean?): CompletableFuture<Eviction> =
+        CompletableFuture.completedFuture(
+            when (removeIfIdle(onlyIfEmpty, claimedAbsent)) {
+                true -> Eviction.REMOVED
+                false -> Eviction.REFUSED
+                null -> Eviction.AT_BOUND
+            }
+        )
 
     /**
      * Marks this slot removed and drops it from the map, unless a load is in flight or, with [onlyIfEmpty], a
@@ -164,7 +168,7 @@ internal class Slot<T : Any>(
      * by now, else it claims that kind's decrement here, under this lock, only for a removal that happens. Null when
      * the kind is at its bound. A removal with no kind named moves the count itself (`SNP-14`).
      */
-    fun removeIfIdle(onlyIfEmpty: Boolean, claimedAbsent: Boolean? = null): Boolean? {
+    private fun removeIfIdle(onlyIfEmpty: Boolean, claimedAbsent: Boolean? = null): Boolean? {
         // The shared slot is never removed.
         val family = family() ?: return false
         synchronized(this) {
@@ -181,11 +185,13 @@ internal class Slot<T : Any>(
                 context.families.move(family, this, entry, null)
             }
         }
+        // What a removal does besides leaving the map is its own, not a caller's reading of a reply (§4b).
+        context.families.removed(key)
         return true
     }
 
     /** The installed entry if it is usable, otherwise a load; null when this slot was removed. */
-    fun usable(): CompletableFuture<SnapshotEntry<T>>? {
+    private fun usableOrNull(): CompletableFuture<SnapshotEntry<T>>? {
         if (removed) {
             return null
         }
@@ -193,14 +199,14 @@ internal class Slot<T : Any>(
         if (entry != null && entry.state !is DocumentState.Failed) {
             return CompletableFuture.completedFuture(entry)
         }
-        return load()
+        return loadOrNull()
     }
 
     /**
      * What one request waits for: the installed entry, or its own view of the shared load, bounded in time.
      * Null when this slot was removed.
      */
-    fun forRequest(): CompletableFuture<SnapshotEntry<T>>? {
+    private fun forRequestOrNull(): CompletableFuture<SnapshotEntry<T>>? {
         if (removed) {
             return null
         }
@@ -209,7 +215,7 @@ internal class Slot<T : Any>(
             context.metrics.onLoad(key.kind, LoadOutcome.HIT)
             return CompletableFuture.completedFuture(it)
         }
-        val shared = load() ?: return null
+        val shared = loadOrNull() ?: return null
         val own = RequestView()
         context.pendingRequests.add(own)
         if (context.closed.get()) {
@@ -278,7 +284,7 @@ internal class Slot<T : Any>(
      * by a compilation, and confirms the document when it ends. Waiting would stop the pass behind it, and the
      * documents after it would never be revalidated once as many compilations as there are lanes never end (`SNP-6`).
      */
-    fun load(force: Boolean = false, pass: Pass? = null): CompletableFuture<SnapshotEntry<T>>? {
+    private fun loadOrNull(force: Boolean = false, pass: Pass? = null): CompletableFuture<SnapshotEntry<T>>? {
         val load: Load
         synchronized(this) {
             if (removed) {
@@ -305,7 +311,7 @@ internal class Slot<T : Any>(
      * Loads again even if a load is in flight, since a change may postdate what that load reads. Returns the future
      * of the load that starts after the current one. Null when this slot was removed.
      */
-    fun reload(force: Boolean): CompletableFuture<SnapshotEntry<T>>? {
+    private fun reloadOrNull(force: Boolean): CompletableFuture<SnapshotEntry<T>>? {
         synchronized(this) {
             if (removed) {
                 return null
@@ -316,14 +322,14 @@ internal class Slot<T : Any>(
                 return next ?: CompletableFuture<SnapshotEntry<T>>().also { next = it }
             }
         }
-        return load(force)
+        return loadOrNull(force)
     }
 
     /**
      * For [close], with [closed] already set, so no load starts after this looks. What is installed stays, as for a
      * read that failed, and is what this load's waiters get, unless a [recompile] has outdated it.
      */
-    fun endLoad() {
+    override fun close() {
         val load = synchronized(this) { inFlight } ?: return
         val outdated = load.recompiles || load.epoch < context.compileEpoch.get()
         finish(
@@ -334,7 +340,7 @@ internal class Slot<T : Any>(
     }
 
     /** A change notification: reload if this key is installed or loading, otherwise there is nothing to refresh. */
-    fun onChanged() {
+    override fun changed() {
         synchronized(this) {
             if (removed) {
                 return
@@ -347,7 +353,7 @@ internal class Slot<T : Any>(
                 return
             }
         }
-        load()
+        loadOrNull()
     }
 
     private fun read(load: Load) {
@@ -498,7 +504,7 @@ internal class Slot<T : Any>(
         val delay = retryDelay
         retryDelay = minOf(delay.multipliedBy(2), context.options.revalidateInterval)
         try {
-            context.threads.scheduler.schedule({ reload(force = false) }, delay.toNanos(), TimeUnit.NANOSECONDS)
+            context.threads.scheduler.schedule({ reloadOrNull(force = false) }, delay.toNanos(), TimeUnit.NANOSECONDS)
         } catch (rejected: RejectedExecutionException) {
             log.debug { "No reload retry: $rejected" }
         }

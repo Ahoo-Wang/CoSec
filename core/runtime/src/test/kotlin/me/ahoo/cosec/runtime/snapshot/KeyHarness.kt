@@ -178,7 +178,9 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
     private fun hang(waiter: HarnessWaiter, handle: KeyHandle<String>) {
         if (handle in answered) violations += "$waiter hung on $handle, already answered"
         hung[waiter] = handle
-        if (waiter.ask is Ask.Reload) startedAfter.merge(handle, serialBefore, ::maxOf)
+        if (waiter.ask is Ask.Reload || waiter.ask is Ask.ReloadIfHeld) {
+            startedAfter.merge(handle, serialBefore, ::maxOf)
+        }
     }
 
     private fun answerDirectly(waiter: KeyEvent.Waiter, effect: KeyEffect<String>) {
