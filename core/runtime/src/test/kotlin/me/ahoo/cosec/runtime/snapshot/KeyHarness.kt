@@ -75,7 +75,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
         if (event == KeyEvent.Close) closed = true
         if (event is KeyEvent.ReadDone || event is KeyEvent.ReadFailed || event is KeyEvent.ReadTimedOut) reads -= event.loadId!!
         if (event is KeyEvent.Compiled || event is KeyEvent.CompileCrashed || event is KeyEvent.CompileRejected) compiles -= event.loadId!!
-        if (event == KeyEvent.RetryDue) retries--
+        if (event is KeyEvent.RetryDue) retries--
         val before = state
         val step = transitions.next(before, event, moment())
         val again = transitions.next(before, event, moment())
@@ -105,7 +105,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
                     KeyEvent.Compiled(load.id, DocumentState.Present("compiled"), 1)
                 )
                 reads.isNotEmpty() -> offer(KeyEvent.ReadDone(reads.first(), answer))
-                retries > 0 && !closed -> offer(KeyEvent.RetryDue)
+                retries > 0 && !closed -> offer(KeyEvent.RetryDue())
                 else -> return
             }
         }

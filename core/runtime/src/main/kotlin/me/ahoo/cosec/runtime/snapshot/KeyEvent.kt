@@ -26,10 +26,24 @@ import java.util.concurrent.RejectedExecutionException
  * replaces. An event about a load carries the load's [loadId]; one about a load that has ended, or about a read the
  * load has moved past, is dropped. [carried] is what the event brought in that must be answered whatever happens: a
  * waiter or a reply.
+ *
+ * An event the source's own work produces, a load's or its retry's, is a [LaneEvent]: the drain takes it from its load
+ * lane, never counted against a caller's budget (RFC 0013 B2b, finding 2). Every other event is a caller's.
  */
 internal sealed interface KeyEvent<out T : Any> {
     val loadId: Long? get() = null
     val carried: Any? get() = null
+
+    /**
+     * An event of the load lane: produced only by a load the runner itself started (its read's answer, its timeout, its
+     * compilation, an effect that failed) or by a retry of one, and offered once. Each offer makes a fresh instance, so
+     * [next] is the instance's own link in the lane: a plain field, written before the CAS that publishes it and read
+     * after the swap that takes it ([KeyDrain]). A linked instance offered again fails an assertion.
+     */
+    sealed class LaneEvent<out T : Any> : KeyEvent<T> {
+        @JvmField
+        internal var next: Any? = null
+    }
 
     /** `forRequest`, `usable`, `load`, `reload`; [waiter] is null when nobody waits (a change, a retry). */
     data class Requested(val ask: Ask, val waiter: Waiter?) : KeyEvent<Nothing> {
@@ -45,29 +59,31 @@ internal sealed interface KeyEvent<out T : Any> {
     }
 
     /** The store answered load [loadId]'s read. */
-    data class ReadDone(override val loadId: Long, val read: SnapshotRead) : KeyEvent<Nothing>
+    data class ReadDone(override val loadId: Long, val read: SnapshotRead) : LaneEvent<Nothing>()
 
     /** Load [loadId]'s read failed, or its start threw: undecodable when [cause] is a format failure. */
-    data class ReadFailed(override val loadId: Long, val cause: Throwable) : KeyEvent<Nothing>
+    data class ReadFailed(override val loadId: Long, val cause: Throwable) : LaneEvent<Nothing>()
 
     /** The store did not answer load [loadId]'s read within the store read timeout. */
-    data class ReadTimedOut(override val loadId: Long) : KeyEvent<Nothing>
+    data class ReadTimedOut(override val loadId: Long) : LaneEvent<Nothing>()
 
     /** The compile pool compiled load [loadId]'s document into [state], in [nanos]. */
     data class Compiled<out T : Any>(
         override val loadId: Long,
         val state: DocumentState<T>,
         val nanos: Long
-    ) : KeyEvent<T>
+    ) : LaneEvent<T>()
 
     /** Compiling load [loadId]'s document threw a `VirtualMachineError`, described by [failure] (RC1-43). */
-    data class CompileCrashed(override val loadId: Long, val failure: SnapshotUnavailableException) : KeyEvent<Nothing>
+    data class CompileCrashed(override val loadId: Long, val failure: SnapshotUnavailableException) : LaneEvent<Nothing>()
 
     /** The compile pool refused load [loadId]'s compilation. */
-    data class CompileRejected(override val loadId: Long, val cause: RejectedExecutionException) : KeyEvent<Nothing>
+    data class CompileRejected(override val loadId: Long, val cause: RejectedExecutionException) : LaneEvent<Nothing>()
 
-    /** A reload the compile queue rejected tries again. */
-    data object RetryDue : KeyEvent<Nothing>
+    /** A reload the compile queue rejected tries again: an instance per retry, since a lane event is offered once. */
+    class RetryDue : LaneEvent<Nothing>() {
+        override fun toString() = "RetryDue"
+    }
 
     /**
      * `removeIfIdle`: an eviction, or dropping an empty slot ([onlyIfEmpty]). [claim] is what the runner found before
@@ -85,7 +101,7 @@ internal sealed interface KeyEvent<out T : Any> {
     data object Close : KeyEvent<Nothing>
 
     /** An effect of load [loadId] threw [cause]: the load ends as a transient failure, if it has not ended. */
-    data class EffectFailed(override val loadId: Long, val cause: Throwable) : KeyEvent<Nothing>
+    data class EffectFailed(override val loadId: Long, val cause: Throwable) : LaneEvent<Nothing>()
 
     /** What a [Requested] asks for. */
     sealed interface Ask {
