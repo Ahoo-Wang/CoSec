@@ -43,6 +43,13 @@ Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fe
 `isTrusted: (url, exchange) => sameOriginTrust(url, exchange) || new URL(url).origin === 'https://files.example.com'`。
 在 Node 中（没有页面），只有绝对 `baseURL` 的源被信任；`baseURL` 是相对的时，绝对 URL 不带凭据。
 
+**刷新端点在 `baseURL` 之外的另一个源**（独立的认证服务）。刷新请求用自己的 `Fetcher`（上文建议的做法）时没有任何变化：它从来不带 CoSec
+请求头，令牌对在请求体里。用已配置的 `Fetcher` 并且端点是另一个源上的绝对 URL 时，刷新请求现在不带 `Authorization`（已过期的访问令牌）、
+`CoSec-Device-Id`、`CoSec-Request-Id` 和 `CoSec-Space-Id`，会话仍然能刷新：令牌对在请求体里，CoSec 把过期令牌当作匿名，刷新路由不需要这个请求头。
+丢掉的是这次调用上的设备 ID 和请求 ID。想保留它们，就写明那个源：
+`isTrusted: (url, exchange) => sameOriginTrust(url, exchange) || new URL(url).origin === 'https://auth.example.net'`。
+刷新端点在 `baseURL` 上时，刷新请求照旧带过期的 `Authorization`、`CoSec-Device-Id` 和 `CoSec-Request-Id`，不带空间。
+
 ## 核心能力
 
 - 设备、请求、空间、租户与所有者归属。

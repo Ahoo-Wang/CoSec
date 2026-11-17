@@ -51,6 +51,20 @@ new URL(url).origin === 'https://files.example.com'`. In Node (no page) an
 absolute `baseURL` is the only trusted origin; with a relative one, an
 absolute URL is sent bare.
 
+**A refresh endpoint on another origin than the `baseURL`** (an auth service of
+its own). On a `Fetcher` of its own, as recommended above, nothing changes: it
+never carried the CoSec headers, and the pair is the body. On the configured
+`Fetcher` with an absolute endpoint on another origin, the refresh request now
+goes without `Authorization` (the expired access token), `CoSec-Device-Id`,
+`CoSec-Request-Id` and `CoSec-Space-Id`, and it still renews the session: the
+pair is in the body, and CoSec reads the expired token as anonymous, so the
+route does not need the header. What is lost is the device and request id on
+that call. To keep them, name the origin: `isTrusted: (url, exchange) =>
+sameOriginTrust(url, exchange) || new URL(url).origin ===
+'https://auth.example.net'`. On the `baseURL`, the refresh carries the expired
+`Authorization`, `CoSec-Device-Id` and `CoSec-Request-Id` as before, and no
+space.
+
 ## Core capabilities
 
 - Device, request, space, tenant, and owner attribution.
