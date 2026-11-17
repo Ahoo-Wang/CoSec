@@ -67,12 +67,8 @@ internal sealed interface KeyEvent<out T : Any> {
     /** The store did not answer load [loadId]'s read within the store read timeout. */
     data class ReadTimedOut(override val loadId: Long) : LaneEvent<Nothing>()
 
-    /** The compile pool compiled load [loadId]'s document into [state], in [nanos]. */
-    data class Compiled<out T : Any>(
-        override val loadId: Long,
-        val state: DocumentState<T>,
-        val nanos: Long
-    ) : LaneEvent<T>()
+    /** The compile pool compiled load [loadId]'s document into [state]. */
+    data class Compiled<out T : Any>(override val loadId: Long, val state: DocumentState<T>) : LaneEvent<T>()
 
     /** Compiling load [loadId]'s document threw a `VirtualMachineError`, described by [failure] (RC1-43). */
     data class CompileCrashed(

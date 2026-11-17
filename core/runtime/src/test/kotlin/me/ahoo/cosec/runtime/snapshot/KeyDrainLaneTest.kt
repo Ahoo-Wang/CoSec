@@ -295,7 +295,7 @@ class KeyDrainLaneTest {
             KeyEvent.ReadDone(1, SnapshotRead.Absent),
             KeyEvent.ReadFailed(1, failure),
             KeyEvent.ReadTimedOut(1),
-            KeyEvent.Compiled(1, DocumentState.Present(Compiled(APP_A, 1, emptyList(), emptySet())), 1),
+            KeyEvent.Compiled(1, DocumentState.Present(Compiled(APP_A, 1, emptyList(), emptySet()))),
             KeyEvent.CompileCrashed(1, SnapshotUnavailableException(APP_A, "thrown by the test", failure)),
             KeyEvent.CompileRejected(1, RejectedExecutionException("thrown by the test")),
             KeyEvent.RetryDue(),
