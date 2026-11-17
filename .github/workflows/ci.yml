@@ -13,7 +13,7 @@
 
 # Tests, detekt and coverage: one job per project group, derived from settings.gradle.kts by scripts/ci/plan.py, so a
 # new project needs no change here. Each job uploads its own coverage to Codecov. The docs are checked and built in
-# the `docs` job, the Kubernetes overlays in the `k8s` job. The `CI` job is the one required check: it passes only
+# the `docs` job, the Kubernetes overlays in the `k8s` job, the TypeScript packages in the `typescript` job. The `CI` job is the one required check: it passes only
 # when every other job here passed.
 name: CI
 on:
@@ -159,6 +159,59 @@ jobs:
       - name: Build with VitePress
         run: pnpm build
 
+  # The TypeScript workspace (typescript/): lint, types, tests and the format. Like `docs` it runs on every pull request,
+  # whatever changed: a skipped job fails the gate, and with no package yet it takes seconds. Actions are pinned by
+  # commit SHA (the version is in the comment, Renovate keeps both current); the job has no secrets and no write access.
+  typescript:
+    name: TypeScript / Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # 24.22.2 is the one the docs job runs on. pnpm 11 itself needs Node 22.13 or later, so the Node 22 leg is the
+        # newest 22 and not the 22.12.0 that `engines.node` promises consumers: that floor is checked by importing the
+        # built packages under 22.12.0 (the package check, which arrives with the first package).
+        node-version: [ '22.23.4', '24.22.2' ]
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.28.11
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Check types
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Check formatting
+        run: pnpm format:check
+
   # Every overlay in k8s/overlays builds, and what it builds is valid for the oldest Kubernetes minor still supported
   # upstream and for the newest; -strict refuses fields the schema does not have. No path filter, like `docs`.
   k8s:
@@ -186,7 +239,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [ plan, test, actionlint, docs, k8s ]
+    needs: [ plan, test, actionlint, docs, k8s, typescript ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
