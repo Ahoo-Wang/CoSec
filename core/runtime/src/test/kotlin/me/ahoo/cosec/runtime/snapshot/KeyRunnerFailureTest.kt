@@ -116,7 +116,12 @@ class KeyRunnerFailureTest {
         )
         source = source(hooks, metrics, compileExecutor = null)
         source.use {
-            source.load("app-a").join()
+            source.load().join()
+            // The compile waits until the request's drain has returned, so the pool takes its own Compiled.
+            val gate = CountDownLatch(1).also { compiler.gate = it }
+            val app = source.load("app-a")
+            gate.countDown()
+            app.join()
             awaitCondition { uncaught.isNotEmpty() }
             late.get(10, TimeUnit.SECONDS).get(10, TimeUnit.SECONDS).assert().isTrue()
             uncaught.single().first.assert().startsWith("cosec-snapshot-compile")
