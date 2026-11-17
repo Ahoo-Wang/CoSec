@@ -18,9 +18,11 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -60,6 +62,12 @@ import java.util.concurrent.atomic.AtomicLong
  *
  * [slots] is today's [Slot] (`slot`, the "before") or the runner with K events past its own per drain (`k0` … `k64`), so
  * every row comes from the same job. The score, the time of one burst, is secondary: the table is the percentiles.
+ *
+ * For step 3's profile: [second] `off` leaves the second key out, so the bytes per burst (`-prof gc`) over [BURST] are
+ * one offer and its answer. Each burst's two phases are timed: offering (the first offer to the last) and answering (the
+ * read's release to the last answer). Each join is split at its compilation (the compiler records its key's start and
+ * end): waiting before it, compiling, and after it until the join returns. [sample] `on` samples what the compile pool's
+ * threads run every millisecond; it stops the world to do so, so its latencies are not the table's.
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.SingleShotTime)
@@ -67,6 +75,12 @@ import java.util.concurrent.atomic.AtomicLong
 open class KeyBurstBenchmark {
     @Param("slot", "k0", "k4", "k16", "k64")
     lateinit var slots: String
+
+    @Param("on")
+    lateinit var second: String
+
+    @Param("off")
+    lateinit var sample: String
 
     private lateinit var source: SnapshotSource<*, *>
     private val store = BurstStore()
@@ -76,6 +90,13 @@ open class KeyBurstBenchmark {
     private var recording = false
     private val offers = Samples(MAX_BURSTS * BURST)
     private val joins = Samples(MAX_JOINS)
+    private val waits = Samples(MAX_JOINS)
+    private val compiles = Samples(MAX_JOINS)
+    private val afters = Samples(MAX_JOINS)
+    private val offering = Samples(MAX_BURSTS)
+    private val answering = Samples(MAX_BURSTS)
+    private val compiled = ConcurrentHashMap<SnapshotKey, LongArray>()
+    private val pool = PoolSampler()
     private val outcomes = EnumMap<LoadOutcome, AtomicLong>(LoadOutcome::class.java).apply {
         LoadOutcome.entries.forEach { put(it, AtomicLong()) }
     }
@@ -88,18 +109,20 @@ open class KeyBurstBenchmark {
 
     @Setup
     fun setup() {
-        val compiler = PolicyDocumentCompiler()
+        val compiler = Timed(PolicyDocumentCompiler(), compiled)
         val options = SnapshotOptions(maxTenants = HELD)
         source = SnapshotSource(
             store, SnapshotKey.Platform, compiler, DocumentSnapshots.families(compiler, options),
             options, Clock.systemUTC(), metrics, null, null, System::nanoTime, null, factory(slots),
         )
         source.load().join()
+        if (sample == "on") pool.start()
     }
 
     @Setup(Level.Iteration)
     fun iteration(params: IterationParams) {
         recording = params.type == IterationType.MEASUREMENT
+        pool.recording = recording
     }
 
     @Benchmark
@@ -109,40 +132,66 @@ open class KeyBurstBenchmark {
         val offered = CountDownLatch(OFFERING)
         val answers = arrayOfNulls<CompletableFuture<*>>(BURST)
         val times = LongArray(BURST)
+        val firstOffer = AtomicLong(Long.MAX_VALUE)
         repeat(OFFERING) { slice ->
             threads.execute {
                 start.await()
                 for (i in slice * PER_THREAD until (slice + 1) * PER_THREAD) {
                     val began = System.nanoTime()
+                    if (i == slice * PER_THREAD) firstOffer.accumulateAndGet(began, ::minOf)
                     answers[i] = source.loadAll(listOf(key))
                     times[i] = System.nanoTime() - began
                 }
                 offered.countDown()
             }
         }
-        val second = threads.submit {
+        val joining = threads.submit {
             start.await()
-            while (offered.count > 0) {
-                val began = System.nanoTime()
-                source.loadAll(listOf(SnapshotKey.Tenant("second-${seconds++}"))).join()
-                if (recording) joins.add(System.nanoTime() - began)
-            }
+            while (second == "on" && offered.count > 0) join(SnapshotKey.Tenant("second-${seconds++}"))
         }
         offered.await()
-        second.get()
+        val offeredAt = System.nanoTime()
+        joining.get()
+        val released = System.nanoTime()
         store.release(key)
         answers.forEach { it!!.join() }
-        if (recording) times.forEach(offers::add)
+        if (recording) {
+            times.forEach(offers::add)
+            answering.add(System.nanoTime() - released)
+            offering.add(offeredAt - firstOffer.get())
+        }
+    }
+
+    /** One cold join on [key], split at its compilation. */
+    private fun join(key: SnapshotKey) {
+        val began = System.nanoTime()
+        source.loadAll(listOf(key)).join()
+        val ended = System.nanoTime()
+        val compile = compiled.remove(key)
+        if (!recording) return
+        joins.add(ended - began)
+        if (compile != null) {
+            waits.add(compile[0] - began)
+            compiles.add(compile[1] - compile[0])
+            afters.add(ended - compile[1])
+        }
     }
 
     @TearDown
     fun tearDown() {
+        pool.stop()
         threads.shutdownNow()
         store.releaseAll()
         source.close()
         val counts = outcomes.mapValues { it.value.get() }
         println("\n[$slots] one offer: ${offers.report()}")
         println("[$slots] one join, a second key during the burst: ${joins.report()}")
+        println("[$slots]   before its compilation: ${waits.report()}")
+        println("[$slots]   compiling: ${compiles.report()}")
+        println("[$slots]   after it, to the answer: ${afters.report()}")
+        println("[$slots] a burst offering: ${offering.report()}")
+        println("[$slots] a burst answering, from the release: ${answering.report()}")
+        if (sample == "on") println("[$slots] the compile pool's threads, sampled: ${pool.report()}")
         println("[$slots] bursts: $bursts, second keys: $seconds, tenant load outcomes: $counts")
         // A burst request answered FAILED or TIMEOUT measured no cold load: the trial is void.
         check(counts.filterKeys { it != LoadOutcome.COLD }.values.all { it == 0L }) { "A request was not a cold load: $counts" }
@@ -192,6 +241,84 @@ open class KeyBurstBenchmark {
         }
 
         fun releaseAll() = held.keys.forEach(::release)
+    }
+
+    /** Records when each second key's compilation starts and ends. */
+    private class Timed(
+        private val delegate: PolicyDocumentCompiler,
+        private val compiled: ConcurrentHashMap<SnapshotKey, LongArray>,
+    ) : SnapshotCompiler<CompiledDocument> by delegate {
+        override fun compile(key: SnapshotKey, document: SnapshotDocument): CompiledDocument {
+            val started = System.nanoTime()
+            try {
+                return delegate.compile(key, document)
+            } finally {
+                if (key is SnapshotKey.Tenant && key.tenantId.startsWith("second-")) {
+                    compiled[key] = longArrayOf(started, System.nanoTime())
+                }
+            }
+        }
+    }
+
+    /**
+     * Every millisecond, what each compile pool thread runs, by the first frame that says: compiling, a hand-off task,
+     * completing futures (answering), draining a key, idle (parked for work), or other.
+     */
+    private class PoolSampler {
+        @Volatile
+        var recording = false
+        private val counts = ConcurrentHashMap<String, AtomicLong>()
+        private var sampler: Thread? = null
+
+        fun start() {
+            sampler = Thread(::run, "key-burst-pool-sampler").apply {
+                isDaemon = true
+                start()
+            }
+        }
+
+        fun stop() {
+            sampler?.interrupt()
+            sampler?.join()
+        }
+
+        private fun run() {
+            var pool = emptyList<Thread>()
+            var round = 0
+            while (!Thread.currentThread().isInterrupted) {
+                if (round++ % REFRESH == 0) pool = Thread.getAllStackTraces().keys.filter { it.name.startsWith(POOL) }
+                if (recording) pool.forEach { counts.computeIfAbsent(classify(it.stackTrace)) { AtomicLong() }.incrementAndGet() }
+                try {
+                    Thread.sleep(1)
+                } catch (_: InterruptedException) {
+                    return
+                }
+            }
+        }
+
+        private fun classify(stack: Array<StackTraceElement>): String {
+            fun has(text: String) = stack.any { text in it.className }
+            return when {
+                has("PolicyDocumentCompiler") -> "compiling"
+                has("DrainHandOffs") -> "hand-off"
+                stack.any { it.className.startsWith("java.util.concurrent.CompletableFuture") && it.methodName == "postComplete" } ->
+                    "answering"
+                has("KeyDrain") || has("snapshot.Slot") -> "draining"
+                stack.firstOrNull()?.methodName == "park" || stack.any { it.methodName == "getTask" } -> "idle"
+                else -> "other: ${stack.firstOrNull()}"
+            }
+        }
+
+        fun report(): String {
+            val total = counts.values.sumOf { it.get() }.coerceAtLeast(1)
+            return counts.entries.sortedByDescending { it.value.get() }
+                .joinToString { "${it.key} ${"%.1f".format(100.0 * it.value.get() / total)} %" } + " (n=$total)"
+        }
+
+        private companion object {
+            const val POOL = "cosec-snapshot-compile"
+            const val REFRESH = 100
+        }
     }
 
     /** Runners draining [k] events past their own. */

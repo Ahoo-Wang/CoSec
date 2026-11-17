@@ -32,6 +32,10 @@ on:
       include:
         description: 'JMH include regex, e.g. HttpPathPatternBenchmark'
         required: true
+      profilers:
+        description: 'Optional JMH profilers beside gc, space-separated, e.g. "stack"'
+        required: false
+        default: ''
       params:
         description: 'Optional JMH params, space-separated key=a,b pairs, e.g. "size=10,100 mode=x"'
         required: false
@@ -86,6 +90,7 @@ jobs:
       MODULE: ${{ inputs.module }}
       INCLUDE: ${{ inputs.include }}
       PARAMS: ${{ inputs.params }}
+      PROFILERS: ${{ inputs.profilers }}
       ROUNDS: ${{ inputs.rounds }}
       FORKS: ${{ inputs.forks }}
       WARMUP: ${{ inputs.warmup }}
@@ -175,6 +180,7 @@ jobs:
           # -foe true: a benchmark that throws fails the run. Without it JMH exits 0 and writes `[]`.
           args=(-f "$FORKS" -wi "$WARMUP" -i "$ITERATIONS" -w "$WARMUP_TIME" -r "$MEASUREMENT_TIME" -prof gc -rf json -foe true)
           for p in $PARAMS; do args+=(-p "$p"); done
+          for p in $PROFILERS; do args+=(-prof "$p"); done
           for round in $(seq 1 "$ROUNDS"); do
             for side in base head; do
               # Only the requested module's jmhJar was built; its directory name can differ from the project name.
