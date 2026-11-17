@@ -16,6 +16,11 @@ pnpm add react @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
   @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react
 ```
 
+Until CoSec 8.0 is released these are pre-releases, which npm does not install
+by default: use a dist-tag, `pnpm add @ahoo-wang/cosec-react@beta` (`@alpha`,
+`@rc`), or an exact version. They are published with each CoSec release, at the
+version of CoSec.
+
 Peer dependencies: `react` (19) and `@ahoo-wang/cosec-fetcher`; the fetcher
 packages are the client's (`cosec-fetcher`'s peers), and nothing else comes
 with it. In particular it does not bring `@ahoo-wang/fetcher-react` or

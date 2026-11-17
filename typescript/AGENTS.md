@@ -68,8 +68,39 @@ pnpm test
   and where the two disagree the host is right and the model is fixed. The bodies of `wiki/integration/clients.md` are
   the ones CoSec writes.
 
+## Releasing
+
+Publishing the GitHub release `vX.Y.Z` publishes the packages to npm, from the `npm-publish` job of
+`.github/workflows/package-deploy.yml`, in this order:
+
+1. The Node and npm it runs on are printed and asserted (Node 22.14 and npm 11.5.1 or later: trusted publishing).
+2. The release tag, `gradle.properties` and every `package.json` must carry one version, or the job fails, printing all of
+   them, before anything is built (`node scripts/release.mjs check <tag>`).
+3. Frozen install, build, tests; `pnpm pack` writes the tarballs (`workspace:` and `catalog:` become versions; the
+   publish refuses a package.json that still has one), `scripts/package-check.mjs --tarballs` checks them, and **those
+   tarballs** are published: `@ahoo-wang/cosec-fetcher`, then `@ahoo-wang/cosec-react`.
+4. The dist-tag follows the version: `-alpha.n` is `alpha`, `-beta.n` is `beta`, `-RCn` is `rc`, none is `latest`. A
+   pre-release never gets `latest`, and a pre-release this table does not know fails. Install one with
+   `pnpm add @ahoo-wang/cosec-fetcher@beta`.
+5. A version already on npm is skipped with a message, so re-running the job after a partial failure goes on with the
+   next package. "Already on npm" needs positive evidence: `npm view <name>@<version> version` printing exactly that
+   version; an `E404` means "not published", and anything else (an error, exit 0 with other or no output) fails the job.
+   After each package the log shows `npm view <name> dist-tags` (not asserted: the registry can lag), so the run records
+   the tag the version got and that `latest` did not move.
+
+There is no npm token: each package has a **trusted publisher** on npm, bound to this repository, to the file name
+`package-deploy.yml` and to the environment `npm-publish`, and npm writes the provenance. Renaming the file or the
+environment means changing them on npm first. A trusted publisher that has not published within two days of its creation
+lapses: the maintainer creates it again just before the first release. `repository.url` of each package is exactly
+`git+https://github.com/Ahoo-Wang/CoSec.git` (the repository of the workflow, with GitHub's own case) and `directory` is
+`typescript/<package>`: `TypeScriptWorkspaceTest` holds both, and the publish checks the url against `GITHUB_REPOSITORY`.
+
+Every pull request rehearses it: the `typescript` job of `ci.yml` packs both packages, checks the tarballs and runs
+`npm publish --dry-run` on them with the dist-tag and in the order a release would use (`scripts/release.mjs`), so the
+first real publish is not the first time the command runs.
+
 ## Supply chain
 
 The CI job has `contents: read`, no secrets, a frozen lockfile and actions pinned by commit SHA. Nothing is published but
-by a release the maintainer creates, in a job with the `npm-publish` environment and OIDC (no npm token), from tarballs
-a job without that permission packed and checked.
+by a release the maintainer creates, in a job with the `npm-publish` environment and OIDC (no npm token), from the
+tarballs that job packed and checked itself ([Releasing](#releasing)).
