@@ -79,7 +79,8 @@ class ProjectListTest {
     @Test
     fun `the labeler labels every project directory`() {
         val labeler = Projects.root.resolve(".github/labeler.yml").readText()
-        val globs = Regex("""'([a-z-]+/[a-z0-9-]+)/\*\*'""").findAll(labeler).map { it.groupValues[1] }.toSet()
+        val globs = Regex("""'([a-z-]+/[a-z0-9-]+)/\*\*'""").findAll(labeler).map { it.groupValues[1] }
+            .filterNot { it.startsWith("typescript/") }.toSet()
         val expected = GROUPS.flatMap { (group, names) -> names.filterNot { it in UNLABELED }.map { "$group/$it" } }
         globs.assert().containsExactlyInAnyOrderElementsOf(expected)
     }
@@ -90,7 +91,8 @@ class ProjectListTest {
         val block = Regex("""id: modules\n(.*?)\n\s*validations:""", RegexOption.DOT_MATCHES_ALL).find(template)
         block.assert().isNotNull()
         val options = Regex("""(?m)^\s+- (.+)$""").findAll(block!!.groupValues[1]).map { it.groupValues[1].trim() }
-        val expected = PROJECTS.filterNot { it in UNREPORTED }.map(::artifactOf) + "Not sure"
+        // A TypeScript package is offered by its name: typescript/AGENTS.md lists them.
+        val expected = PROJECTS.filterNot { it in UNREPORTED }.map(::artifactOf) + "cosec-fetcher" + "Not sure"
         options.toList().assert().containsExactlyInAnyOrderElementsOf(expected)
     }
 

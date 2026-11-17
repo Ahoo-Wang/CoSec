@@ -92,7 +92,8 @@ class TypeScriptWorkspaceTest {
             manifest["version"].asString().assert().describedAs("${directory.name}'s version").isEqualTo(version())
             manifest["license"].asString().assert().isEqualTo("Apache-2.0")
             manifest["private"]?.asBoolean().assert().isNotEqualTo(true)
-            manifest["engines"]?.get("node")?.asString().assert().isEqualTo(">=22.12.0")
+            // nanoid 6, which the client uses, supports Node 22.12 and later, 24 and 26 and later: the range says so.
+            manifest["engines"]?.get("node")?.asString().assert().isEqualTo("^22.12.0 || ^24.0.0 || >=26.0.0")
         }
     }
 
@@ -121,7 +122,8 @@ class TypeScriptWorkspaceTest {
             .single { "plan" in it && "docs" in it }
         gate.split(',').map { it.trim() }.assert().contains("typescript")
         val job = ci.substringAfter("\n  typescript:\n").substringBefore("\n  # ")
-        job.contains("if:").assert().describedAs("the job has no condition: a skipped job fails the gate").isFalse()
+        Regex("(?m)^    if:").containsMatchIn(job).assert()
+            .describedAs("the job has no condition of its own: a skipped job fails the gate").isFalse()
         val uses = Regex("""uses: (\S+)""").findAll(job).map { it.groupValues[1] }.toList()
         uses.assert().isNotEmpty()
         uses.filterNot { Regex("""[\w./-]+@[0-9a-f]{40}""").matches(it) }
