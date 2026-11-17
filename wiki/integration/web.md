@@ -320,8 +320,9 @@ single-flight cache load). So the holder is:
 
 - **restored**, with Micrometer's `io.micrometer:context-propagation` on the classpath and
   `spring.reactor.context-propagation=auto`: Spring restores it with its other thread-locals on every resumption;
-- **unbound** otherwise, before the handler runs (`PIP-22`): reading it fails at once, before or after any suspension,
-  and the message names the parameter. It stays unbound for whatever runs after the handler on that request's threads:
+- **unbound** otherwise, before the handler runs (`PIP-22`): `requiredContext` fails at once, before or after any
+  suspension, and its message names the parameter; `context` is `null`, which a caller must treat as "no context", never
+  as "no restriction". It stays unbound for whatever runs after the handler on that request's threads:
   other interceptors' `postHandle` and `afterCompletion`, and filters once the chain returns. One case is left: a `suspend` handler resumed on the thread of a request whose
   handler is blocking finds **that request's** context there, so code that reads the holder only after such a
   resumption, and never before a suspension, reads another request's principal.
