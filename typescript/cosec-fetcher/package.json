@@ -1,0 +1,82 @@
+{
+  "name": "@ahoo-wang/fetcher-cosec",
+  "version": "6.1.0",
+  "description": "Enterprise-grade CoSec authentication integration for the Fetcher HTTP client with comprehensive security features including automatic token management, device tracking, and request attribution.",
+  "keywords": [
+    "fetch",
+    "http",
+    "client",
+    "cosec",
+    "authentication",
+    "security",
+    "enterprise",
+    "token-management",
+    "device-id"
+  ],
+  "author": "Ahoo-Wang",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/Ahoo-Wang/fetcher/tree/main/packages/cosec",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Ahoo-Wang/fetcher.git",
+    "directory": "packages/cosec"
+  },
+  "bugs": {
+    "url": "https://github.com/Ahoo-Wang/fetcher/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+  },
+  "main": "./dist/index.umd.cjs",
+  "module": "./dist/index.es.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.es.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.umd.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "vite build",
+    "test:ui": "vitest --ui",
+    "test": "vitest run --coverage",
+    "lint": "eslint . --fix",
+    "clean": "rm -rf dist",
+    "analyze": "npx vite-bundle-analyzer -p auto",
+    "test:no-coverage": "vitest run --coverage.enabled=false"
+  },
+  "peerDependencies": {
+    "@ahoo-wang/fetcher": "workspace:^",
+    "@ahoo-wang/fetcher-eventbus": "workspace:^",
+    "@ahoo-wang/fetcher-storage": "workspace:^"
+  },
+  "dependencies": {
+    "nanoid": "catalog:"
+  },
+  "devDependencies": {
+    "@eslint/js": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@vitest/ui": "catalog:",
+    "eslint": "catalog:",
+    "globals": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "unplugin-dts": "catalog:",
+    "vite": "catalog:",
+    "vite-bundle-analyzer": "catalog:",
+    "vitest": "catalog:"
+  }
+}
