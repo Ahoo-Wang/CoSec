@@ -147,7 +147,7 @@ class KeyDrainLaneTest {
         try {
             source(
                 KeyDrain.Hooks.NONE,
-                k = KeyRunner.PROVISIONAL_K,
+                k = KeyRunner.K,
                 compileExecutor = single,
                 compiler = gated
             ).use { source ->
@@ -260,7 +260,7 @@ class KeyDrainLaneTest {
     /** In arrival order, a recompile during a load is followed by exactly one load: the mark sets nothing of its own. */
     @Test
     fun `a recompile during a load is followed by one load, not two`() {
-        source(KeyDrain.Hooks.NONE, k = KeyRunner.PROVISIONAL_K, compileExecutor = directExecutor).use { source ->
+        source(KeyDrain.Hooks.NONE, k = KeyRunner.K, compileExecutor = directExecutor).use { source ->
             source.load("app-a").join()
             store.hold = true
             source.slotA().reload(force = false)

@@ -39,6 +39,7 @@ class SnapshotSlotModelPropertyTest {
         runSeeds("Slot model", "theSourceKeepsToTheModelInEveryScriptedOrder", SlotFactory.SLOT)
     }
 
+    /** The runner at its default K ([KeyRunner.K], 4). */
     @Test
     fun theKeyRunnerKeepsToTheModelInEveryScriptedOrder() = quietly {
         runSeeds("KeyRunner model", "theKeyRunnerKeepsToTheModelInEveryScriptedOrder", counting(), EVENT_KINDS)
@@ -58,13 +59,7 @@ class SnapshotSlotModelPropertyTest {
         )
     }
 
-    /** K = 4, the runner's K once it is the default. */
-    @Test
-    fun theKeyRunnerKeepsToTheModelAtKFour() = quietly {
-        runSeeds("KeyRunner model, K = 4", "theKeyRunnerKeepsToTheModelAtKFour", counting(k = 4), EVENT_KINDS)
-    }
-
-    private fun counting(k: Int = KeyRunner.PROVISIONAL_K) =
+    private fun counting(k: Int = KeyRunner.K) =
         keyRunners(k, KeyDrain.Hooks(beforeNext = { taken += "took ${it::class.simpleName}" }))
 
     private fun quietly(block: () -> Unit) {
