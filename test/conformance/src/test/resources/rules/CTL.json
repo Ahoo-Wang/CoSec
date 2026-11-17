@@ -378,7 +378,11 @@
         "control:BoundaryReferencesTest#a policy a tenant binds does not become a boundary",
         "control:BoundaryReferencesTest#a boundary a tenant names does not become a policy",
         "control:BoundaryReferencesTest#a policy nothing refers to changes kind, and a change of content is not one",
-        "control:BoundaryReferencesTest#the head write refuses a change of kind too, for a reference added after the check"
+        "control:BoundaryReferencesTest#the head write refuses a change of kind too, for a reference added after the check",
+        "control:BoundaryReferencesTest#an app change that removes a policy a tenant binds is refused when it is checked",
+        "control:BoundaryReferencesTest#an app change that removes a policy a short form derives is refused when it is checked",
+        "control:BoundaryReferencesTest#an app change nothing refers to is not refused",
+        "control:BoundaryReferencesTest#the head write refuses an app change too, for a reference added after the check"
       ],
       "pending": null
     },

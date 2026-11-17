@@ -1660,7 +1660,8 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   names a platform boundary is `REFERENCES` too: such a binding never granted, every request it applied to was `503`,
   and a document that holds one has to remove it before it publishes again. An id a change puts holds no `/` (`V2`,
   `422`): a rule ending in `*` did not reach such an entry. A permission policy's `perm:<app>/<id>` may; entries that
-  already hold one can stay or be removed.
+  already hold one can stay or be removed. An app change that removes a policy tenants bind, or one its short forms
+  derive, is `REFERENCES` when it is checked: it used to reach `CHECKED` and fail only when it was published (`CTL-30`).
 - **Removing a DENY from the platform or an app document needs a second person** (RFC 0007 §7.4.4, `CTL-31`). Until
   now, a platform principal without `cosec:approve` could publish alone a change that only removed entries. A removal
   that takes away a DENY, a policy that holds one or a binding whose policy holds one (also through a role removed or put
