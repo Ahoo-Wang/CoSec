@@ -115,45 +115,16 @@ internal class ReferrerIndex(
 
     /**
      * The policies a platform or app candidate removes, or turns from a policy into a boundary or back (`CTL-30`), that
-     * other documents still refer to; `null` for none. A tenant whose head defines the id itself does not refer to the
-     * platform's policy, and does not block (RC1-9).
+     * other documents still refer to; `null` for none. The question is [ReferencedPolicies.of], which the check of a
+     * change asks too.
      */
     suspend fun referenced(
         key: SnapshotKey,
         base: Head?,
         candidate: PolicyDocument
-    ): PublishOutcome.Referenced? {
-        if (base == null || key is SnapshotKey.Tenant) {
-            return null
-        }
-        // What a short form derives is a policy like any other: tenants' roles may refer to it (RFC 0012 §7.5).
-        val kept = RoleExpansion.effective(candidate).policies.associate { it.id to it.boundary }
-        val blocked = RoleExpansion.effective(
-            base.document
-        ).policies.filter { kept[it.id] != it.boundary }.map { it.id }
-            .associateWith { policy ->
-                val referrers = referrers(key, policy) - key
-                referrers.filterNotTo(HashSet()) { definesItself(it, policy) }
-            }
-            .filterValues { it.isNotEmpty() }
-        return if (blocked.isEmpty()) null else PublishOutcome.Referenced(blocked)
-    }
-
-    /**
-     * Whether [referrer] is a tenant whose head, read, defines [policy] itself and does not name it as its boundary;
-     * one that cannot be read may refer.
-     */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun definesItself(referrer: SnapshotKey, policy: PolicyId): Boolean = try {
-        referrer is SnapshotKey.Tenant && head(referrer)?.document?.let { document ->
-            document.boundary != policy && document.policies.any { it.id == policy }
-        } == true
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        log.warn(e) { "The document of [$referrer] could not be read; it counts as referring to [${policy.value}]." }
-        false
-    }
+    ): PublishOutcome.Referenced? =
+        ReferencedPolicies.of(key, base?.document, candidate, ::referrers, head)
+            .takeIf { it.isNotEmpty() }?.let { PublishOutcome.Referenced(it) }
 
     /**
      * What [document] refers to in other documents: a binding to a policy it does not define names a platform

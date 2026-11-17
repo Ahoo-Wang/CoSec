@@ -21,6 +21,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ControlStatus.UNAVAILABLE
 import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
+import me.ahoo.cosec.control.store.ReferencedPolicies
+import me.ahoo.cosec.document.DocumentCompileException
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.RoleExpansion
@@ -33,28 +35,29 @@ internal object PlatformChecks {
     private val log = KotlinLogging.logger {}
 
     /**
-     * The policies a platform candidate removes, or turns from a policy into a boundary or back (`CTL-30`), that other
-     * documents still refer to (RFC 0007 §5.8): a binding reaches only a policy and a tenant's `boundary` only a
-     * boundary, so one of the other kind is missing to them. A tenant whose head defines the id itself refers to its
-     * own policy, not the platform's (RC1-9): the index lists it for [sharedIds], and removing the platform's policy ends
-     * an ambiguity, so it does not block. Any other referrer does, one whose head cannot be read included: the index may
-     * hold more than the true references, never less.
+     * The policies a platform or app candidate removes, or turns from a policy into a boundary or back (`CTL-30`), that
+     * other documents still refer to (RFC 0007 §5.8): a binding reaches only a policy and a tenant's `boundary` only a
+     * boundary, so one of the other kind is missing to them. The head write asks the same question
+     * ([ReferencedPolicies.of]): a change refused there is refused here, with the same documents. Over the limit of
+     * what the roles derive the compile step has said so, and there is nothing expanded to compare.
      */
     suspend fun removedReferences(
+        key: SnapshotKey,
         base: PolicyDocument?,
         candidate: PolicyDocument,
         context: CurrentDocuments,
         findings: MutableList<Finding>,
     ) {
-        val kept = candidate.policies.associate { it.id to it.boundary }
-        for (policy in base?.policies.orEmpty().filter { kept[it.id] != it.boundary }) {
-            val referrers = context.referrers(SnapshotKey.Platform, policy.id).filterNotTo(HashSet()) {
-                definesItself(context, it, policy.id)
-            }
-            if (referrers.isNotEmpty()) {
-                val what = if (policy.id in kept) "changes between a policy and a boundary, and is" else "is"
-                findings += Finding("REFERENCES", "$.policies", "[${policy.id.value}] $what referred to by ${referrers.sorted()}", UNPROCESSABLE)
-            }
+        val referenced = try {
+            ReferencedPolicies.of(key, base, candidate, context::referrers, context::head)
+        } catch (_: DocumentCompileException) {
+            return
+        }
+        if (referenced.isEmpty()) return
+        val kept = RoleExpansion.effective(candidate).policies.mapTo(HashSet()) { it.id }
+        for ((policy, referrers) in referenced) {
+            val what = if (policy in kept) "changes between a policy and a boundary, and is" else "is"
+            findings += Finding("REFERENCES", "$.policies", "[${policy.value}] $what referred to by ${referrers.sorted()}", UNPROCESSABLE)
         }
     }
 
@@ -149,23 +152,6 @@ internal object PlatformChecks {
     } catch (e: Exception) {
         log.warn(e) { "The document of [$tenant] could not be read; [${policy.value}] is refused as one it may use." }
         null
-    }
-
-    /** Whether [referrer] is a tenant whose readable head defines [policy] itself and does not name it as its boundary. */
-    @Suppress("TooGenericExceptionCaught")
-    private suspend fun definesItself(
-        context: CurrentDocuments,
-        referrer: SnapshotKey,
-        policy: PolicyId
-    ): Boolean = try {
-        referrer is SnapshotKey.Tenant && context.head(referrer)?.document?.let { document ->
-            document.boundary != policy && document.policies.any { it.id == policy }
-        } == true
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Exception) {
-        log.warn(e) { "The document of [$referrer] could not be read; it counts as referring to [${policy.value}]." }
-        false
     }
 
     private fun Set<SnapshotKey>.sorted(): List<String> = map { it.toString() }.sorted()
