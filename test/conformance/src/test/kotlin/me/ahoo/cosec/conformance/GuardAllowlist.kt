@@ -257,6 +257,8 @@ object GuardAllowlist {
             "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
             "runtime:SnapshotFamilyBoundTest#passes at once take a kind exactly to its bound, never below it and never stopping above it",
             "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and no count moves",
+            "runtime:AbsentBoundWindowTest#members loading when the last pass scans are evicted once their loads end absent again",
+            "runtime:AbsentBoundWindowTest#a victim the pass chose that starts a load before its eviction is taken is evicted once that load ends",
             "runtime:KeyDrainLaneTest#a lane event offered between the empty queue and the release is taken before the drainer returns",
             "runtime:KeyDrainLaneTest#a lane event offered between the release and the check is taken before the drainer returns",
             "runtime:KeyDrainLaneTest#a failed compilation offered while a caller with a spent budget holds the flag is installed before it returns",
