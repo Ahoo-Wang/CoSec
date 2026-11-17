@@ -219,8 +219,9 @@ cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-
 
 - `ok <doc>: intact down to revision <n>`；没有头的文档输出 `ok <doc>: no head`；
 - `BROKEN <doc>: no record holds revision <n> (<digest>): ...`：链需要的某个修订的记录不存在，或者存的是另一个修订；
-- `INDEX <doc>: the revision index does not follow the head's chain: ...`：这份文档的修订索引落后于头，或在另一条分支上（故障切换或部分恢复所致，`CTL-35`）：它的最后一项不是头，或某一项指向的父修订不是它下面那一项。没有任何东西丢失：下一次读取这份文档的历史时，会从头的记录重建索引；`verify-chain` 自己不修复；
-- `note <doc>: <n> revision index entries predate the parent field ...`：旧版本写下的条目，在第一次读取重写它们之前无法检查；这条提示不算失败；
+- `INDEX <doc>: the revision index does not follow the head's chain: ...`：这份文档的修订索引落后于头的幅度超过一次正在进行的发布，或在另一条分支上（故障切换或部分恢复所致，`CTL-35`）：它的最后一项不是头，或某一项指向的父修订不是它下面那一项。**这是一个发现，会使本次运行失败。**没有任何东西丢失：下一次读取这份文档的历史时，会从头的记录重建索引；`verify-chain` 自己不修复；
+- `note <doc>: the revision index is one revision behind the head ...`：索引恰好止于头的父修订：一次正在完成的发布（头已写入，索引项尚未写入），或索引写入失败的发布。**不算失败**；下一次读取会补上这一项；
+- `note <doc>: <n> revision index entries predate the parent field ...`：旧版本写下的条目，在第一次读取重写它们之前无法检查。**不算失败**；
 - `FAILED <doc>: <原因>`：这份文档读不到；其余文档照常检查。
 
 最后输出 `Verified <n> document(s): <b> broken, <f> could not be read.`，有索引不一致时在句号前加 `, <i> with a revision index that does not follow the head's chain`。只要有链断开、索引不一致或读不到，它就以 `1` 退出。被[保留策略](./storage.md#revisions-history-and-rollback)回收的修订不算断链：检查止于仍保留的最早修订。它只读，所以可以在控制面运行时执行，也可以随时重复执行。

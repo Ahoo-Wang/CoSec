@@ -142,6 +142,28 @@ class ChainVerificationTest {
         runBlocking { memory.index(acme)!!.value }.assert().isEqualTo(index)
     }
 
+    /** The state a publication leaves between its head write and its index write: not a finding beside a healthy plane. */
+    @Test
+    fun `an index one revision behind the head is a note, not a failure`() {
+        publish(acme, 2)
+        val failing = object : ControlStore by memory {
+            override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+                check(index.pending.isNotEmpty()) { "the index write failed" }
+                return memory.putIndex(key, expected, index)
+            }
+        }
+        runBlocking {
+            Revisions(failing).publish(acme, revisions.head(acme), withPolicy(acme, "third"), publication)
+        }
+
+        val (code, output) = verify()
+
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+        output.assert().contains("note tenant:acme: the revision index is one revision behind the head (revision 3)")
+            .doesNotContain("INDEX")
+            .contains("Verified 1 document(s): 0 broken, 0 could not be read.")
+    }
+
     @Test
     fun `entries an older version wrote are a note, not a failure`() {
         publish(acme, 3)

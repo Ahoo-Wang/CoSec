@@ -318,11 +318,15 @@ index still lists, and prints one line per document:
 - `BROKEN <doc>: no record holds revision <n> (<digest>): ...` when the record of a revision the chain needs is
   missing or holds another revision;
 - `INDEX <doc>: the revision index does not follow the head's chain: ...` when the document's revision index is behind
-  the head or on another branch (a failover or a partial restore left it so, `CTL-35`): its last entry is not the head's,
-  or an entry names another parent than the entry below it. Nothing is lost: the next read of the document's history
-  rebuilds the index from the head's records, and `verify-chain` repairs nothing itself;
+  the head by more than a publication in flight, or on another branch (a failover or a partial restore left it so,
+  `CTL-35`): its last entry is not the head's, or an entry names another parent than the entry below it. **A finding:
+  it fails the run.** Nothing is lost: the next read of the document's history rebuilds the index from the head's
+  records, and `verify-chain` repairs nothing itself;
+- `note <doc>: the revision index is one revision behind the head ...` when the index ends exactly at the head's
+  parent: a publication that is settling (its head is written, its index entry not yet), or one whose index write
+  failed. **Not a failure**; the next read adds the entry;
 - `note <doc>: <n> revision index entries predate the parent field ...` for entries an older version wrote: they cannot
-  be checked until the first read rewrites them, and the note is not a failure;
+  be checked until the first read rewrites them. **Not a failure**;
 - `FAILED <doc>: <reason>` when the document could not be read; the others are still verified.
 
 Then `Verified <n> document(s): <b> broken, <f> could not be read.`, with `, <i> with a revision index that does not

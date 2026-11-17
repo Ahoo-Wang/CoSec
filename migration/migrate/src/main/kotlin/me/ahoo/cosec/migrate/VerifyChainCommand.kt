@@ -59,6 +59,9 @@ internal object VerifyChainCommand {
         is IndexCheck.Differs ->
             "INDEX ${verified.key}: the revision index does not follow the head's chain: ${index.why}; the next read " +
                 "of the document's history repairs it"
+        is IndexCheck.Behind ->
+            "note ${verified.key}: the revision index is one revision behind the head (revision ${index.revision}): a " +
+                "publication that is settling, or one whose index write failed; the next read of the history adds it"
         is IndexCheck.Unchecked ->
             "note ${verified.key}: ${index.entries} revision index entries predate the parent field and cannot be " +
                 "checked; the next read of the document's history rewrites them"

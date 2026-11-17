@@ -31,7 +31,15 @@ sealed interface IndexCheck {
     @InternalCoSecApi
     class Unchecked(val entries: Int) : IndexCheck
 
-    /** The index is behind the head or on another branch (a failover, a partial restore): [why]. A read repairs it. */
+    /**
+     * The index ends exactly at the head's parent, and its links hold: one revision behind the head, which is what a
+     * publication leaves between its head write and its index write, or a publication whose index write failed. Not a
+     * finding: the next read of the history adds the head's entry.
+     */
+    @InternalCoSecApi
+    class Behind(val revision: Long) : IndexCheck
+
+    /** The index is behind the head by more than a publication in flight, or on another branch (a failover, a partial restore): [why]. A read repairs it. */
     @InternalCoSecApi
     class Differs(val why: String) : IndexCheck
 }

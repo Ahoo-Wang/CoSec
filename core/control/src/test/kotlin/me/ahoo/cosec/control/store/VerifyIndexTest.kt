@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.control.store
 
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -23,6 +25,8 @@ import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.policy
 import me.ahoo.cosec.control.store.StoreFixtures.publication
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -54,13 +58,63 @@ class VerifyIndexTest {
     }
 
     @Test
-    fun `an index that ends before the head, or at another digest, differs`() = runBlocking<Unit> {
+    fun `an index one revision behind the head is a publication settling, two behind differs`() = runBlocking<Unit> {
         publish("a")
         publish("b")
+        publish("c")
+        rewriteIndex { it.copy(entries = it.entries.dropLast(1)) }
+        (revisions.verifyIndex(ACME) as IndexCheck.Behind).revision.assert().isEqualTo(3L)
         rewriteIndex { it.copy(entries = it.entries.dropLast(1)) }
         (revisions.verifyIndex(ACME) as IndexCheck.Differs).why.assert().contains("the index ends at revision 1")
+    }
+
+    @Test
+    fun `an empty index is a first publication settling, or a lost index`() = runBlocking<Unit> {
+        publish("a")
+        rewriteIndex { RevisionIndex.EMPTY }
+        (revisions.verifyIndex(ACME) as IndexCheck.Behind).revision.assert().isEqualTo(1L)
+        publish("b")
         rewriteIndex { RevisionIndex.EMPTY }
         (revisions.verifyIndex(ACME) as IndexCheck.Differs).why.assert().contains("lists no revision")
+    }
+
+    /** The latches of `LateSettlementTest`: a verification between a publication's head write and its index write. */
+    @Test
+    fun `a verification between a head write and its index write finds a note, not a finding`() = runBlocking<Unit> {
+        publish("a")
+        val latched = LatchedStore(memory)
+        val racing = Revisions(latched)
+        latched.armed = true
+        val late = async {
+            racing.publish(ACME, racing.head(ACME), candidate(ACME, listOf(policy("b"))), publication())
+        }
+        latched.paused.await()
+
+        (racing.verifyIndex(ACME) as IndexCheck.Behind).revision.assert().isEqualTo(2L)
+        latched.resume.complete(Unit)
+        late.await()
+        racing.verifyIndex(ACME).assert().isSameAs(IndexCheck.Follows)
+    }
+
+    /** Holds the index write that follows the head write of a publication once [armed], until [resume]. */
+    private class LatchedStore(private val memory: InMemoryControlStore) : ControlStore by memory {
+        var armed = false
+        private var written = false
+        val paused = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+
+        override suspend fun putHead(key: SnapshotKey, expected: SnapshotDigest?, document: SnapshotDocument) =
+            memory.putHead(key, expected, document).also { written = armed && it is HeadWrite.Written }
+
+        override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+            if (written) {
+                written = false
+                armed = false
+                paused.complete(Unit)
+                resume.await()
+            }
+            return memory.putIndex(key, expected, index)
+        }
     }
 
     @Test
