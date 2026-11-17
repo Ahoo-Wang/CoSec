@@ -1,0 +1,16 @@
+{
+  "description": "No statement lets an anonymous caller reach /auth/refresh: with an expired access token the answer is 401 token-expired, and the client cannot refresh.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/auth/refresh"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

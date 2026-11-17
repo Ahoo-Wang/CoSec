@@ -46,6 +46,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
     items: [
       { text: 'Web 集成', link: '/zh/integration/web' },
       { text: '认证', link: '/zh/integration/authentication' },
+      { text: '构建客户端', link: '/zh/integration/clients' },
       { text: '代码中的权限检查', link: '/zh/integration/checks' },
     ],
   },

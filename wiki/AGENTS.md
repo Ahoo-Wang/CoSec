@@ -30,7 +30,7 @@ Organized by the task the reader is doing, not by module.
 |---|---|---|
 | `guide/` | Evaluating CoSec, or starting with it | `introduction`, `quick-start`, `concepts`, `model`, `security-model`, `roadmap` |
 | `scenarios/` | Building a whole use case end to end | `simple-mode`, `app`, `roles`, `spaces`, `service-account`, `tenant-owner`, `external-source`, `route-maps`, `gateway` |
-| `integration/` | Developer wiring CoSec into an application | `web`, `authentication`, `checks` |
+| `integration/` | Developer wiring CoSec into an application, or building a client of one | `web`, `authentication`, `clients`, `checks` |
 | `policies/` | Writing and reviewing the rules | `language`, `role-permissions`, `rate-limiting`, `testing` |
 | `operations/` | Running CoSec in production | `configuration`, `storage`, `upgrading`, `observability`, `troubleshooting` |
 | `architecture/` | Contributor, or integrator who wants the internals | `overview`, `extending` |
