@@ -104,4 +104,13 @@ class VerifyChainDuringReclaimTest {
 
         ((revisions.verifyChain(ACME)) as ChainCheck.Broken).missing.revision.assert().isEqualTo(2)
     }
+
+    @Test
+    fun `without an index nothing missing is taken for reclaimed`() = runBlocking<Unit> {
+        val digests = publishedFour()
+        memory.dropIndex(ACME)
+        memory.removeRecord(ACME, digests[1])
+
+        (revisions.verifyChain(ACME) as ChainCheck.Broken).missing.revision.assert().isEqualTo(2)
+    }
 }

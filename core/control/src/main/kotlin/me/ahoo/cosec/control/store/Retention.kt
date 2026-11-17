@@ -59,7 +59,7 @@ internal class Retention(
      */
     suspend fun verifyChain(key: SnapshotKey): ChainCheck {
         val head = head(key) ?: return ChainCheck.Intact(0)
-        val floor = store.index(key)?.value?.floor ?: 1
+        val floor = currentFloor(key)
         if (store.record(key, head.digest) == null) {
             return ChainCheck.Broken(ParentRevision(head.revision, head.digest.toString()))
         }
@@ -81,6 +81,7 @@ internal class Retention(
         }
     }
 
+    /** The index floor as it is now; an index that is gone reads as 1, so that nothing missing is taken for reclaimed. */
     private suspend fun currentFloor(key: SnapshotKey): Long = store.index(key)?.value?.floor ?: 1
 
     /**
