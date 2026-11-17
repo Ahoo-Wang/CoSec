@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.store.HistoryForkTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
-index 70698cca..dba1b533 100644
+index b8ca68fc..fc0574f8 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
 @@ -166,7 +166,7 @@ internal class HistoryRepair(
@@ -14,4 +14,4 @@ index 70698cca..dba1b533 100644
 +                true
          }
  
-         /** How many entries from the lowest hold: the lowest, and each next one whose parent is the one before. */
+         /**
