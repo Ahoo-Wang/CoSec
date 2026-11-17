@@ -83,7 +83,6 @@ describe('a 401 from a request the trust policy kept credentials from', () => {
         },
       });
       new CoSecConfigurer({
-        appId: 'audit',
         tokenStorage: tokens,
         deviceIdStorage: devices,
         isTrusted: sameOriginTrust,
@@ -115,7 +114,6 @@ describe('a 401 from a request the trust policy kept credentials from', () => {
         new Response('{}', { status: ++calls === 1 ? 401 : 200 }),
     });
     new CoSecConfigurer({
-      appId: 'audit',
       tokenStorage: tokens,
       deviceIdStorage: devices,
       isTrusted: sameOriginTrust,
@@ -352,7 +350,6 @@ describe('the space of a request retried after a 401', () => {
         },
       });
       new CoSecConfigurer({
-        appId: 'demo',
         tokenStorage: tokens,
         deviceIdStorage: devices,
         spaceIdProvider: new DefaultSpaceIdProvider({
@@ -412,7 +409,6 @@ describe('the 401 response replaced by a refresh and retry', () => {
       async baseURL => {
         const client = new Fetcher({ baseURL, timeout: 5000 });
         new CoSecConfigurer({
-          appId: 'local',
           tokenStorage: tokens,
           deviceIdStorage: devices,
           tokenRefresher: new CoSecTokenRefresher({

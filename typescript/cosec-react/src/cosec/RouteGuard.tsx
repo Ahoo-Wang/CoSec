@@ -12,7 +12,7 @@
  */
 
 import { useEffect, type ReactNode } from 'react';
-import { useLatest } from '@ahoo-wang/fetcher-react';
+import { useLatest } from '../internal/useLatest.js';
 import { useSecurityContext } from './SecurityContext.js';
 
 /**
@@ -70,7 +70,7 @@ export function RouteGuard({
   children,
   fallback,
   onUnauthorized,
-}: RouteGuardProps) {
+}: RouteGuardProps): ReactNode {
   const { authenticated } = useSecurityContext();
   const latestOnUnauthorized = useLatest(onUnauthorized);
 

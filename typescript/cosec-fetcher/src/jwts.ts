@@ -51,7 +51,7 @@ export interface JwtPayload {
   /**
    * Allows additional custom properties to be included in the payload.
    */
-  [key: string]: any;
+  [key: string]: unknown;
 }
 
 /**
@@ -76,7 +76,7 @@ export interface CoSecJwtPayload extends JwtPayload {
   /**
    * Attributes - custom key-value pairs providing additional information about the JWT.
    */
-  attributes?: Record<string, any>;
+  attributes?: Record<string, unknown>;
   /** The session the pair belongs to (CoSec 8.0). Display only: nothing here depends on it. */
   sid?: string;
   /** When the user signed in, in seconds (CoSec 8.0). */
@@ -126,9 +126,8 @@ export function parseJwtPayload<T extends JwtPayload>(token: string): T | null {
       return null;
     }
     return payload as T;
-  } catch (error) {
-    // Avoid exposing sensitive information in error logs
-    console.error('Failed to parse JWT token', error);
+  } catch {
+    // Nothing of the token is logged: an engine's SyntaxError can quote part of the payload.
     return null;
   }
 }

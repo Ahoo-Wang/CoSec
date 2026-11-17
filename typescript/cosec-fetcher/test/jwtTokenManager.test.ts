@@ -71,7 +71,7 @@ describe('JwtTokenManager', () => {
       refreshToken: 'new-refresh-token',
     };
 
-    tokenStorage.setCompositeToken(compositeToken);
+    tokenStorage.signIn(compositeToken);
     vi.mocked(tokenRefresher.refresh).mockResolvedValueOnce(newCompositeToken);
 
     // Act
@@ -98,7 +98,7 @@ describe('JwtTokenManager', () => {
       refreshToken: 'new-refresh-token',
     };
 
-    tokenStorage.setCompositeToken(compositeToken);
+    tokenStorage.signIn(compositeToken);
 
     let resolvePromise: (value: CompositeToken) => void = () => {};
     const refreshPromise = new Promise<CompositeToken>(resolve => {
@@ -190,11 +190,12 @@ describe('JwtTokenManager', () => {
     const failure = await jwtTokenManager.refresh().catch(e => e);
     expect(failure).toBeInstanceOf(RefreshUnavailableError);
     expect(failure.cause).toBe(error);
-    expect(failure.token).toBe(jwtCompositeToken);
+    // The error carries no credential: error reporters serialize own properties.
+    expect(failure).not.toHaveProperty('token');
     expect(tokenStorage.get()).toBe(jwtCompositeToken);
   });
 
-  it('should clear refreshInProgress after successful refresh', async () => {
+  it('sends a new request for the refresh after a finished one', async () => {
     // Setup
     const compositeToken = {
       accessToken: 'access-token',
@@ -206,34 +207,42 @@ describe('JwtTokenManager', () => {
       refreshToken: 'new-refresh-token',
     };
 
-    tokenStorage.setCompositeToken(compositeToken);
+    tokenStorage.signIn(compositeToken);
     vi.mocked(tokenRefresher.refresh).mockResolvedValueOnce(newCompositeToken);
 
     // Act
     await jwtTokenManager.refresh();
 
-    // After await, refreshInProgress should be undefined
-    expect((jwtTokenManager as any).refreshInProgress).toBeUndefined();
+    // The finished refresh is not joined by the next one: it sends its own.
+    vi.mocked(tokenRefresher.refresh).mockResolvedValueOnce(newCompositeToken);
+    await jwtTokenManager.refresh();
+    expect(tokenRefresher.refresh).toHaveBeenCalledTimes(2);
   });
 
-  it('should clear refreshInProgress after failed refresh', async () => {
+  it('sends a new request for the refresh after a failed one', async () => {
     // Setup
     const compositeToken = {
       accessToken: 'access-token',
       refreshToken: 'refresh-token',
     };
 
-    // The server rejects the refresh token (a 4xx).
-    const error = Object.assign(new Error('Refresh failed'), {
-      exchange: { response: { status: 401 } },
-    });
-    tokenStorage.setCompositeToken(compositeToken);
-    vi.mocked(tokenRefresher.refresh).mockRejectedValueOnce(error);
+    // The refresh route cannot be reached: the session is kept.
+    tokenStorage.signIn(compositeToken);
+    vi.mocked(tokenRefresher.refresh).mockRejectedValueOnce(
+      new Error('network down'),
+    );
 
     // Act & Assert
-    await expect(jwtTokenManager.refresh()).rejects.toThrow(RefreshTokenError);
+    await expect(jwtTokenManager.refresh()).rejects.toThrow(
+      RefreshUnavailableError,
+    );
 
-    expect((jwtTokenManager as any).refreshInProgress).toBeUndefined();
+    vi.mocked(tokenRefresher.refresh).mockResolvedValueOnce({
+      accessToken: 'new-access-token',
+      refreshToken: 'new-refresh-token',
+    });
+    await jwtTokenManager.refresh();
+    expect(tokenRefresher.refresh).toHaveBeenCalledTimes(2);
   });
 
   it('should return false for isRefreshNeeded when token has isRefreshNeeded false', () => {
@@ -294,7 +303,7 @@ describe('JwtTokenManager', () => {
       const error = await jwtTokenManager.refresh().catch(e => e);
 
       expect(error).toBeInstanceOf(RefreshTokenError);
-      expect(error.token).toBe(original);
+      expect(error).not.toHaveProperty('token');
       expect(tokenStorage.get()).toBeNull();
       // the token is stored once (the storage also holds the refresh
       // attempt mark, under another key)
@@ -309,12 +318,7 @@ describe('refresh errors', () => {
   it('keeps subclasses recognisable', () => {
     class AppRefreshTokenError extends RefreshTokenError {}
     class AppSessionChangedError extends RefreshSessionChangedError {}
-    const token = new JwtCompositeToken({
-      accessToken: 'access-token',
-      refreshToken: 'refresh-token',
-    });
-
-    const refreshError = new AppRefreshTokenError(token);
+    const refreshError = new AppRefreshTokenError();
     const sessionError = new AppSessionChangedError();
 
     expect(refreshError).toBeInstanceOf(AppRefreshTokenError);

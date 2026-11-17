@@ -33,14 +33,9 @@ import { isCompositeToken } from './compositeToken.js';
  *
  * @example
  * ```typescript
- * interface CustomPayload extends JwtPayload {
- *   userId: string;
- *   roles: string[];
- * }
- *
- * const token: IJwtToken<CustomPayload> = new JwtToken<CustomPayload>('jwt.token.here');
+ * const token = new JwtToken<CoSecJwtPayload>(accessToken);
  * if (!token.isExpired) {
- *   console.log(token.payload?.userId);
+ *   const tenantId = token.payload?.tenantId;
  * }
  * ```
  */
@@ -74,9 +69,9 @@ export interface IJwtToken<
  *
  * @example
  * ```typescript
- * const token = new JwtToken<CoSecJwtPayload>('eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...', 300); // 5 min early period
- * console.log(token.isExpired); // false if not expired
- * console.log(token.payload?.sub); // user ID from payload
+ * const token = new JwtToken<CoSecJwtPayload>(accessToken, 300); // 5 min early period
+ * token.isExpired; // false if not expired, from 5 minutes before exp
+ * token.payload?.sub; // the principal, from the payload
  * ```
  */
 export class JwtToken<
@@ -152,13 +147,10 @@ export interface RefreshTokenStatusCapable {
  *
  * @example
  * ```typescript
- * const compositeToken = new JwtCompositeToken({
- *   accessToken: 'access.jwt.here',
- *   refreshToken: 'refresh.jwt.here'
- * }, 300); // 5 min early period
+ * const compositeToken = new JwtCompositeToken({ accessToken, refreshToken }, 300); // 5 min early period
  *
  * if (compositeToken.authenticated) {
- *   console.log(compositeToken.currentUser?.sub);
+ *   const subject = compositeToken.access.payload?.sub;
  * }
  *
  * if (compositeToken.isRefreshNeeded && compositeToken.isRefreshable) {
@@ -249,7 +241,7 @@ function legacyTokenSessionId(token: CompositeToken): string {
  * @example
  * ```typescript
  * const serializer = new JwtCompositeTokenSerializer(300);
- * const token = new JwtCompositeToken({ accessToken: '...', refreshToken: '...' });
+ * const token = new JwtCompositeToken({ accessToken, refreshToken });
  *
  * const serialized = serializer.serialize(token);
  * const deserialized = serializer.deserialize(serialized);

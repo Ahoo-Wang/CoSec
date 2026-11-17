@@ -221,6 +221,19 @@ class StoredFormatTest {
     }
 
     @Test
+    fun `revision index entries carry their parent`() {
+        // An entry carries the digest its document names as its parent (#1536); one an older version wrote has none.
+        val child = SnapshotDigest.parse("SHA-256:0f0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+        pinned(
+            "revisionIndexParent",
+            RevisionIndex(listOf(RevisionEntry(2, digest, at), RevisionEntry(3, child, at, digest)), floor = 2),
+            RevisionIndexCodec::encode,
+            RevisionIndexCodec::decode,
+            fixture("revisionIndexParent")
+        )
+    }
+
+    @Test
     fun `control records`() {
         val index = RevisionIndex(listOf(RevisionEntry(3, digest, at)), listOf(PendingRecord(digest, at)), floor = 2)
         pinned(

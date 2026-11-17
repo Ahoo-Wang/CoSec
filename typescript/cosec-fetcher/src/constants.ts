@@ -36,12 +36,6 @@ export const UNAUTHORIZED_ERROR_INTERCEPTOR_NAME =
  * - Position: Before RequestBodyInterceptor
  * - Position: Before FetchInterceptor
  * - Value: Number.MIN_SAFE_INTEGER + 1000
- *
- * @example
- * ```typescript
- * const interceptor = new CoSecRequestInterceptor(options);
- * console.log(interceptor.order); // -9007199254740990
- * ```
  */
 export const COSEC_REQUEST_INTERCEPTOR_ORDER =
   Number.MIN_SAFE_INTEGER + DEFAULT_INTERCEPTOR_ORDER_STEP;
@@ -63,11 +57,9 @@ export const COSEC_REQUEST_INTERCEPTOR_ORDER =
  * @example
  * ```typescript
  * // Skip refresh during logout
- * const logoutExchange = await fetcher.createRequest('/logout', {
- *   method: 'POST'
- * }).getExchange();
- * logoutExchange.attributes.set(IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY, true);
- * await fetcher.fetch(logoutExchange);
+ * await fetcher.post('/logout', {}, {
+ *   attributes: new Map([[IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY, true]]),
+ * });
  * ```
  */
 export const IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY = 'Ignore-Refresh-Token';

@@ -191,7 +191,6 @@ describe.each([
         fetch: async () => new Response('business response'),
       });
       new CoSecConfigurer({
-        appId: 'demo',
         tokenStorage: tokens,
         deviceIdStorage: devices,
         tokenRefresher: refresher(rejection(status)),
@@ -256,7 +255,6 @@ describe('a CoSecTokenRefresher from another module instance', () => {
         fetch: async () => new Response('business rejected', { status: 401 }),
       });
       new CoSecConfigurer({
-        appId: 'demo',
         tokenStorage: tokens,
         deviceIdStorage: devices,
         tokenRefresher,
