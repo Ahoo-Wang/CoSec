@@ -49,11 +49,18 @@ internal class SnapshotThreads(
 ) {
     /** Set on the threads this source starts: [SnapshotSource.close] does not wait for the thread it runs on. */
     val onOwnThread = ThreadLocal<Boolean>()
+
+    /**
+     * Set on the compile pool's and housekeeping's threads only, of those this source starts: the ones that may drain a
+     * key without a bound, scan a family in place, and have a key's `VirtualMachineError` rethrown into them (RFC 0013
+     * B2b §3). Not the scheduler's: it keeps time, and drains as a caller does.
+     */
+    val drainsUnbounded = ThreadLocal<Boolean>()
     private val ownsCompileExecutor = compileExecutor == null
-    val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options, onOwnThread)
+    val compileExecutor: Executor = compileExecutor ?: newCompileExecutor(options, onOwnThread, drainsUnbounded)
     private val ownsScheduler = scheduler == null
     val scheduler: ScheduledExecutorService = scheduler ?: newScheduler(onOwnThread)
-    val housekeeping: ExecutorService = housekeeping ?: newHousekeeping(onOwnThread)
+    val housekeeping: ExecutorService = housekeeping ?: newHousekeeping(onOwnThread, drainsUnbounded)
 
     /** Stops the scheduler, when the source started it: nothing is timed any more. */
     fun stopScheduler() {

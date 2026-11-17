@@ -49,6 +49,12 @@ internal interface SnapshotMetrics {
     /** A document's lag passed [SnapshotOptions.lagWarn], or [SnapshotOptions.lagEscalate] when [escalated]. */
     fun onLagExceeded(key: SnapshotKey, lag: Duration, escalated: Boolean) = Unit
 
+    /**
+     * The compile pool refused a key's drain hand-off (RFC 0013 B2b §3): it went to housekeeping, or, [ranInPlace], a
+     * caller's thread ran the source's hand-offs, for as long as they came: the back-pressure that keeps answering.
+     */
+    fun onHandOffRefused(ranInPlace: Boolean) = Unit
+
     companion object {
         val NOOP: SnapshotMetrics = object : SnapshotMetrics {}
     }

@@ -237,7 +237,7 @@ internal class Slot<T : Any>(
      * One request's future. Whoever answers first (the shared load, the timeout, or [close]) claims it; an answer
      * records the outcome before completing, so a caller that sees the result also sees the metric.
      */
-    inner class RequestView : CompletableFuture<SnapshotEntry<T>>() {
+    inner class RequestView : CompletableFuture<SnapshotEntry<T>>(), PendingRequest {
         private val answered = AtomicBoolean()
 
         fun answer(entry: SnapshotEntry<T>, outcome: LoadOutcome): Boolean {
@@ -253,7 +253,7 @@ internal class Slot<T : Any>(
             return true
         }
 
-        fun abort(error: Throwable) {
+        override fun abort(error: Throwable) {
             if (answered.compareAndSet(false, true)) {
                 context.pendingRequests.remove(this)
                 completeExceptionally(error)

@@ -190,10 +190,16 @@ internal class SnapshotFamilies<A : Any>(
         fun slotFor(key: SnapshotKey, context: SlotContext): KeySlot<A> {
             val id = spec.idOf(key)
             while (true) {
-                val slot = slots.computeIfAbsent(id) { Slot(key, spec.compiler, context) }
+                val slot = slots.computeIfAbsent(id) { context.slots.create(key, spec.compiler, context) }
                 if (!slot.removed) return slot
                 slots.remove(id, slot)
             }
+        }
+
+        /** A claim of [slot]'s removal given back, its removal not having happened: the count, and its absent place. */
+        fun giveBack(slot: KeySlot<*>, absent: Boolean) {
+            count(absent).incrementAndGet()
+            if (absent) absentSlots += slot
         }
 
         /** Drops [slot] from the map, if it is still the one held for [id]. */
