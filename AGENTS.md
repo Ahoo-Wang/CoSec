@@ -25,6 +25,7 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
 ./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
 gh workflow run mutation.yml                       # every mutant, on CI only: 36 shards, about an hour (-f mutants=a,b for a subset; also weekly)
 ./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
+(cd typescript && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test)   # the TypeScript packages: what the `typescript` job of CI runs
 ```
 
 - `cosec-cocache` and `cosec-spring-boot` tests need Redis on `localhost:6379`
@@ -109,6 +110,12 @@ the adapters, snapshots or the control plane. The parts that take several files 
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
   (`SourceRulesTest`).
+  `typescript/` is not a Gradle project but a pnpm workspace of its own: `cosec-fetcher`, the client of a CoSec
+  application, and `cosec-react`, its React hooks (`@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react` on npm, at the
+  version of `gradle.properties`). They are built on fetcher's packages from npm and nothing in fetcher depends on them.
+  What a client may rely on is `wiki/integration/clients.md`; the workspace's rules are in
+  [`typescript/AGENTS.md`](typescript/AGENTS.md), and `TypeScriptWorkspaceTest` (`:architecture`) holds its names,
+  versions, dependency direction and CI job to them.
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
@@ -265,6 +272,10 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A public signature (a line of a module's `api/<project>.api`) | the dump (`updateKotlinAbi`); after GA, `!` in the PR title when a line is removed or changed |
 | A file over 400 lines, a second top-level type in a file, a new package edge inside `runtime`, `control` or `document`, a structure suppression | an entry in `test/architecture`'s ledgers (`SourceSizeLedger`, `TypeLedger`, `PackageLedger`, `DetektSuppressionTest.RECORDED`) with its batch or its reason, reviewed |
 | What a published module brings into a build (a library dependency, `compileOnlyApi`, the BOM) | nothing to register: `PublishedMetadataTest` reads the generated metadata; `:dependencies` is CoSec's internal platform and is not published; `wiki/guide/introduction.md#what-cosec-needs-from-your-build` when a minimum moves (`CatalogTest`) |
+| A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, the client's skill; after GA, `!` in the PR title when a line is removed or changed |
+| The wire contract a client sees: a `CoSec-*` header, a problem type or its status, a token claim, the refresh rules | `wiki/integration/clients.md`, and `typescript/cosec-fetcher` in the same PR: its tests against the real host fail otherwise |
+| A new TypeScript package | `typescript/AGENTS.md`, `TypeScriptWorkspaceTest`'s `published`, the labeler, `llms.txt`, the publish workflow's package list |
+| An npm dependency of `typescript/` | the catalog of `typescript/pnpm-workspace.yaml` (packages reference `catalog:`) and its lockfile; nothing else |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
 | A module the starter wires (a new one, or a feature that needs one) | `CoSecModuleCheckAutoConfiguration` (STA-1), `wiki/guide/introduction.md#modules` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
