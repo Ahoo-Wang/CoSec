@@ -62,8 +62,11 @@ pnpm test
 - **A public API report per package** (`test/api/<package>.api.md`, api-extractor) is to a package what
   `api/<project>.api` is to a Kotlin module: a changed line is a public change, and a removed or changed one is a
   breaking change (`!` in the PR title). The report arrives with the first package.
-- A client test that needs a CoSec host runs against the application of `test/client-host`, never against a mock of
-  CoSec's answers (the bodies of `wiki/integration/clients.md` are the ones CoSec writes).
+- A package's unit tests may use its own model of CoSec (a fake server and a fake clock) for what needs a controlled
+  clock or a controlled failure: a 30-second leeway and a lost response cannot be staged against a real host.
+  **Whatever the model asserts about CoSec's answers is also asserted against the application of `test/client-host`**,
+  and where the two disagree the host is right and the model is fixed. The bodies of `wiki/integration/clients.md` are
+  the ones CoSec writes.
 
 ## Supply chain
 
