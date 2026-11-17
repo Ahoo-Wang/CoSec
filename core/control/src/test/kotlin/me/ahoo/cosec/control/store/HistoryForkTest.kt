@@ -19,6 +19,8 @@ import ch.qos.logback.classic.Level
 import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -56,7 +58,22 @@ class HistoryForkTest {
         var afterRecordRead: (suspend () -> Unit)? = null
         var beforeIndexWrite: (suspend () -> Unit)? = null
 
+        /** Holds the index write that follows the head write of a publish once [armed], until [resume]. */
+        var armed = false
+        private var written = false
+        val paused = CompletableDeferred<Unit>()
+        val resume = CompletableDeferred<Unit>()
+
+        override suspend fun putHead(key: SnapshotKey, expected: SnapshotDigest?, document: SnapshotDocument): HeadWrite =
+            memory.putHead(key, expected, document).also { written = armed && it is HeadWrite.Written }
+
         override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+            if (written) {
+                written = false
+                armed = false
+                paused.complete(Unit)
+                resume.await()
+            }
             beforeIndexWrite?.let { hook ->
                 beforeIndexWrite = null
                 hook()
@@ -213,5 +230,43 @@ class HistoryForkTest {
         index.floor.assert().isEqualTo(3L)
         index.entries.map { it.revision }.assert().containsExactly(3L, 4L)
         revisions.history(ACME).map { it.revision }.assert().containsExactly(3L, 4L)
+    }
+
+    /**
+     * The coordinator's counterexample to the write rule (#1536, review of 6b162cfc): only one failed index write, and
+     * no read of the history in between. Revision 3 is refused the index (its parent entry is the old branch's), so
+     * revision 4 finds its parent unlisted, is appended, and the top agrees with the head over an old entry of 2.
+     */
+    @Test
+    fun `a revision published over an unlisted parent does not leave the old branch below a top that agrees`() =
+        runBlocking<Unit> {
+            val old = headMovedBack()
+            store.failIndexWithRevisionTwoNot = old
+            publish("new-branch")
+            publish("third")
+            publish("fourth")
+
+            revisions.history(ACME).map { it.revision }.assert().containsExactly(1L, 2L, 3L, 4L)
+            policiesAt(2).assert().containsExactly("new-branch")
+        }
+
+    /** A settle of the old branch that lands late, over a parent that is right, puts its entry back under a top that agrees. */
+    @Test
+    fun `a late settle of the old branch does not put its entry back under the new one`() = runBlocking<Unit> {
+        publish("base")
+        store.armed = true
+        val late = async { publish("old-branch") }
+        store.paused.await()
+        // The head moves back to revision 1 while the old revision 2 is still being indexed.
+        val first = memory.index(ACME)!!.value.entries.single().digest
+        memory.putHead(ACME, memory.head(ACME)!!.digest, memory.record(ACME, first)!!)
+            .assert().isInstanceOf(HeadWrite.Written::class.java)
+        publish("new-branch")
+        publish("third")
+        store.resume.complete(Unit)
+        late.await()
+
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(1L, 2L, 3L)
+        policiesAt(2).assert().containsExactly("new-branch")
     }
 }
