@@ -75,7 +75,10 @@ internal sealed interface KeyEvent<out T : Any> {
     ) : LaneEvent<T>()
 
     /** Compiling load [loadId]'s document threw a `VirtualMachineError`, described by [failure] (RC1-43). */
-    data class CompileCrashed(override val loadId: Long, val failure: SnapshotUnavailableException) : LaneEvent<Nothing>()
+    data class CompileCrashed(
+        override val loadId: Long,
+        val failure: SnapshotUnavailableException
+    ) : LaneEvent<Nothing>()
 
     /** The compile pool refused load [loadId]'s compilation. */
     data class CompileRejected(override val loadId: Long, val cause: RejectedExecutionException) : LaneEvent<Nothing>()

@@ -145,7 +145,12 @@ class KeyDrainLaneTest {
         listOf(APP_B, APP_C, APP_D).forEach { store.put(it, document(1)) }
         val single = Executors.newSingleThreadExecutor()
         try {
-            source(KeyDrain.Hooks.NONE, k = KeyRunner.PROVISIONAL_K, compileExecutor = single, compiler = gated).use { source ->
+            source(
+                KeyDrain.Hooks.NONE,
+                k = KeyRunner.PROVISIONAL_K,
+                compileExecutor = single,
+                compiler = gated
+            ).use { source ->
                 source.load("app-a").join()
                 order.clear()
                 // One compilation running on the pool's one thread, two queued behind it.
@@ -178,7 +183,8 @@ class KeyDrainLaneTest {
 
     /**
      * K = 4, a burst of reloads queued behind a caller's own: the loads they start read and compile at once, on its
-     * thread. It takes K + 1 of the reloads and, uncounted, the lane events of their loads, and hands the rest off. The bound is (K + 1) × (1 + [KeyDrain.LANE_EVENTS_PER_LOAD]) + [KeyDrain.LANE_EVENTS_PER_LOAD].
+     * thread. It takes K + 1 of the reloads and, uncounted, the lane events of their loads, and hands the rest off. The
+     * bound is (K + 1) × (1 + [KeyDrain.LANE_EVENTS_PER_LOAD]) + [KeyDrain.LANE_EVENTS_PER_LOAD].
      */
     @Test
     fun `a caller's burst at K = 4 takes K + 1 caller events and their loads' lane events, and hands the rest off`() {

@@ -98,7 +98,11 @@ class KeyEffectFailureTest {
      * ([compileExecutor] null) the compilation waits until the change's drain has returned, so the pool takes its own
      * result, as a pool thread drains: unbounded.
      */
-    private fun reloaded(compileExecutor: Executor?, body: String = "p2", arm: () -> Unit): SnapshotSource<Compiled, Compiled> {
+    private fun reloaded(
+        compileExecutor: Executor?,
+        body: String = "p2",
+        arm: () -> Unit
+    ): SnapshotSource<Compiled, Compiled> {
         val source = source(compileExecutor)
         source.load("app-a").join()
         arm()
@@ -158,11 +162,12 @@ class KeyEffectFailureTest {
         }
     }
 
-    /** The install meter overflows, and the eviction pass after it fails in housekeeping, in one step; the crash's own line still goes. */
+    /** In one step the install meter overflows and the eviction pass after it fails; the crash's own line still goes. */
     private fun installOverflows() {
         installFails = StackOverflowError("install meter")
         housekeeping.failing = {
-            if (Thread.currentThread().stackTrace.any { it.methodName == "evictBeyond" }) IllegalStateException("housekeeping") else null
+            val evicting = Thread.currentThread().stackTrace.any { it.methodName == "evictBeyond" }
+            if (evicting) IllegalStateException("housekeeping") else null
         }
     }
 

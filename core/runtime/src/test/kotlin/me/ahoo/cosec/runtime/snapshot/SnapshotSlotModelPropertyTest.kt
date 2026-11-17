@@ -50,7 +50,12 @@ class SnapshotSlotModelPropertyTest {
      */
     @Test
     fun theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff() = quietly {
-        runSeeds("KeyRunner model, K = 0", "theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff", counting(k = 0), EVENT_KINDS)
+        runSeeds(
+            "KeyRunner model, K = 0",
+            "theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
+            counting(k = 0),
+            EVENT_KINDS
+        )
     }
 
     /** K = 4, the runner's K once it is the default. */
