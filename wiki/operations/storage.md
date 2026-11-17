@@ -157,8 +157,11 @@ contain `:` or `/`, so a key names one document only.
 Only the control plane (and `cosec-migrate`) writes documents and control-plane records. Data-plane instances read
 the documents and the candidates, and write only shadow reports and statuses. A Redis ACL can hold each side to that:
 
-- Data-plane credentials: read-only on `<s>:snapshot:*` and `<s>:candidate:*`, write on `<s>:shadow:*`, and no access
-  to `<s>:control:*`.
+- Data-plane credentials: read and write on `<s>:snapshot:*` and `<s>:candidate:*`, write on `<s>:shadow:*`, and no
+  access to `<s>:control:*`. Read-only is not possible with CoCache 8.0.0: it sends every script as `EVALSHA`, for which Redis requires
+  write permission on the keys the script names, so a user with `%R~` on them fails at startup and on every read
+  (`NOPERM`). A data-plane credential can therefore overwrite the documents its instances read, and an ACL cannot
+  prevent it.
 - Control-plane credentials: every key under `<s>:`.
 - To keep one instance from writing another instance's report, give each instance its own user, limited to its own
   report keys (`<s>:shadow:report:*:<instance>`), and set its
@@ -174,13 +177,24 @@ ACL only keeps it to its own keys. An instance with write access to `<s>:shadow:
 instance's id: once the control plane has seen that instance report, the window stays open until its report is back,
 but an id removed before then goes unnoticed until that instance writes again.
 
-An example for instance `pod-a` with the default prefix (Redis 7 ACL syntax; `%R~` is read-only). The first line sets
-the keys and takes every command away; the second grants the commands and channels it needs:
+An example for instance `pod-a` with the default prefix (Redis 7 ACL syntax, `channel-mode: pubsub`). The first line sets
+the keys and takes every command away; the second grants the commands and channels it needs, which are the ones
+[CoCache lists](https://cocache.ahoo.me/operations/#acl) (add `+spublish +ssubscribe +sunsubscribe` in `sharded` mode):
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:pod-a ~cosec:shadow:instances:*
-ACL SETUSER cosec-pod-a <the commands and channels CoCache lists> +info
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all ~cosec:snapshot:* ~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a +@connection +evalsha +eval +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
+
+What the example still gives an operator: no key under `<s>:control:*`, and a report and status only under the
+instance's own name. A data-plane instance needs `snapshot`, `candidate` and the `shadow` families, which are the ones
+tested here; the token, membership, API key, rate limit and OAuth families only for the feature that uses them, and
+those were not tried with an ACL.
+
+`~cosec:shadow:report:` and `~cosec:shadow:status:`, without a `*`, are the keys CoCache names when it creates those
+caches: without them the instance fails at startup with `NOPERM`, though its own keys are allowed. Tested on Redis 8.10
+with this user: the instance creates its caches, reads the documents and the candidates, writes its report and status,
+and hears an invalidation, with an empty `ACL LOG`; writing `pod-b`'s report or status is refused.
 
 Add the keys the instance's other features use (revocations, API keys, rate limits; see [Redis keys](#redis-keys)).
 Check the user with `ACL DRYRUN` before production: CoCache writes through Lua scripts, which Redis checks key by key.
