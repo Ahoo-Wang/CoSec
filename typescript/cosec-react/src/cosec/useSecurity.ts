@@ -12,7 +12,8 @@
  */
 
 import { useCallback, useEffect, useReducer } from 'react';
-import { useKeyStorage, useLatest } from '@ahoo-wang/fetcher-react';
+import { useLatest } from '../internal/useLatest.js';
+import { useStoredToken } from '../internal/useStoredToken.js';
 import type {
   TokenStorage,
   CompositeToken,
@@ -23,7 +24,8 @@ import type {
  * Type representing a composite token provider.
  * Can be either a direct composite token or a function that returns a promise of a composite token.
  */
-type CompositeTokenProvider = CompositeToken | (() => Promise<CompositeToken>);
+export type CompositeTokenProvider =
+  CompositeToken | (() => Promise<CompositeToken>);
 
 export const ANONYMOUS_USER: CoSecJwtPayload = {
   jti: '',
@@ -166,8 +168,8 @@ export function useSecurity(
   tokenStorage: TokenStorage,
   options: UseSecurityOptions = {},
 ): UseSecurityReturn {
-  // Use useKeyStorage to get reactive updates when token changes
-  const [token, , remove] = useKeyStorage(tokenStorage);
+  // Reactive updates when the stored token changes
+  const token = useStoredToken(tokenStorage);
 
   // `authenticated` is computed at render. Re-render when the session can no
   // longer be renewed (the refresh token expires), so a page left open signs
@@ -209,9 +211,9 @@ export function useSecurity(
   );
   const signOut = useCallback(() => {
     nextSessionGeneration(tokenStorage);
-    remove();
+    tokenStorage.remove();
     optionsRef.current.onSignOut?.();
-  }, [tokenStorage, remove, optionsRef]);
+  }, [tokenStorage, optionsRef]);
 
   return {
     currentUser: token?.access?.payload ?? ANONYMOUS_USER,
