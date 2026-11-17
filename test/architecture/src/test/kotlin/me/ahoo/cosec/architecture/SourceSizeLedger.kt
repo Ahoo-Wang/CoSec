@@ -41,8 +41,9 @@ object SourceSizeLedger {
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt",
             // +26 (SNP-14): the claimed kind of a removal and its claim, the counts moved where an entry is installed, an
-            // install over the cap evicting before it answers, and where a throw from that pass goes; the code B2b rewrites.
-            783,
+            // install over the cap evicting before it answers, and where a throw from that pass goes; +6 (B2b step 2a):
+            // KeySlot's overrides over today's methods. The code B2b rewrites, and removes in its step 4.
+            789,
             Disposition.Debt(Batch.B2b),
         ),
         Entry(

@@ -97,7 +97,8 @@ internal class SnapshotFamilies<A : Any>(
     }
 
     /** The slot the family of [key] holds for it now, made if it holds none; for [SlotContext.current]. */
-    fun slotFor(key: SnapshotKey, context: SlotContext): KeySlot<*> = families.first { it.spec.kind == key.kind }.slotFor(key, context)
+    fun slotFor(key: SnapshotKey, context: SlotContext): KeySlot<*> =
+        families.first { it.spec.kind == key.kind }.slotFor(key, context)
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
     internal inline fun victims(

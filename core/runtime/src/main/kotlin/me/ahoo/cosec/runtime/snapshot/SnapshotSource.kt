@@ -333,7 +333,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * Revalidates every document installed at the call with a conditional read that starts after the call (`SNP-13`), a
      * few at a time; a document not installed then (failed with nothing installed, or on its first load) is not.
      */
-    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.reloadIfHeld(force = false) }
+    fun revalidate(): CompletableFuture<Void> =
+        passes.reloadAll(passes.installedSlots()) { it.reloadIfHeld(force = false) }
 
     /**
      * Stops this source and answers everything waiting on it. Every step runs whatever the ones before it did, so a
