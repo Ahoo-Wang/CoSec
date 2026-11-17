@@ -400,14 +400,15 @@ To add your own, declare an `AttributeProvider` bean ([Extending CoSec](../archi
 
 ## CORS
 
-CoSec sets no `Access-Control-*` header and registers no CORS filter. A browser client needs the application to
-configure CORS, and where that happens decides what the browser sees. A preflight is an `OPTIONS` request with no
-credentials, so the pipeline decides it as the action `http:OPTIONS` for an anonymous caller: `401` unless a statement
-lets one do that. On Spring MVC and WebFlux the application's own CORS configuration (`@CrossOrigin`,
-`addCorsMappings`) runs in the handler mapping, after CoSec's filter, so by default it never gets to answer a
-preflight.
+CoSec sets no `Access-Control-*` header itself. A browser client needs the application to configure CORS, and where that
+happens decides what the browser sees. A preflight is an `OPTIONS` request with no credentials, so without more the
+pipeline decides it as the action `http:OPTIONS` for an anonymous caller: `401` unless a statement lets one do that. On
+Spring MVC and WebFlux the application's own CORS configuration (`@CrossOrigin`, `addCorsMappings`) runs in the handler
+mapping, after CoSec's filter, so by default it never gets to answer a preflight. **An application that declares a
+`CorsConfigurationSource` bean gets a CORS filter before CoSec's from the starter** (`STA-5`, below), and then the
+preflight is answered and not decided.
 
-| Stack | CORS by default | A preflight | A refused request's CORS headers |
+| Stack | CORS without a `CorsConfigurationSource` bean | A preflight | A refused request's CORS headers |
 |---|---|---|---|
 | Spring MVC | In `DispatcherServlet`, after CoSec | Decided by CoSec: `http:OPTIONS`, `401` for an anonymous one | None: the browser cannot read the problem |
 | WebFlux | In the handler mapping, after `PipelineWebFilter` | Decided by CoSec, as on MVC | None |
@@ -420,22 +421,45 @@ What a browser accepts, tried on Tomcat (MVC) and Reactor Netty (WebFlux) with a
 | Nothing | `401`, no CORS headers: the browser blocks the request | No CORS headers |
 | A statement that lets anyone do `http:OPTIONS`, and **no** CORS configuration | `200` **without** `Access-Control-*` headers: the browser blocks it as well | No CORS headers |
 | That statement, and Spring's own CORS configuration | `200` with the headers, answered by Spring once it is past CoSec | Still none: only permitted requests carry them |
-| **A CORS filter before CoSec** | `200` with the headers, on any path, never decided and never reaching CoSec or a handler | The CORS headers too, so a script can read the `401` and its problem |
+| **A `CorsConfigurationSource` bean** (the starter's filter), or any CORS filter before CoSec | `200` with the headers, on any path, never decided and never reaching CoSec or a handler | The CORS headers too, so a script can read the `401` and its problem |
 
 A statement that permits `http:OPTIONS` only lets the preflight through CoSec: it is not a CORS configuration, and
 something else must still set the headers. The filter before CoSec is the way that serves both a preflight and a
 refusal; on every stack it is the same arrangement:
 
-- **WebFlux:** register `OrderedCorsWebFilter`; it runs at order `999`, just before `PipelineWebFilter` (`1000`), and
-  answers preflights itself:
+- **Spring MVC and WebFlux, with the starter:** declare the source of the stack, the bean is the switch (there is no
+  property). On WebFlux it is `org.springframework.web.cors.reactive.CorsConfigurationSource`, on Spring MVC
+  `org.springframework.web.cors.CorsConfigurationSource`; Spring MVC's own `HandlerMappingIntrospector` is one too and
+  does not count. The starter registers an `OrderedCorsWebFilter` at order `999`, just before `PipelineWebFilter`
+  (`1000`), or a `CorsFilter` one place before CoSec's servlet filter (order `-10000`, beside Boot's hidden-method
+  filter, which only acts on `POST`). It registers none when the application declares a `CorsFilter` or a
+  `CorsWebFilter` of its own: that one is then the application's to order.
 
 ```kotlin
 @Bean
-fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
+fun corsConfigurationSource(): CorsConfigurationSource = UrlBasedCorsConfigurationSource().apply {
+    registerCorsConfiguration("/**", CorsConfiguration().apply {
+        allowedOrigins = listOf("https://app.example")
+        allowedMethods = listOf("GET", "POST", "PUT", "DELETE")
+        allowedHeaders = listOf("Authorization", "Content-Type", "CoSec-Device-Id", "CoSec-Space-Id", "CoSec-Request-Id")
+        exposedHeaders = listOf("CoSec-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After")
+    })
+}
 ```
 
-- **Spring MVC:** register Spring's `CorsFilter` with an order before `-9999`, the order of CoSec's filter.
 - **Gateway:** `globalcors`, which the gateway applies before its filters.
+
+What the filter changes for the pipeline (`STA-5`):
+
+- **A preflight** (`OPTIONS` with `Origin` and `Access-Control-Request-Method`) is answered by the filter from the
+  source alone and is not decided: no policy, rate limit, blacklist, audit, decision event or metric sees it. An
+  `OPTIONS` without `Access-Control-Request-Method` is no preflight and is decided as before.
+- **A request that is not a preflight** is decided as before, and every response, a refusal included, carries the CORS
+  headers. An origin the source does not allow is refused by the filter with a plain `403` before the pipeline: no
+  problem body, no `CoSec-Request-Id`, no decision event.
+- **`@CrossOrigin` and `addCorsMappings`** apply to the request that follows a preflight, not to the preflight: put every
+  origin, method and header a browser may use in the bean.
+- **Without the bean** nothing changes: the filter is not registered and the first table is the description.
 
 The configuration behind the filter has to allow the request headers a client sends (`Authorization`, `Content-Type`,
 `CoSec-Device-Id`, `CoSec-Space-Id`, `CoSec-Request-Id`) and expose the response headers it reads (`CoSec-Request-Id`,

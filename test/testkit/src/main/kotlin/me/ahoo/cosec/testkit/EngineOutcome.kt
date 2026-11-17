@@ -48,6 +48,9 @@ sealed interface EngineOutcome {
          * (`PIP-14`), or a typed resource id beyond the bounds of a request path.
          */
         RESOURCE,
+
+        /** A header the documents read, sent with different values: it has no value to decide on (`PIP-12`). */
+        HEADER,
     }
 
     /**

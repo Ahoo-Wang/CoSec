@@ -37,7 +37,7 @@ import tools.jackson.databind.node.ObjectNode
  * { "decision": "Indeterminate", "cause": { "type": "MissingPolicies", "policies": ["p"] } }
  * { "decision": "Rejected", "reason": "SPACE_NOT_MEMBER" }
  * { "decision": "NotCompiled", "error": "a part of the error message" }
- * { "decision": "InvalidRequest", "refused": "action" | "resource" }   // enforcement answers 400
+ * { "decision": "InvalidRequest", "refused": "action" | "resource" | "header" }   // enforcement answers 400
  * ```
  *
  * `via` is `{ "binding": id, "document": "platform" | "app" | "tenant" }`, `{ "attached": policy }` or `"builtin"`; a

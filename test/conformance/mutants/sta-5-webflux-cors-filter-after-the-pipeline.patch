@@ -1,0 +1,17 @@
+# Rule: STA-5
+# Mutant: On WebFlux the CORS filter runs after the pipeline's, so a preflight is decided before it is answered
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.CorsWiringTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
+index 740830db..5acb9dc5 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
+@@ -184,7 +184,7 @@ internal class CoSecPipelineWebAutoConfiguration {
+         @ConditionalOnBean(ReactiveCorsConfigurationSource::class)
+         @ConditionalOnMissingBean(CorsWebFilter::class)
+         fun cosecCorsWebFilter(source: ReactiveCorsConfigurationSource): OrderedCorsWebFilter =
+-            OrderedCorsWebFilter(source)
++            OrderedCorsWebFilter(source, order = Ordered.LOWEST_PRECEDENCE)
+     }
+ 
+     /** A gateway decides with policies, always: a gateway behind a gateway is not a mode. */
