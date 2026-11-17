@@ -20,10 +20,7 @@ import { AuthorizationRequestInterceptor } from './authorizationRequestIntercept
 import { AuthorizationResponseInterceptor } from './authorizationResponseInterceptor.js';
 import { CoSecRequestInterceptor } from './cosecRequestInterceptor.js';
 import { DeviceIdStorage } from './deviceIdStorage.js';
-import {
-  ForbiddenErrorInterceptor,
-  type ForbiddenErrorInterceptorOptions,
-} from './forbiddenErrorInterceptor.js';
+import { ForbiddenErrorInterceptor } from './forbiddenErrorInterceptor.js';
 import type { CoSecProblem } from './problem.js';
 import {
   DEFAULT_REFRESH_RETRY_DELAYS,
@@ -33,7 +30,7 @@ import { ResourceAttributionRequestInterceptor } from './resourceAttributionRequ
 import type { TokenRefresher } from './tokenRefresher.js';
 import { TokenStorage } from './tokenStorage.js';
 import { UnauthorizedErrorInterceptor } from './unauthorizedErrorInterceptor.js';
-import type { AppIdCapable, DeviceIdStorageCapable } from './types.js';
+import type { DeviceIdStorageCapable } from './types.js';
 import type { RequestTrustCapable } from './requestTrust.js';
 import type { SpaceIdProvider } from './spaceIdProvider.js';
 import { NoneSpaceIdProvider } from './spaceIdProvider.js';
@@ -86,18 +83,7 @@ import { NoneSpaceIdProvider } from './spaceIdProvider.js';
  * ```
  */
 export interface CoSecConfig
-  extends AppIdCapable, Partial<DeviceIdStorageCapable>, RequestTrustCapable {
-  /**
-   * Does nothing: CoSec 8.0 does not read a request's app. The app of a
-   * request is the `aud` of its token, set by whoever issued it; a host that
-   * serves one app (`cosec.authorization.scope.app-id`) answers
-   * `403 scope-rejected` to a token of another app, or of none.
-   *
-   * @deprecated Remove it. Kept so existing configuration still compiles; it
-   * is removed in the next major version.
-   */
-  readonly appId?: string;
-
+  extends Partial<DeviceIdStorageCapable>, RequestTrustCapable {
   /**
    * Custom implementation for storing and retrieving JWT tokens.
    *
@@ -109,16 +95,14 @@ export interface CoSecConfig
    *
    * @example
    * ```typescript
-   * // Custom encrypted storage
-   * const encryptedStorage = new EncryptedTokenStorage();
+   * // Another key and storage for the pair
    * const config: CoSecConfig = {
-   *   tokenStorage: encryptedStorage
+   *   tokenStorage: new TokenStorage({ key: 'my-app-token', storage: sessionStorage })
    * };
    *
-   * // Memory storage for testing
-   * const memoryStorage = new InMemoryTokenStorage();
-   * const config: CoSecConfig = {
-   *   tokenStorage: memoryStorage
+   * // In memory, for tests
+   * const testConfig: CoSecConfig = {
+   *   tokenStorage: new TokenStorage({ storage: new InMemoryStorage() })
    * };
    * ```
    */
@@ -161,13 +145,16 @@ export interface CoSecConfig
    *
    * @example
    * ```typescript
-   * // Basic refresh implementation
+   * // Basic refresh implementation: the refresh route sees the pair the client holds
    * const myRefresher: TokenRefresher = {
    *   refresh: async (token) => {
    *     const response = await fetch('/api/auth/refresh', {
    *       method: 'POST',
    *       headers: { 'Content-Type': 'application/json' },
-   *       body: JSON.stringify({ refreshToken: token.refreshToken })
+   *       body: JSON.stringify({
+   *         accessToken: token.accessToken,
+   *         refreshToken: token.refreshToken
+   *       })
    *     });
    *     if (!response.ok) throw new Error('Refresh failed');
    *     return response.json();
@@ -230,11 +217,10 @@ export interface CoSecConfig
    *   }
    * };
    *
-   * // Silent token refresh
-   * const config: CoSecConfig = {
+   * // Sign out without a redirect
+   * const quietConfig: CoSecConfig = {
    *   tokenRefresher: myRefresher,
    *   onUnauthorized: async (exchange) => {
-   *     // Force logout without redirect
    *     authService.clearSession();
    *     dispatch(logoutAction());
    *   }
@@ -313,7 +299,7 @@ export interface CoSecConfig
 
   /**
    * Callback invoked for a `403 scope-rejected` (see
-   * {@link ForbiddenErrorInterceptorOptions.onScopeRejected}). Without it,
+   * `ForbiddenErrorInterceptorOptions.onScopeRejected`). Without it,
    * `onForbidden` receives it too, with the problem as its second argument.
    */
   readonly onScopeRejected?: (
@@ -363,8 +349,13 @@ export interface CoSecConfig
  *     refresh: async (token) => {
  *       const res = await fetch('/api/refresh', {
  *         method: 'POST',
- *         body: JSON.stringify({ refreshToken: token.refreshToken })
+ *         headers: { 'Content-Type': 'application/json' },
+ *         body: JSON.stringify({
+ *           accessToken: token.accessToken,
+ *           refreshToken: token.refreshToken
+ *         })
  *       });
+ *       if (!res.ok) throw new Error('Refresh failed');
  *       return res.json();
  *     }
  *   },
@@ -373,22 +364,20 @@ export interface CoSecConfig
  * });
  *
  * // Apply to fetcher
- * const fetcher = new Fetcher({ baseUrl: 'https://api.example.com' });
+ * const fetcher = new Fetcher({ baseURL: 'https://api.example.com' });
  * configurer.applyTo(fetcher);
  *
- * // All requests now have CoSec headers and JWT auth
+ * // Requests to the baseURL now have the CoSec headers and the token
  * const users = await fetcher.get('/api/users');
  * ```
  *
  * @example
  * ```typescript
  * // Minimal setup - headers only, no authentication
- * const fetcher = new Fetcher();
- * new CoSecConfigurer({
- * }).applyTo(fetcher);
+ * const fetcher = new Fetcher({ baseURL: 'https://api.example.com' });
+ * new CoSecConfigurer({}).applyTo(fetcher);
  *
- * // Requests will include:
- * // - CoSec-App-Id: my-tracking-app
+ * // Requests to the baseURL will include:
  * // - CoSec-Device-Id: <generated>
  * // - CoSec-Request-Id: <unique-per-request>
  * ```
@@ -504,7 +493,7 @@ export class CoSecConfigurer implements FetcherConfigurer {
    *
    * @example
    * ```typescript
-   * const fetcher = new Fetcher({ baseUrl: 'https://api.example.com' });
+   * const fetcher = new Fetcher({ baseURL: 'https://api.example.com' });
    *
    * const configurer = new CoSecConfigurer({
    *   tokenRefresher: myRefresher,
@@ -521,8 +510,8 @@ export class CoSecConfigurer implements FetcherConfigurer {
    * @example
    * ```typescript
    * // Applying to multiple fetchers
-   * const apiFetcher = new Fetcher({ baseUrl: 'https://api.example.com' });
-   * const adminFetcher = new Fetcher({ baseUrl: 'https://admin.example.com' });
+   * const apiFetcher = new Fetcher({ baseURL: 'https://api.example.com' });
+   * const adminFetcher = new Fetcher({ baseURL: 'https://admin.example.com' });
    *
    * const configurer = new CoSecConfigurer({
    *   tokenRefresher: myRefresher,

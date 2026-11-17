@@ -49,7 +49,6 @@ export interface ForbiddenErrorInterceptorOptions {
    * ```typescript
    * const options: ForbiddenErrorInterceptorOptions = {
    *   onForbidden: async (exchange) => {
-   *     console.log('Access forbidden for:', exchange.request.url);
    *     // Show permission error or redirect
    *     showPermissionError('You do not have permission to access this resource');
    *   }
@@ -104,7 +103,6 @@ export interface ForbiddenErrorInterceptorOptions {
  * // Basic usage with error display
  * const interceptor = new ForbiddenErrorInterceptor({
  *   onForbidden: async (exchange) => {
- *     console.log('Forbidden access detected for:', exchange.request.url);
  *     showErrorToast('You do not have permission to access this resource');
  *   }
  * });
@@ -159,15 +157,6 @@ export class ForbiddenErrorInterceptor implements ErrorInterceptor {
    *                  Must include the `onForbidden` callback function.
    *
    * @throws Will throw an error if options are not provided or if `onForbidden` callback is missing.
-   *
-   * @example
-   * ```typescript
-   * const interceptor = new ForbiddenErrorInterceptor({
-   *   onForbidden: async (exchange) => {
-   *     // Handle forbidden access
-   *   }
-   * });
-   * ```
    */
   constructor(public options: ForbiddenErrorInterceptorOptions) {}
 
@@ -193,19 +182,6 @@ export class ForbiddenErrorInterceptor implements ErrorInterceptor {
    * - Allows async operations in the callback
    * - Does not throw exceptions - delegates all error handling to the callback
    * - Safe to use with other error interceptors
-   *
-   * @example
-   * ```typescript
-   * // The intercept method is called automatically by the fetcher
-   * // No manual invocation needed - this is for documentation purposes
-   * const interceptor = new ForbiddenErrorInterceptor({
-   *   onForbidden: async (exchange) => {
-   *     // exchange.response.status === 403
-   *     // exchange.request contains original request details
-   *     await handleForbiddenAccess(exchange);
-   *   }
-   * });
-   * ```
    */
   async intercept(exchange: FetchExchange): Promise<void> {
     // Check if the response status indicates forbidden access (403)

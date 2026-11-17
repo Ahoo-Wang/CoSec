@@ -105,8 +105,25 @@ new URL(url).origin === 'https://files.example.com'`. Code that really sent
 
 - The package is `@ahoo-wang/cosec-fetcher`: change `package.json` and every import.
   The React hooks moved to `@ahoo-wang/cosec-react`.
-- `appId` is deprecated and ignored: CoSec 8.0 does not read `CoSec-App-Id`,
-  the app is the token's `aud`. `CoSecHeaders.APP_ID` is removed.
+- `appId` is removed (`CoSecConfig.appId`, `CoSecRequestOptions.appId`,
+  `AppIdCapable`): CoSec 8.0 does not read `CoSec-App-Id`, the app is the
+  token's `aud`. `CoSecHeaders.APP_ID` is removed. `CoSecOptions`, which only
+  combined options nothing used, is removed too, and so is
+  `TokenStorage.setCompositeToken`: use `signIn`.
+- `RefreshTokenError` and `RefreshUnavailableError` no longer carry the token
+  pair (`token` property, and the first constructor parameter): an error
+  reporter that serializes an error's own properties would have sent both
+  tokens. Their `cause` is typed `unknown`; so are `JwtPayload`'s index
+  signature and `CoSecJwtPayload.attributes`: read a claim outside the typed
+  ones with a type guard.
+- `JwtTokenManager.refreshBlocked` and `refreshInProgress` are private.
+- `parseJwtPayload` logs nothing when it cannot parse a token (it answers
+  `null`).
+- The two `Symbol.for` keys the package shares between instances on one page
+  are `@ahoo-wang/cosec-fetcher/shared-token-serializers` and
+  `@ahoo-wang/cosec-fetcher/notification-guard-refresher`. During a migration
+  both packages can be on one page: they no longer share a registry or a
+  marker.
 - `AuthorizeResult` and `AuthorizeResults` are removed: nothing in CoSec 8.0
   sends them.
 - Only a `401` from the refresh route ends the session; a `400`, `403`, `404`

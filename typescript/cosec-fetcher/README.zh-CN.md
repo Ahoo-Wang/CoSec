@@ -86,8 +86,16 @@ CoSec 不提供登录或刷新端点；应用编写的端点必须：
   确实要发往所有源的代码写 `isTrusted: () => true`，并自己承担这个决定。在 Node 里没有绝对 `baseURL` 时，绝对 URL 的调用同样不带凭据。
 
 - 包名改为 `@ahoo-wang/cosec-fetcher`：修改 `package.json` 和每一处导入。React hooks 移到了 `@ahoo-wang/cosec-react`。
-- `appId` 已弃用并被忽略：CoSec 8.0 不读取 `CoSec-App-Id`，应用是令牌的 `aud`。
-  `CoSecHeaders.APP_ID` 已移除。
+- `appId` 已移除（`CoSecConfig.appId`、`CoSecRequestOptions.appId`、`AppIdCapable`）：CoSec 8.0 不读取 `CoSec-App-Id`，
+  应用是令牌的 `aud`。`CoSecHeaders.APP_ID` 已移除。只是把没人用的选项合在一起的 `CoSecOptions` 同样移除，
+  `TokenStorage.setCompositeToken` 也移除：用 `signIn`。
+- `RefreshTokenError` 和 `RefreshUnavailableError` 不再携带令牌对（`token` 属性和第一个构造参数）：序列化错误自有属性的错误上报工具
+  会把两个令牌都发出去。它们的 `cause` 类型是 `unknown`；`JwtPayload` 的索引签名和 `CoSecJwtPayload.attributes` 也是 `unknown`：
+  读取类型化声明之外的声明时用类型守卫。
+- `JwtTokenManager.refreshBlocked` 和 `refreshInProgress` 变为私有。
+- `parseJwtPayload` 无法解析令牌时不再打印日志（返回 `null`）。
+- 包在同一页面的实例之间共享的两个 `Symbol.for` 键现在是 `@ahoo-wang/cosec-fetcher/shared-token-serializers` 和
+  `@ahoo-wang/cosec-fetcher/notification-guard-refresher`。迁移期间两个包可以在同一页面上：它们不再共享注册表或标记。
 - `AuthorizeResult` 与 `AuthorizeResults` 已移除：CoSec 8.0 不会发送它们。
 - 只有刷新路由返回 `401` 才结束会话；`400`、`403`、`404` 或 `429` 现在会保留会话
   （`RefreshUnavailableError`）。刷新路由用其他状态拒绝时，传入 `isRefreshRejected`。

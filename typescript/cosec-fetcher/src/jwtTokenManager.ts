@@ -141,13 +141,14 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
   /**
    * After a 429 of the refresh route: the pair it answered, until when the
    * route is not called again (`Retry-After`), and the error to report.
-   *
-   * @internal
    */
-  refreshBlocked?: { fingerprint: string; until: number; error: unknown };
+  private refreshBlocked?: {
+    fingerprint: string;
+    until: number;
+    error: unknown;
+  };
 
-  /** @internal */
-  refreshInProgress?: {
+  private refreshInProgress?: {
     token: JwtCompositeToken;
     promise: Promise<JwtCompositeToken>;
     notification: { hasHandler: boolean; handled: boolean };
@@ -291,11 +292,11 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
               if (
                 !(this.options.isRefreshRejected ?? isRefreshRejection)(error)
               ) {
-                throw new RefreshUnavailableError(jwtToken, error);
+                throw new RefreshUnavailableError(error);
               }
               this.tokenStorage.remove();
             }
-            throw new RefreshTokenError(jwtToken, error);
+            throw new RefreshTokenError(error);
           });
       // Tabs sharing the storage refresh one at a time (Web Locks): the one
       // that waited reads the token the other stored instead of spending the
