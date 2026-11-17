@@ -14,7 +14,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSecurity, ANONYMOUS_USER } from '../../src/cosec/useSecurity';
-import { TokenStorage } from '@ahoo-wang/fetcher-cosec';
+import { TokenStorage } from '@ahoo-wang/cosec-fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 
 // Valid JWT tokens for testing

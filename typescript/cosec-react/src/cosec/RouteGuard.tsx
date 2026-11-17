@@ -12,7 +12,7 @@
  */
 
 import { useEffect, type ReactNode } from 'react';
-import { useLatest } from '../core/useLatest.js';
+import { useLatest } from '@ahoo-wang/fetcher-react';
 import { useSecurityContext } from './SecurityContext.js';
 
 /**
@@ -52,7 +52,7 @@ export interface RouteGuardProps {
  * @returns The children if authenticated, fallback if provided, or null otherwise.
  * @example
  * ```tsx
- * import { RouteGuard } from '@ahoo-wang/fetcher-react';
+ * import { RouteGuard } from '@ahoo-wang/cosec-react';
  *
  * function ProtectedPage() {
  *   return (

@@ -14,7 +14,7 @@
 import type { RouteGuardProps } from './RouteGuard.js';
 import type { ReactNode } from 'react';
 import { useEffect, useState } from 'react';
-import type { JwtTokenManager } from '@ahoo-wang/fetcher-cosec';
+import type { JwtTokenManager } from '@ahoo-wang/cosec-fetcher';
 import { useSecurityContext } from './SecurityContext.js';
 
 export interface RefreshableRouteGuardProps extends Omit<

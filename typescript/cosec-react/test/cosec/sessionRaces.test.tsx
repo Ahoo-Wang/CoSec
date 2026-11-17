@@ -13,7 +13,7 @@
 
 import { StrictMode } from 'react';
 import { act, render, renderHook, screen } from '@testing-library/react';
-import { JwtTokenManager, TokenStorage } from '@ahoo-wang/fetcher-cosec';
+import { JwtTokenManager, TokenStorage } from '@ahoo-wang/cosec-fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import { SerialTypedEventBus } from '@ahoo-wang/fetcher-eventbus';
 import {

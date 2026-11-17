@@ -15,7 +15,7 @@ import type { UseSecurityOptions, UseSecurityReturn } from './useSecurity.js';
 import { useSecurity } from './useSecurity.js';
 import type { ReactNode } from 'react';
 import { createContext, useContext } from 'react';
-import type { TokenStorage } from '@ahoo-wang/fetcher-cosec';
+import type { TokenStorage } from '@ahoo-wang/cosec-fetcher';
 
 /**
  * Type alias for the security context value, representing the authentication state and methods.
@@ -85,7 +85,7 @@ export interface SecurityContextOptions extends UseSecurityOptions {
  *                 such as invalid tokens or storage access issues (implementation dependent).
  * @example
  * ```tsx
- * import { SecurityProvider } from '@ahoo-wang/fetcher-react';
+ * import { SecurityProvider } from '@ahoo-wang/cosec-react';
  * import { tokenStorage } from './tokenStorage';
  * import { useNavigate } from 'react-router-dom';
  *
@@ -125,7 +125,7 @@ export function SecurityProvider({
  * @throws {Error} Throws an error if used outside of a SecurityProvider component.
  * @example
  * ```tsx
- * import { useSecurityContext } from '@ahoo-wang/fetcher-react';
+ * import { useSecurityContext } from '@ahoo-wang/cosec-react';
  *
  * function UserProfile() {
  *   const { currentUser, authenticated, signOut } = useSecurityContext();

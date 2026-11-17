@@ -15,7 +15,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { RouteGuard } from '../../src';
 import { SecurityProvider } from '../../src';
-import { TokenStorage } from '@ahoo-wang/fetcher-cosec';
+import { TokenStorage } from '@ahoo-wang/cosec-fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 
 // Valid JWT tokens for testing

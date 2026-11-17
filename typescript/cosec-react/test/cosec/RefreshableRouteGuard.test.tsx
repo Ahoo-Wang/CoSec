@@ -19,7 +19,7 @@ import {
   TokenStorage,
   JwtTokenManager,
   CoSecTokenRefresher,
-} from '@ahoo-wang/fetcher-cosec';
+} from '@ahoo-wang/cosec-fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import { Fetcher } from '@ahoo-wang/fetcher';
 

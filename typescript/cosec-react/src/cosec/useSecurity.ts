@@ -12,13 +12,12 @@
  */
 
 import { useCallback, useEffect, useReducer } from 'react';
-import { useKeyStorage } from '../storage/index.js';
+import { useKeyStorage, useLatest } from '@ahoo-wang/fetcher-react';
 import type {
   TokenStorage,
   CompositeToken,
   CoSecJwtPayload,
-} from '@ahoo-wang/fetcher-cosec';
-import { useLatest } from '../core/index.js';
+} from '@ahoo-wang/cosec-fetcher';
 
 /**
  * Type representing a composite token provider.
@@ -118,7 +117,7 @@ function nextSessionGeneration(tokenStorage: TokenStorage): number {
  *                 or storage access issues (implementation dependent).
  * @example
  * ```typescript
- * import { useSecurity } from '@ahoo-wang/fetcher-react';
+ * import { useSecurity } from '@ahoo-wang/cosec-react';
  * import { tokenStorage } from './tokenStorage';
  * import { useNavigate } from 'react-router-dom';
  *
