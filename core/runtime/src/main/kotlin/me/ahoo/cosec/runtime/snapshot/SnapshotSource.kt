@@ -345,10 +345,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * ran, with the others suppressed in it. A second call does nothing.
      */
     override fun close() {
-        if (context.closed.get()) {
-            return
-        }
-        context.closed.set(true)
+        if (!context.closed.compareAndSet(false, true)) return
         var failure: Throwable? = null
         for (step in closeSteps()) {
             failure = attemptClosing(step, failure)
@@ -367,6 +364,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         prewarms::abort,
         { context.pendingRequests.forEach { it.abort(closedError()) } },
         ::endLoads,
+        context.handOffs::runPending,
         threads::stopHousekeeping,
         threads::stopCompiling,
         { threads.awaitOwned(closeTimeout) },

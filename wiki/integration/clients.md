@@ -150,6 +150,12 @@ headers ([App and space](./web.md#app-and-space)).
 A parameter sent twice with different values, or a blank one beside a non-blank one, is `400 invalid-request`
 (`SCP-4`); blank means ASCII whitespace only. No header declares an app, and a client that sends one for it changes nothing: the app is the token's (below).
 
+**Send them only to the origins the application is built against**: the API's own origin and the page's. A pagination
+link, a download URL or a callback that points elsewhere gets none of the four, and its `401` is no reason to refresh or
+to end the session: it says nothing about this application's session. A tenant or owner read from the token does not go
+into the URL of such an origin either. `@ahoo-wang/cosec-fetcher` does this by default (`isTrusted`, which defaults to
+`sameOriginTrust`); an application that must send them to another origin names it in its own predicate.
+
 ## The app comes from the token
 
 A client does not choose its app: the app is the token's `aud`, set by whoever issued it. A host that serves one app

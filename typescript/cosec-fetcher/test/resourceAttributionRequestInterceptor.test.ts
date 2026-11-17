@@ -46,6 +46,7 @@ describe('ResourceAttributionRequestInterceptor', () => {
 
     // Create mock exchange
     mockExchange = {
+      attributes: new Map(),
       request: {
         url: '/api/{tenantId}/resources/{ownerId}',
       },

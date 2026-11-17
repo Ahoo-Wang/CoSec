@@ -103,6 +103,10 @@
   - changed-files:
       - any-glob-to-any-file: 'typescript/cosec-fetcher/**'
 
+'module: cosec-react':
+  - changed-files:
+      - any-glob-to-any-file: 'typescript/cosec-react/**'
+
 'area: typescript':
   - changed-files:
       - any-glob-to-any-file: 'typescript/**'

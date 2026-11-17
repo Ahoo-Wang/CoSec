@@ -63,7 +63,7 @@ src/
 
 - **CoSecConfigurer**: Main entry point that wires up all interceptors onto a Fetcher instance
 - **JWT Token Management**: Parse, validate, refresh, and store JWT tokens
-- **Authorization Interceptors**: Automatically attach Bearer tokens to requests; with `isTrusted` only trusted absolute URLs receive the token and CoSec headers (default: every request)
+- **Authorization Interceptors**: Automatically attach Bearer tokens to requests; only trusted absolute URLs receive the token, the CoSec headers and the tenant and owner path variables: `isTrusted` defaults to `sameOriginTrust` (the origin of an absolute `baseURL` and the page's); there is no "trust everything" constant, an application writes `() => true` itself
 - **Error Handling**: reads the CoSec 8.0 problem type of a refusal. `token-expired` (and a 401 with no CoSec problem) triggers token refresh + retry; `unauthorized`, `token-revoked`, `token-invalid` are not refreshed (the last two remove the stored pair); `forbidden` goes to `onForbidden`, `scope-rejected` to `onScopeRejected`; 429/503/500/400 never touch the session
 - **Refresh under rotation**: only a 401 from the refresh route ends the session. An attempt whose outcome is unknown is retried with the same pair only inside `rotationLeeway` of the first attempt (CoSec 8.0 `IDN-16`); the time is stored with the pair and never slides. After the window one attempt per call, which cannot be made safe. Read the comment of `JwtTokenManager.sendRefresh` before changing it.
 - **Device ID**: Persistent device identification for security tracking

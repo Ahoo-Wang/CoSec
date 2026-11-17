@@ -59,11 +59,11 @@ internal class SlotContext(
     /** The requests waiting on a slot, answered when the source closes. */
     val pendingRequests: MutableSet<PendingRequest> = ConcurrentHashMap.newKeySet()
 
-    /** The drains this source's keys hand off: one task in the compile pool at a time (RFC 0013 B2b §3). */
-    val handOffs = DrainHandOffs(threads, metrics)
-
     /** Set once, by [SnapshotSource.close]. */
     val closed = AtomicBoolean()
+
+    /** The drains this source's keys hand off: one task in the compile pool at a time (RFC 0013 B2b §3). */
+    val handOffs = DrainHandOffs(threads, metrics, closed)
 
     fun closedError() = IllegalStateException("SnapshotSource is closed.")
 

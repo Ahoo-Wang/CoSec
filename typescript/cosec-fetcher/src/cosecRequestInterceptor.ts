@@ -219,7 +219,7 @@ export class CoSecRequestInterceptor implements RequestInterceptor {
    * @param options - The CoSec configuration options
    * @param options.deviceIdStorage - Storage for device identifier management
    * @param options.spaceIdProvider - Optional provider for space identification
-   * @param options.isTrusted - Optional predicate for which absolute URLs get the CoSec headers (default: all)
+   * @param options.isTrusted - Optional predicate for which absolute URLs get the CoSec headers (default: {@link sameOriginTrust})
    *
    *
    * @example
