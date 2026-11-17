@@ -34,11 +34,10 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
     /** `newLoad`: a load starting now, put in the state; its read starts with [startRead]. */
     fun newLoad(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?, handle: KeyHandle<T>?): LoadState<T> {
         val id = step.serial()
-        val state = step.state
-        val known = state.installed
+        val known = step.installed
         // Only a compiled entry depends on the compiler's inputs; the shared document is not recompiled.
         val compiled = known != null && known.origin.compiled
-        val recompiles = !config.shared && compiled && state.installedEpoch < step.moment.epoch
+        val recompiles = !config.shared && compiled && step.installedEpoch < step.moment.epoch
         // readFor: see the class comment of SnapshotSource for why seen keys never use a local copy.
         val local = known == null && step.seen == null
         val digest = when {
@@ -60,7 +59,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             phase = LoadPhase.Reading,
             handle = handle ?: step.handle(),
         )
-        step.state = step.state.copy(load = load)
+        step.load = load
         return load
     }
 
@@ -78,7 +77,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
                 val seen = Seen(read.document.revision, read.digest)
                 step.emit(KeyEffect.RecordSeen(seen, ifAbsent = true))
                 step.seen = step.seen ?: seen
-                step.state = step.state.copy(load = reading.copy(phase = LoadPhase.Compiling(read)))
+                step.load = reading.copy(phase = LoadPhase.Compiling(read))
                 step.emit(KeyEffect.Compile(load.id, read))
             }
 
@@ -101,7 +100,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         read: SnapshotRead.Present,
         compiled: KeyEvent.Compiled<T>
     ) {
-        step.state = step.state.copy(retryDelay = config.rejectedReloadRetry)
+        step.retryDelay = config.rejectedReloadRetry
         val present = compiled.state is DocumentState.Present
         step.emit(KeyEffect.Report(KeyEffect.Metric.Compiled(compiled.nanos, present)))
         val origin = if (present) EntryOrigin.DOCUMENT else EntryOrigin.UNCOMPILABLE
@@ -200,7 +199,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         if (installs) {
             recordInstall(step, entry)
         }
-        val pending = step.state.next
+        val pending = step.next
         val nextLoad = advance(step, load, entry.takeIf { installs }, stale)
         val answer = if (withheld && nextLoad == null) outdated(key, step.moment) else entry
         housekeep(step, installs)
@@ -219,18 +218,19 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         installed: SnapshotEntry<T>?,
         stale: Boolean
     ): LoadState<T>? {
-        val before = step.state
-        val wanted = before.again || stale || (installed != null && load.fromLocalCopy)
-        step.state = before.copy(
-            installed = installed ?: before.installed,
-            installedEpoch = if (installed != null) load.epoch else before.installedEpoch,
-            load = null,
-            again = false,
-            againForced = false,
-            next = null,
-        )
-        val open = !step.moment.closed && !before.removed
-        return if (wanted && open) newLoad(step, before.againForced, null, before.next) else null
+        val wanted = step.again || stale || (installed != null && load.fromLocalCopy)
+        val againForced = step.againForced
+        val pending = step.next
+        if (installed != null) {
+            step.installed = installed
+            step.installedEpoch = load.epoch
+        }
+        step.load = null
+        step.again = false
+        step.againForced = false
+        step.next = null
+        val open = !step.moment.closed && !step.removed
+        return if (wanted && open) newLoad(step, againForced, null, pending) else null
     }
 
     /** `answerWaiters`: [load]'s handles get [answer], or, for a withheld compilation, what [recompiling] ends with. */
@@ -245,13 +245,13 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
             waiting.forEach { step.emit(KeyEffect.Answer(it, answer)) }
             return
         }
-        step.state = step.state.copy(load = recompiling.copy(alsoAnswers = recompiling.alsoAnswers + waiting))
+        step.load = recompiling.copy(alsoAnswers = recompiling.alsoAnswers + waiting)
     }
 
     private fun endRead(step: KeyStepBuilder<T>, load: LoadState<T>): LoadState<T> {
         step.emit(KeyEffect.CancelReadTimeout(load.id))
         load.pass?.let { step.emit(KeyEffect.EndPassRead(it)) }
-        return load.copy(pass = null).also { step.state = step.state.copy(load = it) }
+        return load.copy(pass = null).also { step.load = it }
     }
 
     private fun onUnchanged(step: KeyStepBuilder<T>, load: LoadState<T>) {
@@ -316,8 +316,8 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
 
     /** `retryLater`: with a delay that doubles while the compile queue stays full, up to the revalidation interval. */
     private fun retryLater(step: KeyStepBuilder<T>) {
-        val delay = step.state.retryDelay
-        step.state = step.state.copy(retryDelay = minOf(delay.multipliedBy(2), config.revalidateInterval))
+        val delay = step.retryDelay
+        step.retryDelay = minOf(delay.multipliedBy(2), config.revalidateInterval)
         step.emit(KeyEffect.ScheduleRetry(delay))
     }
 
@@ -342,14 +342,14 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
                 )
             )
         }
-        step.emit(KeyEffect.Install(entry, step.state.installed, regressedFrom))
+        step.emit(KeyEffect.Install(entry, step.installed, regressedFrom))
     }
 
     /** `housekeep`: an empty key is dropped, and an install evicts beyond the family's bound; the shared key has no family. */
     private fun housekeep(step: KeyStepBuilder<T>, installed: Boolean) {
         when {
             config.shared -> Unit
-            step.state.installed == null -> step.emit(KeyEffect.DropIfEmpty)
+            step.installed == null -> step.emit(KeyEffect.DropIfEmpty)
             installed -> step.emit(KeyEffect.EvictBeyond)
         }
     }

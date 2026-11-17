@@ -75,7 +75,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     private fun requested(step: KeyStepBuilder<T>, event: KeyEvent.Requested) {
         val waiter = event.waiter
-        if (step.state.removed) {
+        if (step.removed) {
             // Never null: a request goes to the key's current runner; a pass or a revalidation skips the key.
             val skips = event.ask is Ask.ReloadIfHeld || (event.ask is Ask.Load && event.ask.pass != null)
             waiter?.let { step.emit(if (skips) KeyEffect.Skip(it) else KeyEffect.Redispatch(event)) }
@@ -93,7 +93,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     /** `forRequest`: what is installed, or its own view of the load; after close, refused as today's view is aborted. */
     private fun request(step: KeyStepBuilder<T>, waiter: Waiter?) {
         waiter ?: return
-        val installed = step.state.installed
+        val installed = step.installed
         when {
             installed != null -> step.emit(KeyEffect.Serve(waiter, installed, hit = true))
             step.moment.closed -> step.emit(KeyEffect.Refuse(waiter, closedError()))
@@ -103,7 +103,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     /** `usable`: the installed entry if it has not failed, otherwise a load. */
     private fun usable(step: KeyStepBuilder<T>, waiter: Waiter?) {
-        val installed = step.state.installed
+        val installed = step.installed
         if (installed != null && installed.state !is DocumentState.Failed) {
             waiter?.let { step.emit(KeyEffect.Serve(it, installed)) }
             return
@@ -121,7 +121,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             waiter?.let { step.emit(KeyEffect.Serve(it, failedEntry(config.key, closedError(), step.moment.instant))) }
             return
         }
-        val inFlight = step.state.load
+        val inFlight = step.load
         if (inFlight != null && pass != null && step.moment.nanos - inFlight.startedNanos > config.storeReadTimeout.toNanos()) {
             waiter?.let { step.emit(KeyEffect.Skip(it)) }
             return
@@ -132,23 +132,23 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     /** `reload`: a load that starts after this event, even if one is in flight, since a change may postdate its read. */
     private fun reload(step: KeyStepBuilder<T>, force: Boolean, waiter: Waiter?) {
-        val state = step.state
-        if (state.load == null) {
+        if (step.load == null) {
             load(step, force, pass = null, waiter = waiter)
             return
         }
-        val next = state.next ?: step.handle()
-        step.state = step.state.copy(again = true, againForced = state.againForced || force, next = next)
+        val next = step.next ?: step.handle()
+        step.again = true
+        step.againForced = step.againForced || force
+        step.next = next
         waiter?.let { step.emit(KeyEffect.Hang(it, next)) }
     }
 
     /** `onChanged`: reload if this key is installed or loading; otherwise there is nothing to refresh. */
     private fun changed(step: KeyStepBuilder<T>) {
-        val state = step.state
         when {
-            state.removed -> Unit
-            state.load != null -> step.state = state.copy(again = true)
-            state.installed != null -> load(step, force = false, pass = null, waiter = null)
+            step.removed -> Unit
+            step.load != null -> step.again = true
+            step.installed != null -> load(step, force = false, pass = null, waiter = null)
         }
     }
 
@@ -157,11 +157,10 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
      * True when this key is to be loaded again (loading, or idle with a compiled entry): the caller reloads it.
      */
     private fun recompile(step: KeyStepBuilder<T>): Boolean {
-        val state = step.state
         return when {
-            state.removed -> false
-            state.load != null -> true.also { step.state = state.copy(again = true) }
-            else -> state.installed?.origin?.compiled ?: false
+            step.removed -> false
+            step.load != null -> true.also { step.again = true }
+            else -> step.installed?.origin?.compiled ?: false
         }
     }
 
@@ -178,7 +177,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             Claim.NOT_EVICTABLE, Claim.AT_BOUND -> false
         }
         if (removes) {
-            step.state = step.state.copy(removed = true)
+            step.removed = true
             step.emit(KeyEffect.Drop(claimed = event.claim == Claim.CLAIMED))
         }
         step.emit(KeyEffect.Reply(event.reply, removes))
@@ -189,7 +188,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
      * unless a recompile has outdated it.
      */
     private fun close(step: KeyStepBuilder<T>) {
-        val load = step.state.load ?: return
+        val load = step.load ?: return
         val outdated = load.recompiles || load.epoch < step.moment.epoch
         val entry = load.known.takeUnless { outdated } ?: failedEntry(config.key, closedError(), step.moment.instant)
         loads.finish(step, load, entry, install = false)
@@ -197,7 +196,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     /** An event about a load: dropped when that load has ended, or when it has moved past what the event is about. */
     private fun ofLoad(step: KeyStepBuilder<T>, event: KeyEvent<T>) {
-        val load = step.state.load?.takeIf { it.id == event.loadId }
+        val load = step.load?.takeIf { it.id == event.loadId }
         if (load == null) {
             if (event is KeyEvent.EffectFailed) {
                 step.emit(
@@ -248,9 +247,9 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     }
 
     private fun joinOrStart(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?): KeyHandle<T> {
-        step.state.load?.let { return it.handle }
+        step.load?.let { return it.handle }
         val load = loads.newLoad(step, force, pass, handle = null)
-        step.state = step.state.copy(again = false)
+        step.again = false
         loads.startRead(step, load)
         return load.handle
     }
