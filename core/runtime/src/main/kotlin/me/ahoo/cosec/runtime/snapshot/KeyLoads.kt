@@ -100,8 +100,8 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         compiled: KeyEvent.Compiled<T>
     ) {
         step.retryDelay = config.rejectedReloadRetry
+        // The compilation was reported where it ran, before this step (`KeyEffects.compileOnPool`, as `Slot` does).
         val present = compiled.state is DocumentState.Present
-        step.emit(KeyEffect.Report(KeyEffect.Metric.Compiled(compiled.nanos, present)))
         val origin = if (present) EntryOrigin.DOCUMENT else EntryOrigin.UNCOMPILABLE
         val confirmedAt = load.confirmedAt(config.localCopyMaxAge)
         finish(

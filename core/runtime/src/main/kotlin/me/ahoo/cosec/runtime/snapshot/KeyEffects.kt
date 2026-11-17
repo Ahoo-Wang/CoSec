@@ -153,7 +153,18 @@ internal class KeyEffects<T : Any>(
         } catch (error: Throwable) {
             DocumentState.Failed(SnapshotUnavailableException(key, report().failedToCompile(revision), error))
         }
-        owner.offer(KeyEvent.Compiled(id, state, System.nanoTime() - begin))
+        // As `Slot.compileAndInstall` reports it: on the pool, for a compilation that ran (it compiled, or it threw),
+        // before its result is installed or `closed` is read, so a close that ends the load does not hide the work. A
+        // meter's `VirtualMachineError` (the guard lets nothing else out) leaves after the result is offered.
+        try {
+            context.metrics.onCompile(
+                key.kind,
+                Duration.ofNanos(System.nanoTime() - begin),
+                state is DocumentState.Present
+            )
+        } finally {
+            owner.offer(KeyEvent.Compiled(id, state))
+        }
     }
 
     private fun recordSeen(effect: KeyEffect.RecordSeen) {
@@ -185,11 +196,6 @@ internal class KeyEffects<T : Any>(
 
     private fun report(metric: KeyEffect.Metric) {
         when (metric) {
-            is KeyEffect.Metric.Compiled -> context.metrics.onCompile(
-                key.kind,
-                Duration.ofNanos(metric.nanos),
-                metric.present
-            )
             is KeyEffect.Metric.DocumentLost -> context.metrics.onDocumentLost(key, metric.revision)
         }
     }

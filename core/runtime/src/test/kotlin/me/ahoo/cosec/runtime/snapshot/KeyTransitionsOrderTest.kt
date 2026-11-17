@@ -118,10 +118,10 @@ class KeyTransitionsOrderTest {
         }
         if (load != null && load.id in world.compiles) {
             val id = load.id
-            add("compiled" to { key: KeyHarness -> key.offer(KeyEvent.Compiled(id, DocumentState.Present("c$id"), 1)) })
+            add("compiled" to { key: KeyHarness -> key.offer(KeyEvent.Compiled(id, DocumentState.Present("c$id"))) })
             add(
                 "compile fails" to { key: KeyHarness ->
-                    key.offer(KeyEvent.Compiled(id, DocumentState.Failed(IllegalStateException("no")), 1))
+                    key.offer(KeyEvent.Compiled(id, DocumentState.Failed(IllegalStateException("no"))))
                 }
             )
             add(
