@@ -23,6 +23,7 @@
     "globals": "catalog:",
     "prettier": "catalog:",
     "publint": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:"
   }
 }

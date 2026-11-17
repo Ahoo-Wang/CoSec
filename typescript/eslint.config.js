@@ -13,17 +13,30 @@
 
 import js from '@eslint/js';
 import globals from 'globals';
+import tseslint from 'typescript-eslint';
 
 // The workspace's own files. Each package under typescript/ has an eslint.config.js of its own, and `pnpm lint` runs
-// ESLint inside each of them.
-export default [
+// ESLint inside each of them. `test-host/` is shared by the packages' host tests and belongs to none of them: it gets the
+// rules their tests get.
+export default tseslint.config(
   {
     files: ['eslint.config.js', 'scripts/**/*.mjs'],
-    ...js.configs.recommended,
+    extends: [js.configs.recommended],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: 'module',
       globals: globals.node,
     },
   },
-];
+  {
+    files: ['test-host/**/*.ts'],
+    extends: [js.configs.recommended, ...tseslint.configs.recommended],
+    languageOptions: { ecmaVersion: 2022, globals: globals.node },
+    rules: {
+      '@typescript-eslint/consistent-type-imports': [
+        'error',
+        { prefer: 'type-imports' },
+      ],
+    },
+  },
+);
