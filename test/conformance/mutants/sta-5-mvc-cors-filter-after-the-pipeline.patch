@@ -1,0 +1,17 @@
+# Rule: STA-5
+# Mutant: On Spring MVC the CORS filter runs after the pipeline's, so a preflight is decided before it is answered
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.CorsWiringTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
+index 740830db..a8a34cae 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineWebAutoConfiguration.kt
+@@ -229,7 +229,7 @@ internal class CoSecPipelineWebAutoConfiguration {
+          * The CORS filter's order (`STA-5`): immediately before the servlet filter of the pipeline, at the position of the
+          * hidden-method filter. A tie with a filter that only acts on a `POST` is harmless: neither rewrites an `OPTIONS`.
+          */
+-        const val CORS_SERVLET_FILTER_ORDER = SERVLET_FILTER_ORDER - 1
++        const val CORS_SERVLET_FILTER_ORDER = SERVLET_FILTER_ORDER + 1
+ 
+         /** How this host reads the client address: decided once per context, or startup fails ([ClientIpReadings]). */
+         fun clientIpOf(context: ApplicationContext, properties: RuntimeAuthorizationProperties): ClientIpReading =
