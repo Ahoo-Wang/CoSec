@@ -16,6 +16,16 @@ pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
   @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher
 ```
 
+Until CoSec 8.0 is released this is a pre-release, which npm does not install by
+default: use a dist-tag, `pnpm add @ahoo-wang/cosec-fetcher@beta` (`@alpha`,
+`@rc`), or an exact version. It is published with each CoSec release, at the
+version of CoSec.
+
+Until CoSec 8.0 is released this is a pre-release, which npm does not install by
+default: use a dist-tag, `pnpm add @ahoo-wang/cosec-fetcher@beta` (`@alpha`,
+`@rc`), or an exact version. It is published with each CoSec release, at the
+version of CoSec.
+
 Peer dependencies: `fetcher`, `fetcher-eventbus`, and `fetcher-storage`.
 
 Requires Node `^22.12.0 || ^24.0.0 || >=26.0.0`, the Node versions nanoid 6 supports, from the first 22 release where `require()` of an ES module works: nanoid is ES modules only, and the CommonJS entry (`require`) loads it that way.

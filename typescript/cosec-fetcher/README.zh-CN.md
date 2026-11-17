@@ -14,6 +14,9 @@ pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
   @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher
 ```
 
+CoSec 8.0 发布之前它是预发布版本，npm 默认不会安装：用 dist-tag，`pnpm add @ahoo-wang/cosec-fetcher@beta`（`@alpha`、`@rc`），或写明确切版本。
+它随每次 CoSec 发布而发布，版本与 CoSec 相同。
+
 Peer 依赖：`fetcher`、`fetcher-eventbus` 和 `fetcher-storage`。
 
 需要 Node `^22.12.0 || ^24.0.0 || >=26.0.0`，即 nanoid 6 支持的 Node 版本，并从 22 系列中首个支持 `require()` 加载 ES 模块的版本起：nanoid 仅提供 ES 模块，CommonJS 入口（`require`）以这种方式加载它。

@@ -13,6 +13,9 @@ pnpm add react @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
   @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react
 ```
 
+CoSec 8.0 发布之前它们是预发布版本，npm 默认不会安装：用 dist-tag，`pnpm add @ahoo-wang/cosec-react@beta`（`@alpha`、`@rc`），或写明确切版本。
+它们随每次 CoSec 发布而发布，版本与 CoSec 相同。
+
 对等依赖：`react`（19）、`@ahoo-wang/cosec-fetcher` 和 `@ahoo-wang/fetcher-react`（hooks 使用它的 `useKeyStorage` 和 `useLatest`）。
 应用里必须只有一份 `@ahoo-wang/cosec-fetcher`：hooks 和客户端共用同一个 `TokenStorage` 实例。
 
