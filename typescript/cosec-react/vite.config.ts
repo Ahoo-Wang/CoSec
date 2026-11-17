@@ -20,15 +20,10 @@ export default defineConfig({
   build: {
     sourcemap: true,
     lib: {
-      entry: {
-        index: 'src/index.ts',
-        core: 'src/core/index.ts',
-        fetcher: 'src/fetcher/index.ts',
-      },
-      formats: ['es'],
-      name: 'FetcherReact',
-      fileName: (format, entry) =>
-        entry === 'index' ? `index.${format}.js` : `${entry}.es.js`,
+      entry: 'src/index.ts',
+      name: 'CoSecReact',
+      fileName: format =>
+        format === 'es' ? 'index.es.js' : `index.${format}.cjs`,
     },
     rolldownOptions: {
       external: [
@@ -38,12 +33,8 @@ export default defineConfig({
         'react/jsx-dev-runtime',
         'react/compiler-runtime',
         'react-compiler-runtime',
-        'immer',
-        'dequal',
-        '@ahoo-wang/fetcher',
-        '@ahoo-wang/fetcher-eventbus',
-        '@ahoo-wang/fetcher-storage',
-        '@ahoo-wang/fetcher-cosec',
+        '@ahoo-wang/cosec-fetcher',
+        '@ahoo-wang/fetcher-react',
       ],
       output: {
         keepNames: true,
@@ -54,12 +45,8 @@ export default defineConfig({
           'react/jsx-dev-runtime': 'ReactJSXDevRuntime',
           'react/compiler-runtime': 'ReactCompilerRuntime',
           'react-compiler-runtime': 'ReactCompilerRuntime',
-          immer: 'Immer',
-          dequal: 'dequal',
-          '@ahoo-wang/fetcher': 'Fetcher',
-          '@ahoo-wang/fetcher-eventbus': 'FetcherEventBus',
-          '@ahoo-wang/fetcher-storage': 'FetcherStorage',
-          '@ahoo-wang/fetcher-cosec': 'FetcherCoSec',
+          '@ahoo-wang/cosec-fetcher': 'FetcherCoSec',
+          '@ahoo-wang/fetcher-react': 'FetcherReact',
         },
       },
     },

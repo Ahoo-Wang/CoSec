@@ -21,9 +21,9 @@ export default tseslint.config(
   {
     ignores: [
       '**/dist/**',
+      '**/coverage/**',
       '**/**.test.ts',
       '**/**.test.tsx',
-      '**/**.stories.tsx',
       '**/node_modules/**',
     ],
   },
