@@ -110,9 +110,12 @@ class ChangeListeners(
         scope.launch {
             try {
                 listener.onChange(event)
-            } catch (e: CancellationException) {
-                throw e
             } catch (e: Exception) {
+                // The host stopping the delivery ([cancel]) ends it quietly; a timeout or a cancelled future of the
+                // listener's own, while the delivery is active, is a failure to record like any other (#1535).
+                if (e is CancellationException && !currentCoroutineContext().isActive) {
+                    throw e
+                }
                 log.warn(e) { "Change listener [${listener.name}] could not record $event." }
             }
         }
