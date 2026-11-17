@@ -9,10 +9,10 @@ CoSec's TypeScript packages are the client of a CoSec application and its React 
 
 ## Packages
 
-| Directory | Package | Published | Built on |
-|---|---|---|---|
-| `cosec-fetcher/` | `@ahoo-wang/cosec-fetcher` | yes | `@ahoo-wang/fetcher` and its eventbus and storage packages, from npm |
-| `cosec-react/` | `@ahoo-wang/cosec-react` | yes | `cosec-fetcher`, `@ahoo-wang/fetcher-react`, React |
+| Directory        | Package                    | Published | Built on                                                             |
+| ---------------- | -------------------------- | --------- | -------------------------------------------------------------------- |
+| `cosec-fetcher/` | `@ahoo-wang/cosec-fetcher` | yes       | `@ahoo-wang/fetcher` and its eventbus and storage packages, from npm |
+| `cosec-react/`   | `@ahoo-wang/cosec-react`   | yes       | `cosec-fetcher`, `@ahoo-wang/fetcher-react`, React                   |
 
 A package is added here, to the workspace's members (`cosec-*`), and to `TypeScriptWorkspaceTest` in `:architecture`.
 
@@ -20,12 +20,12 @@ A package is added here, to the workspace's members (`cosec-*`), and to `TypeScr
 
 A pnpm workspace of its own, apart from `wiki/` (whose lockfile and toolchain stay as they are):
 
-| File | Role |
-|---|---|
-| `package.json` | Private root: scripts and shared dev tooling only; pins `packageManager` |
-| `pnpm-workspace.yaml` | Members, the dependency catalog, `allowBuilds`, `minimumReleaseAge` |
-| `pnpm-lock.yaml` | The only JavaScript lockfile of this workspace |
-| `tsconfig.base.json`, `eslint.config.js`, `.prettierrc` | What the packages extend or follow |
+| File                                                    | Role                                                                     |
+| ------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `package.json`                                          | Private root: scripts and shared dev tooling only; pins `packageManager` |
+| `pnpm-workspace.yaml`                                   | Members, the dependency catalog, `allowBuilds`, `minimumReleaseAge`      |
+| `pnpm-lock.yaml`                                        | The only JavaScript lockfile of this workspace                           |
+| `tsconfig.base.json`, `eslint.config.js`, `.prettierrc` | What the packages extend or follow                                       |
 
 ```bash
 cd typescript
