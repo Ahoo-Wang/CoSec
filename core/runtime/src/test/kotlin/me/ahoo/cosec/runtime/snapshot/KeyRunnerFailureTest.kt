@@ -74,7 +74,7 @@ class KeyRunnerFailureTest {
         compileExecutor: Executor? = directExecutor,
         housekeeping: ExecutorService? = null,
         options: SnapshotOptions = OPTIONS,
-        k: Int = KeyRunner.PROVISIONAL_K,
+        k: Int = KeyRunner.K,
         everyKey: Boolean = false,
     ): SnapshotSource<Compiled, Compiled> {
         val ticker = AtomicLong()

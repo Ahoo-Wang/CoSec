@@ -40,7 +40,7 @@ internal class SlotContext(
     val metrics: SnapshotMetrics,
     val threads: SnapshotThreads,
     val families: SnapshotFamilies<*>,
-    /** What makes each key's slot (RFC 0013 B2b): [SlotFactory.SLOT] in production. */
+    /** What makes each key's slot (RFC 0013 B2b): [SlotFactory.RUNNER] in production. */
     val slots: SlotFactory,
 ) {
     /**

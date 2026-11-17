@@ -101,8 +101,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val ticker: LongSupplier,
     /** Tests only (RFC 0013 B2b): housekeeping on an executor the test runs, in place of the thread started here. */
     housekeeping: ExecutorService? = null,
-    /** Tests only (RFC 0013 B2b): what makes each key's slot; [SlotFactory.SLOT] in production. */
-    slots: SlotFactory = SlotFactory.SLOT,
+    /** Tests only (RFC 0013 B2b): what makes each key's slot; [SlotFactory.RUNNER] in production. */
+    slots: SlotFactory = SlotFactory.RUNNER,
 ) : AutoCloseable {
 
     private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
