@@ -49,7 +49,24 @@ internal class KeyDrain<T : Any>(
     private val claim: (absent: Boolean) -> Boolean,
     /** Publishes what readers outside the drain see: removed, and idle. */
     private val publish: (removed: Boolean, idle: Boolean) -> Unit,
+    /** Tests only: called between the steps of a drain; [Hooks.NONE] in production. */
+    private val hooks: Hooks = Hooks.NONE,
 ) {
+    /**
+     * Tests only: where a test interleaves with a drain. [beforeNext] runs before each transition (it may throw, as a
+     * transition that fails would); [afterEmpty] between finding the queue empty and releasing the flag; [afterRelease]
+     * between releasing the flag and checking the queue again.
+     */
+    class Hooks(
+        val beforeNext: (KeyEvent<*>) -> Unit = {},
+        val afterEmpty: () -> Unit = {},
+        val afterRelease: () -> Unit = {},
+    ) {
+        companion object {
+            val NONE = Hooks()
+        }
+    }
+
     private val queue = ConcurrentLinkedQueue<Any>()
     private val flag = AtomicBoolean()
     private var state: KeyState<T> = transitions.initial()
@@ -102,12 +119,14 @@ internal class KeyDrain<T : Any>(
                     }
                     take(queue.poll() ?: break)
                 }
+                if (!spent) hooks.afterEmpty()
             } finally {
                 drainer = null
                 flag.set(false)
             }
             released()
             if (spent) return handOff()
+            hooks.afterRelease()
             // An offer that lost the flag just before the release is taken here: no event is stranded.
             if (queue.isEmpty()) return
         }
@@ -135,6 +154,7 @@ internal class KeyDrain<T : Any>(
             context.families.seen[key],
         )
         val step = try {
+            hooks.beforeNext(event)
             transitions.next(before, event, moment)
         } catch (error: Throwable) {
             aborted(before, event, error)
@@ -160,7 +180,7 @@ internal class KeyDrain<T : Any>(
      * After the release, a `VirtualMachineError` an effect threw. "Never catch a `VirtualMachineError`" is the rule, and
      * this is its reasoned exception, `OutOfMemoryError` included: the error belongs to the key whose effect threw, not
      * to the thread that happened to drain it. So the step's remaining effects ran (its waiters are answered), an
-     * [KeyEvent.EffectFailed] is queued (the load ends as a transient failure), the flag is released, and then it is
+     * [KeyEvent.EffectFailed] is queued (a load still in flight ends as a transient failure), the flag is released, and then it is
      * rethrown on CoSec's own threads, as [Slot] rethrows it to the pool, and on any other thread, a caller's, logged at
      * ERROR instead: that caller gets its own answer, never another key's `StackOverflowError`. The line goes through
      * housekeeping like every line with a stack trace, and is written in place when housekeeping refuses it.
@@ -172,7 +192,7 @@ internal class KeyDrain<T : Any>(
         context.threads.offRequestThread {
             log.error(error) {
                 "Snapshot document [$key]: the effect ${effect::class.simpleName} threw ${error::class.java.name}; the JVM may " +
-                    "not be healthy. Its load ended as a transient failure, and the key goes on."
+                    "not be healthy. A load of it still in flight ends as a transient failure, and the key goes on."
             }
         }
     }

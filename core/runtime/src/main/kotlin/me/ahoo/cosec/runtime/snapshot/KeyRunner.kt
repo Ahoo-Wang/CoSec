@@ -33,6 +33,8 @@ internal class KeyRunner<T : Any>(
     private val context: SlotContext,
     /** The events past their own a caller's thread drains; provisional, until step 2b-ii's measurement sets it. */
     k: Int = PROVISIONAL_K,
+    /** Tests only: where a test interleaves with this key's drain. */
+    hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE,
 ) : KeySlot<T>(key, context.ticker) {
     private val family = context.families.firstOrNull { it.spec.kind == key.kind }
 
@@ -53,7 +55,7 @@ internal class KeyRunner<T : Any>(
         )
         val transitions = KeyTransitions<T>(config)
         val effects = KeyEffects(key, compiler, context, ::offer, ::published, ::dropped, ::redispatched) { offerEviction(true, null) }
-        drain = KeyDrain(key, transitions, effects, context, k, { absent -> family?.claim(this, absent) ?: false }, ::hinted)
+        drain = KeyDrain(key, transitions, effects, context, k, { absent -> family?.claim(this, absent) ?: false }, ::hinted, hooks)
     }
 
     override fun idle(): Boolean = idleHint
