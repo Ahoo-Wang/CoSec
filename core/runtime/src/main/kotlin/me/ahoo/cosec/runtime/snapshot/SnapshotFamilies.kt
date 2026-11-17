@@ -249,7 +249,6 @@ internal class SnapshotFamilies<A : Any>(
         }
 
         /** A slot with its stamp as the scan read it, once. */
-        @PublishedApi
         internal class Stamped<S>(val slot: S, val lastAccess: Long)
     }
 }

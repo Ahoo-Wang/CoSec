@@ -86,7 +86,8 @@ class SnapshotFamilyMembershipTest {
     }
 
     private companion object {
-        const val DOCUMENTS = 100_000
+        /** Many times [ABSENT]: the property, not the size; `AbsentScanBenchmark` measures 100,000. */
+        const val DOCUMENTS = 5_000
         const val ABSENT = 300
         const val ABSENT_BOUND = 4
     }
