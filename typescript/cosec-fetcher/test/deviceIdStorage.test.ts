@@ -14,6 +14,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { DeviceIdStorage, DEFAULT_COSEC_DEVICE_ID_KEY } from '../src';
 
+/** The event bus a DeviceIdStorage takes, which the tests replace with a mock. */
+type MockableEventBus = NonNullable<
+  NonNullable<ConstructorParameters<typeof DeviceIdStorage>[0]>['eventBus']
+>;
+
 // Mock Storage
 const mockStorage = {
   getItem: vi.fn(),
@@ -29,7 +34,7 @@ class MockBroadcastChannel {
   postMessage = vi.fn();
   close = vi.fn();
   onmessage = null;
-  constructor(_name: string) {}
+  constructor(readonly name: string) {}
 }
 
 vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
@@ -79,7 +84,7 @@ describe('DeviceIdStorage', () => {
 
     deviceIdStorage = new DeviceIdStorage({
       key: DEFAULT_COSEC_DEVICE_ID_KEY,
-      storage: mockStorage as any,
+      storage: mockStorage as unknown as Storage,
     });
   });
 
@@ -103,7 +108,10 @@ describe('DeviceIdStorage', () => {
     // channel and cross-contaminate each other's cached value across tabs.
     it('should derive the default event bus channel from the storage key', () => {
       serialBusChannels.length = 0;
-      new DeviceIdStorage({ key: 'my-device-id', storage: mockStorage as any });
+      new DeviceIdStorage({
+        key: 'my-device-id',
+        storage: mockStorage as unknown as Storage,
+      });
       expect(serialBusChannels).toContain('my-device-id');
       expect(serialBusChannels).not.toContain(DEFAULT_COSEC_DEVICE_ID_KEY);
     });
@@ -116,7 +124,9 @@ describe('DeviceIdStorage', () => {
         off: vi.fn(),
         destroy: vi.fn(),
       };
-      const storage = new DeviceIdStorage({ eventBus: mockEventBus as any });
+      const storage = new DeviceIdStorage({
+        eventBus: mockEventBus as unknown as MockableEventBus,
+      });
       expect(storage).toBeDefined();
       // Should use custom eventBus but default key
     });
@@ -131,8 +141,8 @@ describe('DeviceIdStorage', () => {
       };
       const customStorage = new DeviceIdStorage({
         key: 'custom-key',
-        eventBus: mockEventBus as any,
-        storage: mockStorage as any,
+        eventBus: mockEventBus as unknown as MockableEventBus,
+        storage: mockStorage as unknown as Storage,
       });
       expect(customStorage).toBeDefined();
       // Should use all custom options
