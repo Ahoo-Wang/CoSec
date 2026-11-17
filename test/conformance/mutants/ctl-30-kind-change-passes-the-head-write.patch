@@ -3,15 +3,15 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-index 70f21b4f..3f31fc58 100644
+index 12f4aa52..3e16f63c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
-@@ -130,7 +130,7 @@ internal class ReferrerIndex(
-         val kept = RoleExpansion.effective(candidate).policies.associate { it.id to it.boundary }
-         val blocked = RoleExpansion.effective(
-             base.document
--        ).policies.filter { kept[it.id] != it.boundary }.map { it.id }
-+        ).policies.filter { it.id !in kept }.map { it.id }
-             .associateWith { policy ->
-                 val referrers = referrers(key, policy) - key
-                 referrers.filterNotTo(HashSet()) { definesItself(it, policy) }
+@@ -123,7 +123,7 @@ internal class ReferrerIndex(
+         base: Head?,
+         candidate: PolicyDocument
+     ): PublishOutcome.Referenced? =
+-        ReferencedPolicies.of(key, base?.document, candidate, ::referrers, head)
++        ReferencedPolicies.of(key, base?.document, candidate, ::referrers, head).filterValues { false }
+             .takeIf { it.isNotEmpty() }?.let { PublishOutcome.Referenced(it) }
+ 
+     /**

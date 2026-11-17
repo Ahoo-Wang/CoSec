@@ -47,9 +47,8 @@ class KotlinTimeSignatureTest {
         api.unread.filterNot { it.startsWith(KotlinApi.CLASS_NOT_FOUND) }.assert()
             .describedAs("declarations reflection could not read; read them, or name why they may go unread")
             .isEmpty()
-        // Of the declarations it meant to read: internal classes are left out by design, and counting them made the
-        // check fail as internal code grew, with nothing unread.
-        read.assert().isGreaterThan(considered / 2)
+        // Every visible class and file facade it set out to read was read; what may go unread is `api.unread`'s, above.
+        read.assert().describedAs("classes and file facades read, of the $considered considered").isEqualTo(considered)
     }
 
     private val api = KotlinApi()

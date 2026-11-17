@@ -1,17 +1,17 @@
 # Rule: CTL-30
-# Mutant: the checks let a referenced policy change between a policy and a boundary
+# Mutant: the check lets a referenced policy change between a policy and a boundary
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-index 8b7ad47c..32190d2b 100644
+index 551347c8..6e3fe252 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PlatformChecks.kt
-@@ -47,7 +47,7 @@ internal object PlatformChecks {
-         findings: MutableList<Finding>,
-     ) {
-         val kept = candidate.policies.associate { it.id to it.boundary }
--        for (policy in base?.policies.orEmpty().filter { kept[it.id] != it.boundary }) {
-+        for (policy in base?.policies.orEmpty().filter { it.id !in kept }) {
-             val referrers = context.referrers(SnapshotKey.Platform, policy.id).filterNotTo(HashSet()) {
-                 definesItself(context, it, policy.id)
-             }
+@@ -53,7 +53,7 @@ internal object PlatformChecks {
+         } catch (_: DocumentCompileException) {
+             return
+         }
+-        if (referenced.isEmpty()) return
++        return
+         val kept = RoleExpansion.effective(candidate).policies.mapTo(HashSet()) { it.id }
+         for ((policy, referrers) in referenced) {
+             val what = if (policy in kept) "changes between a policy and a boundary, and is" else "is"

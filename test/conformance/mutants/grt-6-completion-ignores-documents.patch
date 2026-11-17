@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
-index cefa0c5a..66142ed1 100644
+index cefa0c5a..2253317c 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/AppListing.kt
 @@ -47,7 +47,7 @@ internal class AppListing(
@@ -11,7 +11,7 @@ index cefa0c5a..66142ed1 100644
                  val current = store.apps()
                  val list = current?.value ?: AppList.EMPTY
 -                val missing = missingApps(documents, list.entries)
-+                val missing = emptySet<String>()
++                val missing = missingApps(documents, list.entries).filterTo(HashSet()) { false }
                  if (missing.isNotEmpty()) {
                      warn(
                          "The platform's first revision found app documents $missing the app list does not name; it " +

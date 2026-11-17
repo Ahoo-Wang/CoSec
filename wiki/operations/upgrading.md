@@ -1383,6 +1383,13 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   closed (`503`), and the control plane refuses a change that makes one. Find them before upgrading, in the documents
   the control plane lists (`"http:HEAD"`, or an `"http:` action with a lower-case letter after the colon), and publish
   them again with `http:GET`, or the method in upper case.
+  For a 7.x conversion, `cosec-migrate convert` reports once, whatever the statements say, that a HEAD request is now
+  decided as GET (`PIP-18`: permitted wherever GET is, denied wherever GET is); it reads the country prefix of 7.x's
+  `ipRegion` as `ext.ip2region.country`, which the platform document then declares (every host that enforces such
+  statements needs `cosec-ip2region`); and a part only 7.x's request appenders filled (`ipRegion`, an application's own
+  attributes) is always absent in 8.0, so a condition on it translates only where it narrows an ALLOW (recorded as
+  `NOT-IN-8.0`); every other case is refused (`MIG-1`), since it would widen an ALLOW, deny every request in scope, or
+  stop a DENY matching what 7.x denied.
 - **`cosec-migrate cocache8` is removed.** It moved 8.0.0-alpha.2's data from CoCache 6 to CoCache 8
   ([Data written through CoCache 6](#data-written-through-cocache-6)): a deployment that still holds such data moves it
   with the `cosec-migrate` of 8.0.0-alpha.4 before upgrading. While `<p>:meta:cocache8` is there, `publish` refuses and
@@ -1641,7 +1648,8 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   names a platform boundary is `REFERENCES` too: such a binding never granted, every request it applied to was `503`,
   and a document that holds one has to remove it before it publishes again. An id a change puts holds no `/` (`V2`,
   `422`): a rule ending in `*` did not reach such an entry. A permission policy's `perm:<app>/<id>` may; entries that
-  already hold one can stay or be removed.
+  already hold one can stay or be removed. An app change that removes a policy tenants bind, or one its short forms
+  derive, is `REFERENCES` when it is checked: it used to reach `CHECKED` and fail only when it was published (`CTL-30`).
 - **Removing a DENY from the platform or an app document needs a second person** (RFC 0007 §7.4.4, `CTL-31`). Until
   now, a platform principal without `cosec:approve` could publish alone a change that only removed entries. A removal
   that takes away a DENY, a policy that holds one or a binding whose policy holds one (also through a role removed or put
@@ -1769,6 +1777,88 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
     notice. `SuspendingHandlerHolderInterceptor` is `@InternalCoSecApi`: the starter registers it.
 - **`cosec-dependencies` no longer manages Guava's version**, and no CoSec module brings Guava. An application that
   takes Guava's version from CoSec's BOM declares it itself.
+
+- **`ChangeState.SHADOWED` is removed.** No change was ever in that state: a closed shadow window is not a state, it
+  is the change's `shadow` (`ShadowState.closed`). Code that names `ChangeState.SHADOWED` (a `when`, a filter on
+  states, a test) stops compiling: delete the branch. A stored change request cannot carry it, and a `"state":"SHADOWED"`
+  would not decode; no version wrote one. The states are `DRAFT`, `CHECKED`, `SHADOWING`, `AWAITING_APPROVAL`, `READY`,
+  `CONFLICTED`, `PUBLISHED`, `REJECTED`, `ABANDONED` and `EXPIRED`. The change event kind `SHADOWED` ("the window
+  closed") stays, with its log line.
+- **A family of documents holds at most its bound plus a stated slack** (`SNP-14`). Under a burst of cold loads a family
+  could hold about its `cosec.authorization.snapshot.max-apps` or `max-tenants` plus the 4,096 evictions the
+  housekeeping thread had queued. It now holds at most twice the bound and never more than 4,096 above it, plus the
+  documents being loaded at that moment; an install that finds its family over that evicts on the installing thread
+  before it answers. Nothing needs configuring and no default changes; a memory budget made for the old worst case is
+  safe. [The property](./configuration.md#snapshot) states the number.
+- **`Retry-After` and `RateLimit-Reset` round up, and a report interval under a millisecond fails startup.** A `429`
+  said `1` for a window with 1.75 s left, so a client that waited as told met the same window; both headers are now the
+  remaining time in whole seconds, rounded up, at least `1` (`1 ms` and `1000 ms` are `1`, `1001 ms` is `2`).
+  Nothing to do: clients wait up to a second longer, and `RateLimit-Remaining` and `-Limit` are unchanged. The starter
+  now refuses `cosec.authorization.shadow.report-interval` below `1ms` (`cosec.authorization.shadow.report-interval is
+  at least one millisecond, not …`), where it used to start a reporter loop that never suspended: set a value of `1ms`
+  or more (the default is `10s`).
+- **`cosec-migrate bootstrap` before this fix dropped the platform tenant's roles.** It rebuilt the platform tenant's
+  document (`tenant:(platform)`) from its policies, bindings and rate limits only, so the revision of kind `BOOTSTRAP`
+  it published had no `roles`. A migration that converted 7.x roles into that document and then ran `bootstrap` (with
+  or without `--force`) lost them, and the members of those roles were denied afterwards: it fails closed, never
+  open. It now keeps everything else the document holds. If you ran an earlier `bootstrap` after converting roles, check
+  the document, with the control API as the administrator: find the revision whose `provenance.kind` is `BOOTSTRAP`
+  (`GET /documents/tenant:(platform)/revisions`, then `GET …/revisions/<n>`), and read
+  `GET /documents/tenant:(platform)/diff?from=<n-1>&to=<n>`: a non-empty `roles.removed` is what the bootstrap dropped.
+  Put those roles back with a change (`putRole` operations with the definitions from revision `<n-1>`). A deployment
+  that bootstrapped before converting roles, or whose platform tenant has no roles, has nothing to do.
+- **`ControlStore` gains `stagedCandidate`, and `putCandidate` writes over a digest.** A candidate is written only over
+  the one the writer read, so a late write by a change that was preempted cannot replace the candidate of the change
+  that took the slot (#1235). `suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>?` is new, and
+  `putCandidate(key, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean` takes the digest it expects
+  (`null`: only if there is none) and answers `false` when the candidate changed in between. A `ControlStore` of your
+  own implements both (`CoCacheControlStore` and `InMemoryControlStore` do); one whose write has an unknown outcome
+  reads back instead of writing again. Nothing to do for the starter's Redis store.
+- **The `cosec-migrate` command line is stricter and takes `--name=value`.** `--name value` and `--name=value` both
+  work; a value that starts with `--` is a usage error (the next option, with its value forgotten, used to be taken as
+  the value): write `--name=--value` for such a value. A flag given twice is `--flag is given twice.`, a flag given a
+  value is `--flag takes no value.`, and a repeated or unknown option is a usage error. A
+  script that relied on an option swallowing the next one fails now: fix its arguments.
+- **A control API path parameter is percent-decoded once.** `GET /documents/tenant:acme%20west` used to read the key
+  `tenant:acme%20west`, a document that is not the `tenant:acme west` the store and the bodies use; the path is now
+  split into segments first and each parameter decoded once (`+` stays `+`, an encoded `/` is part of the value and
+  never a second segment, `tenant%3Aacme` names `tenant:acme`, and the route's own words are matched as written). A
+  client that percent-encoded ids twice, or sent an encoded id and relied on it reaching the control plane as written,
+  names another document now: encode once.
+- **An access review lists a break-glass binding.** `POST /analyze` counted a break-glass binding (its policy,
+  `cosec:root`, is defined by no document) among the `opaque` ones. It is now an entry of `allows`, an allow of
+  `cosec:root` from the engine's own statement, with `breakGlass: true`, `expiresAt` and `conditional: true`, since the
+  review does not evaluate the window; `conditional` now also marks any binding that has a window. A client that
+  parses the review sees fewer `opaque` and new `allows` of `cosec:root` in the platform tenant's review; a tool that
+  treats every allow as permanent should read `conditional` and `expiresAt`.
+- **A generated route map takes the server prefix per operation, and refuses what it cannot place.** The prefix comes
+  from the operation's `servers`, else its path item's, else the document's, and a server URL is read by its components:
+  `//example.test/v1`, `https://example.test:8443/v1` and `/v1` all give `/v1`. A document that generated a route map
+  before may be refused now, naming the operation (`GET /orders: …`): servers of one operation with different paths, a
+  server variable in the path, a server path that does not start with `/` (`v1`, `example.test:8080/v1`, `{baseUrl}/v1`:
+  relative to where the document was fetched from, which the generator does not know) or a dot segment. Generate the
+  route map again; give the refused document absolute server URLs or paths that start with `/`.
+- **A stored document that does not compile is named, logged and counted.** `Cause` in `cosec-model` gains
+  `DocumentInvalid(document, revision, error)`, so an application that matches `Cause` exhaustively with `when` stops
+  compiling: add the branch. The decision is still `503` (the instance cannot decide); `SourceUnavailable` now means
+  the store could not be read. The instance logs one `ERROR` line per revision, digest and inputs, and one `INFO` line
+  when it compiles again; its health names how many documents do not compile and the first ten, with their revisions.
+  Nothing to do beyond the `when`; alert on that log line where you alerted on silence.
+- **A request never logs a dropped decision event.** When a BEST_EFFORT listener's queue is full or closed, the request
+  only counts the drop; a reporter logs, off the request's thread, one `WARN` line per listener and interval
+  (`Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`, or `is
+  closed`). A log alert that matched one line per dropped event now sees a count per interval.
+- **`TraceContext` gains `traceState`.** The parent's W3C `tracestate`, opaque, `""` for none; the three-argument
+  constructor stays. The `cosec.authorize` span inherits it, where it used to start from the default state. It reaches
+  every `DecisionListener` in the event and is vendor data: do not log it. No audit record, Kafka record or metric tag
+  carries it.
+- **`cosec-testkit`'s signatures grow.** `PermittedRequest.withToken(token, verifier, revocations, headers)` takes the
+  request's headers (default empty); a header that carries a credential (`Authorization`, `X-API-Key`,
+  `CoSec-Identity`) is refused, and two different `CoSec-Device-Id` values fail the request as the pipeline does.
+  `PipelineFixture.of` and `load` take `routes` and `listeners` (defaults: none), and `AttributeRequests` builds an
+  `AttributeRequest` for a provider's tests. The kit's exception takes a cause, and refuses a field given twice in what
+  it reads and two files that hold one document. Source compatible (defaults), binary incompatible: recompile your
+  tests against this version.
 
 ### From 8.0.0-alpha.3 {#from-8-0-0-alpha-3}
 
