@@ -64,8 +64,11 @@ import java.time.Duration
  * (the application's functional routes and the control API are served there, behind CoSec). On WebMvc the filter
  * registration never reaches the management server, and the child serves actuator's endpoints and nothing of the
  * application's (a controller, a functional route and the control API are Spring's 404). On a gateway host Spring
- * Cloud Gateway itself leaves a request on a different management port alone, so the gateway's routes are not served
- * there; the control API is, behind the pipeline's filter limited to its base path. **A Spring Boot upgrade that
+ * Cloud Gateway itself leaves a request on a different, fixed management port alone, so the gateway's routes are not
+ * served there; the control API is, behind the pipeline's filter limited to its base path. On a random port (`0`) the
+ * gateway cannot tell the port apart and serves its routes there, under its filter: pinned too. A route a statement
+ * permits to anyone tells "served behind CoSec" from "not served": the premise of `STA-4` is that WebFlux's management
+ * child serves the application's functional routes. **A Spring Boot upgrade that
  * changes what a child context inherits shows up here first**: a cell that moves is either an application route that
  * became reachable outside CoSec, or a pipeline that no longer fronts the management server.
  */
@@ -89,8 +92,8 @@ class ManagementPortTest {
         cells.before.app.assert().isEqualTo(GATED_BEFORE)
         cells.after.app.assert().isEqualTo(GATED_AFTER)
         // Spring's own answers: liveness is up, readiness follows the snapshot (503, then 200).
-        cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 404, 404))
-        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 404, 404))
+        cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 404, 404, 404))
+        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 404, 404, 404))
         cells.managementController.assert().isEqualTo(404)
     }
 
@@ -99,12 +102,36 @@ class ManagementPortTest {
         val cells = run(Stack.GATEWAY, separate = true)
         // The application port: the gateway's route is CoSec's, and so is the control API. Actuator is not served there
         // (404): the gateway's filter fronts its routes, not the probes of a host that has a management port.
-        cells.before.app.assert().isEqualTo(Probes(404, 404, 503, 503, 503))
-        cells.after.app.assert().isEqualTo(Probes(404, 404, 200, 401, 200))
+        cells.before.app.assert().isEqualTo(Probes(404, 404, 503, 503, 503, 503))
+        cells.after.app.assert().isEqualTo(Probes(404, 404, 401, 200, 401, 200))
         // The management port: actuator's endpoints are Spring's, the gateway's route is not served, and the control
         // API, which the pipeline's filter limited to its base path fronts, is CoSec's.
-        cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 503, 503))
-        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 401, 200))
+        cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 404, 503, 503))
+        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 404, 401, 200))
+    }
+
+    @Test
+    fun `a gateway on a random management port serves its routes there, under the gateway's filter`() {
+        // Spring Cloud Gateway compares the request's port with the configured management port, and port 0 never
+        // equals a real one: it cannot tell the management port apart, and serves its routes there. They are CoSec's.
+        val cells = run(Stack.GATEWAY, separate = true, randomManagementPort = true)
+        cells.before.app.assert().isEqualTo(Probes(404, 404, 503, 503, 503, 503))
+        cells.after.app.assert().isEqualTo(Probes(404, 404, 401, 200, 401, 200))
+        cells.before.management.assert().isEqualTo(Probes(200, 503, 503, 503, 503, 503))
+        cells.after.management.assert().isEqualTo(Probes(200, 200, 401, 200, 401, 200))
+    }
+
+    @Test
+    fun `WebFlux serves the application's functional routes on its management port, WebMvc does not`() {
+        val reactive = run(Stack.REACTIVE, separate = true)
+        val servlet = run(Stack.SERVLET, separate = true)
+        // A route a statement permits to anyone: served on both application ports, and on WebFlux's management port
+        // too (behind the pipeline). That Spring Boot's WebFlux management child inherits the application's routes is
+        // what the rule rests on: if this cell moves, the premise changed.
+        reactive.after.app.openRoute.assert().isEqualTo(200)
+        servlet.after.app.openRoute.assert().isEqualTo(200)
+        reactive.after.management.openRoute.assert().isEqualTo(200)
+        servlet.after.management.openRoute.assert().isEqualTo(404)
     }
 
     @Test
@@ -124,11 +151,11 @@ class ManagementPortTest {
         }
     }
 
-    private fun run(stack: Stack, separate: Boolean): Cells {
+    private fun run(stack: Stack, separate: Boolean, randomManagementPort: Boolean = false): Cells {
         // A gateway's route leads to a real backend, so that "permitted" is observable: a proxied answer.
         val backend = if (stack.gateway) backend() else null
         try {
-            return run(stack, separate, backend?.address?.port ?: 0)
+            return run(stack, separate, backend?.address?.port ?: 0, randomManagementPort)
         } finally {
             backend?.stop(0)
         }
@@ -142,8 +169,8 @@ class ManagementPortTest {
         start()
     }
 
-    private fun run(stack: Stack, separate: Boolean, backendPort: Int): Cells {
-        val context = start(stack, separate, backendPort)
+    private fun run(stack: Stack, separate: Boolean, backendPort: Int, randomManagementPort: Boolean): Cells {
+        val context = start(stack, separate, backendPort, randomManagementPort)
         context.use {
             val app = context.environment.getRequiredProperty("local.server.port").toInt()
             val management = if (separate) {
@@ -155,12 +182,12 @@ class ManagementPortTest {
             }
             val token = context.getBean(TokenConverter::class.java)
                 .toToken(TokenSubject("plato", "cosec-control", tenant = "(platform)")).accessToken
-            val before = Observation(probes(app, stack.route, token), probes(management, stack.route, token))
+            val before = Observation(probes(app, stack, token), probes(management, stack, token))
             publish(context)
             // The platform document is installed once the application's own public route answers (a gateway has none:
             // once it stops answering 503).
             val deadline = System.nanoTime() + Duration.ofSeconds(30).toNanos()
-            while (if (stack.gateway) get(app, stack.route) == 503 else get(app, "/hello") != 200) {
+            while (if (stack.gateway) get(app, stack.open) == 503 else get(app, "/hello") != 200) {
                 check(System.nanoTime() < deadline) { "The platform document was not installed on ${stack.name}." }
                 Thread.sleep(50)
             }
@@ -169,7 +196,7 @@ class ManagementPortTest {
                 check(System.nanoTime() < deadline) { "Readiness did not follow the document on ${stack.name}." }
                 Thread.sleep(50)
             }
-            val after = Observation(probes(app, stack.route, token), probes(management, stack.route, token))
+            val after = Observation(probes(app, stack, token), probes(management, stack, token))
             return Cells(
                 Phase(before.app, before.management),
                 Phase(after.app, after.management),
@@ -179,7 +206,12 @@ class ManagementPortTest {
     }
 
     /** A real application of [stack]: Spring Boot's own server and management child, CoSec's starter, in-memory CoCache. */
-    private fun start(stack: Stack, separate: Boolean, backendPort: Int): ConfigurableApplicationContext {
+    private fun start(
+        stack: Stack,
+        separate: Boolean,
+        backendPort: Int,
+        randomManagementPort: Boolean,
+    ): ConfigurableApplicationContext {
         val hidden = buildList {
             if (!stack.gateway) add(GATEWAY_GLOBAL_FILTER)
             // The modules the test classpath carries for other tests; none is wanted here.
@@ -207,13 +239,16 @@ class ManagementPortTest {
                 add("spring.cloud.gateway.server.webflux.routes[0].id=token")
                 add("spring.cloud.gateway.server.webflux.routes[0].uri=http://localhost:$backendPort")
                 add("spring.cloud.gateway.server.webflux.routes[0].predicates[0]=Path=/token")
+                add("spring.cloud.gateway.server.webflux.routes[1].id=closed")
+                add("spring.cloud.gateway.server.webflux.routes[1].uri=http://localhost:$backendPort")
+                add("spring.cloud.gateway.server.webflux.routes[1].predicates[0]=Path=/closed")
             } else {
                 // Spring Cloud Gateway is on the test classpath for other tests: none of its configurations is wanted.
                 add("spring.autoconfigure.exclude=" + gatewayConfigurations().joinToString(","))
             }
             // A port Spring Cloud Gateway can compare with: it leaves a request on a management port that differs from
             // the application's alone, which it cannot do for the random port 0.
-            if (separate) add("management.server.port=${freePort()}")
+            if (separate) add("management.server.port=${if (randomManagementPort) 0 else freePort()}")
         }
         return SpringApplicationBuilder(if (stack.gateway) GatewayApplication::class.java else Application::class.java)
             .web(if (stack.servlet) WebApplicationType.SERVLET else WebApplicationType.REACTIVE)
@@ -241,10 +276,11 @@ class ManagementPortTest {
         }
     }
 
-    private fun probes(port: Int, route: String, token: String): Probes = Probes(
+    private fun probes(port: Int, stack: Stack, token: String): Probes = Probes(
         get(port, "/actuator/health/liveness"),
         get(port, "/actuator/health/readiness"),
-        get(port, route),
+        get(port, stack.closed),
+        get(port, stack.open),
         get(port, "$CONTROL/documents/platform"),
         get(port, "$CONTROL/documents/platform", token),
     )
@@ -260,7 +296,10 @@ class ManagementPortTest {
     private data class Probes(
         val liveness: Int,
         val readiness: Int,
-        val functionalRoute: Int,
+        /** A route of the application no statement permits. */
+        val closedRoute: Int,
+        /** A route of the application a statement permits to anyone. */
+        val openRoute: Int,
         val controlApi: Int,
         val controlApiWithToken: Int,
     )
@@ -271,10 +310,16 @@ class ManagementPortTest {
 
     private data class Cells(val before: Phase, val after: Phase, val managementController: Int)
 
-    private enum class Stack(val servlet: Boolean, val gateway: Boolean = false, val route: String = "/orders/1") {
+    /** [closed] is a route of the application no statement permits, [open] one the document permits to anyone. */
+    private enum class Stack(
+        val servlet: Boolean,
+        val gateway: Boolean = false,
+        val closed: String = "/orders/1",
+        val open: String = "/public/1",
+    ) {
         REACTIVE(false),
         SERVLET(true),
-        GATEWAY(false, gateway = true, route = "/token"),
+        GATEWAY(false, gateway = true, closed = "/closed", open = "/token"),
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -308,6 +353,9 @@ class ManagementPortTest {
             org.springframework.web.reactive.function.server.RouterFunctions.route()
                 .GET("/orders/{id}") {
                     org.springframework.web.reactive.function.server.ServerResponse.ok().bodyValue("fn-order")
+                }
+                .GET("/public/{id}") {
+                    org.springframework.web.reactive.function.server.ServerResponse.ok().bodyValue("fn-public")
                 }.build()
     }
 
@@ -322,6 +370,9 @@ class ManagementPortTest {
             org.springframework.web.servlet.function.RouterFunctions.route()
                 .GET("/orders/{id}") {
                     org.springframework.web.servlet.function.ServerResponse.ok().body("fn-order")
+                }
+                .GET("/public/{id}") {
+                    org.springframework.web.servlet.function.ServerResponse.ok().body("fn-public")
                 }.build()
     }
 
@@ -334,7 +385,7 @@ class ManagementPortTest {
          * platform tenant is the platform administrator. Nothing else is permitted.
          */
         const val PLATFORM = """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z",""" +
-            """"policies":[{"id":"public","statements":[{"effect":"allow","action":"http:GET","resource":["http:path:/hello","http:path:/token"]}]},""" +
+            """"policies":[{"id":"public","statements":[{"effect":"allow","action":"http:GET","resource":["http:path:/hello","http:path:/token","http:path:/public/**"]}]},""" +
             """{"id":"members","statements":[{"effect":"allow","action":"http:*","resource":"http:path:/cosec/control/**",""" +
             """"condition":{"eq":["subject.authenticated",true]}}]}],""" +
             """"bindings":[{"id":"public","subject":"*","app":"*","space":"*","policy":"public"},""" +
@@ -343,9 +394,9 @@ class ManagementPortTest {
             """"policy":"cosec:platform-admin"}]}"""
 
         /** CoSec's answer before a platform document exists: every request, the probes included, is 503. */
-        val GATED_BEFORE = Probes(503, 503, 503, 503, 503)
+        val GATED_BEFORE = Probes(503, 503, 503, 503, 503, 503)
 
         /** After it: anonymous callers are 401 wherever no statement permits the path; a platform token reaches the control API. */
-        val GATED_AFTER = Probes(401, 401, 401, 401, 200)
+        val GATED_AFTER = Probes(401, 401, 401, 200, 401, 200)
     }
 }

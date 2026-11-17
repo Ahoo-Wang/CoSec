@@ -141,6 +141,8 @@ object GuardAllowlist {
             "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there",
             "spring-boot:ManagementPortTest#a gateway leaves its management server outside CoSec too, and gates its own routes and the control API there as on the application port",
             "spring-boot:ManagementPortTest#the two stacks answer alike on the application port",
+            "spring-boot:ManagementPortTest#a gateway on a random management port serves its routes there, under the gateway's filter",
+            "spring-boot:ManagementPortTest#WebFlux serves the application's functional routes on its management port, WebMvc does not",
             "spring-boot:ManagementPortTest#with one port nothing changes, the probes are requests like any other",
             "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on Spring MVC",
             "spring-boot:RewritingFilterOrderTest#a hidden DELETE is authorized as the DELETE it is on WebFlux",

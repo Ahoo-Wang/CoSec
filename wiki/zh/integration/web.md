@@ -357,7 +357,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
 网关过滤器授权的是网关的路由，因此网关自己的 actuator 端点不受 CoSec 管辖。它们暴露在应用端口上时，任何能访问网关的人都能访问；`gateway` 端点甚至能修改路由，任何人都可以把用户请求的路由连同他们的身份指向自己选择的主机。所以，按策略决策的网关宿主在应用端口上通过 HTTP 暴露了 `health` 以外的 actuator 端点时（`management.server.port` 未设置，或与 `server.port` 相同），无法启动（`STA-2`；[故障排查](../operations/troubleshooting.md#startup-fails-on-an-exposed-actuator-endpoint)）。
 
-- 用 `management.server.port` 把 actuator 放到单独的端口上，并置于网络策略之后；在那里可以暴露任何端点。
+- 用 `management.server.port` 把 actuator 放到单独的端口上，并置于网络策略之后；在那里可以暴露任何端点。给这个端口一个确定的号码：用随机端口（`0`）时，Spring Cloud Gateway 分辨不出管理端口，会在那里也提供它的路由，由 CoSec 像在应用端口上一样授权。
 - 或者只暴露 `health`（`management.endpoints.web.exposure.include`，也是 Spring Boot 的默认值）。
 - 或者在 `cosec.gateway.unprotected-endpoints` 中列出应用端口上已由其他手段保护的端点。它从不接受 `gateway`。
 

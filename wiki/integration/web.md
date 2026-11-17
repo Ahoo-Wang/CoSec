@@ -515,7 +515,8 @@ HTTP on its application port: `management.server.port` unset, or the same as `se
 [troubleshooting](../operations/troubleshooting.md#startup-fails-on-an-exposed-actuator-endpoint)).
 
 - Serve actuator on its own port, behind a network policy, with `management.server.port`; there any endpoint may be
-  exposed.
+  exposed. Give the port a number: with a random one (`0`) Spring Cloud Gateway cannot tell the management port apart and
+  serves its routes there too, authorized by CoSec as on the application port.
 - Or expose only `health` (`management.endpoints.web.exposure.include`, Spring Boot's default).
 - Or list in `cosec.gateway.unprotected-endpoints` the endpoints something else protects on the application port.
   It never accepts `gateway`.
