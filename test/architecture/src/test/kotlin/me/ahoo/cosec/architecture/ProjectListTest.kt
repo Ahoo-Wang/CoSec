@@ -92,7 +92,7 @@ class ProjectListTest {
         block.assert().isNotNull()
         val options = Regex("""(?m)^\s+- (.+)$""").findAll(block!!.groupValues[1]).map { it.groupValues[1].trim() }
         // A TypeScript package is offered by its name: typescript/AGENTS.md lists them.
-        val expected = PROJECTS.filterNot { it in UNREPORTED }.map(::artifactOf) + "cosec-fetcher" + "Not sure"
+        val expected = PROJECTS.filterNot { it in UNREPORTED }.map(::artifactOf) + "cosec-fetcher" + "cosec-react" + "Not sure"
         options.toList().assert().containsExactlyInAnyOrderElementsOf(expected)
     }
 

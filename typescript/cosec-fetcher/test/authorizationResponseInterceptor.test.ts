@@ -35,6 +35,7 @@ describe('AuthorizationResponseInterceptor', () => {
 
   beforeEach(() => {
     mockFetcher = {
+      urlBuilder: { baseURL: 'https://api.example.com' },
       interceptors: {
         request: { intercept: vi.fn() },
         response: new InterceptorRegistry(),
@@ -112,6 +113,9 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
+      fetcher: mockFetcher,
+      attributes: new Map(),
     } as unknown as FetchExchange;
 
     await interceptor.intercept(exchange);
@@ -125,7 +129,9 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
+      attributes: new Map(),
     } as unknown as FetchExchange;
 
     mockTokenStorage.get = vi.fn().mockReturnValue({
@@ -151,7 +157,9 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
+      attributes: new Map(),
     } as unknown as FetchExchange;
 
     const refreshError = Object.assign(new Error('Refresh failed'), {
@@ -182,6 +190,7 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
       attributes: new Map(),
     } as unknown as FetchExchange;
@@ -214,7 +223,9 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
+      attributes: new Map(),
     } as unknown as FetchExchange;
 
     mockTokenStorage.get = vi.fn().mockReturnValue(null);
@@ -255,6 +266,7 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
       attributes: new Map(),
     } as unknown as FetchExchange;

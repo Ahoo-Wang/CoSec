@@ -18,6 +18,11 @@ import {
   isAbsoluteURL,
   URL_RESOLVE_INTERCEPTOR_ORDER,
 } from '@ahoo-wang/fetcher';
+import {
+  isTrustedRequest,
+  type RequestTrust,
+  type RequestTrustCapable,
+} from './requestTrust.js';
 import type { TokenStorage } from './tokenStorage.js';
 
 const TENANT_ID_PATH_KEY = 'tenantId';
@@ -26,7 +31,7 @@ const OWNER_ID_PATH_KEY = 'ownerId';
 /**
  * Configuration options for resource attribution
  */
-export interface ResourceAttributionOptions {
+export interface ResourceAttributionOptions extends RequestTrustCapable {
   /**
    * The path parameter key used for tenant ID in URL templates
    */
@@ -69,6 +74,8 @@ export class ResourceAttributionRequestInterceptor implements RequestInterceptor
   readonly ownerIdPathKey: string;
   /** @internal */
   readonly tokenStorage: TokenStorage;
+  /** @internal */
+  readonly isTrusted?: RequestTrust;
 
   /**
    * Creates a new ResourceAttributionRequestInterceptor
@@ -78,10 +85,12 @@ export class ResourceAttributionRequestInterceptor implements RequestInterceptor
     tenantId = TENANT_ID_PATH_KEY,
     ownerId = OWNER_ID_PATH_KEY,
     tokenStorage,
+    isTrusted,
   }: ResourceAttributionOptions) {
     this.tenantIdPathKey = tenantId;
     this.ownerIdPathKey = ownerId;
     this.tokenStorage = tokenStorage;
+    this.isTrusted = isTrusted;
   }
 
   /**
@@ -90,6 +99,11 @@ export class ResourceAttributionRequestInterceptor implements RequestInterceptor
    * @param exchange - The fetch exchange containing the request information
    */
   intercept(exchange: FetchExchange): void {
+    // The tenant and the owner come from the token: they do not go into the
+    // URL of an origin the request trust policy keeps the token from.
+    if (!isTrustedRequest(exchange, this.isTrusted)) {
+      return;
+    }
     const currentToken = this.tokenStorage.get();
     if (!currentToken) {
       return;
