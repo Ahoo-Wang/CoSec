@@ -30,6 +30,7 @@ import java.time.Duration
 import java.util.concurrent.AbstractExecutorService
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.RejectedExecutionException
@@ -143,7 +144,11 @@ class KeyRunnerFailureTest {
             compileExecutor = null
         ).use { source ->
             source.load().join()
-            (source.load("app-a").join().app is DocumentState.Failed).assert().isTrue()
+            // The compile waits until the request's drain has returned, so the pool takes its own Compiled.
+            val gate = CountDownLatch(1).also { compiler.gate = it }
+            val app = source.load("app-a")
+            gate.countDown()
+            (app.join().app is DocumentState.Failed).assert().isTrue()
             awaitCondition { uncaught.isNotEmpty() }
             uncaught.single().first.assert().startsWith("cosec-snapshot-compile")
         }

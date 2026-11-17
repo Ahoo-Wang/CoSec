@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CopyOnWriteArrayList
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -105,7 +106,12 @@ class KeyRunnerTest {
         Thread.setDefaultUncaughtExceptionHandler { thread, error -> uncaught += thread.name to error }
         try {
             runners(throwingOnce(APP_A) { StackOverflowError("meter") }, compileExecutor = null).use { source ->
-                source.load("app-a").join().appCompiled.revision.assert().isEqualTo(1L)
+                source.load().join()
+                // The compile waits until the request's drain has returned, so the pool takes its own Compiled.
+                val gate = CountDownLatch(1).also { compiler.gate = it }
+                val app = source.load("app-a")
+                gate.countDown()
+                app.join().appCompiled.revision.assert().isEqualTo(1L)
                 awaitCondition { uncaught.isNotEmpty() }
                 val (thread, error) = uncaught.single()
                 thread.assert().startsWith("cosec-snapshot-compile")
