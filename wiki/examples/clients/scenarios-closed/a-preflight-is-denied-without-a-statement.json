@@ -1,0 +1,16 @@
+{
+  "description": "No statement lets an anonymous caller do OPTIONS: a preflight is 401, and a browser blocks the real request (a CORS filter before CoSec answers it instead).",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:OPTIONS",
+    "resource": {
+      "type": "http",
+      "id": "/orders/1"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

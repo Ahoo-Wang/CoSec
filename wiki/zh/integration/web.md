@@ -281,6 +281,8 @@ CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追�
 
 ## CORS {#cors}
 
+客户端一侧要做什么（允许哪些请求头、暴露哪些响应头）见[构建客户端](./clients.md#cors)。
+
 浏览器发送 CORS 预检请求时不带凭证，因此授权会以 `401` 回应它们。使用 WebFlux 时，注册 `OrderedCorsWebFilter`；它的顺序为 `999`，正好在 `PipelineWebFilter` 之前，自己回应预检请求：
 
 ```kotlin

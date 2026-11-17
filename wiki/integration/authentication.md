@@ -293,7 +293,10 @@ A client whose access token expired sends both tokens back. `TokenVerifier.refre
 
 A failed check throws a `TokenVerificationException`; a refresh token that was issued with another access token
 throws its subclass `RefreshTokenMismatchException`. Refreshing a [delegation token](#tokens) (one with an `act` claim)
-fails too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint.
+fails too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint. A refresh carries the access
+token that expired, so a caller without a token must be able to reach the route you give it, or the refresh is itself
+`401 token-expired`: [Building a client](./clients.md#what-your-application-serves) shows the statement and what a
+client does on each answer.
 
 `RefreshTokenAuthentication` refreshes as an `Authentication`, so with it declared as a bean, a refresh is a login
 with credentials that implement `RefreshTokenCredentials`. It verifies the pair on the caller's thread, which is pure

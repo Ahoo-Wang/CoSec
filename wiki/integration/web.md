@@ -400,6 +400,8 @@ To add your own, declare an `AttributeProvider` bean ([Extending CoSec](../archi
 
 ## CORS
 
+A client's side of this (which headers to allow and expose) is in [Building a client](./clients.md#cors).
+
 Browsers send CORS preflight requests without credentials, so authorization would answer them `401`. With
 WebFlux, register `OrderedCorsWebFilter`; it runs at order `999`, just before `PipelineWebFilter`, and answers
 preflights itself:
