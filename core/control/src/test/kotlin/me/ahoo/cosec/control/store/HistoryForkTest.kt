@@ -1,0 +1,217 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
+package me.ahoo.cosec.control.store
+
+import ch.qos.logback.classic.Level
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.store.StoreFixtures.ACME
+import me.ahoo.cosec.control.store.StoreFixtures.candidate
+import me.ahoo.cosec.control.store.StoreFixtures.policy
+import me.ahoo.cosec.control.store.StoreFixtures.publication
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
+import org.slf4j.LoggerFactory
+import java.time.Duration
+import java.util.concurrent.atomic.AtomicInteger
+
+/**
+ * #1536: the head is the authority. After the head moved back and a revision number was reused, the history is the
+ * head's chain (digest by digest), never the old branch's entry of the same number; the old branch's records are
+ * left to reclamation, and nothing below the retention floor comes back (#1265). A record read is counted, so what the
+ * ordinary path costs is pinned too.
+ */
+class HistoryForkTest {
+    private val clock = MutableClock()
+    private val memory = InMemoryControlStore(clock)
+    private val retention = RetentionPolicy(maxCount = 2, minAge = Duration.ofDays(1))
+
+    /** Fails one index write on request, counts record reads, and runs one hook right after a record read. */
+    private val store = object : ControlStore by memory {
+        /** Fails the next write of an index that lists revision 2 with a digest other than this one. */
+        var failIndexWithRevisionTwoNot: SnapshotDigest? = null
+        val recordReads = AtomicInteger()
+        var afterRecordRead: (suspend () -> Unit)? = null
+        var beforeIndexWrite: (suspend () -> Unit)? = null
+
+        override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+            beforeIndexWrite?.let { hook ->
+                beforeIndexWrite = null
+                hook()
+            }
+            val old = failIndexWithRevisionTwoNot
+            if (old != null && index.entries.any { it.revision == 2L && it.digest != old }) {
+                failIndexWithRevisionTwoNot = null
+                error("the index write failed")
+            }
+            return memory.putIndex(key, expected, index)
+        }
+
+        override suspend fun record(key: SnapshotKey, digest: SnapshotDigest): SnapshotDocument? {
+            recordReads.incrementAndGet()
+            val read = memory.record(key, digest)
+            afterRecordRead?.let { hook ->
+                afterRecordRead = null
+                hook()
+            }
+            return read
+        }
+    }
+    private val revisions = Revisions(store, clock, retention)
+    private val appender = ListAppender<ILoggingEvent>().apply { start() }
+    private val root = LoggerFactory.getLogger(Logger.ROOT_LOGGER_NAME) as Logger
+
+    @BeforeEach
+    fun capture() {
+        root.addAppender(appender)
+    }
+
+    @AfterEach
+    fun release() {
+        root.detachAppender(appender)
+    }
+
+    private suspend fun publish(policyId: String): SnapshotDigest {
+        clock.now = clock.now.plus(Duration.ofHours(1))
+        val outcome = revisions.publish(
+            ACME,
+            revisions.head(ACME),
+            candidate(ACME, listOf(policy(policyId))),
+            publication(),
+        )
+        return (outcome as PublishOutcome.Published).digest
+    }
+
+    private suspend fun policiesAt(revision: Long): List<String> =
+        revisions.revision(ACME, revision)!!.policies.map { it.id.value }
+
+    /** Revisions 1 and 2 (`old-branch`), then the head restored to revision 1 with the index and records kept. */
+    private suspend fun headMovedBack(): SnapshotDigest {
+        val first = publish("base")
+        val old = publish("old-branch")
+        val restored = memory.record(ACME, first)!!
+        memory.putHead(ACME, old, restored).assert().isInstanceOf(HeadWrite.Written::class.java)
+        return old
+    }
+
+    private fun warnings() = appender.list.filter { it.level == Level.WARN }.map { it.formattedMessage }
+
+    @Test
+    fun `history repairs the reused revision after the index write failed`() = runBlocking<Unit> {
+        val old = headMovedBack()
+        store.failIndexWithRevisionTwoNot = old
+        val new = publish("new-branch")
+
+        revisions.history(ACME).last().digest.assert().isEqualTo(new)
+        policiesAt(2).assert().containsExactly("new-branch")
+        // The repair is written back: a second reading is the same without another walk.
+        memory.index(ACME)!!.value.entries.map { it.digest }.assert().contains(new).doesNotContain(old)
+        memory.index(ACME)!!.value.reclaiming.assert().contains(old)
+    }
+
+    @Test
+    fun `a later publication does not keep the old branch below it`() = runBlocking<Unit> {
+        val old = headMovedBack()
+        store.failIndexWithRevisionTwoNot = old
+        publish("new-branch")
+        publish("third")
+
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(1L, 2L, 3L)
+        policiesAt(2).assert().containsExactly("new-branch")
+        revisions.rollbackCandidate(ACME, 2).policies.map { it.id.value }.assert().containsExactly("new-branch")
+    }
+
+    @Test
+    fun `the repair says what it unlisted, once`() = runBlocking<Unit> {
+        val old = headMovedBack()
+        store.failIndexWithRevisionTwoNot = old
+        val new = publish("new-branch")
+        appender.list.clear()
+
+        revisions.history(ACME)
+        revisions.history(ACME)
+
+        val said = warnings().filter { "reclaimed" in it }
+        said.size.assert().isEqualTo(1)
+        said.single().assert().contains(ACME.toString()).contains("revision 2").contains(old.toString())
+            .contains(new.toString())
+    }
+
+    @Test
+    fun `an index that agrees with the head is returned without reading a record`() = runBlocking<Unit> {
+        publish("a")
+        publish("b")
+        publish("c")
+        store.recordReads.set(0)
+
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(1L, 2L, 3L)
+
+        store.recordReads.get().assert().isEqualTo(0)
+    }
+
+    /** A publication over a parent the index does not end at appends nothing: the index stays behind, and says so. */
+    @Test
+    fun `a publication does not index itself over an entry that is not its parent`() = runBlocking<Unit> {
+        val old = headMovedBack()
+        store.failIndexWithRevisionTwoNot = old
+        publish("new-branch")
+        publish("third")
+
+        memory.index(ACME)!!.value.entries.map { it.revision }.assert().containsExactly(1L, 2L)
+    }
+
+    @Test
+    fun `a republication of a number between the walk and the write is not overwritten`() = runBlocking<Unit> {
+        val old = headMovedBack()
+        store.failIndexWithRevisionTwoNot = old
+        publish("new-branch")
+        val other = SnapshotDigest(ByteArray(SnapshotDigest.SHA_256_BYTES) { 7 })
+        store.beforeIndexWrite = {
+            val current = memory.index(ACME)!!
+            val entries = current.value.entries.map { if (it.revision == 2L) it.copy(digest = other) else it }
+            memory.putIndex(ACME, current.digest, current.value.copy(entries = entries))
+        }
+
+        revisions.history(ACME)
+
+        memory.index(ACME)!!.value.entries.single { it.revision == 2L }.digest.assert().isEqualTo(other)
+    }
+
+    /** #1265: the repair runs against the floor of its own attempt, so what reclamation took out does not come back. */
+    @Test
+    fun `a repair that a reclamation overtakes lists nothing below its floor`() = runBlocking<Unit> {
+        (1..4).forEach { publish("p$it") }
+        clock.now = clock.now.plus(Duration.ofDays(2))
+        memory.dropIndex(ACME)
+        store.afterRecordRead = { revisions.reclaim(ACME) }
+
+        revisions.history(ACME)
+
+        val index = memory.index(ACME)!!.value
+        index.floor.assert().isEqualTo(3L)
+        index.entries.map { it.revision }.assert().containsExactly(3L, 4L)
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(3L, 4L)
+    }
+}

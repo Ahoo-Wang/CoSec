@@ -70,6 +70,7 @@ class Revisions(
     private val writes = RevisionWrites(store, maxAttempts)
     private val referrerIndex = ReferrerIndex(store, writes, ::head)
     private val listing = AppListing(store, writes, maxAttempts)
+    private val repair = HistoryRepair(store, writes, ::decode)
     private val retained = Retention(store, writes, clock, retention, ::head, ::decode, ::history)
 
     /** The head of [key], read from the store of record. */
@@ -142,7 +143,7 @@ class Revisions(
             }
             val published = PublishOutcome.Published(revision, digest)
             try {
-                settle(key, RevisionEntry(revision, digest, publishedAt), before - after)
+                settle(key, RevisionEntry(revision, digest, publishedAt), document.provenance?.parent, before - after)
                 if (key == SnapshotKey.Platform && base == null) {
                     listing.completeOnNewStore()
                 }
@@ -160,9 +161,14 @@ class Revisions(
      * store's own timeout (#1263); the caller's stays pending and takes effect when [publish] returns.
      */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
+    private suspend fun settle(
+        key: SnapshotKey,
+        entry: RevisionEntry,
+        parent: ParentRevision?,
+        dropped: Set<Pair<SnapshotKey, PolicyId>>,
+    ) {
         try {
-            published(key, entry, dropped)
+            published(key, entry, parent, dropped)
         } catch (e: Exception) {
             log.warn(e) {
                 "[$key] revision ${entry.revision} is published; its index or the references it dropped could not be " +
@@ -186,15 +192,15 @@ class Revisions(
     )
 
     /** After the head moved to [entry] (§5.4 steps 5 and 6): index it, drop the [dropped] references. Failures only warn. */
-    private suspend fun published(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
-        writes.updateIndex(key) { index ->
-            index.copy(
-                // Beside any later revision, never over it: a settle that runs late must not cut off the revisions indexed
-                // after it. What a head that moved back left above it stays until replaced; history() leaves that out.
-                entries = (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision },
-                pending = index.pending.filter { it.digest != entry.digest },
-            )
-        } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
+    private suspend fun published(
+        key: SnapshotKey,
+        entry: RevisionEntry,
+        parent: ParentRevision?,
+        dropped: Set<Pair<SnapshotKey, PolicyId>>,
+    ) {
+        if (!index(key, entry, parent)) {
+            warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
+        }
         for ((target, policy) in dropped) {
             writes.updateReferrers(target, policy) { referrerIndex.dropped(it, key, entry.revision) } ||
                 warn("[$key] no longer refers to [$policy] of [$target], which stays indexed")
@@ -202,9 +208,9 @@ class Revisions(
     }
 
     /**
-     * The retained revisions of [key], oldest first, none above its head. When the index is behind the head (a publish
-     * that failed after its head write, or a lost index), the missing entries are found along the head's `parent` chain
-     * and added.
+     * The retained revisions of [key], oldest first, none above its head, and each the head's own: when the index is
+     * behind the head (a publish that failed after its head write, or a lost index) or holds another branch's entry
+     * of a number the head reused, the chain is walked from the head and the index follows it ([HistoryRepair]).
      */
     suspend fun history(key: SnapshotKey): List<RevisionEntry> {
         // The head as stored: its envelope says its revision, and it is decoded only when the chain has to be walked
@@ -215,32 +221,42 @@ class Revisions(
         // chain. A revision published after the head was read is left out of this read alone, and what reclamation
         // removes comes from this list, so it is never taken for one to remove.
         val entries = indexed.entries.filter { it.revision <= stored.document.revision }
-        val latest = entries.lastOrNull()?.revision ?: 0
-        if (stored.document.revision <= latest) {
-            return entries
+        // The head is the authority (#1536): an index whose last entry is not the head's, by digest, is behind it or on
+        // another branch, and is rebuilt from the chain.
+        return if (HistoryRepair.agrees(entries.lastOrNull(), stored)) {
+            entries
+        } else {
+            repair.rebuild(key, stored, indexed, entries)
         }
-        val head = Head(key, decode(key, stored.document), stored)
-        val missing = ArrayList<RevisionEntry>()
-        var document: PolicyDocument? = head.document
-        var digest: SnapshotDigest? = head.digest
-        while (document != null && digest != null && document.revision > latest) {
-            missing += RevisionEntry(document.revision, digest, document.publishedAt)
-            val parent = document.provenance?.parent ?: break
-            digest = SnapshotDigest.parse(parent.digest)
-            document = store.record(key, digest)?.let { decode(key, it) }
-        }
-        val repaired = missing.sortedBy { it.revision }
-        writes.updateIndex(key) { index ->
-            val known = index.entries.map { it.revision }.toSet()
-            // Against the index as it is at this attempt: reclamation may have taken some out since the chain was walked,
-            // and below its floor nothing comes back (#1265).
-            val retained = repaired.filter { it.revision >= index.floor }
+    }
+
+    /**
+     * Adds [entry] to the index, over [parent] only (#1536): an index that does not end at [parent] (a publish before
+     * this one was not indexed, or it holds another branch's entry of that number) is left behind the head, where the
+     * next read finds it and rebuilds it from the chain, rather than made to look current over an entry that is not
+     * the head's parent. `false` when the index could not be written.
+     */
+    private suspend fun index(key: SnapshotKey, entry: RevisionEntry, parent: ParentRevision?): Boolean {
+        var linked = true
+        val written = writes.updateIndex(key) { index ->
+            linked = HistoryRepair.linked(index, parent)
             index.copy(
-                entries = (index.entries + retained.filter { it.revision !in known }).sortedBy { it.revision },
-                pending = index.pending.filter { pending -> retained.none { it.digest == pending.digest } },
+                // Beside any later revision, never over it: a settle that runs late must not cut off the revisions indexed
+                // after it. What a head that moved back left above it stays until replaced; history() leaves that out.
+                entries = if (linked) {
+                    (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision }
+                } else {
+                    index.entries
+                },
+                pending = index.pending.filter { it.digest != entry.digest },
             )
-        } || warn("[$key]: the rebuilt history could not be written back to the index")
-        return (entries.filter { it.revision < (repaired.firstOrNull()?.revision ?: Long.MAX_VALUE) } + repaired)
+        }
+        if (written && !linked) {
+            warn(
+                "[$key] revision ${entry.revision} is published; the index holds another entry for its parent, so history() rebuilds it"
+            )
+        }
+        return written
     }
 
     /**
@@ -269,12 +285,8 @@ class Revisions(
     internal suspend fun rewritten(key: SnapshotKey, published: Head, first: Boolean) = withContext(NonCancellable) {
         val entry = RevisionEntry(published.revision, published.digest, published.document.publishedAt)
         try {
-            writes.updateIndex(key) { index ->
-                index.copy(
-                    entries = (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision },
-                    pending = index.pending.filter { it.digest != entry.digest },
-                )
-            } || warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it")
+            index(key, entry, published.document.provenance?.parent) ||
+                warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it")
         } catch (e: Exception) {
             log.warn(e) { "[$key] revision ${entry.revision} is published; its index entry could not be written." }
         }

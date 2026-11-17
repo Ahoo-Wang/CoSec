@@ -1,0 +1,43 @@
+{
+  "rules": [
+    "CTL-35"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "Two ordinary publishes. The history lists each revision with the document the head's chain has at it.",
+  "publishes": [
+    {
+      "policies": [
+        "p"
+      ]
+    },
+    {
+      "policies": [
+        "q"
+      ]
+    }
+  ],
+  "history": true,
+  "expect": {
+    "outcomes": [
+      "Published",
+      "Published"
+    ],
+    "head": {
+      "revision": 2,
+      "parent": 1,
+      "parentRecord": true
+    },
+    "records": 2,
+    "writes": [
+      "record",
+      "head",
+      "record",
+      "head"
+    ],
+    "history": [
+      "1:p",
+      "2:q"
+    ]
+  }
+}

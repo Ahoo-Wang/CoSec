@@ -423,6 +423,22 @@
         "control:ChangeTransitionTableTest#each command refuses exactly the states outside its from-set, for every state",
         "control:ChangeTransitionTableTest#no step writes a change outside its row"
       ]
+    },
+    {
+      "id": "CTL-35",
+      "source": "RFC 0007 §5.2, §5.4; #1536",
+      "statement": "The head is the authority over a document's revision history: the history lists, for each retained revision, the document the head's parent chain has at that revision, by digest, never an index entry of the same number from another branch (the head moved back and a number reused). An index whose entry at the head's revision is not the head's digest is rebuilt from the chain, replacing only an entry still as the walk compared it, and nothing below the retention floor; the replaced digests are left to reclamation, and the repair is logged once with the key and each revision's dropped and kept digest. A publish appends its revision to the index only over a parent entry the index does not contradict.",
+      "level": "control",
+      "guards": [
+        "control:HistoryForkTest#history repairs the reused revision after the index write failed",
+        "control:HistoryForkTest#a later publication does not keep the old branch below it",
+        "control:HistoryForkTest#the repair says what it unlisted, once",
+        "control:HistoryForkTest#an index that agrees with the head is returned without reading a record",
+        "control:HistoryForkTest#a publication does not index itself over an entry that is not its parent",
+        "control:HistoryForkTest#a republication of a number between the walk and the write is not overwritten",
+        "control:HistoryForkTest#a repair that a reclamation overtakes lists nothing below its floor"
+      ],
+      "pending": null
     }
   ]
 }
