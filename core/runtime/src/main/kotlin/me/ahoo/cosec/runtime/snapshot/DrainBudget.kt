@@ -37,17 +37,20 @@ internal object DrainBudget {
     }
 
     /**
-     * Runs [block] with no bound, whatever an outer call on this thread set, and restores it after: a hand-off run in
-     * place, and close, which drains to empty.
+     * Runs [block] with no bound, whatever an outer call on this thread set, and restores it after, what was left
+     * included: a hand-off run in place, close, which drains to empty, and an in-place eviction pass, whose offers open
+     * budgets of their own inside it and must not refill the caller's.
      */
     internal inline fun <R> unbounded(block: () -> R): R {
         val cell = cell()
         val active = cell[ACTIVE]
+        val left = cell[LEFT]
         cell[ACTIVE] = 0L
         try {
             return block()
         } finally {
             cell[ACTIVE] = active
+            cell[LEFT] = left
         }
     }
 
