@@ -1,0 +1,17 @@
+# Rule: SNP-13
+# Mutant: an EffectFailed's own step raises another when its log throws, so the key loops on that thread and close waits for good
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyEffectFailureTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
+index 705674ef..7babf017 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
+@@ -271,7 +271,7 @@ internal class KeyDrain<T : Any>(
+         }
+         state = step.state
+         owner.hinted(step.state.removed, step.state.idle)
+-        executed(step.state, step.effects, before.load?.id, raises = event !is KeyEvent.EffectFailed)
++        executed(step.state, step.effects, before.load?.id, raises = event !is KeyEvent.Changed)
+     }
+ 
+     /**

@@ -1,0 +1,17 @@
+# Rule: SNP-8
+# Mutant: a load's event is queued with the caller events, so a caller whose budget is spent leaves a failed compilation behind it and the old revision is served
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
+index 705674ef..2bc3f173 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
+@@ -109,7 +109,7 @@ internal class KeyDrain<T : Any>(
+      * a lane event is uncounted, so its offerer opens a budget of K: what it brought, plus at most K caller events.
+      */
+     fun offer(item: Any) {
+-        val events = if (item is KeyEvent.LaneEvent<*>) {
++        val events = if (item is KeyEvent.LaneEvent<*> && k < 0) {
+             push(item)
+             k
+         } else {
