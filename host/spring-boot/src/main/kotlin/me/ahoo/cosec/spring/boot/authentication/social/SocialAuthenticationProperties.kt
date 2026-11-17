@@ -28,7 +28,9 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 @ConfigurationProperties(prefix = SocialAuthenticationProperties.PREFIX, ignoreUnknownFields = false)
 @InternalCoSecApi
 class SocialAuthenticationProperties(
+    /** Whether social login is on (`cosec-social`); it needs `cosec.authentication.login.enabled`. */
     @DefaultValue("true") override var enabled: Boolean = true,
+    /** The OAuth providers, one per name, each a JustAuth `AuthConfig` with its `type` and `client-id` required. */
     val registration: Map<String, Provider> = emptyMap()
 ) : EnabledCapable {
     @InternalCoSecApi

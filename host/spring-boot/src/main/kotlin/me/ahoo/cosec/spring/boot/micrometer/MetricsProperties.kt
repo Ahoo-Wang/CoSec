@@ -21,6 +21,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 @ConfigurationProperties(MetricsProperties.PREFIX)
 @InternalCoSecApi
 class MetricsProperties(
+    /** Whether the metrics listener is on; it needs `cosec-micrometer` and a `MeterRegistry` bean. */
     @DefaultValue("true") override var enabled: Boolean = true,
 ) : EnabledCapable {
 

@@ -30,7 +30,9 @@ data class CacheConfiguration(
     /** How long a local copy lives at most (CoCache's `localMaxAge`): the bound on staleness when an invalidation is lost. */
     @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)
     var localMaxAge: Duration? = DEFAULT_LOCAL_MAX_AGE,
+    /** The most entries the local copy holds. */
     var maximumSize: Long? = DEFAULT_MAXIMUM_SIZE,
+    /** The initial capacity of the local copy; unset, CoCache's. */
     var initialCapacity: Int? = null,
     /** Drops a local copy not read for this long. A number without a unit is seconds, as the expiry settings always were. */
     @param:DurationUnit(ChronoUnit.SECONDS) @field:DurationUnit(ChronoUnit.SECONDS)

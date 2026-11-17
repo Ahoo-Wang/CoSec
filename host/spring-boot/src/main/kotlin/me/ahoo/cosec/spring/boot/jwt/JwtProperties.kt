@@ -29,8 +29,14 @@ import java.time.Duration
 @ConfigurationProperties(prefix = JwtProperties.PREFIX)
 @InternalCoSecApi
 class JwtProperties(
+    /** Whether JWTs are issued, verified and revoked; unset, on where the host verifies tokens itself and off behind a gateway. */
     @DefaultValue("true") override var enabled: Boolean = true,
+    /** The signing algorithm; issuers and verifiers must agree. */
     @DefaultValue("hmac256") var algorithm: Algorithm = Algorithm.HMAC256,
+    /**
+     * The signing secret, required while JWT is enabled: startup fails when it is blank or shorter than the algorithm
+     * needs in UTF-8 bytes (32 for hmac256, 48 for hmac384, 64 for hmac512).
+     */
     @DefaultValue("") var secret: String = "",
     @NestedConfigurationProperty var tokenValidity: TokenValidity = TokenValidity(),
     @NestedConfigurationProperty var session: Session = Session(),
@@ -42,7 +48,9 @@ class JwtProperties(
 
     @InternalCoSecApi
     class TokenValidity(
+        /** The lifetime of an access token. */
         var access: Duration = Duration.ofMinutes(10),
+        /** The lifetime of a refresh token; a revocation is kept this long, plus one second. */
         var refresh: Duration = Duration.ofDays(7)
     )
 

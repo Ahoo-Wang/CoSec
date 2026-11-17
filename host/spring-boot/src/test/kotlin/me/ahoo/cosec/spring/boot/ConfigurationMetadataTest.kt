@@ -67,4 +67,20 @@ class ConfigurationMetadataTest {
         generated.get("properties").size().assert().isGreaterThan(0)
         generated.assert().isEqualTo(pinned)
     }
+
+    /**
+     * What an IDE shows beside a key is its description, which is the KDoc of the property that binds it. A key without
+     * one is a key someone has to look up on the page: every `cosec.*` property has one, so the next one added does too.
+     */
+    @Test
+    fun `every cosec property has a description`() {
+        val undescribed = generated().get("properties")
+            .filter { it.get("name").asString().startsWith("cosec.") }
+            .filter { it.get("description")?.asString().isNullOrBlank() }
+            .map { it.get("name").asString() }
+        check(undescribed.isEmpty()) {
+            "${undescribed.size} cosec.* properties have no description; write a KDoc on the property that binds each " +
+                "(its first sentence is the description): $undescribed"
+        }
+    }
 }
