@@ -112,7 +112,8 @@
       ],
       "guards": [
         "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
-        "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey"
+        "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey",
+        "runtime:KeyDrainLaneTest#a failed compilation offered while a caller with a spent budget holds the flag is installed before it returns"
       ],
       "pending": null
     },
@@ -180,7 +181,8 @@
       "guards": [
         "runtime:SnapshotRevalidationTest#revalidationAnswersWithAReadThatStartedAfterTheCall",
         "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs",
-        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
+        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder",
+        "runtime:KeyDrainLaneTest#a load of an absent key that ends before its recompile mark is taken is followed by a read after the call"
       ]
     },
     {
@@ -196,6 +198,39 @@
         "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
         "runtime:SnapshotFamilyBoundTest#passes at once take a kind exactly to its bound, never below it and never stopping above it",
         "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and no count moves"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-15",
+      "source": "RFC 0013 §5.4 (the load lane)",
+      "statement": "What a spent drain budget leaves is not left waiting on the compile queue. An event the source's own work produces (a read's answer, failure or timeout, a compilation's result, an effect's failure, a retry coming due) is taken by the thread that holds the key's flag or the next one to take it, before any budget check and uncounted. A caller event left by a spent budget is handed to the source's own threads, where it waits for at most the compilation a pool thread is running; when the pool refuses it housekeeping runs it, and when that refuses too, its offerer does.",
+      "level": "timing",
+      "properties": [
+        "runtime:SnapshotSlotModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff"
+      ],
+      "guards": [
+        "runtime:KeyDrainLaneTest#a lane event offered between the empty queue and the release is taken before the drainer returns",
+        "runtime:KeyDrainLaneTest#a lane event offered between the release and the check is taken before the drainer returns",
+        "runtime:KeyDrainLaneTest#a failed compilation offered while a caller with a spent budget holds the flag is installed before it returns",
+        "runtime:KeyDrainLaneTest#the compile pool serves a hand-off when the compilation it runs ends, before the ones queued behind it",
+        "runtime:KeyRunnerFailureTest#a hand-off the compile pool refuses goes to housekeeping, counted, and runs there",
+        "runtime:KeyRunnerFailureTest#a hand-off both pools refuse is counted, and the caller runs the source's hand-offs"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-16",
+      "source": "RFC 0013 §5.4",
+      "statement": "An effect that throws ends its key's load in flight as a transient failure and the key goes on: a step offers at most one `EffectFailed`, and an `EffectFailed`'s own step offers none, so no thread loops on a key whose effects keep failing.",
+      "level": "build",
+      "guards": [
+        "runtime:KeyEffectFailureTest#every effect of a step that throws gives one EffectFailed, and its own failed log gives none",
+        "runtime:KeyEffectFailureTest#an EffectFailed whose log throws gives no other on the compile pool, which drains unbounded",
+        "runtime:KeyEffectFailureTest#what an EffectFailed's own step fails is logged in place, and no other EffectFailed comes",
+        "runtime:KeyEffectFailureTest#a VirtualMachineError in a step with other failures is still logged on a caller's thread",
+        "runtime:KeyEffectFailureTest#a VirtualMachineError in a step with other failures is still rethrown on the compile pool",
+        "runtime:KeyEffectFailureTest#a VirtualMachineError from logging what an EffectFailed's step failed is kept and logged, not dropped"
       ],
       "pending": null
     }

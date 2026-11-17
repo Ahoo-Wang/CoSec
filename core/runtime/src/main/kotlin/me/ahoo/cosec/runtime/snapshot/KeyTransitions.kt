@@ -33,6 +33,10 @@ import java.util.concurrent.TimeoutException
  * Every waiter hangs on exactly one [KeyHandle], named by the transition that takes its request: the load in flight's,
  * a new load's, or, for a reload, the handle of the load that starts after the current one (`SNP-13`). A handle is
  * answered once, by the transition that ends its load.
+ *
+ * A load's events overtake caller events queued before them ([KeyDrain]'s load lane), so nothing here decides on the
+ * order of the two: each caller event, against each state a load's end can leave, gives the same answer taken before
+ * or after that end, or one both orders may give. RFC 0013 §5.4 has the table, cell by cell.
  */
 internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     private val loads = KeyLoads<T>(config)
@@ -53,7 +57,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
         when (event) {
             is KeyEvent.Requested -> requested(step, event)
             KeyEvent.Changed -> changed(step)
-            KeyEvent.RetryDue -> if (!state.removed) reload(step, force = false, waiter = null)
+            is KeyEvent.RetryDue -> if (!state.removed) reload(step, force = false, waiter = null)
             is KeyEvent.Recompile -> step.emit(KeyEffect.Reply(event.reply, recompile(step)))
             is KeyEvent.Evict -> evict(step, event)
             KeyEvent.Close -> close(step)
@@ -159,13 +163,14 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     }
 
     /**
-     * `markRecompile`, after the epoch moved: a load in flight is followed by another, which starts in the new epoch.
-     * True when this key is to be loaded again (loading, or idle with a compiled entry): the caller reloads it.
+     * `markRecompile`, after the epoch moved. True when this key is to be loaded again (loading, or idle with a compiled
+     * entry): the caller reloads it. A load in flight that started before the move is followed by one in the new epoch
+     * when it ends ([KeyLoads]), so the mark sets nothing: it may be taken before or after that end.
      */
     private fun recompile(step: KeyStepBuilder<T>): Boolean {
         return when {
             step.removed -> false
-            step.load != null -> true.also { step.again = true }
+            step.load != null -> true
             else -> step.installed?.origin?.compiled ?: false
         }
     }

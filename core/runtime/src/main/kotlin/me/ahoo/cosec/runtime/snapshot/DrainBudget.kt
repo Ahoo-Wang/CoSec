@@ -14,10 +14,13 @@
 package me.ahoo.cosec.runtime.snapshot
 
 /**
- * The events one top-level call may drain on its thread (RFC 0013 B2b §3, amendment 7): K + 1, spent by every event the
- * thread takes on any runner, nested drains included, so that a caller's thread does bounded work whatever it offers
- * to. The compile pool and housekeeping drain without a bound, and so do close and a hand-off run in place. Kept in
- * one cell per thread, reused: a top-level offer allocates nothing.
+ * The caller events one top-level call may drain on its thread (RFC 0013 B2b §3, amendment 7): K + 1, spent by every
+ * caller event the thread takes on any runner, nested drains included, so that a caller's thread does bounded work
+ * whatever it offers to. A thread that is not CoSec's own takes what it brought plus at most K caller events of others:
+ * a caller's offer opens K + 1, its own event included, and an offer of a load's event (the store client's thread, the
+ * scheduler's) opens K, since that event is taken from the load lane, uncounted, as every lane event is. The compile
+ * pool and housekeeping drain without a bound, and so do close and a hand-off run in place. Kept in one cell per
+ * thread, reused: a top-level offer allocates nothing.
  */
 internal object DrainBudget {
     /** [ACTIVE]: whether a call on this thread set the budget; [LEFT]: the events it has left. */

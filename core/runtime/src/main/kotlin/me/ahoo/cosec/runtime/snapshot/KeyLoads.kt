@@ -212,7 +212,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
 
     /**
      * `advance`: [installed] is written, the load is over, and, if another load is wanted (a change came, the entry is
-     * [stale], or a local copy answered) and the key is open, the next load starts in the same step, with the pending
+     * [stale], a recompile came since the load started, or a local copy answered) and the key is open, the next load starts in the same step, with the pending
      * reload's handle, so no other load and no removal can come between them.
      */
     private fun advance(
@@ -221,7 +221,10 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         installed: SnapshotEntry<T>?,
         stale: Boolean
     ): LoadState<T>? {
-        val wanted = step.again || stale || (installed != null && load.fromLocalCopy)
+        // A load that started before a recompile is followed by one in the new epoch, whatever it read: the rule does
+        // not depend on whether the recompile's mark or this end is taken first (RFC 0013 B2b, the load lane).
+        val recompiled = load.epoch < step.moment.epoch
+        val wanted = step.again || stale || recompiled || (installed != null && load.fromLocalCopy)
         val againForced = step.againForced
         val pending = step.next
         if (installed != null) {

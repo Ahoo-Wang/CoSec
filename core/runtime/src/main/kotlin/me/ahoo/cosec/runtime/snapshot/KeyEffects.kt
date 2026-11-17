@@ -154,6 +154,9 @@ internal class KeyEffects<T : Any>(
             DocumentState.Failed(SnapshotUnavailableException(key, report().failedToCompile(revision), error))
         }
         owner.offer(KeyEvent.Compiled(id, state, System.nanoTime() - begin))
+        // Between compilations the pool serves the hand-offs: a caller's event left by a spent budget waits at most for
+        // the compilation a pool thread is running, not for the compilations queued behind it.
+        context.handOffs.runPending()
     }
 
     private fun recordSeen(effect: KeyEffect.RecordSeen) {
@@ -205,7 +208,7 @@ internal class KeyEffects<T : Any>(
     private fun scheduleRetry(delay: Duration) {
         try {
             context.threads.scheduler.schedule(
-                { owner.offer(KeyEvent.RetryDue) },
+                { owner.offer(KeyEvent.RetryDue()) },
                 delay.toNanos(),
                 TimeUnit.NANOSECONDS
             )

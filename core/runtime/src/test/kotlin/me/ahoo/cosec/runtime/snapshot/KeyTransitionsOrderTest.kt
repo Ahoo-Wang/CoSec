@@ -91,7 +91,7 @@ class KeyTransitionsOrderTest {
         add("reload if held" to { key: KeyHarness -> key.request(Ask.ReloadIfHeld(force = false)) })
         add("changed" to { key: KeyHarness -> key.offer(KeyEvent.Changed) })
         if (world.epoch < MAX_EPOCH) add("recompile" to { key: KeyHarness -> key.recompile() })
-        if (world.retries > 0) add("retry" to { key: KeyHarness -> key.offer(KeyEvent.RetryDue) })
+        if (world.retries > 0) add("retry" to { key: KeyHarness -> key.offer(KeyEvent.RetryDue()) })
         if (world.nanos == 0L) {
             add(
                 "time passes" to { key: KeyHarness -> key.nanos = KeyHarness.STORE_READ_TIMEOUT.toNanos() + 1 }

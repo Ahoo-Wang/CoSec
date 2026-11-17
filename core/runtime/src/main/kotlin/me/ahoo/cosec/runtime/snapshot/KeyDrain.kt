@@ -29,11 +29,19 @@ import java.util.concurrent.locks.LockSupport
 private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
 
 /**
- * One key's queue and its drain (RFC 0013 B2b §3). A thread that offers enqueues, then takes the flag if it is free and
- * drains: for each event it fills a [KeyMoment], calls [KeyTransitions.next], stores the state, publishes the hints and
- * executes the effects in order. Events an effect raises are queued, never recursed into. A thread that is not one of
- * CoSec's drains at most K + 1 events per top-level call ([DrainBudget]), then hands the rest to the compile pool,
- * else to housekeeping, else drains it itself. Nobody waits on the flag, but [close], which drains to empty.
+ * One key's two lanes and its drain (RFC 0013 B2b §3). A thread that offers enqueues, then takes the flag if it is free
+ * and drains: for each event it fills a [KeyMoment], calls [KeyTransitions.next], stores the state, publishes the hints
+ * and executes the effects in order. Events an effect raises are queued, never recursed into. Nobody waits on the
+ * flag, but [close], which drains to empty.
+ *
+ * Caller events (requests, changes, recompile marks, evictions, close) are queued: a thread not CoSec's takes at most
+ * K + 1 per top-level call ([DrainBudget]) and hands the rest off ([DrainHandOffs]). A load's events go on the load lane
+ * ([KeyLane]), taken whole before each caller event and again after the release, never counted (finding 2). A call
+ * takes at most (K + 1) caller events and (K + 2) × [LANE_EVENTS_PER_LOAD] lane events (`KeyDrainLaneTest`).
+ *
+ * The lane overtakes queued caller events; no transition decides on arrival order across the two. A load's end is
+ * judged by epoch ([KeyLoads]), so a [KeyEvent.Recompile] it overtakes finds the next load in flight: one extra load at
+ * most, the price of judging by epoch.
  *
  * [state] is a plain field: read and written only while the flag is held, its visibility carried by the flag's
  * acquire and release.
@@ -49,7 +57,7 @@ internal class KeyDrain<T : Any>(
     private val owner: KeyOwner<T>,
     /** Tests only: called between the steps of a drain; [Hooks.NONE] in production. */
     private val hooks: Hooks = Hooks.NONE,
-) {
+) : KeyLane() {
     /**
      * Tests only: where a test interleaves with a drain. [beforeNext] runs before each transition (it may throw, as a
      * transition that fails would); [afterEmpty] between finding the queue empty and releasing the flag; [afterRelease]
@@ -86,9 +94,15 @@ internal class KeyDrain<T : Any>(
     /** An eviction as offered; claimed when it is taken (§4b), so nothing of this key moves in between. */
     class EvictRequest(val onlyIfEmpty: Boolean, val absent: Boolean?, val reply: CompletableFuture<Eviction>)
 
+    /**
+     * Enqueues [item] in its lane and drains if the flag is free. A caller's event is one of the K + 1 its thread takes;
+     * a lane event is uncounted, so its offerer opens a budget of K: what it brought, plus at most K caller events.
+     */
     fun offer(item: Any) {
-        queue.add(item)
-        DrainBudget.within(if (context.threads.drainsUnbounded.get() == true) Int.MAX_VALUE else k + 1) { drain() }
+        val lane = item is KeyEvent.LaneEvent<*>
+        if (lane) push(item as KeyEvent.LaneEvent<*>) else queue.add(item)
+        val events = if (lane) k else k + 1
+        DrainBudget.within(if (context.threads.drainsUnbounded.get() == true) Int.MAX_VALUE else events) { drain() }
     }
 
     /**
@@ -106,7 +120,7 @@ internal class KeyDrain<T : Any>(
             var waits = 0
             while (true) {
                 drain()
-                if (queue.isEmpty() && flagged == 0) return
+                if (queue.isEmpty() && !laneWaiting && flagged == 0) return
                 // Another thread's step is running (an eviction over a large family, a slow meter): spin briefly, then
                 // park for a growing while rather than burn a core.
                 waits++
@@ -138,9 +152,11 @@ internal class KeyDrain<T : Any>(
                     drainer = null
                     flagged = 0
                 }
-                if (spent) return handOff()
                 hooks.afterRelease()
-                // An offer that lost the flag just before the release is taken here: no event is stranded.
+                // An offer that lost the flag just before the release is taken here: no event is stranded. A lane
+                // event is taken again whatever the budget; only caller events are handed off.
+                if (laneWaiting) continue
+                if (spent) return handOff()
                 if (queue.isEmpty()) return
             }
         } finally {
@@ -148,15 +164,21 @@ internal class KeyDrain<T : Any>(
         }
     }
 
-    /** Takes events while this thread's budget lasts; true when it ran out with events left. */
+    /** The lane whole, then one caller event while this thread's budget lasts; true when it ran out with some left. */
     private fun takeWhileBudget(): Boolean {
-        while (queue.isNotEmpty()) {
+        while (true) {
+            takeLane()
+            if (queue.isEmpty()) {
+                if (laneWaiting) continue
+                hooks.afterEmpty()
+                return false
+            }
             if (!DrainBudget.spend()) return true
-            take(queue.poll() ?: return false)
+            take(queue.poll() ?: continue)
         }
-        hooks.afterEmpty()
-        return false
     }
+
+    override fun takeFromLane(event: KeyEvent.LaneEvent<*>) = take(event)
 
     /** The rest goes to the source's one hand-off task ([DrainHandOffs]), which drains it without a bound. */
     private fun handOff() {
@@ -195,25 +217,51 @@ internal class KeyDrain<T : Any>(
         }
         state = step.state
         owner.hinted(step.state.removed, step.state.idle)
-        executed(step.state, step.effects, before.load?.id)
+        executed(step.state, step.effects, before.load?.id, raises = event !is KeyEvent.EffectFailed)
     }
 
-    /** The step's effects, in order; one that throws queues an [KeyEvent.EffectFailed] and the rest still run. */
+    /**
+     * The step's effects, in order; the rest still run after one throws. A step that [raises] offers one
+     * [KeyEvent.EffectFailed], its first failure with the later ones suppressed in it; an `EffectFailed`'s own step
+     * raises none, and logs what failed, so no chain of them runs on (`LANE_EVENTS_PER_LOAD`). A
+     * `VirtualMachineError` is kept as the drain's crash either way, rethrown or logged once the flag is released.
+     */
     @Suppress("TooGenericExceptionCaught")
-    private fun executed(after: KeyState<T>, emitted: List<KeyEffect<T>>, loadBefore: Long?) {
-        val loadId = after.load?.id ?: loadBefore ?: NO_LOAD
+    private fun executed(after: KeyState<T>, emitted: List<KeyEffect<T>>, loadBefore: Long?, raises: Boolean) {
+        var failed: Throwable? = null
         // By index: the list is the thread's pooled builder's, and an iterator per step is what this saves.
         for (index in emitted.indices) {
             val effect = emitted[index]
             try {
                 effects.execute(effect)
             } catch (error: VirtualMachineError) {
-                // The rest of the step still runs, so its waiters are answered; the error is handled after the release.
+                // The rest of the step still runs, so its waiters are answered; a crash is handled after the release.
                 crash = crash ?: ("the effect ${effect::class.simpleName}" to error)
-                queue.add(KeyEvent.EffectFailed(loadId, error))
+                failed = withFirst(failed, error)
             } catch (error: Throwable) {
-                queue.add(KeyEvent.EffectFailed(loadId, error))
+                failed = withFirst(failed, error)
             }
+        }
+        failed ?: return
+        val loadId = after.load?.id ?: loadBefore ?: NO_LOAD
+        if (raises) push(KeyEvent.EffectFailed(loadId, failed)) else loggedInPlace(failed)
+    }
+
+    /** [error], or [failed] with [error] suppressed in it: a step's first failure carries the later ones. */
+    private fun withFirst(failed: Throwable?, error: Throwable): Throwable =
+        failed?.also { if (it !== error) it.addSuppressed(error) } ?: error
+
+    /** What failed in an `EffectFailed`'s own step: logged, and dropped if the logging throws; never another event. */
+    @Suppress("TooGenericExceptionCaught")
+    private fun loggedInPlace(failed: Throwable) {
+        try {
+            context.threads.offRequestThread {
+                log.error(failed) { "Snapshot document [$key]: an effect failed while a failed effect was handled." }
+            }
+        } catch (error: VirtualMachineError) {
+            crash = crash ?: ("logging a failed effect" to error)
+        } catch (_: Throwable) {
+            // Logging is what failed: nothing is left to tell, and another event would only fail the same way.
         }
     }
 
@@ -320,18 +368,25 @@ internal class KeyDrain<T : Any>(
         }
     }
 
-    private companion object {
+    internal companion object {
         /** Sets [flagged]. */
-        val FLAG: AtomicIntegerFieldUpdater<KeyDrain<*>> =
+        private val FLAG: AtomicIntegerFieldUpdater<KeyDrain<*>> =
             AtomicIntegerFieldUpdater.newUpdater(KeyDrain::class.java, "flagged")
 
+        /**
+         * The most lane events one load offers: 4 (its read's answer, its read timing out, its compilation's result, a
+         * `RetryDue`), and one `EffectFailed` for each of its 5 steps (the one that started it, and those 4's): an
+         * `EffectFailed` raises none. A new lane event fails `KeyDrainLaneTest`; a second per step, `KeyEffectFailureTest`.
+         */
+        const val LANE_EVENTS_PER_LOAD = 9
+
         /** An effect failed with no load in flight: its transition logs it as a failure after the load. */
-        const val NO_LOAD = -1L
+        private const val NO_LOAD = -1L
 
         /** How close waits out another thread's drain step: spins first, then parks from 10 µs, doubling up to 1 ms. */
-        const val SPINS = 200
-        const val MIN_PARK_NANOS = 10_000L
-        const val MAX_PARK_NANOS = 1_000_000L
-        const val PARK_DOUBLINGS = 7
+        private const val SPINS = 200
+        private const val MIN_PARK_NANOS = 10_000L
+        private const val MAX_PARK_NANOS = 1_000_000L
+        private const val PARK_DOUBLINGS = 7
     }
 }

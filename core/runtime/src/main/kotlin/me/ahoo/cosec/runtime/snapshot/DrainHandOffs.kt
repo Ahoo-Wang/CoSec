@@ -25,6 +25,14 @@ import java.util.concurrent.atomic.AtomicBoolean
  * source's hand-offs, for as long as they come: the back-pressure that keeps answering under overload, where deferring
  * them would leave requests waiting without a bound. Each refusal is counted ([SnapshotMetrics.onHandOffRefused]).
  *
+ * The task alone would queue a hand-off behind every compilation queued before it: on a cold start, seconds. So a pool
+ * thread that finishes a compilation also runs what is pending ([runPending]) before it takes its next task, and a
+ * caller's event left by a spent budget waits at most for the compilation a pool thread is running. The task stays for
+ * an idle pool. Two threads may run hand-offs at once; each drain is behind its key's flag.
+ *
+ * Only caller events are handed off: a load's events are taken from the load lane by whoever holds the key's flag,
+ * whatever its budget ([KeyDrain]).
+ *
  * Close owns what the source accepted, and a hand-off may hold a key close does not reach: a removed one, whose
  * requests a pass or a lane offered after its eviction. So close runs what is pending ([runPending]) once its keys are
  * ended, and a hand-off made after that is run by its offerer, which re-checks [closed] once it has enqueued.
@@ -46,7 +54,8 @@ internal class DrainHandOffs(
     }
 
     /**
-     * Runs every pending hand-off on this thread, unbounded: close's, once its keys are ended, and an offerer's after.
+     * Runs every pending hand-off on this thread, unbounded: a pool thread's between compilations, close's once its keys
+     * are ended, and an offerer's after close. With nothing pending, one volatile read.
      * One that throws does not leave the rest queued with their waiters: they all run, and the first failure is thrown
      * at the end with the others suppressed in it, as [SnapshotSource.close] does with its steps.
      */
