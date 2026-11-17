@@ -39,4 +39,9 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    // A library writes nothing to the console: a log line leaks what it was given (a token, a payload).
+    files: ['src/**/*.ts'],
+    rules: { 'no-console': 'error' },
+  },
 );

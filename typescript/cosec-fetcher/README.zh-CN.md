@@ -43,6 +43,13 @@ Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fe
 `isTrusted: (url, exchange) => sameOriginTrust(url, exchange) || new URL(url).origin === 'https://files.example.com'`。
 在 Node 中（没有页面），只有绝对 `baseURL` 的源被信任；`baseURL` 是相对的时，绝对 URL 不带凭据。
 
+**刷新端点在 `baseURL` 之外的另一个源**（独立的认证服务）。刷新请求用自己的 `Fetcher`（上文建议的做法）时没有任何变化：它从来不带 CoSec
+请求头，令牌对在请求体里。用已配置的 `Fetcher` 并且端点是另一个源上的绝对 URL 时，刷新请求现在不带 `Authorization`（已过期的访问令牌）、
+`CoSec-Device-Id`、`CoSec-Request-Id` 和 `CoSec-Space-Id`，会话仍然能刷新：令牌对在请求体里，CoSec 把过期令牌当作匿名，刷新路由不需要这个请求头。
+丢掉的是这次调用上的设备 ID 和请求 ID。想保留它们，就写明那个源：
+`isTrusted: (url, exchange) => sameOriginTrust(url, exchange) || new URL(url).origin === 'https://auth.example.net'`。
+刷新端点在 `baseURL` 上时，刷新请求照旧带过期的 `Authorization`、`CoSec-Device-Id` 和 `CoSec-Request-Id`，不带空间。
+
 ## 核心能力
 
 - 设备、请求、空间、租户与所有者归属。
@@ -76,6 +83,12 @@ CoSec 不提供登录或刷新端点；应用编写的端点必须：
 `sessionStorage` 或每个标签页各自的内存存储时，只在一个地方刷新。细节见
 [实战文档](https://fetcher.ahoo.me/zh/guides/integrations/cosec)。
 
+## 上报错误
+
+请求的错误（`FetcherError`，以及本包中继承它的错误，包括 `RefreshTokenError`）带着该请求的 `exchange`：请求头和请求体，所以包含访问令牌，
+刷新时还包含令牌对。去掉刷新错误上的 `token` 并没有让它们可以安全地序列化。把错误发给上报工具（Sentry、日志管道）的应用要先清理
+`exchange`，或者只上报 `name`、`message` 和 `problem`。
+
 ## 从 `@ahoo-wang/fetcher-cosec` 6.x 升级
 
 - **凭据默认只发往受信任的源。** 不设 `isTrusted` 时，6.x 会把令牌、`CoSec-Device-Id`、`CoSec-Request-Id` 和 `CoSec-Space-Id`
@@ -86,8 +99,16 @@ CoSec 不提供登录或刷新端点；应用编写的端点必须：
   确实要发往所有源的代码写 `isTrusted: () => true`，并自己承担这个决定。在 Node 里没有绝对 `baseURL` 时，绝对 URL 的调用同样不带凭据。
 
 - 包名改为 `@ahoo-wang/cosec-fetcher`：修改 `package.json` 和每一处导入。React hooks 移到了 `@ahoo-wang/cosec-react`。
-- `appId` 已弃用并被忽略：CoSec 8.0 不读取 `CoSec-App-Id`，应用是令牌的 `aud`。
-  `CoSecHeaders.APP_ID` 已移除。
+- `appId` 已移除（`CoSecConfig.appId`、`CoSecRequestOptions.appId`、`AppIdCapable`）：CoSec 8.0 不读取 `CoSec-App-Id`，
+  应用是令牌的 `aud`。`CoSecHeaders.APP_ID` 已移除。只是把没人用的选项合在一起的 `CoSecOptions` 同样移除，
+  `TokenStorage.setCompositeToken` 也移除：用 `signIn`。
+- `RefreshTokenError` 和 `RefreshUnavailableError` 不再携带令牌对（`token` 属性和第一个构造参数）：序列化错误自有属性的错误上报工具
+  会把两个令牌都发出去。它们的 `cause` 类型是 `unknown`；`JwtPayload` 的索引签名和 `CoSecJwtPayload.attributes` 也是 `unknown`：
+  读取类型化声明之外的声明时用类型守卫。
+- `JwtTokenManager.refreshBlocked` 和 `refreshInProgress` 变为私有。
+- `parseJwtPayload` 无法解析令牌时不再打印日志（返回 `null`）。
+- 包在同一页面的实例之间共享的两个 `Symbol.for` 键现在是 `@ahoo-wang/cosec-fetcher/shared-token-serializers` 和
+  `@ahoo-wang/cosec-fetcher/notification-guard-refresher`。迁移期间两个包可以在同一页面上：它们不再共享注册表或标记。
 - `AuthorizeResult` 与 `AuthorizeResults` 已移除：CoSec 8.0 不会发送它们。
 - 只有刷新路由返回 `401` 才结束会话；`400`、`403`、`404` 或 `429` 现在会保留会话
   （`RefreshUnavailableError`）。刷新路由用其他状态拒绝时，传入 `isRefreshRejected`。

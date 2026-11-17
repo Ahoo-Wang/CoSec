@@ -19,7 +19,7 @@ import {
   IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY,
   SPACE_ID_ATTRIBUTE,
 } from './constants.js';
-import type { AppIdCapable, DeviceIdStorageCapable } from './types.js';
+import type { DeviceIdStorageCapable } from './types.js';
 import { CoSecHeaders } from './types.js';
 import { idGenerator } from './idGenerator.js';
 import type { SpaceIdProvider } from './spaceIdProvider.js';
@@ -39,7 +39,7 @@ import {
  *
  * @remarks
  * CoSec 8.0 does not read an app from a request: the app is the `aud` of the
- * token. The deprecated `appId` is accepted and ignored.
+ * token, so there is no `appId` option.
  * The deviceIdStorage manages persistent device identifiers for tracking.
  * The spaceIdProvider (optional) enables space-scoped resource access control.
  *
@@ -54,14 +54,14 @@ import {
  * const optionsWithSpace: CoSecRequestOptions = {
  *   deviceIdStorage: new DeviceIdStorage(),
  *   spaceIdProvider: new DefaultSpaceIdProvider({
- *     spacedResourcePredicate: urlPredicate,
+ *     spacedResourcePredicate: { test: exchange => exchange.request.url.includes('/spaces/') },
  *     spaceIdStorage: new SpaceIdStorage()
  *   })
  * };
  * ```
  */
 export interface CoSecRequestOptions
-  extends AppIdCapable, DeviceIdStorageCapable, RequestTrustCapable {
+  extends DeviceIdStorageCapable, RequestTrustCapable {
   /**
    * Optional provider for resolving space identifiers from requests.
    *
@@ -78,13 +78,6 @@ export interface CoSecRequestOptions
  *
  * This constant is used by the Fetcher interceptor registration system
  * to identify and manage this interceptor instance.
- *
- * @example
- * ```typescript
- * // Used internally by Fetcher for interceptor registration
- * fetcher.addInterceptor(new CoSecRequestInterceptor(options));
- * console.log(interceptor.name); // 'CoSecRequestInterceptor'
- * ```
  */
 export const COSEC_REQUEST_INTERCEPTOR_NAME = 'CoSecRequestInterceptor';
 
@@ -107,8 +100,8 @@ export {
  *
  * @remarks
  * **Header Injection:**
- * This interceptor injects the following headers into every outgoing request:
- * - `CoSec-App-Id`: Identifies your application
+ * This interceptor injects the following headers into every request to a trusted origin
+ * (see `isTrusted`):
  * - `CoSec-Device-Id`: Unique device identifier (persisted or generated)
  * - `CoSec-Request-Id`: Unique identifier for this request (per-request)
  * - `CoSec-Space-Id`: Space identifier (when spaceIdProvider returns a value)
@@ -132,45 +125,40 @@ export {
  * @example
  * ```typescript
  * import { Fetcher } from '@ahoo-wang/fetcher';
- * import { CoSecRequestInterceptor } from '@ahoo-wang/cosec-fetcher';
- * import { DeviceIdStorage } from '@ahoo-wang/cosec-fetcher';
+ * import {
+ *   CoSecRequestInterceptor,
+ *   DeviceIdStorage,
+ * } from '@ahoo-wang/cosec-fetcher';
  *
- * // Create dependencies
- * const deviceIdStorage = new DeviceIdStorage();
+ * const fetcher = new Fetcher({ baseURL: 'https://api.example.com' });
+ * fetcher.interceptors.request.use(
+ *   new CoSecRequestInterceptor({ deviceIdStorage: new DeviceIdStorage() }),
+ * );
  *
- * // Create the interceptor
- * const coSecInterceptor = new CoSecRequestInterceptor({
- *   deviceIdStorage
- * });
- *
- * // Register with Fetcher
- * const fetcher = new Fetcher()
- *   .addInterceptor(coSecInterceptor)
- *   .setBaseUrl('https://api.example.com');
- *
- * // All requests will now include CoSec headers
- * const response = await fetcher.get('/api/users');
- * // Request headers include:
- * // - CoSec-App-Id: my-saas-application
+ * // Requests to the baseURL now carry:
  * // - CoSec-Device-Id: <unique-device-id>
  * // - CoSec-Request-Id: <unique-request-id>
+ * const response = await fetcher.get('/users');
  * ```
  *
  * @example
  * ```typescript
  * // Multi-tenant with space support
- * import { DefaultSpaceIdProvider, SpaceIdStorage } from '@ahoo-wang/cosec-fetcher';
+ * import {
+ *   DefaultSpaceIdProvider,
+ *   DeviceIdStorage,
+ *   SpaceIdStorage,
+ * } from '@ahoo-wang/cosec-fetcher';
  *
- * const spaceStorage = new SpaceIdStorage();
  * const spaceIdProvider = new DefaultSpaceIdProvider({
  *   spacedResourcePredicate: {
  *     test: (exchange) => exchange.request.url.includes('/spaces/')
  *   },
- *   spaceIdStorage: spaceStorage
+ *   spaceIdStorage: new SpaceIdStorage()
  * });
  *
  * const coSecInterceptor = new CoSecRequestInterceptor({
- *   deviceIdStorage,
+ *   deviceIdStorage: new DeviceIdStorage(),
  *   spaceIdProvider
  * });
  * ```
@@ -224,29 +212,16 @@ export class CoSecRequestInterceptor implements RequestInterceptor {
    *
    * @example
    * ```typescript
-   * // Basic instantiation
-   * const interceptor = new CoSecRequestInterceptor({
-   *   deviceIdStorage: new DeviceIdStorage()
-   * });
-   *
-   * // With custom device ID storage
-   * const customStorage = new DeviceIdStorage({
+   * const deviceIdStorage = new DeviceIdStorage({
    *   key: 'custom-device-key',
    *   storage: sessionStorage
    * });
-   * const interceptorWithCustom = new CoSecRequestInterceptor({
-   *   deviceIdStorage: customStorage
-   * });
-   *
-   * // With space support
-   * const spaceStorage = new SpaceIdStorage();
-   * const spaceProvider = new DefaultSpaceIdProvider({
-   *   spacedResourcePredicate: { test: (e) => true },
-   *   spaceIdStorage: spaceStorage
-   * });
-   * const interceptorWithSpace = new CoSecRequestInterceptor({
+   * const interceptor = new CoSecRequestInterceptor({
    *   deviceIdStorage,
-   *   spaceIdProvider: spaceProvider
+   *   spaceIdProvider: new DefaultSpaceIdProvider({
+   *     spacedResourcePredicate: { test: exchange => exchange.request.url.includes('/spaces/') },
+   *     spaceIdStorage: new SpaceIdStorage()
+   *   })
    * });
    * ```
    */
@@ -292,22 +267,9 @@ export class CoSecRequestInterceptor implements RequestInterceptor {
    *
    * @example
    * ```typescript
-   * // The interceptor is called automatically by Fetcher
-   * const fetcher = new Fetcher()
-   *   .addInterceptor(new CoSecRequestInterceptor({
-   *     deviceIdStorage: new DeviceIdStorage()
-   *   }));
-   *
-   * // This request will have CoSec headers added
-   * const response = await fetcher.get('/api/data');
-   * ```
-   *
-   * @example
-   * ```typescript
-   * // Headers added to outgoing request:
+   * // Headers added to a request to a trusted origin:
    * // GET /api/users HTTP/1.1
    * // Host: api.example.com
-   * // CoSec-App-Id: my-app
    * // CoSec-Device-Id: abc123xyz789
    * // CoSec-Request-Id: req_abc123def456
    * // CoSec-Space-Id: workspace-alpha  (if space resolved)

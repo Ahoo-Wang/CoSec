@@ -92,7 +92,7 @@ export interface TokenRefresher {
    * ```typescript
    * const refresher: TokenRefresher = new CoSecTokenRefresher({ fetcher, endpoint: '/auth/refresh' });
    * const newToken = await refresher.refresh(currentToken);
-   * console.log('New access token:', newToken.accessToken);
+   * tokenStorage.signIn(newToken);
    * ```
    *
    * @warning **Critical**: Failing to set the `IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY`
@@ -163,14 +163,6 @@ export class CoSecTokenRefresher implements TokenRefresher {
    * @param {CoSecTokenRefresherOptions} options - The configuration options for the token refresher.
    * @param {Fetcher} options.fetcher - The HTTP client instance used for making refresh requests.
    * @param {string} options.endpoint - The URL endpoint for token refresh operations.
-   *
-   * @example
-   * ```typescript
-   * const refresher = new CoSecTokenRefresher({
-   *   fetcher: myFetcherInstance,
-   *   endpoint: '/api/v1/auth/refresh'
-   * });
-   * ```
    */
   constructor(public readonly options: CoSecTokenRefresherOptions) {}
 
@@ -194,13 +186,11 @@ export class CoSecTokenRefresher implements TokenRefresher {
    * @example
    * ```typescript
    * const refresher = new CoSecTokenRefresher({ fetcher, endpoint: '/auth/refresh' });
-   * const token = { accessToken: 'expired-token', refreshToken: 'valid-refresh-token' };
    *
    * try {
-   *   const newToken = await refresher.refresh(token);
-   *   console.log('Refreshed access token:', newToken.accessToken);
+   *   tokenStorage.signIn(await refresher.refresh(currentToken));
    * } catch (error) {
-   *   console.error('Token refresh failed:', error.message);
+   *   // The refresh route refused the pair, or could not be reached
    * }
    * ```
    *

@@ -73,8 +73,7 @@ export interface UnauthorizedErrorInterceptorOptions {
  * ```typescript
  * const interceptor = new UnauthorizedErrorInterceptor({
  *   onUnauthorized: (exchange) => {
- *     console.log('Unauthorized access detected for:', exchange.request.url);
- *     // Redirect to login page or refresh token
+ *     // The session is over: send the user to sign in
  *     window.location.href = '/login';
  *   }
  * });
@@ -113,15 +112,6 @@ export class UnauthorizedErrorInterceptor implements ErrorInterceptor {
    * @param exchange - The fetch exchange containing request, response, and error information
    *                   to be inspected for unauthorized status codes or refresh token errors
    * @returns {void} This method does not return a value
-   *
-   * @example
-   * ```typescript
-   * const interceptor = new UnauthorizedErrorInterceptor({
-   *   onUnauthorized: (exchange) => {
-   *      // Custom logic here
-   *   }
-   * });
-   * ```
    */
   intercept(exchange: FetchExchange): void | Promise<void> {
     const notification = exchange.attributes?.get(this.name);
