@@ -67,7 +67,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
   （[限流](#rate-limiting)）。
 - **令牌吊销**：启用 JWT 时始终开启（[启动](./troubleshooting.md#startup-fails-without-a-token-store)）。
 - **`cosecServiceGenerator` actuator 端点**：只要有 `cosec-openapi`、springdoc 和 Spring Boot Actuator 就存在；像其他 actuator
-  端点一样决定是否暴露它。
+  端点一样决定是否暴露它，并用 Spring Boot 的 `management.endpoint.cosec-service-generator.access` 限制访问（默认
+  `unrestricted`）。
 
 ## Key 前缀 {#key-prefix}
 
@@ -105,7 +106,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.authorization.scope.app-id` | string | 无 | 本宿主服务的应用。声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`）。不设置时取凭证的应用（[应用](../integration/authentication.md#apps)）。在网关上，路由元数据 `cosec-app-id` 对该路由的请求优先（[网关](../integration/web.md#gateway)）。 |
-| `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。在 `native` 转发头策略下，于 Tomcat 上显式设置，或在 Reactor Netty、Jetty 上设为 `0`，都会导致启动失败；`framework` 总是导致启动失败（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)，`PIP-16`）。 |
+| `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | 解析客户端 IP 时信任 `X-Forwarded-For` 中的几跳代理。`0` 忽略该请求头（宿主直接对外）；`N` 取第 N 近的代理追加的那一项。在 `native` 转发头策略下，于 Tomcat 上显式设置，或在 Reactor Netty、Jetty 上设为 `0`，都会导致启动失败，其他服务器或没有服务器（外部容器里的 war）也一样；`framework` 总是导致启动失败（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)，`PIP-16`）。 |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | 一次 `MembershipProvider` 调用。超时或失败时得到 `503`。 |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | 一次没有自行设置超时的 `AttributeProvider` 调用。超时后它的属性不可用，需要这些属性的语句使决策成为 Indeterminate。 |
 | `cosec.authorization.routes.location` | 逗号分隔的资源位置 | 未设置 | WebFlux 或 WebMvc 宿主在启动时加载的路由映射，日志会写明每份映射的服务和路由条数。位置不存在、映射无法解析或映射没有路由，启动失败。未设置时不加载路由映射，每个请求都在 `http` 命名空间中授权；但 `classpath:cosec-routes.json` 存在时启动失败，直到配置项指明它或设为空。设置为空表示明确不使用路由映射。Spring Cloud Gateway 宿主忽略它，不加载路由映射。 |
@@ -157,13 +158,13 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | 文档超过这个时长未被确认时，以 `WARN` 记录。不得超过 `lag-escalate`。 |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | 文档超过这个时长未被确认时，以 `ERROR` 记录为陈旧。 |
 | `cosec.authorization.snapshot.fail-closed.tenants` | 租户 id 集合 | 空 | 不得基于旧文档决策的租户：这类租户的请求读取的最旧文档，若上次确认距今超过 `max-lag`，请求得到 `503`（`SourceUnavailable`），除非有 DENY 匹配。其他租户继续基于已装入的文档决策。 |
-| `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | 上述租户超过这个滞后即失败即拒绝。 |
-| `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | 请求等待一个未装入的文档多久。超过后，对这个请求而言该文档算作失败。 |
-| `cosec.authorization.snapshot.max-apps` | int | `1024` | 内存中最多持有的应用文档数；超过后丢弃最久未用的一个，需要时再加载。冷加载突发时，一个族可能短暂地持有更多：最多为该上限的两倍，且绝不超出上限 4,096 个以上，另加此刻正在加载的文档；超过这个数时，实例在加载该文档的线程上先驱逐、再回答（[存储](./storage.md#how-instances-read-documents)）。 |
-| `cosec.authorization.snapshot.max-tenants` | int | `1024` | 租户文档的同一上限。平台文档从不被丢弃。 |
+| `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | 上述租户超过这个滞后即失败即拒绝。不能为负。 |
+| `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | 请求等待一个未装入的文档多久。超过后，对这个请求而言该文档算作失败。必须为正。 |
+| `cosec.authorization.snapshot.max-apps` | int | `1024` | 内存中最多持有的应用文档数（为正）；超过后丢弃最久未用的一个，需要时再加载。冷加载突发时，一个族可能短暂地持有更多：最多为该上限的两倍，且绝不超出上限 4,096 个以上，另加此刻正在加载的文档；超过这个数时，实例在加载该文档的线程上先驱逐、再回答（[存储](./storage.md#how-instances-read-documents)）。 |
+| `cosec.authorization.snapshot.max-tenants` | int | `1024` | 租户文档的同一上限（为正）。平台文档从不被丢弃。 |
 | `cosec.authorization.snapshot.prewarm-apps` | 应用 id 列表 | 空 | 启动时在平台文档（总会加载）之后加载的应用文档。在平台文档和列出的每个文档都装入之前，就绪状态拒绝流量；存活状态不受影响。 |
 | `cosec.authorization.snapshot.prewarm-tenants` | 租户 id 列表 | 空 | 启动时加载的租户文档，同上。 |
-| `cosec.authorization.snapshot.compile-threads` | int | `2` | 编译文档的线程数。 |
+| `cosec.authorization.snapshot.compile-threads` | int | `2` | 编译文档的线程数。必须为正。 |
 | `cosec.authorization.snapshot.eviction-check` | `fail`、`warn` | `fail` | Redis 某个节点的 `maxmemory-policy` 不是 `noeviction`，或读不到（`INFO memory` 失败或被拒绝，CoCache 后端被包装或是自定义的）时，启动怎么办。`fail` 终止启动。`warn` 照常启动，并记录一条以 `!!!` 开头的 `WARN`（[Redis 要求](./storage.md#redis-requirements)）。CoCache 的内存后端总是通过。无论哪种，实例都会每个 `revalidate-interval` 再次读取该策略，Redis 可能驱逐时 `cosecSnapshotEviction` 健康指示器为 `DOWN`；读不到策略时，`fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`（[故障排查](./troubleshooting.md#cosecsnapshoteviction-is-down)）。 |
 
 ## 影子窗口 {#shadow-windows}
@@ -275,7 +276,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.changes.expire-after` | duration | `7d` | 未关闭的变更请求在提出后这么久过期，并离开未关闭变更列表。 |
 | `cosec.control.approval.expire-after` | duration | `72h` | 一次审批的有效期。长于令牌吊销的保留时长 `cosec.jwt.token-validity.refresh` 时启动失败：审批会比其令牌的吊销记录活得更久。 |
 | `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要另一位平台主体审批。升级权限的变更无论如何都需要。 |
-| `cosec.control.break-glass.max-duration` | duration | `4h` | 一个 break-glass 绑定最长持续多久。超过 `24h` 启动失败。 |
+| `cosec.control.break-glass.max-duration` | duration | `4h` | 一个 break-glass 绑定最长持续多久。超过 `24h`，或不为正，启动失败。 |
 | `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。 |
 | `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。 |
 | `cosec.control.shadow.max-duration` | duration | `24h` | 窗口到这个年龄时即使样本不足也关闭，作为发布者必须确认的证据不足。不得小于 `min-duration`。 |

@@ -78,7 +78,8 @@ These have no switch:
   otherwise counted per instance ([Rate limiting](#rate-limiting)).
 - **Token revocation** is always on with JWT ([Startup](./troubleshooting.md#startup-fails-without-a-token-store)).
 - **The `cosecServiceGenerator` actuator endpoint** is there whenever `cosec-openapi`, springdoc and Spring Boot Actuator are;
-  expose it like any actuator endpoint.
+  expose it like any actuator endpoint, and restrict it with Spring Boot's `management.endpoint.cosec-service-generator.access`
+  (`unrestricted` by default).
 
 ## Key prefix
 
@@ -119,7 +120,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.scope.app-id` | string | none | The app this host serves. A credential that declares another app, or none, is rejected (`403` `scope-rejected`). Unset, the credential's app applies ([Apps](../integration/authentication.md#apps)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
-| `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. Under the `native` forward-headers strategy, set explicitly on Tomcat or `0` on Reactor Netty or Jetty, startup fails; `framework` always fails startup ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies), `PIP-16`). |
+| `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. Under the `native` forward-headers strategy, set explicitly on Tomcat or `0` on Reactor Netty or Jetty, startup fails, and so does any other server or none (a war in an external container); `framework` always fails startup ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies), `PIP-16`). |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | One call of the `MembershipProvider`. Past it, or when it fails, `503`. |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | One call of an `AttributeProvider` that sets no timeout of its own. Past it, its attributes are unavailable, and a statement that needs them makes the decision Indeterminate. |
 | `cosec.authorization.routes.location` | comma-separated resource locations | unset | The route maps a WebFlux or WebMvc host loads at startup, each logged with its service and route count. A location that does not exist, a map that does not parse, or a map with no routes fails startup. Unset, no route map is loaded and every request is authorized in the `http` namespace, unless `classpath:cosec-routes.json` exists: startup then fails until the property names it or is set empty. Empty runs without a route map on purpose. A Spring Cloud Gateway host ignores it and loads no route map. |
@@ -174,13 +175,13 @@ of your own replaces both.
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. Other tenants keep deciding on what is installed. |
-| `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | The lag beyond which the tenants above fail closed. |
-| `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | How long a request waits for a document that is not installed. Past it the document counts as failed for that request. |
-| `cosec.authorization.snapshot.max-apps` | int | `1024` | The most app documents held in memory; the least recently used one is dropped beyond it, and loaded again when needed. Under a burst of cold loads a family may for a moment hold more: at most twice this bound, and never more than 4,096 above it, plus the documents being loaded at that moment; beyond that the instance evicts on the thread that loaded the document, before it answers ([Storage](./storage.md#how-instances-read-documents)). |
-| `cosec.authorization.snapshot.max-tenants` | int | `1024` | The same for tenant documents. The platform document is never dropped. |
+| `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | The lag beyond which the tenants above fail closed. Not negative. |
+| `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | How long a request waits for a document that is not installed. Past it the document counts as failed for that request. Must be positive. |
+| `cosec.authorization.snapshot.max-apps` | int | `1024` | The most app documents held in memory (positive); the least recently used one is dropped beyond it, and loaded again when needed. Under a burst of cold loads a family may for a moment hold more: at most twice this bound, and never more than 4,096 above it, plus the documents being loaded at that moment; beyond that the instance evicts on the thread that loaded the document, before it answers ([Storage](./storage.md#how-instances-read-documents)). |
+| `cosec.authorization.snapshot.max-tenants` | int | `1024` | The same for tenant documents (positive). The platform document is never dropped. |
 | `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document, which is always loaded. Readiness refuses traffic until the platform document and every listed document are installed; liveness is not affected. |
 | `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, as above. |
-| `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. |
+| `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. Must be positive. |
 | `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `INFO memory`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. Either way the instance reads the policy again every `revalidate-interval`, and the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict; a policy it cannot read is `DOWN` under `fail` and `UP` with `eviction: unknown` under `warn` ([Troubleshooting](./troubleshooting.md#cosecsnapshoteviction-is-down)). |
 
 ## Shadow windows
@@ -297,7 +298,7 @@ credential is ever revoked.
 | `cosec.control.changes.expire-after` | duration | `7d` | An open change request expires this long after it was proposed, and leaves the list of open changes. |
 | `cosec.control.approval.expire-after` | duration | `72h` | How long an approval stays valid. Startup fails when it is longer than `cosec.jwt.token-validity.refresh`, how long a token revocation is kept: an approval would outlive the revocation of its token. |
 | `cosec.control.approval.four-eyes` | boolean | `false` | Whether the changes of a platform principal holding `cosec:approve` on the document (the trust root) are analyzed too: what the analysis cannot prove contained then needs another platform principal's approval. A change that escalates needs one either way. |
-| `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h` fails startup. |
+| `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h`, or not positive, fails startup. |
 | `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. |
 | `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. |
 | `cosec.control.shadow.max-duration` | duration | `24h` | A window closes at this age with fewer samples, as insufficient evidence the publisher must acknowledge. Must not be less than `min-duration`. |
