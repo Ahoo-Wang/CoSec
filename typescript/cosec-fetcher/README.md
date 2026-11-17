@@ -24,12 +24,11 @@ Requires Node `^22.12.0 || ^24.0.0 || >=26.0.0`, the Node versions nanoid 6 supp
 
 ```ts
 import { Fetcher } from '@ahoo-wang/fetcher';
-import { CoSecConfigurer, sameOriginTrust } from '@ahoo-wang/cosec-fetcher';
+import { CoSecConfigurer } from '@ahoo-wang/cosec-fetcher';
 
 const api = new Fetcher({ baseURL: 'https://api.example.com' });
 
 const cosec = new CoSecConfigurer({
-  isTrusted: sameOriginTrust,
   onUnauthorized: () => window.location.assign('/login'),
   onForbidden: async () => console.error('Access denied'),
 });
@@ -41,9 +40,16 @@ This minimal configuration adds attribution headers without authentication.
 Provide a `TokenRefresher` to enable token storage, Bearer injection, and
 automatic refresh. Keep refresh requests on a separate unconfigured Fetcher.
 
-`isTrusted: sameOriginTrust` keeps the token and the CoSec headers, device ID
-included, on the origin of the `baseURL` and the page. Without `isTrusted`, a
-request to an absolute URL on any origin receives the access token.
+The token, the CoSec headers (device ID included) and the tenant and owner that
+fill path variables go only to the origin of an absolute `baseURL` and to the
+page's origin: `isTrusted` defaults to `sameOriginTrust`. A request to an
+absolute URL on any other origin (a pagination link, a download URL, a
+callback) is sent bare, and its `401` starts no refresh and ends no session.
+Name more origins with your own predicate, which then decides alone for
+absolute URLs: `isTrusted: (url, exchange) => sameOriginTrust(url, exchange) ||
+new URL(url).origin === 'https://files.example.com'`. In Node (no page) an
+absolute `baseURL` is the only trusted origin; with a relative one, an
+absolute URL is sent bare.
 
 ## Core capabilities
 
@@ -57,7 +63,7 @@ request to an absolute URL on any origin receives the access token.
   session; a `429` never signs the user out; `scope-rejected` has its own
   callback.
 - Configurable 401, 403 and `scope-rejected` callbacks that receive the problem.
-- Per-origin credential trust with `isTrusted` / `sameOriginTrust`.
+- Per-origin credential trust: same origin by default (`sameOriginTrust`), your own `isTrusted` to change it.
 - Individual interceptors for applications with a custom pipeline.
 
 Never log, embed, or commit real tokens.
@@ -84,6 +90,18 @@ per-tab in-memory storage, refresh in one place only. The
 [recipe](https://fetcher.ahoo.me/guides/integrations/cosec) has the details.
 
 ## Upgrading from `@ahoo-wang/fetcher-cosec` 6.x
+
+- **Credentials go only to trusted origins by default.** Without `isTrusted`,
+  6.x sent the token, `CoSec-Device-Id`, `CoSec-Request-Id` and `CoSec-Space-Id`
+  to every absolute URL, and filled `{tenantId}` and `{ownerId}` from the token.
+  Now only the origin of an absolute `baseURL` and the page's origin get them.
+  What breaks: a call to a third origin that relied on the token (a second API
+  on another host, a CDN that checks it) now arrives without it, as a `401` of
+  that origin. Migrate with a predicate that names the origin:
+  `isTrusted: (url, exchange) => sameOriginTrust(url, exchange) ||
+new URL(url).origin === 'https://files.example.com'`. Code that really sent
+  to every origin writes `isTrusted: () => true` and owns that decision. Calls
+  with an absolute URL in Node without an absolute `baseURL` are sent bare too.
 
 - The package is `@ahoo-wang/cosec-fetcher`: change `package.json` and every import.
   The React hooks moved to `@ahoo-wang/cosec-react`.
