@@ -1,17 +1,19 @@
-# `@ahoo-wang/fetcher-cosec`
+# `@ahoo-wang/cosec-fetcher`
 
 CoSec request attribution and optional JWT authentication for Fetcher. Use it
 when the server contract expects CoSec device, request, space, or Bearer-token
 behavior.
 
-**Which CoSec it speaks.** 6.x speaks CoSec 7.x. The next major version speaks
-**CoSec 8.0 only**: a CoSec 7 server needs 6.x. See [Upgrading](#upgrading-from-6x).
+**Which CoSec it speaks.** CoSec 8.0 only. It is the client of CoSec's wire
+contract ([Building a client](https://cosec.ahoo.me/integration/clients)),
+versioned and released with CoSec. A CoSec 7 server needs `@ahoo-wang/fetcher-cosec`
+6.x. Moving from that package: [Upgrading](#upgrading-from-ahoo-wangfetcher-cosec-6x).
 
 ## Install
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
-  @ahoo-wang/fetcher-storage @ahoo-wang/fetcher-cosec
+  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher
 ```
 
 Peer dependencies: `fetcher`, `fetcher-eventbus`, and `fetcher-storage`.
@@ -22,7 +24,7 @@ Requires Node `^22.12.0 || ^24.0.0 || >=26.0.0`, the Node versions nanoid 6 supp
 
 ```ts
 import { Fetcher } from '@ahoo-wang/fetcher';
-import { CoSecConfigurer, sameOriginTrust } from '@ahoo-wang/fetcher-cosec';
+import { CoSecConfigurer, sameOriginTrust } from '@ahoo-wang/cosec-fetcher';
 
 const api = new Fetcher({ baseURL: 'https://api.example.com' });
 
@@ -81,8 +83,10 @@ lock: `localStorage` with Web Locks, or another storage declared with
 per-tab in-memory storage, refresh in one place only. The
 [recipe](https://fetcher.ahoo.me/guides/integrations/cosec) has the details.
 
-## Upgrading from 6.x
+## Upgrading from `@ahoo-wang/fetcher-cosec` 6.x
 
+- The package is `@ahoo-wang/cosec-fetcher`: change `package.json` and every import.
+  The React hooks moved to `@ahoo-wang/cosec-react`.
 - `appId` is deprecated and ignored: CoSec 8.0 does not read `CoSec-App-Id`,
   the app is the token's `aud`. `CoSecHeaders.APP_ID` is removed.
 - `AuthorizeResult` and `AuthorizeResults` are removed: nothing in CoSec 8.0
@@ -99,7 +103,7 @@ per-tab in-memory storage, refresh in one place only. The
 
 ## Documentation
 
-- [CoSec authentication recipe](https://fetcher.ahoo.me/guides/integrations/cosec)
-- [CoSec reference](https://fetcher.ahoo.me/reference/cosec)
+- [Building a client](https://cosec.ahoo.me/integration/clients): what a client may rely on
+- [Fetcher](https://fetcher.ahoo.me), the HTTP client it is built on
 
 [中文](./README.zh-CN.md) · [License](../../LICENSE)

@@ -1,5 +1,5 @@
 {
-  "name": "@ahoo-wang/fetcher-cosec",
+  "name": "@ahoo-wang/cosec-fetcher",
   "version": "6.1.0",
   "description": "Enterprise-grade CoSec authentication integration for the Fetcher HTTP client with comprehensive security features including automatic token management, device tracking, and request attribution.",
   "keywords": [
@@ -15,14 +15,14 @@
   ],
   "author": "Ahoo-Wang",
   "license": "Apache-2.0",
-  "homepage": "https://github.com/Ahoo-Wang/fetcher/tree/main/packages/cosec",
+  "homepage": "https://github.com/Ahoo-Wang/CoSec/tree/main/typescript/cosec-fetcher",
   "repository": {
     "type": "git",
-    "url": "https://github.com/Ahoo-Wang/fetcher.git",
-    "directory": "packages/cosec"
+    "url": "git+https://github.com/Ahoo-Wang/CoSec.git",
+    "directory": "typescript/cosec-fetcher"
   },
   "bugs": {
-    "url": "https://github.com/Ahoo-Wang/fetcher/issues"
+    "url": "https://github.com/Ahoo-Wang/CoSec/issues"
   },
   "type": "module",
   "engines": {

@@ -132,8 +132,8 @@ export {
  * @example
  * ```typescript
  * import { Fetcher } from '@ahoo-wang/fetcher';
- * import { CoSecRequestInterceptor } from '@ahoo-wang/fetcher-cosec';
- * import { DeviceIdStorage } from '@ahoo-wang/fetcher-cosec';
+ * import { CoSecRequestInterceptor } from '@ahoo-wang/cosec-fetcher';
+ * import { DeviceIdStorage } from '@ahoo-wang/cosec-fetcher';
  *
  * // Create dependencies
  * const deviceIdStorage = new DeviceIdStorage();
@@ -159,7 +159,7 @@ export {
  * @example
  * ```typescript
  * // Multi-tenant with space support
- * import { DefaultSpaceIdProvider, SpaceIdStorage } from '@ahoo-wang/fetcher-cosec';
+ * import { DefaultSpaceIdProvider, SpaceIdStorage } from '@ahoo-wang/cosec-fetcher';
  *
  * const spaceStorage = new SpaceIdStorage();
  * const spaceIdProvider = new DefaultSpaceIdProvider({

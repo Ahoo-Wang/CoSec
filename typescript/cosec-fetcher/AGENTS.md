@@ -1,4 +1,4 @@
-# AGENTS.md — @ahoo-wang/fetcher-cosec
+# AGENTS.md — @ahoo-wang/cosec-fetcher
 
 <!-- This file provides coding agents with context about this package. -->
 
@@ -6,19 +6,19 @@
 
 ```bash
 # Build this package
-pnpm --filter @ahoo-wang/fetcher-cosec build
+pnpm --filter @ahoo-wang/cosec-fetcher build
 
 # Run tests
-pnpm --filter @ahoo-wang/fetcher-cosec test
+pnpm --filter @ahoo-wang/cosec-fetcher test
 
 # Run a single test file
-pnpm --filter @ahoo-wang/fetcher-cosec exec vitest run test/cosecConfigurer.test.ts
+pnpm --filter @ahoo-wang/cosec-fetcher exec vitest run test/cosecConfigurer.test.ts
 
 # Lint
-pnpm --filter @ahoo-wang/fetcher-cosec lint
+pnpm --filter @ahoo-wang/cosec-fetcher lint
 
 # Clean
-pnpm --filter @ahoo-wang/fetcher-cosec clean
+pnpm --filter @ahoo-wang/cosec-fetcher clean
 ```
 
 ## Testing

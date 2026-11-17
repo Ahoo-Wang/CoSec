@@ -1,16 +1,17 @@
-# `@ahoo-wang/fetcher-cosec`
+# `@ahoo-wang/cosec-fetcher`
 
 面向 Fetcher 的 CoSec 请求归属与可选 JWT 认证。服务端契约要求 CoSec 设备、请求、
 空间或 Bearer Token 行为时使用。
 
-**对接的 CoSec 版本。** 6.x 对接 CoSec 7.x。下一个主版本**只对接 CoSec 8.0**：CoSec 7
-服务端请使用 6.x。见[升级](#从-6x-升级)。
+**对接的 CoSec 版本。** **只对接 CoSec 8.0**。它是 CoSec 线上契约的客户端
+（[构建客户端](https://cosec.ahoo.me/zh/integration/clients)），与 CoSec 一起版本化、一起发布。CoSec 7
+服务端请使用 `@ahoo-wang/fetcher-cosec` 6.x。从那个包迁移：见[升级](#从-ahoo-wangfetcher-cosec-6x-升级)。
 
 ## 安装
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
-  @ahoo-wang/fetcher-storage @ahoo-wang/fetcher-cosec
+  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher
 ```
 
 Peer 依赖：`fetcher`、`fetcher-eventbus` 和 `fetcher-storage`。
@@ -21,7 +22,7 @@ Peer 依赖：`fetcher`、`fetcher-eventbus` 和 `fetcher-storage`。
 
 ```ts
 import { Fetcher } from '@ahoo-wang/fetcher';
-import { CoSecConfigurer, sameOriginTrust } from '@ahoo-wang/fetcher-cosec';
+import { CoSecConfigurer, sameOriginTrust } from '@ahoo-wang/cosec-fetcher';
 
 const api = new Fetcher({ baseURL: 'https://api.example.com' });
 
@@ -73,8 +74,9 @@ CoSec 不提供登录或刷新端点；应用编写的端点必须：
 `sessionStorage` 或每个标签页各自的内存存储时，只在一个地方刷新。细节见
 [实战文档](https://fetcher.ahoo.me/zh/guides/integrations/cosec)。
 
-## 从 6.x 升级
+## 从 `@ahoo-wang/fetcher-cosec` 6.x 升级
 
+- 包名改为 `@ahoo-wang/cosec-fetcher`：修改 `package.json` 和每一处导入。React hooks 移到了 `@ahoo-wang/cosec-react`。
 - `appId` 已弃用并被忽略：CoSec 8.0 不读取 `CoSec-App-Id`，应用是令牌的 `aud`。
   `CoSecHeaders.APP_ID` 已移除。
 - `AuthorizeResult` 与 `AuthorizeResults` 已移除：CoSec 8.0 不会发送它们。
@@ -87,7 +89,7 @@ CoSec 不提供登录或刷新端点；应用编写的端点必须：
 
 ## 文档
 
-- [CoSec 认证实战](https://fetcher.ahoo.me/zh/guides/integrations/cosec)
-- [CoSec 参考](https://fetcher.ahoo.me/zh/reference/cosec)
+- [构建客户端](https://cosec.ahoo.me/zh/integration/clients)：客户端可以依赖什么
+- [Fetcher](https://fetcher.ahoo.me)：它所基于的 HTTP 客户端
 
 [English](./README.md) · [许可证](../../LICENSE)

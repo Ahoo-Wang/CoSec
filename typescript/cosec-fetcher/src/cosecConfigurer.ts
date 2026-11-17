@@ -355,7 +355,7 @@ export interface CoSecConfig
  * @example
  * ```typescript
  * import { Fetcher } from '@ahoo-wang/fetcher';
- * import { CoSecConfigurer } from '@ahoo-wang/fetcher-cosec';
+ * import { CoSecConfigurer } from '@ahoo-wang/cosec-fetcher';
  *
  * // Create and configure
  * const configurer = new CoSecConfigurer({
