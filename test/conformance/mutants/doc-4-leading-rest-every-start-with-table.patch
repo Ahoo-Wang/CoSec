@@ -3,10 +3,19 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
-index 4bd7f08c..76b2b478 100644
+index fcbdbed7..efee1418 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
-@@ -171,7 +171,7 @@ class HttpPathPattern private constructor(
+@@ -131,8 +131,6 @@ class HttpPathPattern private constructor(
+         // Every element after a leading rest matches one path element, except a final `*`, which may match none:
+         // so the rest of the pattern can only start where it ends the path, or one later. Spring takes the first that
+         // fits. Trying no other start keeps a glob after the rest to two segments (RC1-8, `DOC-4`).
+-        val rest = elements.size - 1
+-        val first = path.size - rest
+         for (start in maxOf(0, first) until minOf(path.size, first + 2)) {
+             if (matchFrom(1, start, path, captures)) {
+                 (elements[0] as PathElement.Rest).capture(path, 0, start, captures)
+@@ -176,7 +174,7 @@ class HttpPathPattern private constructor(
          }
          val rest = elements.size - 1
          val first = path.size - rest
