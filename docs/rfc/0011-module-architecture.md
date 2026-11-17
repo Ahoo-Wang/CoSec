@@ -119,6 +119,8 @@ flowchart BT
 
 根目录保留 `config/`、`docs/`、`gradle/`、`k8s/`、`schema/`、`scripts/`、`skills/`、`wiki/`。
 
+> **2026-11-17 增补：`typescript/`，一个不属于 Gradle 的工作区。** CoSec 的 TypeScript 客户端从 fetcher 仓库搬进本仓库（维护者决定，[路线图](../roadmap.md) §9）：`typescript/cosec-fetcher`（`@ahoo-wang/cosec-fetcher`，CoSec 应用的客户端）与 `typescript/cosec-react`（`@ahoo-wang/cosec-react`，它的 React 钩子）。它是一个独立的 pnpm 工作区，有自己的锁文件，与 `wiki/` 的互不相见；不是 Gradle 项目，所以不在 §5 的项目清单里，由 `test/architecture` 的 `TypeScriptWorkspaceTest` 单独约束：包名与目录、版本等于 `gradle.properties` 的版本（Maven 与 npm 由同一个标签发布）、只有一个锁文件、依赖方向单向指向 fetcher 的包且不依赖被它取代的 `@ahoo-wang/fetcher-cosec`、CI 的任务不带条件与密钥并在必需检查之内。Kotlin 的结构规则（每文件 400 行、一个类型）不适用于它；与 `api/<project>.api` 对应的是每个包的公共 API 报告。客户端可以依赖什么，以 `wiki/integration/clients.md` 为准；它的测试对着本仓库的一个真实的 CoSec 应用运行，所以改了线上契约而没有改客户端的 PR 不会通过。
+
 包名与模块对齐：`me.ahoo.cosec.spi.*`、`me.ahoo.cosec.document.*`、`me.ahoo.cosec.runtime.*` 等；同一个包不跨模块。
 
 ## 4. 今天的 `core/` 与 `api/` 的去向
