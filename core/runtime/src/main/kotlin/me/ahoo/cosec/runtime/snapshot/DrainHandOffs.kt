@@ -21,7 +21,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  * The drains a [SnapshotSource]'s keys hand off when a thread's budget is spent (RFC 0013 B2b §3): one task in the
  * compile pool at a time, which runs them in order, so that hand-offs never compete with compilations one task per
  * key. Scheduled by a CAS, like a drain: a hand-off made while the task runs is taken by it, or by the task scheduled
- * after it. A pool that refuses the task sends it to housekeeping, and when that refuses too, it runs in place.
+ * after it. A pool that refuses the task sends it to housekeeping. When that refuses too, the caller's thread runs the
+ * source's hand-offs, for as long as they come: the back-pressure that keeps answering under overload, where deferring
+ * them would leave requests waiting without a bound. Each refusal is counted ([SnapshotMetrics.onHandOffRefused]).
  */
 internal class DrainHandOffs(private val threads: SnapshotThreads, private val metrics: SnapshotMetrics) {
     private val waiting = ConcurrentLinkedQueue<Runnable>()
