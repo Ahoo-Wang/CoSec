@@ -20,6 +20,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicLong
 
 /**
@@ -110,6 +111,35 @@ class AbsentBoundWindowTest {
             store.hold = false
             release(a)
             reloading.join()
+            runHousekeeping()
+            source.absentHeld().assert().describedAs("absent entries held").isLessThanOrEqualTo(1)
+        }
+    }
+
+    /**
+     * The one refusal no load in flight answers: an eviction whose transition throws gives its claim back, and the victim
+     * stays, idle. Nothing asks at once, since a transition that throws every time would loop; the periodic revalidation
+     * reloads every installed member, and each of those loads' ends asks for the bound.
+     */
+    @Test
+    fun `an eviction whose transition throws is taken back to the bound by the next revalidation`() {
+        val throwing = AtomicBoolean()
+        val thrown = AtomicInteger()
+        val hooks = KeyDrain.Hooks({
+            if (it is KeyEvent.Evict && throwing.get()) error("thrown by the test, ${thrown.incrementAndGet()}")
+        })
+        source(hooks).use { source ->
+            source.load().join()
+            source.load(a.appId).join()
+            source.load(b.appId).join()
+            // Every pass b's loads asked for refuses: each eviction's transition throws, and its claim is given back.
+            throwing.set(true)
+            runHousekeeping()
+            throwing.set(false)
+            thrown.get().assert().describedAs("evictions whose transition threw").isGreaterThan(0)
+            source.absentHeld().assert().describedAs("the claims given back").isEqualTo(2)
+            // Both members load again, and the store answers absent again: nothing installs, each end asks.
+            source.revalidate().join()
             runHousekeeping()
             source.absentHeld().assert().describedAs("absent entries held").isLessThanOrEqualTo(1)
         }
