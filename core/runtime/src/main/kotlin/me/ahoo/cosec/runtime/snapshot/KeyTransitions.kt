@@ -38,8 +38,12 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     fun initial(): KeyState<T> = KeyState(retryDelay = config.rejectedReloadRetry)
 
-    fun next(state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment): KeyStep<T> {
-        val step = KeyStepBuilder(state, if (event == KeyEvent.Close) moment.copy(closed = true) else moment)
+    fun next(state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment): KeyStep<T> =
+        KeyStepBuilder(state, moment).also { next(it, state, event, moment) }.build()
+
+    /** [next] into a drain's own [step], reset here: the same decision, its effects read in place. */
+    fun next(step: KeyStepBuilder<T>, state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment) {
+        step.reset(state, if (event == KeyEvent.Close) moment.copy(closed = true) else moment)
         when (event) {
             is KeyEvent.Requested -> requested(step, event)
             KeyEvent.Changed -> changed(step)
@@ -50,7 +54,6 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             is KeyEvent.ReadDone, is KeyEvent.ReadFailed, is KeyEvent.ReadTimedOut, is KeyEvent.Compiled,
             is KeyEvent.CompileCrashed, is KeyEvent.CompileRejected, is KeyEvent.EffectFailed -> ofLoad(step, event)
         }
-        return step.build()
     }
 
     /**

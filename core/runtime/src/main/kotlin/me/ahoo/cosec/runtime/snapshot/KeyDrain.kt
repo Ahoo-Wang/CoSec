@@ -160,12 +160,16 @@ internal class KeyDrain<T : Any>(
         context.handOffs.handOff { DrainBudget.unbounded { drain() } }
     }
 
+    @Suppress("UNCHECKED_CAST")
+    private fun take(item: Any) = KeyStepPool.withStep<T> { step -> take(item, step) }
+
+    /** One event through [step], this thread's builder at this depth (RFC 0013 B2b step 3). */
     @Suppress("UNCHECKED_CAST", "TooGenericExceptionCaught")
-    private fun take(item: Any) {
+    private fun take(item: Any, step: KeyStepBuilder<T>) {
         val request = item as? EvictRequest
         val before = state
         var event: KeyEvent<T>? = if (request == null) item as KeyEvent<T> else null
-        val step = try {
+        try {
             // Inside the guard, so that whatever throws here still has its event answered (§5).
             val taken = event ?: claimed(request!!).also { event = it }
             val moment = KeyMoment(
@@ -176,7 +180,7 @@ internal class KeyDrain<T : Any>(
                 context.families.seen[key],
             )
             hooks.beforeNext(taken)
-            transitions.next(before, taken, moment)
+            transitions.next(step, before, taken, moment)
         } catch (error: VirtualMachineError) {
             // As from an effect: never thrown into a thread that only happened to drain this key (§5).
             aborted(before, event, request, error)
@@ -188,14 +192,16 @@ internal class KeyDrain<T : Any>(
         }
         state = step.state
         publish(step.state.removed, step.state.idle)
-        executed(step, before.load?.id)
+        executed(step.state, step.effects, before.load?.id)
     }
 
     /** The step's effects, in order; one that throws queues an [KeyEvent.EffectFailed] and the rest still run. */
     @Suppress("TooGenericExceptionCaught")
-    private fun executed(step: KeyStep<T>, loadBefore: Long?) {
-        val loadId = step.state.load?.id ?: loadBefore ?: NO_LOAD
-        for (effect in step.effects) {
+    private fun executed(after: KeyState<T>, emitted: List<KeyEffect<T>>, loadBefore: Long?) {
+        val loadId = after.load?.id ?: loadBefore ?: NO_LOAD
+        // By index: the list is the thread's pooled builder's, and an iterator per step is what this saves.
+        for (index in emitted.indices) {
+            val effect = emitted[index]
             try {
                 effects.execute(effect)
             } catch (error: VirtualMachineError) {
