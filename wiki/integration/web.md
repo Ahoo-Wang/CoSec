@@ -477,6 +477,34 @@ Kustomize manifests for Kubernetes are in [`k8s/`](https://github.com/Ahoo-Wang/
 to try CoSec out and a `production` one to start from ([Kubernetes](../operations/deployment.md#kubernetes)). The
 image exposes only the `health` actuator endpoint.
 
+### Actuator on an application {#actuator-on-an-application}
+
+On an application, WebFlux or WebMvc, an actuator endpoint is a request like any other: where CoSec's filter stands,
+nothing is let through without a policy, and until the first platform document is installed every request is `503`. What
+the filter fronts depends on the server (`STA-4`; the cells are asserted against real servers in `ManagementPortTest`):
+
+| Server | The application port | A separate `management.server.port` |
+|---|---|---|
+| WebFlux | CoSec's: the probes are `503` before the first platform document, `401` for an anonymous caller after it | CoSec's too: Spring Boot's management server collects the application's `WebFilter`s and `RouterFunction`s, so the pipeline fronts it, the application's functional routes and the control API included (an application controller is a `404` there) |
+| WebMvc | CoSec's, as on WebFlux | Outside CoSec: actuator's endpoints are Spring's own (liveness `200`; readiness `503` until the documents are installed, then `200`), and a controller, a functional route and the control API are a `404` |
+| Gateway ([its own section](#actuator-on-a-gateway)) | the gateway's routes only | Outside CoSec: actuator's endpoints are Spring's own and the gateway's routes are not served; the control API, when the control plane is on, is served under its own pipeline |
+
+With one port, or `management.server.port` equal to the application's, every row is the application port.
+
+- **Readiness over HTTP needs one statement.** An anonymous probe is `401` once the platform document is installed, unless
+  a statement permits its path. This one permits `GET` on the two probe paths for anyone, and nothing else of actuator:
+
+  <<< @/examples/probes/documents/platform.json [probes policy and binding]
+
+  Before the first document is published the probe still answers `503`, which is the right answer for "not ready". Outside
+  Kubernetes, Spring Boot serves the probes only with `management.endpoint.health.probes.enabled=true`.
+- **Liveness and startup must not depend on the platform document.** An HTTP liveness probe on the application port of an
+  application answers `503` until the first document is published, so the kubelet restarts the pod before it can ever be
+  ready. On WebMvc, point it at the management port, which is outside CoSec. On WebFlux the management port is under CoSec
+  too, so use a `tcpSocket` probe on the application port.
+- **What is served on a management port outside CoSec is protected by the network**, as on a gateway: expose there only
+  what you would expose to whoever can reach that port.
+
 ### Actuator on a gateway
 
 The gateway filter authorizes the gateway's routes, so the gateway's own actuator endpoints are not under CoSec. Served
@@ -487,7 +515,8 @@ HTTP on its application port: `management.server.port` unset, or the same as `se
 [troubleshooting](../operations/troubleshooting.md#startup-fails-on-an-exposed-actuator-endpoint)).
 
 - Serve actuator on its own port, behind a network policy, with `management.server.port`; there any endpoint may be
-  exposed.
+  exposed. Give the port a number: with a random one (`0`) Spring Cloud Gateway cannot tell the management port apart and
+  serves its routes there too, authorized by CoSec as on the application port.
 - Or expose only `health` (`management.endpoints.web.exposure.include`, Spring Boot's default).
 - Or list in `cosec.gateway.unprotected-endpoints` the endpoints something else protects on the application port.
   It never accepts `gateway`.
