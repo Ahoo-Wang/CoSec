@@ -241,6 +241,12 @@ RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保�
 >   没有测的：Jetty 与 Undertow，真实的 kubelet（重启循环是由存活探针的 `503` 推断的）。
 > - **随测试一起改的文档：** `web.md` 增加“应用上的 Actuator”，`deployment.md` 的就绪一节，`troubleshooting.md` 的新症状，快速启动里讲就绪的那一句。没有破坏性变化，升级文档不动。
 
+> **决定（2026-11-17，尚未实现；规则 `STA-5`）：应用声明了 CORS 的来源时，starter 把 CORS 过滤器接在管道之前。** 写客户端契约文档时在真实的 Tomcat 与 Netty 上跑出的事实（`wiki/integration/web.md` 的 CORS 一节）：CoSec 不设置任何 `Access-Control-*` 响应头，starter 也不注册 CORS 过滤器；在 Spring MVC 与 WebFlux 上，浏览器的预检请求（不带凭据的 `OPTIONS`）先到 CoSec，被当作匿名调用方的 `http:OPTIONS` 判定，应用自己的 `@CrossOrigin` 与 `addCorsMappings` 轮不到应答；只用策略放行 `OPTIONS` 得到的是不带 CORS 头的 `200`，浏览器照样拦截。唯一能让预检请求与被拒绝的响应都被脚本读到的安排，是在 CoSec 之前有一个 CORS 过滤器；网关的 `globalcors` 本来就是这样。
+>
+> - **定下的。** 应用声明了 `CorsConfigurationSource`（两个栈各自的那个接口），且没有自己注册 `CorsFilter` 或 `CorsWebFilter` 时，starter 在管道的过滤器之前紧挨着注册一个 CORS 过滤器。预检请求由它应答，不被判定；不是预检的请求照旧判定。没有这个 bean 时与今天完全相同：预检请求被当作匿名调用方的 `http:OPTIONS` 判定。不新增 `cosec.*` 属性，bean 就是开关；这个构建解析到的各个 starter 都不默认声明它。
+> - **代价，写进文档。** 启用之后预检请求不经过 CoSec：策略对 `http:OPTIONS` 的 DENY、限流、黑名单、审计与判定事件都看不到它。不带 `Access-Control-Request-Method` 的 `OPTIONS` 不是预检请求，照旧判定。来源不被允许的跨域请求由 Spring 在管道之前以普通的 `403` 拒绝，不是 problem+json，也没有 `CoSec-Request-Id`。预检请求只从这个 bean 应答，`@CrossOrigin` 与 `addCorsMappings` 只作用于随后的请求。
+> - **由带真实服务器的测试钉住**（两个栈），连同一个把装配改成无条件的变异体；它改变了管道能看到什么，所以进升级文档。
+
 > **实现说明（2026-11-04，#1200，RC 修复批次 D1，`DOC-5`，RC1-44）**：D3 的"一个 mapper"同时是一个严格的 mapper：`CoSecJson.mapper` 打开 `STRICT_DUPLICATE_DETECTION`，所以 CoSec 读的每种存储格式（文档、API Key、成员关系、影子报告、吊销、`cosec-migrate` 读的 7.x 输入）与每个控制面请求体都拒绝重复的 key，不再按后出现的值读。吊销缓存改用它，不再用应用的 `ObjectMapper`。唯一的例外是 starter 读 Spring 的配置元数据（`UnknownProperties`）：那不是 CoSec 的格式，用 `without(STRICT_DUPLICATE_DETECTION)` 读，后出现的值生效。
 
 ## 7. 交付
