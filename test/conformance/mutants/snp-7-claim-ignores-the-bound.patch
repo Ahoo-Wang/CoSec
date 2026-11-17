@@ -1,6 +1,6 @@
 # Rule: SNP-7
 # Mutant: a claim takes its kind's count down to nothing, not to its bound, so an eviction claimed after another took the kind back to its bound removes one more
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundRunnerTest --tests me.ahoo.cosec.runtime.snapshot.KeyRunnerContendedBoundTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
 index d8d8d5df..4d694aeb 100644
