@@ -1465,7 +1465,7 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   before CoSec, a CORS filter say, needs an order below `-9999`.
 - **HEAD is decided as GET, and a method with a lower-case letter is a `400`** (`PIP-18`). Servers run the GET handler
   for HEAD, so a DENY on `http:GET` did not stop it: HEAD now takes a route map's HEAD route, or GET's, and unmapped it
-  is `http:GET`; a statement on `http:HEAD` is refused (`DOC-8`, below), since HEAD is decided as `http:GET` or as the
+  is `http:GET`; a statement on `http:HEAD` is refused (`DOC-8`, see above), since HEAD is decided as `http:GET` or as the
   action of the route map's HEAD route. A method such as `delete` was
   decided as `http:delete`, which a DENY on `http:DELETE` does not name, while backends that fold case served it as
   DELETE: it is now `400 invalid-request`. `AuthorizationChecker` and the control plane's simulate, explain and analyze
@@ -1554,7 +1554,7 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   request's app.
 - **`SecurityContext` is read-only**: `tenantId`, `principal`, a non-null `scope` and `forwardedIdentity`
   (`gatewayRequestId`, `credentialId`, which replace the attributes `cosec.identity.rid` and `cosec.identity.jti`), and
-  `requestId` and `deviceId` (below). The attribute map and its accessors are removed; `tenant.tenantId` becomes `tenantId`.
+  `requestId` and `deviceId` (see above). The attribute map and its accessors are removed; `tenant.tenantId` becomes `tenantId`.
 - **`CoSecPrincipal` is what an application reads of the request**: `id`, an explicit `authenticated`, `attributes`. The
   roles effective for the request are in `SecurityContext.scope.roles`; `principal.roles` and `principal.policies` are
   removed.
@@ -1573,11 +1573,11 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   name CoSec's own ids, the anonymous principal `(0)` above all.
 - **`AttributeRequest` carries the `tenant`**, and `Subject.tenantId` is removed: a stage-A provider reads `request.tenant`.
 - **`SwitchTenantCredentials` carries the `context`** (`SecurityContext`) of the request instead of a `principal`, and
-  `switchTenant` receives it (`AbstractSwitchTenantAuthentication.switchTenant` is the `TenantSwitch` hook of
-  `SwitchTenantAuthentication` since, below). The new token keeps the previous token's app.
+  `switchTenant` receives it (`AbstractSwitchTenantAuthentication.switchTenant` is now the `TenantSwitch` hook of
+  `SwitchTenantAuthentication`, see above). The new token keeps the previous token's app.
 - **Login is suspending, and `cosec-login` no longer brings Reactor** (batch R7c). `Authentication.authenticate`,
-  `TokenCompositeAuthentication.authenticateAsToken`, `AbstractSwitchTenantAuthentication.switchTenant` (the
-  `TenantSwitch` hook of `SwitchTenantAuthentication` since, below),
+  `TokenCompositeAuthentication.authenticateAsToken`, `AbstractSwitchTenantAuthentication.switchTenant` (now the
+  `TenantSwitch` hook of `SwitchTenantAuthentication`, see above),
   `SocialAuthenticationProvider.authorizeUrl` and `authenticate`, `SocialAuthentication.authorizeUrl` and
   `SocialUserPrincipalConverter.convert` are `suspend` functions that return the value instead of a `Mono`. To migrate:
   make the override `suspend` and return the value; await a Reactor client with `awaitSingle()`; make the controller
@@ -1600,8 +1600,7 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   their exceptions are public.
 - **`PipelineComponents` is a plain class**, as is `SnapshotOptions`; both lose `copy` and the `componentN` functions.
   `PipelineComponents` no longer takes an `engine`. A host without Spring Boot is built with
-  `Pipeline.builder(authenticator, store)` (`SuspendingSnapshotSource.of(store)`, which this bullet first named, is gone
-  since, above).
+  `Pipeline.builder(authenticator, store)` (`SuspendingSnapshotSource.of(store)`, which this bullet first named, is gone: see above).
 - **`PolicyDocumentCompiler.compile` is internal.** A CI check calls `validate`; `forPlatform(platform)` is the
   overload for it.
 - **A public `data class` is now a value that cannot grow** (RFC 0010 C4): `Identity`, `Identity.Credential`,
@@ -1619,8 +1618,8 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
   `revokeSubject`, now `suspend`; its synchronous `isRevoked` and `subjectRevokedBefore` are gone (read them through
   `RevocationReader`), as is `TokenStore.NoOp`. `TokenRevoker.revoke` and `revokeSubject` are `suspend`: call them from a
   `suspend` handler instead of moving them off the event loop. `DefaultTokenRevoker` takes the `TokenRevocation`
-  (it is `StoreTokenRevoker` in `me.ahoo.cosec.login.token` since, above). `SimpleRefreshTokenAuthentication(tokenVerifier)`
-  becomes `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)` (`RefreshTokenAuthentication` since, above)
+  (it is now `StoreTokenRevoker` in `me.ahoo.cosec.login.token`, see above). `SimpleRefreshTokenAuthentication(tokenVerifier)`
+  becomes `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)` (now `RefreshTokenAuthentication`, see above)
   and no longer runs on a dispatcher of its own. The
   starter's `TokenVerifier` bean is the plain `JwtTokenVerifier`, and it adds a `TokenRevocation` bean. A `TokenStore` of
   your own implements the two writes as `suspend` functions, and its reads as a `RevocationReader` bean.
@@ -1633,7 +1632,7 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
     refresh (`token-invalid`); its access token works until it expires.
   - **Issue tokens through `TokenCompositeAuthentication`**, which starts the session, or start one yourself with
     `TokenFamilies.start` and `TokenSubject.inSession`: a pair from `TokenConverter.toToken` alone never refreshes.
-    `TokenCompositeAuthentication` and `SimpleRefreshTokenAuthentication` (`RefreshTokenAuthentication` since, above)
+    `TokenCompositeAuthentication` and `SimpleRefreshTokenAuthentication` (now `RefreshTokenAuthentication`, see above)
     take a `TokenFamilies` (a starter bean).
   - **A client keeps only the newest pair:** presenting a pair after a newer one was issued ends the session, unless it
     happens within `cosec.jwt.session.rotation-leeway` (30 seconds) of that refresh: then it gets a pair of the newest
@@ -1773,8 +1772,8 @@ and have to be provisioned again. **Close or withdraw open shadow windows before
     }
     ```
 
-  - `AbstractRefreshTokenAuthentication` is removed: `SimpleRefreshTokenAuthentication` (`RefreshTokenAuthentication`
-    since, above) implements `Authentication<RefreshTokenCredentials>` itself. `AuthenticationProvider`, `DefaultAuthenticationProvider` and
+  - `AbstractRefreshTokenAuthentication` is removed: `SimpleRefreshTokenAuthentication` (now `RefreshTokenAuthentication`,
+    see above) implements `Authentication<RefreshTokenCredentials>` itself. `AuthenticationProvider`, `DefaultAuthenticationProvider` and
     `CompositeAuthentication`'s constructor are `@InternalCoSecApi`: the starter registers every `Authentication`
     bean.
   - `cosec-social`: `SocialProviderManager` and `SocialAuthenticationProvider` are `@InternalCoSecApi`, as are the

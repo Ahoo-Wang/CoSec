@@ -209,6 +209,8 @@ fun currentUser(): Mono<String> =
 val securityContext = exchange.getSecurityContext()
 ```
 
+CoSec 没有处理该请求时，三个访问器的回答不同：`ContextView.getSecurityContext()` 抛出 `IllegalStateException`，`ContextView.getSecurityContextOrEmpty()` 和 `exchange.getSecurityContext()` 返回 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。
+
 **Spring MVC**：在处理器中声明一个 `SecurityContext` 参数。starter 注册了它的解析器（`SecurityContextArgumentResolver`），它从请求中读取上下文，所以在各种处理器中（阻塞的、`suspend` 的、异步的），这个参数都是处理器自己那个请求的上下文。CoSec 没有处理该请求时，可空的参数为 null。参数的类型就是 `SecurityContext` 本身：你自己的子类型的参数交给你自己的解析器。
 
 ```kotlin

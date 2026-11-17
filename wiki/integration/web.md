@@ -291,6 +291,10 @@ fun currentUser(): Mono<String> =
 val securityContext = exchange.getSecurityContext()
 ```
 
+Where CoSec did not handle the request, the three accessors answer differently: `ContextView.getSecurityContext()` throws an
+`IllegalStateException`, while `ContextView.getSecurityContextOrEmpty()` and `exchange.getSecurityContext()` return `null`,
+which a caller must treat as "no context", never as "no restriction".
+
 **Spring MVC**: in a handler, declare a `SecurityContext` parameter. The starter registers its resolver
 (`SecurityContextArgumentResolver`), which reads the context from the request, so the parameter is the context of the
 handler's own request in every kind of handler: blocking, `suspend` and async. A nullable parameter is null where CoSec
