@@ -400,27 +400,54 @@ To add your own, declare an `AttributeProvider` bean ([Extending CoSec](../archi
 
 ## CORS
 
-A client's side of this (which headers to allow and expose) is in [Building a client](./clients.md#cors).
+CoSec sets no `Access-Control-*` header and registers no CORS filter. A browser client needs the application to
+configure CORS, and where that happens decides what the browser sees. A preflight is an `OPTIONS` request with no
+credentials, so the pipeline decides it as the action `http:OPTIONS` for an anonymous caller: `401` unless a statement
+lets one do that. On Spring MVC and WebFlux the application's own CORS configuration (`@CrossOrigin`,
+`addCorsMappings`) runs in the handler mapping, after CoSec's filter, so by default it never gets to answer a
+preflight.
 
-Browsers send CORS preflight requests without credentials, so authorization would answer them `401`. With
-WebFlux, register `OrderedCorsWebFilter`; it runs at order `999`, just before `PipelineWebFilter`, and answers
-preflights itself:
+| Stack | CORS by default | A preflight | A refused request's CORS headers |
+|---|---|---|---|
+| Spring MVC | In `DispatcherServlet`, after CoSec | Decided by CoSec: `http:OPTIONS`, `401` for an anonymous one | None: the browser cannot read the problem |
+| WebFlux | In the handler mapping, after `PipelineWebFilter` | Decided by CoSec, as on MVC | None |
+| Gateway | `spring.cloud.gateway.server.webflux.globalcors`, when the route is matched, before the gateway filter | Answered by the gateway, never decided | Added before CoSec answers |
+
+What a browser accepts, tried on Tomcat (MVC) and Reactor Netty (WebFlux) with a preflight and a cross-origin `GET`:
+
+| Configuration | A preflight | A refused request (`401`) |
+|---|---|---|
+| Nothing | `401`, no CORS headers: the browser blocks the request | No CORS headers |
+| A statement that lets anyone do `http:OPTIONS`, and **no** CORS configuration | `200` **without** `Access-Control-*` headers: the browser blocks it as well | No CORS headers |
+| That statement, and Spring's own CORS configuration | `200` with the headers, answered by Spring once it is past CoSec | Still none: only permitted requests carry them |
+| **A CORS filter before CoSec** | `200` with the headers, on any path, never decided and never reaching CoSec or a handler | The CORS headers too, so a script can read the `401` and its problem |
+
+A statement that permits `http:OPTIONS` only lets the preflight through CoSec: it is not a CORS configuration, and
+something else must still set the headers. The filter before CoSec is the way that serves both a preflight and a
+refusal; on every stack it is the same arrangement:
+
+- **WebFlux:** register `OrderedCorsWebFilter`; it runs at order `999`, just before `PipelineWebFilter` (`1000`), and
+  answers preflights itself:
 
 ```kotlin
 @Bean
 fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
 ```
 
-With Spring MVC, register a CORS filter with an order before `-9999`.
+- **Spring MVC:** register Spring's `CorsFilter` with an order before `-9999`, the order of CoSec's filter.
+- **Gateway:** `globalcors`, which the gateway applies before its filters.
 
-Where CORS is handled decides what a browser sees of a refusal, so the three stacks differ unless you configure them
-alike:
+The configuration behind the filter has to allow the request headers a client sends (`Authorization`, `Content-Type`,
+`CoSec-Device-Id`, `CoSec-Space-Id`, `CoSec-Request-Id`) and expose the response headers it reads (`CoSec-Request-Id`,
+`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-After`): a browser shows a script only the
+safelisted response headers and the exposed ones. A client's side of this is in
+[Building a client](./clients.md#cors).
 
-| Stack | CORS by default | A preflight | A refused request's CORS headers |
-|---|---|---|---|
-| Spring MVC | In `DispatcherServlet`, after CoSec | Decided by CoSec: `http:OPTIONS`, `401` for an anonymous one | None: the browser cannot read the problem. A CORS filter before `-9999` answers preflights and adds them |
-| WebFlux | Where you put it; `OrderedCorsWebFilter` runs before CoSec | Answered by the CORS filter, never decided | Added by the CORS filter |
-| Gateway | `spring.cloud.gateway.server.webflux.globalcors`, when the route is matched, before the gateway filter | Answered by the gateway, never decided | Added before CoSec answers |
+The scenarios decide the statement in the table's second row, and a document without it:
+
+<<< @/examples/clients/scenarios/a-preflight-is-permitted-where-a-statement-says-so.json [scenarios/a-preflight-is-permitted-where-a-statement-says-so.json]
+
+<<< @/examples/clients/scenarios-closed/a-preflight-is-denied-without-a-statement.json [scenarios-closed/a-preflight-is-denied-without-a-statement.json]
 
 ## Gateway
 

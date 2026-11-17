@@ -142,19 +142,7 @@ CoSec 不提供登录、刷新、登出或租户切换端点。应用用 CoSec �
 
 ## CORS {#cors}
 
-CoSec 不设置任何 `Access-Control-*` 头，也不注册 CORS 过滤器。浏览器客户端需要应用配置 CORS，而配置在哪里决定了浏览器看到什么
-（[CORS](./web.md#cors) 讲了三种栈）。
-
-- **预检请求不带凭证。** CoSec 把 `OPTIONS` 请求按动作 `http:OPTIONS`、匿名来判定。在 Spring MVC 上，应用的 CORS 配置
-  （`@CrossOrigin`、`addCorsMappings`）运行在 CoSec 之后，所以那里的预检请求是 `401`，除非顺序早于 CoSec 的 CORS 过滤器先回答它，或者有语句让匿名调用方做
-  `http:OPTIONS`。Spring 自己的 CORS 配置没有机会回答它。WebFlux 上注册 `OrderedCorsWebFilter`（顺序 999，早于 1000 的 CoSec）；Spring Cloud
-  Gateway 上由 `globalcors` 在网关过滤器之前回答。
-
-<<< @/examples/clients/scenarios/a-preflight-is-permitted-where-a-statement-says-so.json [scenarios/a-preflight-is-permitted-where-a-statement-says-so.json]
-
-<<< @/examples/clients/scenarios-closed/a-preflight-is-denied-without-a-statement.json [scenarios-closed/a-preflight-is-denied-without-a-statement.json]
-
-- **允许客户端发送的请求头：** `Authorization`、`Content-Type`、`CoSec-Device-Id`、`CoSec-Space-Id` 和 `CoSec-Request-Id`。
-- **暴露客户端要读的响应头：** `CoSec-Request-Id`、`RateLimit-Limit`、`RateLimit-Remaining`、`RateLimit-Reset` 和 `Retry-After`。浏览器只把
-  CORS 安全响应头和被暴露的响应头交给脚本。
-- **被拒绝的响应也要带 CORS 头**，否则浏览器报的是网络错误，而不是那个 `401`：在每个栈上都把 CORS 过滤器放在 CoSec 之前，被拒绝的请求才有这些头。
+浏览器客户端需要应用配置 CORS：CoSec 不设置任何 `Access-Control-*` 头，也不接线 CORS 过滤器。[CORS](./web.md#cors)说明了各个栈上的预检请求会怎样、
+让预检请求和拒绝响应都能被脚本读到的那一种安排（CoSec 之前的 CORS 过滤器），以及要允许的请求头和要暴露的响应头：客户端要读的
+`CoSec-Request-Id`、`RateLimit-Limit`、`RateLimit-Remaining`、`RateLimit-Reset` 和 `Retry-After`。客户端在应该看到 `401` 的地方看到网络错误，
+就是看到了一个没有 CORS 头的拒绝响应。

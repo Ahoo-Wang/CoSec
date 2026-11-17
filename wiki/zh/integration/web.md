@@ -281,24 +281,48 @@ CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追�
 
 ## CORS {#cors}
 
-客户端一侧要做什么（允许哪些请求头、暴露哪些响应头）见[构建客户端](./clients.md#cors)。
+CoSec 不设置任何 `Access-Control-*` 头，也不注册 CORS 过滤器。浏览器客户端需要应用自己配置 CORS，而配置在哪里，决定了浏览器看到什么。
+预检请求是不带凭证的 `OPTIONS` 请求，所以管道把它按动作 `http:OPTIONS`、匿名调用方来判定：除非有语句让匿名调用方做这件事，否则是 `401`。
+在 Spring MVC 和 WebFlux 上，应用自己的 CORS 配置（`@CrossOrigin`、`addCorsMappings`）运行在处理器映射中，位于 CoSec 的过滤器之后，
+所以默认情况下它没有机会回答预检请求。
 
-浏览器发送 CORS 预检请求时不带凭证，因此授权会以 `401` 回应它们。使用 WebFlux 时，注册 `OrderedCorsWebFilter`；它的顺序为 `999`，正好在 `PipelineWebFilter` 之前，自己回应预检请求：
+| 栈 | 默认的 CORS 处理 | 预检请求 | 被拒绝请求的 CORS 头 |
+|---|---|---|---|
+| Spring MVC | 在 `DispatcherServlet` 中，位于 CoSec 之后 | 由 CoSec 判定：`http:OPTIONS`，匿名时为 `401` | 没有：浏览器读不到问题体 |
+| WebFlux | 在处理器映射中，位于 `PipelineWebFilter` 之后 | 与 MVC 一样，由 CoSec 判定 | 没有 |
+| 网关 | `spring.cloud.gateway.server.webflux.globalcors`，路由匹配时，在网关过滤器之前 | 由网关回应，从不判定 | 在 CoSec 回答之前加上 |
+
+浏览器能接受什么，在 Tomcat（MVC）和 Reactor Netty（WebFlux）上用一个预检请求和一个跨域 `GET` 试过：
+
+| 配置 | 预检请求 | 被拒绝的请求（`401`） |
+|---|---|---|
+| 什么都没有 | `401`，没有 CORS 头：浏览器拦下请求 | 没有 CORS 头 |
+| 一条让任何人做 `http:OPTIONS` 的语句，**没有** CORS 配置 | `200`，但**没有** `Access-Control-*` 头：浏览器同样拦下 | 没有 CORS 头 |
+| 该语句加上 Spring 自己的 CORS 配置 | `200` 并带这些头，通过 CoSec 之后由 Spring 回答 | 仍然没有：只有被许可的请求带这些头 |
+| **CoSec 之前的 CORS 过滤器** | `200` 并带这些头，任何路径都一样，既不被判定，也不会到达 CoSec 或处理器 | 同样带 CORS 头，脚本能读到这个 `401` 和它的 problem |
+
+允许 `http:OPTIONS` 的语句只是让预检请求通过 CoSec：它不是 CORS 配置，仍然需要别的东西来设置这些头。CoSec 之前的过滤器，是同时服务预检请求和拒绝响应的做法，
+各个栈上的安排是一样的：
+
+- **WebFlux：** 注册 `OrderedCorsWebFilter`；它的顺序为 `999`，正好在 `PipelineWebFilter`（`1000`）之前，自己回应预检请求：
 
 ```kotlin
 @Bean
 fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
 ```
 
-使用 Spring MVC 时，注册一个顺序早于 `-9999` 的 CORS 过滤器。
+- **Spring MVC：** 注册 Spring 的 `CorsFilter`，顺序早于 `-9999`，即 CoSec 过滤器的顺序。
+- **网关：** `globalcors`，网关在自己的过滤器之前应用它。
 
-CORS 在哪里处理，决定了浏览器能看到拒绝的哪些内容，因此除非你把三种栈配置得一样，它们会有差别：
+过滤器背后的配置要允许客户端发送的请求头（`Authorization`、`Content-Type`、`CoSec-Device-Id`、`CoSec-Space-Id`、`CoSec-Request-Id`），并暴露客户端要读的响应头
+（`CoSec-Request-Id`、`RateLimit-Limit`、`RateLimit-Remaining`、`RateLimit-Reset`、`Retry-After`）：浏览器只把 CORS 安全响应头和被暴露的响应头交给脚本。
+客户端一侧见[构建客户端](./clients.md#cors)。
 
-| 栈 | 默认的 CORS 处理 | 预检请求 | 被拒绝请求的 CORS 头 |
-|---|---|---|---|
-| Spring MVC | 在 `DispatcherServlet` 中，位于 CoSec 之后 | 由 CoSec 判定：`http:OPTIONS`，匿名时为 `401` | 没有：浏览器读不到问题体。顺序早于 `-9999` 的 CORS 过滤器会回应预检并加上这些头 |
-| WebFlux | 取决于你放在哪里；`OrderedCorsWebFilter` 在 CoSec 之前运行 | 由 CORS 过滤器回应，从不判定 | 由 CORS 过滤器加上 |
-| 网关 | `spring.cloud.gateway.server.webflux.globalcors`，在匹配路由时、网关过滤器之前处理 | 由网关回应，从不判定 | 在 CoSec 回应之前加上 |
+下面的场景判定表中第二行的语句，以及没有它的文档：
+
+<<< @/examples/clients/scenarios/a-preflight-is-permitted-where-a-statement-says-so.json [scenarios/a-preflight-is-permitted-where-a-statement-says-so.json]
+
+<<< @/examples/clients/scenarios-closed/a-preflight-is-denied-without-a-statement.json [scenarios-closed/a-preflight-is-denied-without-a-statement.json]
 
 ## 网关 {#gateway}
 

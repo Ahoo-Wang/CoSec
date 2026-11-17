@@ -166,23 +166,9 @@ endpoint and stores the pair it answers; it never rewrites a header ([Apps](./au
 
 ## CORS
 
-CoSec sets no `Access-Control-*` header and registers no CORS filter. A browser client needs the application to
-configure CORS, and where it does decides what the browser sees ([CORS](./web.md#cors) has the three stacks).
-
-- **The preflight has no credentials.** CoSec decides an `OPTIONS` request as the action `http:OPTIONS`, anonymous. On
-  Spring MVC the application's CORS configuration (`@CrossOrigin`, `addCorsMappings`) runs after CoSec, so a preflight
-  there is `401` unless a CORS filter ordered before CoSec answers it or a statement lets an anonymous caller do
-  `http:OPTIONS`. Spring's own CORS configuration never gets to answer it. On WebFlux register `OrderedCorsWebFilter`
-  (order 999, before CoSec at 1000); on Spring Cloud Gateway `globalcors` answers before the gateway filter.
-
-<<< @/examples/clients/scenarios/a-preflight-is-permitted-where-a-statement-says-so.json [scenarios/a-preflight-is-permitted-where-a-statement-says-so.json]
-
-<<< @/examples/clients/scenarios-closed/a-preflight-is-denied-without-a-statement.json [scenarios-closed/a-preflight-is-denied-without-a-statement.json]
-
-- **Allow the request headers a client sends:** `Authorization`, `Content-Type`, `CoSec-Device-Id`, `CoSec-Space-Id`
-  and `CoSec-Request-Id`.
-- **Expose the response headers a client reads:** `CoSec-Request-Id`, `RateLimit-Limit`, `RateLimit-Remaining`,
-  `RateLimit-Reset` and `Retry-After`. A browser shows a script only the safelisted response headers and the ones
-  exposed.
-- **A refusal must carry the CORS headers too**, or the browser reports a network error instead of the `401`: put the
-  CORS filter before CoSec on every stack, so that a refused request has them.
+A browser client needs the application to configure CORS: CoSec sets no `Access-Control-*` header and wires no CORS
+filter. [CORS](./web.md#cors) says what happens to a preflight on each stack, the one arrangement that makes both a
+preflight and a refusal readable by a script (a CORS filter before CoSec), and the request headers to allow and the
+response headers to expose: `CoSec-Request-Id`, `RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset` and
+`Retry-After`, which a client reads. A client that sees a network error where it expects a `401` is looking at a refusal
+without CORS headers.
