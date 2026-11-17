@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Versioned
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -91,6 +92,17 @@ class ExpiryRaceTest {
     }
 
     @Test
+    fun `a change that keeps changing under the read is a 409 after the attempts, never a guess`() = runBlocking<Unit> {
+        val change = expiredChange()
+        racing.refuseChangeWrites = true
+
+        assertThrows<ChangeRejectedException> { harness.changes.visible(ALICE_OP, change.id) }
+            .status.assert().isEqualTo(ControlStatus.CONFLICT)
+        racing.refuseChangeWrites = false
+        harness.changes.visible(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.EXPIRED)
+    }
+
+    @Test
     fun `a command still refuses an expired change with a 409 of its own`() = runBlocking<Unit> {
         val change = expiredChange()
         harness.changes.visible(ALICE_OP, change.id).state.assert().isEqualTo(ChangeState.EXPIRED)
@@ -103,6 +115,13 @@ class ExpiryRaceTest {
     private class Racing(private val memory: InMemoryControlStore) : ControlStore by memory {
         @Volatile
         private var race: Pair<ChangeId, suspend () -> Unit>? = null
+
+        /** Whether every write of a change is refused, as if another caller kept winning it. */
+        @Volatile
+        var refuseChangeWrites = false
+
+        override suspend fun putChange(expected: SnapshotDigest?, change: ChangeRequest): Boolean =
+            !refuseChangeWrites && memory.putChange(expected, change)
 
         fun afterRead(id: ChangeId, block: suspend () -> Unit) {
             race = id to block
