@@ -1,0 +1,48 @@
+{
+  "rules": [
+    "CTL-34"
+  ],
+  "polarity": "positive",
+  "level": "control",
+  "description": "c1 is proposed and checked; six days pass, short of the seven it lives, and the change is still open: staging it works, and it holds the slot.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "advance": "P6D"
+    },
+    {
+      "stage": "c1"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "advanced",
+      "SHADOWING"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "tenant:acme": 0
+    }
+  }
+}
