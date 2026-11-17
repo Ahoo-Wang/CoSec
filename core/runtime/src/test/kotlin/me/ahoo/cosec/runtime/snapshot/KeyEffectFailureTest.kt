@@ -45,6 +45,7 @@ class KeyEffectFailureTest {
     private val store = ControllableStore().apply {
         put(SnapshotKey.Platform, document(1))
         put(APP_A, document(1))
+        put(APP_B, document(1))
     }
     private val compiler = FakeCompiler()
     private val lines = ListAppender<ILoggingEvent>()
@@ -87,8 +88,21 @@ class KeyEffectFailureTest {
         null,
         { 0L },
         housekeeping,
-        keyRunners(hooks = KeyDrain.Hooks({ if (it is KeyEvent.EffectFailed) failed += it })) { it == APP_A },
+        keyRunners(hooks = KeyDrain.Hooks(::taking)) { it == APP_A },
     )
+
+    /**
+     * Records each `EffectFailed`. The first event after one disarms what the case made throw: the step under test and
+     * the `EffectFailed`'s own step fail, and A's later loads, each of whose ends asks for the pass, do not.
+     */
+    private fun taking(event: KeyEvent<*>) {
+        if (event is KeyEvent.EffectFailed) {
+            failed += event
+        } else if (failed.isNotEmpty()) {
+            installFails = null
+            housekeeping.failing = { null }
+        }
+    }
 
     private fun SnapshotSource<*, *>.slotA(): KeySlot<*> =
         families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue("app-a")
@@ -104,9 +118,15 @@ class KeyEffectFailureTest {
         arm: () -> Unit
     ): SnapshotSource<Compiled, Compiled> {
         val source = source(compileExecutor)
+        // Two apps over a bound of one, which the passes housekeeping drops never take back: each install of A asks
+        // housekeeping for the pass, the effect these cases make throw.
+        source.load("app-b").join()
         source.load("app-a").join()
+        // A's first load is followed by a confirming one; it ends before anything is armed.
+        awaitCondition { source.slotA().idle() }
         arm()
-        val gate = CountDownLatch(1).also { compiler.gate = it }
+        // On the pool only: compiled in place, a held compilation would hold this thread until the gate times out.
+        val gate = CountDownLatch(1).also { if (compileExecutor == null) compiler.gate = it }
         // The store tells the source of the change, and the key reloads.
         store.put(APP_A, document(2, body))
         gate.countDown()
@@ -216,14 +236,17 @@ class KeyEffectFailureTest {
         }
     }
 
-    /** Housekeeping on the calling thread; while [failing] answers an error, it throws that instead of running. */
+    /**
+     * Housekeeping on the calling thread; while [failing] answers an error, it throws that instead of running. It drops
+     * the eviction passes it is not told to fail, so the family stays above its bound.
+     */
     private class Housekeeping : AbstractExecutorService() {
         @Volatile
         var failing: () -> Throwable? = { null }
 
         override fun execute(command: Runnable) {
             failing()?.let { throw it }
-            command.run()
+            if (Thread.currentThread().stackTrace.none { it.methodName == "evictBeyond" }) command.run()
         }
 
         override fun shutdown() = Unit
@@ -239,7 +262,8 @@ class KeyEffectFailureTest {
 
     private companion object {
         val APP_A = SnapshotKey.App("app-a")
-        val OPTIONS = SnapshotOptions(revalidateInterval = QUIET_PASS)
+        val APP_B = SnapshotKey.App("app-b")
+        val OPTIONS = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 1)
         const val WAIT_SECONDS = 10L
     }
 }
