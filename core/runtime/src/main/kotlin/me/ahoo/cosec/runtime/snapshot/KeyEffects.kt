@@ -32,24 +32,33 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
 
 /**
  * Executes what [KeyTransitions] asks of one key (RFC 0013 B2b §2), inside its runner's drain, in list order. It
- * reaches its runner only through the functions it is given: [offer] raises an event (a read's answer, a compilation,
- * a timer) behind what is queued, [install] publishes an entry, [drop] takes the key out of its family, [redispatch]
- * sends a request to the key's current runner, [dropIfEmpty] offers the key's own eviction if it holds nothing.
+ * reaches its runner only through [owner]: an event (a read's answer, a compilation, a timer) is offered behind what is
+ * queued, an entry published, the key dropped from its family, a request redispatched to the key's current runner, the
+ * key's own eviction offered if it holds nothing.
  */
 internal class KeyEffects<T : Any>(
     private val key: SnapshotKey,
     private val compiler: SnapshotCompiler<T>,
     private val context: SlotContext,
-    private val offer: (KeyEvent<T>) -> Unit,
-    private val install: (SnapshotEntry<T>?, SnapshotEntry<T>) -> Unit,
-    private val drop: (Boolean) -> Unit,
-    private val redispatch: (KeyEvent.Requested) -> Unit,
-    private val dropIfEmpty: () -> Unit,
+    private val owner: KeyOwner<T>,
 ) {
-    private val report = CompileReport(key, compiler, context.threads::offRequestThread)
+    /**
+     * Made at a key's first failure to compile and kept from then on (RFC 0013 B2b step 3): most keys never fail. Made
+     * under this object's lock, since the compile pool reaches it outside the drain.
+     */
+    @Volatile
+    private var report: CompileReport? = null
 
-    /** The store-read timeout of each load whose read is out; touched inside the drain only. */
-    private val readTimeouts = HashMap<Long, ScheduledFuture<*>>()
+    /** The store-read timeout of each load whose read is out, made at the first read; touched inside the drain only. */
+    private var readTimeouts: HashMap<Long, ScheduledFuture<*>>? = null
+
+    private fun timeouts(): HashMap<Long, ScheduledFuture<*>> = readTimeouts ?: HashMap<Long, ScheduledFuture<*>>().also {
+        readTimeouts = it
+    }
+
+    private fun report(): CompileReport = report ?: synchronized(this) {
+        report ?: CompileReport(key, compiler, context.threads::offRequestThread).also { report = it }
+    }
 
     @Suppress("CyclomaticComplexMethod", "UNCHECKED_CAST")
     fun execute(effect: KeyEffect<T>) {
@@ -57,7 +66,7 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.StartPassRead -> effect.ticket.read = effect.ticket.pass.startRead()
             is KeyEffect.EndPassRead -> effect.ticket.read?.end()
             is KeyEffect.StartRead -> startRead(effect)
-            is KeyEffect.CancelReadTimeout -> readTimeouts.remove(effect.loadId)?.cancel(false)
+            is KeyEffect.CancelReadTimeout -> readTimeouts?.remove(effect.loadId)?.cancel(false)
             is KeyEffect.Compile -> compile(effect.loadId, effect.read)
             is KeyEffect.RecordSeen -> recordSeen(effect)
             is KeyEffect.Confirm -> effect.entry.confirm(effect.at)
@@ -69,18 +78,18 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.Serve -> (effect.waiter as KeyWaiter<T, *>).serve(effect.entry, effect.hit)
             is KeyEffect.Refuse -> (effect.waiter as KeyWaiter<T, *>).fail(effect.error)
             is KeyEffect.Skip -> (effect.waiter as KeyWaiter<T, *>).skip()
-            is KeyEffect.Redispatch -> redispatch(effect.event)
+            is KeyEffect.Redispatch -> owner.redispatched(effect.event)
             is KeyEffect.ScheduleRetry -> scheduleRetry(effect.delay)
-            KeyEffect.DropIfEmpty -> context.threads.offRequestThread(dropIfEmpty)
+            KeyEffect.DropIfEmpty -> context.threads.offRequestThread { owner.dropIfEmpty() }
             KeyEffect.EvictBeyond -> evictBeyond()
-            is KeyEffect.Drop -> drop(effect.claimed)
+            is KeyEffect.Drop -> owner.dropped(effect.claimed)
             is KeyEffect.Reply -> effect.reply.complete(effect.value)
         }
     }
 
     /** §5: a load ended by a transition that threw has no read left to time. */
     fun cancelReadTimeout(loadId: Long) {
-        readTimeouts.remove(loadId)?.cancel(false)
+        readTimeouts?.remove(loadId)?.cancel(false)
     }
 
     /** The store call only starts the read; its answer is offered from the store client's thread, behind what is queued. */
@@ -96,15 +105,18 @@ internal class KeyEffects<T : Any>(
         if (!reading.isDone) {
             val bound = context.options.storeReadTimeout
             try {
-                readTimeouts[id] = context.threads.scheduler.schedule({
-                    offer(KeyEvent.ReadTimedOut(id))
-                }, bound.toNanos(), TimeUnit.NANOSECONDS)
+                val timeout = context.threads.scheduler.schedule(
+                    { owner.offer(KeyEvent.ReadTimedOut(id)) },
+                    bound.toNanos(),
+                    TimeUnit.NANOSECONDS,
+                )
+                timeouts()[id] = timeout
             } catch (rejected: RejectedExecutionException) {
                 log.debug { "No store read timeout: $rejected" }
             }
         }
         reading.whenComplete { read: SnapshotRead?, error: Throwable? ->
-            offer(
+            owner.offer(
                 when {
                     error != null -> KeyEvent.ReadFailed(id, error)
                     read == null -> KeyEvent.ReadFailed(id, IllegalStateException("The store answered null."))
@@ -119,7 +131,7 @@ internal class KeyEffects<T : Any>(
         try {
             context.threads.compileExecutor.execute { compileOnPool(id, read) }
         } catch (rejected: RejectedExecutionException) {
-            offer(KeyEvent.CompileRejected(id, rejected))
+            owner.offer(KeyEvent.CompileRejected(id, rejected))
         }
     }
 
@@ -131,14 +143,17 @@ internal class KeyEffects<T : Any>(
             DocumentState.Present(compiler.compile(key, read.document))
         } catch (error: VirtualMachineError) {
             // RC1-43: installed as a document that does not compile, then rethrown to the pool.
-            offer(
-                KeyEvent.CompileCrashed(id, SnapshotUnavailableException(key, report.failedToCompile(revision), error))
+            owner.offer(
+                KeyEvent.CompileCrashed(
+                    id,
+                    SnapshotUnavailableException(key, report().failedToCompile(revision), error)
+                )
             )
             throw error
         } catch (error: Throwable) {
-            DocumentState.Failed(SnapshotUnavailableException(key, report.failedToCompile(revision), error))
+            DocumentState.Failed(SnapshotUnavailableException(key, report().failedToCompile(revision), error))
         }
-        offer(KeyEvent.Compiled(id, state, System.nanoTime() - begin))
+        owner.offer(KeyEvent.Compiled(id, state, System.nanoTime() - begin))
     }
 
     private fun recordSeen(effect: KeyEffect.RecordSeen) {
@@ -160,9 +175,11 @@ internal class KeyEffects<T : Any>(
             } finally {
                 effect.regressedFrom?.let { context.metrics.onRegression(key, it.revision, effect.entry.revision) }
             }
-            report.installed(effect.entry)
+            // Without a report, no failure was logged: only a failed compilation needs one made.
+            val made = report ?: if (effect.entry.origin == EntryOrigin.UNCOMPILABLE) report() else null
+            made?.installed(effect.entry)
         } finally {
-            install(effect.previous, effect.entry)
+            owner.published(effect.previous, effect.entry)
         }
     }
 
@@ -187,7 +204,11 @@ internal class KeyEffects<T : Any>(
 
     private fun scheduleRetry(delay: Duration) {
         try {
-            context.threads.scheduler.schedule({ offer(KeyEvent.RetryDue) }, delay.toNanos(), TimeUnit.NANOSECONDS)
+            context.threads.scheduler.schedule(
+                { owner.offer(KeyEvent.RetryDue) },
+                delay.toNanos(),
+                TimeUnit.NANOSECONDS
+            )
         } catch (rejected: RejectedExecutionException) {
             log.debug { "No reload retry: $rejected" }
         }
