@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -41,7 +42,7 @@ class SnapshotFailClosedPropertyTest {
 
     @Test
     fun absentEntriesNeverEvictDocuments() {
-        repeat(maxOf(ABSENT_CASES, iterations / 100)) { seed -> absentCase(Random(seed)) }
+        repeat(maxOf(ABSENT_CASES, iterations / 100)) { seed -> absentCase(seed) }
     }
 
     @Test
@@ -49,7 +50,8 @@ class SnapshotFailClosedPropertyTest {
         repeat(maxOf(COMPILE_CASES, iterations / 10)) { seed -> compileCase(Random(seed)) }
     }
 
-    private fun absentCase(random: Random) {
+    private fun absentCase(seed: Int) {
+        val random = Random(seed)
         val maxApps = random.nextInt(1, 5)
         val maxAbsent = random.nextInt(1, 5)
         val store = ControllableStore().apply { put(SnapshotKey.Platform, document(1)) }
@@ -64,7 +66,14 @@ class SnapshotFailClosedPropertyTest {
                 source.load((key as SnapshotKey.App).appId).join()
                 if (key in documents) loaded += key
             }
-            awaitCondition { absent.count(source::holds) <= maxAbsent }
+            awaitCondition({ absent.count(source::holds) <= maxAbsent }) {
+                // What the next failure must show: a timeout alone has taught nothing twice.
+                val family = source.families.first { it.spec.kind == SnapshotKind.APP }
+                val (documentsHeld, absentHeld) = source.heldCounts(SnapshotKind.APP)
+                "seed $seed: the app family holds $documentsHeld documents (bound $maxApps) and $absentHeld absent " +
+                    "entries (bound $maxAbsent); absent members ${family.absentMembers.map { it.key }}; loading " +
+                    "${family.slots.values.filterNot { it.idle() }.map { it.key }}; held absent ${absent.filter(source::holds)}"
+            }
             loaded.forEach { key -> source.holds(key).assert().describedAs("document $key").isTrue() }
             absent.count(source::holds).assert().isLessThanOrEqualTo(maxAbsent)
         }
@@ -117,10 +126,10 @@ class SnapshotFailClosedPropertyTest {
         }
     }
 
-    private fun awaitCondition(condition: () -> Boolean) {
+    private fun awaitCondition(condition: () -> Boolean, describe: () -> String = { "" }) {
         val deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos()
         while (!condition()) {
-            check(System.nanoTime() < deadline) { "Condition not met in time." }
+            check(System.nanoTime() < deadline) { "Condition not met in time. ${describe()}" }
             Thread.onSpinWait()
         }
     }

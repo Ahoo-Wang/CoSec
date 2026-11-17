@@ -111,6 +111,36 @@ try {
     ['install', '--no-audit', '--no-fund', '--loglevel=error', ...tarballs],
     { cwd: project },
   );
+  // A package whose types name React's has no @types/react of its own: the consumer that uses it has them.
+  run(
+    'npm',
+    [
+      'install',
+      '--no-audit',
+      '--no-fund',
+      '--loglevel=error',
+      '--save-dev',
+      '@types/react@^19',
+    ],
+    { cwd: project },
+  );
+  // A package must not bring the package it replaces: @ahoo-wang/fetcher-cosec came in through a peer of
+  // @ahoo-wang/fetcher-react once, and nothing noticed.
+  const installed = JSON.parse(
+    run('npm', ['ls', '--all', '--json'], { cwd: project }),
+  );
+  const found = [];
+  const search = (node, path) => {
+    for (const [dependency, child] of Object.entries(node.dependencies ?? {})) {
+      if (dependency === '@ahoo-wang/fetcher-cosec')
+        found.push([...path, dependency].join(' > '));
+      search(child, [...path, dependency]);
+    }
+  };
+  search(installed, []);
+  for (const path of found) {
+    fail(`a consumer's tree holds the package CoSec's replaces: ${path}`);
+  }
   for (const name of names) {
     const esm = run(
       'node',

@@ -63,12 +63,12 @@ src/
 
 - **CoSecConfigurer**: Main entry point that wires up all interceptors onto a Fetcher instance
 - **JWT Token Management**: Parse, validate, refresh, and store JWT tokens
-- **Authorization Interceptors**: Automatically attach Bearer tokens to requests; with `isTrusted` only trusted absolute URLs receive the token and CoSec headers (default: every request)
+- **Authorization Interceptors**: Automatically attach Bearer tokens to requests; only trusted absolute URLs receive the token, the CoSec headers and the tenant and owner path variables: `isTrusted` defaults to `sameOriginTrust` (the origin of an absolute `baseURL` and the page's); there is no "trust everything" constant, an application writes `() => true` itself
 - **Error Handling**: reads the CoSec 8.0 problem type of a refusal. `token-expired` (and a 401 with no CoSec problem) triggers token refresh + retry; `unauthorized`, `token-revoked`, `token-invalid` are not refreshed (the last two remove the stored pair); `forbidden` goes to `onForbidden`, `scope-rejected` to `onScopeRejected`; 429/503/500/400 never touch the session
 - **Refresh under rotation**: only a 401 from the refresh route ends the session. An attempt whose outcome is unknown is retried with the same pair only inside `rotationLeeway` of the first attempt (CoSec 8.0 `IDN-16`); the time is stored with the pair and never slides. After the window one attempt per call, which cannot be made safe. Read the comment of `JwtTokenManager.sendRefresh` before changing it.
 - **Device ID**: Persistent device identification for security tracking
 - **Multi-tenant**: Space ID provider for tenant-scoped authentication. No `CoSec-Space-Id` goes on the refresh call or on a request with no token (an anonymous request that declares a space is `401`, SCP-3)
-- **App**: CoSec 8.0 reads the app from the token's `aud`; `appId` is deprecated and no `CoSec-App-Id` is sent
+- **App**: CoSec 8.0 reads the app from the token's `aud`; there is no `appId` option and no `CoSec-App-Id` is sent
 
 ## Dependencies
 
@@ -101,14 +101,7 @@ src/
 
 ## The lint warning ceiling
 
-`pnpm lint` is `eslint --max-warnings 53 .`. The package came in with 53 warnings, no errors, and none was fixed in the
-import (fixing one changes code). The number only ever goes down, and it is zero before the first npm release.
-
-| Rule                                 | In `src/`                                                                                                                                                                         | In `test/` |
-| ------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| `@typescript-eslint/no-explicit-any` | 4: `errors.ts:28` and `:57` (`cause?: Error \| any` of two public constructors), `jwts.ts:54` and `:79` (`Record<string, any>` and an index signature of the public `JwtPayload`) | 35         |
-| `@typescript-eslint/no-unused-vars`  | 1: `cosecConfigurer.ts:25`                                                                                                                                                        | 13         |
-
-None of the 48 in `test/` or the one unused variable changes behaviour or a public signature. The four `any` of `src/` are
-**public declarations**: replacing them changes lines of `test/api/cosec-fetcher.api.md`, so they are a decision for CoSec,
-not a lint fix. The follow-up that brings the ceiling to zero is its own small pull request after `cosec-react`.
+`pnpm lint` is `eslint --max-warnings 45 .`, and `src/` has no warning: `no-console` is an error there (a library writes
+nothing to the console), and no public declaration says `any`. The 45 are in `test/`: 32 `@typescript-eslint/no-explicit-any`
+and 13 `@typescript-eslint/no-unused-vars`, none of which changes behaviour or a public signature. The number only ever
+goes down, and it is zero before the first npm release (a small follow-up pull request).

@@ -9,10 +9,10 @@ allowBuilds:
 
 # A version npm published less than a day ago is not installed: a malicious release is usually pulled in that time.
 minimumReleaseAge: 1440
-# TEMPORARY. fetcher 6.1.0, which the client needs, was published on 2026-11-17 and the day's wait above refused it. The
-# wait exists for the day a maintainer's npm account is not in the maintainer's hands, and fetcher is the dependency
-# whose compromise would hurt most: remove this exclusion in the first pull request that touches the workspace once 6.1.0
-# is more than a day old (cosec-react's). The lockfile pins what CI installs meanwhile.
+# TEMPORARY. fetcher 6.1.0, which the client and the hooks need, was published on 2026-11-17 at 09:11 UTC and the day's
+# wait above refuses it until 2026-11-18 09:12 UTC. The wait exists for the day a maintainer's npm account is not in the
+# maintainer's hands, and fetcher is the dependency whose compromise would hurt most: delete this exclusion (these four
+# lines) after that time; `pnpm install` without it is the check. The lockfile pins what CI installs meanwhile.
 minimumReleaseAgeExclude:
   - '@ahoo-wang/fetcher'
   - '@ahoo-wang/fetcher-*'
@@ -25,6 +25,7 @@ catalogs:
     '@ahoo-wang/fetcher': ^6.1.0
     '@ahoo-wang/fetcher-eventbus': ^6.1.0
     '@ahoo-wang/fetcher-storage': ^6.1.0
+    react: ^19.0.0
 
 # One version per external dependency across the workspace. Packages reference these with `catalog:`; the packages of
 # this workspace reference each other with the `workspace:` protocol.
@@ -34,13 +35,25 @@ catalog:
   '@ahoo-wang/fetcher-storage': ^6.1.0
   '@eslint/js': ^10.0.1
   '@microsoft/api-extractor': ^7.60.1
+  '@rolldown/plugin-babel': ^0.2.4
+  '@testing-library/react': ^16.3.3
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
+  '@vitejs/plugin-react': ^6.1.2
   '@vitest/coverage-v8': ^4.1.11
   '@vitest/ui': ^4.1.11
+  babel-plugin-react-compiler: ^1.0.0
   eslint: ^10.15.0
+  eslint-plugin-react-compiler: ^19.1.0-rc.2
+  eslint-plugin-react-hooks: ^7.1.1
   globals: ^17.13.0
+  jsdom: ^30.1.2
   nanoid: ^6.0.2
   prettier: ^3.9.9
   publint: ^0.3.25
+  react: ^19.3.0
+  react-compiler-runtime: ^1.0.0
+  react-dom: ^19.3.0
   typescript: ^6.0.3
   typescript-eslint: ^8.71.1
   unplugin-dts: 1.1.2

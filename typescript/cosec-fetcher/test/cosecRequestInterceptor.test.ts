@@ -70,6 +70,9 @@ vi.mock('../src/idGenerator', () => ({
 class MockFetchExchange implements Partial<FetchExchange> {
   public requestHeaders: Record<string, string> = {};
   public attributes: Map<string, any> = new Map();
+  // A request to the fetcher's own baseURL: the default trust policy carries credentials to it.
+  public request = { url: '/orders' };
+  public fetcher = { urlBuilder: { baseURL: 'https://api.example.com' } };
 
   ensureRequestHeaders(): Record<string, string> {
     return this.requestHeaders;
@@ -104,7 +107,6 @@ describe('CoSecRequestInterceptor', () => {
   describe('constructor', () => {
     it('should have correct name', () => {
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
       expect(interceptor.name).toBe(COSEC_REQUEST_INTERCEPTOR_NAME);
@@ -112,7 +114,6 @@ describe('CoSecRequestInterceptor', () => {
 
     it('should have correct order', () => {
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
       expect(interceptor.order).toBe(COSEC_REQUEST_INTERCEPTOR_ORDER);
@@ -120,19 +121,9 @@ describe('CoSecRequestInterceptor', () => {
 
     it('should have order value calculated from Number.MIN_SAFE_INTEGER', () => {
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
       expect(interceptor.order).toBe(Number.MIN_SAFE_INTEGER + 1000);
-    });
-
-    it('should use provided appId', () => {
-      const customAppId = 'custom-app-123';
-      interceptor = new CoSecRequestInterceptor({
-        appId: customAppId,
-        deviceIdStorage: mockDeviceIdStorage,
-      });
-      expect(interceptor).toBeDefined();
     });
 
     it('should use provided deviceIdStorage', () => {
@@ -140,7 +131,6 @@ describe('CoSecRequestInterceptor', () => {
         storage: mockStorage as unknown as Storage,
       });
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: customDeviceIdStorage,
       });
       expect(interceptor).toBeDefined();
@@ -149,7 +139,6 @@ describe('CoSecRequestInterceptor', () => {
 
     it('should use NoneSpaceIdProvider when spaceIdProvider not provided', () => {
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
       });
       expect(interceptor).toBeDefined();
@@ -160,7 +149,6 @@ describe('CoSecRequestInterceptor', () => {
         resolveSpaceId: () => 'test-space-id',
       };
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
         spaceIdProvider: mockSpaceIdProvider,
       });
@@ -171,7 +159,6 @@ describe('CoSecRequestInterceptor', () => {
   describe('intercept', () => {
     beforeEach(() => {
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
     });
@@ -213,7 +200,6 @@ describe('CoSecRequestInterceptor', () => {
         resolveSpaceId: () => 'test-space-123',
       };
       const interceptorWithSpace = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
         spaceIdProvider: mockSpaceIdProvider,
       });
@@ -232,7 +218,6 @@ describe('CoSecRequestInterceptor', () => {
         resolveSpaceId: () => null,
       };
       const interceptorWithSpace = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
         spaceIdProvider: mockSpaceIdProvider,
       });
@@ -258,7 +243,6 @@ describe('CoSecRequestInterceptor', () => {
   describe('intercept with existing headers', () => {
     beforeEach(() => {
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
     });
@@ -304,7 +288,6 @@ describe('CoSecRequestInterceptor', () => {
       });
 
       const testInterceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
 
@@ -323,7 +306,6 @@ describe('CoSecRequestInterceptor', () => {
       mockStorage.getItem.mockReturnValue('persistent-device-id');
 
       const testInterceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
 
@@ -343,10 +325,11 @@ describe('CoSecRequestInterceptor', () => {
       const exchangeWithoutHeaders = {
         ensureRequestHeaders: vi.fn().mockReturnValue({}),
         attributes: new Map<string, any>(),
+        request: { url: '/orders' },
+        fetcher: { urlBuilder: { baseURL: 'https://api.example.com' } },
       } as unknown as FetchExchange;
 
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
 
@@ -366,38 +349,11 @@ describe('CoSecRequestInterceptor', () => {
   });
 
   describe('edge cases', () => {
-    it('should ignore an empty appId', async () => {
-      const interceptorWithEmptyAppId = new CoSecRequestInterceptor({
-        appId: '',
-        deviceIdStorage: mockDeviceIdStorage,
-      });
-
-      await interceptorWithEmptyAppId.intercept(
-        mockExchange as unknown as FetchExchange,
-      );
-
-      expect(mockExchange.requestHeaders[APP_ID_HEADER]).toBeUndefined();
-    });
-
-    it('should ignore an appId, which CoSec 8.0 does not read', async () => {
-      const interceptorWithSpecialAppId = new CoSecRequestInterceptor({
-        appId: 'app-with-special-chars_123-456',
-        deviceIdStorage: mockDeviceIdStorage,
-      });
-
-      await interceptorWithSpecialAppId.intercept(
-        mockExchange as unknown as FetchExchange,
-      );
-
-      expect(mockExchange.requestHeaders[APP_ID_HEADER]).toBeUndefined();
-    });
-
     it('should handle unicode characters in space ID', async () => {
       const mockSpaceIdProvider: SpaceIdProvider = {
         resolveSpaceId: () => '空间-标识-123',
       };
       const interceptorWithUnicodeSpace = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
         spaceIdProvider: mockSpaceIdProvider,
       });
@@ -416,7 +372,6 @@ describe('CoSecRequestInterceptor', () => {
       vi.mocked(idGenerator.generateId).mockReturnValue(longRequestId);
 
       const interceptorWithLongId = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
       });
 
@@ -444,7 +399,6 @@ describe('CoSecRequestInterceptor', () => {
       ];
 
       const testInterceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
 
@@ -478,9 +432,10 @@ describe('CoSecRequestInterceptor', () => {
         'http://localhost:3000/api',
       ];
 
+      // Every origin in the list is trusted explicitly: the case is the URL shapes.
       const testInterceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
+        isTrusted: () => true,
       });
 
       for (const url of urls) {
@@ -511,7 +466,6 @@ describe('CoSecRequestInterceptor', () => {
         resolveSpaceId: mockResolveSpaceId,
       };
       const interceptorWithProvider = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
         spaceIdProvider: mockSpaceIdProvider,
       });
@@ -531,7 +485,6 @@ describe('CoSecRequestInterceptor', () => {
         resolveSpaceId: mockResolveSpaceId,
       };
       const interceptorWithProvider = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
         spaceIdProvider: mockSpaceIdProvider,
       });
@@ -545,7 +498,6 @@ describe('CoSecRequestInterceptor', () => {
 
     it('should not call spaceIdProvider when using NoneSpaceIdProvider', async () => {
       const interceptorWithNoneProvider = new CoSecRequestInterceptor({
-        appId: 'test-app',
         deviceIdStorage: mockDeviceIdStorage,
       });
 
@@ -564,7 +516,6 @@ describe('CoSecRequestInterceptor', () => {
       mockStorage.getItem.mockReturnValue('stored-device-id');
 
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
 
@@ -577,7 +528,6 @@ describe('CoSecRequestInterceptor', () => {
       mockStorage.getItem.mockReturnValue(null);
 
       interceptor = new CoSecRequestInterceptor({
-        appId: 'test-app-id',
         deviceIdStorage: mockDeviceIdStorage,
       });
 

@@ -229,7 +229,7 @@ describe('a 403 says which (M4, M5)', () => {
     });
   });
 
-  it('reports a token of another app as scope-rejected, whatever appId says (M5)', async () => {
+  it('reports a token of another app as scope-rejected (M5)', async () => {
     const host = new FakeCoSecHost({ hostApp: 'order' });
     const pair = host.login('u1', { aud: 'billing' });
     const onScopeRejected = vi.fn(async () => undefined);
@@ -238,7 +238,6 @@ describe('a 403 says which (M4, M5)', () => {
       spaced: () => false,
       config: {
         onScopeRejected,
-        appId: 'order', // the deprecated option decides nothing
       },
     });
     await client.get('/me').catch(() => undefined);

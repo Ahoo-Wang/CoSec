@@ -53,16 +53,6 @@ type SpaceId = string;
  * Implementations of this interface are used by the CoSecRequestInterceptor
  * to add the appropriate space identifier to outgoing requests. This enables
  * proper routing and access control in multi-tenant, multi-space environments.
- *
- * @example
- * ```typescript
- * // Example: Extract space ID from a custom header
- * const headerSpaceIdProvider: SpaceIdProvider = {
- *   resolveSpaceId: (exchange) => {
- *     return exchange.request.headers['X-Space-Id'] || null;
- *   }
- * };
- * ```
  */
 export interface SpaceIdProvider {
   /**
@@ -81,7 +71,7 @@ export interface SpaceIdProvider {
    * // Example: Extract space ID from a custom header
    * const provider: SpaceIdProvider = {
    *   resolveSpaceId: (exchange) => {
-   *     return exchange.request.headers['X-Space-Id'] || null;
+   *     return exchange.request.headers?.['X-Space-Id'] ?? null;
    *   }
    * };
    *
@@ -218,19 +208,6 @@ export class SpaceIdStorage extends KeyStorage<SpaceId> {
    * @param options.defaultValue - Default value when no space ID is stored
    *
    * @throws Error if the underlying storage is unavailable
-   *
-   * @example
-   * ```typescript
-   * // Default configuration
-   * const storage = new SpaceIdStorage();
-   *
-   * // With custom options
-   * const storage = new SpaceIdStorage({
-   *   key: 'custom-space-key',
-   *   storage: sessionStorage,
-   *   defaultValue: 'default-space'
-   * });
-   * ```
    */
   constructor({
     key = DEFAULT_COSEC_SPACE_ID_KEY,
@@ -273,7 +250,7 @@ export class SpaceIdStorage extends KeyStorage<SpaceId> {
  * // Header-based predicate
  * const headerPredicate: SpacedResourcePredicate = {
  *   test: (exchange) => {
- *     return 'X-Require-Space' in exchange.request.headers;
+ *     return 'X-Require-Space' in (exchange.request.headers ?? {});
  *   }
  * };
  *
@@ -294,16 +271,6 @@ export interface SpacedResourcePredicate {
    *
    * @param exchange - The fetch exchange to evaluate
    * @returns true if the resource requires space scoping, false otherwise
-   *
-   * @example
-   * ```typescript
-   * const predicate: SpacedResourcePredicate = {
-   *   test: (exchange) => {
-   *     // Only resources under /api/spaces/ require space identification
-   *     return exchange.request.url.startsWith('/api/v1/spaces/');
-   *   }
-   * };
-   * ```
    */
   test(exchange: FetchExchange): boolean;
 }
@@ -377,16 +344,6 @@ export class DefaultSpaceIdProvider implements SpaceIdProvider {
    * @param options - The configuration options containing the predicate and storage
    * @param options.spacedResourcePredicate - Determines which requests require space scoping
    * @param options.spaceIdStorage - Provides access to the persisted space identifier
-   *
-   * @example
-   * ```typescript
-   * const provider = new DefaultSpaceIdProvider({
-   *   spacedResourcePredicate: {
-   *     test: (exchange) => exchange.request.url.includes('/api/')
-   *   },
-   *   spaceIdStorage: new SpaceIdStorage()
-   * });
-   * ```
    */
   constructor(public options: SpaceIdProviderOptions) {}
 
@@ -400,24 +357,6 @@ export class DefaultSpaceIdProvider implements SpaceIdProvider {
    * @param exchange - The fetch exchange containing the HTTP request details
    * @returns The space identifier if the request requires scoping and one exists,
    *         otherwise null
-   *
-   * @example
-   * ```typescript
-   * const provider = new DefaultSpaceIdProvider({
-   *   spacedResourcePredicate: {
-   *     test: (exchange) => exchange.request.url.includes('/spaced/')
-   *   },
-   *   spaceIdStorage: new SpaceIdStorage()
-   * });
-   *
-   * // For a request to /api/spaces/workspace-alpha/resources
-   * const exchange = createMockExchange({ url: '/api/spaces/workspace-alpha/resources' });
-   * const spaceId = provider.resolveSpaceId(exchange); // Returns stored space ID
-   *
-   * // For a request to /api/public/resources
-   * const publicExchange = createMockExchange({ url: '/api/public/resources' });
-   * const noSpace = provider.resolveSpaceId(publicExchange); // Returns null
-   * ```
    */
   resolveSpaceId(exchange: FetchExchange): SpaceId | null {
     if (!this.options.spacedResourcePredicate.test(exchange)) {

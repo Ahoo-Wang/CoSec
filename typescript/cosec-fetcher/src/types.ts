@@ -30,17 +30,6 @@ export class ResponseCodes {
   static readonly TOO_MANY_REQUESTS = 429;
 }
 
-export interface AppIdCapable {
-  /**
-   * Does nothing: CoSec 8.0 does not read a request's app. The app of a
-   * request is the `aud` of its token, set by whoever issued it.
-   *
-   * @deprecated Remove it. Kept so existing configuration still compiles;
-   * it is removed in the next major version.
-   */
-  appId?: string;
-}
-
 export interface DeviceIdStorageCapable {
   deviceIdStorage: DeviceIdStorage;
 }
@@ -48,9 +37,3 @@ export interface DeviceIdStorageCapable {
 export interface JwtTokenManagerCapable {
   tokenManager: JwtTokenManager;
 }
-
-/**
- * CoSec options interface.
- */
-export interface CoSecOptions
-  extends AppIdCapable, DeviceIdStorageCapable, JwtTokenManagerCapable {}

@@ -18,7 +18,7 @@ import {
   AUTHORIZATION_RESPONSE_INTERCEPTOR_ORDER,
   RefreshTokenError,
 } from '../src';
-import { ResponseCodes, type CoSecOptions } from '../src';
+import { ResponseCodes } from '../src';
 import type { FetchExchange } from '@ahoo-wang/fetcher';
 import { InterceptorRegistry, type Fetcher } from '@ahoo-wang/fetcher';
 import { JwtTokenManager } from '../src';
@@ -30,11 +30,11 @@ describe('AuthorizationResponseInterceptor', () => {
   let mockTokenStorage: TokenStorage;
   let mockTokenRefresher: TokenRefresher;
   let mockJwtTokenManager: JwtTokenManager;
-  let coSecOptions: CoSecOptions;
   let interceptor: AuthorizationResponseInterceptor;
 
   beforeEach(() => {
     mockFetcher = {
+      urlBuilder: { baseURL: 'https://api.example.com' },
       interceptors: {
         request: { intercept: vi.fn() },
         response: new InterceptorRegistry(),
@@ -64,13 +64,9 @@ describe('AuthorizationResponseInterceptor', () => {
       .spyOn(mockJwtTokenManager, 'isRefreshable', 'get')
       .mockReturnValue(true);
 
-    coSecOptions = {
-      appId: 'test-app-id',
-      deviceIdStorage: {} as any,
+    interceptor = new AuthorizationResponseInterceptor({
       tokenManager: mockJwtTokenManager,
-    } as CoSecOptions;
-
-    interceptor = new AuthorizationResponseInterceptor(coSecOptions);
+    });
   });
 
   it('should have correct name and order', () => {
@@ -112,6 +108,9 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
+      fetcher: mockFetcher,
+      attributes: new Map(),
     } as unknown as FetchExchange;
 
     await interceptor.intercept(exchange);
@@ -125,7 +124,9 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
+      attributes: new Map(),
     } as unknown as FetchExchange;
 
     mockTokenStorage.get = vi.fn().mockReturnValue({
@@ -151,7 +152,9 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
+      attributes: new Map(),
     } as unknown as FetchExchange;
 
     const refreshError = Object.assign(new Error('Refresh failed'), {
@@ -182,6 +185,7 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
       attributes: new Map(),
     } as unknown as FetchExchange;
@@ -214,7 +218,9 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
+      attributes: new Map(),
     } as unknown as FetchExchange;
 
     mockTokenStorage.get = vi.fn().mockReturnValue(null);
@@ -255,6 +261,7 @@ describe('AuthorizationResponseInterceptor', () => {
       response: {
         status: ResponseCodes.UNAUTHORIZED,
       } as Response,
+      request: { url: '/orders' },
       fetcher: mockFetcher,
       attributes: new Map(),
     } as unknown as FetchExchange;

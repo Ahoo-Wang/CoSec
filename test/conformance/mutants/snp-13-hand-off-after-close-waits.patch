@@ -1,0 +1,17 @@
+# Rule: SNP-13
+# Mutant: an offerer that hands off after close does not run it, so its request waits on a pool that has stopped
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyRunnerCloseTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
+index bef97711..8cdb9cd2 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DrainHandOffs.kt
+@@ -42,7 +42,7 @@ internal class DrainHandOffs(
+         schedule()
+         // Enqueue, then re-check: close set [closed] before it ran what was pending, so either it took this one or this
+         // offerer sees [closed] and takes it, whatever the pool did with the task.
+-        if (closed.get()) runPending()
++        if (closed.get() && false) runPending()
+     }
+ 
+     /**

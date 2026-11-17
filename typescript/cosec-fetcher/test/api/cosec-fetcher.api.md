@@ -22,12 +22,6 @@ export interface AccessToken {
 }
 
 // @public (undocumented)
-export interface AppIdCapable {
-    // @deprecated
-    appId?: string;
-}
-
-// @public (undocumented)
 export const AUTHORIZATION_REQUEST_INTERCEPTOR_NAME = "AuthorizationRequestInterceptor";
 
 // @public (undocumented)
@@ -88,9 +82,7 @@ export const COSEC_REQUEST_INTERCEPTOR_NAME = "CoSecRequestInterceptor";
 export const COSEC_REQUEST_INTERCEPTOR_ORDER: number;
 
 // @public
-export interface CoSecConfig extends AppIdCapable, Partial<DeviceIdStorageCapable>, RequestTrustCapable {
-    // @deprecated
-    readonly appId?: string;
+export interface CoSecConfig extends Partial<DeviceIdStorageCapable>, RequestTrustCapable {
     readonly deviceIdStorage?: DeviceIdStorage;
     readonly isRefreshRejected?: (error: unknown) => boolean;
     readonly onForbidden?: (exchange: FetchExchange, problem?: CoSecProblem) => Promise<void>;
@@ -129,16 +121,12 @@ export class CoSecHeaders {
 
 // @public
 export interface CoSecJwtPayload extends JwtPayload {
-    attributes?: Record<string, any>;
+    attributes?: Record<string, unknown>;
     auth_time?: number;
     policies?: string[];
     roles?: string[];
     sid?: string;
     tenantId?: string;
-}
-
-// @public
-export interface CoSecOptions extends AppIdCapable, DeviceIdStorageCapable, JwtTokenManagerCapable {
 }
 
 // @public
@@ -187,7 +175,7 @@ export class CoSecRequestInterceptor implements RequestInterceptor {
 }
 
 // @public
-export interface CoSecRequestOptions extends AppIdCapable, DeviceIdStorageCapable, RequestTrustCapable {
+export interface CoSecRequestOptions extends DeviceIdStorageCapable, RequestTrustCapable {
     spaceIdProvider?: SpaceIdProvider;
 }
 
@@ -340,7 +328,7 @@ export const jwtCompositeTokenSerializer: JwtCompositeTokenSerializer;
 
 // @public
 export interface JwtPayload {
-    [key: string]: any;
+    [key: string]: unknown;
     aud?: string | string[];
     exp: number;
     iat: number;
@@ -372,21 +360,6 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
     // (undocumented)
     readonly options: JwtTokenManagerOptions;
     refresh(exchange?: FetchExchange): Promise<void>;
-    // @internal
-    refreshBlocked?: {
-        fingerprint: string;
-        until: number;
-        error: unknown;
-    };
-    // @internal (undocumented)
-    refreshInProgress?: {
-        token: JwtCompositeToken;
-        promise: Promise<JwtCompositeToken>;
-        notification: {
-            hasHandler: boolean;
-            handled: boolean;
-        };
-    };
     // @internal
     sendRefresh(jwtToken: JwtCompositeToken, send: () => Promise<CompositeToken>): Promise<CompositeToken>;
     // (undocumented)
@@ -440,10 +413,8 @@ export interface RefreshToken {
 
 // @public (undocumented)
 export class RefreshTokenError extends FetcherError {
-    constructor(token: JwtCompositeToken, cause?: Error | any);
+    constructor(cause?: unknown);
     readonly problem?: CoSecProblem;
-    // (undocumented)
-    readonly token: JwtCompositeToken;
 }
 
 // @public
@@ -454,10 +425,8 @@ export interface RefreshTokenStatusCapable {
 
 // @public
 export class RefreshUnavailableError extends FetcherError {
-    constructor(token: JwtCompositeToken, cause?: Error | any);
+    constructor(cause?: unknown);
     readonly problem?: CoSecProblem;
-    // (undocumented)
-    readonly token: JwtCompositeToken;
 }
 
 // @public
@@ -475,7 +444,7 @@ export const RESOURCE_ATTRIBUTION_REQUEST_INTERCEPTOR_NAME = "ResourceAttributio
 export const RESOURCE_ATTRIBUTION_REQUEST_INTERCEPTOR_ORDER: number;
 
 // @public
-export interface ResourceAttributionOptions {
+export interface ResourceAttributionOptions extends RequestTrustCapable {
     ownerId?: string;
     tenantId?: string;
     tokenStorage: TokenStorage;
@@ -485,6 +454,8 @@ export interface ResourceAttributionOptions {
 export class ResourceAttributionRequestInterceptor implements RequestInterceptor {
     constructor(input: ResourceAttributionOptions);
     intercept(exchange: FetchExchange): void;
+    // @internal (undocumented)
+    readonly isTrusted?: RequestTrust;
     // (undocumented)
     readonly name = "ResourceAttributionRequestInterceptor";
     // (undocumented)
@@ -553,8 +524,6 @@ export class TokenStorage extends KeyStorage<JwtCompositeToken> implements Early
     get currentUser(): CoSecJwtPayload | null;
     readonly earlyPeriod: number;
     remove(): void;
-    // @deprecated
-    setCompositeToken(compositeToken: CompositeToken): void;
     signIn(compositeToken: CompositeToken): void;
     signOut(): void;
 }
