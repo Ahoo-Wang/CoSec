@@ -285,6 +285,46 @@ class CorsWiringTest {
             .any { it.contains("STA-5: 2 CorsConfigurationSource beans") }.assert().isTrue()
     }
 
+    /** The return types of a class's methods; a class whose optional dependency is missing from the classpath has none to read. */
+    private fun declaredReturnTypes(type: Class<*>): List<Class<*>> = try {
+        type.declaredMethods.map { it.returnType }
+    } catch (_: NoClassDefFoundError) {
+        emptyList()
+    }
+
+    /**
+     * A gateway host: Spring Cloud Gateway's `globalcors` is properties of its own handler mapping, no bean declares a source
+     * in its auto-configuration, and the starter's WebFlux filter is not wired where the gateway filter is.
+     */
+    @Test
+    fun `a gateway host gets no CORS filter of the starter, with or without a source`() {
+        val gateway = org.springframework.cloud.gateway.config.GatewayAutoConfiguration::class.java
+        (listOf(gateway) + gateway.declaredClasses).flatMap { declaredReturnTypes(it) }
+            .filter {
+                org.springframework.web.cors.reactive.CorsConfigurationSource::class.java.isAssignableFrom(it) ||
+                    org.springframework.web.cors.CorsConfigurationSource::class.java.isAssignableFrom(it)
+            }
+            .assert().describedAs("Spring Cloud Gateway declares no CorsConfigurationSource bean").isEmpty()
+        val source = { org.springframework.web.cors.reactive.UrlBasedCorsConfigurationSource() }
+        listOf(false, true).forEach { declared ->
+            val runner = ReactiveWebApplicationContextRunner()
+                .withConfiguration(AutoConfigurations.of(CoSecPipelineWebAutoConfiguration::class.java))
+                .withBean(RequestGate::class.java, { GATE })
+                .withBean(Pipeline::class.java, { FIXTURE.pipeline })
+                .withBean(RuntimeAuthorizationProperties::class.java, { RuntimeAuthorizationProperties() })
+            val configured = if (declared) {
+                runner.withBean(org.springframework.web.cors.reactive.CorsConfigurationSource::class.java, source)
+            } else {
+                runner
+            }
+            configured.run { context ->
+                context.startupFailure.assert().isNull()
+                context.getBeansOfType(OrderedCorsWebFilter::class.java).assert().isEmpty()
+                context.getBeansOfType(me.ahoo.cosec.gateway.PipelineGatewayFilter::class.java).assert().hasSize(1)
+            }
+        }
+    }
+
     @Test
     fun `Spring MVC leaves the application's own CorsFilter alone`() {
         servlet(MvcWithOwnFilter::class.java) { _, context ->
