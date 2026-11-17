@@ -98,8 +98,11 @@ internal sealed interface KeyEvent<out T : Any> {
         /** The load in flight, or a new one; a periodic [pass] does not join one older than the store read timeout. */
         data class Load(val force: Boolean, val pass: Pass? = null) : Ask
 
-        /** A load that starts after this event (`SNP-13`). */
+        /** A load that starts after this event (`SNP-13`); a removed key's goes to the key's current runner. */
         data class Reload(val force: Boolean) : Ask
+
+        /** As [Reload] for a key still held; a removed key is skipped (revalidation, reset, recompile's reloads). */
+        data class ReloadIfHeld(val force: Boolean) : Ask
     }
 
     /** What the runner found for an [Evict]. */

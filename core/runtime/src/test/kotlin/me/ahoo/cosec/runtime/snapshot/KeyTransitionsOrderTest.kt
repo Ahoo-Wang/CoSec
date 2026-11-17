@@ -88,6 +88,7 @@ class KeyTransitionsOrderTest {
         add("pass" to { key: KeyHarness -> key.request(Ask.Load(force = false, pass = pass)) })
         add("reload" to { key: KeyHarness -> key.request(Ask.Reload(force = false)) })
         add("reload forced" to { key: KeyHarness -> key.request(Ask.Reload(force = true)) })
+        add("reload if held" to { key: KeyHarness -> key.request(Ask.ReloadIfHeld(force = false)) })
         add("changed" to { key: KeyHarness -> key.offer(KeyEvent.Changed) })
         if (world.epoch < MAX_EPOCH) add("recompile" to { key: KeyHarness -> key.recompile() })
         if (world.retries > 0) add("retry" to { key: KeyHarness -> key.offer(KeyEvent.RetryDue) })

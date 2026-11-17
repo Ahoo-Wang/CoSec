@@ -74,7 +74,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
         val waiter = event.waiter
         if (step.state.removed) {
             // Never null: a request goes to the key's current runner; a pass or a revalidation skips the key.
-            val skips = event.ask is Ask.Reload || (event.ask is Ask.Load && event.ask.pass != null)
+            val skips = event.ask is Ask.ReloadIfHeld || (event.ask is Ask.Load && event.ask.pass != null)
             waiter?.let { step.emit(if (skips) KeyEffect.Skip(it) else KeyEffect.Redispatch(event)) }
             return
         }
@@ -83,6 +83,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
             Ask.Usable -> usable(step, waiter)
             is Ask.Load -> load(step, ask.force, ask.pass, waiter)
             is Ask.Reload -> reload(step, ask.force, waiter)
+            is Ask.ReloadIfHeld -> reload(step, ask.force, waiter)
         }
     }
 

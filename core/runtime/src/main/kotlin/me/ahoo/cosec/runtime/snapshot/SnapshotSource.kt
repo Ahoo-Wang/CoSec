@@ -208,11 +208,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (context.closed.get()) {
             return CompletableFuture.failedFuture(closedError())
         }
-        val policiesEntry = shared.forRequest() ?: error("The shared slot is never removed.")
+        val policiesEntry = shared.request()
         if (appKey == null) {
             return policiesEntry.thenApply { it.alone }
         }
-        val appEntry = withSlot(appKey) { it.forRequest() }
+        val appEntry = withSlot(appKey) { it.request() }
         return policiesEntry.thenCombine(appEntry) { p, a -> Snapshot(p, a) }
     }
 
@@ -227,8 +227,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (context.closed.get()) {
             return CompletableFuture.failedFuture(closedError())
         }
-        val sharedEntry = shared.forRequest() ?: error("The shared slot is never removed.")
-        val entries = keys.map { key -> withSlot(key) { it.forRequest() } }
+        val sharedEntry = shared.request()
+        val entries = keys.map { key -> withSlot(key) { it.request() } }
         return CompletableFuture.allOf(sharedEntry, *entries.toTypedArray())
             .thenApply { SnapshotSet(sharedEntry.join(), entries.map { it.join() }) }
     }
@@ -304,7 +304,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      */
     fun reload(key: SnapshotKey): CompletableFuture<SnapshotEntry<*>> =
         if (key == sharedKey) {
-            shared.reload(force = true)!!.thenApply<SnapshotEntry<*>> { it }
+            shared.reload(force = true).thenApply<SnapshotEntry<*>> { it }
         } else {
             withSlot(key) { it.reload(force = true) }.thenApply<SnapshotEntry<*>> { it }
         }
@@ -322,15 +322,19 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      */
     fun recompile(): CompletableFuture<Void> {
         context.compileEpoch.incrementAndGet()
-        val outdated = families.flatMap { it.slots.values }.filter { it.markRecompile() }
-        return passes.reloadAll(outdated) { it.reload(force = false) }
+        val slots = families.flatMap { it.slots.values }
+        val marks = slots.map { it.markRecompile() }
+        return CompletableFuture.allOf(*marks.toTypedArray()).thenCompose {
+            passes.reloadAll(slots.filterIndexed { index, _ -> marks[index].join() }) { it.reloadIfHeld(force = false) }
+        }
     }
 
     /**
      * Revalidates every document installed at the call with a conditional read that starts after the call (`SNP-13`), a
      * few at a time; a document not installed then (failed with nothing installed, or on its first load) is not.
      */
-    fun revalidate(): CompletableFuture<Void> = passes.reloadAll(passes.installedSlots()) { it.reload(force = false) }
+    fun revalidate(): CompletableFuture<Void> =
+        passes.reloadAll(passes.installedSlots()) { it.reloadIfHeld(force = false) }
 
     /**
      * Stops this source and answers everything waiting on it. Every step runs whatever the ones before it did, so a
@@ -387,8 +391,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /** With the scheduler gone nothing bounds a read the store does not answer, and everything waiting on it (#1266). */
     private fun endLoads() {
-        shared.endLoad()
-        families.forEach { family -> family.slots.values.forEach { it.endLoad() } }
+        shared.close()
+        families.forEach { family -> family.slots.values.forEach { it.close() } }
     }
 
     /** Whether every thread this source started has finished: true once [close] has returned. */
@@ -410,23 +414,17 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun closedError() = context.closedError()
 
     /**
-     * Runs [action] on the slot of [key], retrying with a fresh slot when the one found was removed concurrently
-     * (evicted or forgotten) before the action could start a load on it. A removed slot still in the map is dropped
-     * here too, so the retry never waits for the remover.
+     * Runs [action] on the slot of [key]. A slot removed between this lookup and the action (evicted or forgotten) sends
+     * the request on to the key's current slot itself ([KeySlot.request]), so nothing here retries.
      */
-    private inline fun <R : Any> withSlot(key: SnapshotKey, action: (Slot<A>) -> R?): R {
-        val family = familyOf(key)
-        val id = family.spec.idOf(key)
-        while (true) {
-            val slot = family.slots.computeIfAbsent(id) { Slot(key, family.spec.compiler, context) }
-            afterSlotLookup?.invoke(key)
-            action(slot)?.let { return it }
-            family.slots.remove(id, slot)
-        }
+    private inline fun <R : Any> withSlot(key: SnapshotKey, action: (KeySlot<A>) -> R): R {
+        val slot = familyOf(key).slotFor(key, context)
+        afterSlotLookup?.invoke(key)
+        return action(slot)
     }
 
     private fun usableOf(key: SnapshotKey): CompletableFuture<out SnapshotEntry<*>> =
-        if (key == sharedKey) shared.usable()!! else withSlot(key) { it.usable() }
+        if (key == sharedKey) shared.usable() else withSlot(key) { it.usable() }
 
     /** The family [key] belongs to; [IllegalArgumentException] when it is no document of this source. */
     private fun familyOf(key: SnapshotKey): Family<A> =
@@ -440,7 +438,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
     internal fun evict(key: SnapshotKey): Boolean {
         val family = familyOf(key)
-        return family.slots[family.spec.idOf(key)]?.removeIfIdle(onlyIfEmpty = false) ?: false
+        val slot = family.slots[family.spec.idOf(key)] ?: return false
+        return slot.evict(onlyIfEmpty = false, claimedAbsent = null).join() == Eviction.REMOVED
     }
 
     internal companion object {
