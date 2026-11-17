@@ -21,6 +21,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
@@ -39,7 +40,7 @@ class KeyRunnerContendedBoundTest {
         (0..CAP).forEach { put(app(it), document(1)) }
     }
     private val compiler = FakeCompiler()
-    private val holders = mutableSetOf<Thread>()
+    private val holders = ConcurrentHashMap.newKeySet<Thread>()
     private val holding = CountDownLatch(HOLDERS)
     private val release = CountDownLatch(1)
 
@@ -85,9 +86,13 @@ class KeyRunnerContendedBoundTest {
         (0 until CAP).forEach { source.load(app(it).appId).join() }
         documentsHeld().assert().isEqualTo(CAP)
         val reloads = (0 until HOLDERS).map { n ->
-            thread(name = "holder-$n") { source.reload(app(n)) }.also { synchronized(holders) { holders += it } }
+            // Registered before it starts: the hook reads the set on the holder's own thread, at its reload.
+            thread(start = false, name = "holder-$n") { source.reload(app(n)) }.also {
+                holders += it
+                it.start()
+            }
         }
-        // Registered before each starts its reload: the set is read in the hook, on the holder's own thread.
+        // Every holder has stopped in its reload, with its key's flag held.
         holding.await(10, TimeUnit.SECONDS).assert().isTrue()
 
         source.load(app(CAP).appId).join()
