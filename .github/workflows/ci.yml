@@ -212,6 +212,69 @@ jobs:
       - name: Check formatting
         run: pnpm format:check
 
+      # The packages as a consumer gets them: publint on the tarballs, and a clean project that installs, imports,
+      # requires and type-checks them under node16, nodenext and bundler resolution.
+      - name: Check the packed packages
+        run: pnpm check:package
+
+      # engines.node promises Node 22.12.0, which pnpm 11 cannot run on: pack here, check the tarballs under 22.12.0.
+      - name: Pack the packages for the Node 22.12.0 check
+        if: matrix.node-version == '22.23.4'
+        run: mkdir -p "$RUNNER_TEMP/tarballs" && for package in cosec-*/; do (cd "$package" && pnpm pack --pack-destination "$RUNNER_TEMP/tarballs"); done
+
+      - name: Setup Node 22.12.0
+        if: matrix.node-version == '22.23.4'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.12.0
+
+      - name: Check the packed packages under Node 22.12.0
+        if: matrix.node-version == '22.23.4'
+        run: node scripts/package-check.mjs --tarballs "$RUNNER_TEMP/tarballs"
+
+      - name: Stage the coverage
+        if: matrix.node-version == '24.22.2'
+        run: mkdir -p ../coverage-artifact && cp cosec-fetcher/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-fetcher.json
+
+      - name: Keep the coverage
+        if: matrix.node-version == '24.22.2'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-typescript
+          path: coverage-artifact/
+          retention-days: 1
+          if-no-files-found: error
+
+  # The one upload of the TypeScript coverage, with the token the `typescript` job does not have. Its own flag keeps it
+  # apart from the Gradle uploads; codecov.yml waits for it and plan.py counts it.
+  typescript-coverage:
+    name: TypeScript coverage
+    needs: typescript
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the coverage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-typescript
+          path: coverage-artifact
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: coverage-artifact
+          flags: typescript
+          name: typescript
+          disable_search: true
+          files: coverage-artifact/typescript-cosec-fetcher.json
+          fail_ci_if_error: true
+
   # Every overlay in k8s/overlays builds, and what it builds is valid for the oldest Kubernetes minor still supported
   # upstream and for the newest; -strict refuses fields the schema does not have. No path filter, like `docs`.
   k8s:
@@ -239,7 +302,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [ plan, test, actionlint, docs, k8s, typescript ]
+    needs: [ plan, test, actionlint, docs, k8s, typescript, typescript-coverage ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

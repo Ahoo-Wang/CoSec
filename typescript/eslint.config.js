@@ -18,7 +18,7 @@ import globals from 'globals';
 // ESLint inside each of them.
 export default [
   {
-    files: ['eslint.config.js'],
+    files: ['eslint.config.js', 'scripts/**/*.mjs'],
     ...js.configs.recommended,
     languageOptions: {
       ecmaVersion: 2022,

@@ -61,7 +61,7 @@ pnpm test
   header on every source file. The Kotlin structure rules (400 lines a file, one type a file) do not apply here.
 - **A public API report per package** (`test/api/<package>.api.md`, api-extractor) is to a package what
   `api/<project>.api` is to a Kotlin module: a changed line is a public change, and a removed or changed one is a
-  breaking change (`!` in the PR title). The report arrives with the first package.
+  breaking change (`!` in the PR title). `pnpm test:api` checks it against the build; `pnpm test:api -u` rewrites it, and the change is committed on purpose.
 - A package's unit tests may use its own model of CoSec (a fake server and a fake clock) for what needs a controlled
   clock or a controlled failure: a 30-second leeway and a lost response cannot be staged against a real host.
   **Whatever the model asserts about CoSec's answers is also asserted against the application of `test/client-host`**,

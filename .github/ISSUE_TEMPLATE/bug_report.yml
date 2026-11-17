@@ -45,6 +45,7 @@ body:
         - cosec-cosid
         - cosec-migrate
         - cosec-gateway-server
+        - cosec-fetcher
         - Not sure
     validations:
       required: true
