@@ -137,6 +137,6 @@ internal class KeyRunner<T : Any>(
 
     internal companion object {
         /** Provisional: step 2b-ii's measurement (K ∈ 0, 4, 16, 64) sets it. */
-        const val PROVISIONAL_K = 16
+        const val PROVISIONAL_K = 4
     }
 }
