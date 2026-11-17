@@ -68,7 +68,9 @@ import java.time.Duration
  * served there; the control API is, behind the pipeline's filter limited to its base path. On a random port (`0`) the
  * gateway cannot tell the port apart and serves its routes there, under its filter: pinned too. A route a statement
  * permits to anyone tells "served behind CoSec" from "not served": the premise of `STA-4` is that WebFlux's management
- * child serves the application's functional routes. **A Spring Boot upgrade that
+ * child serves the application's functional routes; so does the control API read with a platform token (200 on WebFlux's
+ * management port, 404 on WebMvc's): the starter's routes are `RouterFunction` beans of the parent like an application's,
+ * and that cell pins the inheritance too. **A Spring Boot upgrade that
  * changes what a child context inherits shows up here first**: a cell that moves is either an application route that
  * became reachable outside CoSec, or a pipeline that no longer fronts the management server.
  */
