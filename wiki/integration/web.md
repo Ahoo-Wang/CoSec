@@ -487,7 +487,7 @@ the filter fronts depends on the server (`STA-4`; the cells are asserted against
 |---|---|---|
 | WebFlux | CoSec's: the probes are `503` before the first platform document, `401` for an anonymous caller after it | CoSec's too: Spring Boot's management server collects the application's `WebFilter`s and `RouterFunction`s, so the pipeline fronts it, the application's functional routes and the control API included (an application controller is a `404` there) |
 | WebMvc | CoSec's, as on WebFlux | Outside CoSec: actuator's endpoints are Spring's own (liveness `200`; readiness `503` until the documents are installed, then `200`), and a controller, a functional route and the control API are a `404` |
-| Gateway | the gateway's routes only (above) | Outside CoSec, but for the control API, which is CoSec's |
+| Gateway ([its own section](#actuator-on-a-gateway)) | the gateway's routes only | Outside CoSec: actuator's endpoints are Spring's own and the gateway's routes are not served; the control API, when the control plane is on, is served under its own pipeline |
 
 With one port, or `management.server.port` equal to the application's, every row is the application port.
 

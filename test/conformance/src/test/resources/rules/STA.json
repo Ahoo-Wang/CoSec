@@ -73,7 +73,7 @@
     {
       "id": "STA-4",
       "source": "RFC 0011 D2",
-      "statement": "On every port a host opens, nothing the application serves answers without passing CoSec. On WebFlux the management server (management.server.port different from the application's) is under the pipeline: its probes and everything of the application's it inherits, the application's functional routes and the control API among them, are CoSec's 503 before the first platform document and 401 for an anonymous caller after it. On WebMvc and on a gateway it serves actuator's endpoints only, which are Spring's own (liveness 200, readiness 503 until the documents are installed, then 200), and a controller, a servlet or functional route and the control API answer 404 there; a gateway's control API is CoSec's. With one port, or a management port equal to the application's, the probes are requests like any other. The tests assert the answers of real servers (Reactor Netty, Tomcat) cell by cell: they are what shows that a Spring Boot upgrade changed what a management child context inherits.",
+      "statement": "On every port a host opens, nothing the application serves answers without passing CoSec. A WebFlux application's management server is under the pipeline, as its application port is. A WebMvc application's management server serves only actuator's endpoints: a controller, a functional route and the control API are not served there. A gateway's management server serves actuator's endpoints and, when the control plane is on, the control API under its own pipeline; the gateway's routes are not served there.",
       "level": "startup",
       "pending": null,
       "guards": [

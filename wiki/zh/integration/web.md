@@ -341,7 +341,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 |---|---|---|
 | WebFlux | 经 CoSec：第一份平台文档之前探针是 `503`，之后匿名调用方是 `401` | 同样经 CoSec：Spring Boot 的管理服务器会收集应用的 `WebFilter` 和 `RouterFunction`，所以管道在它前面，应用的函数式路由和控制 API 都在其中（应用的控制器在那里是 `404`） |
 | WebMvc | 经 CoSec，同 WebFlux | 不经 CoSec：actuator 的端点是 Spring 自己的（存活 `200`；就绪在文档安装之前是 `503`，之后 `200`），控制器、函数式路由和控制 API 都是 `404` |
-| 网关 | 只有网关的路由（见上） | 不经 CoSec，控制 API 除外，它仍经 CoSec |
+| 网关（[单独一节](#actuator-on-a-gateway)） | 只有网关的路由 | 不经 CoSec：actuator 的端点是 Spring 自己的，网关的路由不在那里提供；控制平面开启时，控制 API 在那里提供，经它自己的管道 |
 
 只有一个端口，或 `management.server.port` 与应用端口相同时，每一行都是应用端口那一列。
 

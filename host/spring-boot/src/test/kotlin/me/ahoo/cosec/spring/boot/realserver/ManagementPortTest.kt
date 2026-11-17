@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.realserver
 
+import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -23,6 +24,8 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.login.token.TokenConverter
+import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -43,6 +46,7 @@ import org.springframework.context.annotation.Import
 import org.springframework.core.io.DefaultResourceLoader
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.RestController
+import java.net.InetSocketAddress
 import java.net.URI
 import java.net.http.HttpClient
 import java.net.http.HttpRequest
@@ -85,8 +89,8 @@ class ManagementPortTest {
         cells.before.app.assert().isEqualTo(GATED_BEFORE)
         cells.after.app.assert().isEqualTo(GATED_AFTER)
         // Spring's own answers: liveness is up, readiness follows the snapshot (503, then 200).
-        cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 404))
-        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 404))
+        cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 404, 404))
+        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 404, 404))
         cells.managementController.assert().isEqualTo(404)
     }
 
@@ -95,12 +99,12 @@ class ManagementPortTest {
         val cells = run(Stack.GATEWAY, separate = true)
         // The application port: the gateway's route is CoSec's, and so is the control API. Actuator is not served there
         // (404): the gateway's filter fronts its routes, not the probes of a host that has a management port.
-        cells.before.app.assert().isEqualTo(Probes(404, 404, 503, 503))
-        cells.after.app.assert().isEqualTo(Probes(404, 404, 401, 401))
+        cells.before.app.assert().isEqualTo(Probes(404, 404, 503, 503, 503))
+        cells.after.app.assert().isEqualTo(Probes(404, 404, 200, 401, 200))
         // The management port: actuator's endpoints are Spring's, the gateway's route is not served, and the control
         // API, which the pipeline's filter limited to its base path fronts, is CoSec's.
-        cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 503))
-        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 401))
+        cells.before.management.assert().isEqualTo(Probes(200, 503, 404, 503, 503))
+        cells.after.management.assert().isEqualTo(Probes(200, 200, 404, 401, 200))
     }
 
     @Test
@@ -121,7 +125,25 @@ class ManagementPortTest {
     }
 
     private fun run(stack: Stack, separate: Boolean): Cells {
-        val context = start(stack, separate)
+        // A gateway's route leads to a real backend, so that "permitted" is observable: a proxied answer.
+        val backend = if (stack.gateway) backend() else null
+        try {
+            return run(stack, separate, backend?.address?.port ?: 0)
+        } finally {
+            backend?.stop(0)
+        }
+    }
+
+    private fun backend(): HttpServer = HttpServer.create(InetSocketAddress("localhost", 0), 0).apply {
+        createContext("/") { exchange ->
+            exchange.sendResponseHeaders(200, 0)
+            exchange.responseBody.use { it.write("backend".toByteArray()) }
+        }
+        start()
+    }
+
+    private fun run(stack: Stack, separate: Boolean, backendPort: Int): Cells {
+        val context = start(stack, separate, backendPort)
         context.use {
             val app = context.environment.getRequiredProperty("local.server.port").toInt()
             val management = if (separate) {
@@ -131,7 +153,9 @@ class ManagementPortTest {
             } else {
                 app
             }
-            val before = Observation(probes(app, stack.route), probes(management, stack.route))
+            val token = context.getBean(TokenConverter::class.java)
+                .toToken(TokenSubject("plato", "cosec-control", tenant = "(platform)")).accessToken
+            val before = Observation(probes(app, stack.route, token), probes(management, stack.route, token))
             publish(context)
             // The platform document is installed once the application's own public route answers (a gateway has none:
             // once it stops answering 503).
@@ -145,7 +169,7 @@ class ManagementPortTest {
                 check(System.nanoTime() < deadline) { "Readiness did not follow the document on ${stack.name}." }
                 Thread.sleep(50)
             }
-            val after = Observation(probes(app, stack.route), probes(management, stack.route))
+            val after = Observation(probes(app, stack.route, token), probes(management, stack.route, token))
             return Cells(
                 Phase(before.app, before.management),
                 Phase(after.app, after.management),
@@ -155,7 +179,7 @@ class ManagementPortTest {
     }
 
     /** A real application of [stack]: Spring Boot's own server and management child, CoSec's starter, in-memory CoCache. */
-    private fun start(stack: Stack, separate: Boolean): ConfigurableApplicationContext {
+    private fun start(stack: Stack, separate: Boolean, backendPort: Int): ConfigurableApplicationContext {
         val hidden = buildList {
             if (!stack.gateway) add(GATEWAY_GLOBAL_FILTER)
             // The modules the test classpath carries for other tests; none is wanted here.
@@ -179,9 +203,9 @@ class ManagementPortTest {
             add("management.endpoint.health.probes.enabled=true")
             add("spring.main.banner-mode=off")
             if (stack.gateway) {
-                // A gateway host: one route, to a backend nothing listens on (the requests the tests send never get there).
+                // A gateway host: one route, to the test's own backend.
                 add("spring.cloud.gateway.server.webflux.routes[0].id=token")
-                add("spring.cloud.gateway.server.webflux.routes[0].uri=http://localhost:1")
+                add("spring.cloud.gateway.server.webflux.routes[0].uri=http://localhost:$backendPort")
                 add("spring.cloud.gateway.server.webflux.routes[0].predicates[0]=Path=/token")
             } else {
                 // Spring Cloud Gateway is on the test classpath for other tests: none of its configurations is wanted.
@@ -217,23 +241,29 @@ class ManagementPortTest {
         }
     }
 
-    private fun probes(port: Int, route: String): Probes = Probes(
+    private fun probes(port: Int, route: String, token: String): Probes = Probes(
         get(port, "/actuator/health/liveness"),
         get(port, "/actuator/health/readiness"),
         get(port, route),
         get(port, "$CONTROL/documents/platform"),
+        get(port, "$CONTROL/documents/platform", token),
     )
 
-    private fun get(port: Int, path: String): Int =
+    private fun get(port: Int, path: String, token: String? = null): Int =
         CLIENT.send(
-            HttpRequest.newBuilder(
-                URI.create("http://localhost:$port$path")
-            ).timeout(Duration.ofSeconds(10)).GET().build(),
+            HttpRequest.newBuilder(URI.create("http://localhost:$port$path")).timeout(Duration.ofSeconds(10))
+                .apply { token?.let { header("Authorization", "Bearer $it") } }.GET().build(),
             HttpResponse.BodyHandlers.discarding(),
         ).statusCode()
 
-    /** Status codes of liveness, readiness, the application's functional route, the control API: anonymous callers. */
-    private data class Probes(val liveness: Int, val readiness: Int, val functionalRoute: Int, val controlApi: Int)
+    /** Status codes of liveness, readiness, the application's route, the control API anonymous and with a platform token. */
+    private data class Probes(
+        val liveness: Int,
+        val readiness: Int,
+        val functionalRoute: Int,
+        val controlApi: Int,
+        val controlApiWithToken: Int,
+    )
 
     private data class Observation(val app: Probes, val management: Probes)
 
@@ -299,15 +329,23 @@ class ManagementPortTest {
         const val CONTROL = "/cosec/control/v1"
         val CLIENT: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build()
 
-        /** `/hello` is permitted to anyone; nothing else is. */
+        /**
+         * `/hello` and `/token` are permitted to anyone; the control API's paths to authenticated callers; `plato` of the
+         * platform tenant is the platform administrator. Nothing else is permitted.
+         */
         const val PLATFORM = """{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z",""" +
-            """"policies":[{"id":"public","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/hello"}]}],""" +
-            """"bindings":[{"id":"public","subject":"*","app":"*","space":"*","policy":"public"}]}"""
+            """"policies":[{"id":"public","statements":[{"effect":"allow","action":"http:GET","resource":["http:path:/hello","http:path:/token"]}]},""" +
+            """{"id":"members","statements":[{"effect":"allow","action":"http:*","resource":"http:path:/cosec/control/**",""" +
+            """"condition":{"eq":["subject.authenticated",true]}}]}],""" +
+            """"bindings":[{"id":"public","subject":"*","app":"*","space":"*","policy":"public"},""" +
+            """{"id":"members","subject":"*","app":"*","space":"*","policy":"members"},""" +
+            """{"id":"plato","subject":{"principal":"plato","tenant":"(platform)"},"app":"cosec-control","space":"",""" +
+            """"policy":"cosec:platform-admin"}]}"""
 
         /** CoSec's answer before a platform document exists: every request, the probes included, is 503. */
-        val GATED_BEFORE = Probes(503, 503, 503, 503)
+        val GATED_BEFORE = Probes(503, 503, 503, 503, 503)
 
-        /** After it: anonymous callers are 401 wherever no statement permits the path. */
-        val GATED_AFTER = Probes(401, 401, 401, 401)
+        /** After it: anonymous callers are 401 wherever no statement permits the path; a platform token reaches the control API. */
+        val GATED_AFTER = Probes(401, 401, 401, 401, 200)
     }
 }
