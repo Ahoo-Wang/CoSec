@@ -59,6 +59,10 @@ that do not convert, get no ratio: the row says `not comparable`, a "Not compara
 mismatch, and `compare.py` exits with status 1. The raw JMH JSON (`base-N.json`, `head-N.json`) is uploaded as the
 `jmh-ab-<run id>` artifact.
 
+The summary also names the job's host (CPU model, vCPU count, kernel), and the artifact's `host.txt` holds that and the
+whole `lscpu`. Compare ratios only within a job, and absolute times only between jobs on the same host class: hosted
+runners differ, and a ratio can move with the host when the two sides wait on threads differently.
+
 ## Script
 
 `compare.py <dir>` reads `<dir>/base-N.json` and `<dir>/head-N.json` and prints the table; run it locally on the
