@@ -209,6 +209,19 @@ RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保�
 > - **失败条件：** 应用端口上通过 HTTP 暴露了 `health` 以外的 Actuator 端点，除非 `cosec.gateway.unprotected-endpoints` 列出了它。`gateway` 端点在任何端口上都不能列入。
 > - **按真实端点检查：** 包括 Spring Cloud Gateway 自己的 `@RestControllerEndpoint`。
 
+> **决定（2026-11-17，尚未实现；规则 `STA-4`）：闸门立在应用的服务器上。** 核对快速启动时发现，应用（WebFlux 或 WebMvc，不是网关）上的 Actuator 探针也经过 CoSec，而讲探针的文档描述的都是网关。实测（Spring Boot 4.1.2，Netty 与 Tomcat，匿名请求，每格是存活 / 就绪）：
+>
+> | | 应用端口，平台文档发布前 | 应用端口，发布后 | 管理端口，发布前 | 管理端口，发布后 |
+> |---|---|---|---|---|
+> | WebFlux | 503 / 503（CoSec） | 401 / 401（CoSec） | 503 / 503（CoSec） | 401 / 401（CoSec） |
+> | WebMvc | 503 / 503（CoSec） | 401 / 401（CoSec） | 200 / 503（Spring） | 200 / 200（Spring） |
+>
+> - **事实。** WebFlux 的管理子上下文收集到了父上下文的 `PipelineWebFilter`；WebMvc 的 `FilterRegistrationBean` 到不了管理服务器。所以 WebFlux 应用没有任何配置能让存活探针在第一次发布之前成功，“存活探针不受影响”只对 WebMvc 加管理端口、以及网关成立；两个栈在管理端口上的回答也不一样。平台文档里加一条对任何人放行两个探针路径的语句，发布后应用端口上两个栈都是 200 / 200，但发布之前没有文档可以放行。WebFlux 的管理端口不路由应用自己的控制器（带有效令牌请求应用的路由得到 Spring 的 404），所以那里的过滤器挡在前面的只有 Actuator。
+> - **定下的。** CoSec 的 HTTP 适配器只作用于应用的服务器。独立的管理服务器（`management.server.port` 与应用端口不同）上的请求不经过 CoSec，三种宿主相同：WebMvc 与网关今天已经如此，WebFlux 在 starter 里修正。应用端口上不变：Actuator 端点与其他请求一样被鉴权（网关除外，见 `STA-2`），没有任何路径不经策略就放行，平台文档装入之前一律 `503`。
+> - **怎样认出管理服务器的请求。** 只凭处理它的是哪个服务器（它的应用上下文），不凭路径、请求头或任何请求能影响的东西；不能确定时按应用的请求处理。按路径豁免探针的做法被否决：它是适配器里的第二条判定路径，路径匹配与路由之间的任何差异都是绕过；它也使一个路径无法被策略关闭。
+> - **为什么不反过来让三种宿主的管理端口都经过 CoSec。** 平台文档缺失时 CoSec 对一切请求回答 `503`，探针必须在没有文档时也能回答；管理端口是运维的接口，由网络策略保护，[网关的文档](../../wiki/integration/web.md)本来就是这样写的。暴露在管理端口上的端点因此由运维自己负责，文档里说明。
+> - **随实现一起改的文档：** `web.md` 增加“应用上的 Actuator”，`deployment.md` 的就绪一节，`troubleshooting.md` 的新症状，`upgrading.md`（WebFlux 的管理端口不再经过 CoSec，属于鉴权语义的变化）。
+
 > **实现说明（2026-11-04，#1200，RC 修复批次 D1，`DOC-5`，RC1-44）**：D3 的"一个 mapper"同时是一个严格的 mapper：`CoSecJson.mapper` 打开 `STRICT_DUPLICATE_DETECTION`，所以 CoSec 读的每种存储格式（文档、API Key、成员关系、影子报告、吊销、`cosec-migrate` 读的 7.x 输入）与每个控制面请求体都拒绝重复的 key，不再按后出现的值读。吊销缓存改用它，不再用应用的 `ObjectMapper`。唯一的例外是 starter 读 Spring 的配置元数据（`UnknownProperties`）：那不是 CoSec 的格式，用 `without(STRICT_DUPLICATE_DETECTION)` 读，后出现的值生效。
 
 ## 7. 交付
