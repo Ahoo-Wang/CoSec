@@ -180,15 +180,17 @@ jobs:
           # -foe true: a benchmark that throws fails the run. Without it JMH exits 0 and writes `[]`.
           args=(-f "$FORKS" -wi "$WARMUP" -i "$ITERATIONS" -w "$WARMUP_TIME" -r "$MEASUREMENT_TIME" -prof gc -rf json -foe true)
           for p in $PARAMS; do args+=(-p "$p"); done
-          for p in $PROFILERS; do args+=(-prof "$p"); done
           for round in $(seq 1 "$ROUNDS"); do
             for side in base head; do
               # Only the requested module's jmhJar was built; its directory name can differ from the project name.
               jar=$(find "$RUNNER_TEMP/$side" -path '*/build/libs/*-jmh.jar' | head -n 1)
               [ -n "$jar" ] || { echo "no jmh jar for $MODULE in $side"; exit 1; }
+              # A profiler's "@side" names the side, so that each side's recordings land apart.
+              extra=()
+              for p in $PROFILERS; do extra+=(-prof "${p//@side/$side}"); done
               echo "::group::round $round: $side"
               # The WARN-level logback config: without it forked JVMs log at DEBUG and skew the numbers.
-              "$JAVA25" -jar "$jar" "$INCLUDE" "${args[@]}" \
+              "$JAVA25" -jar "$jar" "$INCLUDE" "${args[@]}" "${extra[@]}" \
                 -rff "$RUNNER_TEMP/results/$side-$round.json" \
                 -jvmArgsAppend "-Dlogback.configurationFile=$RUNNER_TEMP/$side/config/logback-jmh.xml"
               echo "::endgroup::"
@@ -206,4 +208,6 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: jmh-ab-${{ github.run_id }}
-          path: ${{ runner.temp }}/results/*.json
+          path: |
+            ${{ runner.temp }}/results/*.json
+            ${{ runner.temp }}/results/**/*.jfr
