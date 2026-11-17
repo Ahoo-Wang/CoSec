@@ -118,6 +118,56 @@ class ChainVerificationTest {
             .contains("Verified 2 document(s): 0 broken, 1 could not be read.")
     }
 
+    /** A fork the control plane has not read yet: the head moved back and revision 2 was published again. */
+    @Test
+    fun `an index on another branch than the head is a finding, and verify-chain repairs nothing`() {
+        val (first, second) = publish(acme, 2)
+        runBlocking {
+            memory.putHead(acme, second, memory.record(acme, first)!!)
+            revisions.publish(acme, revisions.head(acme), withPolicy(acme, "new-branch"), publication)
+        }
+        val index = runBlocking { memory.index(acme)!!.value }
+
+        val (code, output) = verify()
+
+        code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert()
+            .contains("ok tenant:acme: intact down to revision 1")
+            .contains(
+                "INDEX tenant:acme: the revision index does not follow the head's chain: the index ends at revision 2 ("
+            )
+            .contains(
+                "Verified 1 document(s): 0 broken, 0 could not be read, 1 with a revision index that does not follow the head's chain."
+            )
+        runBlocking { memory.index(acme)!!.value }.assert().isEqualTo(index)
+    }
+
+    @Test
+    fun `entries an older version wrote are a note, not a failure`() {
+        publish(acme, 3)
+        runBlocking {
+            val index = memory.index(acme)!!
+            memory.putIndex(
+                acme,
+                index.digest,
+                index.value.copy(entries = index.value.entries.map { it.copy(parent = null) })
+            )
+        }
+
+        val (code, output) = verify()
+
+        code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+        output.assert().contains("note tenant:acme: 2 revision index entries predate the parent field")
+            .contains("Verified 1 document(s): 0 broken, 0 could not be read.")
+    }
+
+    private val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+
+    private fun withPolicy(key: SnapshotKey, policy: String): PolicyDocument =
+        document(
+            key
+        ).copy(policies = listOf(me.ahoo.cosec.document.PolicyDefinition(PolicyId(policy), false, null, emptyList())))
+
     /** Publishes [count] revisions of [key] and answers their digests, oldest first. */
     private fun publish(key: SnapshotKey, count: Int): List<SnapshotDigest> = runBlocking {
         val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))

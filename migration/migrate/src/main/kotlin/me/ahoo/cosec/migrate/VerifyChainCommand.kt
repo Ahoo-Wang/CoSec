@@ -18,6 +18,7 @@ package me.ahoo.cosec.migrate
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.ChainCheck
+import me.ahoo.cosec.control.store.IndexCheck
 import me.ahoo.cosec.migrate.MigrateMain.FAILED
 import me.ahoo.cosec.migrate.MigrateMain.OK
 import me.ahoo.cosec.migrate.RedisAccess.controlStore
@@ -41,11 +42,27 @@ internal object VerifyChainCommand {
      * credentials of the URIs given out of what a failure prints.
      */
     fun report(verified: List<VerifiedChain>, out: PrintStream, scrub: (String) -> String = { it }): Int {
-        verified.forEach { out.println(lineOf(it, scrub)) }
+        verified.forEach { chain ->
+            out.println(lineOf(chain, scrub))
+            indexLine(chain)?.let(out::println)
+        }
         val broken = verified.count { it.check is ChainCheck.Broken }
         val failed = verified.count { it.failure != null }
-        out.println("Verified ${verified.size} document(s): $broken broken, $failed could not be read.")
-        return if (broken + failed > 0) FAILED else OK
+        val differs = verified.count { it.index is IndexCheck.Differs }
+        val indexes = if (differs > 0) ", $differs with a revision index that does not follow the head's chain" else ""
+        out.println("Verified ${verified.size} document(s): $broken broken, $failed could not be read$indexes.")
+        return if (broken + failed + differs > 0) FAILED else OK
+    }
+
+    /** The finding on the revision index of [verified], if there is one; a missing chain says nothing of its index. */
+    private fun indexLine(verified: VerifiedChain): String? = when (val index = verified.index) {
+        is IndexCheck.Differs ->
+            "INDEX ${verified.key}: the revision index does not follow the head's chain: ${index.why}; the next read " +
+                "of the document's history repairs it"
+        is IndexCheck.Unchecked ->
+            "note ${verified.key}: ${index.entries} revision index entries predate the parent field and cannot be " +
+                "checked; the next read of the document's history rewrites them"
+        else -> null
     }
 
     private fun lineOf(verified: VerifiedChain, scrub: (String) -> String): String =

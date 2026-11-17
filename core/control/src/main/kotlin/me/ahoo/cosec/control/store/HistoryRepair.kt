@@ -169,6 +169,36 @@ internal class HistoryRepair(
                 soundPrefix(live) == live.size
         }
 
+        /**
+         * What [agrees] says, and why not, from the entries alone: nothing is read or repaired. An entry without a
+         * `parent` cannot be checked, which an older version wrote ([IndexCheck.Unchecked]); one that names another
+         * parent than the entry below it is a difference.
+         */
+        fun check(entries: List<RevisionEntry>, floor: Long, head: StoredDocument): IndexCheck {
+            val live = entries.filter { it.revision >= floor }
+            val last = live.lastOrNull()
+                ?: return IndexCheck.Differs("the index lists no revision, and the head is revision ${head.document.revision}")
+            if (last.revision != head.document.revision || last.digest != head.digest) {
+                return IndexCheck.Differs(
+                    "the index ends at revision ${last.revision} (${last.digest}), the head is revision " +
+                        "${head.document.revision} (${head.digest})"
+                )
+            }
+            var unchecked = 0
+            for (i in 1 until live.size) {
+                val parent = live[i].parent
+                when {
+                    parent == live[i - 1].digest -> Unit
+                    parent == null -> unchecked++
+                    else -> return IndexCheck.Differs(
+                        "revision ${live[i].revision} names $parent as its parent, but the entry below it is " +
+                            "revision ${live[i - 1].revision} (${live[i - 1].digest})"
+                    )
+                }
+            }
+            return if (unchecked > 0) IndexCheck.Unchecked(unchecked) else IndexCheck.Follows
+        }
+
         /** How many entries from the lowest hold: the lowest, and each next one whose parent is the one before. */
         private fun soundPrefix(entries: List<RevisionEntry>): Int {
             var sound = minOf(entries.size, 1)
