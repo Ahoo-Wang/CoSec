@@ -94,3 +94,75 @@ jobs:
           cd migration/migrate/build/distributions
           sha256sum cosec-migrate-*.zip > "$(ls cosec-migrate-*.zip).sha256"
           gh release upload "$TAG" cosec-migrate-*.zip cosec-migrate-*.zip.sha256 --clobber --repo "$GITHUB_REPOSITORY"
+  # The TypeScript packages of typescript/ (@ahoo-wang/cosec-fetcher, then @ahoo-wang/cosec-react), published to npm with
+  # the release, under the same tag and version as the Maven artifacts. There is no npm token anywhere: each package has a
+  # trusted publisher on npm, bound to this workflow file (package-deploy.yml) and to the `npm-publish` environment, and
+  # npm exchanges the OIDC identity of this job (id-token: write) for a short-lived credential and writes the provenance.
+  # Do not rename the file or the environment without changing them on npm. scripts/release.mjs is rehearsed on every
+  # pull request by the `typescript` job of ci.yml (`npm publish --dry-run` on the same tarballs).
+  # Actions are pinned by commit SHA, as in ci.yml.
+  npm-publish:
+    name: Publish the TypeScript packages to npm
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: npm-publish
+    permissions:
+      id-token: write
+      contents: read
+    defaults:
+      run:
+        working-directory: typescript
+    env:
+      RELEASE_TAG: ${{ github.event.release.tag_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.28.11
+
+      # Trusted publishing needs npm 11.5.1 or later (Node 22.14 or later): Node 24 brings it, the next step asserts it.
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.2
+          registry-url: https://registry.npmjs.org
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Check Node and npm
+        run: node scripts/release.mjs env
+
+      # Before anything is built or published: the tag, gradle.properties and both package.json say one version.
+      - name: Check the version of the release
+        run: node scripts/release.mjs check "$RELEASE_TAG"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      # pnpm packs: `workspace:` and `catalog:` become versions. The tarballs checked here are the ones published.
+      - name: Pack the packages
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/tarballs"
+          for package in cosec-fetcher cosec-react; do
+            (cd "$package" && pnpm pack --pack-destination "$RUNNER_TEMP/tarballs")
+          done
+
+      - name: Check the packed packages
+        run: node scripts/package-check.mjs --tarballs "$RUNNER_TEMP/tarballs"
+
+      # cosec-fetcher first, then cosec-react; a version already on npm is skipped, so a re-run after a partial failure
+      # goes on with the next package. A pre-release never gets the `latest` dist-tag.
+      - name: Publish to npm
+        run: node scripts/release.mjs publish --tarballs "$RUNNER_TEMP/tarballs"
