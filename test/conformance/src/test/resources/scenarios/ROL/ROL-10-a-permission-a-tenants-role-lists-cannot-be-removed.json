@@ -4,7 +4,7 @@
   ],
   "polarity": "positive",
   "level": "control",
-  "description": "Removing edit would leave the tenant's role failing closed: the publish stops it.",
+  "description": "Removing edit would leave the tenant's role failing closed: the check refuses it, and it stays a draft.",
   "documents": {
     "platform": {},
     "apps": {
@@ -91,18 +91,10 @@
           }
         ]
       }
-    },
-    {
-      "skipShadow": "c1"
-    },
-    {
-      "publish": "c1"
     }
   ],
   "expect": {
     "steps": [
-      "CHECKED",
-      "READY",
       "DRAFT"
     ],
     "errors": {

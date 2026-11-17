@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
-index dcea2cef..f29b2bf7 100644
+index 9f602785..7f1b979b 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferencedPolicies.kt
 @@ -51,7 +51,7 @@ internal object ReferencedPolicies {
@@ -12,6 +12,6 @@ index dcea2cef..f29b2bf7 100644
          val kept = RoleExpansion.effective(candidate).policies.associate { it.id to it.boundary }
 -        return RoleExpansion.effective(base).policies.filter { kept[it.id] != it.boundary }.map { it.id }
 +        return RoleExpansion.effective(base).policies.filter { it.id !in kept }.map { it.id }
-             .associateWith { policy -> (referrers(key, policy) - key).filterNotTo(HashSet()) { definesItself(it, policy, head) } }
-             .filterValues { it.isNotEmpty() }
-     }
+             .associateWith { policy ->
+                 (referrers(key, policy) - key).filterNotTo(
+                     HashSet()
