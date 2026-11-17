@@ -19,7 +19,6 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -90,14 +89,7 @@ class KeyRunnerFailureTest {
             null,
             { ticker.incrementAndGet() },
             housekeeping,
-            object : SlotFactory {
-                override fun <T : Any> create(
-                    key: SnapshotKey,
-                    compiler: SnapshotCompiler<T>,
-                    context: SlotContext
-                ): KeySlot<T> =
-                    KeyRunner(key, compiler, context, k, if (everyKey || key == APP_A) hooks else KeyDrain.Hooks.NONE)
-            },
+            keyRunners(k, hooks) { everyKey || it == APP_A },
         )
     }
 
@@ -199,14 +191,9 @@ class KeyRunnerFailureTest {
         }
         val refuse = AtomicBoolean()
         // Accepting until A is installed, so A is held; refusing after, so the hand-off is refused.
-        val refusing = Executor {
-            if (refuse.get()) {
-                throw RejectedExecutionException(
-                    "refused by the test"
-                )
-            } else {
-                it.run()
-            }
+        val refusing = Executor { task ->
+            if (refuse.get()) throw RejectedExecutionException("refused by the test")
+            task.run()
         }
         val more = CopyOnWriteArrayList<CompletableFuture<Boolean>>()
         val armed = AtomicBoolean()
@@ -276,9 +263,10 @@ class KeyRunnerFailureTest {
             }
         }
         val refuse = AtomicBoolean()
-        val refusing = Executor { if (refuse.get()) throw RejectedExecutionException(
-            "refused by the test"
-        ) else it.run() }
+        val refusing = Executor { task ->
+            if (refuse.get()) throw RejectedExecutionException("refused by the test")
+            task.run()
+        }
         val housekeeping = SlotModelThreads().housekeeping
         val more = CopyOnWriteArrayList<CompletableFuture<Boolean>>()
         val armed = AtomicBoolean()

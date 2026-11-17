@@ -19,7 +19,6 @@ import io.mockk.every
 import io.mockk.mockk
 import io.mockk.verify
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -63,14 +62,7 @@ class KeyDrainTest {
         null,
         { 0L },
         null,
-        object : SlotFactory {
-            override fun <T : Any> create(
-                key: SnapshotKey,
-                compiler: SnapshotCompiler<T>,
-                context: SlotContext
-            ): KeySlot<T> =
-                KeyRunner(key, compiler, context, k, if (everyKey || key == APP_A) hooks else KeyDrain.Hooks.NONE)
-        },
+        keyRunners(k, hooks) { everyKey || it == APP_A },
     )
 
     private fun SnapshotSource<*, *>.slotA(): KeySlot<*> = families.first {

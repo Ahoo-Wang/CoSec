@@ -25,36 +25,53 @@ import org.slf4j.LoggerFactory
  * correctly ([SlotModel]). Each seed is one [SlotModelScript], run on [SlotModelThreads] alone: no real thread, so a
  * seed replays exactly.
  *
+ * The same seeds run over [Slot] and over the [KeyRunner] (RFC 0013 B2b), with every check of the model.
+ *
  * A failing seed is shrunk (events are left out while the same check still fails) and reported with its event log and
  * the command that runs it alone: `-PpropertySeed=<seed>`.
  */
 class SnapshotSlotModelPropertyTest {
+    /** The kinds of [KeyEvent] the runner took in the seed now running (every run is on this thread alone). */
+    private val taken = sortedSetOf<String>()
+
     @Test
-    fun theSourceKeepsToTheModelInEveryScriptedOrder() {
+    fun theSourceKeepsToTheModelInEveryScriptedOrder() = quietly {
+        runSeeds("Slot model", "theSourceKeepsToTheModelInEveryScriptedOrder", SlotFactory.SLOT)
+    }
+
+    @Test
+    fun theKeyRunnerKeepsToTheModelInEveryScriptedOrder() = quietly {
+        val counting = keyRunners(hooks = KeyDrain.Hooks(beforeNext = { taken += "took ${it::class.simpleName}" }))
+        runSeeds("KeyRunner model", "theKeyRunnerKeepsToTheModelInEveryScriptedOrder", counting, EVENT_KINDS)
+    }
+
+    private fun quietly(block: () -> Unit) {
         // Every load that fails logs with its stack trace: at the TRACE level tests run with, tens of megabytes.
         val logger = LoggerFactory.getLogger(SnapshotSlotModelPropertyTest::class.java.packageName) as Logger
         val level = logger.level
         logger.level = Level.OFF
         try {
-            runSeeds()
+            block()
         } finally {
             logger.level = level
         }
     }
 
-    private fun runSeeds() {
+    private fun runSeeds(name: String, test: String, slots: SlotFactory, kinds: List<String> = emptyList()) {
         val only = System.getProperty("cosec.property.seed")?.toInt()
         val seeds = if (only != null) listOf(only) else (0 until seedCount()).toList()
         val reached = sortedMapOf<String, Int>()
         val totals = SlotModel.Counts()
         for (seed in seeds) {
-            val run = SlotModelRun(SlotModelScript.generate(seed, EVENTS)).run()
-            run.failure?.let { throw AssertionError(report(seed, it)) }
+            taken.clear()
+            val run = SlotModelRun(SlotModelScript.generate(seed, EVENTS), slots).run()
+            run.failure?.let { throw AssertionError(report(seed, it, test, slots)) }
             run.reached.forEach { reached.merge(it, 1, Int::plus) }
+            taken.forEach { reached.merge(it, 1, Int::plus) }
             add(run.counts, totals, reached)
         }
         println(
-            "Slot model: ${seeds.size} seeds; seeds reaching each kind of event: $reached; checked " +
+            "$name: ${seeds.size} seeds; seeds reaching each kind of event: $reached; checked " +
                 "${totals.installs} installs, ${totals.answered} answered waiters, ${totals.failures} compile failures, " +
                 "${totals.readTimeouts} store read timeouts, ${totals.coldTimeouts} request timeouts, " +
                 "${totals.evictions} evictions, ${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
@@ -62,7 +79,7 @@ class SnapshotSlotModelPropertyTest {
         )
         if (only == null) {
             // A property test that rarely gets past the first load proves little: each kind of event is reached.
-            VACUITY.forEach { kind ->
+            (VACUITY + kinds).forEach { kind ->
                 (reached[kind] ?: 0).assert().describedAs(
                     "seeds reaching '$kind'"
                 ).isGreaterThan(0)
@@ -96,9 +113,9 @@ class SnapshotSlotModelPropertyTest {
     private fun seedCount(): Int = maxOf(SEEDS, Integer.getInteger("cosec.property.iterations", 0) / 10)
 
     /** The failure of [seed], shrunk: the shortest script found that fails the same check, with its events. */
-    private fun report(seed: Int, failure: String): String {
-        val script = shrink(SlotModelScript.generate(seed, EVENTS), shapeOf(failure))
-        val run = SlotModelRun(script).run()
+    private fun report(seed: Int, failure: String, test: String, slots: SlotFactory): String {
+        val script = shrink(SlotModelScript.generate(seed, EVENTS), shapeOf(failure), slots)
+        val run = SlotModelRun(script, slots).run()
         return buildString {
             appendLine("Seed $seed: ${run.failure ?: failure}")
             appendLine(
@@ -106,7 +123,7 @@ class SnapshotSlotModelPropertyTest {
             )
             run.log.forEach { appendLine("  $it") }
             append(
-                "Replay: ./gradlew :runtime:test --tests '${SnapshotSlotModelPropertyTest::class.qualifiedName}' -PpropertySeed=$seed"
+                "Replay: ./gradlew :runtime:test --tests '${SnapshotSlotModelPropertyTest::class.qualifiedName}.$test' -PpropertySeed=$seed"
             )
         }
     }
@@ -115,15 +132,15 @@ class SnapshotSlotModelPropertyTest {
      * Leaves events out, one at a time from the end, while the run still fails with the same kind of violation; again
      * until a whole pass leaves nothing out.
      */
-    private fun shrink(script: SlotModelScript, shape: String): SlotModelScript {
-        val failedAt = SlotModelRun(script).run().log.size
+    private fun shrink(script: SlotModelScript, shape: String, slots: SlotFactory): SlotModelScript {
+        val failedAt = SlotModelRun(script, slots).run().log.size
         var current = script.copy(events = script.events.take(maxOf(0, failedAt - 1)))
         do {
             val before = current.events.size
             for (index in current.events.indices.reversed()) {
                 if (index > current.events.lastIndex) continue
                 val candidate = current.copy(events = current.events.filterIndexed { i, _ -> i != index })
-                val failure = SlotModelRun(candidate).run().failure
+                val failure = SlotModelRun(candidate, slots).run().failure
                 if (failure != null && shapeOf(failure) == shape) current = candidate
             }
         } while (current.events.size < before)
@@ -145,5 +162,14 @@ class SnapshotSlotModelPropertyTest {
             "store read failed", "compile rejected", "abandoned read answered",
             "reset reloads checked", "lost invalidation installed by a pass",
         )
+
+        /**
+         * Over the runner, each kind of [KeyEvent] is taken in some seed, but `EffectFailed`: no effect throws in the
+         * model, whose meters never do. `KeyRunnerTest`'s effects that throw queue it, and the drain takes it.
+         */
+        val EVENT_KINDS = listOf(
+            "Requested", "Changed", "Recompile", "ReadDone", "ReadFailed", "ReadTimedOut", "Compiled", "CompileCrashed",
+            "CompileRejected", "RetryDue", "Evict", "Close",
+        ).map { "took $it" }
     }
 }

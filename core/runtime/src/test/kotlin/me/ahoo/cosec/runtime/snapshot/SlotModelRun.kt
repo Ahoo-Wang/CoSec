@@ -29,10 +29,14 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Runs one [SlotModelScript] against a real [SnapshotSource] whose every thread is [SlotModelThreads], checking the
- * [SlotModel] after each event. [failure] is the first violation, with the event it followed; [reached] says which
+ * [SlotModel] after each event. [slots] makes each key's slot: [Slot] or the [KeyRunner] (RFC 0013 B2b), under the same
+ * checks. [failure] is the first violation, with the event it followed; [reached] says which
  * kinds of event the run got to, for the vacuity report.
  */
-internal class SlotModelRun(private val script: SlotModelScript) {
+internal class SlotModelRun(
+    private val script: SlotModelScript,
+    private val slots: SlotFactory = SlotFactory.SLOT,
+) {
     private val threads = SlotModelThreads()
     private val options = SnapshotOptions(
         maxApps = 1,
@@ -110,6 +114,7 @@ internal class SlotModelRun(private val script: SlotModelScript) {
             threads.scheduler,
             ticker::incrementAndGet,
             threads.housekeeping,
+            slots,
         )
         source.nanoTime = threads.nanoTime
     }

@@ -19,7 +19,6 @@ import ch.qos.logback.classic.Logger
 import ch.qos.logback.classic.spi.ILoggingEvent
 import ch.qos.logback.core.read.ListAppender
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -69,7 +68,7 @@ class KeyRunnerTest {
         null,
         { 0L },
         null,
-        RUNNERS,
+        keyRunners(),
     )
 
     /** A meter that throws [error] once, on the first install of [key]. */
@@ -156,14 +155,5 @@ class KeyRunnerTest {
         val APP_A = SnapshotKey.App("app-a")
         val APP_B = SnapshotKey.App("app-b")
         val OPTIONS = SnapshotOptions(revalidateInterval = QUIET_PASS)
-
-        val RUNNERS = object : SlotFactory {
-            override fun <T : Any> create(
-                key: SnapshotKey,
-                compiler: SnapshotCompiler<T>,
-                context: SlotContext
-            ): KeySlot<T> =
-                KeyRunner(key, compiler, context)
-        }
     }
 }
