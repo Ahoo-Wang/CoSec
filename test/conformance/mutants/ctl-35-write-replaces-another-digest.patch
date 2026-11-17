@@ -3,7 +3,7 @@
 # Tests: :control:test --tests me.ahoo.cosec.control.store.HistoryForkTest :conformance:test
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 3bb28f67..b19aa776 100644
+index 3bb28f67..c8713eee 100644
 --- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
 +++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
 @@ -238,7 +238,7 @@ class Revisions(
@@ -11,7 +11,7 @@ index 3bb28f67..b19aa776 100644
          val listed = index.entries.firstOrNull { it.revision == entry.revision }
          index.copy(
 -            entries = if (listed == null || listed.digest == entry.digest) {
-+            entries = if (true) {
++            entries = if (listed == null || listed.revision == entry.revision) {
                  (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision }
              } else {
                  index.entries
