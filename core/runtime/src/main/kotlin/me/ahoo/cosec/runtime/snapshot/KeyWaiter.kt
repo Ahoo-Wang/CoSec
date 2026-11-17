@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionException
 import java.util.concurrent.RejectedExecutionException
@@ -97,40 +98,58 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
     }
 
     /**
-     * One request's view (`forRequest`): created, registered in `pendingRequests` and timed by the caller before it
-     * offers ([arm]), so no request's bound depends on the drain. Whoever answers first (its load's handle, its
-     * timeout, or close) claims it; an answer records the outcome before completing, so a caller that sees the result
-     * also sees the metric.
+     * One request's view (`forRequest`): created and registered in `pendingRequests` by the caller before it offers
+     * ([register]), so `close` answers it whatever the drain does, and timed when the offer returns ([arm]). Nobody
+     * holds the future before `request()` returns, so a timer armed before the offer bounds nothing anyone can observe,
+     * and a request answered inside its own offer needs none. The bound still runs from the call: the timer gets what is
+     * left of `coldLoadTimeout`. Whoever answers first (its load's handle, its timeout, or close) claims it; an answer
+     * records the outcome before completing, so a caller that sees the result also sees the metric.
      */
     class Request<T : Any>(private val key: SnapshotKey, private val context: SlotContext) :
         KeyWaiter<T, SnapshotEntry<T>>(), PendingRequest {
         private val answered = AtomicBoolean()
 
+        /** When `request()` was called, by the source's monotonic time: the bound runs from here. */
+        private val calledAt = context.nanoTime.get().asLong
+
         @Volatile
         private var timeout: ScheduledFuture<*>? = null
 
-        /** Registered, then timed by the cold load timeout; after close, aborted at once. */
-        fun arm(): Request<T> {
+        /** Registered, so that `close` answers it; after close, aborted at once. Before the offer. */
+        fun register(): Request<T> {
             context.pendingRequests.add(this)
             if (context.closed.get()) {
                 abort(context.closedError())
-                return this
-            }
-            val bound = context.options.coldLoadTimeout
-            timeout = try {
-                context.threads.scheduler.schedule(
-                    {
-                        val error = SnapshotUnavailableException(key, "not loaded within $bound", TimeoutException())
-                        answer(failedEntry(key, error, context.clock.instant()), LoadOutcome.TIMEOUT)
-                    },
-                    bound.toNanos(),
-                    TimeUnit.NANOSECONDS,
-                )
-            } catch (rejected: RejectedExecutionException) {
-                answer(transientFailure(key, context.clock.instant(), rejected), LoadOutcome.FAILED)
-                null
             }
             return this
+        }
+
+        /**
+         * Timed, once its offer has returned, by what is left of the cold load timeout since the call; nothing when it
+         * is already answered. A remainder already spent answers it TIMEOUT here, on the caller's thread.
+         */
+        fun arm() {
+            if (answered.get()) return
+            val bound = context.options.coldLoadTimeout
+            val left = bound.toNanos() - (context.nanoTime.get().asLong - calledAt)
+            if (left <= 0) {
+                timedOut(bound)
+                return
+            }
+            val scheduled = try {
+                context.threads.scheduler.schedule({ timedOut(bound) }, left, TimeUnit.NANOSECONDS)
+            } catch (rejected: RejectedExecutionException) {
+                answer(transientFailure(key, context.clock.instant(), rejected), LoadOutcome.FAILED)
+                return
+            }
+            timeout = scheduled
+            // An answer between the check above and this write found no timer to cancel.
+            if (answered.get()) scheduled.cancel(false)
+        }
+
+        private fun timedOut(bound: Duration) {
+            val error = SnapshotUnavailableException(key, "not loaded within $bound", TimeoutException())
+            answer(failedEntry(key, error, context.clock.instant()), LoadOutcome.TIMEOUT)
         }
 
         override fun hang(handle: KeyHandle<T>) {
@@ -163,11 +182,12 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
         private fun answer(entry: SnapshotEntry<T>, outcome: LoadOutcome) {
             if (!answered.compareAndSet(false, true)) return
             context.pendingRequests.remove(this)
-            timeout?.cancel(false)
             try {
                 context.metrics.onLoad(key.kind, outcome)
             } finally {
                 complete(entry)
+                // After the answer, as `Slot` does: a timer that fires in between finds the request answered.
+                timeout?.cancel(false)
             }
         }
 

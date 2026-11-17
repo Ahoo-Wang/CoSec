@@ -54,6 +54,7 @@ internal class KeyRunner<T : Any>(
 
     override val draining: Boolean get() = !drain.quiet()
 
+    @Suppress("TooGenericExceptionCaught")
     override fun request(): CompletableFuture<SnapshotEntry<T>> {
         if (!removed) {
             installed?.let {
@@ -62,8 +63,17 @@ internal class KeyRunner<T : Any>(
                 return CompletableFuture.completedFuture(it)
             }
         }
-        val waiter = KeyWaiter.Request<T>(key, context).arm()
-        if (!waiter.isDone) offer(KeyEvent.Requested(Ask.Request, waiter))
+        val waiter = KeyWaiter.Request<T>(key, context).register()
+        if (!waiter.isDone) {
+            try {
+                offer(KeyEvent.Requested(Ask.Request, waiter))
+            } catch (error: Throwable) {
+                // Registered and never timed: answered here, or nobody would answer it before close.
+                waiter.fail(error)
+                throw error
+            }
+            waiter.arm()
+        }
         return waiter
     }
 
