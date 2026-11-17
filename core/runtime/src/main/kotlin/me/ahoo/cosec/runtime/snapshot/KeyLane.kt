@@ -17,9 +17,12 @@ import java.util.concurrent.atomic.AtomicReferenceFieldUpdater
 
 /**
  * One key's load lane (RFC 0013 B2b, finding 2): what the source's own work produces about the key's loads, as a
- * Treiber stack linked through the events themselves ([KeyEvent.LaneEvent.next]). A base of [KeyDrain], not an object
- * of its own, so a held key keeps one field for it and nothing else. An offer pushes with a CAS; the drain takes the
- * whole stack with one swap and takes it in arrival order ([takeLane]).
+ * Treiber stack linked through the events themselves ([KeyEvent.LaneEvent.next]). An offer pushes with a CAS; the drain
+ * takes the whole stack with one swap and takes it in arrival order ([takeLane]).
+ *
+ * A base class of [KeyDrain] for one reason: the lane's field must live in the runner's own object. An object of its
+ * own per key, composed into the drain, would cost the bytes per held key that RFC 0013 §5.4's gate counts; as a base,
+ * its one field fits the drain's padding (232 bytes per runner before and after).
  */
 internal abstract class KeyLane {
     /** The lane's top: the last event offered, linked to the ones before it down to [END]. */

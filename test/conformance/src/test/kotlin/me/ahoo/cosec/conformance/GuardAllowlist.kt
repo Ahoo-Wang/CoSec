@@ -40,6 +40,7 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#revalidationAnswersWithAReadThatStartedAfterTheCall",
             "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs",
             "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder",
+            "runtime:KeyDrainLaneTest#a load of an absent key that ends before its recompile mark is taken is followed by a read after the call",
             "document:ShadowCodecTest#a candidate record that states its header beside its document is refused",
             "runtime:CandidateRecordShapeTest#a candidate record in the shape of 8_0_0-alpha_4 is not compared, and the request is answered as without it",
             "runtime:DecisionListenersShutdownTest#a full queue drops without waiting on the log, which is written off the request's thread",
@@ -250,6 +251,13 @@ object GuardAllowlist {
             "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
             "runtime:SnapshotFamilyBoundTest#passes at once take a kind exactly to its bound, never below it and never stopping above it",
             "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and no count moves",
+            "runtime:KeyDrainLaneTest#a lane event offered between the empty queue and the release is taken before the drainer returns",
+            "runtime:KeyDrainLaneTest#a lane event offered between the release and the check is taken before the drainer returns",
+            "runtime:KeyDrainLaneTest#a failed compilation offered while a caller with a spent budget holds the flag is installed before it returns",
+            "runtime:KeyDrainLaneTest#the compile pool serves a hand-off when the compilation it runs ends, before the ones queued behind it",
+            "runtime:KeyRunnerFailureTest#a hand-off the compile pool refuses goes to housekeeping, counted, and runs there",
+            "runtime:KeyRunnerFailureTest#a hand-off both pools refuse is counted, and the caller runs the source's hand-offs",
+            "runtime:SnapshotSlotModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
         ),
     )
 }

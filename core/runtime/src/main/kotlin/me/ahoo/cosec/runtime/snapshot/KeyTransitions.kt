@@ -33,6 +33,10 @@ import java.util.concurrent.TimeoutException
  * Every waiter hangs on exactly one [KeyHandle], named by the transition that takes its request: the load in flight's,
  * a new load's, or, for a reload, the handle of the load that starts after the current one (`SNP-13`). A handle is
  * answered once, by the transition that ends its load.
+ *
+ * A load's events overtake caller events queued before them ([KeyDrain]'s load lane), so nothing here decides on the
+ * order of the two: each caller event, against each state a load's end can leave, gives the same answer taken before
+ * or after that end, or one both orders may give. RFC 0013 §5.4 has the table, cell by cell.
  */
 internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
     private val loads = KeyLoads<T>(config)

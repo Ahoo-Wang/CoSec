@@ -1,5 +1,5 @@
-# Rule: SNP-13
-# Mutant: the compile pool does not serve the hand-offs between compilations, so a caller's event left by a spent budget waits behind every compilation queued (RFC 0013 §5.4's hand-off bound; no rule of its own)
+# Rule: SNP-15
+# Mutant: the compile pool does not serve the hand-offs between compilations, so a caller's event left by a spent budget waits behind every compilation queued
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt

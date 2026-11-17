@@ -1,5 +1,5 @@
-# Rule: SNP-8
-# Mutant: a load's event is queued with the caller events, so a caller whose budget is spent leaves a failed compilation behind it and the old revision is served
+# Rule: SNP-15
+# Mutant: a load's event is queued with the caller events and counted, so what a spent budget leaves includes it
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt

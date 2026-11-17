@@ -1,4 +1,4 @@
-# Rule: SNP-8
+# Rule: SNP-15
 # Mutant: the drain does not take the load lane again after its release, so a load's end offered while the flag was held waits for the next caller
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
 
