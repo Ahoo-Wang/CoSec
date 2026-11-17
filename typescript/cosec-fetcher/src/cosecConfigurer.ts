@@ -67,8 +67,8 @@ import { NoneSpaceIdProvider } from './spaceIdProvider.js';
  *   tokenRefresher: {
  *     refresh: async (token) => refreshMyToken(token)
  *   },
- *   onUnauthorized: () => window.location.href = '/login',
- *   onForbidden: () => showError('Access denied')
+ *   onUnauthorized: () => { window.location.href = '/login'; },
+ *   onForbidden: async () => showError('Access denied')
  * };
  *
  * // Enterprise: Multi-tenant with custom storage
@@ -182,7 +182,7 @@ export interface CoSecConfig
    * // Multi-tenant space provider
    * const spaceProvider: SpaceIdProvider = {
    *   resolveSpaceId: (exchange) => {
-   *     return exchange.request.headers['X-Current-Space'] || null;
+   *     return exchange.request.headers?.['X-Current-Space'] ?? null;
    *   }
    * };
    *
@@ -359,8 +359,8 @@ export interface CoSecConfig
  *       return res.json();
  *     }
  *   },
- *   onUnauthorized: () => window.location.href = '/login',
- *   onForbidden: () => showAccessDenied()
+ *   onUnauthorized: () => { window.location.href = '/login'; },
+ *   onForbidden: async () => showAccessDenied()
  * });
  *
  * // Apply to fetcher

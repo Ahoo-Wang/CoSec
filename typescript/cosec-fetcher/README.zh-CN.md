@@ -76,6 +76,12 @@ CoSec 不提供登录或刷新端点；应用编写的端点必须：
 `sessionStorage` 或每个标签页各自的内存存储时，只在一个地方刷新。细节见
 [实战文档](https://fetcher.ahoo.me/zh/guides/integrations/cosec)。
 
+## 上报错误
+
+请求的错误（`FetcherError`，以及本包中继承它的错误，包括 `RefreshTokenError`）带着该请求的 `exchange`：请求头和请求体，所以包含访问令牌，
+刷新时还包含令牌对。去掉刷新错误上的 `token` 并没有让它们可以安全地序列化。把错误发给上报工具（Sentry、日志管道）的应用要先清理
+`exchange`，或者只上报 `name`、`message` 和 `problem`。
+
 ## 从 `@ahoo-wang/fetcher-cosec` 6.x 升级
 
 - **凭据默认只发往受信任的源。** 不设 `isTrusted` 时，6.x 会把令牌、`CoSec-Device-Id`、`CoSec-Request-Id` 和 `CoSec-Space-Id`

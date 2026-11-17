@@ -71,7 +71,7 @@ export interface SpaceIdProvider {
    * // Example: Extract space ID from a custom header
    * const provider: SpaceIdProvider = {
    *   resolveSpaceId: (exchange) => {
-   *     return exchange.request.headers['X-Space-Id'] || null;
+   *     return exchange.request.headers?.['X-Space-Id'] ?? null;
    *   }
    * };
    *
@@ -250,7 +250,7 @@ export class SpaceIdStorage extends KeyStorage<SpaceId> {
  * // Header-based predicate
  * const headerPredicate: SpacedResourcePredicate = {
  *   test: (exchange) => {
- *     return 'X-Require-Space' in exchange.request.headers;
+ *     return 'X-Require-Space' in (exchange.request.headers ?? {});
  *   }
  * };
  *

@@ -150,7 +150,7 @@ export interface RefreshTokenStatusCapable {
  * const compositeToken = new JwtCompositeToken({ accessToken, refreshToken }, 300); // 5 min early period
  *
  * if (compositeToken.authenticated) {
- *   const subject = compositeToken.currentUser?.sub;
+ *   const subject = compositeToken.access.payload?.sub;
  * }
  *
  * if (compositeToken.isRefreshNeeded && compositeToken.isRefreshable) {

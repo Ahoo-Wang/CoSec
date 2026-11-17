@@ -57,7 +57,7 @@ export const COSEC_REQUEST_INTERCEPTOR_ORDER =
  * @example
  * ```typescript
  * // Skip refresh during logout
- * await fetcher.post('/logout', {
+ * await fetcher.post('/logout', {}, {
  *   attributes: new Map([[IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY, true]]),
  * });
  * ```

@@ -89,6 +89,15 @@ lock: `localStorage` with Web Locks, or another storage declared with
 per-tab in-memory storage, refresh in one place only. The
 [recipe](https://fetcher.ahoo.me/guides/integrations/cosec) has the details.
 
+## Reporting errors
+
+The errors of a request (`FetcherError` and the ones of this package that extend
+it, `RefreshTokenError` among them) carry the `exchange` of the request: its
+headers and body, so the access token, and on a refresh the token pair.
+Removing `token` from the refresh errors did not make them safe to serialize.
+An application that sends errors to a reporter (Sentry, a log pipeline) scrubs
+`exchange` first, or reports only `name`, `message` and `problem`.
+
 ## Upgrading from `@ahoo-wang/fetcher-cosec` 6.x
 
 - **Credentials go only to trusted origins by default.** Without `isTrusted`,
