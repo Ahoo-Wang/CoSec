@@ -205,9 +205,19 @@ data class AppList(val entries: Set<String>, val complete: Boolean) {
     }
 }
 
-/** One published revision of a document. */
+/**
+ * One published revision of a document: its record [digest], and [parent], the digest its document names as its parent
+ * (`null` for the first revision, and for an entry an older version wrote). An entry is a fact about an immutable
+ * record, so whoever writes the entry of a digest writes the same [parent]; a list of entries is the head's chain when
+ * each entry's [parent] is the digest of the one below it ([Revisions.history]).
+ */
 @ExperimentalCoSecApi
-data class RevisionEntry(val revision: Long, val digest: SnapshotDigest, val publishedAt: Instant)
+data class RevisionEntry(
+    val revision: Long,
+    val digest: SnapshotDigest,
+    val publishedAt: Instant,
+    val parent: SnapshotDigest? = null,
+)
 
 /** A revision record written for a publish whose head write has not been confirmed (RFC 0007 §5.4 step 2). */
 @ExperimentalCoSecApi

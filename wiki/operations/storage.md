@@ -494,12 +494,18 @@ the history is a chain from the head down. A write that a Redis failover lost le
 [`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) walks the chains, reads only, and names
 each document whose chain is broken.
 
-The head is the authority over the history (`CTL-35`). The revision index is only a list of the chain's digests: a read
-whose last entry is not the head's digest (the index is behind, or the head moved back after a partial restore and a
-revision number was reused) walks the chain from the head and makes the index follow it, so a revision number never
-reads the document of another branch. What the repair drops is left to the next reclamation, and the repair logs a
-warning, once, naming the document, each revision and the digest dropped and kept: that is the moment to take the
-dropped branch's content from a backup, if anyone needs it.
+The head is the authority over the history (`CTL-35`). The revision index lists, for each revision, its digest and the
+digest of its parent, and a history is returned only when its last entry is the head and each entry names the one below
+it. Otherwise (the index is behind, or the head moved back after a partial restore and a revision number was reused)
+the read walks the chain from the head and makes the index follow it, so a revision number never reads the document of
+another branch. What the repair replaces is left to the next reclamation, which never deletes a digest the history
+lists, and the repair logs a warning, once, naming the document, each revision and the digest dropped and kept: that is
+the moment to take the dropped branch's content from a backup, if anyone needs it.
+
+If a record the chain needs is missing and the walk cannot meet an entry it can trust, the history below that revision
+is not returned: `GET /documents/<doc>/revisions/<n>` answers `410` for those revisions, and the control plane logs one
+warning naming the revision and its digest. Their entries stay in the index and nothing of them is deleted; restore the
+record (from a backup) and the next read lists them again.
 
 Every control-plane instance runs two maintenance passes while it runs, each first after one interval:
 

@@ -19,21 +19,18 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.RevisionLog.log
 import me.ahoo.cosec.control.store.RevisionLog.warn
-import me.ahoo.cosec.document.ParentRevision
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import java.util.concurrent.ConcurrentHashMap
 
 /**
- * Keeps the revision index the head's chain (#1536). The head is the authority, and a document's digest covers its
- * `parent`, so one index entry whose digest is the chain's vouches for every entry below it, provided the index was
- * only ever appended to over a parent it does not contradict ([linked]): the invariant is kept at the write, not paid
- * for at every read.
- *
- * - At read, the entry at the head's revision must carry the head's digest ([agrees]): one comparison, no record read.
- * - Otherwise the index is behind the head, or on another branch (the head moved back and a number was reused):
- *   [rebuild] walks the chain from the head down to the first entry the index has right, and replaces what differs.
+ * Keeps the revision index the head's chain (#1536). The head is the authority; an index entry is a fact about an
+ * immutable record (its [RevisionEntry.parent] is the one its document names), so a list of entries is the head's chain
+ * exactly when its last entry is the head's and each entry's parent is the digest of the entry below it. That is
+ * checked at every read ([agrees]) from the entries alone, whatever order the writers settled in: no record is read.
+ * When it does not hold the index is behind the head or holds another branch, and [rebuild] walks the head's records.
  */
 internal class HistoryRepair(
     private val store: ControlStore,
@@ -41,12 +38,32 @@ internal class HistoryRepair(
     /** A stored document decoded, as [Revisions.decode] decodes it. */
     private val decode: (SnapshotKey, SnapshotDocument) -> PolicyDocument,
 ) {
+    /** The record a walk of a document found missing, last logged: one digest per document, so a read logs it once. */
+    private val reported = ConcurrentHashMap<SnapshotKey, SnapshotDigest>()
+
+    /** What a walk from the head found: the chain down to where the index is right, and where it could not go on. */
+    private class Walk(
+        /** The chain's entries, oldest first, that the index does not have right. */
+        val found: List<RevisionEntry>,
+        /** The revision of the sound entry the walk met and stopped at, if it did. */
+        val anchor: Long?,
+        /** The digest and revision whose record is missing, if that is where the walk ended. */
+        val missing: Pair<Long, SnapshotDigest>?,
+    )
+
     /**
-     * [indexed], rebuilt from the chain of [stored], the head of [key]; [entries] are its entries up to the head. Each
-     * revision of the chain that the index has otherwise is replaced, but only where the index, at the write, still
-     * has the entry the walk compared: another instance's repair or a republication of that number is never
-     * overwritten. Nothing below the floor of the attempt is written (#1265), and what is replaced goes to
-     * [RevisionIndex.reclaiming], where the next reclamation deletes it unless something still holds it.
+     * [indexed], rebuilt from the chain of [stored], the head of [key]; [entries] are its entries up to the head.
+     *
+     * The walk stops at a revision whose index entry is the chain's *and* lies in the sound prefix of the index (the
+     * entries whose links hold from the lowest one up): the rest is then the chain's. What differs is replaced in the
+     * index CAS, and only where the index at the write still has the entry the walk compared, so another repair or
+     * a republication of that number is never overwritten. Nothing below the floor of the attempt is written
+     * (#1265). Digests the repair replaces go to [RevisionIndex.reclaiming], where the next reclamation deletes them
+     * unless something still holds them; a digest it lists leaves it: [RevisionIndex.reclaiming] never holds a
+     * digest the history lists.
+     *
+     * A walk that ends at a missing record without meeting a sound entry returns only what it found: the entries
+     * below cannot be shown to be on the chain, so they are not returned, and stay in the index as they are.
      */
     suspend fun rebuild(
         key: SnapshotKey,
@@ -54,77 +71,111 @@ internal class HistoryRepair(
         indexed: RevisionIndex,
         entries: List<RevisionEntry>,
     ): List<RevisionEntry> {
-        val compared = entries.associateBy { it.revision }
-        val chain = walk(key, stored, indexed.floor, compared)
-        var replaced: List<RevisionEntry> = emptyList()
-        var replacements: List<RevisionEntry> = emptyList()
+        // Below the floor are the revisions reclamation kept for an open change: listed when they were on the chain, and
+        // with nothing above them to link to (what lay between was reclaimed), so they are not judged again.
+        val kept = entries.filter { it.revision < indexed.floor }
+        val live = entries.filter { it.revision >= indexed.floor }
+        val sound = live.take(soundPrefix(live))
+        val compared = live.associateBy { it.revision }
+        val walk = walk(key, stored, indexed.floor, compared, sound.mapTo(HashSet()) { it.revision })
+        var applied: List<RevisionEntry> = emptyList()
+        var dropped: List<RevisionEntry> = emptyList()
         val written = writes.updateIndex(key) { index ->
-            replacements = chain.filter { entry ->
-                entry.revision >= index.floor && entry.digest !in index.reclaiming &&
+            applied = walk.found.filter { entry ->
+                entry.revision >= index.floor &&
                     index.entries.firstOrNull { it.revision == entry.revision }?.digest ==
                     compared[entry.revision]?.digest
             }
-            replaced = replacements.mapNotNull { compared[it.revision] }
-            val revisions = replacements.map { it.revision }.toSet()
+            dropped = applied.mapNotNull { compared[it.revision]?.takeIf { old -> old.digest != applied.digestAt(old) } }
+            val revisions = applied.map { it.revision }.toSet()
             index.copy(
-                entries = (index.entries.filter { it.revision !in revisions } + replacements).sortedBy { it.revision },
-                pending = index.pending.filter { pending -> replacements.none { it.digest == pending.digest } },
-                reclaiming = (index.reclaiming + replaced.map { it.digest }).distinct(),
+                entries = (index.entries.filter { it.revision !in revisions } + applied).sortedBy { it.revision },
+                pending = index.pending.filter { pending -> applied.none { it.digest == pending.digest } },
+                reclaiming = (
+                    index.reclaiming.filter { listed -> applied.none { it.digest == listed } } +
+                        dropped.map { it.digest }
+                    ).distinct(),
             )
         }
         if (!written) {
             warn("[$key]: the rebuilt history could not be written back to the index")
-        } else if (replaced.isNotEmpty()) {
-            val kept = replacements.associateBy { it.revision }
+        }
+        if (written && dropped.isNotEmpty()) {
             log.warn {
                 "[$key]: the head's chain differs from the revision index (a head that moved back and a revision " +
                     "number reused, or a partly restored store); the index now follows the head. Dropped, kept: " +
-                    replaced.joinToString("; ") { "revision ${it.revision} ${it.digest}, ${kept[it.revision]?.digest}" } +
-                    ". The dropped records will be reclaimed."
+                    dropped.joinToString("; ") { old ->
+                        "revision ${old.revision} ${old.digest}, ${applied.digestAt(old)}"
+                    } + ". The dropped records will be reclaimed."
             }
         }
-        val revisions = chain.map { it.revision }.toSet()
-        return (entries.filter { it.revision !in revisions } + chain).sortedBy { it.revision }
+        walk.missing?.let { (revision, digest) -> reportMissing(key, revision, digest) }
+        val below = walk.anchor?.let { anchor -> sound.filter { it.revision <= anchor } }.orEmpty()
+        return kept + below + walk.found
     }
 
-    /** The head's chain, oldest first, down to the first revision the index has right, the floor or a missing record. */
+    private fun List<RevisionEntry>.digestAt(old: RevisionEntry): SnapshotDigest? =
+        firstOrNull { it.revision == old.revision }?.digest
+
+    /** Once per document and record: a damaged document is not logged on every read. */
+    private fun reportMissing(key: SnapshotKey, revision: Long, digest: SnapshotDigest) {
+        if (reported.put(key, digest) != digest) {
+            log.warn {
+                "[$key]: the record of revision $revision ($digest), the parent of a later revision, is missing: the " +
+                    "history below it cannot be shown to be on the head's chain, so it is not listed (revision " +
+                    "$revision and older read as not retained) until the record is restored."
+            }
+        }
+    }
+
+    /** The head's chain, oldest first, down to the first sound entry the chain agrees with, the floor or a missing record. */
     private suspend fun walk(
         key: SnapshotKey,
         stored: StoredDocument,
         floor: Long,
         compared: Map<Long, RevisionEntry>,
-    ): List<RevisionEntry> {
+        sound: Set<Long>,
+    ): Walk {
         val found = ArrayList<RevisionEntry>()
         var document = decode(key, stored.document)
         var digest = stored.digest
         while (true) {
-            found += RevisionEntry(document.revision, digest, document.publishedAt)
-            val parent = document.provenance?.parent ?: break
-            val parentDigest = SnapshotDigest.parse(parent.digest)
-            if (parent.revision < floor || compared[parent.revision]?.digest == parentDigest) {
-                break
+            val parent = document.provenance?.parent
+            val parentDigest = parent?.let { SnapshotDigest.parse(it.digest) }
+            found += RevisionEntry(document.revision, digest, document.publishedAt, parentDigest)
+            if (parent == null || parentDigest == null || parent.revision < floor) {
+                return Walk(found.reversed(), null, null)
             }
-            document = store.record(key, parentDigest)?.let { decode(key, it) } ?: break
+            if (compared[parent.revision]?.digest == parentDigest && parent.revision in sound) {
+                return Walk(found.reversed(), parent.revision, null)
+            }
+            val record = store.record(key, parentDigest)
+                ?: return Walk(found.reversed(), null, parent.revision to parentDigest)
+            document = decode(key, record)
             digest = parentDigest
         }
-        return found.reversed()
     }
 
     companion object {
-        /** Whether [last], the last entry up to the head, is the head's own: its revision and its digest. */
-        fun agrees(last: RevisionEntry?, head: StoredDocument): Boolean =
-            last != null && last.revision == head.document.revision && last.digest == head.digest
-
         /**
-         * Whether an entry published over [parent] (`null` for a document's first revision) may be appended to [index]:
-         * the index does not contradict [parent], that is, it has no entry of that revision with another digest. A
-         * parent it does not list yet is no contradiction: a publish settles late, beside the later ones, and a
-         * revision that never gets indexed is found by a read of the chain (the head's entry must be the head's own).
-         * Otherwise the index stays behind the head, and the next read rebuilds it from the chain.
+         * Whether [entries], the index's entries up to the head's revision, are [head]'s chain from [floor] up: the last
+         * is the head's own (revision and digest), and each entry's parent is the digest of the one below it. What
+         * reclamation kept below the floor is not part of the chain that is left, and is not judged.
          */
-        fun linked(index: RevisionIndex, parent: ParentRevision?): Boolean {
-            val listed = parent?.let { p -> index.entries.firstOrNull { it.revision == p.revision } }
-            return listed == null || listed.digest.toString() == parent.digest
+        fun agrees(entries: List<RevisionEntry>, floor: Long, head: StoredDocument): Boolean {
+            val live = entries.filter { it.revision >= floor }
+            val last = live.lastOrNull() ?: return false
+            return last.revision == head.document.revision && last.digest == head.digest &&
+                soundPrefix(live) == live.size
+        }
+
+        /** How many entries from the lowest hold: the lowest, and each next one whose parent is the one before. */
+        private fun soundPrefix(entries: List<RevisionEntry>): Int {
+            var sound = minOf(entries.size, 1)
+            while (sound < entries.size && entries[sound].parent == entries[sound - 1].digest) {
+                sound++
+            }
+            return sound
         }
     }
 }

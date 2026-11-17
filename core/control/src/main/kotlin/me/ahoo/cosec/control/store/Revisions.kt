@@ -143,7 +143,7 @@ class Revisions(
             }
             val published = PublishOutcome.Published(revision, digest)
             try {
-                settle(key, RevisionEntry(revision, digest, publishedAt), document.provenance?.parent, before - after)
+                settle(key, entryOf(document, digest), before - after)
                 if (key == SnapshotKey.Platform && base == null) {
                     listing.completeOnNewStore()
                 }
@@ -161,14 +161,9 @@ class Revisions(
      * store's own timeout (#1263); the caller's stays pending and takes effect when [publish] returns.
      */
     @Suppress("TooGenericExceptionCaught")
-    private suspend fun settle(
-        key: SnapshotKey,
-        entry: RevisionEntry,
-        parent: ParentRevision?,
-        dropped: Set<Pair<SnapshotKey, PolicyId>>,
-    ) {
+    private suspend fun settle(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
         try {
-            published(key, entry, parent, dropped)
+            published(key, entry, dropped)
         } catch (e: Exception) {
             log.warn(e) {
                 "[$key] revision ${entry.revision} is published; its index or the references it dropped could not be " +
@@ -176,6 +171,14 @@ class Revisions(
             }
         }
     }
+
+    /** The index entry of [document], the revision whose record has [digest]: with the parent it names. */
+    private fun entryOf(document: PolicyDocument, digest: SnapshotDigest) = RevisionEntry(
+        document.revision,
+        digest,
+        document.publishedAt,
+        document.provenance?.parent?.digest?.let(SnapshotDigest::parse),
+    )
 
     /** The document [publish] writes: the candidate's body at the revision after [base], naming [base] as its parent. */
     private fun next(base: Head?, candidate: PolicyDocument, publication: Publication): PolicyDocument = candidate.copy(
@@ -192,13 +195,8 @@ class Revisions(
     )
 
     /** After the head moved to [entry] (§5.4 steps 5 and 6): index it, drop the [dropped] references. Failures only warn. */
-    private suspend fun published(
-        key: SnapshotKey,
-        entry: RevisionEntry,
-        parent: ParentRevision?,
-        dropped: Set<Pair<SnapshotKey, PolicyId>>,
-    ) {
-        if (!index(key, entry, parent)) {
+    private suspend fun published(key: SnapshotKey, entry: RevisionEntry, dropped: Set<Pair<SnapshotKey, PolicyId>>) {
+        if (!index(key, entry)) {
             warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it from the chain")
         }
         for ((target, policy) in dropped) {
@@ -223,7 +221,7 @@ class Revisions(
         val entries = indexed.entries.filter { it.revision <= stored.document.revision }
         // The head is the authority (#1536): an index whose last entry is not the head's, by digest, is behind it or on
         // another branch, and is rebuilt from the chain.
-        return if (HistoryRepair.agrees(entries.lastOrNull(), stored)) {
+        return if (HistoryRepair.agrees(entries, indexed.floor, stored)) {
             entries
         } else {
             repair.rebuild(key, stored, indexed, entries)
@@ -231,32 +229,22 @@ class Revisions(
     }
 
     /**
-     * Adds [entry] to the index, over [parent] only (#1536): an index that does not end at [parent] (a publish before
-     * this one was not indexed, or it holds another branch's entry of that number) is left behind the head, where the
-     * next read finds it and rebuilds it from the chain, rather than made to look current over an entry that is not
-     * the head's parent. `false` when the index could not be written.
+     * Adds [entry] to the index beside any later revision, never over it: a settle that runs late must not cut off the
+     * revisions indexed after it. A number that is listed with another digest stays as it is (#1536): which of two
+     * records is the head's chain's is for [history] to say, by walking from the head, and a settle of another branch
+     * must not put its entry over a right one. The same digest is written again, which gives an entry an older version
+     * wrote its `parent`. `false` when the index could not be written.
      */
-    private suspend fun index(key: SnapshotKey, entry: RevisionEntry, parent: ParentRevision?): Boolean {
-        var linked = true
-        val written = writes.updateIndex(key) { index ->
-            linked = HistoryRepair.linked(index, parent)
-            index.copy(
-                // Beside any later revision, never over it: a settle that runs late must not cut off the revisions indexed
-                // after it. What a head that moved back left above it stays until replaced; history() leaves that out.
-                entries = if (linked) {
-                    (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision }
-                } else {
-                    index.entries
-                },
-                pending = index.pending.filter { it.digest != entry.digest },
-            )
-        }
-        if (written && !linked) {
-            warn(
-                "[$key] revision ${entry.revision} is published; the index holds another entry for its parent, so history() rebuilds it"
-            )
-        }
-        return written
+    private suspend fun index(key: SnapshotKey, entry: RevisionEntry): Boolean = writes.updateIndex(key) { index ->
+        val listed = index.entries.firstOrNull { it.revision == entry.revision }
+        index.copy(
+            entries = if (listed == null || listed.digest == entry.digest) {
+                (index.entries.filter { it.revision != entry.revision } + entry).sortedBy { it.revision }
+            } else {
+                index.entries
+            },
+            pending = index.pending.filter { it.digest != entry.digest },
+        )
     }
 
     /**
@@ -283,9 +271,9 @@ class Revisions(
      */
     @Suppress("TooGenericExceptionCaught")
     internal suspend fun rewritten(key: SnapshotKey, published: Head, first: Boolean) = withContext(NonCancellable) {
-        val entry = RevisionEntry(published.revision, published.digest, published.document.publishedAt)
+        val entry = entryOf(published.document, published.digest)
         try {
-            index(key, entry, published.document.provenance?.parent) ||
+            index(key, entry) ||
                 warn("[$key] revision ${entry.revision} is published but not indexed; history() rebuilds it")
         } catch (e: Exception) {
             log.warn(e) { "[$key] revision ${entry.revision} is published; its index entry could not be written." }

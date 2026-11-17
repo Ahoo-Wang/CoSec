@@ -52,8 +52,8 @@ class HistoryForkTest {
 
     /** Fails one index write on request, counts record reads, and runs one hook right after a record read. */
     private val store = object : ControlStore by memory {
-        /** Fails the next write of an index that lists revision 2 with a digest other than this one. */
-        var failIndexWithRevisionTwoNot: SnapshotDigest? = null
+        /** Fails the next index write that holds no pending record: the settle of a publication. */
+        var failNextSettle = false
         val recordReads = AtomicInteger()
         var afterRecordRead: (suspend () -> Unit)? = null
         var beforeIndexWrite: (suspend () -> Unit)? = null
@@ -78,9 +78,8 @@ class HistoryForkTest {
                 beforeIndexWrite = null
                 hook()
             }
-            val old = failIndexWithRevisionTwoNot
-            if (old != null && index.entries.any { it.revision == 2L && it.digest != old }) {
-                failIndexWithRevisionTwoNot = null
+            if (failNextSettle && index.pending.isEmpty()) {
+                failNextSettle = false
                 error("the index write failed")
             }
             return memory.putIndex(key, expected, index)
@@ -138,7 +137,7 @@ class HistoryForkTest {
     @Test
     fun `history repairs the reused revision after the index write failed`() = runBlocking<Unit> {
         val old = headMovedBack()
-        store.failIndexWithRevisionTwoNot = old
+        store.failNextSettle = true
         val new = publish("new-branch")
 
         revisions.history(ACME).last().digest.assert().isEqualTo(new)
@@ -150,8 +149,8 @@ class HistoryForkTest {
 
     @Test
     fun `a later publication does not keep the old branch below it`() = runBlocking<Unit> {
-        val old = headMovedBack()
-        store.failIndexWithRevisionTwoNot = old
+        headMovedBack()
+        store.failNextSettle = true
         publish("new-branch")
         publish("third")
 
@@ -163,7 +162,7 @@ class HistoryForkTest {
     @Test
     fun `the repair says what it unlisted, once`() = runBlocking<Unit> {
         val old = headMovedBack()
-        store.failIndexWithRevisionTwoNot = old
+        store.failNextSettle = true
         val new = publish("new-branch")
         appender.list.clear()
 
@@ -188,21 +187,92 @@ class HistoryForkTest {
         store.recordReads.get().assert().isEqualTo(0)
     }
 
-    /** A publication over a parent the index does not end at appends nothing: the index stays behind, and says so. */
+    /**
+     * The write path never replaces a listed number with another digest: only a repair, which has walked from the head,
+     * does. So a settle of an old branch cannot put its entry over a right one, and a later publication lists itself
+     * beside the old entry, which the next read replaces.
+     */
     @Test
-    fun `a publication does not index itself over an entry that is not its parent`() = runBlocking<Unit> {
+    fun `a publication leaves a number listed with another digest as it is`() = runBlocking<Unit> {
         val old = headMovedBack()
-        store.failIndexWithRevisionTwoNot = old
-        publish("new-branch")
+        val new = publish("new-branch")
         publish("third")
 
-        memory.index(ACME)!!.value.entries.map { it.revision }.assert().containsExactly(1L, 2L)
+        val index = memory.index(ACME)!!.value
+        index.entries.single { it.revision == 2L }.digest.assert().isEqualTo(old)
+        index.entries.map { it.revision }.assert().containsExactly(1L, 2L, 3L)
+        revisions.history(ACME).single { it.revision == 2L }.digest.assert().isEqualTo(new)
+        memory.index(ACME)!!.value.reclaiming.assert().containsExactly(old)
+    }
+
+    /** The same digest is written again, which gives an entry an older version wrote its parent. */
+    @Test
+    fun `an entry written without a parent is rewritten with it by a read`() = runBlocking<Unit> {
+        publish("a")
+        publish("b")
+        val index = memory.index(ACME)!!
+        memory.putIndex(
+            ACME,
+            index.digest,
+            index.value.copy(entries = index.value.entries.map { it.copy(parent = null) })
+        )
+        val parents = revisions.history(ACME).map { it.parent }
+
+        parents[1].assert().isEqualTo(revisions.history(ACME)[0].digest)
+        memory.index(ACME)!!.value.entries.drop(1).all { it.parent != null }.assert().isTrue()
+    }
+
+    /** A walk that ends at a missing record returns what it found and lists nothing of what it cannot judge (a). */
+    @Test
+    fun `a record missing below the head hides what cannot be shown to be on the chain`() = runBlocking<Unit> {
+        val digests = (1..3).map { publish("p$it") }
+        val index = memory.index(ACME)!!
+        val bogus = SnapshotDigest(ByteArray(SnapshotDigest.SHA_256_BYTES) { 9 })
+        memory.putIndex(
+            ACME,
+            index.digest,
+            index.value.copy(
+                entries = index.value.entries.map { if (it.revision == 2L) it.copy(digest = bogus) else it }
+            ),
+        )
+        memory.removeRecord(ACME, digests[1])
+        appender.list.clear()
+
+        revisions.history(ACME).map { it.revision }.assert().containsExactly(3L)
+        revisions.history(ACME)
+
+        revisions.revision(ACME, 2).assert().isNull()
+        val stored = memory.index(ACME)!!.value
+        stored.entries.map { it.revision }.assert().containsExactly(1L, 2L, 3L)
+        stored.reclaiming.assert().isEmpty()
+        warnings().filter { "is missing" in it }.size.assert().isEqualTo(1)
+        warnings().first { "is missing" in it }.assert().contains("revision 2")
+    }
+
+    /** (b) A digest a repair replaced and that the head then returns to is listed again, and reclamation keeps it. */
+    @Test
+    fun `a head restored to a replaced digest is listed again and not reclaimed`() = runBlocking<Unit> {
+        val first = publish("base")
+        val old = publish("old-branch")
+        memory.putHead(ACME, old, memory.record(ACME, first)!!)
+        publish("new-branch")
+        revisions.history(ACME)
+        memory.index(ACME)!!.value.reclaiming.assert().contains(old)
+        val head = memory.head(ACME)!!
+        memory.putHead(ACME, head.digest, memory.record(ACME, old)!!)
+
+        revisions.history(ACME).last().digest.assert().isEqualTo(old)
+        memory.index(ACME)!!.value.reclaiming.assert().doesNotContain(old)
+        clock.now = clock.now.plus(Duration.ofDays(2))
+        revisions.reclaim(ACME)
+        memory.record(ACME, old).assert().isNotNull()
+        revisions.revision(ACME, 2)!!.policies.map { it.id.value }.assert().containsExactly("old-branch")
     }
 
     @Test
     fun `a republication of a number between the walk and the write is not overwritten`() = runBlocking<Unit> {
-        val old = headMovedBack()
-        store.failIndexWithRevisionTwoNot = old
+        headMovedBack()
+        store.failNextSettle = true
         publish("new-branch")
         val other = SnapshotDigest(ByteArray(SnapshotDigest.SHA_256_BYTES) { 7 })
         store.beforeIndexWrite = {
@@ -240,8 +310,8 @@ class HistoryForkTest {
     @Test
     fun `a revision published over an unlisted parent does not leave the old branch below a top that agrees`() =
         runBlocking<Unit> {
-            val old = headMovedBack()
-            store.failIndexWithRevisionTwoNot = old
+            headMovedBack()
+            store.failNextSettle = true
             publish("new-branch")
             publish("third")
             publish("fourth")

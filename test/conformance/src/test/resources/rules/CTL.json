@@ -442,14 +442,19 @@
     {
       "id": "CTL-35",
       "source": "RFC 0007 §5.2, §5.4; #1536",
-      "statement": "The head is the authority over a document's revision history: the history lists, for each retained revision, the document the head's parent chain has at that revision, by digest, never an index entry of the same number from another branch (the head moved back and a number reused). An index whose entry at the head's revision is not the head's digest is rebuilt from the chain, replacing only an entry still as the walk compared it, and nothing below the retention floor; the replaced digests are left to reclamation, and the repair is logged once with the key and each revision's dropped and kept digest. A publish appends its revision to the index only over a parent entry the index does not contradict.",
+      "statement": "The history of a document is the chain of its head. A revision index is returned only when its last entry is the head's (revision and digest) and each entry above the lowest names, as its parent, the digest of the entry below it; otherwise it is rebuilt from the head's records, replacing only an entry still as the walk compared it, and nothing below the retention floor; an entry that cannot be shown to be on the chain (below a record the walk could not read) is not returned. The write path never replaces a listed revision number that has another digest; the digests a rebuild replaces are left to reclamation, which never deletes a digest the history lists, and the rebuild is logged once with the key and each revision's dropped and kept digest.",
       "level": "control",
       "guards": [
         "control:HistoryForkTest#history repairs the reused revision after the index write failed",
         "control:HistoryForkTest#a later publication does not keep the old branch below it",
+        "control:HistoryForkTest#a revision published over an unlisted parent does not leave the old branch below a top that agrees",
+        "control:HistoryForkTest#a late settle of the old branch does not put its entry back under the new one",
+        "control:HistoryForkTest#a publication leaves a number listed with another digest as it is",
         "control:HistoryForkTest#the repair says what it unlisted, once",
         "control:HistoryForkTest#an index that agrees with the head is returned without reading a record",
-        "control:HistoryForkTest#a publication does not index itself over an entry that is not its parent",
+        "control:HistoryForkTest#an entry written without a parent is rewritten with it by a read",
+        "control:HistoryForkTest#a record missing below the head hides what cannot be shown to be on the chain",
+        "control:HistoryForkTest#a head restored to a replaced digest is listed again and not reclaimed",
         "control:HistoryForkTest#a republication of a number between the walk and the write is not overwritten",
         "control:HistoryForkTest#a repair that a reclamation overtakes lists nothing below its floor"
       ],

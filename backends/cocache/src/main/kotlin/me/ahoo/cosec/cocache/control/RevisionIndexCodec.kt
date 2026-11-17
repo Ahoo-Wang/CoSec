@@ -43,8 +43,9 @@ private fun JsonNode.digest(what: String): SnapshotDigest {
 
 /**
  * A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`, with `"reclaiming": [...]` only when
- * records are left to delete, so that an index with none carries no field a reader that does not know it would
- * refuse: the decoders of the stored formats reject unknown fields.
+ * records are left to delete, and an entry's `"parent"` only when it has one (an entry an older version wrote has
+ * none, and is rewritten by the first read of its document, #1536), so that an index with none carries no field a
+ * reader that does not know it would refuse: the decoders of the stored formats reject unknown fields.
  */
 internal object RevisionIndexCodec : Codec<RevisionIndex> {
     private const val WHAT = "revision index"
@@ -54,7 +55,9 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
         val entries = root.putArray("entries")
         value.entries.forEach {
             entries.addObject().put("revision", it.revision).put("digest", it.digest.toString())
-                .put("publishedAt", it.publishedAt.toString())
+                .put("publishedAt", it.publishedAt.toString()).apply {
+                    it.parent?.let { parent -> put("parent", parent.toString()) }
+                }
         }
         val pending = root.putArray("pending")
         value.pending.forEach {
@@ -76,11 +79,12 @@ internal object RevisionIndexCodec : Codec<RevisionIndex> {
         return try {
             RevisionIndex(
                 entries = root.field("entries", WHAT).items(WHAT).map { entry ->
-                    entry.only(WHAT, "revision", "digest", "publishedAt")
+                    entry.only(WHAT, "revision", "digest", "publishedAt", "parent")
                     RevisionEntry(
                         entry.field("revision", WHAT).long(WHAT),
                         entry.field("digest", WHAT).digest(WHAT),
                         entry.field("publishedAt", WHAT).instant(WHAT),
+                        entry.get("parent")?.digest(WHAT),
                     )
                 },
                 pending = root.field("pending", WHAT).items(WHAT).map { pending ->
