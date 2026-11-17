@@ -32,6 +32,19 @@ internal object DrainBudget {
         }
     }
 
+    /**
+     * Runs [block] with no bound, whatever an outer call on this thread set, and restores it after: a hand-off that runs
+     * in place (a direct executor, or every pool refused it), and close, which drains to empty.
+     */
+    inline fun <R> unbounded(block: () -> R): R {
+        val saved = take()
+        try {
+            return block()
+        } finally {
+            if (saved != null) restore(saved)
+        }
+    }
+
     /** Spends one event; false once the budget is spent. A thread outside any call has no bound. */
     fun spend(): Boolean {
         val cell = left.get() ?: return true
@@ -48,4 +61,10 @@ internal object DrainBudget {
 
     @PublishedApi
     internal fun clear() = left.remove()
+
+    @PublishedApi
+    internal fun take(): IntArray? = left.get().also { left.remove() }
+
+    @PublishedApi
+    internal fun restore(cell: IntArray) = left.set(cell)
 }

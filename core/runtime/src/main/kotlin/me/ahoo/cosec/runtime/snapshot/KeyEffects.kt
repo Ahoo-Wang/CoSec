@@ -1,0 +1,198 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class)
+
+package me.ahoo.cosec.runtime.snapshot
+
+import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.snapshot.KeyEffect.Level
+import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotRead
+import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
+import java.time.Duration
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
+
+// The source's logger: moving the code did not move the name operators configure.
+private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
+
+/**
+ * Executes what [KeyTransitions] asks of one key (RFC 0013 B2b §2), inside its runner's drain, in list order. It
+ * reaches its runner only through the functions it is given: [offer] raises an event (a read's answer, a compilation,
+ * a timer) behind what is queued, [install] publishes an entry, [drop] takes the key out of its family, [redispatch]
+ * sends a request to the key's current runner, [dropIfEmpty] offers the key's own eviction if it holds nothing.
+ */
+internal class KeyEffects<T : Any>(
+    private val key: SnapshotKey,
+    private val compiler: SnapshotCompiler<T>,
+    private val context: SlotContext,
+    private val offer: (KeyEvent<T>) -> Unit,
+    private val install: (SnapshotEntry<T>?, SnapshotEntry<T>) -> Unit,
+    private val drop: (Boolean) -> Unit,
+    private val redispatch: (KeyEvent.Requested) -> Unit,
+    private val dropIfEmpty: () -> Unit,
+) {
+    private val report = CompileReport(key, compiler, context.threads::offRequestThread)
+
+    /** The store-read timeout of each load whose read is out; touched inside the drain only. */
+    private val readTimeouts = HashMap<Long, ScheduledFuture<*>>()
+
+    @Suppress("CyclomaticComplexMethod", "UNCHECKED_CAST")
+    fun execute(effect: KeyEffect<T>) {
+        when (effect) {
+            is KeyEffect.StartPassRead -> effect.ticket.read = effect.ticket.pass.startRead()
+            is KeyEffect.EndPassRead -> effect.ticket.read?.end()
+            is KeyEffect.StartRead -> startRead(effect)
+            is KeyEffect.CancelReadTimeout -> readTimeouts.remove(effect.loadId)?.cancel(false)
+            is KeyEffect.Compile -> compile(effect.loadId, effect.read)
+            is KeyEffect.RecordSeen -> recordSeen(effect)
+            is KeyEffect.Confirm -> effect.entry.confirm(effect.at)
+            is KeyEffect.Install -> installed(effect)
+            is KeyEffect.Report -> report(effect.metric)
+            is KeyEffect.Log -> context.threads.offRequestThread { write(effect) }
+            is KeyEffect.Answer -> effect.handle.future.complete(effect.entry)
+            is KeyEffect.Hang -> (effect.waiter as KeyWaiter<T, *>).hang(effect.handle)
+            is KeyEffect.Serve -> (effect.waiter as KeyWaiter<T, *>).serve(effect.entry, effect.hit)
+            is KeyEffect.Refuse -> (effect.waiter as KeyWaiter<T, *>).fail(effect.error)
+            is KeyEffect.Skip -> (effect.waiter as KeyWaiter<T, *>).skip()
+            is KeyEffect.Redispatch -> redispatch(effect.event)
+            is KeyEffect.ScheduleRetry -> scheduleRetry(effect.delay)
+            KeyEffect.DropIfEmpty -> context.threads.offRequestThread(dropIfEmpty)
+            KeyEffect.EvictBeyond -> evictBeyond()
+            is KeyEffect.Drop -> drop(effect.claimed)
+            is KeyEffect.Reply -> effect.reply.complete(effect.value)
+        }
+    }
+
+    /** §5: a load ended by a transition that threw has no read left to time. */
+    fun cancelReadTimeout(loadId: Long) {
+        readTimeouts.remove(loadId)?.cancel(false)
+    }
+
+    /** The store call only starts the read; its answer is offered from the store client's thread, behind what is queued. */
+    private fun startRead(effect: KeyEffect.StartRead) {
+        val id = effect.loadId
+        val reading = if (effect.fromLocalCopy) context.store.read(key) else context.store.readIfChanged(key, effect.digest)
+        if (!reading.isDone) {
+            val bound = context.options.storeReadTimeout
+            try {
+                readTimeouts[id] = context.threads.scheduler.schedule({ offer(KeyEvent.ReadTimedOut(id)) }, bound.toNanos(), TimeUnit.NANOSECONDS)
+            } catch (rejected: RejectedExecutionException) {
+                log.debug { "No store read timeout: $rejected" }
+            }
+        }
+        reading.whenComplete { read: SnapshotRead?, error: Throwable? ->
+            offer(
+                when {
+                    error != null -> KeyEvent.ReadFailed(id, error)
+                    read == null -> KeyEvent.ReadFailed(id, IllegalStateException("The store answered null."))
+                    else -> KeyEvent.ReadDone(id, read)
+                }
+            )
+        }
+    }
+
+    /** On the compile pool only; its answer, a crash or a refusal is offered back. */
+    private fun compile(id: Long, read: SnapshotRead.Present) {
+        try {
+            context.threads.compileExecutor.execute { compileOnPool(id, read) }
+        } catch (rejected: RejectedExecutionException) {
+            offer(KeyEvent.CompileRejected(id, rejected))
+        }
+    }
+
+    @Suppress("TooGenericExceptionCaught")
+    private fun compileOnPool(id: Long, read: SnapshotRead.Present) {
+        val revision = read.document.revision
+        val begin = System.nanoTime()
+        val state: DocumentState<T> = try {
+            DocumentState.Present(compiler.compile(key, read.document))
+        } catch (error: VirtualMachineError) {
+            // RC1-43: installed as a document that does not compile, then rethrown to the pool.
+            offer(KeyEvent.CompileCrashed(id, SnapshotUnavailableException(key, report.failedToCompile(revision), error)))
+            throw error
+        } catch (error: Throwable) {
+            DocumentState.Failed(SnapshotUnavailableException(key, report.failedToCompile(revision), error))
+        }
+        offer(KeyEvent.Compiled(id, state, System.nanoTime() - begin))
+    }
+
+    private fun recordSeen(effect: KeyEffect.RecordSeen) {
+        if (effect.ifAbsent) context.families.seen.putIfAbsent(key, effect.seen) else context.families.seen[key] = effect.seen
+    }
+
+    /** `recordInstall`: the metrics first, then, whatever they did, the entry is published. */
+    private fun installed(effect: KeyEffect.Install<T>) {
+        try {
+            try {
+                context.metrics.onInstall(effect.entry)
+            } finally {
+                effect.regressedFrom?.let { context.metrics.onRegression(key, it.revision, effect.entry.revision) }
+            }
+            report.installed(effect.entry)
+        } finally {
+            install(effect.previous, effect.entry)
+        }
+    }
+
+    private fun report(metric: KeyEffect.Metric) {
+        when (metric) {
+            is KeyEffect.Metric.Compiled -> context.metrics.onCompile(key.kind, Duration.ofNanos(metric.nanos), metric.present)
+            is KeyEffect.Metric.DocumentLost -> context.metrics.onDocumentLost(key, metric.revision)
+        }
+    }
+
+    private fun write(effect: KeyEffect.Log) {
+        when (effect.level) {
+            Level.DEBUG -> log.debug(effect.cause) { effect.message }
+            Level.WARN -> log.warn(effect.cause) { effect.message }
+            Level.ERROR -> log.error(effect.cause) { effect.message }
+        }
+    }
+
+    private fun scheduleRetry(delay: Duration) {
+        try {
+            context.threads.scheduler.schedule({ offer(KeyEvent.RetryDue) }, delay.toNanos(), TimeUnit.NANOSECONDS)
+        } catch (rejected: RejectedExecutionException) {
+            log.debug { "No reload retry: $rejected" }
+        }
+    }
+
+    /**
+     * After an install: housekeeping evicts beyond the bound, unless the install took the family over its cap. Then the
+     * pass runs before the waiters are answered, here on CoSec's own threads; on another thread the pass (the scan and
+     * its offers, not the answer) goes to the compile pool, so a caller's thread never scans a family (§4c, decision B).
+     */
+    private fun evictBeyond() {
+        val families = context.families
+        val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
+        if (!families.overCap(family)) {
+            context.threads.offRequestThread { families.evictBeyond(family) }
+            return
+        }
+        if (context.threads.onOwnThread.get() == true) {
+            families.evictBeyond(family)
+            return
+        }
+        try {
+            context.threads.compileExecutor.execute { families.evictBeyond(family) }
+        } catch (_: RejectedExecutionException) {
+            if (!context.threads.offTimer { families.evictBeyond(family) }) families.evictBeyond(family)
+        }
+    }
+
+}
