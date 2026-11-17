@@ -44,10 +44,10 @@ starter 注册的监听器：
   [`cosec.observability.listener.drain-timeout`](./configuration.md)（5 秒）。之后不再开始任何监听器调用：进行中的调用不会被中断，剩下的事件被丢弃并计入 `cosec.listener.dropped`，并以 `WARN` 记录
   `Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`。随后 Kafka 审计监听器
   最多再用同样长的时间，等待它手中的发送以及 broker 对这些发送的应答，然后才关闭 producer。到达这个上限时，排队的发送
-  被丢弃，进行中的发送被中断，并以 `WARN` 记录 `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...`
+  被丢弃，进行中的发送被中断，并以 `WARN` 记录 `The Kafka audit queue of [<topic>] did not drain within <timeout>: <n> queued records are dropped and <n> sends are unanswered.`
 - **求值追踪。** `DecisionEvent` 带有 `evaluationTrace`，即引擎查看过的内容，深度由
   [`cosec.pipeline.trace-level`](./configuration.md#pipeline) 决定：`off`（默认，没有追踪，也没有开销）、`full`
-  （决策到达的每一层的每条规则，包括决定性规则之后的规则）或 `exhaustive`（还包括决策没有到达的层）。在 `off` 时，以及
+  （列出每个候选的每条语句及其被排除的原因；求值在没有追踪时停止的地方停止，但会完成作出决策的那一轮）或 `exhaustive`（决策已由 DENY 轮作出时，也会求值 ALLOW 轮）。在 `off` 时，以及
   请求没有到达引擎时，它为 null。只有你自己的监听器会读它：下面的审计事件、span 和指标都不包含它。
 - **gateway 模式的服务**（`cosec.pipeline.mode=gateway`）不产生决策事件：它们不做决策，也不注册监听器。由前面的网关
   记录决策（[部署网关服务](./deployment.md#services-behind-the-gateway)）。
@@ -62,7 +62,7 @@ starter 注册的监听器：
 | `eventId`、`timestamp`、`tenantId` | 事件本身；`tenantId` 是主体的租户 |
 | `kind` | `DECIDED`、`BAD_REQUEST`（`400`）、`AUTHENTICATION_UNAVAILABLE`、`CANCELLED` 或 `ERROR`（`500`） |
 | `principal` | `id`、`authenticated`、`roles`（解析出的作用域中的角色） |
-| `request` | `id`（即 `CoSec-Request-Id`）、`appId`、`spaceId`、`remoteIp`、`method`、`path`（规范化后）、`device.id` |
+| `request` | `id`（即 `CoSec-Request-Id`）、`appId`、`spaceId`、`remoteIp`、`method`、`path`（规范化后）、`routeId`（请求经过的网关路由；其他适配器为 null）、`device.id` |
 | `authorization.decision`、`authorization.reasonCode` | 见下表 |
 | `authorization.reason` | 结果，`503` 时还有其原因，例如 `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | 整个管道，从请求开始到得出结果 |
