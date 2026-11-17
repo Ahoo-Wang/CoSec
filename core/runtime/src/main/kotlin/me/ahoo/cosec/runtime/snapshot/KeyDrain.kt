@@ -173,7 +173,7 @@ internal class KeyDrain<T : Any>(
             // Inside the guard, so that whatever throws here still has its event answered (§5).
             val taken = event ?: claimed(request!!).also { event = it }
             val moment = KeyMoment(
-                context.clock.instant(),
+                context.clock,
                 context.nanoTime.get().asLong,
                 context.compileEpoch.get(),
                 context.closed.get(),

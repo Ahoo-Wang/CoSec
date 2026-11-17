@@ -43,7 +43,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
 
     /** [next] into a drain's own [step], reset here: the same decision, its effects read in place. */
     fun next(step: KeyStepBuilder<T>, state: KeyState<T>, event: KeyEvent<T>, moment: KeyMoment) {
-        step.reset(state, if (event == KeyEvent.Close) moment.copy(closed = true) else moment)
+        step.reset(state, if (event == KeyEvent.Close) moment.closing() else moment)
         when (event) {
             is KeyEvent.Requested -> requested(step, event)
             KeyEvent.Changed -> changed(step)
