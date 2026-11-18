@@ -349,7 +349,8 @@ rest, and the kubelet restarts the pod.
 
 - **Readiness over HTTP:** permit `GET` on the two probe paths for anyone, with one statement
   ([the policy](../integration/web.md#actuator-on-an-application)). Before the first publish it still answers `503`, the
-  right answer for "not ready". Outside Kubernetes, set `management.endpoint.health.probes.enabled=true`.
+  right answer for "not ready". Spring Boot 4 serves the probes on every platform (`management.endpoint.health.probes.enabled`
+  is `true` by default).
 - **Liveness and startup:** on WebMvc, point the probe at `management.server.port`, which is outside CoSec. On WebFlux the
   management port is under CoSec as well: use a `tcpSocket` probe on the application port. Never an HTTP liveness probe on
   the application port of an application.
