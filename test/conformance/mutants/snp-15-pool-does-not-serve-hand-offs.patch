@@ -3,11 +3,11 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-index 8075f426..12767f29 100644
+index 9c40e457..eca3a6ef 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-@@ -156,7 +156,6 @@ internal class KeyEffects<T : Any>(
-         owner.offer(KeyEvent.Compiled(id, state, System.nanoTime() - begin))
+@@ -167,7 +167,6 @@ internal class KeyEffects<T : Any>(
+         }
          // Between compilations the pool serves the hand-offs: a caller's event left by a spent budget waits at most for
          // the compilation a pool thread is running, not for the compilations queued behind it.
 -        context.handOffs.runPending()

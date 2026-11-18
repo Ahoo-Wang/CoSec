@@ -48,7 +48,7 @@ class KeyTransitionsTest {
         key.hung[second].assert().isSameAs(key.hung[first])
         val load = key.state.load!!.id
         key.offer(KeyEvent.ReadDone(load, present(1)))
-        val step = key.offer(KeyEvent.Compiled(load, DocumentState.Present("c1"), 1))
+        val step = key.offer(KeyEvent.Compiled(load, DocumentState.Present("c1")))
         val install = step.effects.indexOfFirst { it is KeyEffect.Install }
         val answer = step.effects.indexOfFirst { it is KeyEffect.Answer }
         install.assert().isNotNegative().isLessThan(answer)
@@ -62,12 +62,12 @@ class KeyTransitionsTest {
         val reload = key.request(Ask.Reload(force = false))
         key.hung[reload].assert().isNotSameAs(key.hung[request])
         key.offer(KeyEvent.ReadDone(firstLoad, present(1)))
-        key.offer(KeyEvent.Compiled(firstLoad, DocumentState.Present("c1"), 1))
+        key.offer(KeyEvent.Compiled(firstLoad, DocumentState.Present("c1")))
         key.answered.keys.assert().doesNotContain(key.hung[reload])
         val secondLoad = key.state.load!!.id
         secondLoad.assert().isGreaterThan(firstLoad)
         key.offer(KeyEvent.ReadDone(secondLoad, present(2)))
-        key.offer(KeyEvent.Compiled(secondLoad, DocumentState.Present("c2"), 1))
+        key.offer(KeyEvent.Compiled(secondLoad, DocumentState.Present("c2")))
         key.answered[key.hung[request]]!!.revision.assert().isEqualTo(1L)
         key.answered[key.hung[reload]]!!.revision.assert().isEqualTo(2L)
     }
@@ -78,10 +78,10 @@ class KeyTransitionsTest {
         val firstLoad = key.state.load!!.id
         key.request(Ask.Reload(force = false))
         key.offer(KeyEvent.ReadDone(firstLoad, present(1)))
-        key.offer(KeyEvent.Compiled(firstLoad, DocumentState.Present("c1"), 1))
+        key.offer(KeyEvent.Compiled(firstLoad, DocumentState.Present("c1")))
         val secondLoad = key.state.load!!.id
         key.offer(KeyEvent.ReadDone(secondLoad, present(2)))
-        key.offer(KeyEvent.Compiled(secondLoad, DocumentState.Present("c2"), 1))
+        key.offer(KeyEvent.Compiled(secondLoad, DocumentState.Present("c2")))
         key.state.installed!!.revision.assert().isEqualTo(2L)
         key.answered[key.hung[request]]!!.revision.assert().isEqualTo(1L)
     }
@@ -92,12 +92,12 @@ class KeyTransitionsTest {
         val firstLoad = key.state.load!!.id
         key.offer(KeyEvent.ReadDone(firstLoad, present(1)))
         key.recompile().assert().isTrue()
-        val step = key.offer(KeyEvent.Compiled(firstLoad, DocumentState.Present("old"), 1))
+        val step = key.offer(KeyEvent.Compiled(firstLoad, DocumentState.Present("old")))
         step.effects.none { it is KeyEffect.Install || it is KeyEffect.Answer }.assert().isTrue()
         val secondLoad = key.state.load!!
         secondLoad.alsoAnswers.assert().contains(key.hung[request])
         key.offer(KeyEvent.ReadDone(secondLoad.id, present(1)))
-        key.offer(KeyEvent.Compiled(secondLoad.id, DocumentState.Present("new"), 1))
+        key.offer(KeyEvent.Compiled(secondLoad.id, DocumentState.Present("new")))
         (key.answered[key.hung[request]]!!.state as DocumentState.Present).compiled.assert().isEqualTo("new")
     }
 
@@ -178,7 +178,7 @@ class KeyTransitionsTest {
             it.state.assert().isEqualTo(compiling)
             it.effects.assert().isEmpty()
         }
-        key.offer(KeyEvent.Compiled(load, DocumentState.Present("c1"), 1))
+        key.offer(KeyEvent.Compiled(load, DocumentState.Present("c1")))
         val idle = key.state
         key.offer(KeyEvent.ReadDone(load, SnapshotRead.Absent)).state.assert().isEqualTo(idle)
     }
@@ -204,7 +204,7 @@ class KeyTransitionsTest {
         val request = key.request(Ask.Request)
         var load = key.state.load!!.id
         key.offer(KeyEvent.ReadDone(load, present(3)))
-        key.offer(KeyEvent.Compiled(load, DocumentState.Present("c3"), 1))
+        key.offer(KeyEvent.Compiled(load, DocumentState.Present("c3")))
         key.offer(KeyEvent.Changed)
         load = key.state.load!!.id
         val step = key.offer(KeyEvent.ReadDone(load, SnapshotRead.Absent))

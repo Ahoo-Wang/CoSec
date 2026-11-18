@@ -16,7 +16,7 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.snapshot.KeyRunner.Companion.PROVISIONAL_K
+import me.ahoo.cosec.runtime.snapshot.KeyRunner.Companion.K
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
@@ -25,7 +25,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * each drain takes [k] events, and [hooks] reach only the keys [hooked] accepts.
  */
 internal fun keyRunners(
-    k: Int = PROVISIONAL_K,
+    k: Int = K,
     hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE,
     hooked: (SnapshotKey) -> Boolean = { true },
 ): SlotFactory = keyRunners(k, hooksOf = { key -> if (hooked(key)) hooks else KeyDrain.Hooks.NONE })

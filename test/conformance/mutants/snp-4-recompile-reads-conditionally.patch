@@ -1,17 +1,17 @@
 # Rule: SNP-4
-# Mutant: a recompiling load sends a conditional read, and Unchanged confirms the old compilation
+# Mutant: a recompiling load sends a conditional read, and Unchanged confirms the old compilation (the runner's KeyLoads.newLoad)
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-index 6b2d91c5..cf669049 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-@@ -360,7 +360,7 @@ internal class Slot<T : Any>(
-             return context.store.read(key)
-         }
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+index 270a9a56..0a9019da 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+@@ -40,7 +40,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+         // readFor: see the class comment of SnapshotSource for why seen keys never use a local copy.
+         val local = known == null && step.seen == null
          val digest = when {
--            known == null || load.force || load.recompiles -> null
-+            known == null || load.force -> null
+-            local || known == null || force || recompiles -> null
++            local || known == null || force -> null
              known.origin.compilesAgain -> null
              else -> known.digest
          }

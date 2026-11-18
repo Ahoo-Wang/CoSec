@@ -63,5 +63,12 @@ internal fun SnapshotSource<*, *>.loadsInFlight(kind: SnapshotKind): Int = famil
     !it.idle()
 }
 
+/**
+ * Tests only: nothing in motion, no key loading, queued or draining, housekeeping idle (RFC 0013 B2b step 3). A test's
+ * read: no production path branches on it.
+ */
+internal fun SnapshotSource<*, *>.quiescent(): Boolean =
+    shared.quiescent() && families.all { it.slots.values.all(KeySlot<*>::quiescent) } && threads.housekeepingIdle
+
 private fun SnapshotSource<*, *>.familyOfKind(kind: SnapshotKind): SnapshotFamilies.Family<*> =
     families.first { it.spec.kind == kind }

@@ -102,7 +102,7 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
             when {
                 load != null && load.id in reads -> offer(KeyEvent.ReadDone(load.id, answer))
                 load != null && load.id in compiles -> offer(
-                    KeyEvent.Compiled(load.id, DocumentState.Present("compiled"), 1)
+                    KeyEvent.Compiled(load.id, DocumentState.Present("compiled"))
                 )
                 reads.isNotEmpty() -> offer(KeyEvent.ReadDone(reads.first(), answer))
                 retries > 0 && !closed -> offer(KeyEvent.RetryDue())

@@ -46,7 +46,7 @@ class KeyDrainTest {
 
     private fun source(
         hooks: KeyDrain.Hooks,
-        k: Int = KeyRunner.PROVISIONAL_K,
+        k: Int = KeyRunner.K,
         compileExecutor: Executor? = directExecutor,
         options: SnapshotOptions = OPTIONS,
         everyKey: Boolean = false,

@@ -112,8 +112,6 @@ internal sealed interface KeyEffect<out T : Any> {
 
     /** The metrics a transition reports beside installs. */
     sealed interface Metric {
-        data class Compiled(val nanos: Long, val present: Boolean) : Metric
-
         data class DocumentLost(val revision: Long) : Metric
     }
 

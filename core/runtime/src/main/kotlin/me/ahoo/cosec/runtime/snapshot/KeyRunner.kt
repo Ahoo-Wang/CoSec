@@ -32,8 +32,8 @@ internal class KeyRunner<T : Any>(
     key: SnapshotKey,
     compiler: SnapshotCompiler<T>,
     private val context: SlotContext,
-    /** The events past their own a caller's thread drains; provisional, until step 2b-ii's measurement sets it. */
-    k: Int = PROVISIONAL_K,
+    /** The events past their own a caller's thread drains. */
+    k: Int = K,
     /** Tests only: where a test interleaves with this key's drain. */
     hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE,
 ) : KeySlot<T>(key, context.ticker), KeyOwner<T> {
@@ -51,6 +51,8 @@ internal class KeyRunner<T : Any>(
     }
 
     override fun idle(): Boolean = idleHint
+
+    override val draining: Boolean get() = !drain.quiet()
 
     @Suppress("TooGenericExceptionCaught")
     override fun request(): CompletableFuture<SnapshotEntry<T>> {
@@ -144,7 +146,13 @@ internal class KeyRunner<T : Any>(
     }
 
     internal companion object {
-        /** Provisional: step 2b-ii's measurement (K ∈ 0, 4, 16, 64) sets it. */
-        const val PROVISIONAL_K = 16
+        /**
+         * The events past its own a caller's thread drains before it hands the rest off (RFC 0013 B2b §3). Set by step
+         * 2b-ii's measurement, jmh-ab run 44049110176 (`KeyBurstBenchmark`, a burst of 10,000 cold requests on one key
+         * from 8 threads, 4 runs per K): the smallest K that is not worse. Below it a second key's cold load waits longer
+         * behind the hand-offs (k0's p99 about 11 % over k4…k64); above it the offering caller's p99 rises (k16 about
+         * 30 % over k4), with nothing better on the other side.
+         */
+        const val K = 4
     }
 }

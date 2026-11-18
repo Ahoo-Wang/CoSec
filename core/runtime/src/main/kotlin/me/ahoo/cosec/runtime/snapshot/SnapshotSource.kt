@@ -101,8 +101,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val ticker: LongSupplier,
     /** Tests only (RFC 0013 B2b): housekeeping on an executor the test runs, in place of the thread started here. */
     housekeeping: ExecutorService? = null,
-    /** Tests only (RFC 0013 B2b): what makes each key's slot; [SlotFactory.SLOT] in production. */
-    slots: SlotFactory = SlotFactory.SLOT,
+    /** Tests only (RFC 0013 B2b): what makes each key's slot; [SlotFactory.RUNNER] in production. */
+    slots: SlotFactory = SlotFactory.RUNNER,
 ) : AutoCloseable {
 
     private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
@@ -118,12 +118,12 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         get() = context.nanoTime.get()
         set(value) = context.nanoTime.set(value)
 
-    private val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
+    internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
     internal val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics)
     private val context =
         SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, slots)
-    private val shared = slots.create(sharedKey, sharedCompiler, context)
+    internal val shared = slots.create(sharedKey, sharedCompiler, context)
 
     /** Tests only: runs between finding a family's slot and using it, to force an eviction into that gap. */
     @Volatile

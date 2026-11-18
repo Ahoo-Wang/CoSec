@@ -92,6 +92,9 @@ internal class KeyDrain<T : Any>(
     /** An eviction as offered; claimed when it is taken (§4b), so nothing of this key moves in between. */
     class EvictRequest(val onlyIfEmpty: Boolean, val absent: Boolean?, val reply: CompletableFuture<Eviction>)
 
+    /** Tests only: no event in either lane, and no thread draining this key. No production path branches on it. */
+    fun quiet(): Boolean = !callerWaiting && !laneWaiting && flagged == 0
+
     /**
      * Enqueues [item] in its lane and drains if the flag is free. A caller's event is one of the K + 1 its thread takes;
      * a lane event is uncounted, so its offerer opens a budget of K: what it brought, plus at most K caller events.

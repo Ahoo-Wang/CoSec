@@ -184,11 +184,10 @@ internal class KeyModelRunner(
                         KeyEvent.Compiled(
                             id,
                             DocumentState.Failed(SnapshotUnavailableException(world.key, "does not compile", compiled)),
-                            1
                         )
                     )
 
-                    else -> offer(KeyEvent.Compiled(id, DocumentState.Present(compiled as String), 1))
+                    else -> offer(KeyEvent.Compiled(id, DocumentState.Present(compiled as String)))
                 }
             }
         } catch (rejected: RejectedExecutionException) {

@@ -1,18 +1,17 @@
 # Rule: SNP-6
-# Mutant: a seen key is read through the local copy, so revalidation can confirm what the copy holds instead of the store
+# Mutant: a seen key is read through the local copy, so revalidation can confirm what the copy holds instead of the store (the runner's KeyEffects.startRead)
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-index 6b2d91c5..64267870 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Slot.kt
-@@ -359,6 +359,9 @@ internal class Slot<T : Any>(
-             load.fromLocalCopy = true
-             return context.store.read(key)
-         }
-+        if (known != null && !load.force && !load.recompiles) {
-+            return context.store.read(key)
-+        }
-         val digest = when {
-             known == null || load.force || load.recompiles -> null
-             known.origin.compilesAgain -> null
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+index 5a2eeaee..86d3239d 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+@@ -95,7 +95,7 @@ internal class KeyEffects<T : Any>(
+     /** The store call only starts the read; its answer is offered from the store client's thread, behind what is queued. */
+     private fun startRead(effect: KeyEffect.StartRead) {
+         val id = effect.loadId
+-        val reading = if (effect.fromLocalCopy) {
++        val reading = if (effect.fromLocalCopy || effect.digest != null) {
+             context.store.read(
+                 key
+             )
