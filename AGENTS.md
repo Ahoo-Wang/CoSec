@@ -25,6 +25,7 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
 ./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
 gh workflow run mutation.yml                       # every mutant, on CI only: 36 shards, about an hour (-f mutants=a,b for a subset; also weekly)
 ./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
+./gradlew :runtime:updateClientContract :jwt:updateClientContract   # rewrite contract/, what a client receives, after an intended change (PIP-25)
 (cd typescript && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test)   # the TypeScript packages: what the `typescript` job of CI runs
 (cd typescript && pnpm test:host)                  # the client against a real host: Gradle builds test/client-host, the script starts it, vitest runs (the `typescript-host` job)
 ```
@@ -277,7 +278,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | A file over 400 lines, a second top-level type in a file, a new package edge inside `runtime`, `control` or `document`, a structure suppression | an entry in `test/architecture`'s ledgers (`SourceSizeLedger`, `TypeLedger`, `PackageLedger`, `DetektSuppressionTest.RECORDED`) with its batch or its reason, reviewed |
 | What a published module brings into a build (a library dependency, `compileOnlyApi`, the BOM) | nothing to register: `PublishedMetadataTest` reads the generated metadata; `:dependencies` is CoSec's internal platform and is not published; `wiki/guide/introduction.md#what-cosec-needs-from-your-build` when a minimum moves (`CatalogTest`) |
 | A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, the client's skill; after GA, `!` in the PR title when a line is removed or changed |
-| The wire contract a client sees: a `CoSec-*` header, a problem type or its status, a token claim, the refresh rules | `wiki/integration/clients.md`, and `typescript/cosec-fetcher` in the same PR: its tests against the real host fail otherwise |
+| What a client receives: a problem type, its status, headers or body; a `CoSec-*` header; the token pair; a claim of CoSec's tokens; what the served refresh and logout routes answer | `contract/` (`./gradlew :runtime:updateClientContract :jwt:updateClientContract`, `PIP-25`), `wiki/integration/clients.md` (its claims table is held to `contract/token/claims.json` by `pnpm check:docs`), and `typescript/cosec-fetcher` in the same PR: its tests against `contract/` and the real host fail otherwise. From GA, `!` in the PR title when a file's member, value, status or header is removed or changed |
 | A new TypeScript package | `typescript/AGENTS.md`, `TypeScriptWorkspaceTest`'s `published`, the labeler, `llms.txt`, the publish workflow's package list |
 | An npm dependency of `typescript/` | the catalog of `typescript/pnpm-workspace.yaml` (packages reference `catalog:`) and its lockfile; nothing else |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
