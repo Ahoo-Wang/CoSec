@@ -19,8 +19,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import java.time.Duration
 
 /**
- * One key's state, as [KeyTransitions] sees it (RFC 0013 B2b): an immutable value, replaced by each transition. What
- * [Slot] keeps under its monitor, under the names the page gives it: [again] is `dirty`, [againForced] `forceNext`.
+ * One key's state, as [KeyTransitions] sees it (RFC 0013 B2b): an immutable value, replaced by each transition.
+ * [again] is a reload asked while a load was in flight, [againForced] one asked in full.
  * `lastAccess` is not here: `touch` writes it outside any transition, and only eviction reads it.
  */
 internal data class KeyState<T : Any>(

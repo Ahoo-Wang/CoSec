@@ -78,7 +78,7 @@ internal class SnapshotFamilies<A : Any>(
             return
         }
         for (victim in victims(family, absent, minOf(excess, limit))) {
-            // A reply already complete (always, with Slot) at the bound stops the pass; one not yet complete never
+            // A reply already complete at the bound stops the pass; one not yet complete never
             // holds it back: a claim cannot take a kind below its bound, whatever is offered (§4b, decision B).
             if (evictOne(victim, absent).getNow(null) == Eviction.AT_BOUND) return
         }
@@ -88,7 +88,7 @@ internal class SnapshotFamilies<A : Any>(
      * Offers the eviction of [victim], an entry of the kind [absent] names when it was chosen: removed if it is still idle
      * and of that kind, the claim taken by the victim itself (`SNP-14`).
      */
-    fun evictOne(victim: KeySlot<*>, absent: Boolean): CompletableFuture<Eviction> =
+    fun evictOne(victim: KeyRunner<*>, absent: Boolean): CompletableFuture<Eviction> =
         victim.evict(onlyIfEmpty = false, claimedAbsent = absent)
 
     /** [key] left its family, holding [entry]: what a removal does besides leaving the map. */
@@ -102,8 +102,8 @@ internal class SnapshotFamilies<A : Any>(
         log.debug { "Removed snapshot document [$key]." }
     }
 
-    /** The slot the family of [key] holds for it now, made if it holds none; for [SlotContext.current]. */
-    fun slotFor(key: SnapshotKey, context: SlotContext): KeySlot<*> =
+    /** The slot the family of [key] holds for it now, made if it holds none; for [KeyContext.current]. */
+    fun slotFor(key: SnapshotKey, context: KeyContext): KeyRunner<*> =
         families.first { it.spec.kind == key.kind }.slotFor(key, context)
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
@@ -111,8 +111,8 @@ internal class SnapshotFamilies<A : Any>(
         family: Family<*>,
         absent: Boolean,
         wanted: Int,
-        lastAccessOf: (KeySlot<*>) -> Long = { it.lastAccess },
-    ): List<KeySlot<*>> = leastRecentlyUsed(
+        lastAccessOf: (KeyRunner<*>) -> Long = { it.lastAccess },
+    ): List<KeyRunner<*>> = leastRecentlyUsed(
         candidates(family, absent),
         wanted,
         // A slot is checked again, since its kind can change after it was listed.
@@ -126,11 +126,11 @@ internal class SnapshotFamilies<A : Any>(
      * A set of the documents made their warmed scan 1.6 times slower at a bound of 100,000 (2.25-2.42 ms against
      * 3.7-4.1 ms, `EvictionPassBenchmark`), for nothing their pass uses.
      */
-    fun candidates(family: Family<*>, absent: Boolean): Iterable<KeySlot<*>> =
+    fun candidates(family: Family<*>, absent: Boolean): Iterable<KeyRunner<*>> =
         if (absent) family.absentMembers else family.slots.values
 
     /** Moves [family]'s counts for an entry replaced by another, either of them null: where `installed` is written. */
-    fun move(family: Family<*>, slot: KeySlot<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
+    fun move(family: Family<*>, slot: KeyRunner<*>, old: SnapshotEntry<*>?, new: SnapshotEntry<*>?) {
         val from = old?.let(::isAbsent)
         val to = new?.let(::isAbsent)
         if (from == to) {
@@ -142,7 +142,7 @@ internal class SnapshotFamilies<A : Any>(
 
     /** One family's documents, by id, and how many of each kind it holds (`SNP-14`). */
     class Family<A : Any>(val spec: SnapshotFamily<A>) {
-        val slots = ConcurrentHashMap<String, KeySlot<A>>()
+        val slots = ConcurrentHashMap<String, KeyRunner<A>>()
 
         /** The documents held (every failed entry is one) and the entries for documents the store does not hold. */
         private val documents = AtomicInteger()
@@ -153,18 +153,18 @@ internal class SnapshotFamilies<A : Any>(
          * alone, so it costs what that kind holds (512 at most), however many documents the family holds. The documents'
          * pass walks the family's map. Read only by eviction passes and tests; `peek` never sees it.
          */
-        private val absentSlots: MutableSet<KeySlot<*>> = ConcurrentHashMap.newKeySet()
+        private val absentSlots: MutableSet<KeyRunner<*>> = ConcurrentHashMap.newKeySet()
 
-        val absentMembers: Set<KeySlot<*>> get() = absentSlots
+        val absentMembers: Set<KeyRunner<*>> get() = absentSlots
 
         fun count(absent: Boolean): AtomicInteger = if (absent) absentEntries else documents
 
-        fun join(slot: KeySlot<*>, absent: Boolean) {
+        fun join(slot: KeyRunner<*>, absent: Boolean) {
             if (absent) absentSlots += slot
             count(absent).incrementAndGet()
         }
 
-        fun leave(slot: KeySlot<*>, absent: Boolean) {
+        fun leave(slot: KeyRunner<*>, absent: Boolean) {
             if (absent) absentSlots -= slot
             count(absent).decrementAndGet()
         }
@@ -180,7 +180,7 @@ internal class SnapshotFamilies<A : Any>(
          * Claims the removal of [slot], an entry of the kind [absent] names: its count's decrement, never below the
          * bound, and for an absent entry its place among [absentMembers]; false at the bound, and nothing moves.
          */
-        fun claim(slot: KeySlot<*>, absent: Boolean): Boolean {
+        fun claim(slot: KeyRunner<*>, absent: Boolean): Boolean {
             val bound = bound(absent)
             val claimed = count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound
             if (claimed && absent) {
@@ -193,23 +193,23 @@ internal class SnapshotFamilies<A : Any>(
          * The slot held for [key], made if none is; a removed one still in the map is dropped here, so that a lookup never
          * waits for the remover (what `withSlot`'s retry did).
          */
-        fun slotFor(key: SnapshotKey, context: SlotContext): KeySlot<A> {
+        fun slotFor(key: SnapshotKey, context: KeyContext): KeyRunner<A> {
             val id = spec.idOf(key)
             while (true) {
-                val slot = slots.computeIfAbsent(id) { context.slots.create(key, spec.compiler, context) }
+                val slot = slots.computeIfAbsent(id) { context.runners.create(key, spec.compiler, context) }
                 if (!slot.removed) return slot
                 slots.remove(id, slot)
             }
         }
 
         /** A claim of [slot]'s removal given back, its removal not having happened: the count, and its absent place. */
-        fun giveBack(slot: KeySlot<*>, absent: Boolean) {
+        fun giveBack(slot: KeyRunner<*>, absent: Boolean) {
             count(absent).incrementAndGet()
             if (absent) absentSlots += slot
         }
 
         /** Drops [slot] from the map, if it is still the one held for [id]. */
-        fun drop(id: String, slot: KeySlot<*>) {
+        fun drop(id: String, slot: KeyRunner<*>) {
             slots.computeIfPresent(id) { _, current -> current.takeUnless { it === slot } }
         }
     }

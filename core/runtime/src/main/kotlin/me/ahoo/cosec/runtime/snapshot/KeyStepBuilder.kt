@@ -22,7 +22,7 @@ import java.time.Duration
 
 /**
  * One transition being built: the state as it stands, the effects so far, and `families.seen[key]` as the effects so
- * far leave it, so that a load started later in the same transition chooses its read as [Slot] would, after them.
+ * far leave it, so that a load started later in the same transition chooses its read after them.
  * [KeyTransitions.next] makes its own and stays pure. A runner's drain keeps one and [reset]s it for each event, under
  * its flag, executing the effects in place before the next; nothing of a step outlives it (RFC 0013 B2b step 3).
  *

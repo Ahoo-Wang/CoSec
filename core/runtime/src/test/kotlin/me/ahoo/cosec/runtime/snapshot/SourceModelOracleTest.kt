@@ -22,13 +22,13 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 
 /**
- * The oracle itself (`SNP-7` at the claim, [SlotModel.claimed]): each of its eviction checks fails when it should, apart
+ * The oracle itself (`SNP-7` at the claim, [SourceModel.claimed]): each of its eviction checks fails when it should, apart
  * from any run of the source. The property test's scripts rarely make a claim on a stale choice, so this is where the
  * checks are shown able to fail.
  */
-class SlotModelOracleTest {
-    private val store = SlotModelStore({ 0L }, { 0L }).apply { hold = false }
-    private val model = SlotModel(store, SlotModelThreads(), OPTIONS, listOf(APP_A, APP_B))
+class SourceModelOracleTest {
+    private val store = SourceModelStore({ 0L }, { 0L }).apply { hold = false }
+    private val model = SourceModel(store, SourceModelThreads(), OPTIONS, listOf(APP_A, APP_B))
 
     /** An absent entry of [key], answered by a live read and reported installed through the model's metrics. */
     private fun installedAbsent(key: SnapshotKey): SnapshotEntry<*> {
@@ -61,7 +61,6 @@ class SlotModelOracleTest {
 
     @Test
     fun `under the runner, a key whose install leaves the source with no claim seen is a violation`() {
-        model.judgesClaims = true
         val entry = installedAbsent(APP_A)
         val b = installedAbsent(APP_B)
         model.afterEvent(listOf(b), closed = false)
@@ -69,16 +68,7 @@ class SlotModelOracleTest {
     }
 
     @Test
-    fun `under Slot, the same removal is judged after its event`() {
-        installedAbsent(APP_A)
-        model.afterEvent(emptyList(), closed = false)
-        model.violations.assert().containsExactly("evicted app:app-a while its family held 1 absent entries, within 1")
-        model.counts.evictionsAfterEvent.assert().isEqualTo(1)
-    }
-
-    @Test
     fun `an entry whose eviction was claimed and is still served after its event is a violation`() {
-        model.judgesClaims = true
         val a = installedAbsent(APP_A)
         val b = installedAbsent(APP_B)
         model.claimed(APP_A)

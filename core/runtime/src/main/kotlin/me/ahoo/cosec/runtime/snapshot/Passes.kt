@@ -40,9 +40,9 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
  * pass and of the one that replaced it never add up.
  */
 internal class Passes(
-    private val shared: KeySlot<*>,
+    private val shared: KeyRunner<*>,
     private val families: SnapshotFamilies<*>,
-    private val context: SlotContext,
+    private val context: KeyContext,
     private val lagReports: LagReports,
 ) {
     // Guarded by this.
@@ -110,7 +110,7 @@ internal class Passes(
         run(next)
     }
 
-    fun installedSlots(): List<KeySlot<*>> = buildList {
+    fun installedSlots(): List<KeyRunner<*>> = buildList {
         if (shared.installed != null) add(shared)
         families.forEach { family -> family.slots.values.filterTo(this) { it.installed != null } }
     }
@@ -123,9 +123,9 @@ internal class Passes(
      * the slot starts ([Pass.abandonIfStalled]).
      */
     fun reloadAll(
-        slots: List<KeySlot<*>>,
+        slots: List<KeyRunner<*>>,
         pass: Pass? = null,
-        reload: (KeySlot<*>) -> CompletableFuture<out Reloaded<*>>,
+        reload: (KeyRunner<*>) -> CompletableFuture<out Reloaded<*>>,
     ): CompletableFuture<Void> {
         val done = CompletableFuture<Void>()
         if (slots.isEmpty()) {

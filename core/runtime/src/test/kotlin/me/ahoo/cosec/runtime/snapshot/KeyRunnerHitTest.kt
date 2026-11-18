@@ -24,10 +24,9 @@ import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.Executor
 
 /**
- * A difference from [Slot] the runner states (RFC 0013 §5.4): a request queued while its key's load is in flight, and
- * taken only after that load's end, is served the install, counted as a HIT. The load's end is taken from the load
- * lane ahead of it. `Slot` joins such a request to the load in flight, and counts it COLD. Either way the request gets
- * the same entry; only the outcome metric says when it was taken.
+ * RFC 0013 §5.4: a request queued while its key's load is in flight, and taken only after that load's end, is served
+ * the install, counted as a HIT, not joined to the load as a COLD one. The load's end is taken from the load lane ahead
+ * of it. The request gets the entry the load installed; only the outcome metric says when it was taken.
  */
 class KeyRunnerHitTest {
     private val store = ControllableStore().apply {
@@ -46,13 +45,12 @@ class KeyRunnerHitTest {
     /**
      * Compilations run in place; a hand-off is held until the test runs it. Told by its class name: `DrainHandOffs`
      * submits `::run`, which has no type of its own, and a seam in main for this one test would be a tests-only member.
-     * The test goes with [Slot] in step 4.
      */
     private val pool = Executor { task ->
         if (task.javaClass.name.contains("DrainHandOffs")) handOffs += task else task.run()
     }
 
-    private fun source(slots: SlotFactory): SnapshotSource<Compiled, Compiled> = SnapshotSource(
+    private fun source(runners: KeyRunner.Settings): SnapshotSource<Compiled, Compiled> = SnapshotSource(
         store,
         SnapshotKey.Platform,
         compiler,
@@ -64,12 +62,12 @@ class KeyRunnerHitTest {
         null,
         { 0L },
         null,
-        slots,
+        runners,
     )
 
     /** A's cold load in flight; a second request for A offered with a spent budget; then the load's read answers. */
-    private fun twoRequests(slots: SlotFactory): List<LoadOutcome> {
-        source(slots).use { source ->
+    private fun twoRequests(runners: KeyRunner.Settings): List<LoadOutcome> {
+        source(runners).use { source ->
             source.load().join()
             store.hold = true
             val first = source.load(APP_A.appId)
@@ -85,11 +83,6 @@ class KeyRunnerHitTest {
     @Test
     fun `the runner serves a request taken after its key's load ends from the install, a hit`() {
         twoRequests(keyRunners(k = 0)).assert().containsExactly(LoadOutcome.COLD, LoadOutcome.HIT)
-    }
-
-    @Test
-    fun `Slot joins the same request to the load in flight, cold`() {
-        twoRequests(SlotFactory.SLOT).assert().containsExactly(LoadOutcome.COLD, LoadOutcome.COLD)
     }
 
     private companion object {

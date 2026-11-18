@@ -1,15 +1,15 @@
 # Rule: SNP-7
 # Mutant: a claim takes its kind's count down to nothing, not to its bound, so an eviction claimed after another took the kind back to its bound removes one more
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundRunnerTest --tests me.ahoo.cosec.runtime.snapshot.KeyRunnerContendedBoundTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundTest --tests me.ahoo.cosec.runtime.snapshot.KeyRunnerContendedBoundTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceModelPropertyTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
-index d8d8d5df..4d694aeb 100644
+index d97768d3..f757cd92 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
-@@ -175,7 +175,7 @@ internal class SnapshotFamilies<A : Any>(
+@@ -181,7 +181,7 @@ internal class SnapshotFamilies<A : Any>(
           * bound, and for an absent entry its place among [absentMembers]; false at the bound, and nothing moves.
           */
-         fun claim(slot: KeySlot<*>, absent: Boolean): Boolean {
+         fun claim(slot: KeyRunner<*>, absent: Boolean): Boolean {
 -            val bound = bound(absent)
 +            val bound = 0
              val claimed = count(absent).getAndUpdate { if (it > bound) it - 1 else it } > bound

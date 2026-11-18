@@ -63,7 +63,7 @@ class KeyCallersTest {
         keyRunners(k, hooks) { it == APP_A },
     )
 
-    private fun SnapshotSource<*, *>.slotA(): KeySlot<*> =
+    private fun SnapshotSource<*, *>.slotA(): KeyRunner<*> =
         families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue("app-a")
 
     private fun runHandOffs() {

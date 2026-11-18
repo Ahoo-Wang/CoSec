@@ -367,7 +367,7 @@ CoSec 声明的值无论取何值都优先于 `cocache.defaults.*`，与 CoCache
 | `ShadowReportCache`、`ShadowReporterCache`、`InstanceStatusCache`、`InstanceIndexCache` | `unknown-read`、`ttl` | `unknown-read: throw`；`ttl` 为声明的 8 天（报告、报告者）或 2 分钟（状态；实例列表仍是 8 天） | 故障不能读成“没有样本”或“没有实例”，实例的样本也不能从它报告过的窗口中过期。 |
 | `MembershipCache` | `read-failure`、`unknown-read` | `ttl` 有限（`forever` 时为一分钟），`ttl-jitter: 0s`，`read-failure` 与 `unknown-read: throw` | 读取失败绝不能变成“没有成员关系”，丢失的失效必须到期。 |
 | `TokenFamilyCache` | `unknown-read` | `unknown-read: throw` | 无法读取的会话会拒绝刷新（`503`），绝不读成不存在。每个条目都带着它所属会话的剩余寿命写入。 |
-| `RevokedTokenCache`、`RevokedSubjectCache` | `read-timeout`、`unknown-read` | `read-timeout`：存储的命令超时；`unknown-read: throw` | 作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。读取失败是“未知”，绝不是“未吊销”：读成不存在会让刷新在一次失败的读取上签发令牌（`IDN-14`）。超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何一层，包括 `cocache.defaults.store.read-timeout`，都不能让它更早超时。校验时是否接受由 `cosec.authentication.revocation.fail-closed` 决定。 |
+| `RevokedTokenCache`、`RevokedSubjectCache` | `read-timeout`、`unknown-read`、`absent-ttl` | `read-timeout`：存储的命令超时；`unknown-read: throw`；`absent-ttl: 30s` | “未吊销”的答案在本地最多保留 30 秒：更长的 `absent-ttl` 会在失效消息丢失之后的那么长时间里接受已吊销的令牌，`local-max-age` 只能缩短它。作为 `Store`，它们从不回收读不懂的吊销记录，否则其令牌会重新有效。读取失败是“未知”，绝不是“未吊销”：读成不存在会让刷新在一次失败的读取上签发令牌（`IDN-14`）。超时的读取是“无法读取”，流水线校验令牌时会接受它，所以任何一层，包括 `cocache.defaults.store.read-timeout`，都不能让它更早超时。校验时是否接受由 `cosec.authentication.revocation.fail-closed` 决定。 |
 | 每个 CoSec 缓存 | key 前缀、命名空间、key 编码器、编解码器、key 过滤器、`ttl` 函数、数据来源 | — | 存储布局由 CoSec 决定，每个实例与控制面都在那里找它。 |
 
 **下一步：** 文档存在哪里、实例如何读取它们，见[存储与缓存](./storage.md)。

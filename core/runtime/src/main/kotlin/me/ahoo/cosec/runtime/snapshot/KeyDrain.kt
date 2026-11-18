@@ -50,7 +50,7 @@ internal class KeyDrain<T : Any>(
     private val key: SnapshotKey,
     private val transitions: KeyTransitions<T>,
     private val effects: KeyEffects<T>,
-    private val context: SlotContext,
+    private val context: KeyContext,
     /** The events past their own a caller's thread drains: provisional until step 2b-ii measures it. */
     private val k: Int,
     /** The runner, as far as the drain reaches it: claims and give-backs (`SNP-14`), and what readers see. */
@@ -273,7 +273,7 @@ internal class KeyDrain<T : Any>(
      * this is its reasoned exception, `OutOfMemoryError` included: the error belongs to the key whose effect threw, not
      * to the thread that happened to drain it. So the step's remaining effects ran (its waiters are answered), an
      * [KeyEvent.EffectFailed] is queued (a load still in flight ends as a transient failure), the flag is released, and then it is
-     * rethrown on CoSec's own threads, as [Slot] rethrows it to the pool, and on any other thread, a caller's, logged at
+     * rethrown on CoSec's own threads, to the pool's uncaught handler, and on any other thread, a caller's, logged at
      * ERROR instead: that caller gets its own answer, never another key's `StackOverflowError`. The line goes through
      * housekeeping like every line with a stack trace, and is dropped and counted when housekeeping refuses it (`SNP-19`).
      */
@@ -331,7 +331,7 @@ internal class KeyDrain<T : Any>(
         if (load != null && event != null && event.loadId == load.id) {
             state = before.copy(load = null, next = null)
             guarded { effects.cancelReadTimeout(load.id) }
-            // Whatever ended the load, its pass's read is over (SNP-6), as Slot's finish ends it.
+            // Whatever ended the load, its pass's read is over (SNP-6), as a load's finish ends it.
             guarded { load.pass?.read?.end() }
             (listOf(load.handle) + load.alsoAnswers + listOfNotNull(before.next)).forEach {
                 guarded { it.future.complete(failed) }

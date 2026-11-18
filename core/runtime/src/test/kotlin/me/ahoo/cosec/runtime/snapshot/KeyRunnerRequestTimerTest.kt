@@ -16,7 +16,6 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -82,9 +81,9 @@ class KeyRunnerRequestTimerTest {
     private val requests = CopyOnWriteArrayList<CompletableFuture<*>>()
     private val throwAfterRelease = AtomicBoolean()
 
-    /** The source's slot context, taken as it makes its first slot: where its registered requests are. */
+    /** The source's key context: where its registered requests are. */
     @Volatile
-    private var context: SlotContext? = null
+    private var context: KeyContext? = null
 
     private fun registered() = requireNotNull(context).pendingRequests
 
@@ -107,21 +106,11 @@ class KeyRunnerRequestTimerTest {
             scheduler,
             { 0L },
             null,
-            capturing(keyRunners(hooks = hooks, hooked = { it == APP_A })),
+            keyRunners(hooks = hooks, hooked = { it == APP_A }),
         ).also {
+            context = it.context
             it.nanoTime = nanoTime
             it.load().join()
-        }
-    }
-
-    private fun capturing(runners: SlotFactory) = object : SlotFactory {
-        override fun <T : Any> create(
-            key: SnapshotKey,
-            compiler: SnapshotCompiler<T>,
-            context: SlotContext
-        ): KeySlot<T> {
-            this@KeyRunnerRequestTimerTest.context = context
-            return runners.create(key, compiler, context)
         }
     }
 

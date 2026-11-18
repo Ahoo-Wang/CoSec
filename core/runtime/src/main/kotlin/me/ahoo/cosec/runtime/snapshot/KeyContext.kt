@@ -26,11 +26,11 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.function.LongSupplier
 
 /**
- * What every [Slot] of a [SnapshotSource] reads from it (RFC 0013 B2a), named in one place, where the inner class it
+ * What every key of a [SnapshotSource] reads from it (RFC 0013 B2a), named in one place, where the inner class it
  * was hid which of the source's fields it used. Every field is a `val`, set before the first slot is made; what changes
  * lives in the object a field holds, with one home each.
  */
-internal class SlotContext(
+internal class KeyContext(
     val store: SnapshotDocumentStore,
     /** The document every request needs. */
     val sharedKey: SnapshotKey,
@@ -40,8 +40,8 @@ internal class SlotContext(
     val metrics: SnapshotMetrics,
     val threads: SnapshotThreads,
     val families: SnapshotFamilies<*>,
-    /** What makes each key's slot (RFC 0013 B2b): [SlotFactory.RUNNER] in production. */
-    val slots: SlotFactory,
+    /** How each key's runner is made (RFC 0013 B2b): [KeyRunner.Settings]' defaults in production. */
+    val runners: KeyRunner.Settings,
 ) {
     /**
      * Monotonic nanoseconds, the time the scheduler's timeouts keep: whether a periodic pass stalled is measured in it,
@@ -91,5 +91,5 @@ internal class SlotContext(
      * The slot [families] holds for [key] now, made if it holds none: where a removed slot sends a request. Nothing it
      * reads is set later than this context's construction, and no slot exists before that.
      */
-    fun current(key: SnapshotKey): KeySlot<*> = families.slotFor(key, this)
+    fun current(key: SnapshotKey): KeyRunner<*> = families.slotFor(key, this)
 }

@@ -29,13 +29,16 @@ class SessionStoreUnavailableException internal constructor(message: String, cau
 
 /**
  * One call to a session store port: whatever it throws leaves as [SessionStoreUnavailableException], a store's exception
- * having no type of its own (a Redis client's, a timeout), and cancellation as itself.
+ * having no type of its own (a Redis client's, a timeout); cancellation leaves as itself, and so does an
+ * [UnsupportedOperationException], a store saying it cannot do the call at all, which is no outage.
  */
 // stays: a store port may throw anything, and every failure of it is one answer
 @Suppress("TooGenericExceptionCaught")
 internal inline fun <T> sessionStore(operation: String, call: () -> T): T = try {
     call()
 } catch (e: CancellationException) {
+    throw e
+} catch (e: UnsupportedOperationException) {
     throw e
 } catch (e: Exception) {
     throw SessionStoreUnavailableException("The session store could not $operation.", e)

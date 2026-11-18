@@ -17,7 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.snapshot.SlotModelStore.Content
+import me.ahoo.cosec.runtime.snapshot.SourceModelStore.Content
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -47,9 +47,9 @@ internal class ModelCompiled(val key: SnapshotKey, val revision: Long, val input
  *    their documents that started after the call has ended (`SNP-13`), `recompile` with nothing older than its inputs
  *    left in service; everything once the source is closed or the run settles.
  */
-internal class SlotModel(
-    private val store: SlotModelStore,
-    private val threads: SlotModelThreads,
+internal class SourceModel(
+    private val store: SourceModelStore,
+    private val threads: SourceModelThreads,
     private val options: SnapshotOptions,
     private val familyKeys: List<SnapshotKey>,
 ) {
@@ -76,14 +76,6 @@ internal class SlotModel(
     private val lastRevision = HashMap<SnapshotKey, Long>()
     private val evictedAt = HashMap<SnapshotKey, Long>()
 
-    /**
-     * Whether evictions are judged at their claims ([claimed]): the runner's, whose hooks report each claim. Then a key
-     * whose install leaves the source with no claim seen is a violation. [Slot] has no claim the model can watch: its
-     * removal happens under its monitor inside the pass, so its evictions are judged after their event, which is weaker:
-     * an install later in the same event changes what the family held, either way. That goes with [Slot] (step 4).
-     */
-    var judgesClaims = false
-
     /** The entries whose eviction was claimed during the event now running: none of them is served after it. */
     private val claimedEntries = mutableListOf<SnapshotEntry<*>>()
     private val expectedRegressions = mutableListOf<Pair<SnapshotKey, Long>>()
@@ -102,15 +94,14 @@ internal class SlotModel(
         var coldTimeouts = 0
         var evictions = 0
 
-        /** Of [evictions], those judged at the runner's claim ([claimed]), and those judged after their event ([Slot]). */
+        /** Of [evictions], those judged at the runner's claim ([claimed]): every one, since a removal without a claim is a violation. */
         var evictionsAtClaim = 0
-        var evictionsAfterEvent = 0
         var regressions = 0
         var resetsChecked = 0
         var lostWritesChecked = 0
 
         /** [lostWritesChecked] by what went wrong meanwhile. */
-        val lostWritesByLag = java.util.EnumMap<SlotModelScript.Lag, Int>(SlotModelScript.Lag::class.java)
+        val lostWritesByLag = java.util.EnumMap<SourceModelScript.Lag, Int>(SourceModelScript.Lag::class.java)
     }
 
     /** A reset of the change channel at [at]: each of [keys], installed then, is read again after it (`SNP-6`). */
@@ -205,7 +196,7 @@ internal class SlotModel(
      * Whether the source is done with [read]: it answered, or the source gave it up, which it does once
      * `storeReadTimeout` has passed since the read started (the timer that ends it falls due then) or once it closes.
      */
-    fun ended(read: SlotModelStore.Read): Boolean =
+    fun ended(read: SourceModelStore.Read): Boolean =
         read.answered || read.abandoned || closedAt >= 0 ||
             threads.nanos >= read.startedNanos + options.storeReadTimeout.toNanos()
 
@@ -256,7 +247,7 @@ internal class SlotModel(
     fun isInstalled(key: SnapshotKey): Boolean = key in lastInstall
 
     /** A write of [key] whose notification was lost was checked to be installed in time. */
-    fun lostWriteChecked(lag: SlotModelScript.Lag) {
+    fun lostWriteChecked(lag: SourceModelScript.Lag) {
         counts.lostWritesChecked++
         counts.lostWritesByLag.merge(lag, 1, Int::plus)
     }
@@ -383,12 +374,9 @@ internal class SlotModel(
         }
         for (key in lastInstall.keys.toList()) {
             if (key !in byKey && !closed) {
-                if (judgesClaims) {
-                    violations += "removed ${lastInstall.getValue(key)} of $key without a claim"
-                } else {
-                    checkEvicted(key)
-                    counts.evictionsAfterEvent++
-                }
+                // Evictions are judged at their claims ([claimed]), which the runners' hooks report: a key whose
+                // install leaves the source with no claim seen is a violation.
+                violations += "removed ${lastInstall.getValue(key)} of $key without a claim"
                 lastInstall.remove(key)
                 evictedAt[key] = event
                 counts.evictions++
@@ -425,8 +413,7 @@ internal class SlotModel(
     /**
      * `SNP-7`: an entry of a document the store holds goes only while its family holds more such entries than its bound,
      * and one for a document the store does not hold only while there are more of those than `maxAbsent`: neither kind
-     * evicts the other. Judged after the claim and before the removal, against the model's installs then ([claimed]);
-     * for [Slot], after the event that removed it ([judgesClaims]).
+     * evicts the other. Judged after the claim and before the removal, against the model's installs then ([claimed]).
      */
     private fun checkEvicted(key: SnapshotKey) {
         val absent = lastInstall.getValue(key).origin == EntryOrigin.ABSENT

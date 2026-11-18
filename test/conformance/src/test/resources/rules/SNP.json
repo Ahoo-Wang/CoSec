@@ -21,7 +21,7 @@
       "properties": [
         "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
         "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge",
-        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
       ],
       "pending": null
     },
@@ -49,7 +49,7 @@
       "level": "timing",
       "properties": [
         "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
-        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
       ],
       "pending": null,
       "guards": [
@@ -108,7 +108,7 @@
       "level": "timing",
       "properties": [
         "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision",
-        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
       ],
       "guards": [
         "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
@@ -181,7 +181,8 @@
       "guards": [
         "runtime:SnapshotRevalidationTest#revalidationAnswersWithAReadThatStartedAfterTheCall",
         "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs",
-        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
         "runtime:KeyDrainLaneTest#a load of an absent key that ends before its recompile mark is taken is followed by a read after the call"
       ]
     },
@@ -191,7 +192,8 @@
       "statement": "A family holds at most its bound plus the smaller of its bound and 4,096 entries of each kind (documents; entries for documents the store does not hold), plus the entries being installed or loaded at that moment; an install that finds its kind over that evicts on the installing thread before it answers its waiters. Evictions never take a kind below its bound, and passes running at once leave a kind at its bound when every victim was idle: they never stop above it.",
       "level": "timing",
       "properties": [
-        "runtime:SnapshotSlotModelPropertyTest#theSourceKeepsToTheModelInEveryScriptedOrder"
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff"
       ],
       "guards": [
         "runtime:SnapshotFamilyBoundTest#a burst with housekeeping held never holds more than the cap, and the installer evicted it in place",
@@ -210,7 +212,7 @@
       "statement": "What a spent drain budget leaves is not left waiting on the compile queue. An event the source's own work produces (a read's answer, failure or timeout, a compilation's result, an effect's failure, a retry coming due) is taken by the thread that holds the key's flag or the next one to take it, before any budget check and uncounted. A caller event left by a spent budget is handed to the source's own threads, where it waits for at most the compilation a pool thread is running; when the pool refuses it housekeeping runs it, and when that refuses too, its offerer does.",
       "level": "timing",
       "properties": [
-        "runtime:SnapshotSlotModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff"
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff"
       ],
       "guards": [
         "runtime:KeyDrainLaneTest#a lane event offered between the empty queue and the release is taken before the drainer returns",

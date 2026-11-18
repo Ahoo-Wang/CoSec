@@ -22,8 +22,8 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.RejectedExecutionException
 
 /**
- * What happens to one key (RFC 0013 B2b): the input of [KeyTransitions.next]. Each event names the [Slot] method it
- * replaces. An event about a load carries the load's [loadId]; one about a load that has ended, or about a read the
+ * What happens to one key (RFC 0013 B2b): the input of [KeyTransitions.next], one per [KeyRunner] call or completion it
+ * stands for. An event about a load carries the load's [loadId]; one about a load that has ended, or about a read the
  * load has moved past, is dropped. [carried] is what the event brought in that must be answered whatever happens: a
  * waiter or a reply.
  *

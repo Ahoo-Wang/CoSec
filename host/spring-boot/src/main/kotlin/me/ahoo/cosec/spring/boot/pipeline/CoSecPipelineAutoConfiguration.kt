@@ -48,6 +48,7 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.apikey.apiKeysEnabled
 import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
@@ -143,13 +144,16 @@ class CoSecPipelineAutoConfiguration {
     fun cosecUncheckedRevocations(): UncheckedRevocations = UncheckedRevocations()
 
     /**
-     * Token and API-key authentication. A token is verified by the JWT algorithm and checked against the revocation
-     * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store.
+     * Token and API-key authentication. A token is verified by the application's [TokenVerifier] bean, the one refresh
+     * and logout verify with (`IDN-25`), else by CoSec's own over the JWT algorithm, and checked against the revocation
+     * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store. The
+     * algorithm decides only whether tokens are on.
      */
     @Bean
     @ConditionalOnMissingBean
     fun cosecAuthenticator(
         algorithm: ObjectProvider<Algorithm>,
+        verifier: ObjectProvider<TokenVerifier>,
         revocationReader: ObjectProvider<RevocationReader>,
         tokenStore: ObjectProvider<TokenStore>,
         apiKeyReader: ObjectProvider<ApiKeyReader>,
@@ -160,7 +164,7 @@ class CoSecPipelineAutoConfiguration {
     ): Authenticator {
         val token = algorithm.ifAvailable?.let {
             TokenAuthenticator(
-                JwtTokenVerifier(it),
+                verifier.getIfAvailable { JwtTokenVerifier(it) },
                 revocationReader(revocationReader, tokenStore),
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,

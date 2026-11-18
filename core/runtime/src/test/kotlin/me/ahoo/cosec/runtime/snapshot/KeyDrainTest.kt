@@ -65,7 +65,7 @@ class KeyDrainTest {
         keyRunners(k, hooks) { everyKey || it == APP_A },
     )
 
-    private fun SnapshotSource<*, *>.slotA(): KeySlot<*> = families.first {
+    private fun SnapshotSource<*, *>.slotA(): KeyRunner<*> = families.first {
         it.spec.kind == SnapshotKind.APP
     }.slots.getValue("app-a")
 
@@ -248,7 +248,7 @@ class KeyDrainTest {
             options = options,
             everyKey = true
         ).use { source ->
-            // A cold burst of a thousand overruns a queue of 64 with Slot too; what is measured is the recompile.
+            // A cold burst of a thousand overruns a queue of 64 whatever drains it; what is measured is the recompile.
             keys.chunked(CHUNK).forEach { source.loadAll(it).join() }
             rejected.set(0)
             source.recompile().join()

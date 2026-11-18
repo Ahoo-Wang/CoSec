@@ -193,7 +193,8 @@ endpoint and stores the pair it answers; it never rewrites a header ([Apps](./au
   over. A logout the server did not confirm (`503`, `500`, no answer) still removes the pair on the client: the user
   asked to leave the device. The client then tells the user that the server may hold the session until it ends there,
   at the latest when its refresh token expires. A logout waits for a refresh in flight and ends the session with the
-  pair that refresh stored, since the pair it rotated away would be refused.
+  pair that refresh stored, since the pair it rotated away would be refused. In React, `cosec-react`'s `logout` (with the
+  `tokenManager` option) is that logout, and `signOut` the local step alone.
 - **A switch answers a new pair.** Present the current token, store the pair that answers, and drop the old one. A
   switch issues only from a live session and keeps its login time (`IDN-17`, `IDN-22`); it does not sign the user in
   again. Path parameters a client fills from `tenantId` change with the new token.

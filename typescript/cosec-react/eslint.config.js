@@ -19,13 +19,7 @@ import reactCompiler from 'eslint-plugin-react-compiler';
 
 export default tseslint.config(
   {
-    ignores: [
-      '**/dist/**',
-      '**/coverage/**',
-      '**/**.test.ts',
-      '**/**.test.tsx',
-      '**/node_modules/**',
-    ],
+    ignores: ['**/dist/**', '**/coverage/**', '**/node_modules/**'],
   },
   {
     files: ['**/*.{ts,tsx}'],

@@ -1,6 +1,6 @@
 # Rule: SNP-14
 # Mutant: an install that takes its family over the cap does not evict in place, before its answers or after them, so a burst holds as many as housekeeping lets it (the runner's KeyEffects.evictOverCap and evictBeyond)
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundRunnerTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSourceModelPropertyTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
 index 9f946fce..7cee1547 100644

@@ -17,7 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.snapshot.SlotModelScript.Lag
+import me.ahoo.cosec.runtime.snapshot.SourceModelScript.Lag
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
 
@@ -40,11 +40,11 @@ import java.time.Duration
  *   does not wait for a load in flight longer than `storeReadTimeout`. So: the timeout, the next tick, the pass. With one
  *   lane only that next pass can install the others; with two, the stuck pass's other lane may.
  */
-internal class SlotModelLag(
-    private val script: SlotModelScript,
-    private val store: SlotModelStore,
-    private val threads: SlotModelThreads,
-    private val model: SlotModel,
+internal class SourceModelLag(
+    private val script: SourceModelScript,
+    private val store: SourceModelStore,
+    private val threads: SourceModelThreads,
+    private val model: SourceModel,
     options: SnapshotOptions,
     /** The model's checks now; false once one failed. */
     private val check: () -> Boolean,
@@ -53,7 +53,7 @@ internal class SlotModelLag(
     private val timeout: Duration = options.storeReadTimeout
     private lateinit var bound: Duration
     private var target: SnapshotKey? = null
-    private var hung: SlotModelStore.Read? = null
+    private var hung: SourceModelStore.Read? = null
     private var stuck: Runnable? = null
 
     /** How long after the write the passes have to install [n] documents' changes, for [lag] (see the class comment). */
@@ -130,7 +130,7 @@ internal class SlotModelLag(
     }
 
     /** Whether [read] is of the target, in a run whose lag is [lag]. */
-    private fun firstOfTarget(read: SlotModelStore.Read, lag: Lag): Boolean = read.key == target && script.lag == lag
+    private fun firstOfTarget(read: SourceModelStore.Read, lag: Lag): Boolean = read.key == target && script.lag == lag
 
     private companion object {
         val STEP: Duration = Duration.ofMillis(500)

@@ -16,7 +16,6 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -36,8 +35,8 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * What one uncontended cold load costs in thread work (RFC 0013 B2b, the cold-load criterion): one compile-pool task,
  * one housekeeping task (the eviction pass of a family beyond its bound), one timer scheduled and cancelled, and one
- * completion that crosses from the pool to the caller's thread. The runner has no hand-off, timer or wake-up beyond
- * `Slot`'s, on any host: the counts are deterministic, so this holds where timing cannot show it.
+ * completion that crosses from the pool to the caller's thread, and nothing more: no other hand-off, timer or wake-up,
+ * on any host. The counts are deterministic, so this holds where timing cannot show it.
  *
  * The source's executors are driven by the test: the compilation runs on a thread of the test's own, marked as the
  * source's pool threads are, after `load` returned; housekeeping runs on another, and the next load waits for it.
@@ -60,7 +59,7 @@ class ColdLoadCountsTest {
             .map { it.get().toDouble() / loads }
     }
 
-    private fun measure(slots: SlotFactory): List<Double> {
+    private fun measure(runners: KeyRunner.Settings): List<Double> {
         val counts = Counts()
         val store = ControllableStore().apply {
             put(SnapshotKey.Platform, document(1))
@@ -105,16 +104,6 @@ class ColdLoadCountsTest {
             override fun <V> schedule(callable: Callable<V>, delay: Long, unit: TimeUnit): ScheduledFuture<V> =
                 counted(realScheduler.schedule(callable, delay, unit))
         }
-        val capturing = object : SlotFactory {
-            override fun <T : Any> create(
-                key: SnapshotKey,
-                compiler: SnapshotCompiler<T>,
-                context: SlotContext
-            ): KeySlot<T> {
-                threads = context.threads
-                return slots.create(key, compiler, context)
-            }
-        }
         val compiler = FakeCompiler()
         val source = SnapshotSource(
             store,
@@ -132,8 +121,9 @@ class ColdLoadCountsTest {
             // The eviction's order: the least recently used key goes, so each key of the cycle is cold again.
             AtomicLong()::incrementAndGet,
             housekeeping,
-            capturing,
+            runners,
         )
+        threads = source.threads
         try {
             fun coldLoad(key: SnapshotKey.App) {
                 val answer = source.load(key.appId)
@@ -175,11 +165,6 @@ class ColdLoadCountsTest {
     @Test
     fun `an uncontended cold load costs the runner one pool task, one housekeeping task, one timer and one cross-thread answer`() {
         measure(keyRunners()).assert().containsExactly(1.0, 1.0, 1.0, 1.0, 1.0)
-    }
-
-    @Test
-    fun `the runner's uncontended cold load costs what Slot's does`() {
-        measure(keyRunners()).assert().isEqualTo(measure(SlotFactory.SLOT))
     }
 
     private companion object {

@@ -18,11 +18,11 @@ import kotlin.random.Random
 
 /**
  * One scripted run of the slot model, as data: what the store holds and tells the listener while it subscribes, then
- * the events in order. Being data, a failing run can be shrunk by leaving events out ([SnapshotSlotModelPropertyTest]).
+ * the events in order. Being data, a failing run can be shrunk by leaving events out ([SnapshotSourceModelPropertyTest]).
  * An event that picks among what is waiting (a read, a compilation, a housekeeping task) picks by [Event.pick] modulo
  * how many wait then, so it stays valid when the events before it change.
  */
-internal data class SlotModelScript(
+internal data class SourceModelScript(
     val initial: List<SnapshotKey>,
     val duringSubscribe: Subscribe,
     val events: List<Event>,
@@ -81,7 +81,7 @@ internal data class SlotModelScript(
         )
         private val TOTAL = WEIGHTS.sumOf { it.second }
 
-        fun generate(seed: Int, length: Int): SlotModelScript {
+        fun generate(seed: Int, length: Int): SourceModelScript {
             val random = Random(seed)
             val initial = KEYS.filter { random.nextInt(3) != 0 }
             val subscribe = if (random.nextInt(4) == 0) Subscribe.entries.random(random) else Subscribe.NOTHING
@@ -94,7 +94,7 @@ internal data class SlotModelScript(
             val lanes = 1 + random.nextInt(2)
             // A fifth of the runs end their events with a reset that nothing after it can mask: the reset check's own.
             if (random.nextInt(5) == 0) events += Event(Kind.RESET)
-            return SlotModelScript(initial, subscribe, events, lag, target, lanes)
+            return SourceModelScript(initial, subscribe, events, lag, target, lanes)
         }
 
         private fun event(random: Random): Event {

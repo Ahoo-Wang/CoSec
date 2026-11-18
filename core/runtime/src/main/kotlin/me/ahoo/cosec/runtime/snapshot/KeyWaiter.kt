@@ -105,7 +105,7 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
      * left of `coldLoadTimeout`. Whoever answers first (its load's handle, its timeout, or close) claims it; an answer
      * records the outcome before completing, so a caller that sees the result also sees the metric.
      */
-    class Request<T : Any>(private val key: SnapshotKey, private val context: SlotContext) :
+    class Request<T : Any>(private val key: SnapshotKey, private val context: KeyContext) :
         KeyWaiter<T, SnapshotEntry<T>>(), PendingRequest {
         private val answered = AtomicBoolean()
 
@@ -186,7 +186,7 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
                 context.metrics.onLoad(key.kind, outcome)
             } finally {
                 complete(entry)
-                // After the answer, as `Slot` does: a timer that fires in between finds the request answered.
+                // After the answer: a timer that fires in between finds the request answered.
                 timeout?.cancel(false)
             }
         }

@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory
 /**
  * [KeyTransitions] run by a literal runner over seeded scripts on one key (RFC 0013 B2b, step 1): the key-level driver
  * of the slot model, beside [KeyTransitionsOrderTest]'s exhaustive small orders. Each seed is one [KeyModelScript] run
- * by [KeyModelRun] on [SlotModelThreads] alone, so it replays exactly: `-PpropertySeed=<seed>`. Under `propertyStress`
+ * by [KeyModelRun] on [SourceModelThreads] alone, so it replays exactly: `-PpropertySeed=<seed>`. Under `propertyStress`
  * the seeds scale as the model's do.
  */
 class KeyModelPropertyTest {

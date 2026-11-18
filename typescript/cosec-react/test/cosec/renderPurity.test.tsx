@@ -11,8 +11,7 @@
  * limitations under the License.
  */
 
-import { act, render } from '@testing-library/react';
-import { useState } from 'react';
+import { render } from '@testing-library/react';
 import { TokenStorage } from '@ahoo-wang/cosec-fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import { RouteGuard, SecurityProvider } from '../../src';
@@ -24,10 +23,7 @@ describe('RouteGuard', () => {
       storage: new InMemoryStorage(),
     });
     const onUnauthorized = vi.fn();
-    let rerender!: () => void;
     function Parent() {
-      const [, setTick] = useState(0);
-      rerender = () => setTick(tick => tick + 1);
       return (
         <SecurityProvider tokenStorage={tokenStorage}>
           <RouteGuard onUnauthorized={onUnauthorized}>
@@ -36,11 +32,12 @@ describe('RouteGuard', () => {
         </SecurityProvider>
       );
     }
-    render(<Parent />);
+    // Each rerender renders the guard again, in the same mounted tree.
+    const { rerender } = render(<Parent />);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
 
-    act(() => rerender());
-    act(() => rerender());
+    rerender(<Parent />);
+    rerender(<Parent />);
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
     tokenStorage.destroy();
   });
