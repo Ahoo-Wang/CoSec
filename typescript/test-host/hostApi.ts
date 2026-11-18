@@ -85,6 +85,15 @@ export async function revocationsUp(): Promise<void> {
   await post('/test/revocations/up');
 }
 
+/** The host's session store cannot answer from now on, until {@link sessionsUp}: a refresh or a logout is `503`. */
+export async function sessionsDown(): Promise<void> {
+  await post('/test/sessions/down');
+}
+
+export async function sessionsUp(): Promise<void> {
+  await post('/test/sessions/up');
+}
+
 /** Every refresh fails with a bug of the application's own code while on: the served refresh answers `500`. */
 export async function refreshError(on: boolean): Promise<void> {
   await post(`/test/refresh-error/${on}`);
@@ -94,4 +103,9 @@ export async function refreshError(on: boolean): Promise<void> {
 export async function endSession(pair: HostPair): Promise<void> {
   const response = await post('/test/end-session', pair);
   if (!response.ok) throw new Error(`end-session answered ${response.status}`);
+}
+
+/** The served refresh of `pair`, as a client that is not this package sends it: what the host says of the pair now. */
+export async function refreshAt(pair: HostPair): Promise<Response> {
+  return post('/auth/refresh', pair);
 }

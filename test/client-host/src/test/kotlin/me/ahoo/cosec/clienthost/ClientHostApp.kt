@@ -80,8 +80,8 @@ internal const val LOGOUT_PATH = "/auth/logout"
  * ones every application gets.
  *
  * Never an example of a production host: its login signs in anyone who names themselves, its secret is a constant, and
- * the `/test` routes (counters, echo, a session ended on request, an expired sign-in, the outage switches) are open to
- * every caller. They
+ * the `/test` routes (counters, echo, a session ended on request, an expired sign-in, the outage switches of the
+ * revocations and the session store) are open to every caller. They
  * pass CoSec like every other route: the document permits them, and nothing is exempted from the filter (STA-4).
  */
 @RestController
@@ -92,6 +92,7 @@ internal class ClientHostApi(
     private val converter: TokenConverter,
     private val counters: ClientHostCounters,
     private val revocations: SwitchableRevocations,
+    private val sessions: SwitchableSessions,
 ) {
     @GetMapping("/hello")
     fun hello(): Map<String, String> = mapOf("message" to "hello")
@@ -142,6 +143,17 @@ internal class ClientHostApi(
         revocations.down = false
     }
 
+    /** The session store cannot answer from now on, until `/test/sessions/up`: a refresh or a logout is `503`. */
+    @PostMapping("/test/sessions/down")
+    fun sessionsDown() {
+        sessions.down = true
+    }
+
+    @PostMapping("/test/sessions/up")
+    fun sessionsUp() {
+        sessions.down = false
+    }
+
     /** The ids of the tokens whose revocation read failed while the revocations were down. */
     @GetMapping("/test/revocations/failed")
     fun failedReads(): List<String> = revocations.failedReads.toList()
@@ -162,6 +174,7 @@ internal class ClientHostApi(
         counters.refreshError = false
         revocations.down = false
         revocations.failedReads.clear()
+        sessions.down = false
     }
 
     /** Ends the session of [body]'s pair, as a server-side sign-out or a revocation would: its next refresh is a 401. */
@@ -189,6 +202,10 @@ internal class ClientHostApplication {
             null
         }
 
+    /** The session store, which `/test/sessions/down` takes down: CoCache's in-memory one is not switchable. */
+    @Bean
+    fun clientHostSessions(): SwitchableSessions = SwitchableSessions()
+
     @Bean
     fun clientHostRevocations(tokenStore: TokenStore): SwitchableRevocations =
         SwitchableRevocations((tokenStore as CoCacheTokenStore).reader)
@@ -209,5 +226,6 @@ internal class ClientHostApplication {
         converter: TokenConverter,
         counters: ClientHostCounters,
         revocations: SwitchableRevocations,
-    ) = ClientHostApi(auth, verifier, families, converter, counters, revocations)
+        sessions: SwitchableSessions,
+    ) = ClientHostApi(auth, verifier, families, converter, counters, revocations, sessions)
 }
