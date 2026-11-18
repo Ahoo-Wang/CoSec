@@ -65,6 +65,10 @@ class KeyEffectFailureTest {
     @Volatile
     private var lastReleaseOfA = 0L
 
+    /** The thread in A's drain, from its step to the release of its flag; null outside. */
+    @Volatile
+    private var drainerOfA: Thread? = null
+
     @Volatile
     private var installFails: Throwable? = null
     private val metrics = object : SnapshotMetrics {
@@ -107,6 +111,7 @@ class KeyEffectFailureTest {
      */
     private fun taking(event: KeyEvent<*>) {
         lastStepOfA = sequence.incrementAndGet()
+        drainerOfA = Thread.currentThread()
         if (event is KeyEvent.EffectFailed) {
             failed += event
         } else if (failed.isNotEmpty()) {
@@ -116,6 +121,7 @@ class KeyEffectFailureTest {
     }
 
     private fun released() {
+        drainerOfA = null
         lastReleaseOfA = sequence.incrementAndGet()
     }
 
@@ -270,12 +276,16 @@ class KeyEffectFailureTest {
         val release = CountDownLatch(1)
         source(compileExecutor = null).use { source ->
             source.load("app-b").join()
-            // The pool's first hand to housekeeping made while A already reads idle: the confirming load's end.
+            // A hand to housekeeping made inside A's drain while A already reads idle: its confirming load's end. Not
+            // app-b's tail, which another pool thread may still be running.
             housekeeping.holdOnPool = {
-                val a = source.families.first { it.spec.kind == SnapshotKind.APP }.slots["app-a"]
-                if (a?.idle() == true) release.also { held.countDown() } else null
+                if (drainerOfA === Thread.currentThread() && source.slotA().idle()) release.also { held.countDown() } else null
             }
-            source.load("app-a").join()
+            // The compilation waits until this thread's drain of A has returned, so the pool takes its own result.
+            val gate = CountDownLatch(1).also { compiler.gate = it }
+            val loading = source.load("app-a")
+            gate.countDown()
+            loading.join()
             held.await(WAIT_SECONDS, TimeUnit.SECONDS).assert().isTrue()
             source.slotA().idle().assert().isTrue()
             source.quietA().assert().isFalse()
