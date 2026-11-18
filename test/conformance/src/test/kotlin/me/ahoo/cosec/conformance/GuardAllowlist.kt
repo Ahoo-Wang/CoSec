@@ -47,8 +47,8 @@ object GuardAllowlist {
             "control:ChangeTransitionTableTest#no step writes a change outside its row",
             "runtime:SnapshotRevalidationTest#revalidationAnswersWithAReadThatStartedAfterTheCall",
             "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs",
-            "runtime:SnapshotSlotModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder",
-            "runtime:SnapshotSlotModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
+            "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder",
+            "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
             "runtime:KeyDrainLaneTest#a load of an absent key that ends before its recompile mark is taken is followed by a read after the call",
             "runtime:KeyEffectFailureTest#every effect of a step that throws gives one EffectFailed, and its own failed log gives none",
             "runtime:KeyEffectFailureTest#an EffectFailed whose log throws gives no other on the compile pool, which drains unbounded",
@@ -331,7 +331,7 @@ object GuardAllowlist {
             "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision",
             "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
             "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey",
-            "runtime:SnapshotSlotModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder",
+            "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder",
             "runtime:SnapshotFamilyBoundTest#a burst with housekeeping held never holds more than the cap, and the installer evicted it in place",
             "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
             "runtime:SnapshotFamilyBoundTest#passes at once take a kind exactly to its bound, never below it and never stopping above it",
@@ -345,7 +345,7 @@ object GuardAllowlist {
             "runtime:KeyDrainLaneTest#the compile pool serves a hand-off when the compilation it runs ends, before the ones queued behind it",
             "runtime:KeyRunnerFailureTest#a hand-off the compile pool refuses goes to housekeeping, counted, and runs there",
             "runtime:KeyRunnerFailureTest#a hand-off both pools refuse is counted, and the caller runs the source's hand-offs",
-            "runtime:SnapshotSlotModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
+            "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
         ),
     )
 }

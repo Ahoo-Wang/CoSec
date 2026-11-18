@@ -33,7 +33,7 @@ import java.util.concurrent.CompletableFuture
  * then or the one current when it started (either is a linearization a real store may give); a hung read is never
  * released until the run settles.
  */
-internal class SlotModelStore(private val events: () -> Long, private val now: () -> Long) : SnapshotDocumentStore {
+internal class SourceModelStore(private val events: () -> Long, private val now: () -> Long) : SnapshotDocumentStore {
     /** What a key holds at one version. */
     sealed interface Content {
         data class Document(val document: SnapshotDocument, val digest: SnapshotDigest) : Content

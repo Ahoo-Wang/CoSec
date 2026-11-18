@@ -17,27 +17,27 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.snapshot.SlotModelScript.Companion.FAMILY
-import me.ahoo.cosec.runtime.snapshot.SlotModelScript.Companion.SHARED
-import me.ahoo.cosec.runtime.snapshot.SlotModelScript.Kind
-import me.ahoo.cosec.runtime.snapshot.SlotModelScript.On
-import me.ahoo.cosec.runtime.snapshot.SlotModelScript.Subscribe
+import me.ahoo.cosec.runtime.snapshot.SourceModelScript.Companion.FAMILY
+import me.ahoo.cosec.runtime.snapshot.SourceModelScript.Companion.SHARED
+import me.ahoo.cosec.runtime.snapshot.SourceModelScript.Kind
+import me.ahoo.cosec.runtime.snapshot.SourceModelScript.On
+import me.ahoo.cosec.runtime.snapshot.SourceModelScript.Subscribe
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong
 
 /**
- * Runs one [SlotModelScript] against a real [SnapshotSource] whose every thread is [SlotModelThreads], checking the
- * [SlotModel] after each event. [slots] makes each key's [KeyRunner], with the K it drains (RFC 0013 B2b).
+ * Runs one [SourceModelScript] against a real [SnapshotSource] whose every thread is [SourceModelThreads], checking the
+ * [SourceModel] after each event. [runners] makes each key's [KeyRunner], with the K it drains (RFC 0013 B2b).
  * [failure] is the first violation, with the event it followed; [reached] says which
  * kinds of event the run got to, for the vacuity report.
  */
-internal class SlotModelRun(
-    private val script: SlotModelScript,
-    private val slots: ModelSlots = ModelSlots.runner(KeyRunner.K),
+internal class SourceModelRun(
+    private val script: SourceModelScript,
+    private val runners: ModelRunners = ModelRunners.runner(KeyRunner.K),
 ) {
-    private val threads = SlotModelThreads()
+    private val threads = SourceModelThreads()
     private val options = SnapshotOptions(
         maxApps = 1,
         maxTenants = 1,
@@ -45,9 +45,9 @@ internal class SlotModelRun(
         maxAbsent = 1,
         reloadConcurrency = script.lanes,
     )
-    private val model: SlotModel
-    private val store: SlotModelStore
-    private val compiler: SlotModel.Compiler
+    private val model: SourceModel
+    private val store: SourceModelStore
+    private val compiler: SourceModel.Compiler
     private lateinit var source: SnapshotSource<ModelCompiled, ModelCompiled>
     private var dropNext = false
 
@@ -56,20 +56,20 @@ internal class SlotModelRun(
     var failure: String? = null
         private set
     val reached = sortedSetOf<String>()
-    val counts: SlotModel.Counts get() = model.counts
+    val counts: SourceModel.Counts get() = model.counts
 
     /** The event now running, which the store stamps each read with. */
     private val moment = longArrayOf(0)
 
     init {
-        store = SlotModelStore({ moment[0] }, { threads.nanos })
-        model = SlotModel(store, threads, options, FAMILY)
+        store = SourceModelStore({ moment[0] }, { threads.nanos })
+        model = SourceModel(store, threads, options, FAMILY)
         compiler = model.Compiler(::recompile)
         threads.onPeriodic = { model.masks(null) }
     }
 
     /** Runs the script; stops at the first violation. */
-    fun run(): SlotModelRun {
+    fun run(): SourceModelRun {
         script.initial.forEach(store::put)
         store.duringSubscribe = ::duringSubscribe
         val ticker = AtomicLong()
@@ -80,7 +80,7 @@ internal class SlotModelRun(
         step("settle") { settle() }
         if (failure == null) step("resets") { model.checkResets() }
         if (failure == null && model.closedAt < 0) {
-            val lag = SlotModelLag(script, store, threads, model, options, ::checkNow)
+            val lag = SourceModelLag(script, store, threads, model, options, ::checkNow)
             step("lag") { lag.run() }
         }
         if (failure == null && model.closedAt < 0) step("converge") { converge() }
@@ -114,7 +114,7 @@ internal class SlotModelRun(
             threads.scheduler,
             ticker::incrementAndGet,
             threads.housekeeping,
-            slots.factory(model),
+            runners.settings(model),
         )
         source.nanoTime = threads.nanoTime
     }
@@ -142,13 +142,13 @@ internal class SlotModelRun(
 
     private var closed = false
 
-    private fun apply(event: SlotModelScript.Event) = when (event.kind.on) {
+    private fun apply(event: SourceModelScript.Event) = when (event.kind.on) {
         On.STORE -> onStore(event)
         On.SOURCE -> onSource(event)
         On.THREADS -> onThreads(event)
     }
 
-    private fun onStore(event: SlotModelScript.Event) {
+    private fun onStore(event: SourceModelScript.Event) {
         val key = event.key
         when (event.kind) {
             Kind.PUT -> write(key!!) { store.put(key) }
@@ -168,7 +168,7 @@ internal class SlotModelRun(
         }
     }
 
-    private fun onSource(event: SlotModelScript.Event) {
+    private fun onSource(event: SourceModelScript.Event) {
         val key = event.key
         masks(event)
         when (event.kind) {
@@ -186,7 +186,7 @@ internal class SlotModelRun(
         }
     }
 
-    private fun onThreads(event: SlotModelScript.Event) {
+    private fun onThreads(event: SourceModelScript.Event) {
         when (event.kind) {
             Kind.COMPILE -> if (threads.compiles.isNotEmpty()) threads.runCompile(event.pick % threads.compiles.size)
             Kind.COMPILE_FAILS -> compiler.failNext = true
@@ -203,7 +203,7 @@ internal class SlotModelRun(
     }
 
     /** A held read answers: with what the key held when it started, or, released late, with what it holds now. */
-    private fun release(event: SlotModelScript.Event) {
+    private fun release(event: SourceModelScript.Event) {
         val read = pick(store.pending.filterNot { it.hung }, event.pick) ?: return
         if (model.ended(read)) reached += "abandoned read answered"
         read.release(atStart = event.kind == Kind.RELEASE)
@@ -211,9 +211,9 @@ internal class SlotModelRun(
 
     /**
      * What else than a reset may read a key during [event]: a reset is only shown to reload a key when nothing else
-     * started a read of it since ([SlotModel.checkResets]).
+     * started a read of it since ([SourceModel.checkResets]).
      */
-    private fun masks(event: SlotModelScript.Event) {
+    private fun masks(event: SourceModelScript.Event) {
         when (event.kind) {
             Kind.REVALIDATE, Kind.RECOMPILE, Kind.TICK -> model.masks(null)
             Kind.REQUEST, Kind.RELOAD, Kind.SETTLED, Kind.PREWARM -> {

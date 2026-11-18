@@ -22,21 +22,22 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.CompletableFuture
 
 /**
- * One key run by [KeyTransitions] (RFC 0013 B2b, step 2b): each [KeySlot] call becomes an event offered to its
- * [KeyDrain], whose effects [KeyEffects] executes. `peek`'s members are [KeySlot]'s, and a request's hit is answered
- * outside the queue, on the caller's thread. The constructor starts nothing: no timer, no read, nothing offered.
+ * One key of a [SnapshotSource], as its callers see it, run by [KeyTransitions] (RFC 0013 B2b): each call becomes an
+ * event offered to its [KeyDrain], whose effects [KeyEffects] executes. Everything is asynchronous: an answer is a
+ * future, and no request is ever null. `peek`'s members are [PeekedKey]'s, and a request's hit is answered outside the
+ * queue, on the caller's thread. The constructor starts nothing: no timer, no read, nothing offered.
  * Dependencies go one way: this → [KeyDrain] → [KeyEffects], which reach back only through [KeyOwner], which this
  * implements.
  */
 internal class KeyRunner<T : Any>(
     key: SnapshotKey,
     compiler: SnapshotCompiler<T>,
-    private val context: SlotContext,
+    private val context: KeyContext,
     /** The events past their own a caller's thread drains. */
     k: Int = K,
     /** Tests only: where a test interleaves with this key's drain. */
     hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE,
-) : KeySlot<T>(key, context.ticker), KeyOwner<T> {
+) : PeekedKey<T>(key, context.ticker), KeyOwner<T> {
     private val family = context.families.firstOrNull { it.spec.kind == key.kind }
 
     @Volatile
@@ -54,8 +55,9 @@ internal class KeyRunner<T : Any>(
 
     override val draining: Boolean get() = !drain.quiet()
 
+    /** What one request waits for: the installed entry, or its own view of the load, bounded by the cold load timeout. */
     @Suppress("TooGenericExceptionCaught")
-    override fun request(): CompletableFuture<SnapshotEntry<T>> {
+    fun request(): CompletableFuture<SnapshotEntry<T>> {
         if (!removed) {
             installed?.let {
                 touch()
@@ -77,7 +79,8 @@ internal class KeyRunner<T : Any>(
         return waiter
     }
 
-    override fun usable(): CompletableFuture<SnapshotEntry<T>> {
+    /** The installed entry if it has not failed, otherwise the load in flight or a new one. */
+    fun usable(): CompletableFuture<SnapshotEntry<T>> {
         val entry = installed
         if (!removed && entry != null && entry.state !is DocumentState.Failed) {
             return CompletableFuture.completedFuture(entry)
@@ -85,25 +88,39 @@ internal class KeyRunner<T : Any>(
         return KeyWaiter.Entry<T>().also { offer(KeyEvent.Requested(Ask.Usable, it)) }
     }
 
-    override fun reload(force: Boolean): CompletableFuture<SnapshotEntry<T>> =
+    /** A load that starts after this call, in full when [force] (`SNP-13`); a removed key's goes to its current runner. */
+    fun reload(force: Boolean): CompletableFuture<SnapshotEntry<T>> =
         KeyWaiter.Entry<T>().also { offer(KeyEvent.Requested(Ask.Reload(force), it)) }
 
-    override fun reloadIfHeld(force: Boolean): CompletableFuture<Reloaded<T>> =
+    /** As [reload] for a key still held; a removed one is [Reloaded.Skipped]: revalidation, reset, recompile, retries. */
+    fun reloadIfHeld(force: Boolean): CompletableFuture<Reloaded<T>> =
         KeyWaiter.Held<T>().also { offer(KeyEvent.Requested(Ask.ReloadIfHeld(force), it)) }
 
-    override fun load(pass: Pass): CompletableFuture<Reloaded<T>> =
+    /**
+     * The load in flight, or a new one, counted as a read of [pass]. Skipped for a removed key, and for a load in flight
+     * longer than the store read timeout, which the pass does not wait for (`SNP-6`).
+     */
+    fun load(pass: Pass): CompletableFuture<Reloaded<T>> =
         KeyWaiter.Held<T>().also { offer(KeyEvent.Requested(Ask.Load(force = false, pass = pass), it)) }
 
-    override fun changed() = offer(KeyEvent.Changed)
+    /** A change notification: reload if this key is installed or loading. */
+    fun changed() = offer(KeyEvent.Changed)
 
-    override fun markRecompile(): CompletableFuture<Boolean> = CompletableFuture<Boolean>().also {
+    /** After the compile epoch moved: whether this key is to be loaded again (loading, or idle with a compiled entry). */
+    fun markRecompile(): CompletableFuture<Boolean> = CompletableFuture<Boolean>().also {
         offer(KeyEvent.Recompile(it))
     }
 
-    override fun evict(onlyIfEmpty: Boolean, claimedAbsent: Boolean?): CompletableFuture<Eviction> =
+    /**
+     * Removes this key if it is idle and, with [onlyIfEmpty], holds nothing. An eviction names the kind it chose the key
+     * for ([claimedAbsent]): refused when the key is of the other kind by now, and at the bound when the family's claim
+     * fails (`SNP-14`).
+     */
+    fun evict(onlyIfEmpty: Boolean, claimedAbsent: Boolean?): CompletableFuture<Eviction> =
         offerEviction(onlyIfEmpty, claimedAbsent)
 
-    override fun close() = drain.close()
+    /** The source is closing: the load in flight ends, answering its waiters with what is installed or a failure. */
+    fun close() = drain.close()
 
     override fun offer(event: KeyEvent<T>) = drain.offer(event)
 
@@ -125,9 +142,7 @@ internal class KeyRunner<T : Any>(
     /** An offer to the key's current runner, not a call chain. */
     @Suppress("UNCHECKED_CAST")
     override fun redispatched(event: KeyEvent.Requested) {
-        val current = context.current(key)
-        check(current is KeyRunner<*>) { "A runner's request went to [$current], not a runner." }
-        (current as KeyRunner<T>).offer(event)
+        (context.current(key) as KeyRunner<T>).offer(event)
     }
 
     override fun dropIfEmpty() {
@@ -143,6 +158,12 @@ internal class KeyRunner<T : Any>(
     override fun hinted(removed: Boolean, idle: Boolean) {
         if (removed) this.removed = true
         idleHint = idle
+    }
+
+    /** Tests only (RFC 0013 B2b): the K and the hooks each key's runner is made with; the defaults in production. */
+    class Settings(val k: Int = K, val hooksOf: (SnapshotKey) -> KeyDrain.Hooks = { KeyDrain.Hooks.NONE }) {
+        fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: KeyContext): KeyRunner<T> =
+            KeyRunner(key, compiler, context, k, hooksOf(key))
     }
 
     internal companion object {

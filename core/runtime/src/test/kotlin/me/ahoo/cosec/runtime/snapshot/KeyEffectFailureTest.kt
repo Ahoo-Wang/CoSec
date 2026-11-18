@@ -126,12 +126,12 @@ class KeyEffectFailureTest {
     }
 
     /**
-     * A holds nothing in flight and no thread is in its drain: its flag was released after its last step. Not [KeySlot.idle]
+     * A holds nothing in flight and no thread is in its drain: its flag was released after its last step. Not [KeyRunner.idle]
      * alone, which the drain publishes with the step's state, before it runs the step's effects.
      */
     private fun SnapshotSource<*, *>.quietA(): Boolean = slotA().idle() && lastReleaseOfA > lastStepOfA
 
-    private fun SnapshotSource<*, *>.slotA(): KeySlot<*> =
+    private fun SnapshotSource<*, *>.slotA(): KeyRunner<*> =
         families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue("app-a")
 
     /**

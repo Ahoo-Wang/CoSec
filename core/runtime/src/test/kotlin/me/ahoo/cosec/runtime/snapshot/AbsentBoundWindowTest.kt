@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong
  * Deterministic: housekeeping runs only when a test says, and a held read answers only when released.
  */
 class AbsentBoundWindowTest {
-    private val threads = SlotModelThreads()
+    private val threads = SourceModelThreads()
     private val store = ControllableStore().apply { put(SnapshotKey.Platform, document(1)) }
     private val compiler = FakeCompiler()
     private val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxAbsent = 1)

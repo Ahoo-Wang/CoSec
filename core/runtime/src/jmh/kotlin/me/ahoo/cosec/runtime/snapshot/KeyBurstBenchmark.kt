@@ -19,7 +19,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
-import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -208,12 +207,6 @@ open class KeyBurstBenchmark {
         fun releaseAll() = held.keys.forEach(::release)
     }
 
-    /** Runners draining [k] events past their own. */
-    private class KRunners(private val k: Int) : SlotFactory {
-        override fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: SlotContext): KeySlot<T> =
-            KeyRunner(key, compiler, context, k)
-    }
-
     private companion object {
         const val OFFERING = 8
         const val PER_THREAD = 1_250
@@ -224,6 +217,6 @@ open class KeyBurstBenchmark {
         const val MAX_JOINS = 1_000_000
         const val TEXT = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"}"""
 
-        fun factory(name: String): SlotFactory = KRunners(name.removePrefix("k").toInt())
+        fun factory(name: String): KeyRunner.Settings = KeyRunner.Settings(name.removePrefix("k").toInt())
     }
 }

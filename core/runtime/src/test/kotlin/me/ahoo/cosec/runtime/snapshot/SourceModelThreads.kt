@@ -31,7 +31,7 @@ import java.util.function.LongSupplier
  * the compile pool and housekeeping are queues the script takes tasks from, and the scheduler keeps virtual time, which
  * moves only when the script advances it, with the wall clock and `nanoTime` together.
  */
-internal class SlotModelThreads {
+internal class SourceModelThreads {
     val clock = ManualClock()
 
     /** Virtual monotonic time: [SnapshotSource.nanoTime], and what the scheduler's tasks are due at. */

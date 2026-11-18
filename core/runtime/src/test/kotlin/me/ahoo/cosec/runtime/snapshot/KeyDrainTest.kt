@@ -65,7 +65,7 @@ class KeyDrainTest {
         keyRunners(k, hooks) { everyKey || it == APP_A },
     )
 
-    private fun SnapshotSource<*, *>.slotA(): KeySlot<*> = families.first {
+    private fun SnapshotSource<*, *>.slotA(): KeyRunner<*> = families.first {
         it.spec.kind == SnapshotKind.APP
     }.slots.getValue("app-a")
 

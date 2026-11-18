@@ -50,7 +50,7 @@ internal class KeyDrain<T : Any>(
     private val key: SnapshotKey,
     private val transitions: KeyTransitions<T>,
     private val effects: KeyEffects<T>,
-    private val context: SlotContext,
+    private val context: KeyContext,
     /** The events past their own a caller's thread drains: provisional until step 2b-ii measures it. */
     private val k: Int,
     /** The runner, as far as the drain reaches it: claims and give-backs (`SNP-14`), and what readers see. */

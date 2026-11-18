@@ -17,7 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.runtime.snapshot.SlotModelStore.Content
+import me.ahoo.cosec.runtime.snapshot.SourceModelStore.Content
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -47,9 +47,9 @@ internal class ModelCompiled(val key: SnapshotKey, val revision: Long, val input
  *    their documents that started after the call has ended (`SNP-13`), `recompile` with nothing older than its inputs
  *    left in service; everything once the source is closed or the run settles.
  */
-internal class SlotModel(
-    private val store: SlotModelStore,
-    private val threads: SlotModelThreads,
+internal class SourceModel(
+    private val store: SourceModelStore,
+    private val threads: SourceModelThreads,
     private val options: SnapshotOptions,
     private val familyKeys: List<SnapshotKey>,
 ) {
@@ -101,7 +101,7 @@ internal class SlotModel(
         var lostWritesChecked = 0
 
         /** [lostWritesChecked] by what went wrong meanwhile. */
-        val lostWritesByLag = java.util.EnumMap<SlotModelScript.Lag, Int>(SlotModelScript.Lag::class.java)
+        val lostWritesByLag = java.util.EnumMap<SourceModelScript.Lag, Int>(SourceModelScript.Lag::class.java)
     }
 
     /** A reset of the change channel at [at]: each of [keys], installed then, is read again after it (`SNP-6`). */
@@ -196,7 +196,7 @@ internal class SlotModel(
      * Whether the source is done with [read]: it answered, or the source gave it up, which it does once
      * `storeReadTimeout` has passed since the read started (the timer that ends it falls due then) or once it closes.
      */
-    fun ended(read: SlotModelStore.Read): Boolean =
+    fun ended(read: SourceModelStore.Read): Boolean =
         read.answered || read.abandoned || closedAt >= 0 ||
             threads.nanos >= read.startedNanos + options.storeReadTimeout.toNanos()
 
@@ -247,7 +247,7 @@ internal class SlotModel(
     fun isInstalled(key: SnapshotKey): Boolean = key in lastInstall
 
     /** A write of [key] whose notification was lost was checked to be installed in time. */
-    fun lostWriteChecked(lag: SlotModelScript.Lag) {
+    fun lostWriteChecked(lag: SourceModelScript.Lag) {
         counts.lostWritesChecked++
         counts.lostWritesByLag.merge(lag, 1, Int::plus)
     }

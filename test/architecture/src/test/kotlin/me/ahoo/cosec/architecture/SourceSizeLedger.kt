@@ -33,7 +33,8 @@ object SourceSizeLedger {
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt",
             // +3 (SNP-13): what the futures of revalidate and recompile promise, in their KDoc.
             // +3 (B2b gate 1): the test seam for housekeeping, a parameter with its KDoc and its import.
-            // +2 (B2b step 2b): the SlotFactory seam, a parameter with its KDoc, and the context's construction wrapped.
+            // +2 (B2b step 2b): the runner seam (`KeyRunner.Settings` since step 4), a parameter with its KDoc, and the
+            // context's construction wrapped.
             // -2 (B2b step 3): close runs the pending hand-offs, and it enters by a CAS on one line, not three.
             450,
             Disposition.Stays(

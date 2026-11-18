@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
-index c9a077a2..1f08a6a6 100644
+index 941e5d39..ab3bb4ec 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
-@@ -56,7 +56,7 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: Slot
+@@ -56,7 +56,7 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: KeyC
       * flight; only one with no read can be, so [startRead] never succeeds after this does.
       */
      fun abandonIfStalled(now: Long): Boolean =
