@@ -28,6 +28,7 @@ import {
 } from './jwtTokenManager.js';
 import { ResourceAttributionRequestInterceptor } from './resourceAttributionRequestInterceptor.js';
 import type { TokenRefresher } from './tokenRefresher.js';
+import type { TokenRevoker } from './tokenRevoker.js';
 import { TokenStorage } from './tokenStorage.js';
 import { UnauthorizedErrorInterceptor } from './unauthorizedErrorInterceptor.js';
 import type { DeviceIdStorageCapable } from './types.js';
@@ -167,6 +168,14 @@ export interface CoSecConfig
    * ```
    */
   readonly tokenRefresher?: TokenRefresher;
+
+  /**
+   * What ends a session at the server on `tokenManager.logout()`:
+   * {@link CoSecTokenRevoker} of CoSec's logout route
+   * (`cosec.authentication.login.logout.path`). Used only with a
+   * `tokenRefresher`.
+   */
+  readonly tokenRevoker?: TokenRevoker;
 
   /**
    * Provider for resolving space identifiers from requests.
@@ -464,6 +473,7 @@ export class CoSecConfigurer implements FetcherConfigurer {
           rotationLeeway: config.rotationLeeway,
           refreshRetryDelays:
             config.refreshRetryDelays ?? DEFAULT_REFRESH_RETRY_DELAYS,
+          tokenRevoker: config.tokenRevoker,
         },
       );
     }

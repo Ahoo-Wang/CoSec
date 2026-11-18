@@ -92,6 +92,40 @@ space.
 
 Never log, embed, or commit real tokens.
 
+## Logging out
+
+Call `logout()` for the user's "Log out": it ends the session at the server
+(CoSec's logout route, `cosec.authentication.login.logout.path`) and removes
+the pair here. Call `tokenStorage.signOut()` when the session is already known
+to be over, or when the application ends it through a logout endpoint of its
+own: it only forgets the pair here, and the session stays refreshable at the
+server until it ends there.
+
+```ts
+const cosec = new CoSecConfigurer({
+  tokenRefresher: new CoSecTokenRefresher({
+    fetcher: api,
+    endpoint: '/auth/refresh',
+  }),
+  tokenRevoker: new CoSecTokenRevoker({
+    fetcher: api,
+    endpoint: '/auth/logout',
+  }),
+});
+cosec.applyTo(api);
+
+await cosec.tokenManager?.logout();
+```
+
+A refresh in flight is waited for, and the session is ended with the pair it
+stored. `logout()` resolves when the server ended the session (`204`) or
+answered `401` (it was not usable any more), and removes the pair here on every
+outcome. A `LogoutUnconfirmedError` (`503`, `500`, a network failure, no
+`tokenRevoker`) asks the application to tell the user that the server may still
+hold the session, until it ends there, at the latest when its refresh token
+expires. It carries no token: `problem` and `status` say what the server
+answered.
+
 ## What the CoSec 8.0 application must allow
 
 The starter serves the refresh route when `cosec.authentication.login.refresh.path`

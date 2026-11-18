@@ -33,6 +33,7 @@ export * from './requestTrust.js';
 export * from './resourceAttributionRequestInterceptor.js';
 export * from './spaceIdProvider.js';
 export * from './tokenRefresher.js';
+export * from './tokenRevoker.js';
 export * from './tokenStorage.js';
 export * from './types.js';
 export * from './unauthorizedErrorInterceptor.js';
