@@ -163,7 +163,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-because-redis-is-read-from-replicas
 - **`JWT is enabled, but no TokenStore records revoked tokens`** or **`Tokens are verified, but no revocation reader
   is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
-  `RevocationReader` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+  `RevocationReader` and `TokenFamilyStore` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+  A service that only verifies another service's tokens must read the **issuer's** revocations (`cosec-cocache` on the
+  issuer's Redis, same `cosec.key-prefix`): `RevocationReader.NONE` silences the message and accepts every revoked token
+  (https://cosec.ahoo.me/scenarios/resource-server).
 - **`Property [cosec.jwt.secret] must not be blank`**: set the secret (same algorithm and secret as the issuer).
   **`Property [cosec.jwt.secret] has <n> bytes, and HMAC256 needs at least 32`**: the secret must be at least 32, 48 or
   64 UTF-8 bytes for `hmac256`, `hmac384`, `hmac512` (RFC 7518 §3.2); set a longer one on the issuer and every verifier.

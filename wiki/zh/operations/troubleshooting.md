@@ -544,7 +544,7 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 ```
 
 启用 JWT 时令牌吊销始终开启，starter 绝不会把吊销写进空处。添加 `cosec-cocache`，注册你自己的 `TokenStore`、
-`RevocationReader` 和 `TokenFamilyStore` bean，或者在既不签发也不校验令牌的服务中关闭 JWT。
+`RevocationReader` 和 `TokenFamilyStore` bean，或者在既不签发也不校验令牌的服务中关闭 JWT。只校验另一个服务所签发令牌的服务同样需要它们，并且读取器必须读取签发方的吊销：`RevocationReader.NONE` 能让这条消息消失，同时接受每一个已吊销的令牌（[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)）。
 
 ### JWT 密钥错误导致启动失败 {#startup-fails-with-a-jwt-secret-error}
 

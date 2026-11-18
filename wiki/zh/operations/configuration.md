@@ -199,7 +199,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.jwt.session.rotation-leeway` | duration | `30s` | 刷新之后，被它替换的那一对在多长时间内会得到一对当前一代的令牌，而不是结束会话：客户端重试响应丢失的刷新的窗口，两个标签页同时刷新时也都能保留一对令牌。请覆盖客户端的超时加一次重试。在窗口内得到应答的副本会在窗口之后的下一次刷新时被发现。 |
 
 启用 JWT 时，除非吊销和会话都能被记录和读取，否则启动失败：需要 `cosec-cocache`，或你自己的 `TokenStore`、
-`RevocationReader` 和 `TokenFamilyStore` bean。
+`RevocationReader` 和 `TokenFamilyStore` bean。只校验另一个服务所签发令牌的服务读取签发方的吊销（[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)）。
 
 ## API key {#api-keys}
 

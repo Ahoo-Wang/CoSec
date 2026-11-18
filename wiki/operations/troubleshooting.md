@@ -682,7 +682,9 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 
 Token revocation is always on with JWT, and the starter never revokes into nothing. Add `cosec-cocache`, register a
 `TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own, or turn JWT off in a service that neither
-issues nor verifies tokens.
+issues nor verifies tokens. A service that only verifies another service's tokens needs them too, and the reader must
+read the issuer's revocations: `RevocationReader.NONE` makes the message go away and accepts every revoked token
+([A service that verifies tokens another service issues](../scenarios/resource-server.md)).
 
 ### Startup fails with a JWT secret error
 

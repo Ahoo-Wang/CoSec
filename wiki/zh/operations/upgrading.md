@@ -17,6 +17,8 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 [`7.x` 分支上的升级指南](https://github.com/Ahoo-Wang/CoSec/blob/7.x/wiki/operations/upgrading.md)升到 7.x（包括其中的数据迁移），
 再回到这里。`cosec-migrate convert` 拒绝不是 7.0 布局的 Redis 数据。从 4.x 和 5.x 升级，以及从任何把策略存放在你自己数据库里的版本升级，只有一条路：[从 4.x、5.x 和 6.x 升级](#from-4-x-5-x-and-6-x)。
 
+**没有自己的 CoSec 数据？** 没有策略、也没有 CoSec 的 Redis 数据需要转换的应用（基于 CoSec API 构建的库，或在自己代码中决策的 6.x inject 模式服务）没有任何东西要迁移。从 6.x 升级时，跳过数据相关的章节（[迁移数据](#migrating-the-data)、[回滚](#rollback)）和 7.x 指南中的数据步骤；阅读代码与配置的章节：[8.0 的决策有何不同](#what-8-0-decides-differently)、[认证的变化](#authentication)、[模块、制品和包](#modules-artifacts-and-packages)、[已移除和被取代的 API](#removed-and-replaced-apis) 与[已移除和已重命名的属性](#removed-and-renamed-properties)。它们写的是 7.x 的类名和键，6.x 大多与之相同。校验另一个服务所签发令牌、自己没有策略的服务，是[单独的一个场景](../scenarios/resource-server.md)。
+
 简要地说，有这些不同：
 
 - **策略是文档。** 一份平台文档、每个应用一份应用文档、每个租户一份租户文档，取代 7.x 的策略、全局策略索引、应用权限和角色授权。
@@ -313,7 +315,7 @@ spec:
 
 ### 从 4.x、5.x 和 6.x 升级 {#from-4-x-5-x-and-6-x}
 
-7.x 之前的版本没有单独的迁移工具。受支持的路径是 `cosec-migrate convert --from-files`：你把策略导出为它读取的三个文件，它像转换 7.x 的数据一样转换它们。数据在 Redis 里的 6.x，先经过 7.x 更省事，如本节开头所说。本页其余关于数据的内容，从这里起都适用。
+7.x 之前的版本没有单独的迁移工具。受支持的路径是 `cosec-migrate convert --from-files`：你把策略导出为它读取的三个文件，它像转换 7.x 的数据一样转换它们。数据在 Redis 里的 6.x，先经过 7.x 更省事，如本节开头所说。本页其余关于数据的内容，从这里起都适用。没有 CoSec 数据要转换的应用，把它们全部跳过（[没有自己的 CoSec 数据？](#_7-x-to-8-0)）。
 
 **这三个文件是什么。**`convert --from-files <dir>` 读取 `policies.json`（策略数组，每个策略有 `id`）、`global-policies.json`（适用于所有人的策略的 id 数组）和 `app-role-permissions.json`（数组，每个应用一项：它的权限列表 `appPermission` 和角色授权 `grants`）。它按 7.x 自己的反序列化器读取策略 JSON，4.3 写出的就是这种（`{"all": {}}`、`{"path": {...}}` 和 `{"authenticated": {}}` 对象，路径的简写是一个模式字符串）。`--from-redis` 只读取 7.0 的布局，所以读不了更老的存储。存储的权威来源是自己数据库的应用，自己写导出程序：按你的版本序列化每个策略的方式写出，并写这三个文件。一个很小的导出：
 
@@ -498,7 +500,7 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 #### 令牌吊销始终开启 {#token-revocation-is-always-on}
 
 `cosec.jwt.token-revocation.enabled` 已删除。启用 JWT 时，每个令牌都要检查是否已吊销；没有任何东西能回答这个检查时，启动失败：加上
-`cosec-cocache`（它带来 Redis 吊销存储），或者注册自己的 `TokenStore` 和 `RevocationReader` bean。7.x 中没有 `cosec-cocache` 时，starter
+`cosec-cocache`（它带来 Redis 吊销存储），或者注册自己的全部三个 bean：`TokenStore`、`RevocationReader` 和 `TokenFamilyStore`。启动一次只指出缺少的一个 bean，所以注册了前两个的宿主会在第三个上再次失败。7.x 中没有 `cosec-cocache` 时，starter
 使用一个什么都不记录的存储，登出悄无声息地不起作用。既不签发令牌也不读取令牌的服务可以改为设置 `cosec.jwt.enabled=false`
 （[登出与吊销](../integration/authentication.md#logout-and-revocation)）；只签发令牌的服务保持它开启，并配好存储（[只签发令牌的服务](../integration/authentication.md#a-service-that-only-issues-tokens)）。7.x 写下的吊销继续有效：8.0 从相同的 key（`<prefix>:token:revoked:*`）
 读取它们。吊销检查报告的错误返回 `503`，永远不会接受该令牌（`PIP-7`）。
@@ -507,6 +509,7 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 
 - 7.x 签发的令牌继续可用：8.0 读取同样的声明（`roles`、`policies`、`attributes`、`tenantId`），并按 7.x 的方式读取角色声明（`role` 在默认空间，
   `role@space` 只在该空间，规则 `MEM-3`）。
+- **6.x 签发的令牌**带有 6.1 的 `JwtTokenConverter` 所写的内容：`jti`、`sub`、`iat` 和 `exp`，以及主体拥有时的 `roles`（`role` 或 `role@space`）、`policies`、`attributes` 和字符串形式的 `tenantId`。只要持有相同的 `cosec.jwt.algorithm` 和 `cosec.jwt.secret`（长度不得短于下文要求），8.0 就能校验它们，并要求有 `jti`、`sub` 和 `exp`，6.x 总会设置它们。它们缺少的东西很要紧：**没有 `aud`**，所以请求没有应用（在没有 `cosec.authorization.scope.app-id` 的宿主上，`scope.appId` 为空，不读取任何应用文档；设置了它，每个这样的令牌都是 `403` `scope-rejected`，见[应用](../integration/authentication.md#apps)）；**没有会话声明**（`sid`、`auth_time`、`cosec.generation`），所以 8.0 的服务永远不会刷新 6.x 的令牌对：用户要在 8.0 的签发方重新登录。6.x 的签发方只有在 `cosec.jwt.token-revocation.enabled=true` 时才吊销，且按令牌 id 吊销；8.0 的校验方是否读取它写下的内容没有确定：不要指望 6.x 签发方的登出能到达 8.0 的校验方，在签发方升到 8.0 之前把访问令牌的有效期保持得短（[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)）。
 - **带 `act` 声明的令牌现在会被拒绝**，结果为 `token-invalid`（`IDN-4`）。7.x 忽略这个声明，因此 RFC 8693 委托令牌被当作它的 `sub`
   读取，执行方得到主体的权限。CoSec 自己从不签发这种令牌；接受其他签发方令牌的校验器在支持委托之前不得放行它们
   （[认证](../integration/authentication.md#tokens)）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时审计记录 `ALLOW`，
@@ -579,6 +582,16 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 在 CoSec 网关之后、自己校验令牌的服务不再收到 `Authorization` 头。要么在网关上设置 `cosec.gateway.identity.forward-authorization=true`，
 并经 `lb://` 或带 `cosec-identity: true` 的路由访问该服务，要么把该服务切换到 `cosec.pipeline.mode=gateway`。放在 `authorization` cookie 中的令牌在同一个开关下也会被移除。
+
+#### 在较旧的网关之后上线 inject 模式服务 {#rolling-out-an-inject-mode-service-behind-an-older-gateway}
+
+6.x 或 7.x inject 模式的服务位于一个网关之后，该网关转发客户端的 `Authorization` 头，并且不发送 `CoSec-Identity`。只要那个网关还在它前面，服务就不能直接切到 `cosec.pipeline.mode=gateway`，`main` 上有两个原因：gateway 模式的服务不读取令牌，所以没有 `CoSec-Identity` 的请求按匿名主体 `(0)` 继续，服务的每个调用方都是匿名的；而较旧的网关不会剥离客户端发送的 `CoSec-Identity` 头，服务却会相信它，于是任何能到达网关的人想是谁就是谁（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。可行的顺序：
+
+1. **服务先切到 `enforce`，校验网关转发的令牌。** 它需要签发方的 `cosec.jwt.secret` 和 `cosec.jwt.algorithm`、签发方的吊销，以及一份放行其已认证调用方的平台文档：[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)。请求的应用是令牌的 `aud`，不来自任何头：网关或客户端发送的 `CoSec-App-Id` 不会被读取。6.x 或 7.x 签发方的令牌没有 `aud`，所以在签发方升到 8.0 之前请求没有应用（[令牌与 API key](#tokens-and-api-keys)）。
+2. **网关升到 8.0**，并设置 `cosec.gateway.identity.forward-authorization=true`。不设置的话，8.0 网关会移除 `Authorization` 头，而仍在读取它的 `enforce` 服务会看到匿名请求。网关随后也会发送 `CoSec-Identity`；`enforce` 服务不读取它，它的适配器会把它从处理器看到的请求中剥离。
+3. **服务切到 `gateway` 模式**，当 8.0 网关成为唯一入口之后：`cosec.pipeline.mode=gateway`，不再需要吊销存储和文档，并配上只放行网关的网络策略。此后可以去掉 `forward-authorization`。
+
+停留在 `enforce` 模式的服务是一个完成的状态，不是一个步骤：它继续校验令牌，使用自己的文档和吊销读取器。
 
 #### 客户端发送令牌和作用域的方式变了 {#clients-send-tokens-and-scope-differently}
 
@@ -697,20 +710,21 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | 7.x | 8.0 |
 |---|---|
 | `Authorization`、`AuthorizeResult`、`SimpleAuthorization`、装饰器链（`DecisionAuthorization`、追踪、审计、指标、限流、影子） | pipeline（`cosec-runtime`）。用 `DecisionListener` bean 观察决策。 |
-| `SecurityPipeline`、`SecurityDecision`、`RequestParser`、`SecurityContextParser` | pipeline；凭证用 `Authenticator` bean。 |
+| `SecurityPipeline`、`SecurityDecision`、`RequestParser`、`SecurityContextParser`、`DefaultSecurityContextParser` | pipeline；凭证用 `Authenticator` bean。 |
 | `CoSecAuthorizationCustomizer` | `Authenticator`、`DecisionListener`、`AttributeProvider`、`MembershipProvider`、`RateLimiter` 的 bean。 |
-| `Policy`、`Statement`、`PermissionVerifier`、`ActionMatcher`、`ConditionMatcher`、`AppPermission`、`AppRolePermission`、`RolePermission` 以及 `cosec-api` 中其余的策略与权限模型 | 文档（[策略语言](../policies/language.md)）。覆写了 `verify` 的 `Statement` 没有对应物。 |
+| `Policy`、`Statement`、`PermissionVerifier`、`VerifyContext`、`RoleVerifyContext`、`VerifyResult`、`ActionMatcher`、`ConditionMatcher`、`AppPermission`、`AppRolePermission`、`RolePermission` 以及 `cosec-api` 中其余的策略与权限模型 | 文档（[策略语言](../policies/language.md)）。覆写了 `verify` 的 `Statement` 没有对应物。请求被放行时所在的应用，原先由 `VerifyContext` 携带，现在是 `SecurityContext.scope.appId`，已按令牌的 `aud` 校验（[应用](../integration/authentication.md#apps)）。 |
 | `ActionMatcherFactory`、`ConditionMatcherFactory`、`MatcherFactoryRegistry`、内置匹配器、OGNL 与 SpEL | 只有内置的动作和条件。自定义条件读取的值改由 `AttributeProvider` 提供（[扩展](../architecture/extending.md)）。 |
 | `AuthenticationProvider`、`DefaultAuthenticationProvider` | 声明 `Authentication` Bean：starter 会注册它们。 |
 | `AbstractRefreshTokenAuthentication` | `RefreshTokenAuthentication`，或你自己的 `Authentication<RefreshTokenCredentials>`。 |
 | `ApiKeyStore` | 查找 key 用 `ApiKeyReader`；管理 key 用 `InMemoryApiKeyStore` 或 `RedisApiKeyStore` Bean。 |
 | `BlockingAware` | 无：没有条件会执行代码。阻塞的查询放进会挂起的 `AttributeProvider`。 |
+| `CoSecPrincipal.anonymous` | `!CoSecPrincipal.authenticated`：`authenticated` 在凭证证明了主体时为 true，由管道声明，从不从 id 读取。匿名主体的 id 仍是 `CoSecPrincipal.ANONYMOUS_ID`。 |
 | `RootPrincipalMatcher`、`CoSecPrincipal.isRoot`、`root-enabled` | break-glass 绑定（[root 变为 break-glass](#root-becomes-break-glass)）。 |
 | `BlacklistChecker` | 放在 `AttributeProvider` bean（`BlacklistAttributeProvider`）后面的 `BlacklistSource`。 |
 | `RequestAttributesAppender`、`GatewayRouteRequestAttributesAppender` | `AttributeProvider`。 |
 | `SimpleSecurityContext`、扩展属性 `CoSecPrincipal.tenant` | 无：请求的 `SecurityContext` 由管道创建。测试中请 mock 或自行实现该接口；租户是 `SecurityContext.tenantId`。 |
 | `cosec-core` 的主体与租户包装类：`SimplePrincipal`、`SimpleTenantPrincipal`、`TenantPrincipal`、`TokenPrincipal`、`TokenTenantPrincipal`、`SimpleTokenPrincipal`、`SimpleTokenTenantPrincipal`；`SimpleTenant`、`Tenant`、`TenantCapable` | 令牌为之签发的是 `TokenSubject`（`me.ahoo.cosec.login.token`）：主体的 `id`、它所针对的 `app` 和 `tenant`、声明的 `roles` 和 `policies`，以及 `attributes`。`Authentication` 返回它，`TokenConverter` 把它变成令牌（[认证](../integration/authentication.md)）。请求读取的是 `CoSecPrincipal`（`SecurityContext.principal`），其租户在 `SecurityContext.tenantId` 中。租户 id 是 `TenantId.DEFAULT` 和 `TenantId.PLATFORM`（`me.ahoo.cosec.model`）。 |
-| `RoleCapable`、`PolicyCapable`（主体的 `roles` 和 `policies`） | 主体的成员关系 `Memberships`（`me.ahoo.cosec.model`），来自令牌的声明或 `MembershipProvider`。对请求生效的角色是 `SecurityContext.scope.roles`。 |
+| `RoleCapable`、`PolicyCapable`（主体的 `roles` 和 `policies`） | 主体的成员关系 `Memberships`（`me.ahoo.cosec.model`），来自令牌的声明或 `MembershipProvider`。对请求生效的角色是 `SecurityContext.scope.roles`：请求所在空间中的角色，用裸名称表示（`editor`，而不是 `editor@team-a`）。主体在其他空间中的角色不在上下文中，附加给它的策略也不在：令牌或成员关系提供方的附加策略 id 在 8.0 中不暴露。要根据附加策略原本的含义分支，就检查该策略放行的某个动作（[代码中的权限检查](../integration/checks.md)），或者把权限给角色。 |
 | `cosec-api` 的 `String` 别名 `RoleId`、`PolicyId` 和 `PermissionId` | `RoleId` 和 `PolicyId` 是 `me.ahoo.cosec.model` 的值类，名字相同、包不同：`RoleId("admin")`，用 `.value` 取得字符串。`PermissionId`：无。权限是一个动作，由策略或目录条目授予（[角色权限](../policies/role-permissions.md)）。 |
 | `KafkaAuditEventSink` | `KafkaAuditListener`，一个 `DecisionListener`，classpath 上有 `cosec-kafka` 时由 starter 注册（[可观测性](./observability.md)）。记录的 key 不变，value 是审计事件（[可观测性的变化](#observability-changes)）。 |
 | `PolicyRepository`、`AppRolePermissionRepository`、Redis 仓库与缓存、`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`、对 `AppPermissionCache`/`RolePermissionCache` 的写入 | 写入用控制面的 HTTP API，由你自己的客户端调用（[外部事实源同步角色](../scenarios/external-source.md)）；第一次写入用 `cosec-migrate publish`。 |
@@ -722,8 +736,8 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `cosec-api` 中 7.x 的请求模型：`Request`、`Attributes`、`AppIdCapable`、`DeviceIdCapable`、`RequestIdCapable`（及其别名 `AppId`、`DeviceId`、`RequestId`）、`COSEC_EXTEND_KEY_PREFIX`、`SpaceIdCapable.SPACE_ID_KEY`；`cosec-core` 的 `RequestSecurityContexts` 和 `InvalidRequestPathException` | `SecurityContext.deviceId` 和 `SecurityContext.requestId` 回答 `DeviceIdCapable` 和 `RequestIdCapable` 原来给出的东西（客户端的 `CoSec-Device-Id`，没有发送时为空；CoSec 在审计记录和问题响应中使用的 id）。适配器读取 `HttpFacts`，安全上下文携带校验后的 `scope`；应用没有 `Request` 可用。`SpaceIdCapable`、`SpacedRoleId` 和别名 `SpaceId` 也已删除：空间 id 是 `me.ahoo.cosec.model` 的值类 `SpaceId`，请求的空间是 `SecurityContext.scope.spaceId`，空间中的角色写作 `role@space`。 |
 | `InternalIds`（`cosec-api`） | 无。 |
 | `me.ahoo.cosec.limiter.RateLimiter` 及其 `LocalRateLimiter`、`RedisRateLimiter`（`cosec-cocache`） | 挂起的 SPI `me.ahoo.cosec.spi.ratelimit.RateLimiter`；starter 注册它的 `LocalRateLimiter` 或 `ReactiveRedisRateLimiter`（[限流](../policies/rate-limiting.md)）。`RateLimit` 和 `RateLimitResult` 保留。 |
-| `Jwts.toPrincipal(String)`、`Jwts.decode`、`Jwts.verifyTimeClaims` | 无：`Jwts` 是 `cosec-jwt` 的内部类。用会校验签名的 `TokenVerifier.verify` 把令牌变成主体。 |
-| `PrincipalConverter`、`TokenVerifier.toPrincipal` | `TokenVerifier.verify`。 |
+| `Jwts.toPrincipal(String)`、`Jwts.decode`、`Jwts.verifyTimeClaims` | 无：`Jwts` 是 `cosec-jwt` 的内部类。用 `TokenVerifier.verify` 把令牌变成主体，它检查签名、过期时间和声明；然后对它的返回值调用 `TokenRevocation.check`（`me.ahoo.cosec.runtime.token`，starter 的 bean）：只做 `verify` 会接受已吊销的令牌。无法读取的吊销存储会抛出 `RevocationUnavailableException`，由你的代码决定怎么办（[在管道之外验证令牌](../integration/authentication.md#verifying-a-token-outside-the-pipeline)）。 |
+| `PrincipalConverter`、`TokenVerifier.toPrincipal` | `TokenVerifier.verify`，然后对其结果调用 `TokenRevocation.check`（starter 的 bean），如上（[在管道之外验证令牌](../integration/authentication.md#verifying-a-token-outside-the-pipeline)）。 |
 | `Authentication.authenticate`、`TokenCompositeAuthentication.authenticateAsToken`、社交登录提供方：`Mono<...>` | 直接返回值的挂起函数；登录失败时抛出异常（[登录](../integration/authentication.md#logging-in)）。 |
 | 作为 object 的 `DefaultAuthenticationProvider` 和 `SocialProviderManager` | 改为类，每个应用上下文一个实例：请注入 `AuthenticationProvider` 或 `SocialProviderManager` Bean。 |
 | `AuthorizationChecker.check(...)`：`Mono<Boolean>` | `AuthorizationChecker.check(security, action, resource)`，挂起函数；`cosec-webflux` 提供 `Mono<Boolean>` 形式，`cosec-webmvc` 提供阻塞形式（[代码中的检查](../integration/checks.md)）。 |
@@ -769,7 +783,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 | `cosec.authentication.social.` | `cosec.authentication.login.social.` |
 | `cosec.authorization.allow-query-token` | `cosec.pipeline.allow-query-token` |
 | `cosec.api-key.header` | `cosec.pipeline.api-key-header` |
-| `cosec.authorization.enabled` | 已删除。`cosec.enabled=false` 关闭每一个 CoSec bean，登录和签发令牌也在内，所以让用户登录而不执行任何授权的服务不用它（[只签发令牌的服务](../integration/authentication.md#a-service-that-only-issues-tokens)）。 |
+| `cosec.authorization.enabled` | 已删除，它的替代是一份文档，不是一个开关：服务用平台文档决策，在文档装入之前每个请求都是 `503`，就绪探针拒绝流量。`cosec.enabled=false` 关闭每一个 CoSec bean，登录和签发令牌也在内，所以让用户登录而不执行任何授权的服务不用它（[只签发令牌的服务](../integration/authentication.md#a-service-that-only-issues-tokens)）。校验另一个服务所签发的令牌并在自己代码中决策的服务，在 `enforce` 模式下运行，用一份放行其已认证调用方的文档，并且必须读取签发方的吊销（[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)）。 |
 | `cosec.authorization.local-policy.` | 已删除：用 `cosec-migrate` 转换并发布这些文件（[迁移数据](#migrating-the-data)）。 |
 | `cosec.authorization.root-enabled` | 已删除：root 变为 break-glass（[root 变为 break-glass](#root-becomes-break-glass)）。 |
 | `cosec.authorization.cache.enabled` | 已删除：快照缓存是 `cosec.authorization.snapshot.*`。 |

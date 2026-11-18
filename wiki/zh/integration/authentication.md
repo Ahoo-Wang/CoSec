@@ -148,6 +148,8 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 把它作为第一份平台文档发布（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。它也允许了控制 API 的路径，但控制面会把它的每一步再以调用方的身份授权一次，所以匿名调用方在那里仍是 `401`；只签发令牌的服务不要引入 `cosec-control`。[`wiki/examples/token-issuer`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/token-issuer/scenarios) 里的场景检查匿名请求和带令牌的请求都被允许。
 
+反过来的方向，即只校验这类服务所签发的令牌并在自己的代码中决策的服务，是[单独的一个场景](../scenarios/resource-server.md)：它读取签发方的吊销。
+
 ## 会话 {#sessions}
 
 登录会开始一个**会话**，即一族令牌对：一个 id（`sid`）、用户登录的时间（`auth_time`）和一个代数（`cosec.generation`），每一对令牌的两个令牌都带有它们。会话保存在 Redis 中（`<cosec.key-prefix>:token:family:<sid>`，[存储](../operations/storage.md#redis-keys)），每个会话一个 key，保留到会话的有效期结束（结束的会话被标记，而不是删除）。它在登录和[租户切换](#switching-tenant-and-app)时写入，在令牌刷新或吊销时读写，从不在请求时读取。
@@ -240,7 +242,7 @@ suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext
 
 ## 登出与吊销 {#logout-and-revocation}
 
-JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore`、`RevocationReader` 和 `TokenFamilyStore` Bean。开启 JWT 但缺少其中任何一个时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验、从不吊销令牌的服务仍然需要这三者（或 `cosec-cocache`）；既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
+JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore`、`RevocationReader` 和 `TokenFamilyStore` Bean。开启 JWT 但缺少其中任何一个时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验另一个服务签发的令牌的服务同样需要这三者（或 `cosec-cocache`），并且它必须读取**签发方**的吊销，否则它会接受签发方已吊销的令牌，直到令牌过期：见[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)。`RevocationReader.NONE` 只用于任何地方、任何人都不吊销的令牌。既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
 
 设置了 `cosec.authentication.login.logout.path` 时，starter 提供登出路由（`IDN-24`），即该路径的 `POST`，与每个路由一样受 CoSec 管辖，所以文档必须允许对它的匿名 `POST`（不在 Spring Cloud Gateway 上）：请求体是令牌对，无论访问令牌是否已过期；会话被结束时应答 `204`，会话早已结束时也是 `204`。请求体不是令牌对时为 `400`，令牌对无法通过校验（包括刷新令牌已过期）时为 `401`，存储无法应答时为 `503`。否则，在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，结束它的会话，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。已吊销的令牌会抛出 `TokenRevokedException`：请像提供的路由一样当作已完成应答。存储无法写入时抛出 `SessionStoreUnavailableException`：请应答 `503`，客户端保留令牌对并再次登出。此后每个实例都以 `token-revoked` 拒绝该访问令牌，该会话的任何一对令牌都不能再刷新，包括它由之刷新而来的令牌对：更早被复制的一对令牌不会比登出活得更久。该会话更早一代的访问令牌在过期前仍然有效，如[会话](#sessions)所述。用户的其他会话不受影响；要结束全部会话（例如账号被盗后），请调用 [`revokeSubject`](#revoking-every-token-of-a-principal)。访问令牌已过期时，用这对令牌登出：`TokenRevoker.revoke(compositeToken)`，刷新令牌会被校验，并且必须属于该访问令牌，与刷新的要求相同。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 的调用都是挂起函数，不会阻塞：在任何线程上从 `suspend` 处理函数里调用即可。
 
@@ -261,6 +263,29 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 - 该记录在 `issuedBefore` 之后再保留一个刷新令牌有效期。之后以更早的 `issuedBefore` 再次调用不会缩短它，即使两个实例同时吊销同一主体也是如此。
 - 它需要与吊销单个令牌相同的存储。根本无法吊销主体的 `TokenStore` 会抛出 `UnsupportedOperationException`，而不是什么都不做；记录失败的（例如 Redis 故障）会像吊销单个令牌时一样抛出 `SessionStoreUnavailableException`：请应答 `503`，然后再次吊销。
 - 检查行为与上文相同：失效消息丢失时，本地的“未吊销”答案最多保留 30 秒；存储无法读取时，请求的令牌被接受，刷新则失败。
+
+## 在管道之外验证令牌 {#verifying-a-token-outside-the-pipeline}
+
+经过管道的请求，其令牌的验证和吊销检查在同一个地方完成。优先用它：让接收令牌的代码（内部端口、WebSocket 握手）经过 `Pipeline.evaluate`（[管道在适配器之外](../architecture/extending.md#pipeline-outside-the-adapters)）。必须自己验证令牌时，需要两次调用，只做第一次会接受已吊销的令牌：
+
+1. `TokenVerifier.verify(token)` 检查签名、过期时间和声明，返回 `VerifiedToken`。它抛出 `TokenVerificationException`（过期令牌为 `TokenExpiredException`，带委托的令牌为 `DelegationUnsupportedException`）。它不会问令牌是否已被吊销。
+2. `TokenRevocation.check(verified)`（`me.ahoo.cosec.runtime.token`，JWT 开启时是 starter 的 bean）询问该令牌，或其主体在某次吊销之前签发的所有令牌，是否已被吊销。它使用与管道相同的读取器和相同的偏差。令牌已被吊销时抛出 `TokenRevokedException`。
+
+```kotlin
+suspend fun principalOf(token: String): String? = try {
+    val verified = verifier.verify(token)
+    revocation.check(verified)
+    verified.principal
+} catch (_: TokenVerificationException) {   // 过期、无效、带委托，以及 TokenRevokedException
+    null
+} catch (_: RevocationUnavailableException) {
+    null
+}
+```
+
+吊销无法读取时，`check` 抛出 `RevocationUnavailableException`，它意味着什么由你决定。管道默认接受该令牌并计数（有文档记载的、对失败即拒绝的例外，[登出与吊销](#logout-and-revocation)）；示例拒绝它，这是应当做的选择，除非你接受同样的窗口。绝不要不小心把这个异常当作“未吊销”：在两次调用外面捕获 `Exception` 就会如此。
+
+这两次调用不做管道对令牌所做的其余事情：它们不会把令牌的应用（`VerifiedToken.app`）与你的服务所属的应用比较，不解析它的成员关系，也不做任何决策。它们只回答令牌自称是谁，以及它刚才没有被吊销。要决策，用经过管道的请求上的主体。
 
 ## API key {#api-keys}
 
