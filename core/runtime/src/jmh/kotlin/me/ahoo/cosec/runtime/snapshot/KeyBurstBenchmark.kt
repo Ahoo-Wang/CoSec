@@ -59,14 +59,13 @@ import java.util.concurrent.atomic.AtomicLong
  * - **one join:** a cold request on a key of its own (read at once), made and awaited by one more thread for as long as
  *   the burst is offered: how long another key waits while the burst runs, behind the hand-offs it causes.
  *
- * [slots] is today's [Slot] (`slot`, the "before") or the runner with K events past its own per drain (`k0` … `k64`), so
- * every row comes from the same job. The score, the time of one burst, is secondary: the table is the percentiles.
+ * [slots] is the runner with K events past its own per drain (`k0` … `k64`), so every row comes from the same job. The score, the time of one burst, is secondary: the table is the percentiles.
  */
 @State(Scope.Benchmark)
 @BenchmarkMode(Mode.SingleShotTime)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
 open class KeyBurstBenchmark {
-    @Param("slot", "k0", "k4", "k16", "k64")
+    @Param("k0", "k4", "k16", "k64")
     lateinit var slots: String
 
     private lateinit var source: SnapshotSource<*, *>
@@ -225,6 +224,6 @@ open class KeyBurstBenchmark {
         const val MAX_JOINS = 1_000_000
         const val TEXT = """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"}"""
 
-        fun factory(name: String): SlotFactory = if (name == "slot") SlotFactory.SLOT else KRunners(name.removePrefix("k").toInt())
+        fun factory(name: String): SlotFactory = KRunners(name.removePrefix("k").toInt())
     }
 }

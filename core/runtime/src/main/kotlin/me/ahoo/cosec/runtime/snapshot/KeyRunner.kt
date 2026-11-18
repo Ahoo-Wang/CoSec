@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture
 /**
  * One key run by [KeyTransitions] (RFC 0013 B2b, step 2b): each [KeySlot] call becomes an event offered to its
  * [KeyDrain], whose effects [KeyEffects] executes. `peek`'s members are [KeySlot]'s, and a request's hit is answered
- * outside the queue, as [Slot] answers it. The constructor starts nothing: no timer, no read, nothing offered.
+ * outside the queue, on the caller's thread. The constructor starts nothing: no timer, no read, nothing offered.
  * Dependencies go one way: this → [KeyDrain] → [KeyEffects], which reach back only through [KeyOwner], which this
  * implements.
  */

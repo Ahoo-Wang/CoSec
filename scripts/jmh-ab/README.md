@@ -63,40 +63,26 @@ The summary also names the job's host (CPU model, vCPU count, kernel), and the a
 whole `lscpu`. Compare ratios only within a job, and absolute times only between jobs on the same host class: hosted
 runners differ, and a ratio can move with the host when the two sides wait on threads differently.
 
-## The cold-load timeline
+## The cold-load timeline (removed)
 
-`ColdLoadTimelineBenchmark` (module `runtime`) is not a score: one invocation runs a stamped timeline of 10,000
-uncontended cold loads, `Slot` against the runner. It gives RFC 0013 §5.4's cold-path criterion its number: the runner's
-extra on the critical path, at most 3 µs on every host class. Run it with `jmh-ab` as a single shot. Base and head may
-be the same ref; each side is one run on the same host:
+`ColdLoadTimelineBenchmark` stamped 10,000 uncontended cold loads, `Slot` against the runner. It gave RFC 0013 §5.4's
+cold-path criterion its number: the runner's extra on the critical path, at most 3 µs on every host class. It found
+the wake-up cliff that #1608 removed. It went with `Slot` in RFC 0013 B2b step 4, since its number was a difference
+from `Slot`. To run it again, check out `2331da36` (8.0.0-beta.2), where it is
+`core/runtime/src/jmh/kotlin/me/ahoo/cosec/runtime/snapshot/ColdLoadTimeline.kt`, and run:
 
 ```bash
 gh workflow run jmh-ab.yml -f base=<ref> -f head=<ref> -f module=runtime -f include=ColdLoadTimelineBenchmark -f rounds=1 -f forks=1 -f warmup=0 -f iterations=1
 ```
 
-The job's log holds each run between `TIMELINE BEGIN` and `TIMELINE END`, and the summary names the host. For each
-side the run prints:
-- the median and p90 of a whole cold load;
-- **window 1**, from the call to the compile task's submission: the requester's own work before the pool can start;
-- **window 2**, from the compilation's end to the answer: the pool's work before the waiter can wake;
-- a table of every stamp with its median offset, its p90 and the thread it ran on.
-
-It ends with the windows summed for each side and **the runner's extra (runner − `Slot`)**, the number the criterion
-gates. The wake-ups between the windows are left out on purpose: what they cost depends on the host (2 µs where a vCPU
-is still awake, 8 to 14 µs where it has gone idle), not on the code.
-
-The stamps come from wrappers: the store, the compiler, the pool, housekeeping, the scheduler and the metrics. Nothing
-in the source changes, but each stamp costs time, and the run measures and prints that cost: 18 to 29 ns on an Apple M4
-Pro, 43 to 132 ns on the hosted runners (Xeon 6973P-C and 6975P-C, EPYC 9V74). Both sides carry the same stamps in window 1. In window 2 `Slot` carries
-one more, its hand to housekeeping before its answer, so the extra it reports is if anything a little low.
-
 ## Bytes per held key
 
-RFC 0013 §5.4 also gates what a held key retains: the runner at most 100 bytes more than `Slot`. That is a test, not a
-benchmark, since it is deterministic: `HeldKeyBytesTest` in `:runtime:check`. It loads 20,000 app documents under each
-slot kind and takes a class histogram of the live heap before the loads and after (`GC.class_histogram`, which collects
-first). The difference per class, divided by the keys, is what one held key retains. It prints the table, class by class,
-`Slot` beside the runner:
+RFC 0013 §5.4 also gates what a held key retains. That is a test, not a benchmark, since it is deterministic:
+`HeldKeyBytesTest` in `:runtime:check`. It loads 20,000 app documents and takes a class histogram of the live heap
+before the loads and after (`GC.class_histogram`, which collects first). The difference per class, divided by the keys,
+is what one held key retains. The key's own objects (`KeyRunner`, `KeyDrain`, `KeyEffects`, `KeyState`) must be one
+instance each, and the total at most 656 bytes: `Slot`'s 556 plus 100, on the host where #1597 measured both. It prints
+the table, class by class:
 
 ```bash
 ./gradlew :runtime:test --tests 'me.ahoo.cosec.runtime.snapshot.HeldKeyBytesTest' --rerun

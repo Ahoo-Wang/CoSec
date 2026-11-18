@@ -443,6 +443,17 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
 check, as it needs `cosec-gateway` instead. Every check runs with `spring.main.lazy-initialization=true` too (`STA-3`).
 
+### Startup fails on the refresh route's authentication {#startup-fails-on-the-refresh-routes-authentication}
+
+```text
+cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <your credentials class>, not the pair the served route presents ... (IDN-25).
+```
+
+The starter serves the refresh route with your `RefreshTokenAuthentication` bean, but yours takes a credentials class
+of your own (a device id beside the pair, say), which the served route cannot build from the request. Serve that
+refresh from a route of your own and unset `cosec.authentication.login.refresh.path`, or declare it over
+`RefreshTokenCredentials` ([Refreshing tokens](../integration/authentication.md#refreshing-tokens)).
+
 ### Startup fails on an exposed actuator endpoint
 
 ```text
@@ -524,7 +535,7 @@ Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
 A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec locks on its caches, such as
-the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
+the `ttl` or `unknown-read` of the snapshot store, the `absent-ttl` of a revocation table, or a `key-prefix`. Remove the setting, or exclude CoSec's caches from
 the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
 ([Precedence](./configuration.md#precedence)).
 

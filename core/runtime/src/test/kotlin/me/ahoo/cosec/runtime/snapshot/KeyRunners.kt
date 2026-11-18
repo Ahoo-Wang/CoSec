@@ -21,8 +21,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
- * A [SlotFactory] of [KeyRunner]s, so a source's tests run over the runner as they run over [Slot] (RFC 0013 B2b):
- * each drain takes [k] events, and [hooks] reach only the keys [hooked] accepts.
+ * A [SlotFactory] of [KeyRunner]s for a source's tests (RFC 0013 B2b): each drain takes [k] events, and [hooks] reach only the keys [hooked] accepts.
  */
 internal fun keyRunners(
     k: Int = K,

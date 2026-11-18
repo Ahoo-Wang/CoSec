@@ -197,6 +197,38 @@ class CacheTtlPolicyTest {
         }
     }
 
+    /** Lengthens a store's "not found" answers, as `cocache.defaults.store.absent-ttl` or a customizer would. */
+    private object LongAbsence : CacheLayers {
+        override fun <K : Any, V : Any> apply(spec: StoreSpec<K, V>, locks: Locks): Layered<StoreSpec<K, V>> =
+            CacheLayers.NONE.apply(
+                spec.toBuilder().policy {
+                    absentTtl = Duration.ofHours(1)
+                    localMaxAge = Duration.ofHours(1)
+                }.build(),
+                locks,
+            )
+
+        override fun <K : Any, V : Any> apply(spec: CacheSpec<K, V>, locks: Locks): Layered<CacheSpec<K, V>> =
+            CacheLayers.NONE.apply(spec, locks)
+    }
+
+    /**
+     * #1629 finding 5: a revocation table keeps "not revoked" locally for 30 seconds at most, whatever a layer says. A
+     * longer `absent-ttl` would accept a revoked token for that long after a lost invalidation.
+     */
+    @Test
+    fun revocationTablesKeepNotRevokedFor30SecondsAtMost() {
+        CacheRuntime.builder().backend(InMemoryBackend()).build().use { runtime ->
+            val factory = CoCacheFactory(runtime, LongAbsence)
+            listOf(CoSecCacheSpecs.revokedToken(), CoSecCacheSpecs.revokedSubject()).forEach { spec ->
+                CoSecCacheSpecs.locks(spec.name).isLocked(PolicyField.ABSENT_TTL).assert().isTrue()
+                factory.create(spec, CoSecCacheSpecs.locks(spec.name))
+                runtime.policy(spec.name)!!.absentTtl.assert().describedAs(spec.name)
+                    .isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+            }
+        }
+    }
+
     /** Review requirement: the snapshot store is a store of record like the others, with one local max age. */
     @Test
     fun snapshotCacheIsStoreOfRecordAndKeepsItsLocalCopiesShort() {

@@ -124,6 +124,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them`**: CoCache 8's own check of
   its `Store`s, which `eviction-check=warn` does not reach. Allow `INFO`, or, once `noeviction` is set, set
   `cocache.redis.assume-maxmemory-policy=noeviction`; `allkeys-*` is never accepted.
+- **`cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <class> ... (IDN-25)`**:
+  the application's `RefreshTokenAuthentication` takes credentials of its own class, which the served refresh route
+  cannot present; serve that refresh from the application's own route and unset the path, or declare it over
+  `RefreshTokenCredentials`.
 - **`API key format [<n>] is not 3.`** (a request with that key is `503`): `null` is a 7.x key, convert it with
   `cosec-migrate api-keys`; `2` is a key an 8.0 pre-release stored, which nothing converts: issue a new key, delete
   the old one. **`[<key>] was stored by an 8.0 pre-release in format <n>`** from `cosec-migrate api-keys`: the same key;

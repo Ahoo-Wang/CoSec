@@ -26,7 +26,7 @@ import java.time.Instant
 internal fun KeyConfig.compiledBefore(load: LoadState<*>, entry: SnapshotEntry<*>, moment: KeyMoment): Boolean =
     !shared && load.epoch < moment.epoch && entry.origin.compiled
 
-/** [Slot]'s `answerFor`: a withheld compilation with no load to follow it (the key is closing) answers a failure. */
+/** A withheld compilation with no load to follow it (the key is closing) answers a failure. */
 internal fun <T : Any> outdated(key: SnapshotKey, moment: KeyMoment): SnapshotEntry<T> =
     failedEntry(key, SnapshotUnavailableException(key, "compiled with inputs that changed"), moment.instant)
 
