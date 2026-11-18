@@ -1,0 +1,17 @@
+# Rule: SNP-15
+# Mutant: the caller events swapped out with the one taken are dropped, so what a spent budget leaves is lost rather than handed off
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyCallersTest --tests me.ahoo.cosec.runtime.snapshot.KeyDrainTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyCallers.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyCallers.kt
+index 0c0dcce7..9e99f3dd 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyCallers.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyCallers.kt
+@@ -67,7 +67,7 @@ internal abstract class KeyCallers : KeyLane() {
+             }
+             head = oldest!!
+         }
+-        remainder = head.next
++        remainder = null
+         return head.item
+     }
+ 
