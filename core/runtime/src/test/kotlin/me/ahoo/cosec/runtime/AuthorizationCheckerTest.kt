@@ -289,6 +289,41 @@ class AuthorizationCheckerTest {
             .map { it.name }.assert().isEmpty()
     }
 
+    /**
+     * `PIP-26`: once the adapter that bound a request has ended it, no check permits as it, in any form: the public one,
+     * the control plane's in another app, and as a recorded principal. Until then, however long, it is answered.
+     */
+    @Test
+    fun `a check of a request its adapter ended is denied in every form`() = runBlocking<Unit> {
+        val security = permitted("cosec-control")
+        val control = AppId("cosec-control")
+        val read = Action("cosec", "read")
+        val doc = Resource("doc", "tenant/a", emptyMap())
+        val ada = AuthenticatedPrincipal(
+            PrincipalId("ada"),
+            PipelineFixtures.TENANT,
+            MembershipSource.Claims(security.memberships),
+            mapOf("level" to 3),
+        )
+        val approve = Action("cosec", "approve")
+        checker.check(security.securityContext, "order:read", "order/42").assert().isTrue()
+        checker.decide(security, control, read, doc).assert().isInstanceOf(Decision.Permit::class.java)
+        checker.decideAs(security, ada, security.memberships, control, approve, doc).assert()
+            .isInstanceOf(Decision.Permit::class.java)
+
+        security.end()
+        security.end()
+
+        checker.check(security.securityContext, "order:read", "order/42").assert().isFalse()
+        checker.decide(security.securityContext, "order:read", "order/42").assert().isEqualTo(Decision.Deny(null))
+        checker.check(security, Action("order", "read"), Resource("order", "42", emptyMap())).assert().isFalse()
+        checker.decide(security, control, read, doc).assert().isEqualTo(Decision.Deny(null))
+        checker.decideAs(security, ada, security.memberships, control, approve, doc).assert()
+            .isEqualTo(Decision.Deny(null))
+        // Another request of the same principal is its own: ending one ends no other.
+        checker.check(permitted("cosec-control").securityContext, "order:read", "order/42").assert().isTrue()
+    }
+
     @Test
     fun failsClosed() = runBlocking<Unit> {
         val security = permitted()

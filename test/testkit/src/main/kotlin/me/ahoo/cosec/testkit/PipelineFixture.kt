@@ -40,10 +40,15 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
+import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
+import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import tools.jackson.databind.JsonNode
 import java.nio.file.Path
+import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicLong
 import kotlin.time.Duration.Companion.seconds
@@ -177,6 +182,24 @@ class PipelineFixture private constructor(
             listeners,
         )
 
+        /**
+         * A fixture whose documents cannot be read, as a host whose store of record is down from its start: every read
+         * fails, no document is ever installed, and every request the pipeline decides answers `503 unavailable`, never
+         * a permit, whoever the principal. For a test that proves an application's routes fail closed. With the route
+         * map [routes] and the decision [listeners], as [of].
+         */
+        fun unreadable(
+            routes: RouteMap = RouteMap.EMPTY,
+            listeners: List<DecisionListener> = emptyList(),
+        ): PipelineFixture {
+            val principals = ConcurrentHashMap<String, Principal>()
+            val pipeline = Pipeline.builder(fixtureAuthenticator(principals), UnreadableDocuments)
+                .routes(routes)
+                .apply { listeners.forEach(::listener) }
+                .build()
+            return PipelineFixture(pipeline, principals, pipeline::close)
+        }
+
         private fun assemble(
             documents: ScenarioDocuments,
             routes: RouteMap,
@@ -233,4 +256,18 @@ class PipelineFixture private constructor(
 
         private fun published(body: JsonNode?): SnapshotDocument = DocumentSnapshotCompiler.published(body)
     }
+}
+
+/** A store of record that cannot be reached: every read fails as an unreachable store's does, never as a format error. */
+private object UnreadableDocuments : SnapshotDocumentStore {
+    override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> = unreachable(key)
+
+    override fun readIfChanged(key: SnapshotKey, known: SnapshotDigest?): CompletableFuture<SnapshotRead> =
+        unreachable(key)
+
+    override fun subscribe(listener: SnapshotChangeListener): AutoCloseable = AutoCloseable { }
+
+    private fun unreachable(key: SnapshotKey): CompletableFuture<SnapshotRead> = CompletableFuture.failedFuture(
+        IllegalStateException("$key cannot be read: the test kit's store is unreadable (PipelineFixture.unreadable).")
+    )
 }

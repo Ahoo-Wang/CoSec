@@ -39,16 +39,14 @@ import kotlin.coroutines.cancellation.CancellationException
 private val log = KotlinLogging.logger {}
 
 /**
- * Answers "may the current principal do this?" in code (RFC 0006 §7.6): to decide which actions a UI shows, or whether
- * the object the handler loaded is the caller's. The same evaluation as the request, through [pipeline], for the
- * principal and scope of a request the pipeline permitted; no obligation runs and no listener hears of it.
- *
- * It is for the request in progress, with the `SecurityContext` of that request. The context holds what the pipeline
- * resolved for that request, and a check decides with it as it is: it does not authenticate again, so it checks no age
- * and no revocation of the token and sees no change of roles since. A context kept past its request (in a message, a
- * scheduled job, a cache) therefore keeps permitting after the token is revoked or the roles change. Never keep one:
- * authorize where the request arrives and carry the decision, not the context, with the work. CoSec decides nothing
- * outside a request in 8.0.
+ * Answers "may the current principal do this?" in code (RFC 0006 §7.6), within the request: in its handler and the
+ * code it calls, or to decide which actions a UI shows, or whether the object the handler loaded is the caller's. The
+ * same evaluation as the request, through [pipeline], for the principal and scope of a request the pipeline permitted,
+ * as they were when it started; no obligation runs and no listener hears of it. A check does not authenticate again: a
+ * request in progress is answered as any other, however long it runs, even once its token has expired or been revoked
+ * or its roles have changed, since the pipeline authenticated it when it began. Once the adapter that bound it has
+ * ended the request, every check of it is denied (`PIP-26`); a request no adapter bound (a transport that calls
+ * `Pipeline.evaluate` itself, the test kit) is never ended, and keeps permitting as long as it is held.
  *
  * [check] answers yes or no; [decide] answers the [Decision] itself, for host code that records what permitted it: a
  * [Decision.Permit] names the statement in [Decision.Permit.by], with the binding it came through in
@@ -59,8 +57,8 @@ private val log = KotlinLogging.logger {}
  * A [Decision] stays in the host's own process: it is never written to a response, and the web adapters never see one
  * (one decision path, RFC 0006 §6.3), so a host must not put one, or its causes, into a response either.
  *
- * Fails closed: only a permit is true. A context the pipeline did not make, an indeterminate decision and an error are
- * false. `cosec-webflux` adds a `Mono<Boolean>` form of [check] and `cosec-webmvc` a blocking one.
+ * Fails closed: only a permit is true. A context the pipeline did not make, one whose request has ended, an
+ * indeterminate decision and an error are false. `cosec-webflux` adds a `Mono<Boolean>` form of [check] and `cosec-webmvc` a blocking one.
  */
 class AuthorizationChecker(private val pipeline: Pipeline) {
     /**
@@ -71,10 +69,10 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         decide(security, action, resource) is Decision.Permit
 
     /**
-     * The decision that [check] answers for the same arguments. A context the pipeline did not make, an action
-     * without `:`, or an action or resource enforcement would not decide ([Enforceable], `PIP-15`,
-     * `PIP-18`: an `http` verb with a lower-case letter; `http:HEAD` is decided as `http:GET`) is an implicit deny
-     * (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check writes no audit. The obligations
+     * The decision that [check] answers for the same arguments. A context the pipeline did not make or whose request
+     * has ended (`PIP-26`), an action without `:`, or an action or resource enforcement would not decide
+     * ([Enforceable], `PIP-15`, `PIP-18`: an `http` verb with a lower-case letter; `http:HEAD` is decided as
+     * `http:GET`) is an implicit deny (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check writes no audit. The obligations
      * of a permit, rate limits, did not run.
      *
      * An error thrown by the check is `Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, error))`. That cause
@@ -99,6 +97,15 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
         }
     }
 
+    /**
+     * The answer for a request its adapter has ended (`PIP-26`): an implicit deny, as for a context the pipeline did not
+     * make. Nothing is unavailable, and asking again would not help.
+     */
+    private fun ended(security: RequestSecurity): Decision {
+        log.debug { "Check as request [${security.requestId}] after it ended - denied." }
+        return Decision.Deny(null)
+    }
+
     /** As [check], with the action and resource given as the engine reads them. CoSec's own: the control plane's. */
     @InternalCoSecApi
     suspend fun check(security: RequestSecurity, action: Action, resource: Resource): Boolean =
@@ -114,7 +121,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun decided(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
-        pipeline.check(security, action, resource)
+        if (security.inProgress) pipeline.check(security, action, resource) else ended(security)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
             throw e
@@ -139,6 +146,9 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      */
     @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
+        if (!security.inProgress) {
+            return ended(security)
+        }
         val scoped = security.inApp(app) ?: return Decision.Deny(null)
         return decided(scoped, action, resource)
     }
@@ -176,6 +186,9 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
     ): Decision {
         if (!memberships.active) {
             return Decision.Deny(null)
+        }
+        if (!security.inProgress) {
+            return ended(security)
         }
         if (principal.membershipSource !is MembershipSource.Provider) {
             return decideOn(security, principal, memberships, app, action, resource)

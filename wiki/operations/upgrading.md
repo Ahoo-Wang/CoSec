@@ -675,8 +675,8 @@ the token may also go in the query string with that property.
 
 `cosec.jwt.token-revocation.enabled` is gone. With JWT enabled, every token is checked for revocation, and startup
 fails when nothing can answer that check: add `cosec-cocache`, which brings the Redis revocation store, or register all
-three beans of your own: a `TokenStore`, a `RevocationReader` and a `TokenFamilyStore`. Startup names one missing bean at
-a time, so a host that registers the first two fails again on the third. In 7.x, without `cosec-cocache` the starter used a store that
+three beans of your own: a `TokenStore`, a `RevocationReader` and a `TokenFamilyStore`. The failure names every missing
+one at once. `RevocationReader.NONE` starts, with a `WARN`, and accepts every revoked token until it expires. In 7.x, without `cosec-cocache` the starter used a store that
 records nothing, so logout silently did nothing. A service that issues no tokens and reads none can set
 `cosec.jwt.enabled=false` instead ([Logout and revocation](../integration/authentication.md#logout-and-revocation)); one
 that only issues tokens keeps it on, with the stores ([A service that only issues tokens](../integration/authentication.md#a-service-that-only-issues-tokens)).

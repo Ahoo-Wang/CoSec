@@ -421,7 +421,7 @@ revocation is always on, with no switch. It needs `cosec-cocache`, or a `TokenSt
 does nothing is not an option. A service that only verifies tokens another service issues needs all three too (or
 `cosec-cocache`), and it must read the **issuer's** revocations, or it accepts a token the issuer revoked until it
 expires: see [A service that verifies tokens another service issues](../scenarios/resource-server.md).
-`RevocationReader.NONE` is only for tokens that nobody, anywhere, revokes. A service that issues no tokens and reads
+`RevocationReader.NONE` is only for tokens that nobody, anywhere, revokes; it starts, with a `WARN`. A service that issues no tokens and reads
 none can set `cosec.jwt.enabled=false`.
 
 With `cosec.authentication.login.logout.path` set, the starter serves the logout route (`IDN-24`), a `POST` of that path
@@ -769,7 +769,8 @@ service of another, even with the same signing key and a role of the same name, 
 issues one token per app, with the roles of that app. A token that operates the control plane is issued for the control
 plane's app, `cosec.control.app-id`.
 
-Whoever issues the token says which app it is for: `TokenSubject.app` has no default. Refreshing a token keeps its app.
+Whoever issues the token says which app it is for, in `TokenSubject.app`. Left out, it is null, as on a host without
+apps: a host with an app refuses such a token (`SCP-11`). Refreshing a token keeps its app.
 A token whose `aud` is several values, not a string, or not a possible app id (blank, `*`, with `:`, `/` or a
 control character, longer than 128 characters) is `token-invalid`.
 

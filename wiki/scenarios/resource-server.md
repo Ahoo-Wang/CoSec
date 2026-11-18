@@ -43,7 +43,7 @@ that Redis, or it accepts the revoked token until it expires.
 - **`RevocationReader.NONE` is for tokens that nobody, anywhere, revokes.** It is not for "tokens this service never
   revokes", which describes every resource server. With it, a user who logged out, or whose tokens the issuer
   revoked after a compromise, keeps their access to this service until the token expires (the issuer's `cosec.jwt.token-validity.access`, ten minutes by default).
-  Nothing fails, and nothing warns.
+  The service starts and logs one `WARN`, which is easy to miss: no request fails.
 - While the issuer's Redis cannot be read, a request's token is accepted unless `cosec.authentication.revocation.fail-closed`
   is `true`, as everywhere ([Logout and revocation](../integration/authentication.md#logout-and-revocation)). A service
   that decides things worth more than that window sets it.

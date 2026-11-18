@@ -500,7 +500,7 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 #### 令牌吊销始终开启 {#token-revocation-is-always-on}
 
 `cosec.jwt.token-revocation.enabled` 已删除。启用 JWT 时，每个令牌都要检查是否已吊销；没有任何东西能回答这个检查时，启动失败：加上
-`cosec-cocache`（它带来 Redis 吊销存储），或者注册自己的全部三个 bean：`TokenStore`、`RevocationReader` 和 `TokenFamilyStore`。启动一次只指出缺少的一个 bean，所以注册了前两个的宿主会在第三个上再次失败。7.x 中没有 `cosec-cocache` 时，starter
+`cosec-cocache`（它带来 Redis 吊销存储），或者注册自己的全部三个 bean：`TokenStore`、`RevocationReader` 和 `TokenFamilyStore`。启动失败信息一次列出所有缺少的 bean。`RevocationReader.NONE` 可以启动，会记录一条 `WARN`，并接受每个已吊销的令牌直到它过期。7.x 中没有 `cosec-cocache` 时，starter
 使用一个什么都不记录的存储，登出悄无声息地不起作用。既不签发令牌也不读取令牌的服务可以改为设置 `cosec.jwt.enabled=false`
 （[登出与吊销](../integration/authentication.md#logout-and-revocation)）；只签发令牌的服务保持它开启，并配好存储（[只签发令牌的服务](../integration/authentication.md#a-service-that-only-issues-tokens)）。7.x 写下的吊销继续有效：8.0 从相同的 key（`<prefix>:token:revoked:*`）
 读取它们。吊销检查报告的错误返回 `503`，永远不会接受该令牌（`PIP-7`）。

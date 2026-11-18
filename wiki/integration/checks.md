@@ -117,8 +117,10 @@ whatever the documents say. There is therefore no check outside a request.
 
 A check does not authenticate again. It decides with the principal, the memberships and the scope that were resolved
 when the request was permitted, and it reads the documents again. It checks no age and no revocation of the token, and
-it sees no change of roles since. So a context kept past its request keeps permitting after the user logs out, after
-`revokeSubject`, and after a role is removed, for as long as the documents permit. Never store a context.
+it sees no change of roles since. So during the request, a check keeps permitting after the user logs out, after
+`revokeSubject` or after a role is removed, for as long as the documents permit; the request has been decided already.
+When the request ends the check stops (`PIP-26`, below), and a context no adapter bound is never ended. Do not store a
+context: authorize where the request arrives and carry the decision with the work.
 
 ### A check and a mapped route
 
@@ -150,6 +152,24 @@ instead:
   8.0. There is no principal to decide as, and a check without a context is `false`. Decide it in your own code, in a
   way you can read: do not fall back to a default that permits everything because the check says `false`. A decision
   as a principal for work outside a request, with an in-process entry for a named service principal, is planned for 8.1.
+
+A check belongs to its request, and the adapter that bound the request ends it when the request completes (`PIP-26`):
+
+- **While the request is in progress**, a check is answered as the table says, however long the request runs: during
+  a streamed or server-sent-events body, in an async servlet request, in code the handler awaits. It decides on the
+  principal, memberships and attributes the request began with, also once its token has expired meanwhile: the
+  pipeline authenticated the request when it began, and a check is not stricter than the request's own decision.
+- **Once the request has ended**, every check of its context is `false` (`decide` answers `Deny(null)`), whatever the
+  documents say: a context kept in a field, a cache or a message permits nothing afterwards. WebFlux and the gateway
+  end a request when its response has been written, failed, or the client went away; Spring MVC when the dispatch
+  returns, or, for an async request (`DeferredResult`, `StreamingResponseBody`, a `suspend` handler), when it
+  completes, fails or times out. Code on the async request's ASYNC dispatch (message converters, a
+  `ResponseBodyAdvice`, interceptors) is still within the request. The error page is not: Spring MVC renders it on an
+  ERROR dispatch, after the request has ended, so an error page or error controller reads the context but every check
+  of it there is `false`.
+- **A request no adapter bound** is never ended: one your own transport handed to `Pipeline.evaluate`, and the test
+  kit's (`PipelineFixture`, `PermittedRequest`). Checks of it behave as they always did, so do not keep its context
+  after the request either.
 
 ## Object-level rules
 

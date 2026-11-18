@@ -51,8 +51,33 @@ class RequestSecurity internal constructor(
     /** In a service behind a gateway (`cosec.pipeline.mode=gateway`), the identity the gateway forwarded. */
     val identity: Identity? = null,
 ) {
+    /**
+     * Set once the adapter that bound this request has ended it ([end]). A field, not an object: it fits in the padding
+     * of this one, so a permitted request allocates nothing more for it. The forms [inApp] and [asPrincipal] make of
+     * this request live within one check, which asks this request, not them (`AuthorizationChecker`).
+     */
+    @Volatile
+    private var ended: Boolean = false
+
     /** The application-facing view. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
+
+    /**
+     * Whether the request is still in progress: true until the adapter that bound it ends it ([end]). A request no
+     * adapter bound (a transport that calls `Pipeline.evaluate` itself, the test kit) is never ended. A check of an
+     * ended request is refused (`PIP-26`).
+     */
+    internal val inProgress: Boolean get() = !ended
+
+    /**
+     * Ends the request: from now on no check permits as it (`PIP-26`). Only the adapters call it, when the request
+     * completes: WebFlux and the gateway when the chain's `Mono` terminates, the servlet filter when the dispatch returns
+     * or, for an async request, when it completes, fails or times out. Idempotent.
+     */
+    @InternalCoSecApi
+    fun end() {
+        ended = true
+    }
 
     /**
      * The same principal in the default space of [app] of its tenant, resolved as [ScopeResolver] resolves a host of

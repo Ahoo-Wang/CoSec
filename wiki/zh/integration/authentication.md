@@ -242,7 +242,7 @@ suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext
 
 ## 登出与吊销 {#logout-and-revocation}
 
-JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore`、`RevocationReader` 和 `TokenFamilyStore` Bean。开启 JWT 但缺少其中任何一个时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验另一个服务签发的令牌的服务同样需要这三者（或 `cosec-cocache`），并且它必须读取**签发方**的吊销，否则它会接受签发方已吊销的令牌，直到令牌过期：见[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)。`RevocationReader.NONE` 只用于任何地方、任何人都不吊销的令牌。既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
+JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore`、`RevocationReader` 和 `TokenFamilyStore` Bean。开启 JWT 但缺少其中任何一个时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验另一个服务签发的令牌的服务同样需要这三者（或 `cosec-cocache`），并且它必须读取**签发方**的吊销，否则它会接受签发方已吊销的令牌，直到令牌过期：见[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)。`RevocationReader.NONE` 只用于任何地方、任何人都不吊销的令牌；它可以启动，并记录一条 `WARN`。既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
 
 设置了 `cosec.authentication.login.logout.path` 时，starter 提供登出路由（`IDN-24`），即该路径的 `POST`，与每个路由一样受 CoSec 管辖，所以文档必须允许对它的匿名 `POST`（不在 Spring Cloud Gateway 上）：请求体是令牌对，无论访问令牌是否已过期；会话被结束时应答 `204`，会话早已结束时也是 `204`。请求体不是令牌对时为 `400`，令牌对无法通过校验（包括刷新令牌已过期）时为 `401`，存储无法应答时为 `503`。否则，在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，结束它的会话，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。已吊销的令牌会抛出 `TokenRevokedException`：请像提供的路由一样当作已完成应答。存储无法写入时抛出 `SessionStoreUnavailableException`：请应答 `503`，客户端保留令牌对并再次登出。此后每个实例都以 `token-revoked` 拒绝该访问令牌，该会话的任何一对令牌都不能再刷新，包括它由之刷新而来的令牌对：更早被复制的一对令牌不会比登出活得更久。该会话更早一代的访问令牌在过期前仍然有效，如[会话](#sessions)所述。用户的其他会话不受影响；要结束全部会话（例如账号被盗后），请调用 [`revokeSubject`](#revoking-every-token-of-a-principal)。访问令牌已过期时，用这对令牌登出：`TokenRevoker.revoke(compositeToken)`，刷新令牌会被校验，并且必须属于该访问令牌，与刷新的要求相同。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 的调用都是挂起函数，不会阻塞：在任何线程上从 `suspend` 处理函数里调用即可。
 
@@ -441,7 +441,7 @@ class SelectTenantTest {
 
 匿名请求没有凭证，它的应用取宿主的应用。所以发给一个应用的令牌在另一个应用的服务上没有用，即使签名密钥相同、角色同名；一次登录访问多个应用时，按应用各签发一个令牌，只放该应用的角色。操作控制面的令牌发给控制面的应用 `cosec.control.app-id`。
 
-由签发令牌的一方说明它属于哪个应用：`TokenSubject.app` 没有默认值。刷新令牌时保留它的应用。`aud` 有多个值、不是字符串或不能作为应用 id（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符）的令牌为 `token-invalid`。
+由签发令牌的一方在 `TokenSubject.app` 中说明它属于哪个应用。省略时为 null，与没有应用的主机一致：有应用的主机拒绝这样的令牌（`SCP-11`）。刷新令牌时保留它的应用。`aud` 有多个值、不是字符串或不能作为应用 id（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符）的令牌为 `token-invalid`。
 
 **平台租户 `(platform)` 享有特权**：只有它的主体能通过 break-glass 获得 `cosec:root`，也只有它的主体能在控制面中操作平台文档和应用文档（[break-glass](../guide/security-model.md#break-glass)）。请只从用户无法影响的来源签发 `(platform)` 的令牌。
 

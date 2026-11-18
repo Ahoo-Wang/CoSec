@@ -27,7 +27,7 @@ description: "资源服务：校验签发方签名的令牌，在自己的代码
 
 - 使用**签发方 Redis** 上的 `cosec-cocache`，并使用**签发方的 `cosec.key-prefix`**。它带来 starter 需要的三个 bean（`TokenStore`、`RevocationReader`、`TokenFamilyStore`），其中吊销读取器读取签发方的 key。该服务只读取它们，除非你的代码调用 `TokenRevoker`，否则不会吊销任何东西。吊销在这里的生效方式与在签发方相同，本地缓存最多 30 秒（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。
 - 够不到签发方 Redis 的服务要自己注册这三个 bean。它的 `RevocationReader` 此时是唯一要紧的：它必须根据签发方的吊销作答，不论这些吊销怎样送达。
-- **`RevocationReader.NONE` 只用于任何地方、任何人都不吊销的令牌。** 它不是用于“这个服务从不吊销的令牌”，那描述的是每个资源服务。用了它，已经登出的用户，或在泄露之后被签发方吊销了令牌的用户，在令牌过期之前（签发方的 `cosec.jwt.token-validity.access`，默认十分钟）仍可访问这个服务。什么都不会失败，也没有任何警告。
+- **`RevocationReader.NONE` 只用于任何地方、任何人都不吊销的令牌。** 它不是用于“这个服务从不吊销的令牌”，那描述的是每个资源服务。用了它，已经登出的用户，或在泄露之后被签发方吊销了令牌的用户，在令牌过期之前（签发方的 `cosec.jwt.token-validity.access`，默认十分钟）仍可访问这个服务。服务照常启动，只记录一条容易被忽略的 `WARN`：没有请求会失败。
 - 签发方的 Redis 无法读取时，请求的令牌会被接受，除非 `cosec.authentication.revocation.fail-closed` 为 `true`，与别处一样（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。所决策的事情比这个窗口更重要的服务，要设置它。
 
 校验令牌需要签发方的签名密钥，所以这个服务同样可以签发令牌。把密钥放在密钥库中，只交给校验令牌的服务。

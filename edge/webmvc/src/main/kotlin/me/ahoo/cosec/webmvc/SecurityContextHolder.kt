@@ -10,10 +10,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+@file:OptIn(ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.webmvc
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.runtime.http.RequestSecurity
 
 /**
  * The security context of the request the current thread serves, for blocking code on that thread: the servlet filter
@@ -57,7 +62,7 @@ object SecurityContextHolder {
      */
     @JvmStatic
     val context: SecurityContext?
-        get() = SECURITY_CONTEXT_THREAD_LOCAL.get()
+        get() = SECURITY_CONTEXT_THREAD_LOCAL.get()?.takeIf { RequestSecurity.of(it) != null }
 
     /**
      * Gets the required security context, throwing if not set.

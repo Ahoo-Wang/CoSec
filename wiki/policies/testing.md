@@ -696,4 +696,8 @@ service's actions and resources, as on a host with `cosec.authorization.routes.l
 returns, a `BEST_EFFORT` one by the time the fixture is closed. That is how a `DecisionListener` of your own is tested
 ([Decision listeners](../architecture/extending.md#decision-listeners)).
 
+`PipelineFixture.unreadable(routes, listeners)` is a host whose documents cannot be read: every read of the store
+fails, so every request is `503 unavailable` and none is permitted. Run your routes against it to prove they fail closed
+when the store is down.
+
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).

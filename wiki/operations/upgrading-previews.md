@@ -10,6 +10,26 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
+- **Security: a check of a request that has ended is denied** (`PIP-26`). Through beta.3, a `SecurityContext` kept
+  after its request (in a field, a cache, a message to a consumer) went on permitting with
+  `AuthorizationChecker`, on the memberships it was made with, after logout, a revoked token or a removed role. Now the
+  adapter that bound the request ends it when the request completes, and every check of it afterwards is `false`
+  (`decide` answers `Deny(null)`). A request in progress is answered as before, however long it runs: a streamed or
+  server-sent-events body, an async servlet request. Affected: code that keeps a context and checks with it after the
+  response was written. Check within the request instead; work that runs afterwards (a consumer, a scheduled job)
+  carries its own authorization ([Checks in code](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)).
+  A context of a request your own transport handed to `Pipeline.evaluate`, and the test kit's, is never ended: no
+  change there.
+- **Security: the readers of the security context answer only a context the pipeline made** (`PIP-27`).
+  `exchange.getSecurityContext()`, `ContextView.getSecurityContextOrEmpty()` / `getSecurityContext()`,
+  `request.getSecurityContext()`, the `SecurityContext` handler parameter and `SecurityContextHolder` returned whatever
+  object sat under `SecurityContext.KEY`, so an application filter or a library that wrote its own was taken for an
+  authenticated caller. Now anything else reads as no context: `null`, or the failure an unbound context is. Affected:
+  code, test code above all, that binds a `SecurityContext` it made itself (a mock, an implementation of the
+  interface) under that key. Bind the context of a request the pipeline permitted instead: in a test,
+  `PipelineFixture.securityContext(fixture.request(...))` or `PermittedRequest` from `cosec-testkit`
+  ([Testing policies](../policies/testing.md)); a filter of your own that runs the pipeline binds
+  `outcome.security!!.securityContext`.
 - **Fixed: a lost invalidation is installed by the first pass after it, even past a load in flight.** The beta.3
   release notes listed it as a known issue: when a revalidation pass met a load of a document already in flight, it
   took that load's read as its confirmation, though the read could predate the change, so a change whose invalidation
