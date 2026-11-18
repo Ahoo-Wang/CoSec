@@ -19,7 +19,10 @@
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache is still needed where it is used",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a service in gateway mode does not need Redis for an unused cosec-cocache",
         "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named without a CosId runtime fails startup",
-        "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named beside the application's own IdGenerator fails startup"
+        "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named beside the application's own IdGenerator fails startup",
+        "spring-boot:LoginRoutesStartupTest#login or JWT off with a path set fails startup",
+        "spring-boot:LoginRoutesStartupTest#a host that serves no HTTP with a path set fails startup",
+        "spring-boot:LoginRoutesStartupTest#unset, nothing is served and nothing is checked"
       ]
     },
     {

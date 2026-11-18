@@ -1,0 +1,28 @@
+# Rule: IDN-23, IDN-24
+# Mutant: the served login routes answer without Cache-Control: no-store, so a cache may keep a token pair
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ServedLoginRoutesTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ReactiveLoginRoutes.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ReactiveLoginRoutes.kt
+index d48e873f..e545a908 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ReactiveLoginRoutes.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ReactiveLoginRoutes.kt
+@@ -63,7 +63,6 @@ internal object ReactiveLoginRoutes {
+ 
+     private fun write(answer: LoginRouteAnswer): Mono<ServerResponse> {
+         val response = ServerResponse.status(answer.status)
+-            .header(HttpHeaders.CACHE_CONTROL, LoginRouteAnswer.CACHE_CONTROL)
+         val contentType = answer.contentType ?: return response.build()
+         return response.contentType(MediaType.parseMediaType(contentType)).bodyValue(answer.body)
+     }
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ServletLoginRoutes.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ServletLoginRoutes.kt
+index bd1e46d3..507cbb5a 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ServletLoginRoutes.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/ServletLoginRoutes.kt
+@@ -57,7 +57,6 @@ internal object ServletLoginRoutes {
+ 
+     private fun write(answer: LoginRouteAnswer): ServerResponse {
+         val response = ServerResponse.status(answer.status)
+-            .header(HttpHeaders.CACHE_CONTROL, LoginRouteAnswer.CACHE_CONTROL)
+         val contentType = answer.contentType ?: return response.build()
+         return response.contentType(MediaType.parseMediaType(contentType)).body(answer.body)
+     }

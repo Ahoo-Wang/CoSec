@@ -1,0 +1,16 @@
+# Rule: IDN-23
+# Mutant: the served refresh answers an unmodelled error 401, so a bug of the application ends its clients' sessions
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.LoginRoutesTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ServedLoginRoutesTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
+index 5292c454..9512bbb8 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
+@@ -56,6 +56,6 @@ internal object RouteFailure {
+         is TokenRevokedException -> ProblemType.TOKEN_REVOKED
+         is TokenVerificationException -> ProblemType.TOKEN_INVALID
+         is RevocationUnavailableException, is SessionStoreUnavailableException -> ProblemType.UNAVAILABLE
+-        else -> ProblemType.INTERNAL_ERROR
++        else -> ProblemType.TOKEN_INVALID
+     }
+ }
