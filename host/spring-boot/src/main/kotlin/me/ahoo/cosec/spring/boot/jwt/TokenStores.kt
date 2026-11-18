@@ -35,7 +35,12 @@ internal object TokenStores {
     /** The bean name of the [TokenFamilyStore] stand-in. */
     const val FAMILY_STORE_STAND_IN = "cosecTokenFamilyStore"
 
-    /** The stores missing in [beans], by type name, in the order the message gives them. Reads definitions only. */
+    /**
+     * The stores missing in [beans], by type name, in the order the message gives them. Reads the bean definitions, and
+     * creates the application's [TokenStore] when it is not the stand-in: whether it yields a reader depends on the
+     * instance (CoCache's does), not on the type a `@Bean` method declares. So an application [TokenStore] that needs a
+     * [TokenFamilyStore] meets Spring's circular-creation error here rather than this message: an accepted corner.
+     */
     fun missing(beans: ListableBeanFactory): List<String> {
         val tokenStores = beans.getBeanNamesForType(TokenStore::class.java, true, false).toList()
         val tokenStoreMissing = tokenStores == listOf(TOKEN_STORE_STAND_IN)
