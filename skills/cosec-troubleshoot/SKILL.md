@@ -128,6 +128,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   the application's `RefreshTokenAuthentication` takes credentials of its own class, which the served refresh route
   cannot present; serve that refresh from the application's own route and unset the path, or declare it over
   `RefreshTokenCredentials`.
+- **`API key format [<n>] is not 3.`** (a request with that key is `503`): `null` is a 7.x key, convert it with
+  `cosec-migrate api-keys`; `2` is a key an 8.0 pre-release stored, which nothing converts: issue a new key, delete
+  the old one. **`[<key>] was stored by an 8.0 pre-release in format <n>`** from `cosec-migrate api-keys`: the same key;
+  the run is refused until it is gone.
 - **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
   field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
   any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained

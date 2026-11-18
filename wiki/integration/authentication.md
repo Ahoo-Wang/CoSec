@@ -471,8 +471,9 @@ refresh token of that principal in that tenant whose `iat` is before `issuedBefo
   so such a token cannot be refreshed into a new one either.
 - The entry is kept for the refresh token lifetime past `issuedBefore`. A later call with an earlier `issuedBefore`
   does not shorten it, even when two instances revoke the same principal at once.
-- It needs the same store as revoking one token. A `TokenStore` that cannot record it throws
-  `UnsupportedOperationException` instead of doing nothing.
+- It needs the same store as revoking one token. A `TokenStore` that cannot revoke a principal at all throws
+  `UnsupportedOperationException` instead of doing nothing; one that fails to record it (Redis down, say) throws
+  `SessionStoreUnavailableException`, as revoking one token does: answer `503`, and revoke again.
 - The check behaves as described above: a local "not revoked" answer for up to 30 seconds if an invalidation is
   lost; a request's token is accepted, and a refresh fails, while the store cannot be read.
 

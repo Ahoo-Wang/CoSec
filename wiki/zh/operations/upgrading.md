@@ -558,7 +558,7 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 1. 带 `--dry-run` 运行并阅读报告。
 2. 在你的 `MembershipProvider` 的数据源中授予 `memberships`，并通过控制面（变更请求）添加 `principalBindings` 和 `roleBindings`。
-3. 不带 `--dry-run` 再运行一次。每个 key 只在仍然是读取时的内容时才被改写，因此期间被吊销或停用的 key 绝不会被恢复：报告在 `changedSinceRead` 中列出它，命令以 `1` 退出并要求再运行一次。已经转换的 key 保持不变，因此命令可以重复运行。
+3. 不带 `--dry-run` 再运行一次。每个 key 只在仍然是读取时的内容时才被改写，因此期间被吊销或停用的 key 绝不会被恢复：报告在 `changedSinceRead` 中列出它，命令以 `1` 退出并要求再运行一次。已经转换的 key 保持不变，因此命令可以重复运行。8.0 预览版以其他格式（`"format":2`）存储的 key 既不会被转换，也不会被 8.0 读取：命令会拒绝这次运行，并指出它是由预览版存储的；请为它签发一个新 key 并删除旧 key，然后再运行。
 
 转换后的 key 不再保存原来的角色和策略：它们只存在于报告里。报告在第一个 key 被改写之前就写好（`status: planned`），运行结束时换成最终的（`converted`）；`--out` 中已有的报告若不是试运行或被拒绝那次运行的，命令在碰任何 key 之前就停止：重复运行会发现这些 key 已转换，而把计划替换成空的。重复运行请用自己的 `--out`，报告里的 `memberships` 和绑定都落实之后才把它移走。两次运行只有在第一次是 `--dry-run` 时才可以共用一个 `--out`。`--out` 在写任何东西之前先创建，写不了的 `--out` 会让运行先停下。`SCAN` 可能把同一个 key 返回两次；它只被读一次。
 
