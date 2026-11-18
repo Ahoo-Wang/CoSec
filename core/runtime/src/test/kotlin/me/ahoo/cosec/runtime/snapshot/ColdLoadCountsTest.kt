@@ -88,15 +88,15 @@ class ColdLoadCountsTest {
             override fun awaitTermination(timeout: Long, unit: TimeUnit): Boolean = true
         }
         val realScheduler = ScheduledThreadPoolExecutor(1)
+        // The timers a counted load scheduled, the futures themselves: after the load, those cancelled are counted.
+        val timers = ConcurrentLinkedQueue<ScheduledFuture<*>>()
         val scheduler = object : ScheduledExecutorService by realScheduler {
             private fun <V> counted(future: ScheduledFuture<V>): ScheduledFuture<V> {
-                if (counting.get()) counts.timersScheduled.incrementAndGet()
-                return object : ScheduledFuture<V> by future {
-                    override fun cancel(mayInterruptIfRunning: Boolean): Boolean {
-                        if (counting.get()) counts.timersCancelled.incrementAndGet()
-                        return future.cancel(mayInterruptIfRunning)
-                    }
+                if (counting.get()) {
+                    counts.timersScheduled.incrementAndGet()
+                    timers += future
                 }
+                return future
             }
 
             override fun schedule(command: Runnable, delay: Long, unit: TimeUnit): ScheduledFuture<*> =
@@ -152,6 +152,8 @@ class ColdLoadCountsTest {
                 // The next load starts with nothing of this one in motion.
                 pool.submit {}.get()
                 housekeepingThread.submit {}.get()
+                counts.timersCancelled.addAndGet(timers.count { it.isCancelled })
+                timers.clear()
                 compileTasks.assert().isEmpty()
             }
             val shared = source.load()
