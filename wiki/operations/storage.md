@@ -158,15 +158,17 @@ Only the control plane (and `cosec-migrate`) writes documents and control-plane 
 the documents and the candidates, and write only shadow reports and statuses. A Redis ACL can hold each side to that:
 
 - Data-plane credentials: read-only on `<s>:snapshot:*` and `<s>:candidate:*` (`%R~`), write on `<s>:shadow:*`, and
-  no access to `<s>:control:*`. An instance that does not run the control plane (no `cosec-control` on its classpath)
-  reads the documents and the candidates read-only: CoCache sends those reads as `EVALSHA_RO` (Redis 7.0 or later), so
+  no access to `<s>:control:*`. An instance that does not run the control plane (no `cosec-control` on its classpath,
+  or `cosec.control.enabled=false`) reads the documents and the candidates read-only: CoCache sends those reads as `EVALSHA_RO` (Redis 7.0 or later), so
   its user needs only read permission on them, and Redis itself refuses that user a write of a document or a
   candidate. A process that runs the control plane writes them, so its user needs write permission; started with a
   read-only user it fails at startup, at CoCache's publish check
   (`Redis denied publishing to the invalidation channel[<s>:inv:snapshot]`).
-- Which of the two a process is follows its classpath alone. No property makes it read-only or read-write, and a
-  `cocache.caches.PolicySnapshotCache.read-only` or `cocache.caches.CandidateCache.read-only` that tries fails startup.
-  So a fleet that ships one image with `cosec-control` for both roles has no read-only data plane.
+- Which of the two a process is follows the condition the control plane is wired on: `cosec-control` on its classpath,
+  and [`cosec.control.enabled`](./configuration.md#control-plane) not `false`. A fleet that ships one image for both
+  roles sets `COSEC_CONTROL_ENABLED=false` on the data-plane role, which then runs no control plane and reads read-only.
+  A `cocache.caches.PolicySnapshotCache.read-only` or `cocache.caches.CandidateCache.read-only` that tries to change it
+  fails startup.
 - Revocations and refresh token families stay read-write wherever JWT is on (`<s>:token:*`): an application can revoke
   tokens from any endpoint of its own (`TokenRevoker`), so nothing in a process says it only reads them.
 - A data-plane user still publishes on `&<s>:*`: its shadow stores broadcast their invalidations there, and a channel

@@ -884,6 +884,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 ### 从 8.0.0-beta.1 升级 {#from-8-0-0-beta-1}
 
 - **升级前：给每个限制了命令的数据面 Redis 用户加上 `+evalsha_ro +eval_ro`。** 不运行控制面的实例现在以只读方式读取文档和候选，即 `EVALSHA_RO`（Redis 7.0 或更高版本，CoCache 8 本已要求）。用一个列出命令的用户（例如 beta.1 的[谁可以写哪些 key](./storage.md#who-may-write-which-keys) 给出的那个：先 `-@all`，再在其他命令中给出 `+evalsha +eval`），升级后的实例会在启动时失败：`Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]: allow [+evalsha_ro] ...`。请先加上这两个命令；没有命令列表的用户（`+@all`）不需要任何改动。把文档和候选收窄为读权限（`%R~<s>:snapshot:* %R~<s>:candidate:*`）是可选的，页面上给出了写法。运行控制面的进程不变：它仍然写入它们。
+- **`cosec.control.enabled` 可以在实例上关闭控制面**（新增：无需迁移；默认值 `true` 不改变任何东西）。两种角色共用一个带 `cosec-control` 镜像的部署，在数据面角色上设置 `COSEC_CONTROL_ENABLED=false`：它不运行控制面，以只读方式读取文档和候选，可以使用[谁可以写哪些 key](./storage.md#who-may-write-which-keys) 中的只读用户。`true` 或 `false` 以外的值会使启动失败。
 - **starter 可以提供刷新和登出路由**（新增：在设置路径之前什么都不变）。`cosec.authentication.login.refresh.path` 和 `logout.path` 在 Spring MVC 和 WebFlux 上提供它们，状态码和响应体见[构建客户端](../integration/clients.md#what-your-application-serves)。你自己写的路由照常工作：不设置路径就不提供任何路由。要迁移到提供的路由，设置客户端调用的路径，删除你的处理器及其异常映射，并保留允许匿名 `POST` 它的语句。
 - **会话存储的故障以 `SessionStoreUnavailableException`（`cosec-login`）离开 `TokenFamilies` 和 `StoreTokenRevoker`**，存储自身的异常作为其 cause，从而把无法应答的存储（`503`）与错误（`500`）区分开。在刷新、切换或登出周围捕获存储自身异常类型的代码，改为捕获它。`StoreTokenRevoker.revokeSubject` 不变。
 - **`MembershipRefresh` 以 `TokenVerificationException` 拒绝**（成员关系已不存在时用 `TokenRevokedException`），这是 `401`；其他任何异常都是错误，在提供的路由上是 `500`，客户端保留令牌对。以其他异常（例如 `IllegalStateException`）拒绝的钩子，改为抛出 `TokenRevokedException`。

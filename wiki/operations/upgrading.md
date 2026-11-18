@@ -1185,6 +1185,11 @@ deployment needs none of it; the section above is the whole upgrade. These notes
   commands first; a user without a command list (`+@all`) needs nothing. Narrowing the documents and the candidates to
   read permission (`%R~<s>:snapshot:* %R~<s>:candidate:*`) is optional, and the page shows it. A process that runs the
   control plane is unchanged: it still writes them.
+- **`cosec.control.enabled` switches the control plane off on an instance** (an addition: nothing to migrate; the
+  default, `true`, changes nothing). An image that carries `cosec-control` for both roles sets
+  `COSEC_CONTROL_ENABLED=false` on the data-plane role: it runs no control plane, reads the documents and candidates
+  read-only, and can use the read-only user of
+  [Who may write which keys](./storage.md#who-may-write-which-keys). A value other than `true` or `false` fails startup.
 - **The starter can serve the refresh and logout routes** (an addition: nothing changes until a path is set).
   `cosec.authentication.login.refresh.path` and `logout.path` serve them on Spring MVC and WebFlux, with the statuses
   and bodies of [Building a client](../integration/clients.md#what-your-application-serves). A route you wrote keeps

@@ -1,0 +1,16 @@
+# Rule: SNP-18
+# Mutant: the condition ignores cosec.control.enabled, so the control plane is wired while it is switched off
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlPlaneSwitchTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
+index 225e5b50..b307d635 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
+@@ -36,7 +36,6 @@ internal class ControlPlaneCondition : SpringBootCondition() {
+         val missing = CLASSES.filterNot { ClassUtils.isPresent(it, context.classLoader) }
+         return when {
+             missing.isNotEmpty() -> ConditionOutcome.noMatch("the control plane is not on the classpath: $missing")
+-            !enabled(context.environment) -> ConditionOutcome.noMatch("$ENABLED_KEY=false")
+             else -> ConditionOutcome.match("the control plane is on the classpath and switched on")
+         }
+     }

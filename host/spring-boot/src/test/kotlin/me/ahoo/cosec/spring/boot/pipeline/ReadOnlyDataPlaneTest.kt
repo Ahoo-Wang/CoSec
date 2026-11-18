@@ -68,7 +68,7 @@ class ReadOnlyDataPlaneTest {
 
     @Test
     fun `a process that runs the control plane writes them`() {
-        ControlPlaneCondition.wired(javaClass.classLoader).assert().isTrue()
+        ControlPlaneCondition.present(javaClass.classLoader).assert().isTrue()
         runner.readOnly().values.assert().containsOnly(false)
     }
 
