@@ -9,7 +9,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 ## 令牌 {#tokens}
 
-一次登录产生一个**组合令牌**：一个短期有效的访问令牌和一个较长期有效的刷新令牌，都是用 `cosec.jwt.secret` 签名的 JWT（默认 HMAC-SHA256，也可用 HMAC-SHA384/512）。JWT 默认开启，开启时不设置密钥，或密钥短于算法的哈希长度，应用就无法启动：HMAC-SHA256 至少 32 字节（按 UTF-8 计），HMAC-SHA384 至少 48 字节，HMAC-SHA512 至少 64 字节（RFC 7518 §3.2）。更短的密钥可以根据任何用它签发的令牌离线猜出。
+一次登录产生一个**组合令牌**：一个短期有效的访问令牌和一个较长期有效的刷新令牌，都是用 `cosec.jwt.secret` 签名的 JWT（默认 HMAC-SHA256，也可用 HMAC-SHA384/512）。JWT 默认开启（网关之后的服务，即 `cosec.pipeline.mode=gateway`，默认关闭），开启时不设置密钥，或密钥短于算法的哈希长度，应用就无法启动：HMAC-SHA256 至少 32 字节（按 UTF-8 计），HMAC-SHA384 至少 48 字节，HMAC-SHA512 至少 64 字节（RFC 7518 §3.2）。更短的密钥可以根据任何用它签发的令牌离线猜出。
 
 访问令牌携带主体信息，因此认证一个请求除了吊销检查之外不需要任何查找：
 
@@ -20,13 +20,13 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 | `roles` | 角色 id，写作 `role` 或 `role@space`（[角色与空间](#roles-and-spaces)）。为空时省略。 |
 | `policies` | 附加到主体的策略 id。为空时省略。 |
 | `attributes` | 任意的主体属性；条件通过 `subject.attributes.<name>` 读取。`apiKeyId` 由 CoSec 为 [API key](#api-keys) 设置，是保留名：带它的令牌按 `token-invalid` 拒绝，`JwtTokenConverter` 也不会签发这样的令牌。 |
-| `tenantId` | 主体有租户时为其租户（[租户](#tenants)）。值为空或不是字符串时令牌无效。 |
-| `aud` | 令牌所属的应用（[应用](#apps)）。只能有一个值，否则令牌无效。签发时不属于任何应用则省略。 |
+| `tenantId` | 主体有租户时为其租户（[租户](#tenants)）。值不是字符串，或不能作为租户 id（为空或空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符）时令牌无效。 |
+| `aud` | 令牌所属的应用（[应用](#apps)）。只能有一个能作为应用 id 的值（字符串，或只含一个字符串的数组，规则与 `tenantId` 相同），否则令牌无效。签发时不属于任何应用则省略。 |
 | `cosec.membership` | 成员关系来自 `MembershipProvider` 时，以 `"provider"` 代替 `roles` 和 `policies`（[成员关系](#memberships)）。其他情况省略。 |
 | `iat`、`exp` | 签发时间和过期时间。没有 `exp` 的令牌会被拒绝。`iat` 决定[吊销主体](#revoking-every-token-of-a-principal)时拒绝哪些令牌。 |
 | `sid`、`auth_time`、`cosec.generation` | 这对令牌所属的会话（[会话](#sessions)）：会话 id、用户登录的时间（秒），以及这对令牌是该会话的第几代。一对令牌的两个令牌都带有。 |
 
-刷新令牌只携带自己的 `jti`、`iat`、`exp`、`cosec.token: "refresh"`、会话声明，以及作为 `sub` 的、所属访问令牌的 `jti`。应用有 `IdGenerator` Bean（例如基于 CosId）时由它生成令牌 id，否则使用 `RandomIdGenerator`（[Id](../architecture/extending.md#ids)）。有效期为 `cosec.jwt.token-validity.access`（10 分钟）和 `cosec.jwt.token-validity.refresh`（7 天）。
+刷新令牌只携带自己的 `jti`、`iat`、`exp`、`cosec.token: "refresh"`、会话声明，以及作为 `sub` 的、所属访问令牌的 `jti`。应用有 `IdGenerator` Bean（例如基于 CosId）时由它生成令牌 id，否则使用 `RandomIdGenerator`（[Id](../architecture/extending.md#ids)）。有效期为 `cosec.jwt.token-validity.access`（10 分钟）和 `cosec.jwt.token-validity.refresh`（7 天），都不超过会话的结束时间（[会话](#sessions)）。
 
 **被拒绝的令牌不是错误。** 过期、签名错误或已吊销的令牌会让调用方成为匿名主体，由策略决定匿名调用方能做什么：公开路径照常可用。如果请求被拒绝，响应为 `401`，problem 类型为 `token-expired`、`token-revoked` 或 `token-invalid`，而不是 `unauthorized`（[响应与状态码](./web.md#responses-and-status-codes)）。
 
@@ -34,7 +34,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 **以 `(` 开头的 id 属于 CoSec。** `sub` 以 `(` 开头的令牌（租户 `(0)`、`(platform)` 和匿名主体 `(0)` 都是这种写法）为 `token-invalid`（`IDN-12`），`JwtTokenConverter` 也拒绝签发。没有 `sub` 或 `jti` 的令牌同样无效。
 
-**刷新令牌不是访问令牌。** 带 `cosec.token` 声明的令牌（`JwtTokenConverter` 在每个刷新令牌上写 `refresh`）在所有需要访问令牌的路径上都是 `token-invalid`（`IDN-13`）：它即使签名有效且未过期也不会完成认证，因此永远不会成为它的 `sub` 所指的主体。其他签发者签发、未写该声明的令牌按访问令牌读取；只有 [`refresh`](#refreshing-tokens) 读取刷新令牌。
+**刷新令牌不是访问令牌。** 带 `cosec.token` 声明的令牌（`JwtTokenConverter` 在每个刷新令牌上写 `refresh`）在所有需要访问令牌的路径上都是 `token-invalid`（`IDN-13`）：它即使签名有效且未过期也不会完成认证，因此永远不会成为它的 `sub` 所指的主体。其他签发者签发、未写该声明的令牌按访问令牌读取；只有 `TokenVerifier.refresh` 读取刷新令牌：[刷新](#refreshing-tokens)，以及用令牌对[登出](#logout-and-revocation)。
 
 **委托令牌会被拒绝。** 带 `act` 声明的令牌（[RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) 委托令牌：`sub` 是被代理方，`act` 是执行方）即使签名和有效期都有效，也按 `token-invalid` 拒绝（`IDN-4`）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时（例如匿名调用方可以访问的路径），审计记录 `ALLOW`，原因只出现在决策事件的 `subject.rejected` 中。如果按 `sub` 读取，这种令牌会让执行方获得主体能做的一切，而 8.0 不评估委托。CoSec 自己从不签发这种令牌。`may_act` 声明只说明谁可以代理主体，因此被忽略。
 
@@ -49,16 +49,16 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 **从哪里读取凭证**，令牌按以下顺序：
 
-1. `Authorization` 请求头（`Bearer ` 前缀可选）；
+1. `Authorization` 请求头（前缀 `Bearer `，必须一字不差，可选；CoSec 的校验器会去掉它）；
 2. `authorization` 查询参数，仅在 `cosec.pipeline.allow-query-token=true` 时读取，因为 URL 会泄漏到访问日志和 `Referer` 请求头中；
 3. `authorization` Cookie，仅在 `cosec.pipeline.allow-cookie-token=true` 时读取。
 
 Cookie 默认关闭，因为浏览器会自动带上 cookie，跨站请求也不例外：其他站点的页面可以借用户的令牌发起操作，而请求头只有页面自己的代码才能设置。
-CoSec 不提供 CSRF 防护，打开这个选项的部署要自己防御 CSRF：给 cookie 设置 `SameSite`，并对每个会改变状态的请求使用防伪令牌或检查 `Origin`。
+CoSec 不为它通过 cookie 认证的请求提供 CSRF 防护，打开这个选项的部署要自己防御 CSRF：给 cookie 设置 `SameSite`，并对每个会改变状态的请求使用防伪令牌或检查 `Origin`。
 
 空值会被跳过。API key 只从请求头 `cosec.pipeline.api-key-header`（默认 `X-API-Key`）读取。
 
-**失败。** 认证器抛出异常、报告依赖失败（`AuthnResult.Unavailable`，例如无法读取的 API key 存储），或未在 `cosec.pipeline.authentication-timeout`（1 秒）内应答时，请求返回 `503`：无法读取的存储绝不会让凭证变得有效或无效。
+**失败。** 认证器抛出异常（例如它的 API key 存储无法读取）、返回 `AuthnResult.Unavailable`，或未在 `cosec.pipeline.authentication-timeout`（1 秒）内应答时，请求返回 `503`：无法读取的存储绝不会让凭证变得有效或无效，只有一个已写明的例外：吊销存储无法读取期间，已校验的令牌不经吊销检查即被接受，除非设置 `cosec.authentication.revocation.fail-closed=true`（[登出与吊销](#logout-and-revocation)）。
 
 **自定义。** 声明一个 `Authenticator` Bean 即可替换 starter 的认证器。它是一个 `suspend` 函数，不能阻塞调用线程（可能是事件循环）；见[扩展 CoSec](../architecture/extending.md)。
 
@@ -76,15 +76,15 @@ CoSec 不提供 CSRF 防护，打开这个选项的部署要自己防御 CSRF：
 - **角色绑定**严格遵循它：带 `CoSec-Space-Id: team-a` 的请求只经由写作 `…@team-a` 的角色绑定，不带该请求头的请求只经由不带后缀的角色绑定（[角色权限](../policies/role-permissions.md)）。
 - **条件**可以读取请求空间中的角色（`scope.roles`）或所有空间中的角色（`subject.roles`）；各自适合做什么，见[条件中的角色](../guide/security-model.md#roles-in-conditions)。
 
-客户端用 `CoSec-Space-Id` 选择空间，但只能在凭证声明的空间中选择：主体没有角色的空间会被拒绝。因此令牌是成员关系的唯一证明：只有确认用户属于某个空间后，才签发 `role@space`。
+客户端用 `CoSec-Space-Id` 选择空间，但只能在主体的成员关系（令牌的声明，或提供者的应答）列出的空间中选择：主体没有角色的空间会被拒绝。因此携带角色的令牌是成员关系的唯一证明：只有确认用户属于某个空间后，才签发 `role@space`。
 
-角色和策略随令牌传递，因此对用户角色的修改要等用户下次登录才生效；[刷新](#refreshing-tokens)会保留旧的声明。要立即收回权限，请[吊销主体的全部令牌](#revoking-every-token-of-a-principal)，或把主体的成员关系改由提供者提供。
+角色和策略随令牌传递，因此对用户角色的修改要等用户下次登录才生效，应用有 `MembershipRefresh` 时在下次[刷新](#refreshing-tokens)时生效；默认情况下刷新会保留旧的声明。要立即收回权限，请[吊销主体的全部令牌](#revoking-every-token-of-a-principal)，或把主体的成员关系改由提供者提供。
 
 ## 成员关系 {#memberships}
 
 CoSec 把 `roles` 和 `policies` 声明读作主体的**成员关系**：它在各空间中的角色，以及附加到它的策略，保持声明顺序。没有租户的令牌属于默认租户 `(0)`。
 
-**数量大或变化快的成员关系。** 声明了很多角色或策略的令牌会让每个请求都变大，而从用户身上移除的角色在令牌过期之前一直留在令牌里。这样的令牌可以携带 `cosec.membership: "provider"` 来代替 `roles` 和 `policies`：此时它的成员关系来自应用的 `MembershipProvider` Bean，每个请求都会以主体的租户和 id 询问它。当两个声明合计超过 `membershipClaimLimit` 字节时，`JwtTokenConverter` 会自己写入这个标记；starter 的转换器没有设置上限，因此请用你自己的转换器或签发方签发这类令牌。从带标记的令牌刷新得到的令牌保留该标记。
+**数量大或变化快的成员关系。** 声明了很多角色或策略的令牌会随每个请求整个发送，而从用户身上移除的角色在令牌过期之前一直留在令牌里。这样的令牌可以携带 `cosec.membership: "provider"` 来代替 `roles` 和 `policies`：此时它的成员关系来自应用的 `MembershipProvider` Bean，每个请求都会以主体的租户和 id 询问它。当两个声明合计超过 `membershipClaimLimit` 字节时，`JwtTokenConverter` 会自己写入这个标记；starter 的转换器没有设置上限，因此请用你自己的转换器或签发方签发这类令牌。从带标记的令牌刷新得到的令牌保留该标记，除非 `MembershipRefresh` 另有应答。
 
 **提供者。** `MembershipProvider` 是一个 `suspend` 函数，不能阻塞调用线程。它返回 `MembershipAnswer.Known`，携带来源为 `PROVIDER` 的 `Memberships`，主体已停用时其中 `active = false`；不认识该主体时返回 `MembershipAnswer.Unknown`，这与认识它但它没有任何成员关系不同。查找失败时抛出异常。`InMemoryMembershipProvider` 用于测试和本地开发，对没有放入的主体返回 `Unknown`。`cosec-cocache` 提供 `CoCacheMembershipProvider`，它把你的 `MembershipLoader` 的结果缓存在 Redis 中供所有实例共享，并在主体的成员关系变化时通过 `invalidate(tenant, principal)` 丢弃缓存；缓存项也会在缓存的 TTL 之后过期。应用有 `MembershipLoader` Bean、且没有自己的 `MembershipProvider` 时，starter 把它声明为 `MembershipProvider`，并以 `cosec.authorization.membership.timeout` 限定每次加载：卡住的加载会失败，下一个请求重新加载。未知主体不会被缓存：每个针对它的请求都会再次询问 loader。一个主体只有一个来源：声明或提供者，绝不会两者兼有。
 
@@ -103,7 +103,7 @@ CoSec 把 `roles` 和 `policies` 声明读作主体的**成员关系**：它在�
 CoSec 不提供登录端点。由你校验凭证，CoSec 把主体转换成令牌：
 
 1. 为你的凭证类型 `C` 实现 `Authentication<C>`，并声明为 Bean。它返回 `TokenSubject`（`me.ahoo.cosec.login.token`），即令牌要写入的内容。starter 会按支持的凭证类型把每个 `Authentication` Bean 注册到该应用上下文自己的注册表中。
-2. 在你的端点中调用挂起函数 `TokenCompositeAuthentication.authenticateAsToken(credentials)`。它根据凭证类型（或其父类型）选择 `Authentication`，返回包含 `accessToken` 和 `refreshToken` 的 `CompositeToken`。
+2. 在你的端点中调用挂起函数 `TokenCompositeAuthentication.authenticateAsToken(credentials)`。它根据凭证类型选择 `Authentication`，或在恰好只有一个已注册的认证支持其父类型时选择那个（两个候选会失败，而不是按顺序挑选），返回包含 `accessToken` 和 `refreshToken` 的 `CompositeToken`。
 
 ```kotlin
 data class PasswordCredentials(val username: String, val password: String) : LoginCredentials
@@ -129,7 +129,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 `authenticate` 通过抛出异常来拒绝登录：它没有“空”的回答，登录失败或调用方已离开时都不会签发令牌。它运行在调用方的线程上，在 WebFlux 中就是事件循环，因此基于阻塞客户端（例如 JDBC 用户表）的实现要用 `runInterruptible(myDispatcher) { ... }` 把调用移到自己的有界调度器上。Spring 在 WebFlux 和 Spring MVC 中都能运行 `suspend` 控制器函数。MVC 需要类路径上有 `kotlinx-coroutines-reactor`；没有时，请在请求线程上调用 `runBlocking { ... }`。
 
-这里的 `LoginCredentials` 和 `Authentication` 是 `me.ahoo.cosec.login` 中的登录类型（`TokenCompositeAuthentication` 和 `TokenConverter` 在 `me.ahoo.cosec.login.token` 中），来自 starter 自带的 `cosec-login`；它们不是管道的 `Credentials` 和 `Authenticator`（`me.ahoo.cosec.spi.authn`）。不使用 starter 时（例如在测试中），用你的认证构建登录：`TokenCompositeAuthentication.of(listOf(passwordAuthentication), tokenConverter, tokenFamilies)`。`cosec.authentication.login.enabled`（默认开启）只开关这些登录 Bean，包括 `TokenCompositeAuthentication` 和社交登录；无论它如何设置，请求都由管道认证。登录路径必须允许匿名调用方访问，因此需要一个放行它的 `Anyone` 绑定，如[快速开始](../guide/quick-start.md#write-a-first-policy)所示。`authenticateAsToken` 会为主体开始一个[会话](#sessions)。单独调用 `TokenConverter.toToken(subject)` 签发的令牌对不属于任何会话，永远不能刷新：要自己签发可刷新的令牌对，请先开始它的会话：`converter.toToken(subject.inSession(tokenFamilies.start(tenant, principal)))`。
+这里的 `LoginCredentials` 和 `Authentication` 是 `me.ahoo.cosec.login` 中的登录类型（`TokenCompositeAuthentication` 和 `TokenConverter` 在 `me.ahoo.cosec.login.token` 中），来自 starter 自带的 `cosec-login`；它们不是管道的 `Credentials` 和 `Authenticator`（`me.ahoo.cosec.spi.authn`）。不使用 starter 时（例如在测试中），用你的认证构建登录：`TokenCompositeAuthentication.of(listOf(passwordAuthentication), tokenConverter, tokenFamilies)`。`cosec.authentication.login.enabled`（默认开启）只开关这些登录 Bean，包括 `TokenCompositeAuthentication`、社交登录，以及 starter 提供的[刷新](#refreshing-tokens)和[登出](#logout-and-revocation)路由（设置了它们的路径而登录关闭时，启动失败）；无论它如何设置，请求都由管道认证。登录路径必须允许匿名调用方访问，因此需要一个放行它的 `Anyone` 绑定，如[快速开始](../guide/quick-start.md#write-a-first-policy)所示。`authenticateAsToken` 会为主体开始一个[会话](#sessions)。单独调用 `TokenConverter.toToken(subject)` 签发的令牌对不属于任何会话，永远不能刷新：要自己签发可刷新的令牌对，请先开始它的会话：`converter.toToken(subject.inSession(tokenFamilies.start(tenant, principal)))`。
 
 ### 只签发令牌的服务 {#a-service-that-only-issues-tokens}
 
@@ -137,10 +137,10 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 | 设置 | 服务得到什么 |
 |---|---|
-| `cosec.enabled=false` | 每一个 CoSec bean 都关闭，登录也不例外：没有 `TokenConverter`、`TokenVerifier` 或 `TokenCompositeAuthentication`，登录控制器因缺少 bean 而无法启动。 |
+| `cosec.enabled=false` | 每一个签发、校验或做决定的 CoSec bean 都关闭，登录也不例外：没有 `TokenConverter`、`TokenVerifier` 或 `TokenCompositeAuthentication`，登录控制器因缺少 bean 而无法启动。 |
 | `cosec.jwt.enabled=false` | 签发同样如此：`TokenConverter` 属于 `cosec.jwt.enabled` 所控制的内容（“签发、校验和吊销”，[配置](../operations/configuration.md)）。 |
 | `cosec.pipeline.mode=gateway` 加 `cosec.jwt.enabled=true` | 登录和签发令牌可用；服务不用策略做任何决定，也不需要文档。它**会相信收到的任何 `CoSec-Identity` 头**，所以只适用于只有 CoSec 网关才能到达的服务（[网关后面的服务](./web.md#services-behind-the-gateway)）。 |
-| 默认的 `enforce`，加一份允许每个请求的平台文档 | 登录和签发可用，服务会校验收到的令牌。每个请求都被允许：见下。需要 Redis 和一份已发布的文档（在有文档之前一直是 `503`）。 |
+| 默认的 `enforce`，加一份允许每个请求的平台文档 | 登录和签发可用，服务会校验收到的令牌。由策略决定的每个请求都被允许：见下。管道仍会对含糊的 `CoSec-*` 参数应答 `400`，对声明了空间的匿名请求应答 `401`。需要 Redis 和一份已发布的文档（在有文档之前一直是 `503`）。 |
 
 两种可用的方式都需要吊销读写的令牌存储：`cosec-cocache`，或你自己的 bean（[登出与吊销](#logout-and-revocation)）。第二种方式，用于任何人都能到达的服务，只需要一份文档：
 
@@ -150,12 +150,12 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 ## 会话 {#sessions}
 
-登录会开始一个**会话**，即一族令牌对：一个 id（`sid`）、用户登录的时间（`auth_time`）和一个代数（`cosec.generation`），每一对令牌的两个令牌都带有它们。会话保存在 Redis 中（`<cosec.key-prefix>:token:family:<sid>`，[存储](../operations/storage.md#redis-keys)），每个存活的会话一个 key，只在令牌刷新或吊销时读写，从不在请求时读取。
+登录会开始一个**会话**，即一族令牌对：一个 id（`sid`）、用户登录的时间（`auth_time`）和一个代数（`cosec.generation`），每一对令牌的两个令牌都带有它们。会话保存在 Redis 中（`<cosec.key-prefix>:token:family:<sid>`，[存储](../operations/storage.md#redis-keys)），每个会话一个 key，保留到会话的有效期结束（结束的会话被标记，而不是删除）。它在登录和[租户切换](#switching-tenant-and-app)时写入，在令牌刷新或吊销时读写，从不在请求时读取。
 
-- **刷新会轮换会话。** 只有当前一代能让会话前进到下一代。同一对令牌同时被刷新两次，无论在一个实例还是多个实例上，会话只前进一次，两次都拿到一对令牌。
+- **刷新会轮换会话。** 只有当前一代能让会话前进到下一代。同一对令牌同时被刷新两次，无论在一个实例还是多个实例上，会话只前进一次，两次都拿到一对令牌（宽限期不为零时，见下）。
 - **刚被替换的那一对在 `cosec.jwt.session.rotation-leeway`（30 秒）内仍会得到应答。** 在会话前进之后的这段时间内出示它，会得到一对当前一代的新令牌，会话不前进。这就是重试窗口：响应没有到达客户端的刷新（连接中断，或实例在记录之后故障），客户端可以用手中仍持有的那一对重试；两个标签页同时刷新同一对令牌，最后都能拿到可用的一对。窗口从会话前进时开始，不会顺延。它的代价：在窗口内持有被替换的那一对的人会得到一对新令牌，窗口关闭之前每次请求都会得到；而这个人片刻之前就持有当前一对。
-- **更早的一代再次出现会结束会话**，宽限期过后的刚被替换的那一对也是如此。这说明某对令牌被复制，并在其所有者刷新之后被使用：整个会话被吊销，此后它的每一对令牌都被拒绝。在宽限期内得到应答的副本是当前一代的第二对令牌，因此同样会被发现：宽限期过后两者中第二个刷新的会结束会话。宽限期越长，客户端重试的时间越多，副本得到应答的时间也越多；请让它覆盖客户端的超时加一次重试。
-- **会话从登录起持续 `cosec.jwt.session.lifetime`（30 天）**，无论刷新多少次：之后的刷新会被拒绝（`token-expired`），用户需要重新登录。一对令牌中没有哪个令牌会比它的会话活得更久。令牌中携带的角色在下次登录时生效，所以这也是角色变更最迟生效的时间。
+- **更早的一代再次出现会结束会话**，宽限期过后的刚被替换的那一对也是如此。这说明某对令牌被复制，并在其所有者刷新之后被使用：整个会话被吊销，此后它的每一对令牌在刷新时都被拒绝（它的访问令牌在过期前仍然有效：见下）。在宽限期内得到应答的副本是当前一代的第二对令牌，因此同样会被发现：宽限期过后两者中第二个刷新的会结束会话。宽限期越长，客户端重试的时间越多，副本得到应答的时间也越多；请让它覆盖客户端的超时加一次重试。
+- **会话从登录起最多持续 `cosec.jwt.session.lifetime`（30 天）**，无论刷新多少次，并且只在刷新令牌过期（`cosec.jwt.token-validity.refresh`，7 天）之前刷新才能延续：之后的刷新会被拒绝（`token-expired`），用户需要重新登录。一对令牌中没有哪个令牌会比它的会话活得更久。默认情况下（没有 `MembershipRefresh`，[见下](#refreshing-tokens)），令牌中携带的角色在下次登录时生效，所以这也是角色变更最迟生效的时间。
 - **请求路径不读取会话。** 更早一代的访问令牌在过期前仍然有效，所有访问令牌都是如此：请让 `cosec.jwt.token-validity.access` 保持较短。要立即让访问令牌失效，请吊销它们（[登出与吊销](#logout-and-revocation)）。
 - **失败即拒绝。** 无法读取的会话、无法记录的刷新都不签发任何东西（刷新抛出异常：请应答 `503`）；未知的会话被拒绝（`token-invalid`）。
 
@@ -170,7 +170,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。
 
-设置了 `cosec.authentication.login.refresh.path` 时，**starter 提供刷新路由**（`IDN-23`），在 Spring MVC 和 WebFlux 上都是：令牌对进，同一会话的新令牌对出，每种失败都以说明原因的问题类型应答（线上格式见[构建客户端](./clients.md#what-your-application-serves)）。有 `MembershipRefresh<RefreshTokenCredentials>` Bean 时会使用它。不设置时不提供任何路由，你按下文自己编写。无论哪种方式，刷新请求都带着已过期的访问令牌，所以该路由必须能被没有令牌的调用方访问，否则刷新本身就是 `401 token-expired`：[构建客户端](./clients.md#what-your-application-serves)给出了这条语句；文档拒绝 starter 提供的路由时，starter 会记录一条点名该属性的 `WARN`。
+设置了 `cosec.authentication.login.refresh.path` 且登录和 JWT 开启时，**starter 提供刷新路由**（`IDN-23`），在 Spring MVC 和 WebFlux 上都是（它无法提供的路径，或在 Spring Cloud Gateway 上设置，会使启动失败）：令牌对进，同一会话的新令牌对出，每种失败都以说明原因的问题类型应答（线上格式见[构建客户端](./clients.md#what-your-application-serves)）。有 `MembershipRefresh<RefreshTokenCredentials>` Bean 时会使用它。该路由自己构建 `RefreshTokenAuthentication`：既不使用 `RefreshTokenAuthentication` Bean，也不使用声明在其中的钩子，所以要用于提供的路由，请把钩子单独声明为 Bean；基于你自己凭证类的钩子需要你自己的路由。不设置时不提供任何路由，你按下文自己编写。无论哪种方式，刷新请求都带着已过期的访问令牌，所以该路由必须能被没有令牌的调用方访问，否则刷新本身就是 `401 token-expired`：[构建客户端](./clients.md#what-your-application-serves)给出了这条语句；文档拒绝 starter 提供的路由时，starter 会记录一条点名该属性的 `WARN`。
 
 `RefreshTokenAuthentication` 以 `Authentication` 的形式完成刷新，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算）；通过 `TokenRevocation` 检查访问令牌未被吊销、其主体的令牌也未被吊销；再通过 `TokenFamilies` 轮换会话（[会话](#sessions)）。新的一对令牌说的是旧访问令牌说的内容，属于下一代。全程没有阻塞：
 
@@ -190,7 +190,7 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
     authentication.authenticateAsToken(credentials)
 ```
 
-会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。吊销记录或会话存储无法应答时，它抛出 `RevocationUnavailableException` 或 `SessionStoreUnavailableException`：请应答 `503`，此时没有签发、也没有消耗任何东西。其他任何异常都是错误：提供的路由以 `500` 应答，与流水线应答未建模错误的方式相同。两者都不会结束客户端的会话。
+会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过或刷新令牌已过期时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。吊销记录或会话存储无法应答时，它抛出 `RevocationUnavailableException` 或 `SessionStoreUnavailableException`：请应答 `503`：此时没有签发任何东西；除非存储恰在记录轮换本身时失败，否则也没有消耗任何东西，而那种情况由宽限期内的重试覆盖。其他任何异常都是错误：提供的路由以 `500` 应答，与流水线应答未建模错误的方式相同。两者都不会结束客户端的会话。
 
 默认情况下，刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个 `MembershipRefresh`。它回答用户现在拥有什么（重新查询）。用户不能再登录时，它通过抛出 `TokenVerificationException`（成员关系已不存在时用 `TokenRevokedException`）来拒绝，这是一个 `401`；其他任何异常都是错误，而不是拒绝：
 
@@ -223,7 +223,9 @@ fun refreshTokenAuthentication(
     tokenFamilies: TokenFamilies,
     devices: TrustedDevices,
 ) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies, Renew::class.java) { token, renew ->
-    require(devices.trusts(token.principal, renew.deviceId)) { "Sign in again on this device." }
+    if (!devices.trusts(token.principal, renew.deviceId)) {
+        throw TokenVerificationException("Sign in again on this device.")
+    }
     null
 }
 
@@ -232,17 +234,19 @@ suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext
     authentication.authenticateAsToken(Renew(pair.accessToken, pair.refreshToken, security.deviceId))
 ```
 
-这个类按顺序保留刷新需要的每一步：校验令牌对，拒绝已吊销的令牌，询问你的 `MembershipRefresh`，把会话移到下一代，并在该会话中签发。新令牌属于旧令牌的主体、租户和应用，持有你的回答所说的内容。回答 null 时保留旧声明；回答另一个应用时拒绝，因为刷新从不改变令牌所属的应用。被拒绝的刷新不消耗任何一代。
+`SecurityContext` 参数在 Spring MVC（`cosec-webmvc`）上会被解析；在 WebFlux 上，请接收 `ServerWebExchange`，读取 `exchange.getSecurityContext()`。
+
+这个类按顺序保留刷新需要的每一步：校验令牌对，拒绝已吊销的令牌，询问你的 `MembershipRefresh`，把会话移到下一代，并在该会话中签发。新令牌属于旧令牌的主体、租户和应用，持有你的回答所说的内容。回答 null 时保留旧声明；回答另一个应用是错误（`IllegalArgumentException`，在提供的路由上为 `500`），因为刷新从不改变令牌所属的应用。被拒绝的刷新不消耗任何一代。
 
 ## 登出与吊销 {#logout-and-revocation}
 
-JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore`、`RevocationReader` 和 `TokenFamilyStore` Bean。开启 JWT 但缺少其中任何一个时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验、从不吊销令牌的服务仍然需要读取器；既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
+JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore`、`RevocationReader` 和 `TokenFamilyStore` Bean。开启 JWT 但缺少其中任何一个时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验、从不吊销令牌的服务仍然需要这三者（或 `cosec-cocache`）；既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
 
-设置了 `cosec.authentication.login.logout.path` 时，starter 提供登出路由（`IDN-24`）：请求体是令牌对，无论访问令牌是否已过期；会话被结束时应答 `204`，会话早已结束时也是 `204`。否则，在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，结束它的会话，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。此后每个实例都以 `token-revoked` 拒绝该访问令牌，该会话的任何一对令牌都不能再刷新，包括它由之刷新而来的令牌对：更早被复制的一对令牌不会比登出活得更久。该会话更早一代的访问令牌在过期前仍然有效，如[会话](#sessions)所述。用户的其他会话不受影响；要结束全部会话（例如账号被盗后），请调用 [`revokeSubject`](#revoking-every-token-of-a-principal)。访问令牌已过期时，用这对令牌登出：`TokenRevoker.revoke(compositeToken)`，刷新令牌会被校验，并且必须属于该访问令牌，与刷新的要求相同。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 的调用都是挂起函数，不会阻塞：在任何线程上从 `suspend` 处理函数里调用即可。
+设置了 `cosec.authentication.login.logout.path` 时，starter 提供登出路由（`IDN-24`），即该路径的 `POST`，与每个路由一样受 CoSec 管辖，所以文档必须允许对它的匿名 `POST`（不在 Spring Cloud Gateway 上）：请求体是令牌对，无论访问令牌是否已过期；会话被结束时应答 `204`，会话早已结束时也是 `204`。请求体不是令牌对时为 `400`，令牌对无法通过校验（包括刷新令牌已过期）时为 `401`，存储无法应答时为 `503`。否则，在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，结束它的会话，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。已吊销的令牌会抛出 `TokenRevokedException`：请像提供的路由一样当作已完成应答。存储无法写入时抛出 `SessionStoreUnavailableException`：请应答 `503`，客户端保留令牌对并再次登出。此后每个实例都以 `token-revoked` 拒绝该访问令牌，该会话的任何一对令牌都不能再刷新，包括它由之刷新而来的令牌对：更早被复制的一对令牌不会比登出活得更久。该会话更早一代的访问令牌在过期前仍然有效，如[会话](#sessions)所述。用户的其他会话不受影响；要结束全部会话（例如账号被盗后），请调用 [`revokeSubject`](#revoking-every-token-of-a-principal)。访问令牌已过期时，用这对令牌登出：`TokenRevoker.revoke(compositeToken)`，刷新令牌会被校验，并且必须属于该访问令牌，与刷新的要求相同。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 的调用都是挂起函数，不会阻塞：在任何线程上从 `suspend` 处理函数里调用即可。
 
-每个已认证的请求都会以非阻塞方式检查吊销。这个检查有三点值得注意：
+每个带令牌的请求都会以非阻塞方式检查吊销。这个检查有四点值得注意：
 
-- **“未吊销”在本地缓存 30 秒**（`cosec.authentication.revocation.cache.*`）。通过 `TokenRevoker` 吊销会让所有实例上的这个答案立即失效。如果失效消息丢失，或吊销记录通过其他方式写入 Redis，某个实例可能在之后最多 30 秒内仍接受该令牌。
+- **“未吊销”在本地最多缓存 30 秒**：这是固定的，`cosec.authentication.revocation.cache.local-max-age` 只能缩短它。通过 `TokenRevoker` 吊销会让所有实例上的这个答案立即失效。如果失效消息丢失，或吊销记录通过其他方式写入 Redis，某个实例可能在之后最多 30 秒内仍接受该令牌。
 - **Redis 无法读取时，请求的令牌被接受。** 吊销读取器报告无法读取（`RevocationUnavailableException`），流水线在校验令牌时放行它。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小，或设置 `cosec.authentication.revocation.fail-closed: true` 改为应答 `503`。每个这样被接受的令牌都会计数（`cosec.revocation.unchecked`，[指标](../operations/observability.md#metrics)），并以 `WARN` 记录日志，最多每 10 秒一次。
 - **Redis 无法读取时，刷新失败。** 绝不在一次失败的吊销读取上签发令牌（`IDN-14`）：此时签发的令牌不在任何吊销记录中，既不受旧令牌的吊销约束，也不受其主体的吊销约束，会比两者都活得久。`RefreshTokenAuthentication` 抛出 `RevocationUnavailableException`，请以 `503` 应答，提供的路由正是如此。
 - **其他任何错误都会让请求失败。** Redis 返回但 CoSec 无法解码的吊销记录，或自定义 `RevocationReader` 抛出的错误，结果都是 `503`，绝不会接受令牌。
@@ -287,6 +291,7 @@ cosec:
         hash: <key 的 SHA-256 十六进制值，来自 ApiKeys.hash(key)>
         principal-id: svc-billing
         tenant-id: acme
+        app: order                        # key 所属的应用；省略则不声明任何应用
         roles: [billing, billing-admin@eu]
         expires-at: 2027-01-01T00:00:00Z
       - id: billing-admin
@@ -296,9 +301,9 @@ cosec:
         uncapped: true # 该 key 拥有 svc-billing 拥有的一切
 ```
 
-每个 key 都需要 `id`、64 个字符的小写十六进制 `hash`、`principal-id`、`tenant-id`，以及 `roles` 与 `uncapped: true` 二者恰好其一，且 id 必须唯一；否则应用无法启动，因此不会有 key 因遗漏而没有上限。配置了 key 不再携带的 `policies` 或 `attributes` 的 key 同样无法启动：未知字段在绑定时失败，而不是被丢弃。在代码中，`ApiKey` 的 `roles` 也没有默认值：创建 key 的一方（包括 `RedisApiKeyStore.issue`）都要传入上限或 `null`。经网关使用的 key 请设置 `expires-at`：网关拒绝转发永不过期的凭证的身份（[转发身份](./web.md#forwarding-the-identity)）。轮换 key 的做法是：先添加新 key，把客户端切换过去，再删除旧 key。
+每个 key 都需要 `id`、64 个字符的小写十六进制 `hash`、`principal-id`、`tenant-id`，以及 `roles` 与 `uncapped: true` 二者恰好其一，且 id 和哈希都必须唯一；否则应用无法启动，因此不会有 key 因遗漏而没有上限。配置了 key 不再携带的 `policies` 或 `attributes` 的 key 同样无法启动：未知字段在绑定时失败，而不是被丢弃。在代码中，`ApiKey` 的 `app` 和 `roles` 都没有默认值：有应用的宿主会拒绝声明了另一个应用或没有声明应用的 key（[应用](#apps)），创建 key 的一方（包括 `RedisApiKeyStore.issue`）都要传入上限或 `null`。经网关使用的 key 请设置 `expires-at`：网关无法转发永不过期的凭证的身份，在每个接收身份的路由上以 `500` 应答这样的请求（[转发身份](./web.md#forwarding-the-identity)）。轮换 key 的做法是：先添加新 key，把客户端切换过去，再删除旧 key。
 
-**Redis 存储**，由所有实例共享，可在运行时修改：设置 `cosec.api-key.store: redis`（需要 `cosec-cocache`；key 位于 `<cosec.key-prefix>:api-key` 之下，默认 `cosec:api-key`）。管道用非阻塞的 `RedisApiKeyReader` 读取它们。通过 `RedisApiKeyStore` Bean 管理 key：
+**Redis 存储**，由所有实例共享，可在运行时修改：设置 `cosec.api-key.store: redis`（需要 `cosec-cocache`；key 位于 `<cosec.key-prefix>:api-key` 之下，默认 `cosec:api-key`）。管道用非阻塞的 `RedisApiKeyReader` 读取它们。通过 `RedisApiKeyStore` Bean 管理 key，它的调用会阻塞在 Redis 上：请在事件循环之外调用。
 
 | 调用 | 效果 |
 |---|---|
@@ -306,7 +311,7 @@ cosec:
 | `save(hash, apiKey)` | 替换具有该哈希的 key，例如设置 `enabled = false` 或修改其角色。 |
 | `revoke(hash)` | 删除该 key。它在下一个请求时即失效。 |
 
-此后每个带 key 的请求都会读取 Redis。Redis 无法读取时，请求返回 `503`：与令牌吊销不同，API key 查找失败即拒绝。key 存储为 `{"format":2,"id":…,"principalId":…,"tenantId":…,"roles":[…]|null,"expiresAt":…|null,"enabled":…}`，每个字段都总是写入。以 8.0 之前的格式存储的 key 自带角色和策略的授予，读取时被拒绝，绝不会被当作没有上限的 key：请求返回 `503`。`cosec-migrate api-keys` 可以转换这类 key（[升级](../operations/upgrading.md#api-keys-narrow-and-memberships-decide)）。
+此后每个带 key 的请求都会读取 Redis。Redis 无法读取时，请求返回 `503`：与令牌吊销不同，API key 查找失败即拒绝。key 存储为 `{"format":3,"id":…,"principalId":…,"tenantId":…,"app":…|null,"roles":[…]|null,"expiresAt":…|null,"enabled":…}`，每个字段都总是写入。以其他任何格式存储的 key 在读取时被拒绝；以 8.0 之前的格式存储、自带角色和策略授予的 key 绝不会被当作没有上限的 key：请求返回 `503`。`cosec-migrate api-keys` 可以转换这类 key（[升级](../operations/upgrading.md#api-keys-narrow-and-memberships-decide)）。
 
 **其他存储**：声明你自己的 `ApiKeyReader` Bean，它按哈希做非阻塞查找，无法读取时抛出异常。开启了 API key，却既没有内存存储也没有 `ApiKeyReader` 时，启动失败。
 
@@ -347,14 +352,16 @@ suspend fun select(@PathVariable tenant: String, @PathVariable app: String, secu
     authentication.authenticateAsToken(SelectTenant(tenant, app, security))
 ```
 
+与[刷新](#refreshing-tokens)一样，`SecurityContext` 参数在 Spring MVC 上会被解析；在 WebFlux 上，请读取 `exchange.getSecurityContext()`。
+
 新令牌只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。**它的应用是你的 `TenantSwitch` 回答的应用**（`TenantMembership.app`），必须是令牌的 `aud` 能携带的应用 id；没有回答应用时，保留先前令牌的应用（`SCP-12`）。`targetAppId` 是用户请求的应用，只能经由你的回答进入令牌：用户不能靠指名得到某个应用的令牌，只有在你的代码检查过用户拥有它之后才行。
 
 **切换从请求的会话签发**，即 CoSec 的令牌向管道证明的那个会话：`context` 必须是管道为该请求构造的上下文，你的凭证中没有任何东西指定会话。新令牌开始一个自己的会话，保留那个会话的登录时间，因此会在先前的会话结束时结束：用户并没有重新登录（`IDN-17`）。它只在那个会话仍然有效时签发（`IDN-22`），并且在询问你的 `TenantSwitch` 之前就检查：
 
-- 重新严格读取其令牌的吊销记录：吊销存储无法读取时，切换回答 503，即使请求本身已被放行（PIP-7，[登出与吊销](#logout-and-revocation)）；
-- 它的会话仍属于该主体且没有被结束：登出，或刷新之后再次出示旧的令牌对（[刷新令牌](#refreshing-tokens)），都会结束会话，此后该会话的访问令牌虽然在过期前仍然有效，却切换不出任何令牌（`token-revoked`）；超过生命周期的会话为 `token-expired`。
+- 重新严格读取其令牌的吊销记录：吊销存储无法读取时，切换抛出 `RevocationUnavailableException`，由你的端点应答 `503`，即使请求本身已被放行（PIP-7，[登出与吊销](#logout-and-revocation)）；会话存储无法读取时抛出 `SessionStoreUnavailableException`，同样是 `503`；
+- 它的会话仍属于该主体且没有被结束：登出，或在轮换宽限期过后再次出示刷新前的令牌对（[会话](#sessions)），都会结束会话，此后该会话的其他访问令牌虽然在过期前仍然有效，却切换不出任何令牌（`TokenRevokedException`：请应答 `401` `token-revoked`）；超过生命周期的会话抛出 `TokenExpiredException`（`token-expired`）。
 
-凭证不是 CoSec 令牌的请求（例如 API key）没有会话，不能切换（`token-invalid`）。被切换离开的会话保持原样：登出结束的是交给它的令牌对，而不是它切换自的那个。要结束一个用户的所有会话，请[吊销该主体](#revoking-every-token-of-a-principal)。在网关之后，切换从网关验证并随身份转发的会话签发（[网关之后的服务](./web.md#services-behind-the-gateway)）。
+凭证不是 CoSec 令牌的请求（例如 API key）没有会话，不能切换（`TokenVerificationException`：`token-invalid`）。这些异常没有人替你映射：切换是你自己的端点，请像[提供的刷新路由](#refreshing-tokens)那样应答它们。被切换离开的会话保持原样：登出结束的是交给它的令牌对，而不是它切换自的那个。要结束一个用户的所有会话，请在它切换进入过的每个租户中[吊销该主体](#revoking-every-token-of-a-principal)：切换出的会话属于其目标租户。在网关之后，切换从网关验证并随身份转发的会话签发（[网关之后的服务](./web.md#services-behind-the-gateway)）；承载它的服务设置 `cosec.jwt.enabled=true`，使用网关的 `cosec.jwt.secret` 和 `cosec.jwt.algorithm`，以及相同的 Redis 和 `cosec.key-prefix`，从而读取同样的会话和吊销记录。
 
 **测试切换。** 切换需要管道为一个携带有效会话令牌的请求构造的上下文，所以测试不能手工构造它。`PermittedRequest.withToken`（`cosec-testkit`）提供这个上下文：用你自己的登录、基于内存中的令牌族签发一个令牌，测试工具会让它经过 CoSec 自己的令牌认证器。切换使用同一组令牌族：
 
@@ -421,15 +428,15 @@ class SelectTenantTest {
 2. 在你的回调端点中，把提供方的回调参数（`code`、`state` 等）绑定到 `JustAuthCredentials("<name>", <绑定 Cookie 的值，没有则为 "">)`，并传给 `TokenCompositeAuthentication.authenticateAsToken`。只有当回调的 `state` 是 CoSec 签发的、未过期、未被使用过（在调用提供方之前就以 `GETDEL` 立即从 Redis 取走），并且浏览器的绑定值哈希后与记录的一致（以恒定时间比较）时，回调才被接受。来自另一个浏览器、重复发送或伪造的 state 会抛出 `SocialAuthenticationException`。这就是阻止登录 CSRF 的方式：攻击者为自己的账户拿到的回调 URL，在受害者的浏览器中打开时，带的是攻击者的 state，却没有攻击者的 Cookie。注册上设置 `ignore-check-state: true` 会让启动失败。
 3. `SocialUserPrincipalConverter` 把提供方的用户转换成你的主体。默认的 `DirectSocialUserPrincipalConverter` 令牌属于 `cosec.authorization.scope.app-id`（用户登录的宿主的应用，未配置则不属于任何应用），并创建一个 id 为 `<提供方用户 id>@<name>` 的主体，只带两个属性，`cosec_oauth_provider`（注册名）和 `cosec_oauth_user_id`（提供方的用户 id），并且**没有角色、策略或租户**。属性会成为签名的声明，条件读取它们，网关也可能转发它们，因此用户在提供方可以编辑的资料（名称、邮箱、公司、简介、原始用户信息）不在其中。要在你自己的系统中查找该用户并赋予角色，请声明你自己的 `SocialUserPrincipalConverter` Bean。登录只需要提供方的用户 id：提供方不返回用户名（StackOverflow）、性别（Figma）或原始用户信息时仍可登录，此时 `SocialUser.username` 取用户 id，`gender` 为 `UNKNOWN`，`rawInfo` 为空。成功响应里没有用户 id 或没有用户，则以 `SocialAuthenticationException` 拒绝。
 
-JustAuth 是阻塞的：`authorize` 把 state 写入 Redis，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，最多 16 个线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
+JustAuth 是阻塞的：`authorize` 把 state 写入 Redis，回调则通过阻塞 HTTP 调用提供方。CoSec 把这两步都放到每个提供方自己的调度器上运行，把它的 state 存储的 Redis 调用放到存储自己的调度器上，各自最多 16 个线程，所以你可以在任何线程上调用它们，包括事件循环。挂住的提供方只会拖慢它自己的登录，请求被取消时会中断它的调用。
 
 ## 网关之后 {#behind-a-gateway}
 
 位于 `cosec-gateway-server` 或任何 CoSec 网关之后的服务，要么信任网关，要么再次决策。没有服务会不经校验就信任令牌。
 
-- **信任网关转发的身份**（`cosec.pipeline.mode=gateway`）。网关校验凭证、检查吊销并做出决策，然后在 `CoSec-Identity` 中转发调用方是谁。服务不需要密钥、key、文档或 Redis，并且必须只能经由网关访问。配置方法、回应和安全上下文见[网关之后的服务](./web.md#services-behind-the-gateway)。
+- **信任网关转发的身份**（`cosec.pipeline.mode=gateway`）。网关校验凭证、检查吊销并做出决策，然后在 `CoSec-Identity` 中转发调用方是谁。服务不需要密钥、key、文档或 Redis，除非它自己签发令牌（登录、[租户切换](#switching-tenant-and-app)）：那时它设置 `cosec.jwt.enabled=true`，使用网关的密钥和令牌存储。它必须只能经由网关访问。配置方法、回应和安全上下文见[网关之后的服务](./web.md#services-behind-the-gateway)。
 - **再次决策**（默认的 `enforce`）。服务运行自己的管道：校验令牌的签名、有效期和吊销状态，并基于同样的文档做决策。
 
-要再次决策，请在网关上设置 `cosec.gateway.identity.forward-authorization=true`：默认情况下网关在转发前会移除 `Authorization` 请求头、API key 请求头、`authorization` 查询参数和 `authorization` cookie；即使打开，也只在本会接收身份的路由上转发它们：`lb://` 路由，或标为 `cosec-identity: true` 的路由（[转发身份](./web.md#forwarding-the-identity)）。让各服务与网关使用相同的 `cosec.jwt.secret`、相同的 Redis 和相同的 `cosec.key-prefix`，这样它们读取的是同样的文档和同样的吊销记录。网关把 `CoSec-Request-Id` 设为它自己的请求 id（[网关](./web.md#gateway)），使每个服务的结果带有同一个 id。在每个服务上设置 `cosec.authorization.scope.app-id`，并把 `cosec.authorization.remote-ip.max-trusted-index` 设为它前面的代理数量（包括网关）（[信任边界](../guide/security-model.md#trust-boundaries)）。
+要再次决策，请在网关上设置 `cosec.gateway.identity.forward-authorization=true`：默认情况下网关在转发前会移除 `Authorization` 请求头、API key 请求头、`authorization` 查询参数和 `authorization` cookie；即使打开，也只在本会接收身份的路由上转发它们：未标为 `cosec-identity: false` 的 `lb://` 路由，或标为 `cosec-identity: true` 的路由（[转发身份](./web.md#forwarding-the-identity)）。让各服务与网关使用相同的 `cosec.jwt.secret` 和 `cosec.jwt.algorithm`、相同的 Redis 和相同的 `cosec.key-prefix`，这样它们读取的是同样的文档和同样的吊销记录。网关把 `CoSec-Request-Id` 设为它自己的请求 id（[网关](./web.md#gateway)），使每个服务的结果带有同一个 id。在每个服务上设置 `cosec.authorization.scope.app-id`，并把 `cosec.authorization.remote-ip.max-trusted-index` 设为它前面的代理数量（包括网关）（[信任边界](../guide/security-model.md#trust-boundaries)）。
 
 **下一步：** 在自己的代码中请求决策，见[代码中的权限检查](./checks.md)。
