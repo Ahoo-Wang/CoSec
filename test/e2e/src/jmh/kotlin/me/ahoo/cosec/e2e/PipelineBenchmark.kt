@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.e2e
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -73,6 +74,8 @@ import kotlin.coroutines.startCoroutine
  * is resolved by `RouteMap.resolve` and its resource id made of two captures, and the `admin` role permits the action;
  * no other scenario resolves a route, so this is the one that prices it. `rate-limited` joins with PR-5.
  *
+ * The slice has a `MeterRegistry`, as an application with Actuator has, so what the starter meters is in the price.
+ *
  * Each operation starts the request as an adapter would and finishes it on the calling thread: a warm request never
  * suspends (`SliceBlockHoundTest`); one that did would be waited for, and counted.
  */
@@ -113,13 +116,19 @@ open class PipelineBenchmark {
                 options = SnapshotOptions(),
                 authenticator = ApiKeyAuthenticator(InMemoryApiKeyStore(keys).reader),
                 membershipLoader = loader,
+                meterRegistry = SimpleMeterRegistry(),
             )
         } else if (scenario == "routed") {
             val file = Files.createTempFile("cosec-routes-", ".json").also { routeMap = it }
             Files.writeString(file, ROUTES)
-            Slice(options = SnapshotOptions(), routeMap = file.toUri().toString())
+            Slice(options = SnapshotOptions(), routeMap = file.toUri().toString(), meterRegistry = SimpleMeterRegistry())
         } else {
-            Slice(options = SnapshotOptions(), attributes = attributes, listeners = listeners)
+            Slice(
+                options = SnapshotOptions(),
+                attributes = attributes,
+                listeners = listeners,
+                meterRegistry = SimpleMeterRegistry(),
+            )
         }
         slice.publish(SnapshotKey.Platform, platform())
         slice.publish(

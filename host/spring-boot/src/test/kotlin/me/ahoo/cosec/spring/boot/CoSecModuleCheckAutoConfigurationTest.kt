@@ -146,6 +146,18 @@ class CoSecModuleCheckAutoConfigurationTest {
     }
 
     @Test
+    fun `metrics turned on explicitly without cosec-micrometer fail startup`() {
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.micrometer.MicrometerSnapshotMetrics"))
+                .withPropertyValues("cosec.metrics.enabled=true"),
+            "cosec-micrometer",
+        )
+        // By default metrics are optional: without the module, nothing is metered and the host starts.
+        starts(plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.micrometer.MicrometerSnapshotMetrics")))
+        starts(plain.withPropertyValues("cosec.metrics.enabled=true"))
+    }
+
+    @Test
     fun `a best-effort Kafka audit needs no cosec-kafka`() {
         starts(
             plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.kafka.KafkaAuditListener"))

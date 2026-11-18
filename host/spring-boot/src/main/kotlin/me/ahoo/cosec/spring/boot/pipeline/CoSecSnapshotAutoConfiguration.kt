@@ -37,6 +37,7 @@ import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
+import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.shadow.CandidateStore
@@ -320,9 +321,17 @@ class CoSecSnapshotAutoConfiguration {
         store: SnapshotDocumentStore,
         compiler: PlatformCompiler,
         properties: RuntimeAuthorizationProperties,
+        metrics: ObjectProvider<SnapshotMetrics>,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        val source = DocumentSnapshots.source(store, compiler, snapshot.toOptions())
+        // The data plane's source only: the control plane's own would count its reads under the same names.
+        val source = DocumentSnapshots.source(
+            store,
+            compiler,
+            snapshot.toOptions(),
+            Clock.systemUTC(),
+            metrics.getIfAvailable { SnapshotMetrics.NOOP },
+        )
         compiler.bind(source)
         // The loads start where the source is made, not in cosecDocumentReadiness: an application may replace that
         // bean, and a lazily initialized context makes it late. Both instances ask of the same keys (prewarmKeys).
