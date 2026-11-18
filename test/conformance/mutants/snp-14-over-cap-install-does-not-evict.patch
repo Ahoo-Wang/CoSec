@@ -1,12 +1,21 @@
 # Rule: SNP-14
-# Mutant: an install that takes its family over the cap does not evict in place, so a burst holds as many as housekeeping lets it (the runner's KeyEffects.evictBeyond)
+# Mutant: an install that takes its family over the cap does not evict in place, before its answers or after them, so a burst holds as many as housekeeping lets it (the runner's KeyEffects.evictOverCap and evictBeyond)
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundRunnerTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-index 9c40e457..b560de2c 100644
+index 00557a17..d74a7994 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-@@ -240,7 +240,7 @@ internal class KeyEffects<T : Any>(
+@@ -233,7 +233,7 @@ internal class KeyEffects<T : Any>(
+     private fun evictOverCap() {
+         val families = context.families
+         val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
+-        if (families.overCap(family)) DrainBudget.unbounded { families.evictBeyond(family) }
++        if (false) DrainBudget.unbounded { families.evictBeyond(family) }
+     }
+ 
+     /**
+@@ -250,7 +250,7 @@ internal class KeyEffects<T : Any>(
          ) {
              return
          }
