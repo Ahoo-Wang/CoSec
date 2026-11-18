@@ -1,0 +1,49 @@
+{
+  "rules": [
+    "PIP-26"
+  ],
+  "polarity": "negative",
+  "level": "pipeline",
+  "description": "While the request is in progress, a check of its context is decided on the documents: the ALLOW permits it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/orders/{*rest}"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "orders",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "check": {
+    "action": "http:DELETE",
+    "resource": "/orders/2"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "check": "Permit"
+  }
+}

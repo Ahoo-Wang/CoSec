@@ -195,6 +195,15 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 
 ## Symptoms
 
+### A check in code is false though the documents permit it
+
+- `decide` answers `Deny(null)` before reading any document when the context's request has ended (`PIP-26`: kept
+  after the response was written; check within the request, which a streamed body or an async servlet request still
+  is), when the pipeline did not make the context (`PIP-27`: the readers return none for a hand-made or mocked one; in
+  tests use `PipelineFixture.securityContext` or `PermittedRequest`), or when the action has no `:` or names what
+  enforcement refuses (`PIP-15`).
+  https://cosec.ahoo.me/operations/troubleshooting#a-check-answers-false
+
 ### Every request is 503, or the instance is not ready
 
 - No platform document is published yet (the first one comes from `cosec-migrate publish`; `cosec-migrate bootstrap`

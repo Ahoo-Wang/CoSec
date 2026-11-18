@@ -194,7 +194,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | `requestId` | CoSec 在审计记录、span 和 problem 响应中使用的请求 id：客户端发送了可接受的 `CoSec-Request-Id` 时就是它，否则是 CoSec 生成的 id，任何请求头里都没有。 |
 | `deviceId` | 客户端在 `CoSec-Device-Id` 中声明的设备，未声明时为空。由客户端声明：CoSec 只检查其形式（只能有一个值，否则 `400`），所以它不能证明是哪台设备。 |
 
-上下文是只读的：应用设置的任何内容都不会影响决策。
+上下文是只读的：应用设置的任何内容都不会影响决策。下面的每个读取入口都只返回 CoSec 管道构造的上下文（`PIP-27`）：应用的过滤器或某个库放在 exchange、Reactor 上下文或 Servlet 请求中 `SecurityContext.KEY` 下的其他任何东西，都读作没有上下文，绝不会被当作已认证的调用者。
 
 **WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。exchange 的 principal 也已设置，因此 `exchange.getPrincipal()` 返回 CoSec 主体。
 
@@ -236,7 +236,7 @@ val securityContext = SecurityContextHolder.requiredContext
 
 启动日志中以 `SecurityContextHolder in suspend handlers` 开头的一行说明宿主属于哪一种。异步处理器（`Callable`、`DeferredResult`）和你自己启动的线程看不到持有者，消息相同。在这些情况下，都请使用参数或请求。
 
-这个上下文正是 `AuthorizationChecker` 接受的上下文，用于询问同一主体能否做别的事（[代码中的权限检查](./checks.md)）。
+这个上下文正是 `AuthorizationChecker` 接受的上下文，用于在请求进行期间询问同一主体能否做别的事：适配器结束请求之后，对它的上下文的检查为 `false`（[代码中的权限检查](./checks.md#how-a-check-relates-to-the-request-pipeline)，`PIP-26`）。在 Spring MVC 上，过滤器只接管 REQUEST 分派：错误页在请求结束之后的 ERROR 分派中渲染，它仍读得到上下文，但在那里对它的每次检查都为 `false`。
 
 ## 代理后的客户端 IP {#client-ip-behind-proxies}
 

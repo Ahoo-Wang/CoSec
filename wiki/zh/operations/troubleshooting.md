@@ -201,6 +201,14 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
    绑定会自行过期，也可以通过控制面吊销。
 5. **旧的修订。** `snapshotVersion` 指明决策读取的修订。如果它们比已发布的旧，见[决策使用了旧的修订](#decisions-use-an-old-revision)。
 
+## 代码中的检查为 false，尽管文档允许 {#a-check-answers-false}
+
+`AuthorizationChecker.check` 为 `false`，`decide` 返回 `Deny(null)`（没有语句），而同样的请求本身会被放行。在读取任何文档之前，以下情况的检查就被拒绝：
+
+- **它的请求已经结束**（`PIP-26`）：上下文在响应写出之后仍被保留，存在字段、缓存或活得比请求更久的协程或消息里。改为在请求内检查；之后运行的工作自己携带授权（[代码中的权限检查](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)）。在流式响应体或异步 Servlet 请求期间的检查仍在请求之内；Spring MVC 错误页（ERROR 分派）中的检查不在。
+- **上下文不是管道构造的**：手工构造的或 mock。适配器的读取入口甚至不会返回这样的上下文（`PIP-27`）：`exchange.getSecurityContext()` 和 `request.getSecurityContext()` 为 `null`，必需的 `SecurityContext` 处理器参数会失败。测试中使用管道放行的请求的上下文（`PipelineFixture.securityContext`、`PermittedRequest`）。
+- **动作没有 `:`**，或者指向执法会拒绝的东西（含小写字母的 `http` 动词、请求会得到 `400` 的路径：`PIP-15`）。
+
 ## 决策使用了旧的修订 {#decisions-use-an-old-revision}
 
 审计事件的 `snapshotVersion` 或 span 的 `cosec.snapshot.version` 比控制面发布的修订旧。

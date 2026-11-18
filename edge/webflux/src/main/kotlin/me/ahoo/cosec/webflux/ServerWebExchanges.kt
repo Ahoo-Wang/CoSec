@@ -10,10 +10,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
+@file:OptIn(ExperimentalCoSecApi::class)
+
 package me.ahoo.cosec.webflux
 
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.runtime.http.RequestSecurity
 import org.springframework.web.server.ServerWebExchange
 
 /**
@@ -29,8 +34,12 @@ object ServerWebExchanges {
         attributes[SecurityContext.KEY] = securityContext
     }
 
+    /**
+     * The security context the adapter bound to this exchange; null when there is none, and for anything else under
+     * [SecurityContext.KEY], which an application filter or a library may have put there: only a context CoSec's
+     * pipeline made is an authenticated caller's (`PIP-27`).
+     */
     @JvmStatic
-    fun ServerWebExchange.getSecurityContext(): SecurityContext? {
-        return getAttribute(SecurityContext.KEY)
-    }
+    fun ServerWebExchange.getSecurityContext(): SecurityContext? =
+        (attributes[SecurityContext.KEY] as? SecurityContext)?.takeIf { RequestSecurity.of(it) != null }
 }
