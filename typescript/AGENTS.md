@@ -133,3 +133,7 @@ first real publish is not the first time the command runs.
 The CI job has `contents: read`, no secrets, a frozen lockfile and actions pinned by commit SHA. Nothing is published but
 by a release the maintainer creates, in a job with the `npm-publish` environment and OIDC (no npm token), from the
 tarballs that job packed and checked itself ([Releasing](#releasing)).
+
+Code scanning covers this workspace too: the `Analyze (javascript-typescript)` job of `.github/workflows/codeql.yml`
+(`.github/codeql/codeql-javascript.yml`) runs CodeQL's `security-and-quality` queries over `typescript/`, without a
+build, on every pull request and on main. An alert it raises is fixed in the code, not dismissed.
