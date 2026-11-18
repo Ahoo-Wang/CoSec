@@ -279,6 +279,7 @@ object GuardAllowlist {
             "runtime:SnapshotRevalidationTest#aPassDoesNotWaitForACompilationThatOutlivedTheStoreReadTimeout",
             "runtime:SnapshotRevalidationTest#aPassInstallsAChangeWrittenBeforeItThoughALoadThatReadBeforeItWasInFlight",
             "runtime:SnapshotRevalidationTest#aPassThatSkipsALoadStuckCompilingStillOwesTheReadAfterIt",
+            "runtime:SnapshotRevalidationTest#theLoadAfterAnOlderOneIsThePassReadSoThePassIsNotAbandonedWhileItReads",
             "runtime:KeyTransitionsTest#aPassThatMeetsALoadOlderThanItselfWaitsForTheLoadAfterItAndReadsWithIt",
             "runtime:KeyTransitionsTest#aPassThatSkipsAStuckLoadOlderThanItselfLeavesTheLoadAfterItOwed",
             "spring-boot:DeploymentKeyPrefixTest#every key family the starter wires lives under cosec key-prefix",

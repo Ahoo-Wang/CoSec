@@ -1,0 +1,25 @@
+# Rule: SNP-6
+# Mutant: the load after one older than a pass is not counted as the pass's read, so a pass waiting on its slow read can be abandoned as stalled while that read is in flight, and its reads add to the next pass's (the runner's KeyLoads.advance)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest --tests me.ahoo.cosec.runtime.snapshot.KeyTransitionsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+index 2291c185..3f8a8844 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+@@ -230,7 +230,6 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+         val wanted = step.again || stale || recompiled || (installed != null && load.fromLocalCopy)
+         val againForced = step.againForced
+         val pending = step.next
+-        val againPass = step.againPass
+         if (installed != null) {
+             step.installed = installed
+             step.installedEpoch = load.epoch
+@@ -241,7 +240,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+         step.next = null
+         step.againPass = null
+         val open = !step.moment.closed && !step.removed
+-        return if (wanted && open) newLoad(step, againForced, againPass, pending) else null
++        return if (wanted && open) newLoad(step, againForced, null, pending) else null
+     }
+ 
+     /** `answerWaiters`: [load]'s handles get [answer], or, for a withheld compilation, what [recompiling] ends with. */

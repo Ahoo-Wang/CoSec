@@ -87,6 +87,7 @@
         "runtime:SnapshotRevalidationTest#aPassDoesNotWaitForACompilationThatOutlivedTheStoreReadTimeout",
         "runtime:SnapshotRevalidationTest#aPassInstallsAChangeWrittenBeforeItThoughALoadThatReadBeforeItWasInFlight",
         "runtime:SnapshotRevalidationTest#aPassThatSkipsALoadStuckCompilingStillOwesTheReadAfterIt",
+        "runtime:SnapshotRevalidationTest#theLoadAfterAnOlderOneIsThePassReadSoThePassIsNotAbandonedWhileItReads",
         "runtime:KeyTransitionsTest#aPassThatMeetsALoadOlderThanItselfWaitsForTheLoadAfterItAndReadsWithIt",
         "runtime:KeyTransitionsTest#aPassThatSkipsAStuckLoadOlderThanItselfLeavesTheLoadAfterItOwed"
       ],

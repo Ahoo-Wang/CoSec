@@ -179,6 +179,13 @@ internal class SourceModel(
          * `SNP-6`: a pass never counts as its confirmation a read that began before it. Each document has had a read
          * that started after the call and ended, unless its load was stuck compiling when the pass reached it: the pass
          * does not wait for that load, and the read after it is owed ([checkOwedReads]).
+         *
+         * A read that started after the call and is still in flight when the pass completes is owed too. Only that skip
+         * leaves one: the pass skipped the stuck load, the compilation then ended before the pass did, and the load
+         * after it is reading. Every read the pass waits for has ended when it completes (a load it joined or waited
+         * for ends after its read; a read that timed out has ended), so it never leaves one in flight; and once a read
+         * of the document after the call has ended, the document is not owed whatever else is reading it. The property
+         * run reports how many documents were owed against how many were checked.
          */
         private fun passRead() {
             if (closedAt >= 0) return
