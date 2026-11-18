@@ -213,7 +213,7 @@ describe('ResourceAttributionRequestInterceptor', () => {
 
     vi.mocked(mockTokenStorage.get).mockReturnValue(mockToken);
 
-    const pathParams: Record<string, any> = {
+    const pathParams: Record<string, unknown> = {
       tenantId: 'existing-tenant',
     };
     vi.mocked(mockExchange.ensureRequestUrlParams).mockReturnValue({

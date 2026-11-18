@@ -28,7 +28,10 @@ internal fun keyRunners(
     k: Int = PROVISIONAL_K,
     hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE,
     hooked: (SnapshotKey) -> Boolean = { true },
-): SlotFactory = object : SlotFactory {
+): SlotFactory = keyRunners(k, hooksOf = { key -> if (hooked(key)) hooks else KeyDrain.Hooks.NONE })
+
+/** As above, with each key's own [hooksOf]: a hook that needs to know which key it runs for. */
+internal fun keyRunners(k: Int, hooksOf: (SnapshotKey) -> KeyDrain.Hooks): SlotFactory = object : SlotFactory {
     override fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: SlotContext): KeySlot<T> =
-        KeyRunner(key, compiler, context, k, if (hooked(key)) hooks else KeyDrain.Hooks.NONE)
+        KeyRunner(key, compiler, context, k, hooksOf(key))
 }

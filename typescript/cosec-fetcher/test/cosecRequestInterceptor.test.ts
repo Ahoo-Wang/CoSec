@@ -21,7 +21,6 @@ import { CoSecHeaders } from '../src';
 import type { FetchExchange } from '@ahoo-wang/fetcher';
 import { DeviceIdStorage } from '../src';
 import type { SpaceIdProvider } from '../src/spaceIdProvider';
-import { NoneSpaceIdProvider, SpaceIdStorage } from '../src/spaceIdProvider';
 import { idGenerator } from '../src/idGenerator';
 
 const mockStorage = {
@@ -37,7 +36,7 @@ class MockBroadcastChannel {
   postMessage = vi.fn();
   close = vi.fn();
   onmessage = null;
-  constructor(_name: string) {}
+  constructor(readonly name: string) {}
 }
 
 vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
@@ -69,9 +68,9 @@ vi.mock('../src/idGenerator', () => ({
 
 class MockFetchExchange implements Partial<FetchExchange> {
   public requestHeaders: Record<string, string> = {};
-  public attributes: Map<string, any> = new Map();
+  public attributes: Map<string, unknown> = new Map();
   // A request to the fetcher's own baseURL: the default trust policy carries credentials to it.
-  public request = { url: '/orders' };
+  public request: { url: string; method?: string } = { url: '/orders' };
   public fetcher = { urlBuilder: { baseURL: 'https://api.example.com' } };
 
   ensureRequestHeaders(): Record<string, string> {
@@ -324,7 +323,7 @@ describe('CoSecRequestInterceptor', () => {
     it('should create request headers object when not present', async () => {
       const exchangeWithoutHeaders = {
         ensureRequestHeaders: vi.fn().mockReturnValue({}),
-        attributes: new Map<string, any>(),
+        attributes: new Map<string, unknown>(),
         request: { url: '/orders' },
         fetcher: { urlBuilder: { baseURL: 'https://api.example.com' } },
       } as unknown as FetchExchange;
@@ -404,7 +403,7 @@ describe('CoSecRequestInterceptor', () => {
 
       for (const method of methods) {
         const exchangeForMethod = new MockFetchExchange();
-        (exchangeForMethod as any).request = {
+        exchangeForMethod.request = {
           method,
           url: 'https://api.example.com/test',
         };
@@ -440,7 +439,7 @@ describe('CoSecRequestInterceptor', () => {
 
       for (const url of urls) {
         const exchangeForUrl = new MockFetchExchange();
-        (exchangeForUrl as any).request = { method: 'GET', url };
+        exchangeForUrl.request = { method: 'GET', url };
 
         await testInterceptor.intercept(
           exchangeForUrl as unknown as FetchExchange,

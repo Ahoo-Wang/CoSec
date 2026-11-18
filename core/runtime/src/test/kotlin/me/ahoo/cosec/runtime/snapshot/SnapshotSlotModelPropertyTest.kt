@@ -36,7 +36,7 @@ class SnapshotSlotModelPropertyTest {
 
     @Test
     fun theSourceKeepsToTheModelInEveryScriptedOrder() = quietly {
-        runSeeds("Slot model", "theSourceKeepsToTheModelInEveryScriptedOrder", SlotFactory.SLOT)
+        runSeeds("Slot model", "theSourceKeepsToTheModelInEveryScriptedOrder", ModelSlots.SLOT)
     }
 
     @Test
@@ -64,8 +64,30 @@ class SnapshotSlotModelPropertyTest {
         runSeeds("KeyRunner model, K = 4", "theKeyRunnerKeepsToTheModelAtKFour", counting(k = 4), EVENT_KINDS)
     }
 
+    /**
+     * Seed 9191 at K = 0, a fixed case (stress run 44163444213): an eviction queued behind a hand-off is claimed while
+     * the family holds two absent entries, then, in the same event, an install moves the other one to the documents
+     * (a compilation that calls `recompile`). Judged after the event, the eviction looked like one within the bound.
+     */
+    @Test
+    fun anEvictionIsJudgedAtItsClaimNotAfterItsEvent() = quietly { fixedCase(SEED_9191) }
+
+    /**
+     * Seed 872 at K = 0, a fixed case: a claim taken when its kind is back at its bound, which the claim refuses. The
+     * first seed of 10,000 at which the model kills a claim that ignores the bound (`snp-7-claim-ignores-the-bound`).
+     */
+    @Test
+    fun aClaimAtItsKindsBoundIsRefused() = quietly { fixedCase(SEED_872) }
+
+    private fun fixedCase(seed: Int) {
+        val run = SlotModelRun(SlotModelScript.generate(seed, EVENTS), ModelSlots.runner(k = 0)).run()
+        run.failure.assert().describedAs("seed $seed").isNull()
+        run.counts.evictionsAtClaim.assert().isGreaterThan(0)
+        run.counts.evictionsAfterEvent.assert().isZero()
+    }
+
     private fun counting(k: Int = KeyRunner.PROVISIONAL_K) =
-        keyRunners(k, KeyDrain.Hooks(beforeNext = { taken += "took ${it::class.simpleName}" }))
+        ModelSlots.runner(k) { taken += "took ${it::class.simpleName}" }
 
     private fun quietly(block: () -> Unit) {
         // Every load that fails logs with its stack trace: at the TRACE level tests run with, tens of megabytes.
@@ -79,7 +101,7 @@ class SnapshotSlotModelPropertyTest {
         }
     }
 
-    private fun runSeeds(name: String, test: String, slots: SlotFactory, kinds: List<String> = emptyList()) {
+    private fun runSeeds(name: String, test: String, slots: ModelSlots, kinds: List<String> = emptyList()) {
         val only = System.getProperty("cosec.property.seed")?.toInt()
         val seeds = if (only != null) listOf(only) else (0 until seedCount()).toList()
         val reached = sortedMapOf<String, Int>()
@@ -96,7 +118,8 @@ class SnapshotSlotModelPropertyTest {
             "$name: ${seeds.size} seeds; seeds reaching each kind of event: $reached; checked " +
                 "${totals.installs} installs, ${totals.answered} answered waiters, ${totals.failures} compile failures, " +
                 "${totals.readTimeouts} store read timeouts, ${totals.coldTimeouts} request timeouts, " +
-                "${totals.evictions} evictions, ${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
+                "${totals.evictions} evictions (${totals.evictionsAtClaim} judged at the claim, " +
+                "${totals.evictionsAfterEvent} after the event), ${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
                 "${totals.lostWritesChecked} lost invalidations ${totals.lostWritesByLag}"
         )
         if (only == null) {
@@ -117,6 +140,8 @@ class SnapshotSlotModelPropertyTest {
         totals.readTimeouts += counts.readTimeouts
         totals.coldTimeouts += counts.coldTimeouts
         totals.evictions += counts.evictions
+        totals.evictionsAtClaim += counts.evictionsAtClaim
+        totals.evictionsAfterEvent += counts.evictionsAfterEvent
         totals.regressions += counts.regressions
         totals.resetsChecked += counts.resetsChecked
         totals.lostWritesChecked += counts.lostWritesChecked
@@ -127,6 +152,7 @@ class SnapshotSlotModelPropertyTest {
             "store read timed out" to counts.readTimeouts,
             "request answered by its timeout" to counts.coldTimeouts,
             "eviction" to counts.evictions,
+            CLAIM_JUDGED to counts.evictionsAtClaim,
             "regression installed" to counts.regressions,
             "compile failed" to counts.failures,
         ).filterValues { it > 0 }.keys.forEach { reached.merge(it, 1, Int::plus) }
@@ -135,7 +161,7 @@ class SnapshotSlotModelPropertyTest {
     private fun seedCount(): Int = maxOf(SEEDS, Integer.getInteger("cosec.property.iterations", 0) / 10)
 
     /** The failure of [seed], shrunk: the shortest script found that fails the same check, with its events. */
-    private fun report(seed: Int, failure: String, test: String, slots: SlotFactory): String {
+    private fun report(seed: Int, failure: String, test: String, slots: ModelSlots): String {
         val script = shrink(SlotModelScript.generate(seed, EVENTS), shapeOf(failure), slots)
         val run = SlotModelRun(script, slots).run()
         return buildString {
@@ -154,7 +180,7 @@ class SnapshotSlotModelPropertyTest {
      * Leaves events out, one at a time from the end, while the run still fails with the same kind of violation; again
      * until a whole pass leaves nothing out.
      */
-    private fun shrink(script: SlotModelScript, shape: String, slots: SlotFactory): SlotModelScript {
+    private fun shrink(script: SlotModelScript, shape: String, slots: ModelSlots): SlotModelScript {
         val failedAt = SlotModelRun(script, slots).run().log.size
         var current = script.copy(events = script.events.take(maxOf(0, failedAt - 1)))
         do {
@@ -176,6 +202,11 @@ class SnapshotSlotModelPropertyTest {
     private companion object {
         const val SEEDS = 500
         const val EVENTS = 250
+        const val SEED_9191 = 9191
+        const val SEED_872 = 872
+
+        /** Reached by every run over the runner: an eviction judged at its claim ([SlotModel.claimed]). */
+        const val CLAIM_JUDGED = "eviction judged at its claim"
         val DIGITS = Regex("[0-9]+")
         val LISTS = Regex("\\[[^]]*]")
         val VACUITY = listOf(
@@ -192,6 +223,6 @@ class SnapshotSlotModelPropertyTest {
         val EVENT_KINDS = listOf(
             "Requested", "Changed", "Recompile", "ReadDone", "ReadFailed", "ReadTimedOut", "Compiled", "CompileCrashed",
             "CompileRejected", "RetryDue", "Evict", "Close",
-        ).map { "took $it" }
+        ).map { "took $it" } + CLAIM_JUDGED
     }
 }

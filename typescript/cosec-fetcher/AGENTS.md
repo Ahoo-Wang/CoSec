@@ -99,9 +99,7 @@ src/
 - 🚫 Sending a refresh again after its `rotationLeeway` window without saying so in the docs: it revokes the session if the first attempt was recorded
 - 🚫 Removing token refresh retry logic without replacement
 
-## The lint warning ceiling
+## Lint
 
-`pnpm lint` is `eslint --max-warnings 45 .`, and `src/` has no warning: `no-console` is an error there (a library writes
-nothing to the console), and no public declaration says `any`. The 45 are in `test/`: 32 `@typescript-eslint/no-explicit-any`
-and 13 `@typescript-eslint/no-unused-vars`, none of which changes behaviour or a public signature. The number only ever
-goes down, and it is zero before the first npm release (a small follow-up pull request).
+`pnpm lint` is `eslint --max-warnings 0 .`, like the workspace's. `no-console` is an error in `src/` (a library writes
+nothing to the console), and no public declaration says `any`; a test types its mocks (`as unknown as X`, never `any`).

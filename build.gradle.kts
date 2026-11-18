@@ -42,6 +42,7 @@ val testOnlyProjects = setOf(
     project(":conformance"),
     project(":architecture"),
     project(":e2e"),
+    project(":client-host"),
 )
 val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects - dependenciesProject
 val libraryProjects = publishProjects - bomProject

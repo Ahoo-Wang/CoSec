@@ -53,8 +53,9 @@
     "lint": "eslint .",
     "clean": "rm -rf dist",
     "analyze": "npx vite-bundle-analyzer -p auto",
+    "test:host": "vitest run --config vitest.host.config.ts",
     "test:no-coverage": "vitest run --coverage.enabled=false && pnpm test:api",
-    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test/tsconfig.json && tsc --noEmit -p test-host/tsconfig.json",
     "test:api": "node ../scripts/api-report.mjs"
   },
   "peerDependencies": {

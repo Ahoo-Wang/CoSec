@@ -106,7 +106,7 @@ describe('JwtTokenManager', () => {
     });
 
     vi.mocked(tokenRefresher.refresh).mockReturnValueOnce(
-      refreshPromise as any,
+      refreshPromise as unknown as ReturnType<TokenRefresher['refresh']>,
     );
 
     // Act
@@ -297,8 +297,9 @@ describe('JwtTokenManager', () => {
         accessToken: 'access-token',
         refreshToken: 'refresh-token',
       });
-      const original = tokenStorage.get();
-      vi.mocked(tokenRefresher.refresh).mockResolvedValueOnce(response as any);
+      vi.mocked(tokenRefresher.refresh).mockResolvedValueOnce(
+        response as unknown as CompositeToken,
+      );
 
       const error = await jwtTokenManager.refresh().catch(e => e);
 

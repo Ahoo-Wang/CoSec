@@ -60,9 +60,7 @@ describe('AuthorizationResponseInterceptor', () => {
       mockTokenRefresher,
     );
     // 使用 vi.spyOn 替代直接定义属性
-    const isRefreshableSpy = vi
-      .spyOn(mockJwtTokenManager, 'isRefreshable', 'get')
-      .mockReturnValue(true);
+    vi.spyOn(mockJwtTokenManager, 'isRefreshable', 'get').mockReturnValue(true);
 
     interceptor = new AuthorizationResponseInterceptor({
       tokenManager: mockJwtTokenManager,
@@ -100,9 +98,9 @@ describe('AuthorizationResponseInterceptor', () => {
 
   it('should not intercept when token is not refreshable', async () => {
     // Mock isRefreshable to return false using spyOn
-    const isRefreshableSpy = vi
-      .spyOn(mockJwtTokenManager, 'isRefreshable', 'get')
-      .mockReturnValue(false);
+    vi.spyOn(mockJwtTokenManager, 'isRefreshable', 'get').mockReturnValue(
+      false,
+    );
 
     const exchange = {
       response: {
@@ -224,8 +222,6 @@ describe('AuthorizationResponseInterceptor', () => {
     } as unknown as FetchExchange;
 
     mockTokenStorage.get = vi.fn().mockReturnValue(null);
-
-    const refreshError = new Error('No token found');
 
     await expect(interceptor.intercept(exchange)).rejects.toThrow(
       'No token found',
