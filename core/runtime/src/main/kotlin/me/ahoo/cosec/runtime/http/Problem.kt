@@ -14,6 +14,7 @@
 package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
  * The body of an outcome that does not proceed: an RFC 9457 problem (RFC 0006 §6.2). It holds what a client can act on
@@ -31,3 +32,12 @@ class Problem internal constructor(
 
     override fun toString(): String = "Problem(type=${type.slug}, requestId=$requestId, traceId=$traceId)"
 }
+
+/**
+ * A problem CoSec answers outside a pipeline outcome: the routes the starter serves for login sessions, which answer
+ * after the pipeline permitted the request. [requestId] is that request's, so the body and the `CoSec-Request-Id`
+ * header agree; there is no trace id, the route having none of its own.
+ */
+@InternalCoSecApi
+@ExperimentalCoSecApi
+fun routeProblem(type: ProblemType, requestId: String): Problem = Problem(type, requestId, null)

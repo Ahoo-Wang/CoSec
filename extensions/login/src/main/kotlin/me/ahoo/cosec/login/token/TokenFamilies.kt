@@ -93,7 +93,7 @@ class TokenFamilies @JvmOverloads constructor(
         }
         repeat(MAX_ATTEMPTS) {
             val family = TokenFamily(ids.generate(), tenant, principal, loggedIn, expiresAt, 1, null, false)
-            if (store.create(family)) {
+            if (sessionStore("create a session") { store.create(family) }) {
                 return Issue(TokenSession(family.id, loggedIn, 1), expiresAt)
             }
         }
@@ -120,7 +120,7 @@ class TokenFamilies @JvmOverloads constructor(
             throw TokenExpiredException("The session that began at ${session.authTime} has ended: sign in again.")
         }
         repeat(MAX_ATTEMPTS) {
-            val read = store.read(session.id)
+            val read = sessionStore("read a session") { store.read(session.id) }
                 ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
             val family = read.family
             checkOwner(family, token.tenant?.let(::TenantId) ?: TenantId.DEFAULT, PrincipalId(token.principal), session)
@@ -133,7 +133,7 @@ class TokenFamilies @JvmOverloads constructor(
             when {
                 session.generation == family.generation -> {
                     val next = family.rotated(now)
-                    if (store.replace(read.version, next)) {
+                    if (sessionStore("rotate a session") { store.replace(read.version, next) }) {
                         return Issue(TokenSession(family.id, family.authTime, next.generation), family.expiresAt)
                     }
                     // Another refresh moved the family in between: read it again, the pair is now the one before.
@@ -171,7 +171,7 @@ class TokenFamilies @JvmOverloads constructor(
         if (!session.authTime.plus(lifetime).isAfter(now)) {
             throw TokenExpiredException("The session that began at ${session.authTime} has ended: sign in again.")
         }
-        val family = store.read(session.id)?.family
+        val family = sessionStore("read a session") { store.read(session.id) }?.family
             ?: throw TokenVerificationException("The token's session is unknown: sign in again.")
         checkOwner(family, tenant, principal, session)
         if (family.revoked) {
@@ -188,7 +188,7 @@ class TokenFamilies @JvmOverloads constructor(
      */
     suspend fun end(id: String) {
         repeat(MAX_ATTEMPTS) {
-            val read = store.read(id) ?: return
+            val read = sessionStore("read a session") { store.read(id) } ?: return
             if (read.family.revoked || revoke(read)) {
                 return
             }
@@ -196,10 +196,9 @@ class TokenFamilies @JvmOverloads constructor(
         throw IllegalStateException("The session [$id] kept changing while it was revoked.")
     }
 
-    private suspend fun revoke(read: TokenFamilyStore.Read): Boolean = store.replace(
-        read.version,
-        read.family.revoked()
-    )
+    private suspend fun revoke(read: TokenFamilyStore.Read): Boolean = sessionStore("revoke a session") {
+        store.replace(read.version, read.family.revoked())
+    }
 
     /** A family is its principal's: a token naming another principal's family is refused, and changes nothing. */
     private fun checkOwner(family: TokenFamily, tenant: TenantId, principal: PrincipalId, session: TokenSession) {
