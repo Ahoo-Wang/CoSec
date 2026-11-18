@@ -395,7 +395,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
   <<< @/examples/probes/documents/platform.json [probes policy and binding]
 
-  第一份文档发布之前，探针仍然回答 `503`，这正是“未就绪”该有的回答。在 Kubernetes 之外，Spring Boot 只有设置了 `management.endpoint.health.probes.enabled=true` 才提供探针。
+  第一份文档发布之前，探针仍然回答 `503`，这正是“未就绪”该有的回答。Spring Boot 4 在任何平台上都提供探针：`management.endpoint.health.probes.enabled` 默认为 `true`。
 - **存活与启动探针不能依赖平台文档。** 应用的应用端口上的 HTTP 存活探针在第一份文档发布之前回答 `503`，kubelet 会在它能就绪之前就重启 pod。WebMvc 上把它指向管理端口，它不经 CoSec。WebFlux 的管理端口同样经 CoSec，所以对应用端口使用 `tcpSocket` 探针。
 - **管理端口上不经 CoSec 的内容由网络保护**，与网关相同：只在那里暴露你愿意让能访问该端口的任何人访问的东西。
 

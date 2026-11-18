@@ -553,8 +553,8 @@ With one port, or `management.server.port` equal to the application's, every row
 
   <<< @/examples/probes/documents/platform.json [probes policy and binding]
 
-  Before the first document is published the probe still answers `503`, which is the right answer for "not ready". Outside
-  Kubernetes, Spring Boot serves the probes only with `management.endpoint.health.probes.enabled=true`.
+  Before the first document is published the probe still answers `503`, which is the right answer for "not ready". Spring
+  Boot 4 serves the probes on every platform: `management.endpoint.health.probes.enabled` is `true` by default.
 - **Liveness and startup must not depend on the platform document.** An HTTP liveness probe on the application port of an
   application answers `503` until the first document is published, so the kubelet restarts the pod before it can ever be
   ready. On WebMvc, point it at the management port, which is outside CoSec. On WebFlux the management port is under CoSec
