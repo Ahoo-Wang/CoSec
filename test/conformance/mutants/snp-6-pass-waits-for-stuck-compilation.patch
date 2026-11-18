@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
-index 1c887b7c..e23ad302 100644
+index 96322c8f..83ca5c6f 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
-@@ -140,7 +140,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
+@@ -139,7 +139,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
          val inFlight = step.load
          if (inFlight != null && pass != null) {
              val older = inFlight.startedNanos - pass.startedNanos <= 0

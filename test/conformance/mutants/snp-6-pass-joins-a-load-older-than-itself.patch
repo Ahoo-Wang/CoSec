@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest --tests me.ahoo.cosec.runtime.snapshot.KeyTransitionsTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
-index 1c887b7c..7f9f6995 100644
+index 96322c8f..783d612e 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
-@@ -145,7 +145,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
+@@ -144,7 +144,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
                  waiter?.let { step.emit(KeyEffect.Skip(it)) }
                  return
              }
