@@ -247,14 +247,19 @@ sequenceDiagram
 - **Lost messages are caught by revalidation** (steps 6 and 7): a pass starts every
   [`revalidate-interval`](./configuration.md#snapshot) (10 seconds) and confirms each installed document with a
   conditional read of Redis, never a local copy, that transfers nothing when it is unchanged. The passes are the only
-  bound on a change whose invalidation message was lost: the first pass to reach the document after the change
-  installs it. So they cannot be turned off, and the interval is at most 5 minutes (`SNP-6`). A pass reads four
+  bound on a change whose invalidation message was lost: a change written before a pass starts is installed by the
+  time that pass is done with the document. So they cannot be turned off, and the interval is at most 5 minutes
+  (`SNP-6`). A pass never takes a read made before it started as its own: when it meets a load of the document
+  already in flight, it joins that load only if the load started after the pass did, and otherwise waits for one
+  more load, which reads Redis after the load in flight ends. A pass reads four
   documents at a time, and one pass runs at a time: when Redis is so slow that a pass outlasts the interval, the next
   starts as soon as it ends, rather than add four more reads each interval. A pass that has confirmed no document for
   30 seconds and has no read in flight is held up only by compilations: the next tick abandons it and starts a new
   pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned. A pass does
-  not wait for a document whose compilation has been running for more than those 30 seconds, whoever started it: the
-  compilation confirms the document when it ends, and the pass goes on to the documents behind it.
+  not wait for a document whose compilation has been running for more than those 30 seconds, whoever started it, and
+  goes on to the documents behind it. When that compilation ends, it installs what its read found; if its read began
+  before the pass, one more load follows at once, so a change the pass would have read is installed then, not at a
+  later pass.
 - **Ids without a document** are remembered apart from the documents, at most 256 per family: credentials issued for
   many app ids that have no document make the instance read Redis for each (a client never declares its app), but never pushes an installed document out (`SNP-7`).
 - **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every

@@ -1178,6 +1178,13 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 
 ### From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
+- **Fixed: a lost invalidation is installed by the first pass after it, even past a load in flight.** The beta.3
+  release notes listed it as a known issue: when a revalidation pass met a load of a document already in flight, it
+  took that load's read as its confirmation, though the read could predate the change, so a change whose invalidation
+  was lost could take two `revalidate-interval`s to install, and decisions used the previous revision meanwhile. A
+  pass now joins only a load that started after it, and otherwise waits for one more load (`SNP-6`,
+  [Storage](./storage.md#how-instances-read-documents)). Nothing to change; Redis may see one more conditional
+  read of a document when a pass meets its load.
 - **The `cosec-gateway-server` image turns ip2region off.** Its `config/application.yaml` now sets
   `cosec.ip2region.enabled: false`, as the Kubernetes base already did; through beta.3 the image left it on. A document
   that reads `ext.ip2region.*` no longer compiles on it: set `COSEC_IP2REGION_ENABLED=true` before you upgrade the

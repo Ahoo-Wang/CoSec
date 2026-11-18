@@ -1,0 +1,17 @@
+# Rule: SNP-6
+# Mutant: a periodic pass joins a load in flight that started before it, and counts as its confirmation a read made before a change it must install (the runner's KeyTransitions.load)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest --tests me.ahoo.cosec.runtime.snapshot.KeyTransitionsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
+index 1c887b7c..7f9f6995 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
+@@ -145,7 +145,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
+                 waiter?.let { step.emit(KeyEffect.Skip(it)) }
+                 return
+             }
+-            if (older) {
++            if (older && inFlight.startedNanos > pass.startedNanos) {
+                 reload(step, force, waiter, pass)
+                 return
+             }
