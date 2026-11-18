@@ -112,7 +112,11 @@ class OneVerifierTest {
 
     @Test
     fun `the served refresh route refreshes with the application's own refresh authentication, its hook included`() {
-        ServedLoginRouteHost(ServedStack.NETTY, ServedLoginRouteHost.PERMITTING, RefusingDisabled::class.java).use { host ->
+        ServedLoginRouteHost(
+            ServedStack.NETTY,
+            ServedLoginRouteHost.PERMITTING,
+            RefusingDisabled::class.java
+        ).use { host ->
             val disabled = host.send("POST", ServedLoginRouteHost.REFRESH, body(host.login("disabled")))
             disabled.statusCode().assert().isEqualTo(401)
             disabled.body().assert().contains("token-revoked")
