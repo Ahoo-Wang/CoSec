@@ -102,6 +102,112 @@ class SnapshotRevalidationTest {
         }
     }
 
+    /**
+     * `SNP-6`: a change written to the store before a pass starts is installed by the time that pass has finished with
+     * its document, though a load of it was in flight when the pass reached it. That load's read answered revision 1
+     * before the change; a pass never counts a store read that began before it did as its confirmation.
+     */
+    @Test
+    fun aPassInstallsAChangeWrittenBeforeItThoughALoadThatReadBeforeItWasInFlight() {
+        val elapsed = ManualNanoTime()
+        testSource(store).use { source ->
+            source.nanoTime = elapsed
+            source.load("app-a").join()
+            store.dropNotifications = true
+            store.hold = true
+            // A load in flight, its read made while the store still holds revision 1.
+            val earlier = source.reload(APP_A)
+            store.put(APP_A, document(2, "a2"))
+            elapsed.advance(Duration.ofSeconds(1))
+
+            val pass = source.tick()
+            pass.isDone.assert().isFalse()
+            store.hold = false
+            store.releaseAll()
+
+            (earlier.join().state as DocumentState.Present).compiled.assert().isInstanceOf(Compiled::class.java)
+            pass.isDone.assert().isTrue()
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
+    /**
+     * `SNP-6`: the load after one older than the pass is the pass's read, counted as its read in flight. A tick that
+     * comes once the pass has finished no document for `storeReadTimeout` does not abandon it while that read is in
+     * flight (`a pass with a read in flight never is`), so its reads and the next pass's never add up.
+     */
+    @Test
+    fun theLoadAfterAnOlderOneIsThePassReadSoThePassIsNotAbandonedWhileItReads() {
+        val elapsed = ManualNanoTime()
+        val options = SnapshotOptions(revalidateInterval = QUIET_PASS, reloadConcurrency = 1)
+        testSource(store, options = options).use { source ->
+            source.nanoTime = elapsed
+            source.load("app-a").join()
+            store.dropNotifications = true
+            store.hold = true
+            val earlier = source.reload(APP_A)
+            store.put(APP_A, document(2, "a2"))
+            elapsed.advance(Duration.ofSeconds(1))
+
+            val pass = source.tick()
+            // The one lane reads the shared document first, then meets the older load of app-a and waits after it.
+            store.pending.single { it.key == SnapshotKey.Platform }.let { read ->
+                store.pending.remove(read)
+                read.release()
+            }
+            store.pending.single { it.key == APP_A }.let { read ->
+                store.pending.remove(read)
+                read.release()
+            }
+            earlier.join()
+            // The load after it reads now, for the pass.
+            store.pending.single().key.assert().isEqualTo(APP_A)
+            val reads = store.readLog.size
+
+            elapsed.advance(options.storeReadTimeout.plusSeconds(1))
+            val owed = source.tick()
+            source.tick().assert().isSameAs(owed)
+            store.readLog.size.assert().describedAs("reads after the stalled-looking tick").isEqualTo(reads)
+            pass.isDone.assert().isFalse()
+
+            store.hold = false
+            store.releaseAll()
+            pass.isDone.assert().isTrue()
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
+    /**
+     * `SNP-6`: a pass does not wait for a load stuck compiling past `storeReadTimeout`. That load read revision 1 before
+     * the pass started, so it confirms nothing for the pass: one more load still follows it, and revision 2, written
+     * before the pass with its invalidation lost, is installed once the compilation ends, with no later pass.
+     */
+    @Test
+    fun aPassThatSkipsALoadStuckCompilingStillOwesTheReadAfterIt() {
+        val parked = CopyOnWriteArrayList<Runnable>()
+        val stuck = AtomicBoolean()
+        val compile = Executor { if (stuck.get()) parked += it else it.run() }
+        val elapsed = ManualNanoTime()
+        testSource(store, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
+            source.load("app-a").join()
+            stuck.set(true)
+            source.reload(APP_A)
+            parked.assert().hasSize(1)
+            store.dropNotifications = true
+            store.put(APP_A, document(2, "a2"))
+            elapsed.advance(SnapshotOptions().storeReadTimeout.plusSeconds(1))
+            stuck.set(false)
+
+            // The pass ends without waiting for the compilation: never a join here, which would hang where it waits.
+            source.tick().isDone.assert().isTrue()
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(1)
+
+            parked.removeAt(0).run()
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
     @Test
     fun f9NotificationDuringALoadStartsAnotherOnceItCompletes() {
         testSource(store).use { source ->

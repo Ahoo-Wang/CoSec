@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
-index 941e5d39..ab3bb4ec 100644
+index c9480f30..2dde999d 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
-@@ -56,7 +56,7 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: KeyC
+@@ -71,7 +71,7 @@ internal class Pass(
       * flight; only one with no read can be, so [startRead] never succeeds after this does.
       */
      fun abandonIfStalled(now: Long): Boolean =
--        now - progressedAt > context.options.storeReadTimeout.toNanos() && reads.compareAndSet(0, ABANDONED)
-+        now - progressedAt > context.options.storeReadTimeout.toNanos() && (reads.compareAndSet(0, ABANDONED) || reads.get() > 0)
+-        now - progressedAt > storeReadTimeout.toNanos() && reads.compareAndSet(0, ABANDONED)
++        now - progressedAt > storeReadTimeout.toNanos() && (reads.compareAndSet(0, ABANDONED) || reads.get() > 0)
  
      /** This abandoned pass ends when [successor] does. */
      fun follow(successor: Pass) {

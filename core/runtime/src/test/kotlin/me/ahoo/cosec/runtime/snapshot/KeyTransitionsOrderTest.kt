@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Ask
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Claim
@@ -36,8 +35,12 @@ import java.util.concurrent.RejectedExecutionException
  * with the load and handle numbers left out, which is all that decides what can follow ([canonical]).
  */
 class KeyTransitionsOrderTest {
-    /** Only its identity is used, and nothing prints it: [KeyHarness] names a pass in its log. */
-    private val pass = mockk<Pass>()
+    /**
+     * Two passes, named, not printed, in [KeyHarness]'s log: one started before every load of the search, which joins
+     * the load in flight, and one started at or after every load, which waits for the load after it (`SNP-6`).
+     */
+    private val earlyPass = KeyHarness.passStartedAt(-1)
+    private val pass = KeyHarness.passStartedAt(KeyHarness.STORE_READ_TIMEOUT.toNanos() + 1)
     private val seen = HashMap<String, Int>()
     private val reached = sortedSetOf<String>()
     private var steps = 0
@@ -86,6 +89,7 @@ class KeyTransitionsOrderTest {
         add("usable" to { key: KeyHarness -> key.request(Ask.Usable) })
         add("load" to { key: KeyHarness -> key.request(Ask.Load(force = false)) })
         add("pass" to { key: KeyHarness -> key.request(Ask.Load(force = false, pass = pass)) })
+        add("early pass" to { key: KeyHarness -> key.request(Ask.Load(force = false, pass = earlyPass)) })
         add("reload" to { key: KeyHarness -> key.request(Ask.Reload(force = false)) })
         add("reload forced" to { key: KeyHarness -> key.request(Ask.Reload(force = true)) })
         add("reload if held" to { key: KeyHarness -> key.request(Ask.ReloadIfHeld(force = false)) })
@@ -184,6 +188,7 @@ class KeyTransitionsOrderTest {
             append(load.id in harness.reads).append(load.id in harness.compiles)
         }
         append("|g").append(state.again).append(state.againForced).append(state.next?.let { waitedOn(harness, it) })
+        append(state.againPass != null)
         append(state.removed).append(state.retryDelay.toMillis())
         append(
             "|E"
@@ -206,6 +211,13 @@ class KeyTransitionsOrderTest {
             },
             "reload during a load" to { it.loading && it.name.startsWith("reload") },
             "pass skips a stuck load" to { it.loading && it.name == "pass" && it.after.direct.size > it.before.direct.size },
+            "pass skips a stuck load younger than itself" to {
+                it.loading && it.name == "early pass" && it.after.direct.size > it.before.direct.size
+            },
+            "pass waits for the load after an older one" to { it.loading && it.name == "pass" && it.after.state.againPass != null },
+            "pass joins a younger load" to {
+                it.loading && it.name == "early pass" && it.after.direct.size == it.before.direct.size
+            },
             "eviction at bound" to { it.name == "evict at bound" },
             "eviction claimed" to { it.name == "evict claimed" },
             "request redispatched" to { it.after.state.removed && it.after.direct.values.any { e -> e is KeyEffect.Redispatch } },

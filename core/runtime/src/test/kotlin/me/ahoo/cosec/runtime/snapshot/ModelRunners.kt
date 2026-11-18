@@ -27,6 +27,9 @@ internal class ModelRunners private constructor(val k: Int, private val onTaken:
         keyRunners(k, hooksOf = { key ->
             KeyDrain.Hooks(beforeNext = { event ->
                 onTaken(event)
+                if (event is KeyEvent.Compiled<*> || event is KeyEvent.CompileCrashed || event is KeyEvent.CompileRejected) {
+                    model.compileTaken(key)
+                }
                 // After the claim, before the transition that removes the key.
                 if (event is KeyEvent.Evict && event.claim == KeyEvent.Claim.CLAIMED) model.claimed(key)
             })

@@ -68,6 +68,11 @@ internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, ke
             if (field !== value) changed = true
             field = value
         }
+    var againPass: Pass? = state.againPass
+        set(value) {
+            if (field !== value) changed = true
+            field = value
+        }
     var removed: Boolean = state.removed
         set(value) {
             if (field != value) changed = true
@@ -93,7 +98,7 @@ internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, ke
     val state: KeyState<T>
         get() {
             if (changed) {
-                base = KeyState(installed, installedEpoch, load, again, againForced, next, removed, retryDelay, serial)
+                base = KeyState(installed, installedEpoch, load, again, againForced, next, againPass, removed, retryDelay, serial)
                 changed = false
             }
             return base
@@ -111,6 +116,7 @@ internal class KeyStepBuilder<T : Any>(state: KeyState<T>, moment: KeyMoment, ke
         again = state.again
         againForced = state.againForced
         next = state.next
+        againPass = state.againPass
         removed = state.removed
         retryDelay = state.retryDelay
         serial = state.serial

@@ -69,6 +69,19 @@ class SnapshotSourceModelPropertyTest {
     @Test
     fun aClaimAtItsKindsBoundIsRefused() = quietly { fixedCase(SEED_872) }
 
+    /**
+     * Seed 827 at K = 0, a fixed case (1M stress run 44330471227): a pass skips a load stuck compiling past
+     * `storeReadTimeout`, which started before the pass, while that compilation has run and its result waits in a
+     * hand-off. The read after it is owed (`SNP-6`); judged by what the compile pool ran rather than by what the runner
+     * took, the oracle saw the document as compiled and the pass as having confirmed nothing.
+     */
+    @Test
+    fun aSkippedLoadWhoseCompilationRanButIsNotTakenStillOwesTheReadAfterIt() = quietly {
+        val run = SourceModelRun(SourceModelScript.generate(SEED_827, EVENTS), ModelRunners.runner(k = 0)).run()
+        run.failure.assert().describedAs("seed $SEED_827").isNull()
+        run.counts.passReadsOwed.assert().isGreaterThan(0)
+    }
+
     private fun fixedCase(seed: Int) {
         val run = SourceModelRun(SourceModelScript.generate(seed, EVENTS), ModelRunners.runner(k = 0)).run()
         run.failure.assert().describedAs("seed $seed").isNull()
@@ -109,7 +122,8 @@ class SnapshotSourceModelPropertyTest {
                 "${totals.readTimeouts} store read timeouts, ${totals.coldTimeouts} request timeouts, " +
                 "${totals.evictions} evictions (${totals.evictionsAtClaim} judged at the claim), " +
                 "${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
-                "${totals.lostWritesChecked} lost invalidations ${totals.lostWritesByLag}"
+                "${totals.lostWritesChecked} lost invalidations ${totals.lostWritesByLag}, " +
+                "${totals.passReadsChecked} documents of passes read after their call (${totals.passReadsOwed} owed)"
         )
         if (only == null) {
             // A property test that rarely gets past the first load proves little: each kind of event is reached.
@@ -133,10 +147,15 @@ class SnapshotSourceModelPropertyTest {
         totals.regressions += counts.regressions
         totals.resetsChecked += counts.resetsChecked
         totals.lostWritesChecked += counts.lostWritesChecked
+        totals.passReadsChecked += counts.passReadsChecked
+        totals.passReadsOwed += counts.passReadsOwed
         counts.lostWritesByLag.forEach { (lag, n) -> totals.lostWritesByLag.merge(lag, n, Int::plus) }
         mapOf(
             "reset reloads checked" to counts.resetsChecked,
             "lost invalidation installed by a pass" to counts.lostWritesChecked,
+            "lost invalidation installed past a load in flight" to (counts.lostWritesByLag[SourceModelScript.Lag.IN_FLIGHT] ?: 0),
+            "pass read checked" to counts.passReadsChecked,
+            "pass read owed past a stuck compilation" to counts.passReadsOwed,
             "store read timed out" to counts.readTimeouts,
             "request answered by its timeout" to counts.coldTimeouts,
             "eviction" to counts.evictions,
@@ -192,6 +211,7 @@ class SnapshotSourceModelPropertyTest {
         const val EVENTS = 250
         const val SEED_9191 = 9191
         const val SEED_872 = 872
+        const val SEED_827 = 827
 
         /** Reached by every run over the runner: an eviction judged at its claim ([SourceModel.claimed]). */
         const val CLAIM_JUDGED = "eviction judged at its claim"
@@ -202,6 +222,7 @@ class SnapshotSourceModelPropertyTest {
             "listener called in subscribe", "close mid-load", "recompile", "store regressed", "converged",
             "store read failed", "compile rejected", "abandoned read answered",
             "reset reloads checked", "lost invalidation installed by a pass",
+            "lost invalidation installed past a load in flight", "pass read checked",
         )
 
         /**

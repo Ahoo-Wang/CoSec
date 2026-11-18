@@ -35,6 +35,8 @@ internal data class KeyState<T : Any>(
     val againForced: Boolean = false,
     /** The handle of the load that follows [load], made by the first reload that needs it. */
     val next: KeyHandle<T>? = null,
+    /** The periodic pass whose read the load that follows [load] is: one that met a load older than itself (`SNP-6`). */
+    val againPass: Pass? = null,
     /** Evicted or dropped: no load starts, and the key's requests go to whatever slot holds the key now. */
     val removed: Boolean = false,
     /** The delay before the next retry of a reload the compile queue rejected; doubles while it keeps rejecting. */

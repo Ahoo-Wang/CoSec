@@ -215,7 +215,8 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
     /**
      * `advance`: [installed] is written, the load is over, and, if another load is wanted (a change came, the entry is
      * [stale], a recompile came since the load started, or a local copy answered) and the key is open, the next load starts in the same step, with the pending
-     * reload's handle, so no other load and no removal can come between them.
+     * reload's handle, so no other load and no removal can come between them. It is the read of the pass that asked
+     * for it, if one did (`SNP-6`).
      */
     private fun advance(
         step: KeyStepBuilder<T>,
@@ -229,6 +230,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         val wanted = step.again || stale || recompiled || (installed != null && load.fromLocalCopy)
         val againForced = step.againForced
         val pending = step.next
+        val againPass = step.againPass
         if (installed != null) {
             step.installed = installed
             step.installedEpoch = load.epoch
@@ -237,8 +239,9 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         step.again = false
         step.againForced = false
         step.next = null
+        step.againPass = null
         val open = !step.moment.closed && !step.removed
-        return if (wanted && open) newLoad(step, againForced, null, pending) else null
+        return if (wanted && open) newLoad(step, againForced, againPass, pending) else null
     }
 
     /** `answerWaiters`: [load]'s handles get [answer], or, for a withheld compilation, what [recompiling] ends with. */

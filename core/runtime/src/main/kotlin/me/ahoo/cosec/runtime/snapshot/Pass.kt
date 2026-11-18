@@ -16,14 +16,29 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 
 /** One periodic pass: [done] completes when it ends, or, once abandoned, when the pass that replaced it does. */
-internal class Pass(val done: CompletableFuture<Void>, private val context: KeyContext) {
+internal class Pass(
+    val done: CompletableFuture<Void>,
+    /** [KeyContext.nanoTime], read each time. */
+    private val nanoTime: () -> Long,
+    private val storeReadTimeout: Duration,
+) {
+    constructor(done: CompletableFuture<Void>, context: KeyContext) :
+        this(done, { context.nanoTime.get().asLong }, context.options.storeReadTimeout)
+
+    /**
+     * When this pass started, in [KeyContext.nanoTime]: a load that started at or before it may have read before a
+     * change this pass must install, so the pass never counts that load's read as its own (`SNP-6`).
+     */
+    val startedNanos: Long = nanoTime()
+
     /** When a document of this pass last finished, in [KeyContext.nanoTime]: the start, until one does. */
     @Volatile
-    private var progressedAt: Long = context.nanoTime.get().asLong
+    private var progressedAt: Long = startedNanos
 
     /** The reads this pass has in flight, with the lanes about to start one; [ABANDONED] once it is abandoned. */
     private val reads = AtomicInteger()
@@ -31,7 +46,7 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: KeyC
     val abandoned: Boolean get() = reads.get() == ABANDONED
 
     fun progressed() {
-        progressedAt = context.nanoTime.get().asLong
+        progressedAt = nanoTime()
     }
 
     /** A read of this pass starting, or null once the pass is abandoned. */
@@ -56,7 +71,7 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: KeyC
      * flight; only one with no read can be, so [startRead] never succeeds after this does.
      */
     fun abandonIfStalled(now: Long): Boolean =
-        now - progressedAt > context.options.storeReadTimeout.toNanos() && reads.compareAndSet(0, ABANDONED)
+        now - progressedAt > storeReadTimeout.toNanos() && reads.compareAndSet(0, ABANDONED)
 
     /** This abandoned pass ends when [successor] does. */
     fun follow(successor: Pass) {
