@@ -53,7 +53,7 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ClientContractTest {
     @Test
-    fun `the token pair is written as the contract says, and the refresh route answers it`() {
+    fun `the token pair is written as the contract says`() {
         val written = JsonMapper.builder().findAndAddModules().build()
             .writeValueAsBytes(CompositeToken("<access token>", "<refresh token>"))
         files.check("token/composite-token.json", files.objectNode().set("body", files.parse(written)))
