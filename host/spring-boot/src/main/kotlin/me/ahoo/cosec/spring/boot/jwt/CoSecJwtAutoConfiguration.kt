@@ -113,12 +113,12 @@ internal class CoSecJwtAutoConfiguration {
      */
     @Bean(TokenStores.TOKEN_STORE_STAND_IN)
     @ConditionalOnMissingBean
-    fun cosecTokenStore(beans: ListableBeanFactory): TokenStore = TokenStores.fail(beans)
+    fun cosecTokenStore(beans: ListableBeanFactory): TokenStore = throw TokenStores.failure(beans)
 
     /** Reached only without `cosec-cocache`, whose family store comes first: a refresh never runs without one. */
     @Bean(TokenStores.FAMILY_STORE_STAND_IN)
     @ConditionalOnMissingBean
-    fun cosecTokenFamilyStore(beans: ListableBeanFactory): TokenFamilyStore = TokenStores.fail(beans)
+    fun cosecTokenFamilyStore(beans: ListableBeanFactory): TokenFamilyStore = throw TokenStores.failure(beans)
 
     /** The refresh token families (RFC 0009): `cosec.jwt.session.*`. */
     @Bean

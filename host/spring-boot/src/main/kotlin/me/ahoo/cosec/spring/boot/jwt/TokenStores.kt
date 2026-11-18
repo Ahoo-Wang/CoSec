@@ -55,8 +55,8 @@ internal object TokenStores {
         }
     }
 
-    /** Fails startup, naming every store [beans] is missing. */
-    fun fail(beans: ListableBeanFactory): Nothing = throw IllegalStateException(message(missing(beans)))
+    /** The startup failure that names every store [beans] is missing: its callers throw it themselves. */
+    fun failure(beans: ListableBeanFactory): IllegalStateException = IllegalStateException(message(missing(beans)))
 
     fun message(missing: List<String>): String =
         "CoSec's tokens are on, but ${missing.joinToString(", ")} ${if (missing.size == 1) "is" else "are"} missing. " +

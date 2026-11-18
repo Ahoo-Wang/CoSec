@@ -294,7 +294,7 @@ class CoSecPipelineAutoConfiguration {
             beans: ListableBeanFactory,
         ): RevocationReader {
             reader.ifAvailable?.let { return it }
-            return CoCacheRevocation.readerOf(tokenStore.ifAvailable) ?: TokenStores.fail(beans)
+            return CoCacheRevocation.readerOf(tokenStore.ifAvailable) ?: throw TokenStores.failure(beans)
         }
 
         /** The API keys the pipeline reads: an [ApiKeyReader] bean, else the in-memory store's. */

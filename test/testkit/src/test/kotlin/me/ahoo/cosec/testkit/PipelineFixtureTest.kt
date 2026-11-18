@@ -183,6 +183,10 @@ class PipelineFixtureTest {
             assertThrownBy<AssertionError> { runBlocking { it.securityContext(refused) } }
             required.events.assert().isNotEmpty()
         }
+        // Without a route map or listeners, a request is `http:<METHOD>` on its path, refused all the same.
+        PipelineFixture.unreadable().use {
+            it.evaluate(it.request("GET", "/orders/7", reader)).status.assert().isEqualTo(503)
+        }
     }
 
     private class Recording(override val delivery: Delivery) : DecisionListener {
