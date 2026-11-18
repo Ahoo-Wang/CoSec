@@ -81,6 +81,7 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.Redispatch -> owner.redispatched(effect.event)
             is KeyEffect.ScheduleRetry -> scheduleRetry(effect.delay)
             KeyEffect.DropIfEmpty -> context.threads.offRequestThread { owner.dropIfEmpty() }
+            KeyEffect.EvictOverCap -> evictOverCap()
             KeyEffect.EvictBeyond -> evictBeyond()
             is KeyEffect.Drop -> owner.dropped(effect.claimed)
             is KeyEffect.Reply -> effect.reply.complete(effect.value)
@@ -218,12 +219,21 @@ internal class KeyEffects<T : Any>(
     }
 
     /**
-     * After a load's end: nothing when both kinds are within their bounds. Otherwise housekeeping evicts beyond the
-     * bound, unless the install took the family over its cap. Then the
-     * pass runs here, on the installing thread whatever it is, with the drain budget lifted, before the step's answers:
-     * `SNP-14`'s back-pressure is the installer's, as [Slot]'s is, so the bound never depends on a pool being free. The
-     * victims whose flags are free are evicted on this thread; a victim another thread is draining takes its eviction
-     * next, in that drain.
+     * Before a load's answers: when the install took the family over its cap, the pass runs here, on the installing
+     * thread whatever it is, with the drain budget lifted: `SNP-14`'s back-pressure is the installer's, as [Slot]'s is,
+     * so the bound never depends on a pool being free. The victims whose flags are free are evicted on this thread; a
+     * victim another thread is draining takes its eviction next, in that drain.
+     */
+    private fun evictOverCap() {
+        val families = context.families
+        val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
+        if (families.overCap(family)) DrainBudget.unbounded { families.evictBeyond(family) }
+    }
+
+    /**
+     * After a load's answers: nothing when both kinds are within their bounds; otherwise housekeeping evicts beyond the
+     * bound, or this thread does when the family is over its cap again. Answers first: a waiter's answer does not wait
+     * for the wake of a thread whose work cannot change it.
      */
     private fun evictBeyond() {
         val families = context.families
