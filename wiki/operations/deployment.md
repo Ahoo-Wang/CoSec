@@ -13,7 +13,8 @@ Kubernetes manifests in the repository, how CI checks the image, and the JDK 25 
 ## The image
 
 CI builds the image from [`platform/gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/Dockerfile)
-on every push and publishes it as `ahoowang/cosec-gateway`, `ghcr.io/ahoo-wang/cosec-gateway` and
+on every push to `main`, `7.x` and the release branches, for each version tag, nightly, and for a pull
+request that changes the image, and publishes it as `ahoowang/cosec-gateway`, `ghcr.io/ahoo-wang/cosec-gateway` and
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`, for `linux/amd64` and `linux/arm64`. The gateway server is an
 application: it is published only as an image, never as a library.
 
@@ -26,8 +27,10 @@ application: it is published only as an image, never as a library.
   configuration is `config/application.yaml`; the JVM options are in `bin/cosec-gateway-server` (ZGC, a 2 GiB heap).
   Add options through `JAVA_OPTS`, which follows them and so overrides them ([Memory](#memory)).
 - **What is in it.** The gateway filter, the Redis snapshot store (`cosec-cocache`), tracing and the Kafka module. Its
-  configuration turns Kafka audit (`cosec.audit.kafka.enabled: false`), login
-  (`cosec.authentication.login.enabled: false`) and ip2region (`cosec.ip2region.enabled: false`) off. It has no control plane: documents are published by
+  configuration, `config/application.yaml` (the only one it reads: `-Dspring.config.location=file:./config/`), turns
+  Kafka audit (`cosec.audit.kafka.enabled: false`) and login (`cosec.authentication.login.enabled: false`) off.
+  `cosec-ip2region` is in it too and stays on; the [Kubernetes](#kubernetes) base turns it off
+  (`cosec.ip2region.enabled: false`). It has no control plane: documents are published by
   `cosec-migrate` or by a control-plane application on the same Redis.
 
 ```bash
@@ -61,7 +64,8 @@ What a routed request carries to its backend:
   user's token. Other cookies are forwarded as they came.
 - **`CoSec-Request-Id`**, the gateway's own request id.
 
-A credential that never expires (an API key without `expires-at`) is not forwarded: such a request answers `500`, and
+A credential that never expires (an API key without `expires-at`) is not forwarded: on a route that receives the
+identity, such a request answers `500`, and
 the gateway logs `Request [<requestId>]: the identity cannot be forwarded.`
 
 ## Services behind the gateway
@@ -131,7 +135,9 @@ application's liveness probe at its management port (outside CoSec), and give a 
 the application port.
 
 With Spring Boot Actuator, the `cosecSnapshot` health indicator reports `UP` once the same documents are installed,
-`DOWN` before, with the details `platform` (`installed`, `invalid`, `failed`, `absent` or `loading`) and `prewarmed`. To see those
+`DOWN` before, with the details `platform` (`installed`, `invalid`, `failed`, `absent` or `loading`), `prewarmed` and
+`missing` (the documents not installed yet), and, when stored documents do not compile here, `invalid` (how many) and
+`invalidFirst` (the first ten, by key and revision). To see those
 details on the readiness endpoint, add it to the readiness group:
 
 ```yaml
@@ -223,7 +229,9 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
 - **Shutdown.** A `preStop` pause of 5 seconds lets the Service drop the pod first; `terminationGracePeriodSeconds: 45`
   covers it, Spring's graceful shutdown (30 seconds at most) and the decision listeners' drain ([Shutdown](#shutdown)).
 - **JVM options**, through `JAVA_OPTS`: the memory sizes below, `-XX:+ExitOnOutOfMemoryError` so that a JVM that ran
-  out of memory is restarted, and `-Dcom.sun.management.jmxremote.host=127.0.0.1`. The image's start script starts a
+  out of memory is restarted, `-Djava.net.preferIPv4Stack=true` (for
+  [netty#16082](https://github.com/netty/netty/issues/16082)), and `-Dcom.sun.management.jmxremote.host=127.0.0.1`. The
+  image's start script starts a
   JMX agent on port 5555 with no authentication; this keeps it inside the pod, and the production NetworkPolicy closes
   every port but 8080.
 
@@ -324,10 +332,10 @@ cache. Each start prints `NOTE: Picked up JDK_JAVA_OPTIONS: …` on stderr. Ever
 container picks the option up too: one without the gateway's options, such as `java -version`, cannot use the
 cache and prints the `[aot]` errors described [below](#when-the-cache-is-not-used), which are harmless.
 
-The cache is not trained with `-Dspring.context.exit=onRefresh`, the mode Spring Boot suggests. The gateway enables
-the Spring Cloud bootstrap context, and that context refreshes first, so the JVM exits before the application
-context exists. The run returns 0 and prints nothing, and the resulting cache covers almost none of the
-application.
+The cache is not trained with `-Dspring.context.exit=onRefresh`, the mode Spring Boot suggests. That mode stops the
+JVM once the application context is refreshed, before the server takes a request, so the classes of the request path
+(Netty, WebFlux, route lookup, the error handler, actuator) would not be in the cache. The script uses it only for its
+check, which needs the cache mapped, not trained.
 
 ### When the cache is not used
 
