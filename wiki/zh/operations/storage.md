@@ -126,13 +126,14 @@ key 都在它之下（`SNP-9`）。
 让两边各守其位：
 
 - 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 只读（`%R~`），对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
-  不运行控制面的实例（类路径上没有 `cosec-control`）以只读方式读取文档和候选：CoCache 以 `EVALSHA_RO` 发送这些读取
+  不运行控制面的实例（类路径上没有 `cosec-control`，或 `cosec.control.enabled=false`）以只读方式读取文档和候选：CoCache 以 `EVALSHA_RO` 发送这些读取
   （Redis 7.0 或更高版本），所以它的用户只需要读权限，Redis 本身会拒绝这个用户写入文档或候选。运行控制面的进程要写入它们，
   所以它的用户需要写权限；用只读用户启动时，它在启动时于 CoCache 的发布检查处失败
   （`Redis denied publishing to the invalidation channel[<s>:inv:snapshot]`）。
-- 一个进程属于哪一种只由它的类路径决定。没有属性能把它设为只读或读写，试图这样做的
-  `cocache.caches.PolicySnapshotCache.read-only` 或 `cocache.caches.CandidateCache.read-only` 会使启动失败。所以两种角色共用
-  一个带 `cosec-control` 的镜像的部署，没有只读的数据面。
+- 一个进程属于哪一种由控制面的装配条件决定：类路径上有 `cosec-control`，并且
+  [`cosec.control.enabled`](./configuration.md#control-plane) 不是 `false`。两种角色共用一个镜像的部署在数据面角色上设置
+  `COSEC_CONTROL_ENABLED=false`，这个角色就不运行控制面，并以只读方式读取。试图改变它的
+  `cocache.caches.PolicySnapshotCache.read-only` 或 `cocache.caches.CandidateCache.read-only` 会使启动失败。
 - 只要启用 JWT，吊销和刷新令牌族（`<s>:token:*`）就保持读写：应用可以在自己的任何端点吊销令牌（`TokenRevoker`），
   所以进程中没有任何东西表明它只读取它们。
 - 数据面用户仍能在 `&<s>:*` 上发布：它的影子存储在那里广播失效消息，而通道模式无法只允许订阅、不允许发布。所以凭证泄露的

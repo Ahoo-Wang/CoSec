@@ -436,6 +436,7 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`, with `cosid-spring-boot-starter` 5.x and its `cosid.*` generators, or remove the key to keep CoSec's own ids |
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | A `CosIdRuntime` (`cosid-spring-boot-starter` and its `cosid.*` settings), or remove the key: with an `IdGenerator` bean of your own, that bean gives CoSec its ids |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`, or remove the key: unset, metrics are optional |
+| `cosec.control.enabled=true needs cosec-control` (or `cosec-cocache`) | the artifact it names, or remove the key: unset, an instance without the modules is a data-plane instance |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
@@ -546,8 +547,8 @@ CoSec reads PolicySnapshotCache read-only in this process, which does not run th
 ```
 
 A `cocache.caches.PolicySnapshotCache.read-only` or `cocache.caches.CandidateCache.read-only` entry, or a customizer,
-changes what CoSec declares: read-only on an instance without `cosec-control`, read-write where the control plane runs
-(`... cannot make it read-only`). Remove it; the classpath decides
+changes what CoSec declares: read-only on an instance that runs no control plane, read-write where it runs
+(`... cannot make it read-only`). Remove it; the classpath and `cosec.control.enabled` decide
 ([Who may write which keys](./storage.md#who-may-write-which-keys)).
 
 ### Startup fails on a Redis permission {#startup-fails-on-a-redis-permission}
@@ -568,7 +569,15 @@ Redis denied publishing to the invalidation channel[cosec:inv:snapshot] of Keysp
 
 The process runs the control plane (`cosec-control` is on its classpath), so it writes the documents, but its user may
 not: usually a data-plane user given to a process that has `cosec-control`. Give the control plane a user that writes
-`<s>:*`, or leave `cosec-control` out of the data plane's image.
+`<s>:*`; on a data-plane instance whose image carries the control plane, set `cosec.control.enabled=false`
+(`COSEC_CONTROL_ENABLED=false`), or leave `cosec-control` out of its image.
+
+```text
+cosec.control.enabled must be true or false, not [flase].
+```
+
+The key is read strictly, whatever the classpath: a value that is neither is never taken as on or as off. Write `true`
+or `false` ([Configuration](./configuration.md#control-plane)).
 
 ### Startup fails on overlapping cache keys
 
