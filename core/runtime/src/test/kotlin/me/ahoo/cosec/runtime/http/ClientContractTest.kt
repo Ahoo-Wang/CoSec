@@ -13,116 +13,178 @@
 
 package me.ahoo.cosec.runtime.http
 
+import io.mockk.mockk
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.runtime.contract.ContractFiles
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import tools.jackson.databind.node.ArrayNode
 import tools.jackson.databind.node.ObjectNode
+import java.lang.reflect.Modifier
 import java.time.Duration
 
 /**
  * `PIP-25`: what the server answers a client, as `contract/` states it. Every problem type's status, headers and body
  * members (exactly those, no more, none missing), and the `CoSec-*` request headers, the request id's grammar and the
  * response headers of each outcome. The TypeScript client is tested against the same files.
+ *
+ * What it does not cover: a `CoSec-*` request header is found in the file only when `CoSecParameters` declares it as a
+ * string constant, so a parameter read from a literal elsewhere is not; `CoSec-Identity` is not in the file, since a
+ * client neither sends nor reads it (a gateway's services behind it do). The response headers are those of the outcomes
+ * the test builds, one per path a pipeline reaches (a permit with and without a rate limit, each problem type), not
+ * those a host adds on its own.
  */
+@OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
 class ClientContractTest {
+    private val files = ContractFiles()
+
     @Test
     fun `every problem type answers its contract file`() {
         for (type in ProblemType.entries) {
-            ContractFiles.check("problems/${type.slug}.json", problemFile(outcomeOf(type)))
+            val outcome = outcomeOf(type)
+            outcome.problem?.type.assert().describedAs("the path of ${type.slug} answers it").isEqualTo(type)
+            files.check("problems/${type.slug}.json", problemFile(outcome))
         }
-        ContractFiles.only("problems", ProblemType.entries.map { "${it.slug}.json" }.toSet())
+        files.only("problems", ProblemType.entries.map { "${it.slug}.json" }.toSet())
     }
 
     @Test
     fun `a trace id is the one optional member of a problem body`() {
         for (type in ProblemType.entries) {
-            val plain = ContractFiles.parse(ProblemEncoder.encode(Problem(type, REQUEST_ID, null))) as ObjectNode
-            val traced = ContractFiles.parse(ProblemEncoder.encode(Problem(type, REQUEST_ID, TRACE_ID))) as ObjectNode
+            val plain = files.parse(ProblemEncoder.encode(Problem(type, REQUEST_ID, null))) as ObjectNode
+            val traced = files.parse(ProblemEncoder.encode(Problem(type, REQUEST_ID, TRACE_ID))) as ObjectNode
             traced.get(TRACE_ID_MEMBER).asString().assert().isEqualTo(TRACE_ID)
             traced.deepCopy().also { it.remove(TRACE_ID_MEMBER) }.assert().describedAs(type.slug).isEqualTo(plain)
         }
     }
 
     @Test
-    fun `the headers a client sends and reads are the contract's`() {
+    fun `the request id's pattern accepts exactly what the server does`() {
         RequestIds.MAX_LENGTH.assert().isEqualTo(REQUEST_ID_MAX)
         val pattern = Regex(REQUEST_ID_PATTERN)
-        val samples =
-            listOf("a", "A-z_0.9", "x".repeat(REQUEST_ID_MAX), "", "x".repeat(REQUEST_ID_MAX + 1), "a b", "é", "a\"b")
-        for (sample in samples) {
-            RequestIds.isAcceptable(sample).assert().describedAs(sample).isEqualTo(pattern.matches(sample))
+        // The whole of Latin-1 and Latin Extended-A, which holds every control character and every look-alike: a
+        // character the pattern lets through and the server does not, or the other way round, fails here.
+        val single = (0..LAST_SAMPLED_CHARACTER).map { it.toChar().toString() }
+        val lengths = listOf(0, 1, REQUEST_ID_MAX, REQUEST_ID_MAX + 1).map { "x".repeat(it) }
+        val others = listOf("A-z_0.9", "a b", "a\"b", "a\n", "\u00e9")
+        for (sample in single + lengths + others) {
+            RequestIds.isAcceptable(sample).assert()
+                .describedAs("first character %s, length %d", sample.firstOrNull()?.code, sample.length)
+                .isEqualTo(pattern.matches(sample))
         }
-        val file = ContractFiles.objectNode()
-        file.set(
-            "request",
-            ContractFiles.arrayNode().apply {
-                listOf(
-                    CoSecParameters.SPACE_ID,
-                    CoSecParameters.DEVICE_ID,
-                    CoSecParameters.REQUEST_ID
-                ).forEach { add(it) }
-            }
-        )
+        // The loops above are not vacuous: both sides accept, and both refuse.
+        single.count { pattern.matches(it) }.assert().isEqualTo(ACCEPTED_SINGLES)
+        lengths.map { pattern.matches(it) }.assert().isEqualTo(listOf(false, true, true, false))
+    }
+
+    @Test
+    fun `the headers a client sends and reads are the contract's`() {
+        val file = files.objectNode()
+        file.set("request", requestHeaders())
         file.putObject("requestId").put("pattern", REQUEST_ID_PATTERN)
         val response = file.putObject("response")
-        response.set("everyAnswer", ContractFiles.arrayNode().add(CoSecParameters.REQUEST_ID))
-        response.set("problem", namesOf(outcomeOf(ProblemType.FORBIDDEN)))
-        response.set("tooManyRequests", namesOf(outcomeOf(ProblemType.TOO_MANY_REQUESTS)))
-        response.set(
-            "permitCounted",
-            ContractFiles.arrayNode().apply {
-                listOf(
-                    StatusMapping.RATE_LIMIT_LIMIT,
-                    StatusMapping.RATE_LIMIT_REMAINING,
-                    StatusMapping.RATE_LIMIT_RESET
-                )
-                    .forEach { add(it) }
-            }
-        )
-        ContractFiles.check("headers.json", file)
+        val permit = names(permit(null))
+        val counted = names(permit(RateLimitResult(true, LIMIT, LIMIT - 1, Duration.ofSeconds(RESET_SECONDS))))
+        val everyAnswer = ProblemType.entries.map { names(outcomeOf(it)) }.fold(permit) { common, next ->
+            common.intersect(next)
+        }
+        response.set("everyAnswer", array(everyAnswer))
+        response.set("problem", array(names(outcomeOf(ProblemType.FORBIDDEN))))
+        response.set("tooManyRequests", array(names(outcomeOf(ProblemType.TOO_MANY_REQUESTS))))
+        response.set("permitCounted", array(counted - permit))
+        files.check("headers.json", file)
     }
+
+    /** Every `CoSec-*` string constant `CoSecParameters` declares: the headers a client may send. */
+    private fun requestHeaders(): ArrayNode {
+        val declared = CoSecParameters::class.java.declaredFields
+            .filter { Modifier.isStatic(it.modifiers) && it.type == String::class.java }
+            .map { it.apply { isAccessible = true }.get(null) as String }
+            .filter { it.startsWith("CoSec-") }
+        declared.assert().containsAll(listOf(CoSecParameters.SPACE_ID, CoSecParameters.DEVICE_ID))
+        return array(declared.toSet())
+    }
+
+    private fun array(names: Set<String>): ArrayNode = files.arrayNode().apply { names.sorted().forEach { add(it) } }
+
+    private fun names(outcome: Outcome): Set<String> = outcome.headers.keys
 
     private fun problemFile(outcome: Outcome): ObjectNode {
         val problem = checkNotNull(outcome.problem)
-        val file = ContractFiles.objectNode()
+        val file = files.objectNode()
         file.put("status", outcome.status)
         file.set("headers", headersOf(outcome))
-        file.set("body", ContractFiles.parse(ProblemEncoder.encode(problem)))
+        file.set("body", files.parse(ProblemEncoder.encode(problem)))
         file.putObject("optionalMembers").put(TRACE_ID_MEMBER, "string")
         return file
     }
 
     /** The response headers of [outcome], by name, in a stable order. */
-    private fun headersOf(outcome: Outcome): ObjectNode = ContractFiles.objectNode().apply {
+    private fun headersOf(outcome: Outcome): ObjectNode = files.objectNode().apply {
         outcome.headers.toSortedMap().forEach { (name, value) -> put(name, value) }
     }
 
-    private fun namesOf(outcome: Outcome) = ContractFiles.arrayNode().apply {
-        outcome.headers.keys.sorted().forEach { add(it) }
-    }
+    /** What a request that was permitted answers, spending [rateLimit] when it is not null. */
+    private fun permit(rateLimit: RateLimitResult?): Outcome = StatusMapping.decided(
+        REQUEST_ID,
+        Decision.Permit(statement()),
+        AuthnResult.Anonymous,
+        null,
+        mockk<RequestSecurity>(),
+        rateLimit,
+    )
+
+    private fun statement() =
+        StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("b"), DocumentKind.TENANT))
 
     /**
-     * The outcome a client receives for [type]. Every refusal but a rate limit's is written by one function of
-     * [StatusMapping], whichever path reaches it; `identityRejected` reaches it for any type.
+     * The outcome a client receives for [type], by the function of [StatusMapping] the path of a request reaches for
+     * it: the pipeline's refusals, a deny by whom it was authenticated as, a scope rejection, an unavailable decision,
+     * an unmodelled error and a rate limit. `identityRejected`, which a forwarded identity's refusals use, answers
+     * `invalid-request`, `token-expired` and `token-invalid` through the same private `problem`, so it adds no body or
+     * header that these paths do not write.
      */
-    private fun outcomeOf(type: ProblemType): Outcome = when (type) {
-        ProblemType.TOO_MANY_REQUESTS -> StatusMapping.tooManyRequests(
-            REQUEST_ID,
-            Decision.Permit(
-                StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("b"), DocumentKind.TENANT))
-            ),
-            "rule",
-            RateLimitResult(false, LIMIT, 0, Duration.ofSeconds(RESET_SECONDS)),
-            null,
-        )
-        else -> StatusMapping.identityRejected(REQUEST_ID, type, "contract", null)
+    private fun outcomeOf(type: ProblemType): Outcome {
+        val deny = Decision.Deny(statement())
+        val authenticated = AuthnResult.Authenticated(AuthenticatedPrincipal(PrincipalId("p"), TenantId("t"), null), "m")
+        fun rejected(reason: AuthnResult.RejectReason) =
+            StatusMapping.decided(REQUEST_ID, deny, AuthnResult.Rejected(reason), null)
+        return when (type) {
+            ProblemType.INVALID_REQUEST -> StatusMapping.invalidRequest(REQUEST_ID, "contract", null)
+            ProblemType.UNAUTHORIZED -> StatusMapping.decided(REQUEST_ID, deny, AuthnResult.Anonymous, null)
+            ProblemType.TOKEN_INVALID -> rejected(AuthnResult.RejectReason.TOKEN_INVALID)
+            ProblemType.TOKEN_EXPIRED -> rejected(AuthnResult.RejectReason.TOKEN_EXPIRED)
+            ProblemType.TOKEN_REVOKED -> rejected(AuthnResult.RejectReason.TOKEN_REVOKED)
+            ProblemType.FORBIDDEN -> StatusMapping.decided(REQUEST_ID, deny, authenticated, null)
+            ProblemType.SCOPE_REJECTED -> StatusMapping.decided(
+                REQUEST_ID,
+                Decision.Deny(StatementRef.ScopeRejected(ScopeResolution.Rejected.Reason.APP_MISMATCH)),
+                authenticated,
+                null,
+            )
+            ProblemType.TOO_MANY_REQUESTS -> StatusMapping.tooManyRequests(
+                REQUEST_ID,
+                Decision.Permit(statement()),
+                "rule",
+                RateLimitResult(false, LIMIT, 0, Duration.ofSeconds(RESET_SECONDS)),
+                null,
+            )
+            ProblemType.UNAVAILABLE -> StatusMapping.unavailable(REQUEST_ID, Unavailability.DeadlineExceeded, null)
+            ProblemType.INTERNAL_ERROR -> StatusMapping.error(REQUEST_ID, IllegalStateException("contract"), null)
+        }
     }
 
     private companion object {
@@ -131,6 +193,10 @@ class ClientContractTest {
         const val TRACE_ID_MEMBER = "traceId"
         const val REQUEST_ID_MAX = 64
         const val REQUEST_ID_PATTERN = "^[A-Za-z0-9._-]{1,64}$"
+        const val LAST_SAMPLED_CHARACTER = 0x17F
+
+        /** `A-Z`, `a-z`, `0-9`, `.`, `_`, `-`. */
+        const val ACCEPTED_SINGLES = 26 + 26 + 10 + 3
         const val LIMIT = 10L
         const val RESET_SECONDS = 30L
     }

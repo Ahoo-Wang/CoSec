@@ -146,7 +146,8 @@ configure(libraryProjects) {
 }
 
 // PIP-25: the projects whose ClientContractTest checks contract/, with the helper of :runtime's test fixtures.
-val contractProjects = listOf(":runtime", ":jwt").map(::project)
+val runtimeProjectPath = ":runtime"
+val contractProjects = listOf(runtimeProjectPath, ":jwt").map(::project)
 configure(contractProjects) {
     clientContractTests()
 }
@@ -484,11 +485,6 @@ fun Project.junitTests() {
 }
 
 /**
- * `check` writes the module's JaCoCo XML, which CI uploads to Codecov (scripts/ci/plan.py). It holds the module's tests
- * against its own classes and those of the projects on its test runtime classpath, as the aggregated report does, so
- * Codecov's merge of the uploads gives the same coverage.
- */
-/**
  * PIP-25: `test` checks this project's files of `contract/` (a changed file reruns it), and `updateClientContract`
  * rewrites them after an intended change of what a client receives, as updateKotlinAbi rewrites a dump. Both name the
  * task in `cosec.contract.task`, for the helper's messages.
@@ -510,9 +506,18 @@ fun Project.clientContractTests() {
         systemProperty("cosec.contract.update", "true")
         systemProperty("cosec.contract.task", update)
         outputs.upToDateWhen { false }
+        // :jwt's test reads contract/problems/, which :runtime's writes, and the build runs in parallel.
+        if (project.path != runtimeProjectPath) {
+            mustRunAfter("$runtimeProjectPath:updateClientContract")
+        }
     }
 }
 
+/**
+ * `check` writes the module's JaCoCo XML, which CI uploads to Codecov (scripts/ci/plan.py). It holds the module's tests
+ * against its own classes and those of the projects on its test runtime classpath, as the aggregated report does, so
+ * Codecov's merge of the uploads gives the same coverage.
+ */
 fun Project.coverageReport() {
     val selfPath = path
     val report = tasks.named<JacocoReport>("jacocoTestReport") {

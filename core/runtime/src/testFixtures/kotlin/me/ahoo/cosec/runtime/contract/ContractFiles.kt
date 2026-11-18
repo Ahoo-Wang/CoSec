@@ -32,16 +32,18 @@ import kotlin.io.path.writeText
  * contract. Its `updateClientContract` task, which the root build registers for each such project, sets
  * `cosec.contract.update` and so writes the files instead; both name that task in `cosec.contract.task`.
  *
+ * The default instance is the one a contract test uses: the repository's `contract/`, and the two system properties.
+ * The parameters exist so that the update mode, which writes and deletes files, is tested over a temporary directory.
+ *
  * In `:runtime`'s test fixtures, the one copy every contract test uses; the fixtures are never published.
  */
-object ContractFiles {
+class ContractFiles(
+    private val root: Path = repositoryContract(),
+    private val update: Boolean = System.getProperty("cosec.contract.update") == "true",
+    task: String = System.getProperty("cosec.contract.task") ?: "updateClientContract",
+) {
     private val mapper = JsonMapper.builder().build()
-    private val update = System.getProperty("cosec.contract.update") == "true"
-    private val task = "./gradlew " + (System.getProperty("cosec.contract.task") ?: "updateClientContract")
-
-    private val root: Path = generateSequence(Path.of("").toAbsolutePath()) { it.parent }
-        .first { Files.exists(it.resolve("settings.gradle.kts")) }
-        .resolve("contract")
+    private val command = "./gradlew $task"
 
     fun objectNode(): ObjectNode = mapper.createObjectNode()
 
@@ -60,9 +62,9 @@ object ContractFiles {
             file.writeText(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(actual) + "\n")
             return
         }
-        file.isRegularFile().assert().describedAs("contract/$path is missing: run $task").isTrue()
+        file.isRegularFile().assert().describedAs("contract/$path is missing: run $command").isTrue()
         mapper.readTree(file.readText()).assert()
-            .describedAs("contract/$path is not what the code answers; if the change is intended, run $task")
+            .describedAs("contract/$path is not what the code answers; if the change is intended, run $command")
             .isEqualTo(actual)
     }
 
@@ -74,6 +76,13 @@ object ContractFiles {
             return
         }
         files.map { it.name }.toSet().assert()
-            .describedAs("contract/$directory holds a file the code does not answer; run $task").isEqualTo(names)
+            .describedAs("contract/$directory holds a file the code does not answer; run $command").isEqualTo(names)
+    }
+
+    private companion object {
+        /** `contract/` of the repository: the first ancestor of the working directory that holds the Gradle settings. */
+        fun repositoryContract(): Path = generateSequence(Path.of("").toAbsolutePath()) { it.parent }
+            .first { Files.exists(it.resolve("settings.gradle.kts")) }
+            .resolve("contract")
     }
 }

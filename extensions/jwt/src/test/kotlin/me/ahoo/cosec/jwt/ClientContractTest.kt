@@ -53,13 +53,15 @@ import java.util.concurrent.ConcurrentHashMap
  */
 class ClientContractTest {
     @Test
-    fun `the token pair is written as the contract says`() {
+    fun `the token pair is written as the contract says, and the refresh route answers it`() {
         val written = JsonMapper.builder().findAndAddModules().build()
             .writeValueAsBytes(CompositeToken("<access token>", "<refresh token>"))
-        ContractFiles.check(
-            "token/composite-token.json",
-            ContractFiles.objectNode().set("body", ContractFiles.parse(written))
-        )
+        files.check("token/composite-token.json", files.objectNode().set("body", files.parse(written)))
+        // The file's values are placeholders; what a client relies on is its members and their JSON types, and the
+        // route writes exactly those.
+        val route = files.parse(refresh(login()).body)
+        shapeOf(route).assert().isEqualTo(shapeOf(files.committed("token/composite-token.json").get("body")))
+        shapeOf(route).assert().isEqualTo(mapOf("accessToken" to "string", "refreshToken" to "string"))
     }
 
     @Test
@@ -67,15 +69,24 @@ class ClientContractTest {
         val full = converter.toToken(fullSubject())
         val provider = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM, membershipClaimLimit = 0)
             .toToken(fullSubject())
-        val file = ContractFiles.objectNode()
-        file.set("access", claimsOf(listOf(full.accessToken, provider.accessToken), ACCESS_CLAIMS))
-        file.set("refresh", claimsOf(listOf(full.refreshToken, provider.refreshToken), REFRESH_CLAIMS))
-        ContractFiles.check("token/claims.json", file)
+        // The smallest subject the converter issues for: no app, no roles, no session (a pair without one is never
+        // refreshed). What its tokens carry is always there, the rest is conditional: a client must not assume it.
+        val smallest = converter.toToken(TokenSubject("alice", null))
+        val file = files.objectNode()
+        file.set(
+            "access",
+            claimsOf(listOf(full.accessToken, provider.accessToken), smallest.accessToken, ACCESS_CLAIMS)
+        )
+        file.set(
+            "refresh",
+            claimsOf(listOf(full.refreshToken, provider.refreshToken), smallest.refreshToken, REFRESH_CLAIMS)
+        )
+        files.check("token/claims.json", file)
     }
 
     @Test
     fun `the served refresh route answers as the contract says`() {
-        val cases = ContractFiles.arrayNode()
+        val cases = files.arrayNode()
         cases.add(case("the pair", refresh(login())))
         cases.add(case("a body that is not exactly the pair", refreshBody("""{"accessToken":"a.b.c"}""")))
         cases.add(case("another media type", runBlocking { refresh.answer("text/plain", body(login()), REQUEST_ID) }))
@@ -97,12 +108,12 @@ class ClientContractTest {
         failing = IllegalStateException("a bug")
         cases.add(case("any other error", refresh(login())))
         failing = null
-        ContractFiles.check("routes/refresh.json", routeFile(cases))
+        files.check("routes/refresh.json", routeFile(cases))
     }
 
     @Test
     fun `the served logout route answers as the contract says`() {
-        val cases = ContractFiles.arrayNode()
+        val cases = files.arrayNode()
         val pair = login()
         cases.add(case("the pair", logout(pair)))
         cases.add(case("a session already ended", logout(pair)))
@@ -120,29 +131,29 @@ class ClientContractTest {
         tokenStore.failing = true
         cases.add(case("the store cannot record it", logout(login())))
         tokenStore.failing = false
-        ContractFiles.check("routes/logout.json", routeFile(cases))
+        files.check("routes/logout.json", routeFile(cases))
     }
 
-    private fun routeFile(cases: JsonNode): ObjectNode = ContractFiles.objectNode().apply {
+    private fun routeFile(cases: JsonNode): ObjectNode = files.objectNode().apply {
         put("cacheControl", LoginRouteAnswer.CACHE_CONTROL)
         set("cases", cases)
     }
 
     /** One answer: its status, its media type and what its body is, `pair`, a problem's slug, or none. */
     private fun case(name: String, answer: LoginRouteAnswer): ObjectNode {
-        val case = ContractFiles.objectNode().put("case", name).put("status", answer.status)
+        val case = files.objectNode().put("case", name).put("status", answer.status)
         answer.contentType?.let { case.put("contentType", it) }
         when (answer.contentType) {
             null -> answer.body.size.assert().isEqualTo(0)
             "application/problem+json" -> {
-                val body = ContractFiles.parse(answer.body)
+                val body = files.parse(answer.body)
                 val slug = body.get("type").asString().substringAfterLast('/')
                 // The route writes the problem a pipeline would: the one contract/problems/ holds.
-                body.assert().isEqualTo(ContractFiles.committed("problems/$slug.json").get("body"))
+                body.assert().isEqualTo(files.committed("problems/$slug.json").get("body"))
                 case.put("problem", slug)
             }
             else -> {
-                val body = ContractFiles.parse(answer.body)
+                val body = files.parse(answer.body)
                 body.propertyNames().toSet().assert().isEqualTo(setOf("accessToken", "refreshToken"))
                 case.put("body", "pair")
             }
@@ -150,20 +161,31 @@ class ClientContractTest {
         return case
     }
 
-    private fun claimsOf(tokens: List<String>, classified: Map<String, String>): ObjectNode {
+    /** The claims [tokens] carry, with their JSON type, said by [classified]; `always` when [smallest] has the claim. */
+    private fun claimsOf(tokens: List<String>, smallest: String, classified: Map<String, String>): ObjectNode {
         val types = sortedMapOf<String, String>()
         for (token in tokens) {
-            val payload = ContractFiles.parse(Base64.getUrlDecoder().decode(token.split('.')[1]))
+            val payload = payloadOf(token)
             for (name in payload.propertyNames()) {
                 val type = typeOf(payload.get(name))
                 types.put(name, type)?.let { it.assert().describedAs(name).isEqualTo(type) }
             }
         }
         (types.keys - classified.keys).assert().describedAs("claims no one said a client reads or ignores").isEmpty()
-        return ContractFiles.objectNode().apply {
-            types.forEach { (name, type) -> putObject(name).put("type", type).put("client", classified.getValue(name)) }
+        val always = payloadOf(smallest).propertyNames().toSet()
+        (always - types.keys).assert().isEmpty()
+        return files.objectNode().apply {
+            types.forEach { (name, type) ->
+                putObject(name).put("type", type).put("client", classified.getValue(name))
+                    .put("presence", if (name in always) "always" else "optional")
+            }
         }
     }
+
+    private fun payloadOf(token: String): JsonNode = files.parse(Base64.getUrlDecoder().decode(token.split('.')[1]))
+
+    private fun shapeOf(body: JsonNode): Map<String, String> =
+        body.propertyNames().associateWith { typeOf(body.get(it)) }
 
     private fun typeOf(node: JsonNode): String = when {
         node.isString -> "string"
@@ -172,6 +194,8 @@ class ClientContractTest {
         node.isArray -> "array"
         else -> "object"
     }
+
+    private val files = ContractFiles()
 
     // The routes over real tokens, as LoginRoutesTest builds them.
     private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
@@ -213,7 +237,7 @@ class ClientContractTest {
         runBlocking { refresh.answer("application/json", text.toByteArray(), REQUEST_ID) }
 
     private fun refreshedPair(answer: LoginRouteAnswer): CompositeToken {
-        val body = ContractFiles.parse(answer.body)
+        val body = files.parse(answer.body)
         return CompositeToken(body.get("accessToken").asString(), body.get("refreshToken").asString())
     }
 

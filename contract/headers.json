@@ -1,5 +1,5 @@
 {
-  "request" : [ "CoSec-Space-Id", "CoSec-Device-Id", "CoSec-Request-Id" ],
+  "request" : [ "CoSec-Device-Id", "CoSec-Request-Id", "CoSec-Space-Id" ],
   "requestId" : {
     "pattern" : "^[A-Za-z0-9._-]{1,64}$"
   },

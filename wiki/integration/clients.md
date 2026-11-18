@@ -14,7 +14,9 @@ The facts a client parses are also files, in
 [`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract) (`PIP-25`): every problem type's status, headers
 and body, the `CoSec-*` headers and the request id's grammar, the token pair's body, the claims of CoSec's tokens, and
 what the served refresh and logout routes answer. The server's tests check its answers against them as parsed JSON, so a
-client's own tests can use them as the answers to expect.
+client's own tests can use them as the answers to expect. A claim the file marks `optional` may be missing from a
+token, and a client that reads it handles that: the table of [the claims a client may read](#the-claims-a-client-may-read)
+says what its absence means.
 
 ## What your application serves
 

@@ -2,89 +2,110 @@
   "access" : {
     "attributes" : {
       "type" : "object",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "optional"
     },
     "aud" : {
       "type" : "string",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "optional"
     },
     "auth_time" : {
       "type" : "number",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "optional"
     },
     "cosec.generation" : {
       "type" : "number",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "optional"
     },
     "cosec.membership" : {
       "type" : "string",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "optional"
     },
     "exp" : {
       "type" : "number",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "always"
     },
     "iat" : {
       "type" : "number",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "always"
     },
     "jti" : {
       "type" : "string",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "always"
     },
     "policies" : {
       "type" : "array",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "optional"
     },
     "roles" : {
       "type" : "array",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "optional"
     },
     "sid" : {
       "type" : "string",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "optional"
     },
     "sub" : {
       "type" : "string",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "always"
     },
     "tenantId" : {
       "type" : "string",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "optional"
     }
   },
   "refresh" : {
     "auth_time" : {
       "type" : "number",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "optional"
     },
     "cosec.generation" : {
       "type" : "number",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "optional"
     },
     "cosec.token" : {
       "type" : "string",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "always"
     },
     "exp" : {
       "type" : "number",
-      "client" : "read"
+      "client" : "read",
+      "presence" : "always"
     },
     "iat" : {
       "type" : "number",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "always"
     },
     "jti" : {
       "type" : "string",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "always"
     },
     "sid" : {
       "type" : "string",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "optional"
     },
     "sub" : {
       "type" : "string",
-      "client" : "do-not-depend"
+      "client" : "do-not-depend",
+      "presence" : "always"
     }
   }
 }
