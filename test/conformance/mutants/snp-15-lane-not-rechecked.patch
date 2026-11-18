@@ -3,14 +3,14 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyDrainLaneTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
-index 3a5dab47..38f71336 100644
+index 95288fef..4b6e393e 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyDrain.kt
-@@ -155,7 +155,6 @@ internal class KeyDrain<T : Any>(
+@@ -153,7 +153,6 @@ internal class KeyDrain<T : Any>(
                  hooks.afterRelease()
                  // An offer that lost the flag just before the release is taken here: no event is stranded. A lane
                  // event is taken again whatever the budget; only caller events are handed off.
 -                if (laneWaiting) continue
                  if (spent) return handOff()
-                 if (queue.isEmpty()) return
+                 if (!callerWaiting) return
              }

@@ -21,7 +21,6 @@ import me.ahoo.cosec.runtime.snapshot.KeyEvent.Claim
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotUnavailableException
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.atomic.AtomicIntegerFieldUpdater
 import java.util.concurrent.locks.LockSupport
 
@@ -34,7 +33,8 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
  * and executes the effects in order. Events an effect raises are queued, never recursed into. Nobody waits on the
  * flag, but [close], which drains to empty.
  *
- * Caller events (requests, changes, recompile marks, evictions, close) are queued: a thread not CoSec's takes at most
+ * Caller events (requests, changes, recompile marks, evictions, close) wait in [KeyCallers], taken in arrival order, of
+ * which an idle key holds nothing: a thread not CoSec's takes at most
  * K + 1 per top-level call ([DrainBudget]) and hands the rest off ([DrainHandOffs]). A load's events go on the load lane
  * ([KeyLane]), taken whole before each caller event and again after the release, never counted (finding 2). A call
  * takes at most (K + 1) caller events and (K + 2) × [LANE_EVENTS_PER_LOAD] lane events (`KeyDrainLaneTest`).
@@ -57,7 +57,7 @@ internal class KeyDrain<T : Any>(
     private val owner: KeyOwner<T>,
     /** Tests only: called between the steps of a drain; [Hooks.NONE] in production. */
     private val hooks: Hooks = Hooks.NONE,
-) : KeyLane() {
+) : KeyCallers() {
     /**
      * Tests only: where a test interleaves with a drain. [beforeNext] runs before each transition (it may throw, as a
      * transition that fails would); [afterEmpty] between finding the queue empty and releasing the flag; [afterRelease]
@@ -72,8 +72,6 @@ internal class KeyDrain<T : Any>(
             val NONE = Hooks()
         }
     }
-
-    private val queue = ConcurrentLinkedQueue<Any>()
 
     /**
      * The flag: 1 while a thread drains this key. A field set through [FLAG] rather than an `AtomicBoolean`, so a held
@@ -100,7 +98,7 @@ internal class KeyDrain<T : Any>(
      */
     fun offer(item: Any) {
         val lane = item is KeyEvent.LaneEvent<*>
-        if (lane) push(item as KeyEvent.LaneEvent<*>) else queue.add(item)
+        if (lane) push(item as KeyEvent.LaneEvent<*>) else enqueue(item)
         val events = if (lane) k else k + 1
         DrainBudget.within(if (context.threads.drainsUnbounded.get() == true) Int.MAX_VALUE else events) { drain() }
     }
@@ -113,14 +111,14 @@ internal class KeyDrain<T : Any>(
      * drain takes; nothing waits on its own flag.
      */
     fun close() {
-        queue.add(KeyEvent.Close)
+        enqueue(KeyEvent.Close)
         // Closing from inside this key's own drain (a meter, a listener): the drain on this thread takes it.
         if (drainer === Thread.currentThread()) return
         DrainBudget.unbounded {
             var waits = 0
             while (true) {
                 drain()
-                if (queue.isEmpty() && !laneWaiting && flagged == 0) return
+                if (!callerWaiting && !laneWaiting && flagged == 0) return
                 // Another thread's step is running (an eviction over a large family, a slow meter): spin briefly, then
                 // park for a growing while rather than burn a core.
                 waits++
@@ -157,7 +155,7 @@ internal class KeyDrain<T : Any>(
                 // event is taken again whatever the budget; only caller events are handed off.
                 if (laneWaiting) continue
                 if (spent) return handOff()
-                if (queue.isEmpty()) return
+                if (!callerWaiting) return
             }
         } finally {
             crashed?.let(::report)
@@ -168,13 +166,13 @@ internal class KeyDrain<T : Any>(
     private fun takeWhileBudget(): Boolean {
         while (true) {
             takeLane()
-            if (queue.isEmpty()) {
+            if (!callerWaiting) {
                 if (laneWaiting) continue
                 hooks.afterEmpty()
                 return false
             }
             if (!DrainBudget.spend()) return true
-            take(queue.poll() ?: continue)
+            take(pollCaller() ?: continue)
         }
     }
 

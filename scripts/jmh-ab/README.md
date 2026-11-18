@@ -90,6 +90,22 @@ in the source changes, but each stamp costs time, and the run measures and print
 Pro, 43 to 132 ns on the hosted runners (Xeon 6973P-C and 6975P-C, EPYC 9V74). Both sides carry the same stamps in window 1. In window 2 `Slot` carries
 one more, its hand to housekeeping before its answer, so the extra it reports is if anything a little low.
 
+## Bytes per held key
+
+RFC 0013 §5.4 also gates what a held key retains: the runner at most 100 bytes more than `Slot`. That is a test, not a
+benchmark, since it is deterministic: `HeldKeyBytesTest` in `:runtime:check`. It loads 20,000 app documents under each
+slot kind and takes a class histogram of the live heap before the loads and after (`GC.class_histogram`, which collects
+first). The difference per class, divided by the keys, is what one held key retains. It prints the table, class by class,
+`Slot` beside the runner:
+
+```bash
+./gradlew :runtime:test --tests 'me.ahoo.cosec.runtime.snapshot.HeldKeyBytesTest' --rerun
+```
+
+The table is in the test's standard output (`build/test-results`). Count by class, not by "heap used" before and after:
+a used-heap figure includes whatever else allocates meanwhile. A probe that read it once subtracted two windows that did
+not measure the same objects, and reported a pass the histogram does not show.
+
 ## Script
 
 `compare.py <dir>` reads `<dir>/base-N.json` and `<dir>/head-N.json` and prints the table; run it locally on the
