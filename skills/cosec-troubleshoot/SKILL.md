@@ -133,6 +133,14 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   CoSec publishes every name it may create, so an entry for a CoSec cache this instance does not create starts. **`Cache[<name>] - its
   storage keys (...) overlap those of Cache[<other>]`**: an application cache and a CoSec cache would share Redis
   keys; give the application's cache another prefix or namespace (`cosec.key-prefix` moves every instance's data).
+- **`Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]`**, **`allow the key pattern [%R~...]`** or
+  **`allow the channel pattern [&...]`**: an instance without `cosec-control` reads the documents and the candidates
+  read-only (SNP-18), and its Redis user lacks `+evalsha_ro +eval_ro`, read permission on `<s>:snapshot:*` or
+  `<s>:candidate:*`, or the channels `&<s>:*`; add what the message names (8.0.0-beta.1's example user lacks the two
+  commands). **`Redis denied publishing to the invalidation channel[<s>:inv:snapshot]`**: a process with `cosec-control`
+  writes the documents but was given a read-only data-plane user; give it a user that writes `<s>:*`. **`CoSec reads
+  <cache> read-only in this process ... (SNP-18)`**: a `cocache.caches.*.read-only` entry or a customizer tries to change
+  what the classpath decides; remove it.
   **An `IllegalStateException` naming a channel pattern** such as
   `[&cosec:control:inv:*]`: the Redis ACL denies the cache's invalidation channel; allow `&<prefix>:*`.
 - **`CoSec's Redis template [<bean>] reads from replicas (ReadFrom...)`**: the Lettuce client behind the template CoSec

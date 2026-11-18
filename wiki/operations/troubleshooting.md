@@ -538,6 +538,35 @@ The entry names a cache no one creates, usually a misspelled name. CoSec publish
 create, so an entry for a CoSec cache this instance does not create (a control-plane cache on a service without the
 control plane) starts; fix the name.
 
+```text
+CoSec reads PolicySnapshotCache read-only in this process, which does not run the control plane: a cocache.* property or customizer cannot make it read-write (SNP-18).
+```
+
+A `cocache.caches.PolicySnapshotCache.read-only` or `cocache.caches.CandidateCache.read-only` entry, or a customizer,
+changes what CoSec declares: read-only on an instance without `cosec-control`, read-write where the control plane runs
+(`... cannot make it read-only`). Remove it; the classpath decides
+([Who may write which keys](./storage.md#who-may-write-which-keys)).
+
+### Startup fails on a Redis permission {#startup-fails-on-a-redis-permission}
+
+CoCache checks the user's permissions when it creates CoSec's caches, and names what is missing. On a data-plane
+instance, one that does not run the control plane, the documents and the candidates are read-only stores
+([Who may write which keys](./storage.md#who-may-write-which-keys)):
+
+| Message contains | Add to the instance's Redis user |
+|---|---|
+| `Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]: allow [+evalsha_ro]` | `+evalsha_ro +eval_ro`: a user whose commands are restricted, such as 8.0.0-beta.1's example ([Upgrading](./upgrading.md#from-8-0-0-beta-1)) |
+| `allow the key pattern [%R~<s>:snapshot:*]` (or `<s>:candidate:*`) | read permission on the documents or the candidates |
+| `allow the channel pattern [&<s>:inv:*]` | the invalidation channels: `&<s>:*` |
+
+```text
+Redis denied publishing to the invalidation channel[cosec:inv:snapshot] of Keyspace(...): allow the channel pattern [&cosec:inv:*] ... (atomic broadcast also needs the key pattern [~cosec:snapshot:*]) ...
+```
+
+The process runs the control plane (`cosec-control` is on its classpath), so it writes the documents, but its user may
+not: usually a data-plane user given to a process that has `cosec-control`. Give the control plane a user that writes
+`<s>:*`, or leave `cosec-control` out of the data plane's image.
+
 ### Startup fails on overlapping cache keys
 
 ```text
