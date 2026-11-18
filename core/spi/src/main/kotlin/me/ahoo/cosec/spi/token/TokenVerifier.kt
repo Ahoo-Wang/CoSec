@@ -22,7 +22,8 @@ import me.ahoo.cosec.api.token.CompositeToken
  * Pure computation by contract: no I/O, no blocking, no state that changes between calls, so the pipeline calls it on
  * the request's thread, which may be an event loop, and a login calls it wherever it runs. Whether a token was
  * revoked is not its question: that is a [RevocationReader]'s, read by the caller after this answers (the pipeline's
- * `TokenAuthenticator`, refresh, `TokenRevoker`), with the one judgement CoSec keeps for it (`TokenRevocation`).
+ * `TokenAuthenticator`, refresh, `TokenRevoker`) through `TokenRevocation` of `cosec-runtime`, which is public and a
+ * bean of the starter. Code that calls this outside the pipeline calls `TokenRevocation.check` with what it returns.
  */
 @CoSecSpi
 interface TokenVerifier {

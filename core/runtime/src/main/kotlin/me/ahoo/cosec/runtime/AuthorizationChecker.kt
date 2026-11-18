@@ -39,9 +39,16 @@ import kotlin.coroutines.cancellation.CancellationException
 private val log = KotlinLogging.logger {}
 
 /**
- * Answers "may the current principal do this?" in code (RFC 0006 §7.6): in services, message consumers, or to decide
- * which actions a UI shows. The same evaluation as the request, through [pipeline], for the principal and scope of a
- * request the pipeline permitted; no obligation runs and no listener hears of it.
+ * Answers "may the current principal do this?" in code (RFC 0006 §7.6): to decide which actions a UI shows, or whether
+ * the object the handler loaded is the caller's. The same evaluation as the request, through [pipeline], for the
+ * principal and scope of a request the pipeline permitted; no obligation runs and no listener hears of it.
+ *
+ * It is for the request in progress, with the `SecurityContext` of that request. The context holds what the pipeline
+ * resolved for that request, and a check decides with it as it is: it does not authenticate again, so it checks no age
+ * and no revocation of the token and sees no change of roles since. A context kept past its request (in a message, a
+ * scheduled job, a cache) therefore keeps permitting after the token is revoked or the roles change. Never keep one:
+ * authorize where the request arrives and carry the decision, not the context, with the work. CoSec decides nothing
+ * outside a request in 8.0.
  *
  * [check] answers yes or no; [decide] answers the [Decision] itself, for host code that records what permitted it: a
  * [Decision.Permit] names the statement in [Decision.Permit.by], with the binding it came through in
