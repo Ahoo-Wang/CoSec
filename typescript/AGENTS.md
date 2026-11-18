@@ -137,4 +137,5 @@ tarballs that job packed and checked itself ([Releasing](#releasing)).
 
 Code scanning covers this workspace too: the `Analyze (javascript-typescript)` job of `.github/workflows/codeql.yml`
 (`.github/codeql/codeql-javascript.yml`) runs CodeQL's `security-and-quality` queries over `typescript/`, without a
-build, on every pull request and on main. An alert it raises is fixed in the code, not dismissed.
+build, on every pull request and on main. It is a required check of `main`, as is `CodeQL`, which fails while a
+pull request's merge ref has an open alert. An alert it raises is fixed in the code, not dismissed.
