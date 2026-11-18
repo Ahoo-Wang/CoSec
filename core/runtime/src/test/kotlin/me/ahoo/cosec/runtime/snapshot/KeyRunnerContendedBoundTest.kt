@@ -51,7 +51,7 @@ class KeyRunnerContendedBoundTest {
             release.await(10, TimeUnit.SECONDS)
         }
     })
-    private val housekeeping = SlotModelThreads().housekeeping
+    private val housekeeping = SourceModelThreads().housekeeping
 
     /** Orders the keys' last access, so the least recently used are the ones the pass chooses, not a tie's order. */
     private val ticker = AtomicLong()

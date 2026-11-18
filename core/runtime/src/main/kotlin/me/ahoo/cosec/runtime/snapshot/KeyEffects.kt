@@ -39,7 +39,7 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
 internal class KeyEffects<T : Any>(
     private val key: SnapshotKey,
     private val compiler: SnapshotCompiler<T>,
-    private val context: SlotContext,
+    private val context: KeyContext,
     private val owner: KeyOwner<T>,
 ) {
     /**

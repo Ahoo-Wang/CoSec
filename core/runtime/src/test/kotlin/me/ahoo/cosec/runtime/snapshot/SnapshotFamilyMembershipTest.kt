@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Test
  * evicted behind its back.
  */
 class SnapshotFamilyMembershipTest {
-    private val threads = SlotModelThreads()
+    private val threads = SourceModelThreads()
     private val store = InMemorySnapshotDocumentStore()
     private val compiler = FakeCompiler()
 

@@ -20,8 +20,8 @@ import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 
 /** One periodic pass: [done] completes when it ends, or, once abandoned, when the pass that replaced it does. */
-internal class Pass(val done: CompletableFuture<Void>, private val context: SlotContext) {
-    /** When a document of this pass last finished, in [SlotContext.nanoTime]: the start, until one does. */
+internal class Pass(val done: CompletableFuture<Void>, private val context: KeyContext) {
+    /** When a document of this pass last finished, in [KeyContext.nanoTime]: the start, until one does. */
     @Volatile
     private var progressedAt: Long = context.nanoTime.get().asLong
 

@@ -28,16 +28,16 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Runs one [KeyModelScript] through [KeyTransitions] and [KeyModelRunner] on [SlotModelThreads] and [SlotModelStore]
+ * Runs one [KeyModelScript] through [KeyTransitions] and [KeyModelRunner] on [SourceModelThreads] and [SourceModelStore]
  * (RFC 0013 B2b, step 1): the key-level driver of the slot model. After every event: [KeyStepChecks] on each step
  * taken, at most one live read for the key, and what is published equal to what the state holds; once the run
  * settles, or the key closes, every waiter answered exactly once. [failure] is the first violation, with [log].
  */
 internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.KeyModelWorld, KeyWorld {
     override val key: SnapshotKey = SnapshotKey.App("app")
-    override val threads = SlotModelThreads()
+    override val threads = SourceModelThreads()
     private val events = longArrayOf(0)
-    override val store = SlotModelStore({ events[0] }, { threads.nanos })
+    override val store = SourceModelStore({ events[0] }, { threads.nanos })
     override val storeReadTimeout: Duration = Duration.ofSeconds(3)
     override val counts = sortedMapOf<String, Int>()
     override var seen: Seen? = null
@@ -60,7 +60,7 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
     private var current: KeyModelRunner? = null
     private val runners = mutableListOf<KeyModelRunner>()
     private val waiters = mutableListOf<ScriptWaiter>()
-    private val loadOfRead = HashMap<SlotModelStore.Read, Pair<KeyModelRunner, Long>>()
+    private val loadOfRead = HashMap<SourceModelStore.Read, Pair<KeyModelRunner, Long>>()
     private val random = kotlin.random.Random(script.seed)
     private var failNext = false
     private var overflowNext = false

@@ -16,7 +16,6 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import me.ahoo.test.asserts.assert
@@ -60,7 +59,7 @@ class ColdLoadCountsTest {
             .map { it.get().toDouble() / loads }
     }
 
-    private fun measure(slots: SlotFactory): List<Double> {
+    private fun measure(runners: KeyRunner.Settings): List<Double> {
         val counts = Counts()
         val store = ControllableStore().apply {
             put(SnapshotKey.Platform, document(1))
@@ -105,16 +104,6 @@ class ColdLoadCountsTest {
             override fun <V> schedule(callable: Callable<V>, delay: Long, unit: TimeUnit): ScheduledFuture<V> =
                 counted(realScheduler.schedule(callable, delay, unit))
         }
-        val capturing = object : SlotFactory {
-            override fun <T : Any> create(
-                key: SnapshotKey,
-                compiler: SnapshotCompiler<T>,
-                context: SlotContext
-            ): KeySlot<T> {
-                threads = context.threads
-                return slots.create(key, compiler, context)
-            }
-        }
         val compiler = FakeCompiler()
         val source = SnapshotSource(
             store,
@@ -132,8 +121,9 @@ class ColdLoadCountsTest {
             // The eviction's order: the least recently used key goes, so each key of the cycle is cold again.
             AtomicLong()::incrementAndGet,
             housekeeping,
-            capturing,
+            runners,
         )
+        threads = source.threads
         try {
             fun coldLoad(key: SnapshotKey.App) {
                 val answer = source.load(key.appId)

@@ -56,7 +56,7 @@ class KeyRunnerCloseTest {
     )
 
     /** [key] installed, then evicted: the runner a pass listed before the eviction. */
-    private fun removed(key: SnapshotKey.App): KeySlot<*> {
+    private fun removed(key: SnapshotKey.App): KeyRunner<*> {
         source.load(key.appId).join()
         val slot = source.families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue(key.appId)
         source.evict(key).assert().isTrue()
@@ -64,7 +64,7 @@ class KeyRunnerCloseTest {
         return slot
     }
 
-    private fun removedA(): KeySlot<*> = removed(APP_A).also { holding = true }
+    private fun removedA(): KeyRunner<*> = removed(APP_A).also { holding = true }
 
     @Test
     fun `close answers a request a removed key handed off before it`() {

@@ -26,7 +26,7 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
 /** What a [SnapshotSource] does when the store says documents changed (RFC 0013 B2a): reload the slot of each. */
 internal class SnapshotChanges(
     private val sharedKey: SnapshotKey,
-    private val shared: KeySlot<*>,
+    private val shared: KeyRunner<*>,
     private val families: SnapshotFamilies<*>,
     private val passes: Passes,
     private val threads: SnapshotThreads,

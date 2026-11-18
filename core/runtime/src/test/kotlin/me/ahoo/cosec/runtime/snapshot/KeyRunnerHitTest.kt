@@ -50,7 +50,7 @@ class KeyRunnerHitTest {
         if (task.javaClass.name.contains("DrainHandOffs")) handOffs += task else task.run()
     }
 
-    private fun source(slots: SlotFactory): SnapshotSource<Compiled, Compiled> = SnapshotSource(
+    private fun source(runners: KeyRunner.Settings): SnapshotSource<Compiled, Compiled> = SnapshotSource(
         store,
         SnapshotKey.Platform,
         compiler,
@@ -62,12 +62,12 @@ class KeyRunnerHitTest {
         null,
         { 0L },
         null,
-        slots,
+        runners,
     )
 
     /** A's cold load in flight; a second request for A offered with a spent budget; then the load's read answers. */
-    private fun twoRequests(slots: SlotFactory): List<LoadOutcome> {
-        source(slots).use { source ->
+    private fun twoRequests(runners: KeyRunner.Settings): List<LoadOutcome> {
+        source(runners).use { source ->
             source.load().join()
             store.hold = true
             val first = source.load(APP_A.appId)

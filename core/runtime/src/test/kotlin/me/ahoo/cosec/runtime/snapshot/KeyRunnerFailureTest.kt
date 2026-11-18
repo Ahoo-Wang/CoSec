@@ -94,7 +94,7 @@ class KeyRunnerFailureTest {
         )
     }
 
-    private fun SnapshotSource<*, *>.slot(id: String): KeySlot<*> = families.first {
+    private fun SnapshotSource<*, *>.slot(id: String): KeyRunner<*> = families.first {
         it.spec.kind == SnapshotKind.APP
     }.slots.getValue(
         id
@@ -165,7 +165,7 @@ class KeyRunnerFailureTest {
             val ids = (1..3).map { if (absent) "made-up-$it" else "app-$it" }
             if (!absent) ids.forEach { store.put(SnapshotKey.App(it), document(1)) }
             val armed = AtomicBoolean()
-            val held = SlotModelThreads().housekeeping
+            val held = SourceModelThreads().housekeeping
             val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = 2, maxAbsent = 2)
             source(
                 KeyDrain.Hooks({ if (it is KeyEvent.Evict && armed.getAndSet(false)) error("thrown by the test") }),
@@ -232,7 +232,7 @@ class KeyRunnerFailureTest {
     @Test
     fun `a burst of absent ids installed on a thread not ours never holds more than the cap, and nothing goes to the pool`() {
         val pooled = CopyOnWriteArrayList<Runnable>()
-        val held = SlotModelThreads().housekeeping
+        val held = SourceModelThreads().housekeeping
         val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxAbsent = 4)
         val cap = 2 * options.maxAbsent
         source(compileExecutor = { pooled += it }, housekeeping = held, options = options).use { source ->
@@ -277,7 +277,7 @@ class KeyRunnerFailureTest {
             if (refuse.get()) throw RejectedExecutionException("refused by the test")
             task.run()
         }
-        val housekeeping = SlotModelThreads().housekeeping
+        val housekeeping = SourceModelThreads().housekeeping
         val more = CopyOnWriteArrayList<CompletableFuture<Boolean>>()
         val armed = AtomicBoolean()
         lateinit var source: SnapshotSource<Compiled, Compiled>
