@@ -272,7 +272,7 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 对 CoSec 来说探针是普通请求（`STA-4`，[应用上的 actuator](../integration/web.md#actuator-on-an-application)）：在应用的应用端口上，以及 WebFlux 应用的管理端口上，它经过管道，平台文档未安装时回答 `503`，之后对匿名调用方回答 `401`，除非有一条语句允许这条路径。Spring 的存活状态不受影响，但 HTTP 存活探针是一个请求，所以它和其余请求一起失败，kubelet 就重启 pod。
 
-- **通过 HTTP 的就绪探针：** 用一条语句允许任何人对两个探针路径发 `GET`（[策略](../integration/web.md#actuator-on-an-application)）。第一次发布之前它仍回答 `503`，这正是“未就绪”该有的回答。在 Kubernetes 之外，设置 `management.endpoint.health.probes.enabled=true`。
+- **通过 HTTP 的就绪探针：** 用一条语句允许任何人对两个探针路径发 `GET`（[策略](../integration/web.md#actuator-on-an-application)）。第一次发布之前它仍回答 `503`，这正是“未就绪”该有的回答。Spring Boot 4 在任何平台上都提供探针（`management.endpoint.health.probes.enabled` 默认为 `true`）。
 - **存活与启动探针：** WebMvc 上把探针指向 `management.server.port`，它不经 CoSec。WebFlux 的管理端口同样经 CoSec：在应用端口上用 `tcpSocket` 探针。永远不要对应用的应用端口使用 HTTP 存活探针。
 
 ## 条件无法编译 {#a-condition-does-not-compile}
@@ -422,7 +422,7 @@ Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
 某个 `cocache.caches.[<CacheName>].*` 条目或 `CacheSpecCustomizer` 设置了 CoSec 在其缓存上锁定的字段，例如快照存储的
-`ttl`、`unknown-read` 或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
+`ttl`、`unknown-read`、吊销表的 `absent-ttl`，或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
 能让该条目启动，但 CoSec 约束的字段保持原值（[优先级](./configuration.md#precedence)）。
 
 ```text

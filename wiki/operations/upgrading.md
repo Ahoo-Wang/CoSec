@@ -1178,6 +1178,11 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 
 ### From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 
+- **Security: a revocation table keeps "not revoked" for 30 seconds at most.** Through 8.0.0-beta.2 the `absent-ttl`
+  of `RevokedTokenCache` and `RevokedSubjectCache` was not locked, so `cocache.caches.RevokedTokenCache.absent-ttl`, a
+  `cocache.defaults.store.absent-ttl` or a customizer could lengthen it, and an instance that missed an invalidation
+  accepted a revoked token for that long. It is now CoSec's, 30 seconds: a `cocache.caches.[name].absent-ttl` for
+  either table fails startup (remove it), and the global defaults and customizers no longer reach it.
 - **Security: requests verify with the application's `TokenVerifier`.** Through 8.0.0-beta.2 the starter's pipeline
   verified request tokens with CoSec's own `JwtTokenVerifier`, even when the application declared a `TokenVerifier`
   bean, which refresh and logout did use. Now a request, a refresh and a logout verify with the same one (`IDN-25`).
