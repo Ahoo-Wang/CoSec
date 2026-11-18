@@ -26,12 +26,16 @@ application: it is published only as an image, never as a library.
 - **Layout.** The application lives in `/opt/cosec-gateway-server` and runs as the unprivileged `appuser`. The
   configuration is `config/application.yaml`; the JVM options are in `bin/cosec-gateway-server` (ZGC, a 2 GiB heap).
   Add options through `JAVA_OPTS`, which follows them and so overrides them ([Memory](#memory)).
-- **What is in it.** The gateway filter, the Redis snapshot store (`cosec-cocache`), tracing and the Kafka module. Its
-  configuration, `config/application.yaml` (the only one it reads: `-Dspring.config.location=file:./config/`), turns
-  Kafka audit (`cosec.audit.kafka.enabled: false`) and login (`cosec.authentication.login.enabled: false`) off.
-  `cosec-ip2region` is in it too and stays on; the [Kubernetes](#kubernetes) base turns it off
-  (`cosec.ip2region.enabled: false`). It has no control plane: documents are published by
+- **What is in it.** The gateway filter, the Redis snapshot store (`cosec-cocache`), tracing, the Kafka module and
+  ip2region. Its configuration, `config/application.yaml` (the only one it reads, from
+  [`src/dist/config/`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml)),
+  turns Kafka audit (`cosec.audit.kafka.enabled: false`), login (`cosec.authentication.login.enabled: false`) and
+  ip2region (`cosec.ip2region.enabled: false`, as the [Kubernetes](#kubernetes) base does) off: a document that reads
+  `ext.ip2region.*` needs `COSEC_IP2REGION_ENABLED=true`. It has no control plane: documents are published by
   `cosec-migrate` or by a control-plane application on the same Redis.
+- **Docker health check.** The image's `HEALTHCHECK` probes `/actuator/health/liveness` every 30 seconds: up once the
+  application runs, whatever Redis holds. It never probes `/actuator/health`, which is `DOWN` until the platform
+  document is installed ([Readiness](#readiness)).
 
 ```bash
 docker run -d -p 8080:8080 \
@@ -280,7 +284,9 @@ service container. It publishes a platform document with `cosec-migrate publish`
 `-XX:AOTMode=on` (a cache that cannot be mapped fails the job), adds a `/smoke/**` route to the gateway's own health
 endpoint, and checks that the health probe answers `200`, an anonymous request `401` with
 `application/problem+json`, a request with a valid HS256 token `200`, and a request a DENY matches `403` with
-`application/problem+json`. The same steps are a quick check of your own deployment.
+`application/problem+json`. It also runs the image's own `HEALTHCHECK`, every 2 seconds instead of 30, and requires
+that it probes the liveness group and that Docker reports the container healthy. The same steps are a quick check of
+your own deployment.
 
 ## AOT cache
 
