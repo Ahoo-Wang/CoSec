@@ -105,7 +105,9 @@ class ContractFilesTest {
         val files = checker()
 
         val extra = assertThrows<AssertionError> { files.only("dir", setOf("keep.json")) }
-        extra.message.assert().contains("contract/dir holds a file the code does not answer").contains("./gradlew update")
+        extra.message.assert().contains(
+            "contract/dir holds a file the code does not answer"
+        ).contains("./gradlew update")
         root.resolve("dir/extra.json").exists().assert().isTrue()
 
         assertThrows<AssertionError> { files.only("dir", setOf("keep.json", "extra.json", "absent.json")) }

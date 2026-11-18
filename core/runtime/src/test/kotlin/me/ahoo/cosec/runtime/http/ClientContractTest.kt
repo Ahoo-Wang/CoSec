@@ -159,7 +159,10 @@ class ClientContractTest {
      */
     private fun outcomeOf(type: ProblemType): Outcome {
         val deny = Decision.Deny(statement())
-        val authenticated = AuthnResult.Authenticated(AuthenticatedPrincipal(PrincipalId("p"), TenantId("t"), null), "m")
+        val authenticated = AuthnResult.Authenticated(
+            AuthenticatedPrincipal(PrincipalId("p"), TenantId("t"), null),
+            "m"
+        )
         fun rejected(reason: AuthnResult.RejectReason) =
             StatusMapping.decided(REQUEST_ID, deny, AuthnResult.Rejected(reason), null)
         return when (type) {
