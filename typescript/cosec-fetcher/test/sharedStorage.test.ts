@@ -63,6 +63,8 @@ function refresher(host: FakeCoSecHost): TokenRefresher {
     refresh: async token => {
       const response = await host.fetch('/auth/refresh', {
         method: 'POST',
+        // The refresh route answers 400 to another media type (contract/routes/refresh.json).
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(token),
       });
       return response.json();

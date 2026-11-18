@@ -24,6 +24,19 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // PIP-25: the client contract, contract/.
+            "runtime:ClientContractTest#every problem type answers its contract file",
+            "runtime:ClientContractTest#a trace id is the one optional member of a problem body",
+            "runtime:ClientContractTest#the headers a client sends and reads are the contract's",
+            "runtime:ClientContractTest#the request id's pattern accepts exactly what the server does",
+            "runtime:ContractFilesTest#writing makes the directories and writes pretty JSON ending in a newline",
+            "runtime:ContractFilesTest#writing deletes the json files the code no longer answers, and nothing else",
+            "runtime:ContractFilesTest#checking fails on a difference and names the task",
+            "runtime:ContractFilesTest#checking fails on an extra file and on a missing one, and deletes nothing",
+            "jwt:ClientContractTest#the token pair is written as the contract says",
+            "jwt:ClientContractTest#the claims of CoSec's tokens are the contract's, each said to be read or not depended on",
+            "jwt:ClientContractTest#the served refresh route answers as the contract says",
+            "jwt:ClientContractTest#the served logout route answers as the contract says",
             "runtime:DocumentInvalidTest#a document that does not compile is logged once per revision, and its recovery once",
             "runtime:DocumentInvalidTest#a decision event says the document is invalid, at the revision its view carries",
             "runtime:DocumentInvalidTest#the client's answer is the same as for an unavailable source",

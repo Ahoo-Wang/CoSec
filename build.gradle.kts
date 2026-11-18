@@ -145,6 +145,13 @@ configure(libraryProjects) {
     }
 }
 
+// PIP-25: the projects whose ClientContractTest checks contract/, with the helper of :runtime's test fixtures.
+val runtimeProjectPath = ":runtime"
+val contractProjects = listOf(runtimeProjectPath, ":jwt").map(::project)
+configure(contractProjects) {
+    clientContractTests()
+}
+
 configure(testOnlyProjects) {
     kotlinJvm()
     junitTests()
@@ -478,6 +485,35 @@ fun Project.junitTests() {
 }
 
 /**
+ * PIP-25: `test` checks this project's files of `contract/` (a changed file reruns it), and `updateClientContract`
+ * rewrites them after an intended change of what a client receives, as updateKotlinAbi rewrites a dump. Both name the
+ * task in `cosec.contract.task`, for the helper's messages.
+ */
+fun Project.clientContractTests() {
+    val update = "$path:updateClientContract"
+    val contract = rootProject.fileTree("contract")
+    tasks.named<Test>("test") {
+        inputs.files(contract).withPropertyName("contract").withPathSensitivity(PathSensitivity.RELATIVE)
+        systemProperty("cosec.contract.task", update)
+    }
+    val test = the<SourceSetContainer>()["test"]
+    tasks.register<Test>("updateClientContract") {
+        description = "Rewrites this project's files of contract/ from what the code answers."
+        group = "verification"
+        testClassesDirs = test.output.classesDirs
+        classpath = test.runtimeClasspath
+        filter { includeTestsMatching("*.ClientContractTest") }
+        systemProperty("cosec.contract.update", "true")
+        systemProperty("cosec.contract.task", update)
+        outputs.upToDateWhen { false }
+        // :jwt's test reads contract/problems/, which :runtime's writes, and the build runs in parallel.
+        if (project.path != runtimeProjectPath) {
+            mustRunAfter("$runtimeProjectPath:updateClientContract")
+        }
+    }
+}
+
+/**
  * `check` writes the module's JaCoCo XML, which CI uploads to Codecov (scripts/ci/plan.py). It holds the module's tests
  * against its own classes and those of the projects on its test runtime classpath, as the aggregated report does, so
  * Codecov's merge of the uploads gives the same coverage.
@@ -491,6 +527,10 @@ fun Project.coverageReport() {
                 componentFilter { it is ProjectComponentIdentifier && it.projectPath != selfPath }
             }.files
         )
+        // A project's test fixtures are code its own tests exercise (ContractFiles, PIP-25), so they are in its report.
+        project.plugins.withId("java-test-fixtures") {
+            classDirectories.from(project.the<SourceSetContainer>()["testFixtures"].output.classesDirs)
+        }
     }
     tasks.named("check") {
         dependsOn(report)

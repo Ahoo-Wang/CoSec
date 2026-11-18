@@ -1,0 +1,12 @@
+{
+  "request" : [ "CoSec-Device-Id", "CoSec-Request-Id", "CoSec-Space-Id" ],
+  "requestId" : {
+    "pattern" : "^[A-Za-z0-9._-]{1,64}$"
+  },
+  "response" : {
+    "everyAnswer" : [ "CoSec-Request-Id" ],
+    "problem" : [ "CoSec-Request-Id", "Content-Type" ],
+    "tooManyRequests" : [ "CoSec-Request-Id", "Content-Type", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After" ],
+    "permitCounted" : [ "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset" ]
+  }
+}

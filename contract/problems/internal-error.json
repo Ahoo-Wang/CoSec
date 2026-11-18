@@ -1,0 +1,17 @@
+{
+  "status" : 500,
+  "headers" : {
+    "CoSec-Request-Id" : "golden-request-id",
+    "Content-Type" : "application/problem+json"
+  },
+  "body" : {
+    "type" : "https://cosec.ahoo.me/problems/internal-error",
+    "title" : "Internal Server Error",
+    "status" : 500,
+    "code" : "INTERNAL_ERROR",
+    "requestId" : "golden-request-id"
+  },
+  "optionalMembers" : {
+    "traceId" : "string"
+  }
+}
