@@ -18,6 +18,7 @@ import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import {
   CoSecConfigurer,
   CoSecTokenRefresher,
+  CoSecTokenRevoker,
   DeviceIdStorage,
   TokenStorage,
   type CoSecConfig,
@@ -65,7 +66,10 @@ export function createHostClient({
     tokenRefresher: new CoSecTokenRefresher({
       fetcher: client,
       endpoint: '/auth/refresh',
-      logoutEndpoint: '/auth/logout',
+    }),
+    tokenRevoker: new CoSecTokenRevoker({
+      fetcher: client,
+      endpoint: '/auth/logout',
     }),
     ...config,
   });

@@ -13,6 +13,7 @@
 
 import type { TokenStorage } from './tokenStorage.js';
 import type { CompositeToken, TokenRefresher } from './tokenRefresher.js';
+import type { TokenRevoker } from './tokenRevoker.js';
 import {
   isNotificationGuardRefresher,
   type NotificationGuardRefresher,
@@ -106,6 +107,12 @@ export interface JwtTokenManagerOptions {
    * {@link CoSecConfigurer} passes {@link DEFAULT_REFRESH_RETRY_DELAYS}.
    */
   refreshRetryDelays?: readonly number[];
+  /**
+   * What ends a session at the server when {@link JwtTokenManager.logout} is
+   * called: {@link CoSecTokenRevoker} of CoSec's logout route. Without it,
+   * `logout()` signs out here and rejects with {@link LogoutUnconfirmedError}.
+   */
+  tokenRevoker?: TokenRevoker;
 }
 
 /** CoSec's default `cosec.jwt.session.rotation-leeway`. */
@@ -508,34 +515,51 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
   }
 
   /**
-   * Logs out: ends the session at the server ({@link TokenRefresher.logout},
-   * CoSec's logout route), then signs out here. The pair is removed here
-   * whatever the server answered, as long as it is still the stored session
-   * (another tab may have signed in meanwhile): the user asked to leave this
-   * device, and a pair kept after a failed logout would stay usable here.
+   * Logs out: ends the session at the server (the {@link TokenRevoker} of
+   * `options.tokenRevoker`, CoSec's logout route), then signs out here.
+   *
+   * A refresh in flight is waited for first, and the session is ended with the
+   * pair stored after it: the pair that refresh rotated away would be refused
+   * (`401`) and the renewed session would live on at the server with nobody
+   * holding it. A refresh that starts while the logout is on its way cannot
+   * store its answer: the pair is gone, and it only stores into the session it
+   * started from.
+   *
+   * The pair is removed here whatever the server answered, as long as it is
+   * still the stored session (another tab may have signed in meanwhile): the
+   * user asked to leave this device, and a pair kept after a failed logout would
+   * stay usable here.
    *
    * - Resolves when the server ended the session (`204`), or answered `401`:
-   *   the session was not usable any more (ended, revoked, or the pair is not
-   *   one), so there is nothing left to end.
+   *   the session was not usable any more, so there is nothing left to end.
    * - Rejects with {@link LogoutUnconfirmedError} for anything else (`503`,
-   *   `500`, a network failure, a timeout, a refresher without a logout
-   *   route): the pair is gone here, and the session lives on at the server
-   *   until it ends there, at the latest when its refresh token expires.
+   *   `500`, a network failure, a timeout, no `tokenRevoker`): the pair is gone
+   *   here, and the session may live on at the server until it ends there, at
+   *   the latest when its refresh token expires.
    *
    * Without a stored pair it does nothing. {@link TokenStorage.signOut} stays
    * the local, synchronous sign-out.
    */
   async logout(): Promise<void> {
+    // A refresh can start again after one settles (another request, another tab's change): wait until none is running.
+    for (
+      let refreshing = this.refreshInProgress;
+      refreshing;
+      refreshing = this.refreshInProgress
+    ) {
+      await refreshing.promise.catch(() => undefined);
+    }
     const jwtToken = this.currentToken;
     if (!jwtToken) return;
     let unconfirmed: unknown;
     try {
-      if (!this.tokenRefresher.logout) {
+      const revoker = this.options.tokenRevoker;
+      if (!revoker) {
         throw new Error(
-          'The token refresher has no logout: give CoSecTokenRefresher a logoutEndpoint.',
+          "No tokenRevoker: give the JwtTokenManager a CoSecTokenRevoker of the server's logout route.",
         );
       }
-      await this.tokenRefresher.logout(jwtToken.token);
+      await revoker.logout(jwtToken.token);
     } catch (error) {
       if (!isRefreshRejection(error)) unconfirmed = error ?? new Error();
     } finally {
@@ -543,8 +567,9 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
         this.tokenStorage.signOut();
       }
     }
-    if (unconfirmed !== undefined)
+    if (unconfirmed !== undefined) {
       throw new LogoutUnconfirmedError(unconfirmed);
+    }
   }
 
   /**

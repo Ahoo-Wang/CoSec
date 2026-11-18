@@ -92,6 +92,7 @@ export interface CoSecConfig extends Partial<DeviceIdStorageCapable>, RequestTru
     readonly rotationLeeway?: number;
     readonly spaceIdProvider?: SpaceIdProvider;
     readonly tokenRefresher?: TokenRefresher;
+    readonly tokenRevoker?: TokenRevoker;
     readonly tokenStorage?: TokenStorage;
 }
 
@@ -182,7 +183,6 @@ export interface CoSecRequestOptions extends DeviceIdStorageCapable, RequestTrus
 // @public
 export class CoSecTokenRefresher implements TokenRefresher {
     constructor(options: CoSecTokenRefresherOptions);
-    logout(token: CompositeToken): Promise<void>;
     // (undocumented)
     readonly options: CoSecTokenRefresherOptions;
     refresh(token: CompositeToken, shouldNotifyUnauthorized?: () => boolean): Promise<CompositeToken>;
@@ -194,7 +194,21 @@ export interface CoSecTokenRefresherOptions {
     endpoint: string;
     // (undocumented)
     fetcher: Fetcher;
-    logoutEndpoint?: string;
+    timeout?: number;
+}
+
+// @public
+export class CoSecTokenRevoker implements TokenRevoker {
+    constructor(options: CoSecTokenRevokerOptions);
+    logout(token: CompositeToken): Promise<void>;
+    // (undocumented)
+    readonly options: CoSecTokenRevokerOptions;
+}
+
+// @public
+export interface CoSecTokenRevokerOptions {
+    endpoint: string;
+    fetcher: Fetcher;
     timeout?: number;
 }
 
@@ -382,12 +396,14 @@ export interface JwtTokenManagerOptions {
     isRefreshRejected?: (error: unknown) => boolean;
     refreshRetryDelays?: readonly number[];
     rotationLeeway?: number;
+    tokenRevoker?: TokenRevoker;
 }
 
 // @public
 export class LogoutUnconfirmedError extends FetcherError {
     constructor(cause?: unknown);
     readonly problem?: CoSecProblem;
+    readonly status?: number;
 }
 
 // @public
@@ -523,8 +539,12 @@ export interface SpaceIdStorageOptions extends Partial<KeyStorageOptions<SpaceId
 
 // @public
 export interface TokenRefresher {
-    logout?(token: CompositeToken): Promise<void>;
     refresh(token: CompositeToken): Promise<CompositeToken>;
+}
+
+// @public
+export interface TokenRevoker {
+    logout(token: CompositeToken): Promise<void>;
 }
 
 // @public

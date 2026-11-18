@@ -70,14 +70,17 @@ Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fe
 
 ## 登出
 
-`tokenStorage.signOut()` 只在本地忘掉令牌对：会话在服务端仍可刷新，直到它在那里结束。要同时在服务端结束会话，请把 starter 提供的登出路由（`cosec.authentication.login.logout.path`）交给刷新器，并调用 `logout()`：
+用户点击“登出”时调用 `logout()`：它在服务端结束会话（CoSec 的登出路由，`cosec.authentication.login.logout.path`），并在本地删除令牌对。已知会话已经结束时，或应用通过自己的登出端点结束会话时，调用 `tokenStorage.signOut()`：它只在本地忘掉令牌对，会话在服务端仍可刷新，直到它在那里结束。
 
 ```ts
 const cosec = new CoSecConfigurer({
   tokenRefresher: new CoSecTokenRefresher({
     fetcher: api,
     endpoint: '/auth/refresh',
-    logoutEndpoint: '/auth/logout',
+  }),
+  tokenRevoker: new CoSecTokenRevoker({
+    fetcher: api,
+    endpoint: '/auth/logout',
   }),
 });
 cosec.applyTo(api);
@@ -85,7 +88,7 @@ cosec.applyTo(api);
 await cosec.tokenManager?.logout();
 ```
 
-它把令牌对发送到该路由，并在本地删除它。服务端结束了会话（`204`），或回答 `401`（会话已不可用）时，它正常完成。其他情况（`503`、`500`、网络故障、超时）下，它以 `LogoutUnconfirmedError` 拒绝，本地的令牌对照样删除：用户要求离开这台设备。此时会话在服务端继续存在，直到它在那里结束，最迟到其刷新令牌过期；请告知用户，或稍后从同一用户的另一个会话调用 `logout()`。
+正在进行的刷新会先被等待，会话用它存下的令牌对结束。服务端结束了会话（`204`）或回答 `401`（会话已不可用）时，`logout()` 正常完成；无论哪种结果，本地的令牌对都会删除。`LogoutUnconfirmedError`（`503`、`500`、网络故障、没有 `tokenRevoker`）要求应用告诉用户：服务端可能仍持有该会话，直到它在那里结束，最迟到其刷新令牌过期。它不携带任何令牌：`problem` 和 `status` 说明服务端的回答。
 
 ## CoSec 8.0 应用必须允许什么
 

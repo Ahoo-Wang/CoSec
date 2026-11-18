@@ -16,26 +16,58 @@ import { SerialTypedEventBus } from '@ahoo-wang/fetcher-eventbus';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  CoSecTokenRefresher,
+  CoSecConfigurer,
+  CoSecTokenRevoker,
   IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY,
   JwtTokenManager,
   LogoutUnconfirmedError,
+  RefreshSessionChangedError,
   TokenStorage,
   type CompositeToken,
-  type TokenRefresher,
+  type TokenRevoker,
 } from '../src';
 
-const jwt = (sub: string, session: string) =>
-  `e30.${btoa(JSON.stringify({ sub, sid: session, exp: Date.now() / 1000 + 3600 }))}.signature`;
-const pair = (sub: string, session = 's1'): CompositeToken => ({
-  accessToken: jwt(sub, session),
-  refreshToken: jwt(sub, session),
+const jwt = (sub: string, session: string, generation: number) =>
+  `e30.${btoa(JSON.stringify({ sub, sid: session, gen: generation, exp: Date.now() / 1000 + 3600 }))}.signature`;
+const pair = (sub: string, session = 's1', generation = 1): CompositeToken => ({
+  accessToken: jwt(sub, session, generation),
+  refreshToken: jwt(sub, session, generation) + '.refresh',
 });
-/** What a Fetcher throws for an answer of `status`, as far as the manager reads it. */
-const answered = (status: number) =>
+/** What a Fetcher throws for an answer of `status`, holding the request's body: the pair. */
+const answered = (status: number, body: CompositeToken) =>
   Object.assign(new Error(`answered ${status}`), {
-    exchange: { response: new Response(null, { status }) },
+    exchange: {
+      request: { body },
+      response: new Response(null, { status }),
+    },
   });
+
+/** A promise and the functions that settle it. */
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((yes, no) => {
+    resolve = yes;
+    reject = no;
+  });
+  return { promise, resolve, reject };
+}
+
+/** Every string reachable from `value`: its own properties, its causes, their exchanges, at any depth. */
+function strings(value: unknown, seen = new Set<unknown>()): string[] {
+  if (typeof value === 'string') return [value];
+  if (value === null || typeof value !== 'object' || seen.has(value)) return [];
+  seen.add(value);
+  const keys = new Set([
+    ...Object.getOwnPropertyNames(value),
+    'message',
+    'cause',
+    'name',
+  ]);
+  return [...keys].flatMap(key =>
+    strings((value as Record<string, unknown>)[key], seen),
+  );
+}
 
 describe('JwtTokenManager.logout', () => {
   let storage: TokenStorage;
@@ -50,49 +82,83 @@ describe('JwtTokenManager.logout', () => {
     storage.eventBus.destroy();
   });
 
-  const manager = (logout?: TokenRefresher['logout']) =>
-    new JwtTokenManager(storage, {
-      refresh: async token => token,
-      ...(logout ? { logout } : {}),
-    });
+  const manager = (
+    tokenRevoker?: TokenRevoker,
+    refresh: (token: CompositeToken) => Promise<CompositeToken> = async token =>
+      token,
+  ) => new JwtTokenManager(storage, { refresh }, { tokenRevoker });
+
+  const revoker = (logout: TokenRevoker['logout']): TokenRevoker => ({
+    logout,
+  });
 
   it('ends the session at the server, then here', async () => {
     const token = pair('alice');
     storage.signIn(token);
     const logout = vi.fn(async () => undefined);
-    await manager(logout).logout();
+    await manager(revoker(logout)).logout();
     expect(logout).toHaveBeenCalledWith(token);
     expect(storage.get()).toBeNull();
   });
 
   it('signs out here when the server answers 401: the session was not usable any more', async () => {
-    storage.signIn(pair('alice'));
-    await manager(async () => {
-      throw answered(401);
-    }).logout();
+    const token = pair('alice');
+    storage.signIn(token);
+    await manager(
+      revoker(async () => {
+        throw answered(401, token);
+      }),
+    ).logout();
     expect(storage.get()).toBeNull();
   });
 
   it.each([
-    ['a 503', answered(503)],
-    ['a 500', answered(500)],
-    ['a network failure', new TypeError('fetch failed')],
+    ['a 503', 503],
+    ['a 500', 500],
+    ['a network failure', undefined],
   ])(
     'rejects LogoutUnconfirmedError on %s, and signs out here all the same',
-    async (_case, failure) => {
-      storage.signIn(pair('alice'));
-      const error = await manager(async () => {
-        throw failure;
-      })
+    async (_case, status) => {
+      const token = pair('alice');
+      storage.signIn(token);
+      const failure =
+        status === undefined
+          ? new TypeError('fetch failed')
+          : answered(status, token);
+      const error = await manager(
+        revoker(async () => {
+          throw failure;
+        }),
+      )
         .logout()
         .catch(error => error);
       expect(error).toBeInstanceOf(LogoutUnconfirmedError);
-      expect(error.cause).toBe(failure);
+      expect((error as LogoutUnconfirmedError).status).toBe(status);
       expect(storage.get()).toBeNull();
     },
   );
 
-  it('rejects without a logout route, and signs out here', async () => {
+  it('carries no token: not on the error, not on its causes, not on an exchange', async () => {
+    const token = pair('alice');
+    storage.signIn(token);
+    const error = await manager(
+      revoker(async () => {
+        throw answered(503, token);
+      }),
+    )
+      .logout()
+      .catch(error => error);
+    const reachable = strings(error);
+    expect(reachable.length).toBeGreaterThan(0);
+    for (const secret of [token.accessToken, token.refreshToken]) {
+      expect(reachable.filter(text => text.includes(secret))).toEqual([]);
+    }
+    expect(
+      strings(answered(503, token)).some(text => text === token.accessToken),
+    ).toBe(true);
+  });
+
+  it('rejects without a token revoker, and signs out here', async () => {
     storage.signIn(pair('alice'));
     const error = await manager()
       .logout()
@@ -103,21 +169,81 @@ describe('JwtTokenManager.logout', () => {
 
   it('does nothing without a stored pair', async () => {
     const logout = vi.fn(async () => undefined);
-    await manager(logout).logout();
+    await manager(revoker(logout)).logout();
     expect(logout).not.toHaveBeenCalled();
   });
 
   it('keeps a session another tab signed in while the logout was on its way', async () => {
     storage.signIn(pair('alice', 's1'));
     const next = pair('bob', 's2');
-    await manager(async () => {
-      storage.signIn(next);
-    }).logout();
+    await manager(
+      revoker(async () => {
+        storage.signIn(next);
+      }),
+    ).logout();
     expect(storage.get()?.token).toEqual(next);
+  });
+
+  it('waits for a refresh in flight, and ends the session with the pair it stored', async () => {
+    const first = pair('alice', 's1', 1);
+    const second = pair('alice', 's1', 2);
+    storage.signIn(first);
+    const answer = deferred<CompositeToken>();
+    const sent: CompositeToken[] = [];
+    const jwt = manager(
+      revoker(async token => {
+        sent.push(token);
+      }),
+      () => answer.promise,
+    );
+    const refreshing = jwt.refresh();
+    const loggingOut = jwt.logout();
+    await Promise.resolve();
+    expect(sent).toEqual([]);
+    answer.resolve(second);
+    await refreshing;
+    await loggingOut;
+    expect(sent).toEqual([second]);
+    expect(storage.get()).toBeNull();
+  });
+
+  it('a refresh answered after the logout cannot store its answer', async () => {
+    const first = pair('alice', 's1', 1);
+    storage.signIn(first);
+    const ended = deferred<void>();
+    const answer = deferred<CompositeToken>();
+    const jwt = manager(
+      revoker(() => ended.promise),
+      () => answer.promise,
+    );
+    const loggingOut = jwt.logout();
+    await Promise.resolve();
+    // The refresh starts while the logout is on its way, from the pair still stored.
+    const refreshing = jwt.refresh().catch(error => error);
+    ended.resolve();
+    await loggingOut;
+    expect(storage.get()).toBeNull();
+    answer.resolve(pair('alice', 's1', 2));
+    expect(await refreshing).toBeInstanceOf(RefreshSessionChangedError);
+    expect(storage.get()).toBeNull();
+  });
+
+  it('is reached through CoSecConfigurer', async () => {
+    const token = pair('alice');
+    const logout = vi.fn(async () => undefined);
+    const configurer = new CoSecConfigurer({
+      tokenStorage: storage,
+      tokenRefresher: { refresh: async token => token },
+      tokenRevoker: revoker(logout),
+    });
+    storage.signIn(token);
+    await configurer.tokenManager!.logout();
+    expect(logout).toHaveBeenCalledWith(token);
+    expect(storage.get()).toBeNull();
   });
 });
 
-describe('CoSecTokenRefresher.logout', () => {
+describe('CoSecTokenRevoker', () => {
   it('posts the pair to the logout route, marked as a refresh is', async () => {
     const sent: { url: string; body: unknown }[] = [];
     const fetcher = new Fetcher({
@@ -138,11 +264,9 @@ describe('CoSecTokenRefresher.logout', () => {
       },
     });
     const token = pair('alice');
-    await new CoSecTokenRefresher({
-      fetcher,
-      endpoint: '/auth/refresh',
-      logoutEndpoint: '/auth/logout',
-    }).logout(token);
+    await new CoSecTokenRevoker({ fetcher, endpoint: '/auth/logout' }).logout(
+      token,
+    );
     expect(sent).toEqual([
       { url: 'https://api.test/auth/logout', body: token },
     ]);
@@ -154,23 +278,12 @@ describe('CoSecTokenRefresher.logout', () => {
       baseURL: 'https://api.test',
       fetch: async () => new Response(null, { status: 503 }),
     });
-    const error = await new CoSecTokenRefresher({
+    const error = await new CoSecTokenRevoker({
       fetcher,
-      endpoint: '/auth/refresh',
-      logoutEndpoint: '/auth/logout',
+      endpoint: '/auth/logout',
     })
       .logout(pair('alice'))
       .catch(error => error);
     expect(error).toBeInstanceOf(HttpStatusValidationError);
-  });
-
-  it('rejects without a logout endpoint', async () => {
-    const error = await new CoSecTokenRefresher({
-      fetcher: new Fetcher({ baseURL: 'https://api.test' }),
-      endpoint: '/auth/refresh',
-    })
-      .logout(pair('alice'))
-      .catch(error => error);
-    expect(error.message).toContain('No logoutEndpoint');
   });
 });

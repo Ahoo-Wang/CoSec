@@ -234,6 +234,23 @@ describe('logout against a real host', () => {
     expect((await client.get('/hello')).status).toBe(200);
   });
 
+  it('waits for a refresh in flight and ends the session it renewed', async () => {
+    const { client, configurer, tokens } = createHostClient();
+    tokens.signIn(await loginExpired('alice'));
+    const wire = recordWire();
+    const call = client.get('/orders/1').catch(error => error);
+    // The refresh has reached the host: the logout is called while it is in flight, or just after it stored.
+    while ((await stats()).refreshes === 0) {
+      await new Promise(done => setTimeout(done, 5));
+    }
+    await configurer.tokenManager!.logout();
+    await call;
+    const session = wire.filter(line => line.startsWith('/auth/'));
+    // Not the rotated pair's 401: the logout sent the pair the refresh stored.
+    expect(session).toEqual(['/auth/refresh 200', '/auth/logout 204']);
+    expect(tokens.get()).toBeNull();
+  });
+
   it('resolves for a session the host had already ended', async () => {
     const { configurer, tokens } = createHostClient();
     const pair = await login('alice');
