@@ -491,7 +491,9 @@ Before production:
   not run the control plane, reads the documents and the candidates read-only, so its user needs only read permission
   on them, and Redis refuses that user a write of either. Its credential still writes the shadow reports and statuses,
   and, with JWT, revocations and refresh token families. A process that runs the control plane needs write access to
-  the documents.
+  the documents. A data-plane credential can still publish invalidations on the documents' channel: that makes
+  instances read the documents they hold again from Redis, a cost in load, never a different decision, since an
+  invalidation carries no document.
 - Run Redis with `maxmemory-policy noeviction`, and read it from the primary
   ([Redis requirements](../operations/storage.md#redis-requirements)).
 - Limit the control API per tenant with a platform rate limit rule

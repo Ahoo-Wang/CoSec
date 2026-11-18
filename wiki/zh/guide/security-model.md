@@ -293,7 +293,8 @@ CoSec 决定请求能否到达你的处理器。它不会：
   通过 TLS 连接 Redis（`rediss://`，或 `spring.data.redis.ssl.enabled`），让中间网络上的任何人都无法读取或篡改实例读到的
   内容；并给控制面和数据面实例各自的用户（[谁可以写哪些 key](../operations/storage.md#who-may-write-which-keys)）。数据面实例（不运行控制面
   的实例）以只读方式读取文档和候选，所以它的用户对它们只需要读权限，Redis 会拒绝这个用户写入其中任何一个。它的凭证仍会写入
-  影子报告和状态，启用 JWT 时还会写入吊销和刷新令牌族。运行控制面的进程需要对文档的写权限。
+  影子报告和状态，启用 JWT 时还会写入吊销和刷新令牌族。运行控制面的进程需要对文档的写权限。数据面凭证仍能在文档的通道上
+  发布失效消息：这会让实例从 Redis 重新读取它持有的文档，代价是负载，从不改变决策，因为失效消息不携带文档。
 - 以 `maxmemory-policy noeviction` 运行 Redis，并从主节点读取（[Redis 要求](../operations/storage.md#redis-requirements)）。
 - 用一条平台限流规则按租户限制控制 API（[限流](../policies/rate-limiting.md#the-control-api)）。
 - 在任何人需要 break-glass 之前注册一个 REQUIRED 决策监听器。

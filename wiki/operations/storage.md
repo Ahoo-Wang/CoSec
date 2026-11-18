@@ -169,6 +169,12 @@ the documents and the candidates, and write only shadow reports and statuses. A 
   So a fleet that ships one image with `cosec-control` for both roles has no read-only data plane.
 - Revocations and refresh token families stay read-write wherever JWT is on (`<s>:token:*`): an application can revoke
   tokens from any endpoint of its own (`TokenRevoker`), so nothing in a process says it only reads them.
+- A data-plane user still publishes on `&<s>:*`: its shadow stores broadcast their invalidations there, and a channel
+  pattern cannot allow subscribing without publishing. So an instance whose credential leaks can publish invalidations
+  on the documents' channel. That costs reads, never a decision: an invalidation carries keys, not a document, so each
+  instance that holds a named document reads it again from Redis, the store of record, which that user cannot write,
+  and decides with the installed copy meanwhile. Keys an instance does not hold are ignored, and the reloads of one
+  document coalesce, at most one in flight and one queued per instance.
 - Control-plane credentials: every key under `<s>:`.
 - To keep one instance from writing another instance's report, give each instance its own user, limited to its own
   report keys (`<s>:shadow:report:*:<instance>`), and set its
