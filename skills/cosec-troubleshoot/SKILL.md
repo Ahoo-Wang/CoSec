@@ -161,9 +161,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   and connection factory of its own that is not the one CoSec injects (not `@Primary`). Never suggest replica reads
   for CoSec: Redis is its store of record, and a lagging replica can hand back a revoked API key.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-because-redis-is-read-from-replicas
-- **`JWT is enabled, but no TokenStore records revoked tokens`** or **`Tokens are verified, but no revocation reader
-  is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
-  `RevocationReader` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+- **`CoSec's tokens are on, but <stores> are missing`**: revocation is always on, and the message names every missing
+  store of the three (`TokenStore`, `RevocationReader`, `TokenFamilyStore`). Add `cosec-cocache` (all three on Redis),
+  or register a bean of each missing one, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+  **`Tokens are verified against RevocationReader.NONE`** (`WARN`): revoked tokens are accepted until they expire;
+  right only where no one revokes a token. A service verifying an issuer's tokens reads the issuer's revocations.
 - **`Property [cosec.jwt.secret] must not be blank`**: set the secret (same algorithm and secret as the issuer).
   **`Property [cosec.jwt.secret] has <n> bytes, and HMAC256 needs at least 32`**: the secret must be at least 32, 48 or
   64 UTF-8 bytes for `hmac256`, `hmac384`, `hmac512` (RFC 7518 §3.2); set a longer one on the issuer and every verifier.

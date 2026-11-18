@@ -692,14 +692,21 @@ the snapshot documents are, then remove the old properties.
 ### Startup fails without a token store
 
 ```text
-JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache or a TokenStore bean, or set cosec.jwt.enabled=false.
-Tokens are verified, but no revocation reader is available: add cosec-cocache or a RevocationReader bean, or set cosec.jwt.enabled=false.
-JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add cosec-cocache or a TokenFamilyStore bean, or set cosec.jwt.enabled=false.
+CoSec's tokens are on, but TokenStore, RevocationReader, TokenFamilyStore are missing. Verifying and refreshing tokens needs three stores: a TokenStore records revoked tokens, a RevocationReader reads them for every token verified, a TokenFamilyStore keeps the refresh token families. Add cosec-cocache, which brings all three, or a bean of each missing one, or set cosec.jwt.enabled=false. RevocationReader.NONE accepts revoked tokens until they expire: use it only where no one revokes a token, on this service or on the one that issued it.
 ```
 
-Token revocation is always on with JWT, and the starter never revokes into nothing. Add `cosec-cocache`, register a
-`TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own, or turn JWT off in a service that neither
-issues nor verifies tokens.
+Token revocation is always on with JWT, and the starter never revokes into nothing. The message names every store
+missing at once. Add `cosec-cocache`, register a `TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of
+your own, or turn JWT off in a service that neither issues nor verifies tokens.
+
+A service that verifies tokens over `RevocationReader.NONE` starts, and logs once at `WARN`:
+
+```text
+Tokens are verified against RevocationReader.NONE: a revoked token (logout, revoked sessions or subjects) is accepted here until it expires. Where the issuer revokes tokens, read its revocations: cosec-cocache on the issuer's Redis with the issuer's cosec.key-prefix, or a RevocationReader of your own.
+```
+
+`NONE` is right only where no one revokes a token, here or on the service that issued it. A service that verifies
+another service's tokens reads that issuer's revocations.
 
 ### Startup fails with a JWT secret error
 

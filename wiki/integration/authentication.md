@@ -727,7 +727,8 @@ service of another, even with the same signing key and a role of the same name, 
 issues one token per app, with the roles of that app. A token that operates the control plane is issued for the control
 plane's app, `cosec.control.app-id`.
 
-Whoever issues the token says which app it is for: `TokenSubject.app` has no default. Refreshing a token keeps its app.
+Whoever issues the token says which app it is for, in `TokenSubject.app`. Left out, it is null, as on a host without
+apps: a host with an app refuses such a token (`SCP-11`). Refreshing a token keeps its app.
 A token whose `aud` is several values, not a string, or not a possible app id (blank, `*`, with `:`, `/` or a
 control character, longer than 128 characters) is `token-invalid`.
 

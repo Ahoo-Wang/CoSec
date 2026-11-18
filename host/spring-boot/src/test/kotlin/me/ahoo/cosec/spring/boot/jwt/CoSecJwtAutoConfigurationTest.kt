@@ -214,7 +214,24 @@ class CoSecJwtAutoConfigurationTest {
                 CoSecJwtAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
-                context.startupFailure!!.stackTraceToString().assert().contains("no TokenStore records revoked tokens")
+                // One message names the three stores, rather than one per restart (drill 2, findings 15 and 22).
+                context.startupFailure!!.stackTraceToString().assert()
+                    .contains("TokenStore, RevocationReader, TokenFamilyStore are missing")
+                    .contains("Add cosec-cocache, which brings all three")
+                    .contains("RevocationReader.NONE accepts revoked tokens until they expire")
+            }
+    }
+
+    /** A store of the application's own that is not CoCache's reads no revocations: the reader is still missing. */
+    @Test
+    fun contextFailsNamingTheStoresACustomTokenStoreLeavesMissing() {
+        contextRunner
+            .withPropertyValues("${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_")
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
+            .run { context: AssertableApplicationContext ->
+                val failure = context.startupFailure!!.stackTraceToString()
+                failure.assert().contains("but RevocationReader, TokenFamilyStore are missing")
             }
     }
 
@@ -248,7 +265,7 @@ class CoSecJwtAutoConfigurationTest {
             .withUserConfiguration(CoSecJwtAutoConfiguration::class.java)
             .run { context: AssertableApplicationContext ->
                 context.startupFailure!!.stackTraceToString().assert().contains(
-                    "no TokenFamilyStore keeps the refresh token families"
+                    "but TokenFamilyStore is missing"
                 )
             }
     }
