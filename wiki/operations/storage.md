@@ -89,7 +89,7 @@ contain `:` or `/`, so a key names one document only.
 | `<s>:token:family:<sid>` | login, refresh and logout | one session's token family: its principal, login time, end, current generation and whether it was revoked. One key per live session, written at login and at each refresh, a few hundred bytes; it expires at the session's end (`cosec.jwt.session.lifetime` after the login), and a revoked one stays, marked, until then. Read only on refresh and logout, never on a request |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
-| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
+| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":3`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it, and one an 8.0 pre-release stored in another format until it is issued again |
 | `<s>:rate-limiter:<ruleId>:<bucket>` | the Redis rate limiter | a hash of one rule's bucket: the window it counts in and that window's and the previous window's counts; expires two windows after its last count. One key per bucket value: a rule keyed on what a client chooses, with a long window, is memory the client controls ([Rate limiting](../policies/rate-limiting.md#counting-and-backends)) |
 | `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress, as JustAuth keeps it; expires after 3 minutes |
 | `<s>:oauth:binding:<state>` | social login | the SHA-256 of the binding of the browser the state was issued to; taken (`GETDEL`) by the callback, so a state is used once; expires after 3 minutes |
@@ -255,8 +255,8 @@ sequenceDiagram
   pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned. A pass does
   not wait for a document whose compilation has been running for more than those 30 seconds, whoever started it: the
   compilation confirms the document when it ends, and the pass goes on to the documents behind it.
-- **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
-  random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
+- **Ids without a document** are remembered apart from the documents, at most 256 per family: credentials issued for
+  many app ids that have no document make the instance read Redis for each (a client never declares its app), but never pushes an installed document out (`SNP-7`).
 - **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every
   document, so lag stays below the revalidate interval plus the length of a pass, or below the length of two passes
   once a pass outlasts the interval. Past `lag-warn` (60 seconds) the instance logs
@@ -314,19 +314,22 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
 | API keys in Redis (`cosec.api-key.store=redis`) | **`503`**. |
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |
-| The control plane | A store read that fails is a failure, never "absent": the control API answers `503` and publishes nothing. |
+| The control plane | A store read that fails is a failure, never "absent", and nothing is published. The control API answers `503` while the outage stops the authorization of the call, which confirms the documents on Redis first; a store call that fails after that answers `500`. |
 | Shadow reports | The instance logs the failed write and writes again on its next cycle; the window stays open meanwhile. |
 
 **After a reconnect.** While its connection is down, Lettuce buffers the commands it is given, and when it reconnects
 it writes them all under a lock that every command write takes. A request that sends a command then, on an event loop
 too, waits until that buffer is flushed, and the buffer is unbounded by default. To bound the wait, set
 `requestQueueSize`, or reject commands while disconnected, on the application's Lettuce client with a
-`LettuceClientConfigurationBuilderCustomizer`. CoSec does not change that client: the application shares it.
+`LettuceClientConfigurationBuilderCustomizer`. CoSec does not change that client: the application shares it. The
+customizer reaches only that client, behind the Redis templates (API keys, the rate limiter, OAuth states); CoCache
+builds its own client for the documents, the control-plane records and the revocations ([Redis client](#redis-requirements)),
+and configures it itself.
 
 **Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither `max-apps`,
 `max-tenants` nor the ids without a document until its load ends: it fails after the store read timeout (30 seconds)
-while Redis hangs, though the request waiting for it answers `503` after `cold-load-timeout`. So a client that declares
-new app ids at a high rate keeps up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
+while Redis hangs, though the request waiting for it answers `503` after `cold-load-timeout`. So credentials for new app ids
+used at a high rate keep up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
 during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
 
 **Apps without a document share 256 places.** The ids an instance remembers as having no document, at most 256 per
@@ -451,7 +454,7 @@ entry that names no app document (not a valid app id, or `*`), or when an app th
 does not name, the grantor's rights are unknown in every app: a grant over every app (a binding with app `*`, or an
 attachment, even one a condition narrows to apps the change does not name) and a grant in an app it could not read
 go to approval (`UNREADABLE`), and the control plane logs a WARN that names `repair-references`, at most once a minute
-per instance. A list that was lost, through a `FLUSHDB` or an eviction, starts again incomplete when the next app
+per instance (a list that cannot be read logs its own WARN at each analysis). A list that was lost, through a `FLUSHDB` or an eviction, starts again incomplete when the next app
 document is published, so the analysis falls back to approval until `repair-references` runs again.
 
 Two cases depend on Redis keeping what it acknowledged, and nothing above catches them: a failover under asynchronous
