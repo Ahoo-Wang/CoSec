@@ -40,6 +40,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Roles From an External Source', link: '/scenarios/external-source' },
       { text: 'Authorizing Business Actions', link: '/scenarios/route-maps' },
       { text: 'Gateway Topologies', link: '/scenarios/gateway' },
+      { text: 'A Resource Server', link: '/scenarios/resource-server' },
     ],
   },
   {

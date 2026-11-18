@@ -73,8 +73,12 @@ cosec:
 Startup fails, on purpose, when:
 
 - **JWT is on without revocation storage.** Revocation is always on. With `cosec-cocache` the Redis token store
-  supplies it; without it, register a `TokenStore` and a `RevocationReader` bean yourself, or set
-  `cosec.jwt.enabled=false`.
+  supplies it; without it, register all three beans yourself (`TokenStore`, `RevocationReader`, `TokenFamilyStore`), or
+  set `cosec.jwt.enabled=false` on a service that issues no tokens and reads none. **A service that only verifies tokens
+  another service issues must read the issuer's revocations**: `cosec-cocache` on the issuer's Redis with the issuer's
+  `cosec.key-prefix`. `RevocationReader.NONE` is only for tokens that nobody, anywhere, revokes: with it the service
+  accepts every token the issuer revoked until it expires
+  (https://cosec.ahoo.me/scenarios/resource-server).
 - **A route map is left out or empty.** `classpath:cosec-routes.json` exists while
   `cosec.authorization.routes.location` is unset (name it, or set the property empty to run without one); a location
   that does not exist; a map with no routes. A gateway host loads no route map.
@@ -261,7 +265,8 @@ the pipeline: 401/403 deny, 429 rate limited, 503 undecidable, 400 ambiguous req
 `SecurityContext`: `ServerWebExchange.getSecurityContext()` / `HttpServletRequest.getSecurityContext()` (extension
 functions in `ServerWebExchanges` / `ServletRequests`). Web details: https://cosec.ahoo.me/integration/web.
 
-To decide in code (UI buttons, message consumers, object-level checks), inject `AuthorizationChecker`:
+To decide in code **for the request in progress** (UI buttons, object-level checks), inject `AuthorizationChecker` and
+pass it the `SecurityContext` of that request:
 
 ```kotlin
 checker.check(securityContext, "order:ship", "order/42")      // suspend
@@ -271,7 +276,15 @@ checker.checkBlocking(securityContext, "order:ship", "order/42") // cosec-webmvc
 
 The resource is `type/id`, or a path (`/orders/42`) for an `http:` action. It uses the principal and scope of the
 permitted request, runs no rate limits and notifies no listener, and is `false` on any deny, error or outage. Keep
-enforcing on the real request. To record what permitted an action, `checker.decide(...)` (suspend) answers the
+enforcing on the real request. A check is not for a message consumer, a scheduler or any work after the request, and a
+`SecurityContext` must never be stored: a check decides with the principal and memberships frozen when the request was
+permitted, and checks no age, revocation or change of roles, so a kept context keeps permitting after logout or after a
+role is removed. Authorize where the request arrives and carry the decision, not the context, with the work; run a
+transport of your own through `Pipeline.evaluate` (`Outcome.security?.securityContext`) rather than verifying tokens by
+hand; and when you must verify a token yourself, call `TokenVerifier.verify` and then `TokenRevocation.check` (the
+starter's bean), which `verify` alone does not replace. CoSec decides no work the system starts itself in 8.0. A check
+applies no route map: `http:POST` on a path decides as `http:POST` even where a route maps it, so check a mapped route by
+its action and typed resource (https://cosec.ahoo.me/integration/checks). To record what permitted an action, `checker.decide(...)` (suspend) answers the
 `Decision` itself: `Decision.Permit.by` names the statement and, in `via`, the binding and its document. Keep a
 `Decision` in the process; never put it into a response. See https://cosec.ahoo.me/integration/checks.
 
@@ -299,7 +312,8 @@ and never writes Redis (https://cosec.ahoo.me/scenarios/roles, https://cosec.aho
 Worked examples with documents and settings that run: https://cosec.ahoo.me/scenarios/simple-mode (one tenant, no apps),
 `/scenarios/app` (an app without spaces), `/scenarios/spaces` (per-app and shared spaces), `/scenarios/service-account`
 (an API key limited to one space), `/scenarios/tenant-owner` (an owner by attachment), `/scenarios/gateway` (which
-action names the gateway and the service use). Tokens are issued for one app (`TokenSubject.app`): the service's
+action names the gateway and the service use), `/scenarios/resource-server` (a service that verifies another service's
+tokens and decides in its own code). Tokens are issued for one app (`TokenSubject.app`): the service's
 `cosec.authorization.scope.app-id` must be the token's. The model: https://cosec.ahoo.me/guide/model.
 
 ## Optional behavior

@@ -39,6 +39,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: '外部事实源同步角色', link: '/zh/scenarios/external-source' },
       { text: '按业务动作授权', link: '/zh/scenarios/route-maps' },
       { text: '网关拓扑', link: '/zh/scenarios/gateway' },
+      { text: '资源服务', link: '/zh/scenarios/resource-server' },
     ],
   },
   {

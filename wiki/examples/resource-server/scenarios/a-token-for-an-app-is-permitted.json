@@ -1,0 +1,14 @@
+{
+  "description": "A token declares the app it was issued for, and the document binds every app.",
+  "credential": { "tenant": "acme", "id": "alice", "app": "order" },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/orders"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

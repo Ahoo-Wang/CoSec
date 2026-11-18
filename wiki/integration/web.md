@@ -279,7 +279,7 @@ pipeline's outcome. A refused request never reaches your handler. Its `principal
 | `principal.authenticated` | Whether a credential proved the principal. |
 | `tenantId` | The scope's tenant: the principal's, or `(0)` for an anonymous caller. |
 | `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). Behind a gateway: the forwarded `claims`. |
-| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the principal's roles there. |
+| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the principal's roles there, by their bare names (`editor`, not `editor@team-a`). The principal's roles in other spaces and the policies attached to it are not on the context. |
 | `forwardedIdentity` | Behind a gateway, the gateway's request id and the id of the caller's credential; otherwise null. |
 | `requestId` | The request's id as CoSec used it in audit records, spans and problem responses: the client's `CoSec-Request-Id` when it sent an acceptable one, else the one CoSec generated, which no request header holds. |
 | `deviceId` | The device the client declared in `CoSec-Device-Id`, empty when none. Declared by the client: CoSec checks its form only (one value, else `400`), so it is not proof of a device. |
@@ -345,7 +345,9 @@ handler (`Callable`, `DeferredResult`) and a thread of your own find no holder, 
 use the parameter or the request.
 
 The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else
-([Checks in code](./checks.md)).
+([Checks in code](./checks.md)). It is for the request in progress: do not store it or hand it to work that runs after
+the request. It is what the pipeline resolved for that request, and is never re-checked for revocation or changed roles
+([Work that is not the request](./checks.md#work-that-is-not-the-request)).
 
 ## Client IP behind proxies
 
