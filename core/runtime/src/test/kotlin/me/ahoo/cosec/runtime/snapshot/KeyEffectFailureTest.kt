@@ -225,7 +225,7 @@ class KeyEffectFailureTest {
         reloaded(directExecutor) {
             // The eviction pass fails, so an EffectFailed comes; its step's log effect fails too, and is logged in place.
             housekeeping.failing = {
-                val inPlace = Thread.currentThread().stackTrace.any { it.methodName == "loggedInPlace" }
+                val inPlace = Thread.currentThread().stackTrace.any { it.methodName == "loggedNotRaised" }
                 if (inPlace) null else IllegalStateException("housekeeping")
             }
         }.use {
@@ -243,7 +243,7 @@ class KeyEffectFailureTest {
             housekeeping.failing = {
                 val stack = Thread.currentThread().stackTrace
                 when {
-                    stack.any { it.methodName == "loggedInPlace" } -> StackOverflowError("logging")
+                    stack.any { it.methodName == "loggedNotRaised" } -> StackOverflowError("logging")
                     stack.any { it.methodName == "report" && it.className.endsWith("KeyDrain") } -> null
                     else -> IllegalStateException("housekeeping")
                 }

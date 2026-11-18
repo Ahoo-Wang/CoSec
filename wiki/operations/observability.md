@@ -250,10 +250,11 @@ The meters above count; the health indicators and logs below answer whether an i
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`, and
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
 - **Housekeeping summary.** The source writes its log lines and runs its eviction passes on one housekeeping thread, so
-  a slow appender never holds a request's thread. When that thread's queue is full, a task is dropped and counted
-  instead of run on the thread that offered it. At most every 10 seconds, and only when something was dropped or a
-  meter threw, the thread logs one `WARN`:
-  `Snapshot housekeeping since its last summary: refused <n> tasks while full (each dropped; drop runs in place):
+  a slow appender never holds a request's thread. When that thread's queue is full, or once it has stopped as the
+  source closes, a task is dropped and counted instead of run on the thread that offered it; the source's own threads
+  still run theirs while it closes. At most every 10 seconds, and only when something was dropped or a meter threw, the
+  thread logs one `WARN`, and a closing source writes what is left once, on the thread that closes it:
+  `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped (each dropped; drop runs in place):
   load-log 3 (last: "<text>"), …; meter failures <n> (last: "<text>").` Each `last` is the text of the last line of
   that task that was dropped, with its exception's class and message but no stack, cut at 256 characters. A meter that
   throws is never logged on its own: it is counted here, so the summary is written whatever registry is bound.

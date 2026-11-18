@@ -16,11 +16,12 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * What a key's work hands to housekeeping, the closed set [SnapshotMetrics.onHousekeepingRefused] counts and
- * `cosec.snapshot.housekeeping.refused{task}` tags (`SNP-19`). When housekeeping's queue is full, every task is dropped
- * and counted but [DROP], which [runsInPlace]: one offer to the key's own drain, with no I/O and no log.
+ * `cosec.snapshot.housekeeping.refused{task}` tags (`SNP-19`). When housekeeping refuses a task, full or stopped, every
+ * task is dropped and counted but [DROP], which [runsInPlace]: one offer to the key's own drain, with no I/O and no log.
  */
 @InternalCoSecApi
 enum class HousekeepingTask(val tag: String, val runsInPlace: Boolean = false) {
@@ -56,4 +57,12 @@ enum class HousekeepingTask(val tag: String, val runsInPlace: Boolean = false) {
 
     /** The periodic lag report, which the next tick queues again. */
     LAG_REPORT("lag-report"),
+    ;
+
+    /** The line kept for a refused task about [key] that has no message of its own: built only when it is refused. */
+    internal fun about(key: SnapshotKey): String = when (this) {
+        EVICT -> "The eviction pass of the ${key.kind} family."
+        DROP -> "The drop of empty key [$key]."
+        else -> "$tag [$key]"
+    }
 }

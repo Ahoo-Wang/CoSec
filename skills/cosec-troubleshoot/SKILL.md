@@ -369,7 +369,7 @@ header: anonymous. Otherwise never anonymous:
 
 ### Snapshot log lines missing / housekeeping summary
 
-- `Snapshot housekeeping since its last summary: refused <n> tasks while full …` (WARN, at most every 10s) with
+- `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …` (WARN, at most every 10s) with
   `cosec.snapshot.housekeeping.refused{task}` rising: the source's one housekeeping thread (queue 4,096) is behind, so
   log lines (`*-log`), eviction passes under the cap (`evict`) and lag reports are dropped and counted instead of run
   on a request's thread (SNP-19); `drop` runs in place. Decisions are unaffected. Usual cause: a synchronous log

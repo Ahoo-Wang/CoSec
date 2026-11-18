@@ -30,7 +30,7 @@ import java.time.Duration
 @Suppress("TooGenericExceptionCaught")
 internal class GuardedSnapshotMetrics(
     private val delegate: SnapshotMetrics,
-    val refusals: HousekeepingRefusals = HousekeepingRefusals(),
+    private val refusals: HousekeepingRefusals = HousekeepingRefusals(),
 ) : SnapshotMetrics {
     private inline fun guard(event: String, call: () -> Unit) {
         try {

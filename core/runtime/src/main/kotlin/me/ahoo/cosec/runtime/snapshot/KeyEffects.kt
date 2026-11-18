@@ -89,10 +89,7 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.Redispatch -> owner.redispatched(effect.event)
             is KeyEffect.ScheduleRetry -> scheduleRetry(effect.delay)
             KeyEffect.DropIfEmpty ->
-                context.threads.offHousekeeping(
-                    HousekeepingTask.DROP,
-                    { "The drop of empty key [$key]." }
-                ) { owner.dropIfEmpty() }
+                context.threads.offHousekeeping(HousekeepingTask.DROP, key) { owner.dropIfEmpty() }
             KeyEffect.EvictOverCap -> evictOverCap()
             KeyEffect.EvictBeyond -> evictBeyond()
             is KeyEffect.Drop -> owner.dropped(effect.claimed)
@@ -265,12 +262,8 @@ internal class KeyEffects<T : Any>(
         if (families.overCap(family)) {
             DrainBudget.unbounded { families.evictBeyond(family) }
         } else {
-            context.threads.offHousekeeping(
-                HousekeepingTask.EVICT,
-                { "The eviction pass of the ${key.kind} family." }
-            ) {
-                families.evictBeyond(family)
-            }
+            // The line is the key's, built only if housekeeping refuses the pass: a load's end allocates nothing for it.
+            context.threads.offHousekeeping(HousekeepingTask.EVICT, key) { families.evictBeyond(family) }
         }
     }
 }

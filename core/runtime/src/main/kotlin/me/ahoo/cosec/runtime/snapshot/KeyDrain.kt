@@ -245,16 +245,20 @@ internal class KeyDrain<T : Any>(
         }
         failed ?: return
         val loadId = after.load?.id ?: loadBefore ?: NO_LOAD
-        if (raises) push(KeyEvent.EffectFailed(loadId, failed)) else loggedInPlace(failed)
+        if (raises) push(KeyEvent.EffectFailed(loadId, failed)) else loggedNotRaised(failed)
     }
 
     /** [error], or [failed] with [error] suppressed in it: a step's first failure carries the later ones. */
     private fun withFirst(failed: Throwable?, error: Throwable): Throwable =
         failed?.also { if (it !== error) it.addSuppressed(error) } ?: error
 
-    /** What failed in an `EffectFailed`'s own step: logged, and dropped if the logging throws; never another event. */
+    /**
+     * What failed in an `EffectFailed`'s own step: never another event, only a line, offered to housekeeping like every
+     * line with a stack (dropped and counted if refused, `SNP-19`). If offering it throws, nothing more is told; a
+     * `VirtualMachineError` is kept as the step's crash.
+     */
     @Suppress("TooGenericExceptionCaught")
-    private fun loggedInPlace(failed: Throwable) {
+    private fun loggedNotRaised(failed: Throwable) {
         try {
             offLogged(HousekeepingTask.EFFECT_LOG, "an effect failed while a failed effect was handled", failed)
         } catch (error: VirtualMachineError) {

@@ -31,7 +31,7 @@ class HousekeepingRefusalsTest {
         refusals.refused(HousekeepingTask.EVICT, "second")
 
         refusals.summary(0).assert().isEqualTo(
-            "Snapshot housekeeping since its last summary: refused 2 tasks while full (each dropped; drop runs in " +
+            "Snapshot housekeeping since its last summary: refused 2 tasks, full or stopped (each dropped; drop runs in " +
                 "place): evict 2 (last: \"second\")."
         )
 

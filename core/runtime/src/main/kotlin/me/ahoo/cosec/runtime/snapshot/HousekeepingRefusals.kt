@@ -52,12 +52,12 @@ internal class HousekeepingRefusals {
 
     /**
      * The summary line since the last one, taken by housekeeping itself (the lag report's tick): null when nothing moved,
-     * or when one was taken less than [INTERVAL_NANOS] ago, and then what moved waits for the next. Taking it resets the
-     * counts.
+     * or, unless [force]d (the source is closing), when one was taken less than [INTERVAL_NANOS] ago, and then what moved
+     * waits for the next. Taking it resets the counts.
      */
-    fun summary(nanos: Long): String? {
+    fun summary(nanos: Long, force: Boolean = false): String? {
         val last = lastSummary
-        if (last != null && nanos - last < INTERVAL_NANOS) {
+        if (!force && last != null && nanos - last < INTERVAL_NANOS) {
             return null
         }
         val taken = LongArray(HousekeepingTask.entries.size) { counts.getAndSet(it, 0) }
@@ -73,7 +73,7 @@ internal class HousekeepingRefusals {
             if (tasks.isEmpty()) {
                 null
             } else {
-                "refused ${taken.sum()} tasks while full (each dropped; drop runs in place): $tasks"
+                "refused ${taken.sum()} tasks, full or stopped (each dropped; drop runs in place): $tasks"
             },
             if (meters == 0L) null else "meter failures $meters (last: \"$lastMeterFailure\")",
         )

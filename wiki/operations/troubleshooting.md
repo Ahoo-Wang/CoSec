@@ -847,7 +847,7 @@ for a check, `412` for an `ifMatch` that does not hold).
 
 ## Snapshot log lines are missing
 
-An instance logs `Snapshot housekeeping since its last summary: refused <n> tasks while full …` at `WARN`, and
+An instance logs `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …` at `WARN`, and
 `cosec.snapshot.housekeeping.refused` rises. The snapshot source writes its log lines, a failed load's included, on one
 housekeeping thread whose queue holds 4,096 tasks. When the queue is full it drops the line and counts it, rather than
 write it on the thread of the request that caused it (SNP-19). The summary names the last line dropped for each task,

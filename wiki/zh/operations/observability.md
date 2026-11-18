@@ -217,9 +217,10 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   `Snapshot document [<doc>] disappeared from the store; failing closed.`、
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`，以及
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
-- **维护摘要。** 快照源在一个维护线程上写日志、执行驱逐，所以慢的 appender 从不占住请求线程。该线程的队列满时，任务被丢弃并计数，
-  而不是在提交它的线程上执行。最多每 10 秒一次，且只在有任务被丢弃或有指标抛出异常时，该线程记录一条 `WARN`：
-  `Snapshot housekeeping since its last summary: refused <n> tasks while full (each dropped; drop runs in place):
+- **维护摘要。** 快照源在一个维护线程上写日志、执行驱逐，所以慢的 appender 从不占住请求线程。该线程的队列满时，或快照源关闭、该线程已停止后，
+  任务被丢弃并计数，而不是在提交它的线程上执行；关闭期间，快照源自己的线程仍就地执行自己的任务。最多每 10 秒一次，且只在有任务被丢弃
+  或有指标抛出异常时，该线程记录一条 `WARN`；关闭中的快照源在关闭它的线程上把剩下的写出一次：
+  `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped (each dropped; drop runs in place):
   load-log 3 (last: "<text>"), …; meter failures <n> (last: "<text>").` 每个 `last` 是该任务最后被丢弃的那条日志的文本，
   带异常的类名和消息、不带堆栈，截断到 256 个字符。抛出异常的指标从不单独记录日志：它在这里计数，所以无论绑定了什么注册表，摘要都会写出。
 - **传播情况。** 控制面的 `GET /documents/<doc>/revisions/<n>/propagation` 回答最近一分钟内报告过的实例中，有多少已经

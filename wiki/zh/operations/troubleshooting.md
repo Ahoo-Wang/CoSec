@@ -646,7 +646,7 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 
 ## 快照日志缺失 {#snapshot-log-lines-are-missing}
 
-实例以 `WARN` 记录 `Snapshot housekeeping since its last summary: refused <n> tasks while full …`，并且
+实例以 `WARN` 记录 `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …`，并且
 `cosec.snapshot.housekeeping.refused` 上升。快照源在一个维护线程上写日志（包括加载失败的日志），该线程的队列容纳 4,096 个任务。
 队列满时，它丢弃这条日志并计数，而不是在引起它的请求的线程上写出（SNP-19）。摘要列出每种任务最后被丢弃的那条日志，不带堆栈。
 

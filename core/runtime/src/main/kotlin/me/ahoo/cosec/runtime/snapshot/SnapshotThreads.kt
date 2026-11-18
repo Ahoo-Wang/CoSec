@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newCompileExecutor
 import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newHousekeeping
 import me.ahoo.cosec.runtime.snapshot.SnapshotExecutors.newScheduler
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Duration
 import java.util.concurrent.Executor
 import java.util.concurrent.ExecutorService
@@ -46,11 +47,11 @@ internal class SnapshotThreads(
     scheduler: ScheduledExecutorService?,
     /** Tests only: what runs housekeeping in place of the thread started here; shut down and awaited as that one is. */
     housekeeping: ExecutorService?,
-    /** The source's guarded metrics, whose [GuardedSnapshotMetrics.refusals] the housekeeping summary reads. */
-    private val metrics: GuardedSnapshotMetrics = GuardedSnapshotMetrics(SnapshotMetrics.NOOP),
-) {
+    /** The source's metrics, already guarded: a refusal is reported to them. */
+    private val metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
     /** What housekeeping refused since its last summary, and the meters that threw (`SNP-19`). */
-    val refusals: HousekeepingRefusals get() = metrics.refusals
+    val refusals: HousekeepingRefusals = HousekeepingRefusals(),
+) {
 
     /** Set on the threads this source starts: [SnapshotSource.close] does not wait for the thread it runs on. */
     val onOwnThread = ThreadLocal<Boolean>()
@@ -87,9 +88,18 @@ internal class SnapshotThreads(
      * once [SnapshotSource.close] returns, a closed source does no more work and leaves no thread behind. Without the
      * wait, a host that closes and replaces sources faster than queued work drains piles their threads up (RFC 0008
      * §3.5's property stress reached the per-process thread limit). Not on one of those threads, which would wait for
-     * itself.
+     * itself. Then, whatever was refused since the last summary is written once, on this thread, whatever the interval
+     * says (`SNP-19`): housekeeping, which would write it, is gone.
      */
     fun awaitOwned(timeout: Duration) {
+        try {
+            awaitThreads(timeout)
+        } finally {
+            refusals.summary(System.nanoTime(), force = true)?.let { line -> log.warn { line } }
+        }
+    }
+
+    private fun awaitThreads(timeout: Duration) {
         if (onOwnThread.get() == true) {
             return
         }
@@ -133,18 +143,36 @@ internal class SnapshotThreads(
     }
 
     /**
-     * Runs [task] on housekeeping, off every caller's thread and off the timer (`SNP-19`). When housekeeping's queue is
-     * full, [kind] decides: a log line, an eviction pass or a lag report is dropped and counted, with [line] kept for the
-     * summary; an empty key's drop ([HousekeepingTask.runsInPlace]) runs here, one offer to its own drain. Nothing is
-     * written on this thread.
+     * Runs [task] on housekeeping, off every caller's thread and off the timer (`SNP-19`). When housekeeping refuses it,
+     * full or stopped, [kind] decides: a log line, an eviction pass or a lag report is dropped and counted, with [line]
+     * kept for the summary; an empty key's drop ([HousekeepingTask.runsInPlace]) runs here, one offer to its own drain.
+     * Nothing is written on a caller's thread. Once housekeeping is stopped, on one of this source's own threads the task
+     * runs in place, uncounted: that thread is no caller's, and closing loses nothing.
      */
     fun offHousekeeping(kind: HousekeepingTask, line: () -> String, task: () -> Unit) {
         try {
             housekeeping.execute(task)
         } catch (_: RejectedExecutionException) {
-            refused(kind, line)
-            if (kind.runsInPlace) task()
+            notOffered(kind, line, task)
         }
+    }
+
+    /** As above, for a task whose line names only [key]: nothing is built for it unless it is refused. */
+    fun offHousekeeping(kind: HousekeepingTask, key: SnapshotKey, task: () -> Unit) {
+        try {
+            housekeeping.execute(task)
+        } catch (_: RejectedExecutionException) {
+            notOffered(kind, { kind.about(key) }, task)
+        }
+    }
+
+    private fun notOffered(kind: HousekeepingTask, line: () -> String, task: () -> Unit) {
+        if (housekeeping.isShutdown && onOwnThread.get() == true) {
+            task()
+            return
+        }
+        refused(kind, line)
+        if (kind.runsInPlace) task()
     }
 
     /** A [kind] of task housekeeping refused: counted for the summary, with [line], and reported to the metrics. */

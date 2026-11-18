@@ -201,7 +201,7 @@ class HousekeepingRefusalTest {
 
             val summary = source.summaryAfterRelease()
 
-            summary.assert().contains("refused 2 tasks while full")
+            summary.assert().contains("refused 2 tasks, full or stopped")
             summary.assert().contains("load-log 1 (last: \"")
             summary.assert().contains("— java.io.IOException: connection reset\")")
             summary.assert().contains("drop 1 (last: \"The drop of empty key [app:app-x].\")")
@@ -371,6 +371,74 @@ class HousekeepingRefusalTest {
         }
     }
 
+    /**
+     * Housekeeping, which would write the summary, is gone once the source closes: the closing thread writes what was
+     * refused and not yet summarized, once, whatever the interval, after it waited for the threads.
+     */
+    @Test
+    fun `close while housekeeping is full writes what it refused, once, on the closing thread`() {
+        val source = source(SnapshotMetrics.NOOP)
+        fill()
+        store.failure = IOException("connection reset")
+        (source.load("app-x").get(WITHIN_SECONDS, TimeUnit.SECONDS).app is DocumentState.Failed).assert().isTrue()
+        source.closeTimeout = Duration.ofMillis(CLOSE_TIMEOUT_MILLIS)
+
+        source.close()
+
+        val summary = summaries().single()
+        summary.threadName.assert().isEqualTo(Thread.currentThread().name)
+        summary.level.assert().isEqualTo(Level.WARN)
+        summary.formattedMessage.assert().contains("load-log 1 (last: \"")
+    }
+
+    /**
+     * Housekeeping stopped is refusal too: a caller's line after close is dropped and counted. On one of the source's
+     * own threads the task runs in place, uncounted, as before: that thread is no caller's, and closing loses nothing.
+     */
+    @Test
+    fun `after close, a caller's line is dropped and counted, and the source's own thread runs its task in place`() {
+        val source = source()
+        source.close()
+        val ranHere = AtomicBoolean()
+        val ranOnOwn = AtomicBoolean()
+
+        source.threads.offHousekeeping(HousekeepingTask.LOAD_LOG, { "after close" }) { ranHere.set(true) }
+        val own = Thread {
+            source.threads.onOwnThread.set(true)
+            source.threads.offHousekeeping(HousekeepingTask.LOAD_LOG, { "after close, own" }) { ranOnOwn.set(true) }
+        }
+        own.start()
+        own.join(TimeUnit.SECONDS.toMillis(WITHIN_SECONDS))
+
+        ranHere.get().assert().isFalse()
+        ranOnOwn.get().assert().isTrue()
+        refused.toList().assert().isEqualTo(listOf(HousekeepingTask.LOAD_LOG))
+    }
+
+    /**
+     * Close ends every load before it stops housekeeping: a compilation that ends later finds no load to install into,
+     * so it reports nothing, and nothing is refused.
+     */
+    @Test
+    fun `a compilation that ends after housekeeping stopped finds its load ended, and nothing is refused`() {
+        val source = source(compileExecutor = null)
+        val gate = CountDownLatch(1)
+        compiler.gate = gate
+        compiler.failure = IllegalStateException("no such matcher")
+        val answer = source.load("app-a")
+        awaitCondition { compiler.threads.isNotEmpty() }
+        val closer = Thread { source.close() }
+        closer.start()
+        awaitCondition { housekeeping.isShutdown }
+
+        gate.countDown()
+        closer.join(TimeUnit.SECONDS.toMillis(TEST_LIMIT_SECONDS))
+
+        answer.isCompletedExceptionally.assert().isTrue()
+        refused.assert().isEmpty()
+        lines.events.filter { "does not compile" in it.formattedMessage }.map { it.threadName }.assert().isEmpty()
+    }
+
     @Test
     fun `nothing refused, nothing summarized`() {
         source().closing { source ->
@@ -395,6 +463,7 @@ class HousekeepingRefusalTest {
         val OPTIONS = SnapshotOptions(revalidateInterval = QUIET_PASS)
         const val HOUSEKEEPING = "cosec-snapshot-housekeeping"
         const val TICKS = 3
+        const val CLOSE_TIMEOUT_MILLIS = 200L
         const val WITHIN_SECONDS = 3L
         const val TEST_LIMIT_SECONDS = 10L
 

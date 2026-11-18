@@ -104,8 +104,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     /** Tests only (RFC 0013 B2b): what makes each key's slot; [SlotFactory.RUNNER] in production. */
     slots: SlotFactory = SlotFactory.RUNNER,
 ) : AutoCloseable {
-
-    private val metrics = GuardedSnapshotMetrics(metrics)
+    private val refusals = HousekeepingRefusals()
+    private val metrics = GuardedSnapshotMetrics(metrics, refusals)
 
     /** How long [close] waits for this source's threads; shorter only in tests of the timeout. */
     internal var closeTimeout: Duration = CLOSE_TIMEOUT
@@ -118,7 +118,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         get() = context.nanoTime.get()
         set(value) = context.nanoTime.set(value)
 
-    internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping, this.metrics)
+    internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping, this.metrics, refusals)
     internal val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics)
     private val context =
