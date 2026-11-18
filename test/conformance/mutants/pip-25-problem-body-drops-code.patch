@@ -1,0 +1,17 @@
+# Rule: PIP-25
+# Mutant: a problem body leaves out its code member, which every client decides on
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.ClientContractTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemEncoder.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemEncoder.kt
+index 9f1f6256..9c82b627 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemEncoder.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/ProblemEncoder.kt
+@@ -40,8 +40,6 @@ object ProblemEncoder {
+         head.append(",\"title\":")
+         appendString(head, it.title)
+         head.append(",\"status\":").append(it.status)
+-        head.append(",\"code\":")
+-        appendString(head, it.code)
+         head.append(",\"requestId\":")
+         head.toString()
+     }

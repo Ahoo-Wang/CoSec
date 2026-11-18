@@ -18,4 +18,6 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
     // MembershipClaimsJwtTest resolves parsed tokens through the pipeline's MembershipResolver.
     testImplementation(project(":runtime"))
+    // PIP-25: ContractFiles, which ClientContractTest checks contract/ with.
+    testImplementation(testFixtures(project(":runtime")))
 }

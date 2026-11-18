@@ -309,7 +309,8 @@
         "spring-boot:ServedLoginRoutesTest#only POST is served, and a preflight is the CORS filter's",
         "spring-boot:ServedLoginRoutesTest#with no statement for the route, CoSec refuses it and the operator is told",
         "spring-boot:LoginRoutesStartupTest#a gateway host with a path set fails startup",
-        "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup"
+        "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup",
+        "jwt:ClientContractTest#the served refresh route answers as the contract says"
       ]
     },
     {
@@ -321,7 +322,8 @@
       "guards": [
         "jwt:LoginRoutesTest#a logout ends the session, and a logout of an ended session is done too",
         "jwt:LoginRoutesTest#a logout of a pair that is not one is 401, of a body that is not a pair 400, of a store that is down 503",
-        "spring-boot:ServedLoginRoutesTest#a logout ends the session, and a logout of an ended one is done too"
+        "spring-boot:ServedLoginRoutesTest#a logout ends the session, and a logout of an ended one is done too",
+        "jwt:ClientContractTest#the served logout route answers as the contract says"
       ]
     },
     {
