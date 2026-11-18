@@ -77,6 +77,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
@@ -95,9 +96,7 @@ import kotlin.time.toKotlinDuration
     afterName = ["org.springframework.boot.kafka.autoconfigure.KafkaAutoConfiguration"],
 )
 @ConditionalOnCoSecEnabled
-@ConditionalOnClass(
-    name = ["me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cocache.control.CoCacheControlStore"]
-)
+@Conditional(ControlPlaneCondition::class)
 @ConditionalOnBean(PolicySnapshotCache::class)
 @EnableConfigurationProperties(ControlProperties::class, RevocationProperties::class, CoSecProperties::class)
 @Import(StartupTaskExclusion::class)

@@ -64,13 +64,18 @@ internal object ShadowCacheSpecs {
      */
     val INDEX_EXPIRY: Duration = Duration.ofHours(3)
 
-    fun candidate(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<SnapshotKey, StoredCandidate> =
+    /** The staged candidates; [readOnly] on a data-plane instance, which only reads them. */
+    fun candidate(
+        keyPrefix: String = DEFAULT_KEY_PREFIX,
+        readOnly: Boolean = false,
+    ): StoreSpec<SnapshotKey, StoredCandidate> =
         CoSecCacheSpecs.storeOfRecord(
             CoSecCacheSpecs.CANDIDATE_CACHE_NAME,
             keyPrefix,
             SnapshotKeyEncoder,
             StoredCandidateCodec
         )
+            .apply { this.readOnly = readOnly }
             .build()
 
     fun reports(keyPrefix: String = DEFAULT_KEY_PREFIX): StoreSpec<String, ShadowReport> =
