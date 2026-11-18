@@ -32,8 +32,7 @@ import java.util.concurrent.TimeoutException
  *
  * Every waiter hangs on exactly one [KeyHandle], named by the transition that takes its request: the load in flight's,
  * a new load's, or, for a reload or a pass that met a load older than itself, the handle of the load that starts after
- * the current one (`SNP-13`, `SNP-6`). A handle is
- * answered once, by the transition that ends its load.
+ * the current one (`SNP-13`, `SNP-6`). A handle is answered once, by the transition that ends its load.
  *
  * A load's events overtake caller events queued before them ([KeyDrain]'s load lane), so nothing here decides on the
  * order of the two: each caller event, against each state a load's end can leave, gives the same answer taken before

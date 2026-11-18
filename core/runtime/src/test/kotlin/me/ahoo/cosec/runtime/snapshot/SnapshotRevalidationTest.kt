@@ -153,7 +153,8 @@ class SnapshotRevalidationTest {
             elapsed.advance(SnapshotOptions().storeReadTimeout.plusSeconds(1))
             stuck.set(false)
 
-            source.tick().join()
+            // The pass ends without waiting for the compilation: never a join here, which would hang where it waits.
+            source.tick().isDone.assert().isTrue()
             source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(1)
 
             parked.removeAt(0).run()
