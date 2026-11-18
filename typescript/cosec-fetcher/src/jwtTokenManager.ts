@@ -134,6 +134,12 @@ const NOT_PROCESSED: ReadonlySet<string> = new Set([
   CoSecProblemType.SCOPE_REJECTED,
 ]);
 
+/** Whether the refresh client already notified the application, and whether the fetcher has a handler to. */
+interface RefreshNotification {
+  hasHandler: boolean;
+  handled: boolean;
+}
+
 /**
  * Manages JWT token refreshing operations and provides status information
  */
@@ -151,7 +157,7 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
   private refreshInProgress?: {
     token: JwtCompositeToken;
     promise: Promise<JwtCompositeToken>;
-    notification: { hasHandler: boolean; handled: boolean };
+    notification: RefreshNotification;
   };
 
   /**
@@ -185,23 +191,8 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
     if (!jwtToken) {
       throw new Error('No token found');
     }
-    if (exchange) {
-      const previousToken = exchange.attributes.get(TOKEN_SESSION_ATTRIBUTE);
-      assertTokenSession(exchange, jwtToken);
-      exchange.attributes.set(TOKEN_SESSION_ATTRIBUTE, jwtToken);
-      if (
-        exchange.attributes.get(UNAUTHORIZED_ERROR_INTERCEPTOR_NAME) !== true
-      ) {
-        exchange.attributes.set(
-          UNAUTHORIZED_ERROR_INTERCEPTOR_NAME,
-          () =>
-            this.currentToken ===
-            exchange.attributes.get(TOKEN_SESSION_ATTRIBUTE),
-        );
-      }
-      if (previousToken && previousToken !== jwtToken) {
-        return;
-      }
+    if (exchange && this.bindExchange(exchange, jwtToken)) {
+      return;
     }
     const inProgress =
       this.refreshInProgress?.token === jwtToken
@@ -211,136 +202,225 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
       hasHandler: false,
       handled: false,
     };
-    const tokenRefresher = this.tokenRefresher as NotificationGuardRefresher;
-    const guarded = isNotificationGuardRefresher(tokenRefresher);
     notification.hasHandler ||=
-      guarded &&
+      isNotificationGuardRefresher(this.tokenRefresher) &&
       (exchange?.fetcher.interceptors.error.interceptors.some(
         interceptor => interceptor.name === UNAUTHORIZED_ERROR_INTERCEPTOR_NAME,
       ) ??
         false);
-    let promise = inProgress?.promise;
-    if (!promise) {
-      const send = (): Promise<CompositeToken> =>
-        // A refresher that throws instead of rejecting gets the same error
-        // handling (classification, cleanup, notification) as a rejection.
-        new Promise<CompositeToken>(resolve =>
-          resolve(
-            guarded
-              ? tokenRefresher.refresh(jwtToken.token, () => {
-                  if (
-                    !isSameToken(jwtToken, this.currentToken) ||
-                    notification.hasHandler
-                  )
-                    return false;
-                  notification.handled = true;
-                  return true;
-                })
-              : tokenRefresher.refresh(jwtToken.token),
-          ),
-        );
-      const refreshAndStore = (): Promise<JwtCompositeToken> =>
-        this.sendRefresh(jwtToken, send)
-          .then(newToken => {
-            // Another tab may have signed out, signed in or refreshed while
-            // this refresh was in flight, before its change event reached
-            // this tab (Web Locks do not cover sign-in and sign-out): decide
-            // from storage, not the cache, whether the result may be stored.
-            const currentToken = this.tokenStorage.reload();
-            if (!currentToken || !isSameTokenSession(jwtToken, currentToken)) {
-              throw new RefreshSessionChangedError();
-            }
-            if (!isSameToken(jwtToken, currentToken)) return currentToken;
-            // A malformed response must not be stored as the session token.
-            if (!isCompositeToken(newToken)) {
-              throw new InvalidRefreshResponseError();
-            }
-            const refreshedToken = new JwtCompositeToken(
-              newToken,
-              this.tokenStorage.earlyPeriod,
-              jwtToken.sessionId,
-            );
-            this.tokenStorage.set(refreshedToken);
-            return refreshedToken;
-          })
-          .catch(error => {
-            if (error instanceof RefreshSessionChangedError) {
-              throw error;
-            }
-            // Another tab may already have refreshed this session with a
-            // one-time refresh token (so ours failed) and written the new
-            // token, before its change event reached this tab: read storage,
-            // not the cache, so its token is reused instead of removed.
-            const currentToken = this.tokenStorage.reload();
-            if (
-              currentToken &&
-              !isSameToken(jwtToken, currentToken) &&
-              isSameTokenSession(jwtToken, currentToken)
-            ) {
-              return currentToken;
-            }
-            // The refresh client's own notification may have signed out this session.
-            if (
-              !isSameToken(jwtToken, currentToken) &&
-              (currentToken !== null || !notification.handled)
-            ) {
-              throw new RefreshSessionChangedError(error);
-            }
-            if (isSameToken(jwtToken, currentToken)) {
-              // Only the server rejecting the refresh token ends the session;
-              // a failure to reach it (offline, timeout, 5xx) keeps it.
-              if (
-                !(this.options.isRefreshRejected ?? isRefreshRejection)(error)
-              ) {
-                throw new RefreshUnavailableError(error);
-              }
-              this.tokenStorage.remove();
-            }
-            throw new RefreshTokenError(error);
-          });
-      // Tabs sharing the storage refresh one at a time (Web Locks): the one
-      // that waited reads the token the other stored instead of spending the
-      // already used refresh token, and so never signs that session out.
-      promise = withRefreshLock(this.tokenStorage, async locked => {
-        if (locked) {
-          const storedToken = this.tokenStorage.reload();
-          if (!isSameToken(jwtToken, storedToken)) {
-            if (storedToken && isSameTokenSession(jwtToken, storedToken)) {
-              return storedToken;
-            }
-            throw new RefreshSessionChangedError();
-          }
-        }
-        return refreshAndStore();
-      }).finally(() => {
-        if (this.refreshInProgress?.promise === promise) {
-          this.refreshInProgress = undefined;
-        }
-      });
-
-      this.refreshInProgress = { token: jwtToken, promise, notification };
-    }
+    const promise =
+      inProgress?.promise ?? this.startRefresh(jwtToken, notification);
     try {
-      const refreshedToken = await promise;
-      exchange?.attributes.set(TOKEN_SESSION_ATTRIBUTE, refreshedToken);
-      if (!isSameTokenSession(refreshedToken, this.currentToken)) {
-        throw new RefreshSessionChangedError();
-      }
+      await this.awaitRefreshed(exchange, promise);
     } catch (error) {
       if (error instanceof RefreshTokenError && exchange) {
-        exchange.attributes.set(TOKEN_SESSION_ATTRIBUTE, null);
-        if (
-          exchange.attributes.get(UNAUTHORIZED_ERROR_INTERCEPTOR_NAME) !== true
-        ) {
-          exchange.attributes.set(UNAUTHORIZED_ERROR_INTERCEPTOR_NAME, () => {
-            if (this.currentToken !== null || notification.handled)
-              return false;
-            notification.handled = true;
-            return true;
-          });
-        }
+        this.leaveNotificationToTheExchange(exchange, notification);
       }
       throw error;
+    }
+  }
+
+  /**
+   * Ties the originating request to the session it refreshes (the unauthorized
+   * notification fires only while that session is the current one).
+   *
+   * @returns true when the exchange was already refreshed by another call, so
+   * there is nothing left to do for it
+   */
+  private bindExchange(
+    exchange: FetchExchange,
+    jwtToken: JwtCompositeToken,
+  ): boolean {
+    const previousToken = exchange.attributes.get(TOKEN_SESSION_ATTRIBUTE);
+    assertTokenSession(exchange, jwtToken);
+    exchange.attributes.set(TOKEN_SESSION_ATTRIBUTE, jwtToken);
+    if (exchange.attributes.get(UNAUTHORIZED_ERROR_INTERCEPTOR_NAME) !== true) {
+      exchange.attributes.set(
+        UNAUTHORIZED_ERROR_INTERCEPTOR_NAME,
+        () =>
+          this.currentToken ===
+          exchange.attributes.get(TOKEN_SESSION_ATTRIBUTE),
+      );
+    }
+    return !!previousToken && previousToken !== jwtToken;
+  }
+
+  /**
+   * Starts the one refresh of a pair that every caller then shares: under the
+   * lock tabs sharing the storage take turns (Web Locks), so the tab that
+   * waited reads the token the other stored instead of spending the already
+   * used refresh token, and so never signs that session out.
+   */
+  private startRefresh(
+    jwtToken: JwtCompositeToken,
+    notification: RefreshNotification,
+  ): Promise<JwtCompositeToken> {
+    const promise: Promise<JwtCompositeToken> = withRefreshLock(
+      this.tokenStorage,
+      async locked => {
+        if (locked) {
+          const adopted = this.adoptStoredToken(jwtToken);
+          if (adopted) return adopted;
+        }
+        return this.sendRefresh(
+          jwtToken,
+          this.requestOf(jwtToken, notification),
+        )
+          .then(newToken => this.store(jwtToken, newToken))
+          .catch(error => this.settleFailure(jwtToken, notification, error));
+      },
+    ).finally(() => {
+      if (this.refreshInProgress?.promise === promise) {
+        this.refreshInProgress = undefined;
+      }
+    });
+    this.refreshInProgress = { token: jwtToken, promise, notification };
+    return promise;
+  }
+
+  /**
+   * After waiting for the lock: the token another tab stored for the same
+   * session, which is the result; null when the stored token is still the
+   * pair to refresh.
+   *
+   * @throws RefreshSessionChangedError when the stored session is another one
+   */
+  private adoptStoredToken(
+    jwtToken: JwtCompositeToken,
+  ): JwtCompositeToken | null {
+    const storedToken = this.tokenStorage.reload();
+    if (isSameToken(jwtToken, storedToken)) return null;
+    if (storedToken && isSameTokenSession(jwtToken, storedToken)) {
+      return storedToken;
+    }
+    throw new RefreshSessionChangedError();
+  }
+
+  /** One attempt to send the refresh of a pair; the refresher may also throw. */
+  private requestOf(
+    jwtToken: JwtCompositeToken,
+    notification: RefreshNotification,
+  ): () => Promise<CompositeToken> {
+    const tokenRefresher = this.tokenRefresher as NotificationGuardRefresher;
+    const guarded = isNotificationGuardRefresher(tokenRefresher);
+    return () =>
+      // A refresher that throws instead of rejecting gets the same error
+      // handling (classification, cleanup, notification) as a rejection.
+      new Promise<CompositeToken>(resolve =>
+        resolve(
+          guarded
+            ? tokenRefresher.refresh(jwtToken.token, () => {
+                if (
+                  !isSameToken(jwtToken, this.currentToken) ||
+                  notification.hasHandler
+                )
+                  return false;
+                notification.handled = true;
+                return true;
+              })
+            : tokenRefresher.refresh(jwtToken.token),
+        ),
+      );
+  }
+
+  /** Stores what the refresh answered, if the session it belongs to is still the stored one. */
+  private store(
+    jwtToken: JwtCompositeToken,
+    newToken: CompositeToken,
+  ): JwtCompositeToken {
+    // Another tab may have signed out, signed in or refreshed while
+    // this refresh was in flight, before its change event reached
+    // this tab (Web Locks do not cover sign-in and sign-out): decide
+    // from storage, not the cache, whether the result may be stored.
+    const currentToken = this.tokenStorage.reload();
+    if (!currentToken || !isSameTokenSession(jwtToken, currentToken)) {
+      throw new RefreshSessionChangedError();
+    }
+    if (!isSameToken(jwtToken, currentToken)) return currentToken;
+    // A malformed response must not be stored as the session token.
+    if (!isCompositeToken(newToken)) {
+      throw new InvalidRefreshResponseError();
+    }
+    const refreshedToken = new JwtCompositeToken(
+      newToken,
+      this.tokenStorage.earlyPeriod,
+      jwtToken.sessionId,
+    );
+    this.tokenStorage.set(refreshedToken);
+    return refreshedToken;
+  }
+
+  /**
+   * What a failed refresh means: another tab's token to reuse, a session that
+   * changed, one the server ended (the stored pair is removed), or one that
+   * only could not be refreshed now (the pair is kept).
+   */
+  private settleFailure(
+    jwtToken: JwtCompositeToken,
+    notification: RefreshNotification,
+    error: unknown,
+  ): JwtCompositeToken {
+    if (error instanceof RefreshSessionChangedError) {
+      throw error;
+    }
+    // Another tab may already have refreshed this session with a
+    // one-time refresh token (so ours failed) and written the new
+    // token, before its change event reached this tab: read storage,
+    // not the cache, so its token is reused instead of removed.
+    const currentToken = this.tokenStorage.reload();
+    if (
+      currentToken &&
+      !isSameToken(jwtToken, currentToken) &&
+      isSameTokenSession(jwtToken, currentToken)
+    ) {
+      return currentToken;
+    }
+    // The refresh client's own notification may have signed out this session.
+    if (
+      !isSameToken(jwtToken, currentToken) &&
+      (currentToken !== null || !notification.handled)
+    ) {
+      throw new RefreshSessionChangedError(error);
+    }
+    if (isSameToken(jwtToken, currentToken)) {
+      // Only the server rejecting the refresh token ends the session;
+      // a failure to reach it (offline, timeout, 5xx) keeps it.
+      if (!(this.options.isRefreshRejected ?? isRefreshRejection)(error)) {
+        throw new RefreshUnavailableError(error);
+      }
+      this.tokenStorage.remove();
+    }
+    throw new RefreshTokenError(error);
+  }
+
+  /** Waits for the shared refresh, and for the caller's exchange to carry the new session. */
+  private async awaitRefreshed(
+    exchange: FetchExchange | undefined,
+    promise: Promise<JwtCompositeToken>,
+  ): Promise<void> {
+    const refreshedToken = await promise;
+    exchange?.attributes.set(TOKEN_SESSION_ATTRIBUTE, refreshedToken);
+    if (!isSameTokenSession(refreshedToken, this.currentToken)) {
+      throw new RefreshSessionChangedError();
+    }
+  }
+
+  /**
+   * After a refresh that ended the session: the exchange has no session to
+   * belong to, and its unauthorized notification fires once, unless the
+   * refresh client already notified.
+   */
+  private leaveNotificationToTheExchange(
+    exchange: FetchExchange,
+    notification: RefreshNotification,
+  ): void {
+    exchange.attributes.set(TOKEN_SESSION_ATTRIBUTE, null);
+    if (exchange.attributes.get(UNAUTHORIZED_ERROR_INTERCEPTOR_NAME) !== true) {
+      exchange.attributes.set(UNAUTHORIZED_ERROR_INTERCEPTOR_NAME, () => {
+        if (this.currentToken !== null || notification.handled) return false;
+        notification.handled = true;
+        return true;
+      });
     }
   }
 
