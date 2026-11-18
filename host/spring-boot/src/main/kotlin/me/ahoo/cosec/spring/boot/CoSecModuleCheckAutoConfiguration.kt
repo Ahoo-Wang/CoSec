@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties
@@ -42,6 +43,8 @@ import org.springframework.context.annotation.ConfigurationCondition
 import org.springframework.context.annotation.Import
 import org.springframework.core.Ordered
 import org.springframework.util.ClassUtils
+
+private val log = KotlinLogging.logger {}
 
 /**
  * `STA-1` (RFC 0011 D2): the starter wires each module it finds on the classpath, so a module the application forgot
@@ -150,17 +153,26 @@ internal class CoSecModuleCheckAutoConfiguration {
     /**
      * The control plane asked for in so many words: `cosec.control.enabled=true` written, and `cosec-control` or
      * `cosec-cocache` missing. Unset, it stays silent: an instance without the modules is a data-plane instance. A value
-     * that is neither `true` nor `false` fails here too, whatever the classpath.
+     * that is neither `true` nor `false` fails here too, whatever the classpath. Where the role is decided once per
+     * startup, an instance whose classpath has the control plane and switches it off says so, at INFO, so that its role
+     * is in its log; one without the classes says nothing.
      */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
     class ControlPlane {
         @Bean
         fun cosecControlPlaneModuleCheck(context: ApplicationContext): StartupTask = StartupTask.OnCreation {
-            if (ControlPlaneCondition.written(context.environment) == true) {
+            val written = ControlPlaneCondition.written(context.environment)
+            if (written == true) {
                 val what = "${ControlPlaneCondition.ENABLED_KEY}=true"
                 checkModule(context, "me.ahoo.cosec.control.api.ControlHttp", "cosec-control", what)
                 checkModule(context, "me.ahoo.cosec.cocache.control.CoCacheControlStore", "cosec-cocache", what)
+            }
+            if (written == false && ControlPlaneCondition.present(context.classLoader)) {
+                log.info {
+                    "Control plane off on this instance: ${ControlPlaneCondition.ENABLED_KEY}=false; policy documents " +
+                        "and candidates are read read-only."
+                }
             }
         }
     }

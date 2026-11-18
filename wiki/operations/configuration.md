@@ -66,14 +66,13 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 | `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`cosec-ip2region`) |
 | `cosec.ip2region.ipv6-location` | string | none | A Spring resource location (`file:`, `classpath:`) of the IPv6 `.xdb` database, loaded beside the bundled IPv4 one. Unset, an IPv6 client's region is unavailable. A location that does not exist fails startup. |
 | `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`cosec-openapi`) |
+| `cosec.control.enabled` | boolean | `true` | the control plane, when `cosec-control` and `cosec-cocache` are on the classpath; its routes need a WebFlux or WebMvc application. Off, the instance runs none of it and reads the policy documents and candidates read-only ([Control plane](#control-plane)) |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cosec-cocache`); see [Shadow windows](#shadow-windows) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | on a Spring Cloud Gateway host, forwarding the verified identity to the services behind it; see [Gateway identity](#gateway-identity) |
 
 These have no switch:
 
 - **Tracing** is on whenever `cosec-opentelemetry` is on the classpath ([Tracing](./observability.md#tracing)).
-- **The control plane** is on whenever `cosec-control` and `cosec-cocache` are on the classpath, unless
-  `cosec.control.enabled=false`; its routes need a WebFlux or WebMvc application ([Control plane](#control-plane)).
 - **The rate limiter** is always there: on Redis when a `ReactiveStringRedisTemplate` bean exists (`cosec-cocache`),
   otherwise counted per instance ([Rate limiting](#rate-limiting)).
 - **Token revocation** is always on with JWT ([Startup](./troubleshooting.md#startup-fails-without-a-token-store)).

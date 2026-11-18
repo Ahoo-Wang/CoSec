@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.control
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.autoconfigure.condition.ConditionOutcome
 import org.springframework.boot.autoconfigure.condition.SpringBootCondition
@@ -72,24 +71,5 @@ internal class ControlPlaneCondition : SpringBootCondition() {
         /** Whether the control plane runs in this process: its classes are present, and it is switched on. */
         fun wired(classLoader: ClassLoader?, environment: Environment): Boolean =
             present(classLoader) && enabled(environment)
-
-        /**
-         * Whether this process reads the policy documents and candidates read-only: it does not run the control plane.
-         * With [announce], an instance whose classpath has the control plane but switches it off says so once, at INFO,
-         * so that its role is in its log; an instance without the classes says nothing.
-         */
-        fun readOnly(classLoader: ClassLoader?, environment: Environment, announce: Boolean = false): Boolean {
-            val present = present(classLoader)
-            val readOnly = !(present && enabled(environment))
-            if (announce && readOnly && present) {
-                log.info {
-                    "Control plane off on this instance: $ENABLED_KEY=false; policy documents and candidates are read " +
-                        "read-only."
-                }
-            }
-            return readOnly
-        }
-
-        private val log = KotlinLogging.logger {}
     }
 }

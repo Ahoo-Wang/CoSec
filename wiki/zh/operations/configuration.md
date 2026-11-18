@@ -55,14 +55,13 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.ip2region.enabled` | boolean | `true` | `ext.ip2region.*` 属性提供者（`cosec-ip2region`） |
 | `cosec.ip2region.ipv6-location` | string | 无 | IPv6 `.xdb` 数据库的 Spring 资源位置（`file:`、`classpath:`），与随附的 IPv4 数据库一同加载。未设置时，IPv6 客户端的归属地取不到。位置不存在时启动失败。 |
 | `cosec.openapi.enabled` | boolean | `true` | OpenAPI 文档的 bearer 认证定制器（`cosec-openapi`） |
+| `cosec.control.enabled` | boolean | `true` | 控制面，当 `cosec-control` 和 `cosec-cocache` 在 classpath 上时；它的路由需要 WebFlux 或 WebMvc 应用。关闭时，实例不运行它的任何部分，并以只读方式读取策略文档和候选（[控制面](#control-plane)） |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | 本实例参与影子窗口（`cosec-cocache`）；见[影子窗口](#shadow-windows) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | 在 Spring Cloud Gateway 宿主上，把已验证的身份转发给其后的服务；见[网关身份](#gateway-identity) |
 
 以下功能没有开关：
 
 - **追踪**：只要 `cosec-opentelemetry` 在 classpath 上就开启（[追踪](./observability.md#tracing)）。
-- **控制面**：只要 `cosec-control` 和 `cosec-cocache` 在 classpath 上就开启，除非 `cosec.control.enabled=false`；它的路由
-  需要 WebFlux 或 WebMvc 应用（[控制面](#control-plane)）。
 - **限流器**：始终存在。有 `ReactiveStringRedisTemplate` bean 时（`cosec-cocache`）基于 Redis，否则按实例计数
   （[限流](#rate-limiting)）。
 - **令牌吊销**：启用 JWT 时始终开启（[启动](./troubleshooting.md#startup-fails-without-a-token-store)）。

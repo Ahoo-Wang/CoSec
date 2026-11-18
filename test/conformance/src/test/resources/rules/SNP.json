@@ -279,7 +279,7 @@
         "spring-boot:ControlPlaneSwitchTest#cosec control enabled false wires nothing of the control plane, and the stores are read read-only",
         "spring-boot:ControlPlaneSwitchTest#the environment variable a one-image fleet sets per role does the same, through the condition and both stores",
         "spring-boot:ControlPlaneSwitchTest#a value that is neither true nor false fails startup, read neither as on nor as off",
-        "spring-boot:ControlPlaneSwitchTest#an instance that switches the control plane off says so once at startup, one without it says nothing",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#an instance that switches the control plane off says so once at startup, one without it says nothing",
         "spring-boot:DataPlaneAclTest#an image with the control plane, switched off, starts with the page's user and may write no document"
       ]
     }

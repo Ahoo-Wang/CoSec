@@ -33,7 +33,6 @@ import me.ahoo.cosec.spring.boot.pipeline.CoSecSnapshotAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.beans.factory.annotation.AnnotatedBeanDefinition
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.data.redis.autoconfigure.DataRedisAutoConfiguration
@@ -42,8 +41,6 @@ import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.assertj.AssertableReactiveWebApplicationContext
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
-import org.springframework.boot.test.system.CapturedOutput
-import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.boot.webflux.autoconfigure.HttpHandlerAutoConfiguration
 import org.springframework.boot.webflux.autoconfigure.WebFluxAutoConfiguration
 import org.springframework.core.env.SystemEnvironmentPropertySource
@@ -53,7 +50,6 @@ import org.springframework.core.env.SystemEnvironmentPropertySource
  * and that instance reads the documents and the candidates read-only, by the dotted key or the environment variable a
  * one-image fleet sets per role. A value that is neither `true` nor `false` fails startup.
  */
-@ExtendWith(OutputCaptureExtension::class)
 class ControlPlaneSwitchTest {
     private val runner = ReactiveWebApplicationContextRunner()
         .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
@@ -154,22 +150,7 @@ class ControlPlaneSwitchTest {
         }
     }
 
-    @Test
-    fun `an instance that switches the control plane off says so once at startup, one without it says nothing`(
-        output: CapturedOutput,
-    ) {
-        runner.withPropertyValues("${ControlPlaneCondition.ENABLED_KEY}=false").run { context ->
-            context.startupFailure.assert().isNull()
-        }
-        output.out.split(LINE).size.assert().isEqualTo(2)
-        val before = output.out.length
-        runner.withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER, "me.ahoo.cosec.control.api.ControlHttp"))
-            .run { context -> context.startupFailure.assert().isNull() }
-        output.out.substring(before).contains(LINE).assert().isFalse()
-    }
-
     private companion object {
         val CONTROL_PACKAGES = listOf("me.ahoo.cosec.control.", "me.ahoo.cosec.spring.boot.control.")
-        const val LINE = "Control plane off on this instance: cosec.control.enabled=false"
     }
 }
