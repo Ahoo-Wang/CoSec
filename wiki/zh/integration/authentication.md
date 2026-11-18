@@ -259,7 +259,7 @@ JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。�
 - `iat` 精确到整秒，因此与吊销同一秒内签发的令牌，即使在吊销之后签发，也会被拒绝。主体被吊销后，不带 `iat` 的令牌一律被拒绝。
 - `iat` 来自签发方的时钟，`issuedBefore` 来自执行吊销的实例的时钟。为了防止时钟偏快的签发方给吊销前签发的令牌打上更晚的 `iat`，请求还会拒绝在 `issuedBefore` 之后 `cosec.authentication.revocation.skew`（5 秒）内签发的令牌。在这个窗口内重新登录的用户需要再登录一次。[刷新](#refreshing-tokens)使用同样的偏差，因此这样的令牌也无法刷新成新令牌。
 - 该记录在 `issuedBefore` 之后再保留一个刷新令牌有效期。之后以更早的 `issuedBefore` 再次调用不会缩短它，即使两个实例同时吊销同一主体也是如此。
-- 它需要与吊销单个令牌相同的存储。无法记录它的 `TokenStore` 会抛出 `UnsupportedOperationException`，而不是什么都不做。
+- 它需要与吊销单个令牌相同的存储。根本无法吊销主体的 `TokenStore` 会抛出 `UnsupportedOperationException`，而不是什么都不做；记录失败的（例如 Redis 故障）会像吊销单个令牌时一样抛出 `SessionStoreUnavailableException`：请应答 `503`，然后再次吊销。
 - 检查行为与上文相同：失效消息丢失时，本地的“未吊销”答案最多保留 30 秒；存储无法读取时，请求的令牌被接受，刷新则失败。
 
 ## API key {#api-keys}
