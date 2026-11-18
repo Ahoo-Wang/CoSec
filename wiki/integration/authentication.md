@@ -79,7 +79,11 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
   a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
   (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
   `JwtTokenVerifier` verified may use [break-glass](../guide/security-model.md#break-glass): a `TokenAuthenticator`
-  around a verifier of your own authenticates its tokens, but never with break-glass.
+  around a verifier of your own authenticates its tokens, but never with break-glass. A `TokenVerifier` bean of yours
+  is another issuer's to CoSec, even one that wraps `JwtTokenVerifier` to add a check: on every request its tokens have
+  the credential method `token`, no session (so no [tenant switch](#switching-tenant-and-app) from it, and none
+  forwarded behind a gateway) and no break-glass. Declare one for another issuer's tokens; to keep CoSec's own tokens
+  CoSec's, declare none.
 - **`ApiKeyAuthenticator`**, only with `cosec.api-key.enabled=true`, looks up the [API key](#api-keys).
 
 A request that carries an API key (and API keys are enabled) is judged by the key alone, even if it also sends a

@@ -185,6 +185,7 @@ object GuardAllowlist {
             "spring-boot:OneVerifierTest#with CoSec's own verifier the same token is the principal on the request",
             "spring-boot:OneVerifierTest#the served refresh route refreshes with the application's own refresh authentication, its hook included",
             "spring-boot:OneVerifierTest#a refresh authentication over credentials of the application's own fails startup with the route set",
+            "spring-boot:OneVerifierTest#an application verifier that wraps CoSec's own makes a request's token not CoSec's, without session or break-glass",
             "spring-boot:ControlPlaneSwitchTest#switched on by default, the control plane and its routes are wired, and the stores written",
             "spring-boot:ControlPlaneSwitchTest#cosec control enabled false wires nothing of the control plane, and the stores are read read-only",
             "spring-boot:ControlPlaneSwitchTest#the environment variable a one-image fleet sets per role does the same, through the condition and both stores",

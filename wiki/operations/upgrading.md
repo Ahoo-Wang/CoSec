@@ -1178,8 +1178,15 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 
 - **Security: requests verify with the application's `TokenVerifier`.** Through 8.0.0-beta.2 the starter's pipeline
   verified request tokens with CoSec's own `JwtTokenVerifier`, even when the application declared a `TokenVerifier`
-  bean, which refresh and logout did use. A stricter verifier of your own (an audience check, say) therefore refused a
-  token at refresh but not on a request. Now a request, a refresh and a logout verify with the same one (`IDN-25`).
+  bean, which refresh and logout did use. Now a request, a refresh and a logout verify with the same one (`IDN-25`).
+  What changes depends on your verifier:
+  - A verifier of another issuer's tokens now works on requests as it always did on refresh.
+  - A verifier that wraps CoSec's own (`JwtTokenVerifier` and a check of yours) makes its tokens not CoSec's on every
+    request: the principal's credential is `token`, not `jwt`, it has no session, so no
+    [tenant switch](../integration/authentication.md#switching-tenant-and-app) from that request's session and no
+    session forwarded by a gateway, and it never gets break-glass. Through beta.2 its requests had all three. Leave such
+    a verifier out unless that is what you want.
+
   Nothing changes for an application without its own `TokenVerifier`.
 - **Security: the served refresh route uses your `RefreshTokenAuthentication`.** Through 8.0.0-beta.2 the route built
   its own and used only a `MembershipRefresh<RefreshTokenCredentials>` bean, so a hook declared inside your

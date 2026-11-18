@@ -15,12 +15,20 @@
 
 package me.ahoo.cosec.spring.boot.realserver
 
+import com.auth0.jwt.algorithms.Algorithm
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -61,6 +69,25 @@ class OneVerifierTest {
                 if (token.principal == "disabled") throw TokenRevokedException("User [disabled] is disabled.")
                 null
             }
+    }
+
+    /**
+     * An application verifier that accepts what CoSec's own accepts and adds a check of its own: it is not CoSec's
+     * verifier (`CoSecTokenVerifier` is internal), so its tokens are not CoSec's on a request.
+     */
+    @Configuration(proxyBeanMethods = false)
+    class Wrapping {
+        @Bean
+        fun tokenVerifier(algorithm: Algorithm): TokenVerifier {
+            val own = JwtTokenVerifier(algorithm)
+            return object : TokenVerifier {
+                override fun verify(accessToken: String): VerifiedToken = own.verify(accessToken).also {
+                    if (it.principal == "stranger") throw TokenVerificationException("not for this service")
+                }
+
+                override fun refresh(token: CompositeToken): VerifiedToken = own.refresh(token)
+            }
+        }
     }
 
     /** A refresh over a credentials class of the application's own, which the served route cannot present. */
@@ -132,5 +159,28 @@ class OneVerifierTest {
         }
         generateSequence<Throwable>(failure) { it.cause }.map { it.message.orEmpty() }
             .any { "IDN-25" in it && OwnCredentials.Renew::class.java.name in it }.assert().isTrue()
+    }
+
+    @Test
+    fun `an application verifier that wraps CoSec's own makes a request's token not CoSec's, without session or break-glass`() {
+        fun principal(host: ServedLoginRouteHost): AuthenticatedPrincipal {
+            val token = host.login("alice").accessToken
+            val result = runBlocking { host.bean(Authenticator::class.java).authenticate(Credentials(token, null)) }
+            return (result as AuthnResult.Authenticated).principal
+        }
+        // CoSec's own verifier: CoSec's token, its session and break-glass.
+        ServedLoginRouteHost(ServedStack.NETTY, ServedLoginRouteHost.PERMITTING).use { host ->
+            val own = principal(host)
+            own.credential?.method.assert().isEqualTo(Identity.Method.JWT)
+            own.session.assert().isNotNull()
+            own.breakGlass.assert().isTrue()
+        }
+        // The application's verifier accepts the same token, which is then another issuer's on every request.
+        ServedLoginRouteHost(ServedStack.NETTY, ServedLoginRouteHost.PERMITTING, Wrapping::class.java).use { host ->
+            val wrapped = principal(host)
+            wrapped.credential?.method.assert().isEqualTo(Identity.Method("token"))
+            wrapped.session.assert().isNull()
+            wrapped.breakGlass.assert().isFalse()
+        }
     }
 }

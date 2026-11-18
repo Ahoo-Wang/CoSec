@@ -230,6 +230,9 @@ class ServedLoginRouteHost(
         return http.send(request.build(), HttpResponse.BodyHandlers.ofString())
     }
 
+    /** The host's bean of [type], for a test that asks the wiring itself. */
+    fun <T : Any> bean(type: Class<T>): T = context.getBean(type)
+
     override fun close() = context.close()
 
     companion object {
