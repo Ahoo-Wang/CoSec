@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundRunnerTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-index 00557a17..d74a7994 100644
+index 19fca0dc..c1892c2e 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-@@ -233,7 +233,7 @@ internal class KeyEffects<T : Any>(
+@@ -245,7 +245,7 @@ internal class KeyEffects<T : Any>(
      private fun evictOverCap() {
          val families = context.families
          val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
@@ -15,7 +15,7 @@ index 00557a17..d74a7994 100644
      }
  
      /**
-@@ -250,7 +250,7 @@ internal class KeyEffects<T : Any>(
+@@ -262,7 +262,7 @@ internal class KeyEffects<T : Any>(
          ) {
              return
          }
@@ -23,4 +23,4 @@ index 00557a17..d74a7994 100644
 +        if (false) {
              DrainBudget.unbounded { families.evictBeyond(family) }
          } else {
-             context.threads.offRequestThread { families.evictBeyond(family) }
+             context.threads.offHousekeeping(

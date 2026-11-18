@@ -1,0 +1,17 @@
+# Rule: SNP-19
+# Mutant: an empty key's drop that housekeeping refuses is dropped like a log line, so the empty slot stays in its family's map
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.HousekeepingRefusalTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/HousekeepingTask.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/HousekeepingTask.kt
+index 17f8e610..b6aff119 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/HousekeepingTask.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/HousekeepingTask.kt
+@@ -52,7 +52,7 @@ enum class HousekeepingTask(val tag: String, val runsInPlace: Boolean = false) {
+     EVICT("evict"),
+ 
+     /** An empty key's drop: run in place when refused. */
+-    DROP("drop", runsInPlace = true),
++    DROP("drop"),
+ 
+     /** The periodic lag report, which the next tick queues again. */
+     LAG_REPORT("lag-report"),
