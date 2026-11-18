@@ -264,6 +264,9 @@ anonymous caller is `401` there; leave `cosec-control` out of a service that onl
 [`wiki/examples/token-issuer`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/token-issuer/scenarios) check
 that an anonymous request and a request with a token are both permitted.
 
+The other direction, a service that only verifies the tokens such a service issues and decides in its own code, is
+[a scenario of its own](../scenarios/resource-server.md): it reads the issuer's revocations.
+
 ## Sessions
 
 A login starts a **session**, a family of token pairs: an id (`sid`), the time its user signed in (`auth_time`) and a
