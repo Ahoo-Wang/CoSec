@@ -22,7 +22,9 @@
         "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named beside the application's own IdGenerator fails startup",
         "spring-boot:LoginRoutesStartupTest#login or JWT off with a path set fails startup",
         "spring-boot:LoginRoutesStartupTest#a host that serves no HTTP with a path set fails startup",
-        "spring-boot:LoginRoutesStartupTest#unset, nothing is served and nothing is checked"
+        "spring-boot:LoginRoutesStartupTest#unset, nothing is served and nothing is checked",
+        "spring-boot:LoginRoutesStartupTest#a gateway host with a path set fails startup",
+        "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup"
       ]
     },
     {

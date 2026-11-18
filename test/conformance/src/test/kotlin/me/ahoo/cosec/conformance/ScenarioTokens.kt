@@ -20,7 +20,6 @@ import com.auth0.jwt.algorithms.Algorithm
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
@@ -206,7 +205,6 @@ internal object ScenarioRefresh {
         }
         return store
     }
-
 
     val LIFETIME: Duration = Duration.ofDays(30)
     val LEEWAY: Duration = Duration.ofSeconds(5)

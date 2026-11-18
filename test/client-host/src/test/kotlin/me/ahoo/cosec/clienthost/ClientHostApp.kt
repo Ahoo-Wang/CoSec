@@ -17,9 +17,9 @@ package me.ahoo.cosec.clienthost
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.cocache.CoCacheTokenStore
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.LoginCredentials
-import me.ahoo.cosec.cocache.CoCacheTokenStore
 import me.ahoo.cosec.login.token.MembershipRefresh
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
@@ -35,7 +35,6 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
 import org.springframework.http.HttpMethod
-import org.springframework.web.server.WebFilter
 import org.springframework.web.bind.annotation.DeleteMapping
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
@@ -43,6 +42,7 @@ import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.WebFilter
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
 

@@ -29,6 +29,7 @@ import me.ahoo.cosec.login.token.SwitchTenantAuthentication
 import me.ahoo.cosec.login.token.SwitchTenantCredentials
 import me.ahoo.cosec.login.token.TenantMembership
 import me.ahoo.cosec.login.token.TokenFamilies
+import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -47,7 +48,6 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
-import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenFamily
