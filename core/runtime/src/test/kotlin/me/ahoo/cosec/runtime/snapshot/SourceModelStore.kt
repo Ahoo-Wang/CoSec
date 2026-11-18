@@ -59,7 +59,7 @@ internal class SourceModelStore(private val events: () -> Long, private val now:
         var answered = false
             private set
 
-        /** The event the answer came in; -1 until answered. */
+        /** When the answer came, as a [stamp]; -1 until answered. */
         var answeredAt = -1L
             private set
         var failed = false
@@ -72,7 +72,7 @@ internal class SourceModelStore(private val events: () -> Long, private val now:
         fun release(atStart: Boolean) {
             pending.remove(this)
             answered = true
-            answeredAt = events()
+            answeredAt = stamp()
             val failure = failure
             if (failure != null) {
                 failed = true
@@ -108,6 +108,11 @@ internal class SourceModelStore(private val events: () -> Long, private val now:
     private val versions = HashMap<SnapshotKey, MutableList<Content>>()
     private val revisions = HashMap<SnapshotKey, Long>()
     private val listeners = mutableListOf<SnapshotChangeListener>()
+
+    private var stamps = 0L
+
+    /** The next of a sequence that orders read answers and what the model records against them, within an event too. */
+    fun stamp(): Long = ++stamps
 
     val reads = mutableListOf<Read>()
     val pending = mutableListOf<Read>()

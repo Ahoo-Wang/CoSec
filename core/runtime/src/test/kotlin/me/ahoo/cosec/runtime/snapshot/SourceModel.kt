@@ -70,8 +70,8 @@ internal class SourceModel(
     private val lastInstall = HashMap<SnapshotKey, SnapshotEntry<*>>()
     private val lastVersion = HashMap<SnapshotKey, Int>()
 
-    /** The event each key was last compiled in, by the model's compiler. */
-    private val compiledAt = HashMap<SnapshotKey, Long>()
+    /** When each key's runner last took a compilation's result, as a [SourceModelStore.stamp] ([compileTaken]). */
+    private val compileTakenAt = HashMap<SnapshotKey, Long>()
 
     /** Documents a periodic pass skipped while their load was stuck compiling: a read after its call is owed (`SNP-6`). */
     private val owedReads = mutableListOf<Pair<Obligation, SnapshotKey>>()
@@ -276,15 +276,22 @@ internal class SourceModel(
 
     /**
      * Whether [key]'s load is held by a compilation older than `storeReadTimeout`: its last read answered a document
-     * that long ago, nothing has compiled the key since, and a compilation waits.
+     * that long ago, and the key's runner has taken no compilation's result since. The runner's view, not the compile
+     * pool's: a compilation that has run but whose result the runner has not taken yet still holds the load (seed 827
+     * of the 1M stress, at K = 0, where the result waits in a hand-off). In the model a compilation's result is taken
+     * after a newer read only once the source is closed, which no pass is judged after.
      */
     private fun stuckCompiling(key: SnapshotKey): Boolean {
-        if (threads.compiles.isEmpty()) return false
         val last = store.reads.lastOrNull { it.key == key && it.answered && !it.failed && !it.abandoned } ?: return false
         val content = store.contentAt(key, last.answeredVersion) as? Content.Document ?: return false
         return content.digest != last.known &&
             threads.nanos - last.startedNanos > options.storeReadTimeout.toNanos() &&
-            (compiledAt[key] ?: -1) < last.answeredAt
+            (compileTakenAt[key] ?: -1) < last.answeredAt
+    }
+
+    /** [key]'s runner takes a compilation's result: called by the run's drain hook, before the transition. */
+    fun compileTaken(key: SnapshotKey) {
+        compileTakenAt[key] = store.stamp()
     }
 
     /** Once the run has settled: each read a pass owed was made, after its call (`SNP-6`). */
@@ -558,7 +565,6 @@ internal class SourceModel(
 
         override fun compile(key: SnapshotKey, document: SnapshotDocument): ModelCompiled {
             val used = inputs
-            compiledAt[key] = event
             if (recompileDuringNext) {
                 recompileDuringNext = false
                 onRecompile()

@@ -69,6 +69,19 @@ class SnapshotSourceModelPropertyTest {
     @Test
     fun aClaimAtItsKindsBoundIsRefused() = quietly { fixedCase(SEED_872) }
 
+    /**
+     * Seed 827 at K = 0, a fixed case (1M stress run 44330471227): a pass skips a load stuck compiling past
+     * `storeReadTimeout`, which started before the pass, while that compilation has run and its result waits in a
+     * hand-off. The read after it is owed (`SNP-6`); judged by what the compile pool ran rather than by what the runner
+     * took, the oracle saw the document as compiled and the pass as having confirmed nothing.
+     */
+    @Test
+    fun aSkippedLoadWhoseCompilationRanButIsNotTakenStillOwesTheReadAfterIt() = quietly {
+        val run = SourceModelRun(SourceModelScript.generate(SEED_827, EVENTS), ModelRunners.runner(k = 0)).run()
+        run.failure.assert().describedAs("seed $SEED_827").isNull()
+        run.counts.passReadsOwed.assert().isGreaterThan(0)
+    }
+
     private fun fixedCase(seed: Int) {
         val run = SourceModelRun(SourceModelScript.generate(seed, EVENTS), ModelRunners.runner(k = 0)).run()
         run.failure.assert().describedAs("seed $seed").isNull()
@@ -198,6 +211,7 @@ class SnapshotSourceModelPropertyTest {
         const val EVENTS = 250
         const val SEED_9191 = 9191
         const val SEED_872 = 872
+        const val SEED_827 = 827
 
         /** Reached by every run over the runner: an eviction judged at its claim ([SourceModel.claimed]). */
         const val CLAIM_JUDGED = "eviction judged at its claim"
