@@ -30,10 +30,7 @@ import kotlin.concurrent.thread
  * over evicts on the installing thread before it answers, and evictions never take a kind below its bound. The source
  * compiles on the test's thread (`directExecutor`), and its housekeeping is a queue the test runs, or holds.
  */
-open class SnapshotFamilyBoundTest {
-    /** What makes each key's slot; [SnapshotFamilyBoundRunnerTest] runs the same cases over the [KeyRunner]. */
-    internal open fun slots(): SlotFactory = SlotFactory.SLOT
-
+class SnapshotFamilyBoundTest {
     private val threads = SlotModelThreads()
     private val store = InMemorySnapshotDocumentStore()
     private val options = SnapshotOptions(revalidateInterval = QUIET_PASS, maxApps = BOUND)
@@ -50,7 +47,6 @@ open class SnapshotFamilyBoundTest {
         null,
         { 0L },
         threads.housekeeping,
-        slots(),
     )
 
     init {

@@ -248,7 +248,7 @@ class KeyDrainTest {
             options = options,
             everyKey = true
         ).use { source ->
-            // A cold burst of a thousand overruns a queue of 64 with Slot too; what is measured is the recompile.
+            // A cold burst of a thousand overruns a queue of 64 whatever drains it; what is measured is the recompile.
             keys.chunked(CHUNK).forEach { source.loadAll(it).join() }
             rejected.set(0)
             source.recompile().join()

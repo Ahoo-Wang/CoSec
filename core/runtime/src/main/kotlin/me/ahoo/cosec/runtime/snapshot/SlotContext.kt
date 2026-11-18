@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicReference
 import java.util.function.LongSupplier
 
 /**
- * What every [Slot] of a [SnapshotSource] reads from it (RFC 0013 B2a), named in one place, where the inner class it
+ * What every key of a [SnapshotSource] reads from it (RFC 0013 B2a), named in one place, where the inner class it
  * was hid which of the source's fields it used. Every field is a `val`, set before the first slot is made; what changes
  * lives in the object a field holds, with one home each.
  */

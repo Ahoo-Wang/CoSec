@@ -163,7 +163,7 @@ internal class KeyEffects<T : Any>(
         } catch (error: Throwable) {
             DocumentState.Failed(SnapshotUnavailableException(key, report().failedToCompile(revision), error))
         }
-        // As `Slot.compileAndInstall` reports it: on the pool, for a compilation that ran (it compiled, or it threw),
+        // Reported on the pool, for a compilation that ran (it compiled, or it threw),
         // before its result is installed or `closed` is read, so a close that ends the load does not hide the work. A
         // meter's `VirtualMachineError` (the guard lets nothing else out) leaves after the result is offered.
         try {
@@ -235,8 +235,8 @@ internal class KeyEffects<T : Any>(
 
     /**
      * Before a load's answers: when the install took the family over its cap, the pass runs here, on the installing
-     * thread whatever it is, with the drain budget lifted: `SNP-14`'s back-pressure is the installer's, as [Slot]'s is,
-     * so the bound never depends on a pool being free. The victims whose flags are free are evicted on this thread; a
+     * thread whatever it is, with the drain budget lifted: `SNP-14`'s back-pressure is the installer's, so the bound
+     * never depends on a pool being free. The victims whose flags are free are evicted on this thread; a
      * victim another thread is draining takes its eviction next, in that drain.
      */
     private fun evictOverCap() {

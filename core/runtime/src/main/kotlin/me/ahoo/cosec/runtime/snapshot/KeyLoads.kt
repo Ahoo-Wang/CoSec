@@ -26,7 +26,7 @@ import java.util.concurrent.ExecutionException
 
 /**
  * A load's life inside [KeyTransitions] (RFC 0013 B2b): how it starts, what its read and its compilation find, and how
- * it ends. Each function names the [Slot] code it replaces, and decides as that code does.
+ * it ends.
  */
 internal class KeyLoads<T : Any>(private val config: KeyConfig) {
 
@@ -100,7 +100,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         compiled: KeyEvent.Compiled<T>
     ) {
         step.retryDelay = config.rejectedReloadRetry
-        // The compilation was reported where it ran, before this step (`KeyEffects.compileOnPool`, as `Slot` does).
+        // The compilation was reported where it ran, before this step (`KeyEffects.compileOnPool`).
         val present = compiled.state is DocumentState.Present
         val origin = if (present) EntryOrigin.DOCUMENT else EntryOrigin.UNCOMPILABLE
         val confirmedAt = load.confirmedAt(config.localCopyMaxAge)
@@ -192,7 +192,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
      * with inputs that a recompile replaced: another load follows at once, and a compiled document is not installed.
      * Its waiters get what that load ends with, never the old compilation. The effects: the install, an eviction in place
      * if it took the family over its cap (`SNP-14`), the next read or the pending reload's answer, the load's waiters,
-     * then the hand to housekeeping: answers first, since that pass cannot change one of them (`Slot` hands before).
+     * then the hand to housekeeping: answers first, since that pass cannot change one of them.
      */
     fun finish(step: KeyStepBuilder<T>, load: LoadState<T>, entry: SnapshotEntry<T>, install: Boolean) {
         // Whatever ended the load (a read that failed to start included), its read is over.

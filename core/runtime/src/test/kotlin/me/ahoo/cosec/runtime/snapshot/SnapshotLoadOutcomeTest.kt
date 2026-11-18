@@ -38,7 +38,7 @@ class SnapshotLoadOutcomeTest {
     /**
      * Keeps cold-load timeouts instead of running them, so the test decides when they fire. Everything else (store read
      * timeouts, housekeeping) is scheduled as usual. A cold-load timeout is any delay up to the bound: the runner's
-     * timer gets what is left of it when its offer returns, `Slot`'s the whole.
+     * timer gets what is left of it when its offer returns.
      */
     private class ManualScheduler : ScheduledThreadPoolExecutor(1) {
         val timeouts: MutableList<Runnable> = CopyOnWriteArrayList()

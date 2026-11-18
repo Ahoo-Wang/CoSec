@@ -18,25 +18,21 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
- * What makes each key's slot in a [SlotModelRun]: [Slot], or [KeyRunner]s draining [k] events each, whose claims the
- * model judges as they are made ([SlotModel.claimed]) and whose every event taken [onTaken] sees.
+ * What makes each key's slot in a [SlotModelRun]: [KeyRunner]s draining [k] events each, whose claims the model judges
+ * as they are made ([SlotModel.claimed]) and whose every event taken [onTaken] sees.
  */
-internal class ModelSlots private constructor(val k: Int?, private val onTaken: (KeyEvent<*>) -> Unit) {
+internal class ModelSlots private constructor(val k: Int, private val onTaken: (KeyEvent<*>) -> Unit) {
     /** The factory for one run, its runners reporting their claims to [model]. */
-    fun factory(model: SlotModel): SlotFactory {
-        val k = k ?: return SlotFactory.SLOT
-        return keyRunners(k, hooksOf = { key ->
+    fun factory(model: SlotModel): SlotFactory =
+        keyRunners(k, hooksOf = { key ->
             KeyDrain.Hooks(beforeNext = { event ->
                 onTaken(event)
                 // After the claim, before the transition that removes the key.
                 if (event is KeyEvent.Evict && event.claim == KeyEvent.Claim.CLAIMED) model.claimed(key)
             })
         })
-    }
 
     companion object {
-        val SLOT = ModelSlots(null) {}
-
         fun runner(k: Int, onTaken: (KeyEvent<*>) -> Unit = {}) = ModelSlots(k, onTaken)
     }
 }
