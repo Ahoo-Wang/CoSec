@@ -185,11 +185,11 @@ Under the same conditions as the timer (`cosec-micrometer`, a `MeterRegistry`, `
 meters the data plane's snapshot source: the documents this instance reads, compiles and holds
 ([How instances read documents](./storage.md#how-instances-read-documents)). The control plane's own source is not
 metered. A `Pipeline` an application builds itself gets none of these meters. No tag carries an app or tenant id, so
-there are 72 series whatever the number of documents. `kind` is `platform`, `app` or `tenant`:
+there are 69 series whatever the number of documents. `kind` is `platform`, `app` or `tenant`:
 
 | Meter | Type | Tags | What it says |
 |---|---|---|---|
-| `cosec.snapshot.loads` | counter | `kind`, `result` | a request asking for a document: `hit` (it was installed), `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted `cold-load-timeout`) |
+| `cosec.snapshot.loads` | counter | `kind`, `result` | a request that had to load a document: `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted `cold-load-timeout`). A request that finds its documents installed is not counted: that is every request's path |
 | `cosec.snapshot.compile.duration` | timer | `kind`, `result` = `success`, `failure` | compiling a document; `failure` is a stored document that does not compile on this instance |
 | `cosec.snapshot.installs` | counter | `kind` | documents installed: a first load or a new revision |
 | `cosec.snapshot.installed` | gauge | `kind`, `state` | the entries held now, by state: `present`, `invalid` (does not compile here), `pending` (its inputs changed and it waits for its compile again), `undecodable`, `absent` (no document, none seen before), `lost` (a document seen before is gone), `unreadable`. The states add up to what the instance holds |
@@ -205,6 +205,9 @@ there are 72 series whatever the number of documents. `kind` is `platform`, `app
 `installed`, `lag` and `lagging` are as of the source's last lag pass, run every `revalidate-interval`, not read on a
 scrape: a scrape costs a read of one field however many documents there are. They read zero before the first pass,
 when `summary.age` is `NaN`; a `summary.age` far above `revalidate-interval` means the passes have stopped.
+
+The share of requests that waited for a document is `loads{result=cold}` over the decisions (the count of
+`cosec.authorization`); `evictions` says why it rises.
 
 | Alert on | Because |
 |---|---|

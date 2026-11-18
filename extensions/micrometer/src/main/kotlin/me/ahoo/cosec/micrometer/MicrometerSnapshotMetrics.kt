@@ -16,7 +16,6 @@
 package me.ahoo.cosec.micrometer
 
 import io.micrometer.core.instrument.Counter
-import io.micrometer.core.instrument.FunctionCounter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -36,10 +35,11 @@ import java.time.Duration
  * The `cosec.snapshot.*` meters of a [SnapshotSource] (`wiki/operations/observability.md` holds their names). Every
  * tag has a closed value set, never an app or tenant id: `kind`, `result`, `state`, `level`, `to`.
  *
- * Every meter is resolved here, in the constructor, so an event is an array index and an increment: [onLoad], which
- * runs on the request path at every `peek`, looks nothing up and allocates nothing, and counts a hit in cells of the
- * calling thread's own ([HitCounts]), never in a shared counter. A registry that refuses a meter
- * fails here, at startup, never on an event. The gauges ([bind]) read the [SnapshotSummary] of the source's last lag
+ * Every meter is resolved here, in the constructor, so an event is an array index and an increment. A hit is not
+ * counted: it is not a load, and [onLoad] runs at every `peek`, the one path every request takes, where a shared count
+ * cost 12 % of a peek's throughput on one thread and 45 % on eight (#1614). The share of requests that waited for a
+ * document is `loads{result=cold}` over the decisions (`cosec.authorization`). A registry that refuses a meter fails
+ * here, at startup, never on an event. The gauges ([bind]) read the [SnapshotSummary] of the source's last lag
  * pass, so a scrape walks nothing.
  */
 @InternalCoSecApi
@@ -47,13 +47,8 @@ class MicrometerSnapshotMetrics(
     private val registry: MeterRegistry,
     private val clock: Clock = Clock.systemUTC(),
 ) : SnapshotMetrics {
-    private val hits = HitCounts(KINDS.size)
-
-    /** The loads other than hits; a hit is counted by [hits], which a function counter reads on a scrape. */
-    private val misses = Array(KINDS.size * OUTCOMES.size) { i ->
-        val outcome = OUTCOMES[i % OUTCOMES.size]
-        val kind = KINDS[i / OUTCOMES.size]
-        if (outcome == LoadOutcome.HIT) null else counter(LOADS, KIND, tag(kind), RESULT, tag(outcome))
+    private val loads = Array(KINDS.size * LOADED.size) { i ->
+        counter(LOADS, KIND, tag(KINDS[i / LOADED.size]), RESULT, tag(LOADED[i % LOADED.size]))
     }
     private val compiles = Array(KINDS.size * 2) { i ->
         Timer.builder(COMPILE_DURATION)
@@ -71,23 +66,14 @@ class MicrometerSnapshotMetrics(
     }
     private val handOffs = Array(2) { counter(HANDOFFS_REFUSED, "to", if (it == 0) "housekeeping" else "caller") }
 
-    init {
-        for (kind in KINDS) {
-            FunctionCounter.builder(LOADS, hits) { it.count(kind.ordinal) }
-                .tags(KIND, tag(kind), RESULT, tag(LoadOutcome.HIT))
-                .register(registry)
-        }
-    }
-
     private fun counter(name: String, vararg tags: String): Counter =
         Counter.builder(name).tags(*tags).register(registry)
 
     override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) {
         if (outcome == LoadOutcome.HIT) {
-            hits.increment(kind.ordinal)
-        } else {
-            misses[kind.ordinal * OUTCOMES.size + outcome.ordinal]?.increment()
+            return
         }
+        loads[kind.ordinal * LOADED.size + LOADED.indexOf(outcome)].increment()
     }
 
     override fun onCompile(kind: SnapshotKind, duration: Duration, succeeded: Boolean) =
@@ -168,7 +154,9 @@ class MicrometerSnapshotMetrics(
         private const val NANOS_PER_SECOND = 1_000_000_000.0
 
         private val KINDS = SnapshotKind.entries
-        private val OUTCOMES = LoadOutcome.entries
+
+        /** The outcomes of a load that ran: every one but a hit. */
+        private val LOADED = LoadOutcome.entries - LoadOutcome.HIT
 
         private fun tag(value: Enum<*>): String = value.name.lowercase()
     }

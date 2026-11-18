@@ -163,12 +163,12 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 
 在与计时器相同的条件下（`cosec-micrometer`、一个 `MeterRegistry`、`cosec.metrics.enabled`），starter 为数据平面的快照源注册指标：
 即本实例读取、编译并持有的文档（[实例如何读取文档](./storage.md#how-instances-read-documents)）。控制平面自己的快照源不计量。
-应用自己构建的 `Pipeline` 不会得到这些指标。没有任何标签携带应用或租户 id，因此无论文档有多少，都是 72 个序列。
+应用自己构建的 `Pipeline` 不会得到这些指标。没有任何标签携带应用或租户 id，因此无论文档有多少，都是 69 个序列。
 `kind` 为 `platform`、`app` 或 `tenant`：
 
 | 指标 | 类型 | 标签 | 含义 |
 |---|---|---|---|
-| `cosec.snapshot.loads` | counter | `kind`、`result` | 请求要一个文档：`hit`（它已安装）、`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了 `cold-load-timeout`） |
+| `cosec.snapshot.loads` | counter | `kind`、`result` | 必须加载文档的请求：`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了 `cold-load-timeout`）。文档已安装的请求不计数：那是每个请求都走的路径 |
 | `cosec.snapshot.compile.duration` | timer | `kind`、`result` = `success`、`failure` | 编译一个文档；`failure` 是一个在本实例上无法编译的已存储文档 |
 | `cosec.snapshot.installs` | counter | `kind` | 安装的文档：首次加载或新修订 |
 | `cosec.snapshot.installed` | gauge | `kind`、`state` | 当前持有的条目，按状态：`present`、`invalid`（在此无法编译）、`pending`（其输入已变，等待重新编译）、`undecodable`、`absent`（没有文档，之前也没见过）、`lost`（之前见过的文档不见了）、`unreadable`。各状态之和等于实例持有的条目数 |
@@ -184,6 +184,8 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 `installed`、`lag` 和 `lagging` 反映快照源上一轮延迟检查（每个 `revalidate-interval` 一次）时的状态，不在抓取时读取：
 无论有多少文档，一次抓取只读一个字段。第一轮之前它们读数为零，此时 `summary.age` 为 `NaN`；`summary.age` 远大于
 `revalidate-interval` 说明检查已经停止。
+
+等待过文档的请求所占比例是 `loads{result=cold}` 除以决策数（`cosec.authorization` 的计数）；它上升的原因看 `evictions`。
 
 | 告警条件 | 原因 |
 |---|---|

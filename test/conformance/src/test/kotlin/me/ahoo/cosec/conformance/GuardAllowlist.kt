@@ -65,6 +65,7 @@ object GuardAllowlist {
             "runtime:DecisionListenersShutdownTest#an event offered after the listeners stopped is dropped and counted, not left queued",
             "runtime:DecisionListenersShutdownTest#events published while the listeners drain are each delivered or dropped, once",
             "micrometer:MicrometerSnapshotMetricsTest#the series are fixed, no event adds a meter",
+            "micrometer:MicrometerSnapshotMetricsTest#a hit is not metered",
             "micrometer:MicrometerSnapshotMetricsTest#the gauges read the source's last lag pass, and its age",
             "runtime:SnapshotSummaryTest#every entry held is counted once, in the state of its origin, and the states sum to the entries",
             "runtime:SnapshotSummaryTest#an eviction on a slot is counted by kind and by what the key held",

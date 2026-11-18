@@ -47,7 +47,7 @@ class MicrometerSnapshotMetricsTest {
         registry.get(name).tags(*tags).meter().measure().single().value
 
     @ParameterizedTest
-    @EnumSource(LoadOutcome::class)
+    @EnumSource(LoadOutcome::class, names = ["COLD", "FAILED", "TIMEOUT"])
     fun `a load is counted by kind and result`(outcome: LoadOutcome) {
         metrics.onLoad(SnapshotKind.APP, outcome)
         metrics.onLoad(SnapshotKind.APP, outcome)
@@ -65,6 +65,17 @@ class MicrometerSnapshotMetricsTest {
             "result",
             outcome.name.lowercase()
         ).assert().isEqualTo(0.0)
+    }
+
+    /** A hit is not a load, and `peek` is every request's path: it is not metered at all (#1614). */
+    @Test
+    fun `a hit is not metered`() {
+        val before = registry.meters.size
+        repeat(3) { metrics.onLoad(SnapshotKind.APP, LoadOutcome.HIT) }
+        registry.meters.size.assert().isEqualTo(before)
+        registry.find(MicrometerSnapshotMetrics.LOADS).tag("result", "hit").meters().assert().isEmpty()
+        val loads = registry.find(MicrometerSnapshotMetrics.LOADS).meters()
+        loads.sumOf { it.measure().single().value }.assert().isEqualTo(0.0)
     }
 
     @Test
@@ -161,7 +172,7 @@ class MicrometerSnapshotMetricsTest {
     )
 
     private companion object {
-        const val LOAD_SERIES = 12
+        const val LOAD_SERIES = 9
         const val COMPILE_SERIES = 6
     }
 }

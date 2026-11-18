@@ -30,9 +30,8 @@ import org.openjdk.jmh.annotations.Threads
 
 /**
  * A warm `SnapshotSource.peek` of the platform and one app, through the starter's wiring with a `MeterRegistry`: two
- * `onLoad` events on the request's thread. Where the starter meters the source (OBS-5) each is an increment of a
- * counter resolved at startup; where it does not, the source's metrics are `NOOP`. On one thread, and on eight
- * contending for the same counters.
+ * `onLoad` events on the request's thread. Where the starter meters the source (OBS-5) the binding returns at once on a
+ * hit; where it does not, the source's metrics are `NOOP`. On one thread, and on eight.
  */
 @State(Scope.Benchmark)
 open class SnapshotPeekBenchmark {
