@@ -3,15 +3,15 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest :conformance:test
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index a07e8edf..cde2cc12 100644
+index e882423e..4e1d0322 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -121,7 +121,7 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -131,7 +131,7 @@ class TokenFamilies @JvmOverloads constructor(
                  throw TokenExpiredException("The session that began at ${family.authTime} has ended: sign in again.")
              }
              when {
 -                session.generation == family.generation -> {
 +                session.generation <= family.generation -> {
                      val next = family.rotated(now)
-                     if (store.replace(read.version, next)) {
+                     if (sessionStore("rotate a session") { store.replace(read.version, next) }) {
                          return Issue(TokenSession(family.id, family.authTime, next.generation), family.expiresAt)

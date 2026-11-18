@@ -110,7 +110,10 @@ A rule id cannot contain `:` or `/`, so no rule can name another document's coun
 the platform's quotas.
 
 A key that reads `subject.id` gives anonymous callers one shared bucket; key them by `environment.ip` in a separate
-rule. A key or condition that reads an [external attribute](./language.md#external-attributes-and-onmissing) which
+rule. The login, refresh and logout routes are anonymous (a refresh carries the access token that expired, `PIP-6`), and
+each refresh verifies a signature and reads the session store: hold them to an `environment.ip` rule, as the
+[`clients` example](../integration/clients.md#what-your-application-serves) does. The routes the starter serves have no
+limiter of their own. A key or condition that reads an [external attribute](./language.md#external-attributes-and-onmissing) which
 cannot be fetched leaves the rule without a bucket: with `onMissing: "nomatch"` (platform rules only) it is skipped,
 otherwise `strictFailure` decides as for a [failing limiter](#failure-behavior).
 

@@ -67,6 +67,8 @@ internal class ClientHost private constructor(private val context: ConfigurableA
                     "server.address=$ADDRESS",
                     "cocache.backend=memory",
                     "cosec.jwt.secret=client-host-secret-client-host-secret",
+                    "cosec.authentication.login.refresh.path=$REFRESH_PATH",
+                    "cosec.authentication.login.logout.path=$LOGOUT_PATH",
                     "cosec.authorization.routes.location=",
                     "cosec.authorization.snapshot.revalidate-interval=1s",
                     "spring.main.banner-mode=off",

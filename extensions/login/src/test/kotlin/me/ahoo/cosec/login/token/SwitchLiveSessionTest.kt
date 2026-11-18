@@ -138,7 +138,7 @@ class SwitchLiveSessionTest {
             override suspend fun read(id: String): TokenFamilyStore.Read? = error("Redis is down")
             override suspend fun replace(version: String, next: TokenFamily): Boolean = error("Redis is down")
         }
-        assertThrows<IllegalStateException> {
+        assertThrows<SessionStoreUnavailableException> {
             login(
                 families = TokenFamilies(down)
             ).authenticateAsToken(Select("beta", PermittedRequest.withToken(session)))

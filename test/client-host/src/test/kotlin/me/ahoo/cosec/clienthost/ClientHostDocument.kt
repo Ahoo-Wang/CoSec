@@ -15,7 +15,7 @@ package me.ahoo.cosec.clienthost
 
 /**
  * The platform document the host serves: what an application of the client's tests needs and nothing else. Anyone may
- * reach `/hello`, the sign-in and refresh routes and the host's own `/test` routes; an authenticated caller reaches
+ * reach `/hello`, the sign-in, refresh and logout routes and the host's own `/test` routes; an authenticated caller reaches
  * `/orders`, and nobody deletes one (a `DENY` that no `ALLOW` overrides).
  */
 internal const val CLIENT_HOST_DOCUMENT: String =
@@ -23,7 +23,7 @@ internal const val CLIENT_HOST_DOCUMENT: String =
         """{"id":"public","statements":[""" +
         """{"effect":"allow","action":"http:GET","resource":["http:path:/hello","http:path:/test/**"]},""" +
         """{"effect":"allow","action":"http:POST","resource":[""" +
-        """"http:path:/auth/login","http:path:/auth/refresh","http:path:/test/**"]}]},""" +
+        """"http:path:/auth/login","http:path:/auth/refresh","http:path:/auth/logout","http:path:/test/**"]}]},""" +
         """{"id":"members","statements":[{"effect":"allow","action":"http:*","resource":"http:path:/orders/**",""" +
         """"condition":{"eq":["subject.authenticated",true]}}]},""" +
         """{"id":"no-delete","statements":[""" +
