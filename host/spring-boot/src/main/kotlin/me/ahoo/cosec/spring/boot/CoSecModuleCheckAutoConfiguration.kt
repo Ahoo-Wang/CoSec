@@ -20,6 +20,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
+import me.ahoo.cosec.spring.boot.authentication.route.LoginRoutesCheck
 import me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
 import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
@@ -124,6 +125,15 @@ internal class CoSecModuleCheckAutoConfiguration {
                 ).afterPropertiesSet()
             }
         }
+    }
+
+    /** The served login routes: a path that is set never does nothing (`IDN-23`, `IDN-24`). */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnCoSecEnabled
+    class LoginRoutes {
+        @Bean
+        fun cosecLoginRoutesCheck(context: ApplicationContext): StartupTask =
+            StartupTask.AfterSingletons { LoginRoutesCheck.check(context) }
     }
 
     /**

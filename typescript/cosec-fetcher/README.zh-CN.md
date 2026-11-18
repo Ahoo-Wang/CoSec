@@ -70,12 +70,12 @@ Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fe
 
 ## CoSec 8.0 应用必须允许什么
 
-CoSec 不提供登录或刷新端点；应用编写的端点必须：
+设置了 `cosec.authentication.login.refresh.path` 时，starter 提供刷新路由，其应答正是本客户端所依赖的（[构建客户端](https://cosec.ahoo.me/zh/integration/clients#what-your-application-serves)）；登录属于应用。应用必须：
 
 - 允许**匿名调用方**访问刷新路由：客户端发送的是已过期的访问令牌，CoSec 把它当作
   匿名（否则用户在第一次过期时就会被退出登录）；
-- 拒绝刷新时回答 **`401`**（只有 `401` 结束会话；`429`、`5xx` 与网络错误保留会话），
-  无法判断时回答 `503`；
+- 如果自己编写刷新路由，拒绝刷新时回答 **`401`**（只有 `401` 结束会话；`429`、`5xx`
+  与网络错误保留会话），无法判断时回答 `503`，与提供的路由相同；
 - 客户端跨源时，在 CoSec 之前配置 CORS 过滤器，允许 `CoSec-Device-Id`、
   `CoSec-Space-Id`、`CoSec-Request-Id` 与 `Authorization`，并暴露 `CoSec-Request-Id`、
   `RateLimit-*` 与 `Retry-After`。

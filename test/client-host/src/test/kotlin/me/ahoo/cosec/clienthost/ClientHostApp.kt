@@ -17,9 +17,10 @@ package me.ahoo.cosec.clienthost
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.cocache.CoCacheTokenStore
 import me.ahoo.cosec.login.Authentication
 import me.ahoo.cosec.login.LoginCredentials
-import me.ahoo.cosec.login.token.RefreshTokenAuthentication
+import me.ahoo.cosec.login.token.MembershipRefresh
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenCompositeAuthentication
 import me.ahoo.cosec.login.token.TokenConverter
@@ -27,34 +28,26 @@ import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.runtime.token.TokenRevocation
-import me.ahoo.cosec.spi.token.RevocationUnavailableException
-import me.ahoo.cosec.spi.token.TokenVerificationException
+import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.http.HttpHeaders
-import org.springframework.http.HttpStatus
+import org.springframework.http.HttpMethod
 import org.springframework.web.bind.annotation.DeleteMapping
-import org.springframework.web.bind.annotation.ExceptionHandler
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.PostMapping
 import org.springframework.web.bind.annotation.RequestBody
 import org.springframework.web.bind.annotation.RequestHeader
-import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.server.WebFilter
 import java.time.Duration
-import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
 /** The sign-in a client posts: whoever names themselves is signed in, because the host tests the client, not a login. */
 data class ClientHostLogin(val username: String) : LoginCredentials
-
-/** The refresh a client posts: the pair it holds, as `TokenRefresher` sends it. */
-data class ClientHostRefresh(override val accessToken: String, override val refreshToken: String) :
-    RefreshTokenCredentials
 
 internal class ClientHostLoginAuthentication : Authentication<ClientHostLogin> {
     override val credentialsType: Class<ClientHostLogin> = ClientHostLogin::class.java
@@ -68,19 +61,27 @@ internal class ClientHostCounters {
     val logins = AtomicInteger()
     val refreshes = AtomicInteger()
 
-    /** Set by `/test/fail-next-refresh`: the next refresh fails as a store that cannot be read does. */
-    val failNextRefresh = AtomicBoolean()
+    /** Set by `/test/refresh-error`: until turned off, every refresh fails with a bug of the application's own code. */
+    @Volatile
+    var refreshError = false
 }
 
 /** How long ago the access token of `/test/login-expired` expired: a token the host refuses and the client may believe. */
 private val EXPIRED_AGO = Duration.ofMinutes(1)
 
+/** Where the starter serves the refresh (`cosec.authentication.login.refresh.path`) and the logout. */
+internal const val REFRESH_PATH = "/auth/refresh"
+internal const val LOGOUT_PATH = "/auth/logout"
+
 /**
- * The application: the sign-in and the refresh route CoSec leaves to it, one route the document permits, one it
- * permits to an authenticated caller and one it denies, and the `/test` routes the client's tests ask of the host.
+ * The application: its sign-in (login stays the application's), one route the document permits, one it permits to an
+ * authenticated caller and one it denies, and the `/test` routes the client's tests ask of the host. Refresh and logout
+ * are the starter's own routes (`cosec.authentication.login.refresh.path`, `logout.path`: `IDN-23`, `IDN-24`), the
+ * ones every application gets.
  *
  * Never an example of a production host: its login signs in anyone who names themselves, its secret is a constant, and
- * the `/test` routes (counters, echo, a session ended on request, an expired sign-in) are open to every caller. They
+ * the `/test` routes (counters, echo, a session ended on request, an expired sign-in, the outage switches) are open to
+ * every caller. They
  * pass CoSec like every other route: the document permits them, and nothing is exempted from the filter (STA-4).
  */
 @RestController
@@ -90,6 +91,7 @@ internal class ClientHostApi(
     private val families: TokenFamilies,
     private val converter: TokenConverter,
     private val counters: ClientHostCounters,
+    private val revocations: SwitchableRevocations,
 ) {
     @GetMapping("/hello")
     fun hello(): Map<String, String> = mapOf("message" to "hello")
@@ -106,25 +108,6 @@ internal class ClientHostApi(
         counters.logins.incrementAndGet()
         return auth.authenticateAsToken(ClientHostLogin(body.getValue("username")))
     }
-
-    @PostMapping("/auth/refresh")
-    suspend fun refresh(@RequestBody body: Map<String, String>): CompositeToken {
-        counters.refreshes.incrementAndGet()
-        if (counters.failNextRefresh.compareAndSet(true, false)) {
-            // What RefreshTokenAuthentication throws when the revocations cannot be read (IDN-14): nothing is issued.
-            throw RevocationUnavailableException("The client host was asked to fail this refresh.")
-        }
-        return auth.authenticateAsToken(ClientHostRefresh(body.getValue("accessToken"), body.getValue("refreshToken")))
-    }
-
-    /** What a failed refresh means is CoSec's, the status is the application's (wiki/integration/clients.md). */
-    @ExceptionHandler(TokenVerificationException::class)
-    @ResponseStatus(HttpStatus.UNAUTHORIZED)
-    fun refused() = Unit
-
-    @ExceptionHandler(RevocationUnavailableException::class)
-    @ResponseStatus(HttpStatus.SERVICE_UNAVAILABLE)
-    fun unavailable() = Unit
 
     /** The headers this request arrived with, lower-cased: what a client put on the wire. */
     @GetMapping("/test/echo")
@@ -144,10 +127,29 @@ internal class ClientHostApi(
         return converter.toToken(issued, EXPIRED_AGO.negated(), Duration.ofDays(1))
     }
 
-    /** The next refresh answers 503 through the exception a store that cannot be read throws, and the one after succeeds. */
-    @PostMapping("/test/fail-next-refresh")
-    fun failNextRefresh() {
-        counters.failNextRefresh.set(true)
+    /**
+     * The revocations cannot be read from now on, until `/test/revocations/up`: the refresh's own read fails, and the
+     * served route answers 503 (`IDN-14`). The pipeline's verification of a request's token reads them too, and lets the
+     * token through (`PIP-7`), so this stays on rather than failing one read, which that verification could take.
+     */
+    @PostMapping("/test/revocations/down")
+    fun revocationsDown() {
+        revocations.down = true
+    }
+
+    @PostMapping("/test/revocations/up")
+    fun revocationsUp() {
+        revocations.down = false
+    }
+
+    /** The ids of the tokens whose revocation read failed while the revocations were down. */
+    @GetMapping("/test/revocations/failed")
+    fun failedReads(): List<String> = revocations.failedReads.toList()
+
+    /** Every refresh fails with a bug of the application's own code until turned off: the route answers 500. */
+    @PostMapping("/test/refresh-error/{on}")
+    fun refreshError(@PathVariable on: Boolean) {
+        counters.refreshError = on
     }
 
     @GetMapping("/test/stats")
@@ -157,7 +159,9 @@ internal class ClientHostApi(
     fun reset() {
         counters.logins.set(0)
         counters.refreshes.set(0)
-        counters.failNextRefresh.set(false)
+        counters.refreshError = false
+        revocations.down = false
+        revocations.failedReads.clear()
     }
 
     /** Ends the session of [body]'s pair, as a server-side sign-out or a revocation would: its next refresh is a 401. */
@@ -177,12 +181,25 @@ internal class ClientHostApplication {
     @Bean
     fun clientHostLogin() = ClientHostLoginAuthentication()
 
+    /** The application's membership refresh: a bug while `/test/refresh-error` is on, else the token's claims. */
     @Bean
-    fun clientHostRefresh(
-        tokenVerifier: TokenVerifier,
-        tokenRevocation: TokenRevocation,
-        tokenFamilies: TokenFamilies,
-    ) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
+    fun clientHostMembershipRefresh(counters: ClientHostCounters): MembershipRefresh<RefreshTokenCredentials> =
+        MembershipRefresh { _, _ ->
+            check(!counters.refreshError) { "a bug in the application's membership lookup" }
+            null
+        }
+
+    @Bean
+    fun clientHostRevocations(tokenStore: TokenStore): SwitchableRevocations =
+        SwitchableRevocations((tokenStore as CoCacheTokenStore).reader)
+
+    /** Counts the refreshes on the wire, before CoSec decides them: what a test asserts about one refresh for many calls. */
+    @Bean
+    fun clientHostRefreshCounter(counters: ClientHostCounters): WebFilter = WebFilter { exchange, chain ->
+        val request = exchange.request
+        if (request.method == HttpMethod.POST && request.path.value() == REFRESH_PATH) counters.refreshes.incrementAndGet()
+        chain.filter(exchange)
+    }
 
     @Bean
     fun clientHostApi(
@@ -191,5 +208,6 @@ internal class ClientHostApplication {
         families: TokenFamilies,
         converter: TokenConverter,
         counters: ClientHostCounters,
-    ) = ClientHostApi(auth, verifier, families, converter, counters)
+        revocations: SwitchableRevocations,
+    ) = ClientHostApi(auth, verifier, families, converter, counters, revocations)
 }

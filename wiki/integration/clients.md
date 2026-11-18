@@ -12,39 +12,60 @@ CoSec. It says what the server does and what the client must do about it; what t
 
 ## What your application serves
 
-CoSec ships no login, refresh, logout or tenant-switch endpoint. The application writes each as a handler over CoSec's
-classes ([Logging in](./authentication.md#logging-in)), so the path, the request body and the status of each failure
-are the application's to choose and to tell its clients.
+CoSec serves no login and no tenant switch: those are the application's, written over CoSec's classes
+([Logging in](./authentication.md#logging-in)), with the path, the body and the status of each failure its own. The
+refresh and the logout the starter serves itself when their paths are set; an application that sets none writes them as
+it writes its login.
 
-| Endpoint | What CoSec gives the handler | In and out |
+| Endpoint | Who serves it | In and out |
 |---|---|---|
-| Login | `TokenCompositeAuthentication.authenticateAsToken(credentials)` | Your credentials in; a `CompositeToken` out |
-| Refresh | `RefreshTokenAuthentication`, over `RefreshTokenCredentials` | `{"accessToken": "...", "refreshToken": "..."}` in, as the usual credentials class has it; a `CompositeToken` out |
-| Logout | `TokenRevoker.revoke(accessToken)`, or `revoke(compositeToken)` once the access token has expired | Whatever you choose; the session ends on the server |
-| Tenant or app switch | `SwitchTenantAuthentication`, from a live session | The current token in the `Authorization` header and your credentials class in the body; a `CompositeToken` out |
+| Login | The application: `TokenCompositeAuthentication.authenticateAsToken(credentials)` | Your credentials in; a `CompositeToken` out |
+| Refresh | The starter at `cosec.authentication.login.refresh.path` (`IDN-23`); unset, the application, over `RefreshTokenAuthentication` | `{"accessToken": "...", "refreshToken": "..."}` in; a `CompositeToken` out |
+| Logout | The starter at `cosec.authentication.login.logout.path` (`IDN-24`); unset, the application: `TokenRevoker.revoke(accessToken)`, or `revoke(compositeToken)` once the access token has expired | The served route: the pair in, `204` out; the session ends on the server |
+| Tenant or app switch | The application: `SwitchTenantAuthentication`, from a live session | The current token in the `Authorization` header and your credentials class in the body; a `CompositeToken` out |
 
 A `CompositeToken` is written as `{"accessToken":"<jwt>","refreshToken":"<jwt>"}`, nothing else
 (`CompositeTokenJsonTest` keeps it byte for byte). An application that adds fields to its answer is not breaking
 CoSec, and a client must ignore the ones it does not know.
 
-**The refresh handler decides the status of a failed refresh; CoSec does not.** `RefreshTokenAuthentication` throws, and
-CoSec registers no exception handler: an exception your handler does not map is whatever the framework answers.
-What each exception means is CoSec's:
+**What the served refresh route answers.** Every answer carries `Cache-Control: no-store`.
 
-| It throws | It means | A client should be told |
+| Request, or what went wrong | Status | Body |
 |---|---|---|
-| `TokenExpiredException` | The session's lifetime is over (`cosec.jwt.session.lifetime`), or the refresh token has expired | `401`: sign in again |
-| `TokenRevokedException` | The session ended: a logout, or a pair presented again (`IDN-16`, `IDN-18`) | `401`: sign in again |
-| `TokenVerificationException` (and `RefreshTokenMismatchException`, `DelegationUnsupportedException`) | The pair is not valid, belongs to no session, or is not one pair | `401`: sign in again |
-| `RevocationUnavailableException`, or an error of the store that keeps the session | Nothing was issued, and nothing is known about the pair (`IDN-14`, `IDN-19`) | `503`: keep the pair and try again |
+| `POST`, `Content-Type: application/json`, the pair and nothing else, at most 32 KiB | `200` | The `CompositeToken` |
+| Another member, a missing or empty value, another media type, a larger body, not JSON | `400` | `invalid-request` |
+| The session's lifetime is over (`cosec.jwt.session.lifetime`), or the refresh token has expired | `401` | `token-expired`: sign in again |
+| The session ended: a logout, or a pair presented again (`IDN-16`, `IDN-18`) | `401` | `token-revoked`: sign in again |
+| The pair is not valid, belongs to no session, or is not one pair | `401` | `token-invalid`: sign in again |
+| The revocations or the store that keeps the session cannot answer: nothing was issued (`IDN-14`, `IDN-19`) | `503` | `unavailable`: keep the pair and try again |
+| Any other error | `500` | `internal-error`: keep the pair |
 
-The statuses in the last column are what [Refreshing tokens](./authentication.md#refreshing-tokens) asks the handler
-to answer; they are a recommendation to the application, and the rest of this page assumes it follows them.
+A body that is not the token is a problem as the pipeline writes it ([problem types](#on-this-problem-type-a-client-does-this)):
+it carries the request id of the `CoSec-Request-Id` header, no trace id, and nothing else of the request. The served
+logout answers `204` when the session is now ended and when it already was, so a logout whose answer was lost can be
+sent again, and otherwise the same `400`, `401`, `503` and `500`.
+
+The route takes its credentials from the body and sets no cookie, so a page of another site cannot make a browser send
+them for it: it is not a cross-site request forgery target. A gateway does not serve it, and its startup fails when a
+path is set there: the service that issues sessions serves the route, behind the gateway, which passes it on like any
+other route its documents permit.
+
+An application that writes its own refresh route answers as this table does: `RefreshTokenAuthentication` throws, and
+CoSec registers no exception handler for a route it does not serve, so an exception the handler does not map is
+whatever the framework answers.
+
+| It throws | Answer |
+|---|---|
+| `TokenExpiredException`, `TokenRevokedException`, any other `TokenVerificationException` (`RefreshTokenMismatchException`, `DelegationUnsupportedException`) | `401`, with the type of the row above |
+| `RevocationUnavailableException`, `SessionStoreUnavailableException` (the store that keeps the session) | `503`: nothing was issued |
+| Anything else | `500` |
 
 **Login and refresh must be reachable by an anonymous caller.** A refresh carries the access token that expired, and
 an expired token is a rejected one: the request is evaluated as anonymous (`PIP-6`). If no statement lets an anonymous
 caller reach the refresh route, the refresh itself is `401 token-expired` and the client cannot renew. A client that
-sends no `Authorization` header on the refresh does not change that: it is anonymous either way.
+sends no `Authorization` header on the refresh does not change that: it is anonymous either way. The served routes are
+no exception (`STA-4`): nothing is exempted from the filter, and when a document refuses one the starter logs a `WARN`
+naming its property and shows it on the `cosecLoginRoutes` health indicator.
 
 <<< @/examples/clients/documents/platform.json [documents/platform.json: the statement of the routes a client needs]
 
@@ -166,7 +187,7 @@ endpoint and stores the pair it answers; it never rewrites a header ([Apps](./au
 ## Logout and switching
 
 - **Logout is a server call, then a local one.** Forgetting the pair on the client leaves it refreshable until the session
-  ends. Call the application's logout endpoint (it ends the session and revokes the access token, `IDN-18`), then
+  ends. Call the logout route, the starter's or the application's (it ends the session and revokes the access token, `IDN-18`), then
   drop the pair. Once the access token has expired, the endpoint needs the pair.
 - **A switch answers a new pair.** Present the current token, store the pair that answers, and drop the old one. A
   switch issues only from a live session and keeps its login time (`IDN-17`, `IDN-22`); it does not sign the user in

@@ -224,7 +224,7 @@ class TokenFamiliesTest {
             },
             clock = clock,
         )
-        assertThrows<IllegalStateException> { runBlocking { unreadable.rotate(token(session)) } }
+        assertThrows<SessionStoreUnavailableException> { runBlocking { unreadable.rotate(token(session)) } }
         val unconfirmed = TokenFamilies(
             object : TokenFamilyStore by store {
                 override suspend fun replace(version: String, next: TokenFamily): Boolean =
@@ -232,7 +232,7 @@ class TokenFamiliesTest {
             },
             clock = clock,
         )
-        assertThrows<IllegalStateException> { runBlocking { unconfirmed.rotate(token(session)) } }
+        assertThrows<SessionStoreUnavailableException> { runBlocking { unconfirmed.rotate(token(session)) } }
         family(session).generation.assert().isEqualTo(1L)
     }
 

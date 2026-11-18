@@ -94,13 +94,16 @@ Never log, embed, or commit real tokens.
 
 ## What the CoSec 8.0 application must allow
 
-CoSec ships no login or refresh endpoint; the application's must:
+The starter serves the refresh route when `cosec.authentication.login.refresh.path`
+is set, with the answers this client relies on ([Building a client](https://cosec.ahoo.me/integration/clients#what-your-application-serves));
+the login is the application's. The application must:
 
 - let an **anonymous caller** reach the refresh route: the client sends the
   access token that expired, which CoSec reads as anonymous (otherwise the
   user is signed out at the first expiry);
-- answer a refresh it refuses with **`401`** (only a `401` ends the session;
-  `429`, `5xx` and network errors keep it) and `503` when it cannot decide;
+- if it writes its own refresh route, answer a refresh it refuses with
+  **`401`** (only a `401` ends the session; `429`, `5xx` and network errors
+  keep it) and `503` when it cannot decide, as the served route does;
 - be configured with a CORS filter before CoSec if the client is cross-origin,
   allowing `CoSec-Device-Id`, `CoSec-Space-Id`, `CoSec-Request-Id` and
   `Authorization`, and exposing `CoSec-Request-Id`, `RateLimit-*` and

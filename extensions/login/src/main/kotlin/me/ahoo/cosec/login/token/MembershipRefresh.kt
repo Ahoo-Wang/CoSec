@@ -25,7 +25,10 @@ import me.ahoo.cosec.spi.token.VerifiedToken
  * credentials: what else of the request the check reads (the device a trusted-device check compares, say) the
  * application's endpoint puts there, and the hook reads it without a cast.
  *
- * An exception refuses the refresh: throw when the user may no longer sign in. Answer null to keep what the refreshed
+ * Refuse the refresh, when the user may no longer sign in, by throwing a
+ * [me.ahoo.cosec.spi.token.TokenVerificationException] ([me.ahoo.cosec.spi.token.TokenRevokedException] when the
+ * membership is gone): the refresh route the starter serves answers it `401`, and the client signs in again. Any other
+ * exception is an error, not a refusal: `500`, and the client keeps its pair. Answer null to keep what the refreshed
  * token claimed. The answer's [TenantMembership.app] is null or the token's own: a refresh never changes the app a
  * token is for.
  */

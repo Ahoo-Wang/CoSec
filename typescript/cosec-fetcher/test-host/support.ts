@@ -79,7 +79,9 @@ export function recordWire(): string[] {
   const send = globalThis.fetch;
   vi.stubGlobal('fetch', async (...args: Parameters<typeof fetch>) => {
     const response = await send(...args);
-    wire.push(`${new URL(String(args[0])).pathname} ${response.status}`);
+    const path = new URL(String(args[0])).pathname;
+    // The host's own /test routes are the test talking to the host, not the client's wire.
+    if (!path.startsWith('/test/')) wire.push(`${path} ${response.status}`);
     return response;
   });
   return wire;
