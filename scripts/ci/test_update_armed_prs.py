@@ -22,7 +22,7 @@ import unittest
 from pathlib import Path
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "update-armed-prs.yml"
-REQUIRED = ["CI", "Analyze (java-kotlin)", "Analyze (javascript-typescript)", "Semantic PR Title"]
+REQUIRED = ["CI", "Analyze (java-kotlin)", "Analyze (javascript-typescript)", "CodeQL", "Semantic PR Title"]
 
 
 def jq_filter():
@@ -64,6 +64,11 @@ class UpdateArmedPrsTest(unittest.TestCase):
         rollup = [c for c in green() if c["name"] != "Analyze (javascript-typescript)"] + [
             check("Analyze (javascript-typescript)", "FAILURE")
         ]
+        self.assertIsNone(run([pr(7, rollup)]))
+
+    def test_an_open_alert_holds_the_pull_request_back(self):
+        # The aggregated code scanning check fails when the pull request's merge ref has an alert to fix.
+        rollup = [c for c in green() if c["name"] != "CodeQL"] + [check("CodeQL", "FAILURE")]
         self.assertIsNone(run([pr(7, rollup)]))
 
     def test_an_analysis_of_the_typescript_workspace_still_running_holds_the_queue(self):
