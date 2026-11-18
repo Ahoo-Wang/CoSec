@@ -890,6 +890,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 
   没有自己 `TokenVerifier` 的应用不受影响。
 - **安全：提供的刷新路由使用你的 `RefreshTokenAuthentication`。** 直到 8.0.0-beta.2，该路由自己构建刷新认证，只使用 `MembershipRefresh<RefreshTokenCredentials>` Bean，所以声明在你的 `RefreshTokenAuthentication` Bean 中的钩子（例如拒绝已停用的用户）对它不起作用。现在由你的 Bean 提供这个路由。基于你自己凭证类的 Bean 在设置了 `cosec.authentication.login.refresh.path` 时会使启动失败：请从你自己的路由提供那个刷新并取消该路径，或者基于 `RefreshTokenCredentials` 声明它。
+- **会话存储失败或无法执行某个调用。** `TokenRevoker.revokeSubject` 中存储失败（例如 Redis 宕机）时，现在抛出 `SessionStoreUnavailableException`，与 `revoke` 一直以来的做法相同：返回 `503` 并再次吊销。原来在 `revokeSubject` 外捕获存储自身异常的代码，改为捕获 `SessionStoreUnavailableException`。会话存储因为根本无法执行某个调用而抛出 `UnsupportedOperationException` 时，现在在每次会话存储调用（登录、刷新、切换租户、登出和两种吊销）中都原样抛出，而以前会变成 `SessionStoreUnavailableException`：这是配置问题，不是故障。在 starter 提供的刷新和登出路由上，这意味着 `500`，以前是 `503`。
 - **`cosec-gateway-server` 镜像关闭了 ip2region。** 它的 `config/application.yaml` 现在设置 `cosec.ip2region.enabled: false`，与 Kubernetes 的 base 一致；直到 beta.2，镜像一直开启它。读取 `ext.ip2region.*` 的文档在它上面不再能编译：升级镜像之前设置 `COSEC_IP2REGION_ENABLED=true`。它的 Docker `HEALTHCHECK` 现在探测 `/actuator/health/liveness`，因此等待平台文档的网关不再被报告为不健康。
 
 ### 从 8.0.0-beta.1 升级 {#from-8-0-0-beta-1}

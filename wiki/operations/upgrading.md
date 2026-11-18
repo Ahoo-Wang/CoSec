@@ -1200,6 +1200,13 @@ deployment needs none of it; the section above is the whole upgrade. These notes
   `RefreshTokenAuthentication` bean (refusing a disabled user, say) did not apply to it. Now your bean serves the
   route. One over a credentials class of your own fails startup while `cosec.authentication.login.refresh.path` is
   set: serve that refresh from your own route and unset the path, or declare it over `RefreshTokenCredentials`.
+- **A session store that fails or cannot do a call.** A store that fails in `TokenRevoker.revokeSubject` (Redis down,
+  say) now throws `SessionStoreUnavailableException`, as `revoke` already did: answer `503` and revoke again. Code that
+  caught the store's own exception around `revokeSubject` catches `SessionStoreUnavailableException` instead. A
+  session store that throws `UnsupportedOperationException`, because it cannot do the call at all, now passes it
+  through on every session-store call (login, refresh, tenant switch, logout and both revokes), where it used to leave
+  as `SessionStoreUnavailableException`: it is configuration, not an outage. On the served refresh and logout routes
+  that is `500` where it was `503`.
 - **The `cosec-gateway-server` image turns ip2region off.** Its `config/application.yaml` now sets
   `cosec.ip2region.enabled: false`, as the Kubernetes base already did; through beta.2 the image left it on. A document
   that reads `ext.ip2region.*` no longer compiles on it: set `COSEC_IP2REGION_ENABLED=true` before you upgrade the
