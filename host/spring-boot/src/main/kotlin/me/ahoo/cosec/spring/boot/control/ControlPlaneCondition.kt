@@ -37,7 +37,7 @@ internal class ControlPlaneCondition : SpringBootCondition() {
         return when {
             missing.isNotEmpty() -> ConditionOutcome.noMatch("the control plane is not on the classpath: $missing")
             !enabled(context.environment) -> ConditionOutcome.noMatch("$ENABLED_KEY=false")
-            else -> ConditionOutcome.match("the control plane's classes are on the classpath, and it is not switched off")
+            else -> ConditionOutcome.match("the control plane is on the classpath and switched on")
         }
     }
 

@@ -21,12 +21,12 @@ import me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.authentication.route.LoginRoutesCheck
+import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
 import me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
 import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
 import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
-import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
