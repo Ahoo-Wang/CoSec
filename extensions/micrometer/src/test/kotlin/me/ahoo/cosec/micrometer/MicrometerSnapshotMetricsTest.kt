@@ -36,7 +36,7 @@ import java.time.Instant
 import java.time.ZoneOffset
 
 /**
- * The `cosec.snapshot.*` meters (`OBS-6`): one per event, tagged by closed sets of values, resolved once, and the
+ * The `cosec.snapshot.*` meters (`OBS-5`): one per event, tagged by closed sets of values, resolved once, and the
  * gauges over a real source's summary.
  */
 class MicrometerSnapshotMetricsTest {
