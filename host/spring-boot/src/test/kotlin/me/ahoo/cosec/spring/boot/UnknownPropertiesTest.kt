@@ -126,8 +126,11 @@ class UnknownPropertiesTest {
     @Configuration(proxyBeanMethods = false)
     class NeedsTokenRevocation {
         @Bean
-        fun application(revocation: TokenRevocation): String = revocation.toString()
+        fun application(revocation: TokenRevocation): Application = Application(revocation)
     }
+
+    /** What the application bean holds: the CoSec bean it needed. */
+    class Application(val revocation: TokenRevocation)
 
     /**
      * `SNP-9`: an environment written for the three prefixes `cosec.key-prefix` replaced must not start. Its token
