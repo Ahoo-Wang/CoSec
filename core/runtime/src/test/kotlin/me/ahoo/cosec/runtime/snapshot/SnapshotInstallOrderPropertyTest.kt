@@ -42,23 +42,28 @@ import kotlin.random.Random
  * Once everything settles, every installed document was compiled with the current inputs.
  */
 class SnapshotInstallOrderPropertyTest {
-    /** Queues compilations so the test decides when each one runs. */
+    /**
+     * Queues compilations so the test decides when each one runs. Submissions may come from more than the test's thread:
+     * under the runner a drain on housekeeping that takes a key's queued read hands its compilation here too.
+     */
     private class ManualExecutor : Executor {
-        val tasks = ArrayDeque<Runnable>()
+        private val tasks = ArrayDeque<Runnable>()
 
         override fun execute(command: Runnable) {
-            tasks.addLast(command)
+            synchronized(tasks) { tasks.addLast(command) }
         }
 
+        fun isEmpty(): Boolean = synchronized(tasks) { tasks.isEmpty() }
+
         fun runOne(random: Random) {
-            if (tasks.isNotEmpty()) {
-                tasks.removeAt(random.nextInt(tasks.size)).run()
-            }
+            val task = synchronized(tasks) { if (tasks.isEmpty()) null else tasks.removeAt(random.nextInt(tasks.size)) }
+            task?.run()
         }
 
         fun runAll() {
-            while (tasks.isNotEmpty()) {
-                tasks.removeFirst().run()
+            while (true) {
+                val task = synchronized(tasks) { tasks.removeFirstOrNull() } ?: return
+                task.run()
             }
         }
     }
@@ -198,10 +203,7 @@ class SnapshotInstallOrderPropertyTest {
             store.failure = null
             load(key)
             repeat(3) {
-                while (store.pending.isNotEmpty() || executor.tasks.isNotEmpty()) {
-                    store.releaseAll()
-                    executor.runAll()
-                }
+                settleQueues()
                 source.revalidate()
             }
         }
@@ -210,11 +212,28 @@ class SnapshotInstallOrderPropertyTest {
             store.failure = null
             source.load(appId)
             repeat(3) {
-                while (store.pending.isNotEmpty() || executor.tasks.isNotEmpty()) {
-                    store.releaseAll()
-                    executor.runAll()
-                }
+                settleQueues()
                 source.revalidate()
+            }
+        }
+
+        /**
+         * Releases reads and runs compilations until one pass finds the source quiescent (no key loading, with an event
+         * queued or draining, and housekeeping idle), then the store and the executor empty. Quiescence is read first:
+         * once nothing of the source moves, nothing adds a read or a compilation behind the test. An empty executor at
+         * one instant is not a settled source, since housekeeping's drains also hand the pool work. Fails loudly rather
+         * than assert on a half-settled source.
+         */
+        private fun settleQueues() {
+            val deadline = System.nanoTime() + SETTLE_BOUND.toNanos()
+            while (!(source.quiescent() && store.pending.isEmpty() && executor.isEmpty())) {
+                check(System.nanoTime() < deadline) {
+                    "The source did not settle within $SETTLE_BOUND: quiescent ${source.quiescent()}, " +
+                        "reads pending ${store.pending.size}, compilations queued ${!executor.isEmpty()}"
+                }
+                store.releaseAll()
+                executor.runAll()
+                Thread.onSpinWait()
             }
         }
     }
@@ -284,5 +303,10 @@ class SnapshotInstallOrderPropertyTest {
             }
             run.metrics.regressions.assert().isEmpty()
         }
+    }
+
+    private companion object {
+        /** How long a settle may take before the test fails, rather than assert on a source still moving. */
+        val SETTLE_BOUND: Duration = Duration.ofSeconds(10)
     }
 }

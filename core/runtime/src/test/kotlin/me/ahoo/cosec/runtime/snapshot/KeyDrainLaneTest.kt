@@ -147,7 +147,7 @@ class KeyDrainLaneTest {
         try {
             source(
                 KeyDrain.Hooks.NONE,
-                k = KeyRunner.PROVISIONAL_K,
+                k = KeyRunner.K,
                 compileExecutor = single,
                 compiler = gated
             ).use { source ->
@@ -260,7 +260,7 @@ class KeyDrainLaneTest {
     /** In arrival order, a recompile during a load is followed by exactly one load: the mark sets nothing of its own. */
     @Test
     fun `a recompile during a load is followed by one load, not two`() {
-        source(KeyDrain.Hooks.NONE, k = KeyRunner.PROVISIONAL_K, compileExecutor = directExecutor).use { source ->
+        source(KeyDrain.Hooks.NONE, k = KeyRunner.K, compileExecutor = directExecutor).use { source ->
             source.load("app-a").join()
             store.hold = true
             source.slotA().reload(force = false)
@@ -295,7 +295,7 @@ class KeyDrainLaneTest {
             KeyEvent.ReadDone(1, SnapshotRead.Absent),
             KeyEvent.ReadFailed(1, failure),
             KeyEvent.ReadTimedOut(1),
-            KeyEvent.Compiled(1, DocumentState.Present(Compiled(APP_A, 1, emptyList(), emptySet())), 1),
+            KeyEvent.Compiled(1, DocumentState.Present(Compiled(APP_A, 1, emptyList(), emptySet()))),
             KeyEvent.CompileCrashed(1, SnapshotUnavailableException(APP_A, "thrown by the test", failure)),
             KeyEvent.CompileRejected(1, RejectedExecutionException("thrown by the test")),
             KeyEvent.RetryDue(),
