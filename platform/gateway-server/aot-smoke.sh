@@ -25,6 +25,9 @@
 # - a request with a valid token is allowed;
 # - a request a DENY matches is 403 with problem+json.
 #
+# It also runs the image's own HEALTHCHECK (every 2 seconds here, instead of 30): it must probe the liveness group,
+# and Docker must report the container healthy.
+#
 # CoSec authorizes the gateway's routes only, so the image gets one route, /smoke/**, that forwards to its own
 # health endpoint: an allowed request answers 200, one CoSec refuses never leaves the gateway.
 set -eu
@@ -57,7 +60,7 @@ printf '{"accepted":true,"outputSha256":{"platform.json":"%s"}}\n' "$SHA" >"$WOR
 
 # 2. The image, on its AOT cache.
 ROUTES='{"spring":{"cloud":{"gateway":{"server":{"webflux":{"routes":[{"id":"smoke","uri":"http://localhost:'$PORT'","predicates":["Path=/smoke/**"],"filters":["SetPath=/actuator/health"]}]}}}}}}'
-docker run -d --name "$NAME" --network host \
+docker run -d --name "$NAME" --network host --health-interval 2s \
   -e SPRING_DATA_REDIS_URL="$REDIS_URI" \
   -e COSEC_JWT_SECRET="$SECRET" \
   -e JAVA_OPTS="-XX:AOTMode=on -Xlog:aot=info" \
@@ -134,6 +137,27 @@ expect "an unauthenticated request is refused" 401 yes /smoke/orders
 expect "a request with a valid token is allowed" 200 no /smoke/orders "$TOKEN"
 expect "a request a DENY matches is forbidden" 403 yes /smoke/denied/orders "$TOKEN"
 
+# 5. The image's HEALTHCHECK: the liveness group, run by Docker with the image's own command.
+check=$(docker inspect -f '{{join .Config.Healthcheck.Test " "}}' "$NAME")
+case "$check" in
+  *"/actuator/health/liveness"*) echo "ok   the image's HEALTHCHECK probes the liveness group" ;;
+  *) echo "FAIL the image's HEALTHCHECK is [$check], not the liveness group" >&2; failed=1 ;;
+esac
+health=
+i=0
+while [ "$i" -lt 30 ]; do
+  health=$(docker inspect -f '{{.State.Health.Status}}' "$NAME")
+  [ "$health" = healthy ] && break
+  sleep 1
+  i=$((i + 1))
+done
+if [ "$health" = healthy ]; then
+  echo "ok   Docker reports the container healthy"
+else
+  echo "FAIL Docker reports the container [$health]" >&2
+  docker inspect -f '{{json .State.Health}}' "$NAME" >&2 || true
+  failed=1
+fi
 if [ "$failed" != 0 ]; then
   docker logs "$NAME" >&2 || true
   exit 1

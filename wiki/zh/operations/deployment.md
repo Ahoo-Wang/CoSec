@@ -11,7 +11,7 @@ description: "运行 cosec-gateway-server 镜像，并用它自带的 JDK 25 AOT
 
 ## 镜像 {#the-image}
 
-CI 在每次推送时用 [`platform/gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/Dockerfile)
+CI 在每次推送到 `main`、`7.x` 和发布分支时、为每个版本标签、每晚，以及在改动镜像的拉取请求中，用 [`platform/gateway-server/Dockerfile`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/Dockerfile)
 构建镜像，发布为 `ahoowang/cosec-gateway`、`ghcr.io/ahoo-wang/cosec-gateway` 和
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以
 镜像发布，从不作为库发布。
@@ -22,9 +22,14 @@ CI 在每次推送时用 [`platform/gateway-server/Dockerfile`](https://github.c
   `SPRING_DATA_REDIS_URL`。
 - **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。配置文件是
   `config/application.yaml`；JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数，它排在这些参数之后，因此会覆盖它们（[内存](#memory)）。
-- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪和 Kafka 模块。它的配置关闭了 Kafka 审计
-  （`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region
-  （`cosec.ip2region.enabled: false`）。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
+- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪、Kafka 模块和 ip2region。它的配置
+  `config/application.yaml`（它只读这一个，来自
+  [`src/dist/config/`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml)）
+  关闭了 Kafka 审计（`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region
+  （`cosec.ip2region.enabled: false`，与 [Kubernetes](#kubernetes) 的 base 一样）：读取 `ext.ip2region.*` 的文档需要
+  `COSEC_IP2REGION_ENABLED=true`。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
+- **Docker 健康检查。** 镜像的 `HEALTHCHECK` 每 30 秒探测一次 `/actuator/health/liveness`：应用运行后即为 up，与 Redis 中
+  有什么无关。它从不探测 `/actuator/health`，后者在平台文档安装之前一直是 `DOWN`（[就绪](#readiness)）。
 
 ```bash
 docker run -d -p 8080:8080 \
@@ -54,7 +59,7 @@ CoSec 作为 Spring Cloud Gateway 的全局过滤器运行，而全局过滤器�
   调用其他 API 的后端打开它。其他 cookie 原样转发。
 - **`CoSec-Request-Id`**，网关自己的请求 id。
 
-永不过期的凭证（没有 `expires-at` 的 API key）不会被转发：这样的请求回答 `500`，网关记录
+永不过期的凭证（没有 `expires-at` 的 API key）不会被转发：在接收身份的路由上，这样的请求回答 `500`，网关记录
 `Request [<requestId>]: the identity cannot be forwarded.`
 
 ## 网关后面的服务 {#services-behind-the-gateway}
@@ -110,7 +115,8 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 在此期间不会给它流量，前提是它能访问到那条路径：对 CoSec 来说它是普通请求，所以在应用的应用端口上需要一条语句允许它（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。存活状态不受缺失文档的影响：存活状态保持 `CORRECT`，缺少文档不是重启实例的理由。HTTP 存活探针则是另一回事：在应用的应用端口上，第一份文档发布之前它回答 `503`，WebFlux 应用的管理端口也一样，kubelet 会在 pod 能就绪之前就重启它。WebMvc 应用的存活探针指向它的管理端口（不经 CoSec），WebFlux 应用则在应用端口上用 `tcpSocket` 探针。
 
 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在这些文档安装后报告 `UP`，之前报告 `DOWN`，细节为 `platform`
-（`installed`、`invalid`、`failed`、`absent` 或 `loading`）和 `prewarmed`。要在就绪端点上看到这些细节，把它加入 readiness 组：
+（`installed`、`invalid`、`failed`、`absent` 或 `loading`）、`prewarmed` 和 `missing`（尚未安装的文档），存储的文档在这里
+无法编译时还有 `invalid`（数量）和 `invalidFirst`（按键和修订号列出的前十个）。要在就绪端点上看到这些细节，把它加入 readiness 组：
 
 ```yaml
 management:
@@ -190,7 +196,8 @@ management:
   （`management.endpoint.gateway.access: none`）。CoSec 授权的是网关的路由，不是它的 actuator 端点。
 - **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
   Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
-- **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；以及
+- **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；`-Djava.net.preferIPv4Stack=true`（因为
+  [netty#16082](https://github.com/netty/netty/issues/16082)）；以及
   `-Dcom.sun.management.jmxremote.host=127.0.0.1`。镜像的启动脚本会在 5555 端口启动一个不需要认证的 JMX agent；这个参数把它
   限制在 pod 内部，production 的 NetworkPolicy 还关闭了 8080 以外的所有端口。
 
@@ -228,7 +235,8 @@ management:
 [`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/aot-smoke.sh)。它用
 `cosec-migrate publish` 发布一个平台文档，以 `-XX:AOTMode=on` 启动镜像（无法映射的缓存会让作业失败），添加一条指向
 网关自身健康端点的 `/smoke/**` 路由，然后检查：健康探针回答 `200`，匿名请求回答带 `application/problem+json` 的
-`401`，带有效 HS256 令牌的请求回答 `200`，匹配到 DENY 的请求回答带 `application/problem+json` 的 `403`。同样的步骤
+`401`，带有效 HS256 令牌的请求回答 `200`，匹配到 DENY 的请求回答带 `application/problem+json` 的 `403`。它还运行镜像自己的
+`HEALTHCHECK`（每 2 秒一次，而不是 30 秒），要求它探测 liveness 组，并且 Docker 报告容器健康。同样的步骤
 也可以用来快速检查你自己的部署。
 
 ## AOT 缓存 {#aot-cache}
@@ -265,8 +273,9 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 每次启动都会在 stderr 打印 `NOTE: Picked up JDK_JAVA_OPTIONS: …`。容器里的其他 `java` 命令也会带上这个参数：不带网关参数的命令（例如 `java -version`）
 无法使用缓存，会打印[下文](#when-the-cache-is-not-used)所述的 `[aot]` 错误，这些错误无害。
 
-缓存没有用 Spring Boot 推荐的 `-Dspring.context.exit=onRefresh` 训练。网关启用了 Spring Cloud bootstrap 上下文，
-它最先刷新，于是 JVM 在应用上下文创建之前就退出了。这次运行返回 0、什么都不打印，得到的缓存几乎不包含应用本身。
+缓存没有用 Spring Boot 推荐的 `-Dspring.context.exit=onRefresh` 训练。这种模式在应用上下文刷新后、服务器接收请求之前就让 JVM
+退出，所以请求路径上的类（Netty、WebFlux、路由查找、错误处理器、actuator）不会进入缓存。脚本只在检查那一步使用它：那一步只需要
+缓存能被映射，不需要训练。
 
 ### 缓存何时不被使用 {#when-the-cache-is-not-used}
 
