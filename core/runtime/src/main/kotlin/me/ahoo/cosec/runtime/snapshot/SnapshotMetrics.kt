@@ -21,13 +21,15 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import java.time.Duration
 
 /**
- * Events of a [SnapshotSource], for meters such as RFC 0003 §4.5's `cosec.snapshot.*`. Gauges (installed documents,
- * lag per key) are read from [SnapshotSource.entries] instead.
+ * Events of a [SnapshotSource], for the `cosec.snapshot.*` meters (`cosec-micrometer`). Gauges (documents held, lag)
+ * read the [SnapshotSummary] of the last lag pass ([summary]) instead, never [SnapshotSource.entries] on a scrape.
  *
- * [onLoad] runs on the request path, on whatever thread calls [SnapshotSource.peek], so implementations must be cheap
- * and must not block. Tag by [SnapshotKind], never by app id: app ids are unbounded.
+ * [onLoad] runs on the request path, on whatever thread calls [SnapshotSource.peek], so implementations must be cheap,
+ * allocate nothing and never block. Tag by [SnapshotKind], never by app or tenant id: those are unbounded. The source
+ * wraps an implementation in [GuardedSnapshotMetrics]: what it throws never reaches a load.
  */
-internal interface SnapshotMetrics {
+@InternalCoSecApi
+interface SnapshotMetrics {
     /** One document a request needed: already installed ([LoadOutcome.HIT]) or loaded for it. */
     fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) = Unit
 
@@ -55,12 +57,19 @@ internal interface SnapshotMetrics {
      */
     fun onHandOffRefused(ranInPlace: Boolean) = Unit
 
+    /**
+     * A key of [kind] left its family by eviction (`SNP-7`): [absent] when what it held said the store has no document,
+     * otherwise a document. Sustained, with cold loads rising, the family's bound is too small.
+     */
+    fun onEvicted(kind: SnapshotKind, absent: Boolean) = Unit
+
     companion object {
         val NOOP: SnapshotMetrics = object : SnapshotMetrics {}
     }
 }
 
-internal enum class LoadOutcome {
+@InternalCoSecApi
+enum class LoadOutcome {
     /** Already installed. */
     HIT,
 

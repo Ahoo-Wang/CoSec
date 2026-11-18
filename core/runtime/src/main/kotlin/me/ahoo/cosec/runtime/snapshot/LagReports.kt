@@ -67,14 +67,22 @@ internal class LagReports(
      * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval].
      * Off the scheduler thread: a log appender or a meter may take its time here.
      */
+    /** What the last [report] counted: the gauges' source, so that a scrape walks nothing. */
+    @Volatile
+    var summary: SnapshotSummary = SnapshotSummary.EMPTY
+        private set
+
     fun report() {
         val now = clock.instant()
+        val tally = SnapshotSummary.Tally()
         for (entry in entries()) {
+            tally.held(entry)
             if (entry.state is DocumentState.Failed) {
                 continue
             }
             val lag = entry.lagAt(now)
             val escalated = lag > options.lagEscalate
+            tally.lag(entry, lag, lagging = escalated || lag > options.lagWarn, escalated)
             if (!escalated && lag <= options.lagWarn) {
                 lastLagReport.remove(entry.key)
                 continue
@@ -89,6 +97,7 @@ internal class LagReports(
                 log.warn { "Snapshot document [${entry.key}] revision ${entry.revision} has not been confirmed for $lag." }
             }
         }
+        summary = tally.summary(clock.instant())
     }
 
     private fun due(key: SnapshotKey, now: Instant): Boolean {

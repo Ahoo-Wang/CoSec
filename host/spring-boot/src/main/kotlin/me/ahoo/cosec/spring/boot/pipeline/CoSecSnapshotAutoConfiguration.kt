@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
+import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -320,9 +321,17 @@ class CoSecSnapshotAutoConfiguration {
         store: SnapshotDocumentStore,
         compiler: PlatformCompiler,
         properties: RuntimeAuthorizationProperties,
+        metrics: ObjectProvider<SnapshotMetrics>,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        val source = DocumentSnapshots.source(store, compiler, snapshot.toOptions())
+        // The data plane's source only: the control plane's own would count its reads under the same names.
+        val source = DocumentSnapshots.source(
+            store,
+            compiler,
+            snapshot.toOptions(),
+            Clock.systemUTC(),
+            metrics.getIfAvailable { SnapshotMetrics.NOOP },
+        )
         compiler.bind(source)
         // The loads start where the source is made, not in cosecDocumentReadiness: an application may replace that
         // bean, and a lazily initialized context makes it late. Both instances ask of the same keys (prewarmKeys).

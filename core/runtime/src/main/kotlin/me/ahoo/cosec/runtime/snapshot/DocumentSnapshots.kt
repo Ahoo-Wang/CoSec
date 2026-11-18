@@ -37,8 +37,8 @@ object DocumentSnapshots {
         clock: Clock = Clock.systemUTC(),
     ): SnapshotSource<T, T> = source(store, compiler, options, clock, SnapshotMetrics.NOOP)
 
-    /** [source] with [metrics]: nothing outside this module observes a source yet. */
-    internal fun <T : Any> source(
+    /** [source] with [metrics]: the starter's, observed by `cosec-micrometer`. */
+    fun <T : Any> source(
         store: SnapshotDocumentStore,
         compiler: SnapshotCompiler<T>,
         options: SnapshotOptions,

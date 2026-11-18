@@ -37,6 +37,7 @@ internal class SnapshotFamilies<A : Any>(
     specs: List<SnapshotFamily<A>>,
     sharedKind: SnapshotKind,
     private val lagReports: LagReports,
+    private val metrics: SnapshotMetrics,
 ) : Iterable<SnapshotFamilies.Family<A>> {
     private val families: List<Family<A>> = specs.map { Family(it) }
 
@@ -90,9 +91,10 @@ internal class SnapshotFamilies<A : Any>(
     fun evictOne(victim: KeySlot<*>, absent: Boolean): CompletableFuture<Eviction> =
         victim.evict(onlyIfEmpty = false, claimedAbsent = absent)
 
-    /** [key] left its family: what a removal does besides leaving the map. */
-    fun removed(key: SnapshotKey) {
+    /** [key] left its family, holding [entry]: what a removal does besides leaving the map. */
+    fun removed(key: SnapshotKey, entry: SnapshotEntry<*>?) {
         lagReports.forget(key)
+        metrics.onEvicted(key.kind, entry == null || isAbsent(entry))
         log.debug { "Removed snapshot document [$key]." }
     }
 
