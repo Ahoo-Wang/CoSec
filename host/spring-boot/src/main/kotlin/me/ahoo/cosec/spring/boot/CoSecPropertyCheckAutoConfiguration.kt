@@ -23,12 +23,14 @@ import org.springframework.core.env.ConfigurableEnvironment
 
 /**
  * Fails startup on a `cosec.*` property CoSec does not read ([UnknownProperties]), whatever else is configured, and
- * before any bean is created: a configuration written for 6.x or 7.x learns of every removed key first, rather than
- * after the store or module checks its old keys would have answered, and an application bean that needs CoSec's beans
- * (created before any auto-configuration's) cannot make another failure speak first.
+ * before any bean is created: a configuration with removed keys hears of every one of them first, before the store or
+ * module checks, and an application bean that needs CoSec's beans (created before any auto-configuration's) cannot make
+ * another failure speak first.
  */
 @AutoConfiguration
 @Import(StartupTaskExclusion::class)
+// A class, not an object: Spring instantiates an auto-configuration.
+@Suppress("UtilityClassWithPublicConstructor")
 internal class CoSecPropertyCheckAutoConfiguration {
     companion object {
         /** Static, so Spring runs it with the post-processors, before it instantiates any configuration or bean. */

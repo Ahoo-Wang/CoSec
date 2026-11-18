@@ -163,7 +163,12 @@ class CoSecPipelineAutoConfigurationTest {
 
         val before = output.out.length
         val reader = mockk<RevocationReader>()
-        runner.withBean("otherReader", RevocationReader::class.java, { reader }, { it.isPrimary = true }).run { context ->
+        runner.withBean(
+            "otherReader",
+            RevocationReader::class.java,
+            { reader },
+            { it.isPrimary = true }
+        ).run { context ->
             context.startupFailure.assert().isNull()
             context.getBean(Authenticator::class.java).assert().isNotNull()
         }
