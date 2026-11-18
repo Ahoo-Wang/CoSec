@@ -1,0 +1,16 @@
+# Rule: OBS-5
+# Mutant: an evicted key is dropped without its eviction being counted
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotSummaryTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+index 18eb0575..ed1079c2 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+@@ -94,7 +94,6 @@ internal class SnapshotFamilies<A : Any>(
+     /** [key] left its family, holding [entry]: what a removal does besides leaving the map. */
+     fun removed(key: SnapshotKey, entry: SnapshotEntry<*>?) {
+         lagReports.forget(key)
+-        metrics.onEvicted(key.kind, entry == null || isAbsent(entry))
+         log.debug { "Removed snapshot document [$key]." }
+     }
+ 
