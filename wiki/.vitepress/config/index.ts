@@ -11,6 +11,8 @@
  * limitations under the License.
  */
 
+import { copyFileSync } from 'node:fs'
+import { join, resolve } from 'node:path'
 import { defineConfig } from 'vitepress'
 import { MermaidMarkdown } from 'vitepress-plugin-mermaid'
 import { en } from './en'
@@ -25,6 +27,11 @@ export default defineConfig({
   srcExclude: ['AGENTS.md'],
   sitemap: {
     hostname: 'https://cosec.ahoo.me',
+  },
+  // llms.txt stays at the repository root, where the READMEs and agents look for it; the site serves that file, not a
+  // second copy to keep in sync. `check:docs` holds its links to the pages.
+  buildEnd(siteConfig) {
+    copyFileSync(resolve(siteConfig.srcDir, '..', 'llms.txt'), join(siteConfig.outDir, 'llms.txt'))
   },
   head: [
     ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
