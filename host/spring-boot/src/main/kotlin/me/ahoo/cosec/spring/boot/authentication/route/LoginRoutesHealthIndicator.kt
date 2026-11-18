@@ -21,7 +21,7 @@ import org.springframework.boot.health.contributor.HealthIndicator
 
 /**
  * `cosecLoginRoutes`: always UP, with each served login route's state as a detail: `not refused` until a document
- * refused it, then `denied` and since when ([LoginRouteDenials]). A refused route does not make the host unready: a
+ * refused it, then `denied since`, with when and which refusal it was ([LoginRouteDenials]). A refused route does not make the host unready: a
  * document may permit it again at any time, and readiness gates on documents being installed, not on what they say.
  */
 @InternalCoSecApi
@@ -33,10 +33,10 @@ class LoginRoutesHealthIndicator(
         val denied = denials.denied()
         val builder = Health.up()
         routes.values.sorted().forEach { property ->
-            val since = denied[property]
+            val denial = denied[property]
             builder.withDetail(
                 property,
-                if (since == null) "not refused" else "denied since $since: no statement permits an anonymous POST of it",
+                if (denial == null) "not refused" else "denied since ${denial.since}: ${denial.why}"
             )
         }
         return builder.build()

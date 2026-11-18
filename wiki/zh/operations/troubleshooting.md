@@ -96,7 +96,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 刷新以 `token-expired` 被拒绝：会话的有效期已过（[`cosec.jwt.session.lifetime`](./configuration.md#jwt)，从登录起 30 天）。请重新登录。
 
-**每次刷新都应答 `401 token-expired`（或 `unauthorized`），客户端在访问令牌过期时登出。** 没有语句允许匿名 `POST` 刷新路由：它的请求带着已过期的访问令牌，CoSec 把它读作匿名（`PIP-6`），所以路由还没运行就被拒绝。对于 starter 提供的路由，请查找 `WARN` `cosec.authentication.login.refresh.path=<path>: no statement permits an anonymous POST of it`，以及 `cosecLoginRoutes` 健康指示器上的 `denied since`。请允许任何人对该路径 `http:POST`（[构建客户端](../integration/clients.md#what-your-application-serves)）；登出路由同理。
+**每次刷新都应答 `401 token-expired`（或 `unauthorized`），客户端在访问令牌过期时登出。** 没有语句允许匿名 `POST` 刷新路由：它的请求带着已过期的访问令牌，CoSec 把它读作匿名（`PIP-6`），所以路由还没运行就被拒绝。对于 starter 提供的路由，请查找 `WARN` `cosec.authentication.login.refresh.path=<path>: no statement permits an anonymous POST of it`（或 `a DENY statement matches`，或 `the tenant's platform boundary does not cover it`），以及 `cosecLoginRoutes` 健康指示器上的 `denied since`。请允许任何人对该路径 `http:POST`（[构建客户端](../integration/clients.md#what-your-application-serves)）；登出路由同理。
 
 ### `token-revoked` {#token-revoked}
 

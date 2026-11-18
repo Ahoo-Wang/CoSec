@@ -39,7 +39,13 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 
 这个路由从请求体读取凭证，也不设置 Cookie，因此别的站点的页面无法让浏览器替它发出这些凭证：它不是跨站请求伪造的目标。网关不提供它，在网关上设置路径会让启动失败：签发会话的服务在网关之后提供这个路由，网关像转发其文档允许的其他路由一样转发它。
 
-自己编写刷新路由的应用按这张表应答：`RefreshTokenAuthentication` 抛出异常（状态码见[刷新令牌](./authentication.md#refreshing-tokens)），而 CoSec 不为它不提供的路由注册异常处理器，所以处理器没有映射的异常，由框架决定如何响应。
+自己编写刷新路由的应用按这张表应答：`RefreshTokenAuthentication` 抛出异常，而 CoSec 不为它不提供的路由注册异常处理器，所以处理器没有映射的异常，由框架决定如何响应。
+
+| 抛出 | 应答 |
+|---|---|
+| `TokenExpiredException`、`TokenRevokedException`、其他任何 `TokenVerificationException`（`RefreshTokenMismatchException`、`DelegationUnsupportedException`） | `401`，类型同上表对应的行 |
+| `RevocationUnavailableException`、`SessionStoreUnavailableException`（保存会话的存储） | `503`：没有签发任何东西 |
+| 其他任何异常 | `500` |
 
 **登录和刷新必须允许匿名调用方访问。** 刷新请求带着已经过期的访问令牌，过期的令牌是被拒绝的凭证：请求按匿名主体求值（`PIP-6`）。
 如果没有任何语句让匿名调用方到达刷新路由，刷新请求本身就是 `401 token-expired`，客户端无法续期。刷新时不带 `Authorization`

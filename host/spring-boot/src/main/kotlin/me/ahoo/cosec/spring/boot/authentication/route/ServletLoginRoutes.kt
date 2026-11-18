@@ -48,7 +48,8 @@ internal object ServletLoginRoutes {
         if (body.size > LoginRouteAnswer.MAX_BODY_BYTES) {
             return write(LoginRouteAnswer.tooLarge(security.requestId))
         }
-        // A servlet thread is the caller's own: waiting on it blocks no event loop.
+        // A servlet thread is the caller's own: waiting on it blocks no event loop. The handler runs on the default
+        // dispatcher, as the control API's servlet routes run theirs.
         val answer = runBlocking(Dispatchers.Default) {
             handler.answer(servlet.getHeader(HttpHeaders.CONTENT_TYPE), body, security.requestId)
         }

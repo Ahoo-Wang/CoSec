@@ -328,7 +328,8 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 A refresh is refused with `token-revoked` when the session was ended (by a logout, or because an older generation was
 presented), `token-expired` when the session's lifetime is over, `token-invalid` when the pair belongs to no session (a pair issued
 before sessions existed, or outside one). When the revocations or the session store cannot answer, it throws
-`RevocationUnavailableException` or a store failure: answer `503`, nothing was issued and nothing spent. Anything else
+`RevocationUnavailableException` or `SessionStoreUnavailableException`: answer `503`, nothing was issued and nothing
+spent. Anything else
 is an error: the served route answers it `500`, as the pipeline answers an unmodelled error. Neither ends a client's
 session.
 

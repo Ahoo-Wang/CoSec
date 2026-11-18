@@ -31,11 +31,12 @@ private val log = KotlinLogging.logger {}
 
 /**
  * Tells the operator when a document refuses a login route the starter serves: CoSec decides that route as every route,
- * and its request is anonymous (`PIP-6`), so without a statement that permits an anonymous `POST` of it every refresh
- * is refused (`401 token-expired`) and every client signs out when its access token expires. Read from real traffic,
- * BEST_EFFORT, off the request path: a deny on the route (implicit or explicit; never a 429 or an indeterminate) logs
- * one WARN per route per [interval] naming the property and the path, and is kept for [LoginRoutesHealthIndicator]. A
- * later permit clears it. It never fails readiness: a document can change at any time, and it is the traffic that says.
+ * and its request is anonymous (`PIP-6`), so a refused route refuses every refresh (`401`) and every client signs out
+ * when its access token expires. Read from real traffic, BEST_EFFORT, off the request path: a refusal decided by the
+ * documents (an implicit deny, a matching DENY, the tenant's platform boundary; never a 429, an indeterminate or an
+ * invalid request) logs one WARN per route per [interval] that names the property, the path and which refusal it was,
+ * and is kept for [LoginRoutesHealthIndicator]. A later permit clears it. It never fails readiness: a document can
+ * change at any time, and it is the traffic that says.
  *
  * @param routes the property that sets each route, by the path it serves
  */
@@ -45,44 +46,70 @@ class LoginRouteDenials(
     private val interval: Duration = Duration.ofMinutes(1),
     private val clock: Clock = Clock.systemUTC(),
 ) : DecisionListener {
+    /** When a route was last refused, and why. */
+    @InternalCoSecApi
+    class Denial(val since: Instant, val why: String)
+
     override val name: String = "cosecLoginRouteDenials"
 
     override val delivery: Delivery = Delivery.BEST_EFFORT
 
-    /** The routes refused at their last decision, by property, with the time of that decision. */
-    private val denied = ConcurrentHashMap<String, Instant>()
+    private val denied = ConcurrentHashMap<String, Denial>()
     private val warned = ConcurrentHashMap<String, Instant>()
 
-    override suspend fun onDecision(event: DecisionEvent) {
-        if (event.request.method != POST) return
-        val property = routes[event.request.path] ?: return
-        when (event.outcome.reason) {
-            OutcomeSummary.Reason.PERMIT -> denied.remove(property)
-            OutcomeSummary.Reason.IMPLICIT_DENY, OutcomeSummary.Reason.EXPLICIT_DENY -> deny(
-                property,
-                event.request.path
-            )
-            else -> Unit
-        }
-    }
+    override suspend fun onDecision(event: DecisionEvent) = record(
+        event.request.method,
+        event.request.path,
+        event.outcome.reason
+    )
 
-    private fun deny(property: String, path: String) {
+    /** One decision on [path]: a permit clears the route, a refusal by the documents is recorded and told. */
+    internal fun record(method: String, path: String, reason: OutcomeSummary.Reason) {
+        if (method != POST) return
+        val property = routes[path] ?: return
+        if (reason == OutcomeSummary.Reason.PERMIT) {
+            denied.remove(property)
+            return
+        }
+        val refusal = refusalOf(reason) ?: return
         val now = clock.instant()
-        denied[property] = now
+        denied[property] = Denial(now, refusal.why)
         val last = warned[property]
         if (last != null && last.plus(interval).isAfter(now)) return
         if (warned.put(property, now) != last) return
         log.warn {
-            "$property=$path: no statement permits an anonymous POST of it, so CoSec refuses it (401). Every refresh " +
-                "and logout through it fails, and clients sign out when their access token expires. Permit " +
-                "http:POST on http:path:$path to anyone in a document."
+            "$property=$path: ${refusal.why}, so CoSec refuses it. Every refresh and logout through it fails, and " +
+                "clients sign out when their access token expires. ${refusal.fix}"
         }
     }
 
-    /** The properties whose route was refused at its last decision, with when. */
-    fun denied(): Map<String, Instant> = denied.toMap()
+    /** The properties whose route was refused at its last decision, with when and why. */
+    fun denied(): Map<String, Denial> = denied.toMap()
 
-    private companion object {
+    /** A refusal the documents decided, and what the operator changes for it. */
+    internal class Refusal(val why: String, val fix: String)
+
+    internal companion object {
         const val POST = "POST"
+
+        /**
+         * What a refusal of [reason] says, or null when the documents did not decide it. A scope rejection is a
+         * membership's answer, and an anonymous request without a space never gets one.
+         */
+        fun refusalOf(reason: OutcomeSummary.Reason): Refusal? = when (reason) {
+            OutcomeSummary.Reason.IMPLICIT_DENY -> Refusal(
+                "no statement permits an anonymous POST of it",
+                "Permit http:POST on its path to anyone in a document.",
+            )
+            OutcomeSummary.Reason.EXPLICIT_DENY -> Refusal(
+                "a DENY statement matches an anonymous POST of it",
+                "Narrow the DENY the decision event names, so that it no longer matches the route.",
+            )
+            OutcomeSummary.Reason.BOUNDARY -> Refusal(
+                "the tenant's platform boundary does not cover it",
+                "Widen the boundary the platform document names for the tenant to cover the route.",
+            )
+            else -> null
+        }
     }
 }

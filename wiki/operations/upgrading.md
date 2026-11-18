@@ -1181,9 +1181,9 @@ deployment needs none of it; the section above is the whole upgrade. These notes
   and bodies of [Building a client](../integration/clients.md#what-your-application-serves). A route you wrote keeps
   working: unset the path and nothing is served. To move onto the served one, set the path your clients call, delete
   your handler and its exception mapping, and keep the statement that permits an anonymous `POST` of it.
-- **A failure of the session store leaves `TokenFamilies` and `StoreTokenRevoker` as one exception of `cosec-login`**,
-  with the store's own as its cause, so that a store that cannot answer (`503`) is told apart from an error (`500`).
-  Code that caught the store's own exception type around a refresh, a switch or a logout catches `CoSecException`
+- **A failure of the session store leaves `TokenFamilies` and `StoreTokenRevoker` as `SessionStoreUnavailableException`**
+  (`cosec-login`), with the store's own as its cause, so that a store that cannot answer (`503`) is told apart from an
+  error (`500`). Code that caught the store's own exception type around a refresh, a switch or a logout catches it
   instead. `StoreTokenRevoker.revokeSubject` is unchanged.
 - **`MembershipRefresh` refuses with a `TokenVerificationException`** (`TokenRevokedException` when the membership is
   gone), a `401`; any other exception is an error, `500` on the served route, and the client keeps its pair. A hook

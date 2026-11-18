@@ -50,9 +50,15 @@ them for it: it is not a cross-site request forgery target. A gateway does not s
 path is set there: the service that issues sessions serves the route, behind the gateway, which passes it on like any
 other route its documents permit.
 
-An application that writes its own refresh route answers as this table does: `RefreshTokenAuthentication` throws (the
-statuses are in [Refreshing tokens](./authentication.md#refreshing-tokens)), and CoSec registers no exception handler
-for a route it does not serve, so an exception the handler does not map is whatever the framework answers.
+An application that writes its own refresh route answers as this table does: `RefreshTokenAuthentication` throws, and
+CoSec registers no exception handler for a route it does not serve, so an exception the handler does not map is
+whatever the framework answers.
+
+| It throws | Answer |
+|---|---|
+| `TokenExpiredException`, `TokenRevokedException`, any other `TokenVerificationException` (`RefreshTokenMismatchException`, `DelegationUnsupportedException`) | `401`, with the type of the row above |
+| `RevocationUnavailableException`, `SessionStoreUnavailableException` (the store that keeps the session) | `503`: nothing was issued |
+| Anything else | `500` |
 
 **Login and refresh must be reachable by an anonymous caller.** A refresh carries the access token that expired, and
 an expired token is a rejected one: the request is evaluated as anonymous (`PIP-6`). If no statement lets an anonymous

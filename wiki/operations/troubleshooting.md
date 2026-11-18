@@ -122,8 +122,9 @@ A refresh refused as `token-expired`: the session's lifetime is over ([`cosec.jw
 **Every refresh is answered `401 token-expired` (or `unauthorized`), and clients sign out when their access token
 expires.** No statement permits an anonymous `POST` of the refresh route: its request carries the access token that
 expired, which CoSec reads as anonymous (`PIP-6`), so the route is refused before it runs. On the route the starter serves,
-look for the `WARN` `cosec.authentication.login.refresh.path=<path>: no statement permits an anonymous POST of it`, and
-for `denied since` on the `cosecLoginRoutes` health indicator. Permit `http:POST` on the path to anyone
+look for the `WARN` `cosec.authentication.login.refresh.path=<path>: no statement permits an anonymous POST of it` (or
+`a DENY statement matches` it, or `the tenant's platform boundary does not cover it`), and for `denied since` on the
+`cosecLoginRoutes` health indicator. Permit `http:POST` on the path to anyone
 ([Building a client](../integration/clients.md#what-your-application-serves)); the same holds for the logout route.
 
 ### `token-revoked` {#token-revoked}

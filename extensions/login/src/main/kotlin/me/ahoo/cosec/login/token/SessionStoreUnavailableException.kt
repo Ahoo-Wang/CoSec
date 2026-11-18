@@ -21,9 +21,11 @@ import kotlin.coroutines.cancellation.CancellationException
  * known about the pair (`IDN-19`). Thrown by this module's calls to the store ports, [me.ahoo.cosec.spi.token.TokenFamilyStore]
  * in [TokenFamilies] and [me.ahoo.cosec.spi.token.TokenStore] in [StoreTokenRevoker], with the store's own exception as
  * its cause, so that whoever answers the caller tells an unavailable store (503) from an error (500), as
- * [me.ahoo.cosec.spi.token.RevocationUnavailableException] does for a revocation read.
+ * [me.ahoo.cosec.spi.token.RevocationUnavailableException] does for a revocation read. An application that serves its
+ * own refresh, switch or logout answers it as the starter's route does: 503, nothing issued, the client keeps its pair.
  */
-internal class SessionStoreUnavailableException(message: String, cause: Throwable) : CoSecException(message, cause)
+class SessionStoreUnavailableException internal constructor(message: String, cause: Throwable) :
+    CoSecException(message, cause)
 
 /**
  * One call to a session store port: whatever it throws leaves as [SessionStoreUnavailableException], a store's exception

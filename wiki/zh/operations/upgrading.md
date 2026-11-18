@@ -884,7 +884,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 ### 从 8.0.0-beta.1 升级 {#from-8-0-0-beta-1}
 
 - **starter 可以提供刷新和登出路由**（新增：在设置路径之前什么都不变）。`cosec.authentication.login.refresh.path` 和 `logout.path` 在 Spring MVC 和 WebFlux 上提供它们，状态码和响应体见[构建客户端](../integration/clients.md#what-your-application-serves)。你自己写的路由照常工作：不设置路径就不提供任何路由。要迁移到提供的路由，设置客户端调用的路径，删除你的处理器及其异常映射，并保留允许匿名 `POST` 它的语句。
-- **会话存储的故障以 `cosec-login` 的一个异常离开 `TokenFamilies` 和 `StoreTokenRevoker`**，存储自身的异常作为其 cause，从而把无法应答的存储（`503`）与错误（`500`）区分开。在刷新、切换或登出周围捕获存储自身异常类型的代码，改为捕获 `CoSecException`。`StoreTokenRevoker.revokeSubject` 不变。
+- **会话存储的故障以 `SessionStoreUnavailableException`（`cosec-login`）离开 `TokenFamilies` 和 `StoreTokenRevoker`**，存储自身的异常作为其 cause，从而把无法应答的存储（`503`）与错误（`500`）区分开。在刷新、切换或登出周围捕获存储自身异常类型的代码，改为捕获它。`StoreTokenRevoker.revokeSubject` 不变。
 - **`MembershipRefresh` 以 `TokenVerificationException` 拒绝**（成员关系已不存在时用 `TokenRevokedException`），这是 `401`；其他任何异常都是错误，在提供的路由上是 `500`，客户端保留令牌对。以其他异常（例如 `IllegalStateException`）拒绝的钩子，改为抛出 `TokenRevokedException`。
 
 ### 从 8.0.0-alpha.4 升级 {#from-8-0-0-alpha-4}

@@ -42,6 +42,9 @@ public final class me/ahoo/cosec/login/token/RefreshTokenMismatchException : me/
 	public fun <init> ()V
 }
 
+public final class me/ahoo/cosec/login/token/SessionStoreUnavailableException : me/ahoo/cosec/model/CoSecException {
+}
+
 public final class me/ahoo/cosec/login/token/StoreTokenRevoker : me/ahoo/cosec/spi/token/TokenRevoker {
 	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/time/Duration;)V
 	public fun <init> (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/TokenStore;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Ljava/time/Duration;Ljava/time/Clock;)V
