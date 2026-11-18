@@ -254,6 +254,22 @@ is a <type>, not a string: ...`: quote the value, and give one app.
 5. **An old revision.** `snapshotVersion` names the revisions the decision read. If they are older than what was
    published, see [Decisions use an old revision](#decisions-use-an-old-revision).
 
+## A check in code answers false though the documents permit it {#a-check-answers-false}
+
+`AuthorizationChecker.check` is `false`, and `decide` answers `Deny(null)` (no statement), where the request itself
+would be permitted. A check is refused before any document is read when:
+
+- **Its request has ended** (`PIP-26`): the context was kept after the response was written, in a field, a cache, a
+  coroutine or message that outlived the request. Check within the request; work that runs afterwards carries its own
+  authorization ([Checks in code](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)). A check
+  during a streamed body or an async servlet request is still within it.
+- **The pipeline did not make the context**: one built by hand, or a mock. The adapters' readers do not even return
+  such a context (`PIP-27`): `exchange.getSecurityContext()` and `request.getSecurityContext()` are `null`, a required
+  `SecurityContext` handler parameter fails. In a test, take the context of a request the pipeline permitted
+  (`PipelineFixture.securityContext`, `PermittedRequest`).
+- **The action has no `:`**, or names what enforcement refuses (an `http` verb with a lower-case letter, a path a
+  request would get `400` for: `PIP-15`).
+
 ## Decisions use an old revision
 
 The audit event's `snapshotVersion`, or the span's `cosec.snapshot.version`, is older than the revision the control

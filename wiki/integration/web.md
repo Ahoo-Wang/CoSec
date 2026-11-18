@@ -279,7 +279,10 @@ pipeline's outcome. A refused request never reaches your handler. Its `principal
 | `requestId` | The request's id as CoSec used it in audit records, spans and problem responses: the client's `CoSec-Request-Id` when it sent an acceptable one, else the one CoSec generated, which no request header holds. |
 | `deviceId` | The device the client declared in `CoSec-Device-Id`, empty when none. Declared by the client: CoSec checks its form only (one value, else `400`), so it is not proof of a device. |
 
-The context is read-only: nothing an application could set reaches a decision.
+The context is read-only: nothing an application could set reaches a decision. Every accessor below answers only the
+context CoSec's pipeline made (`PIP-27`): anything else under `SecurityContext.KEY`, which an application filter or a
+library may have put on the exchange, the Reactor context or the servlet request, reads as no context at all, never as
+an authenticated caller.
 
 **WebFlux and the gateway**: from the exchange attributes, or from the Reactor context of the request. The exchange
 principal is also set, so `exchange.getPrincipal()` returns the CoSec principal.
@@ -339,8 +342,9 @@ The startup log says which a host has, in a line that starts `SecurityContextHol
 handler (`Callable`, `DeferredResult`) and a thread of your own find no holder, with the same message. In all of these,
 use the parameter or the request.
 
-The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else
-([Checks in code](./checks.md)).
+The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else,
+for as long as the request is in progress: once the adapter has ended the request, a check of its context is `false`
+([Checks in code](./checks.md#how-a-check-relates-to-the-request-pipeline), `PIP-26`).
 
 ## Client IP behind proxies
 

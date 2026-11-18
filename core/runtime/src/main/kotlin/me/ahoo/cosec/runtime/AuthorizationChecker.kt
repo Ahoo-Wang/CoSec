@@ -145,6 +145,9 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      */
     @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
+        if (!security.inProgress) {
+            return ended(security)
+        }
         val scoped = security.inApp(app) ?: return Decision.Deny(null)
         return decided(scoped, action, resource)
     }

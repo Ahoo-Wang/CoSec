@@ -31,7 +31,6 @@ import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.identity.Identity
-import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Who a permitted request is, and in what scope (RFC 0006 §7.6): the principal as authenticated (null when anonymous),
@@ -51,12 +50,15 @@ class RequestSecurity internal constructor(
     internal val attributes: ConditionInput = AbsentAttributes,
     /** In a service behind a gateway (`cosec.pipeline.mode=gateway`), the identity the gateway forwarded. */
     val identity: Identity? = null,
-    /**
-     * Set once the adapter that bound this request has ended it ([end]); shared with the forms [inApp] and
-     * [asPrincipal] make of it, so a check of any of them sees the request ended.
-     */
-    private val ended: AtomicBoolean = AtomicBoolean(),
 ) {
+    /**
+     * Set once the adapter that bound this request has ended it ([end]). A field, not an object: it fits in the padding
+     * of this one, so a permitted request allocates nothing more for it. The forms [inApp] and [asPrincipal] make of
+     * this request live within one check, which asks this request, not them (`AuthorizationChecker`).
+     */
+    @Volatile
+    private var ended: Boolean = false
+
     /** The application-facing view. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
 
@@ -65,7 +67,7 @@ class RequestSecurity internal constructor(
      * adapter bound (a transport that calls `Pipeline.evaluate` itself, the test kit) is never ended. A check of an
      * ended request is refused (`PIP-26`).
      */
-    internal val inProgress: Boolean get() = !ended.get()
+    internal val inProgress: Boolean get() = !ended
 
     /**
      * Ends the request: from now on no check permits as it (`PIP-26`). Only the adapters call it, when the request
@@ -74,7 +76,7 @@ class RequestSecurity internal constructor(
      */
     @InternalCoSecApi
     fun end() {
-        ended.set(true)
+        ended = true
     }
 
     /**
@@ -86,7 +88,7 @@ class RequestSecurity internal constructor(
         val member = ScopeSubject(scope.tenant, true, memberships, authenticated.app?.value)
         val resolved = ScopeResolver.resolve(member, "", HostScope(app))
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
-        return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes, ended = ended)
+        return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes)
     }
 
     /**
@@ -114,7 +116,7 @@ class RequestSecurity internal constructor(
             breakGlass = principal.breakGlass,
         )
         val request = with(request) { AuthzRequest(subject, action, resource, environment) }
-        return RequestSecurity(requestId, principal, scope, memberships, request, attributes, ended = ended)
+        return RequestSecurity(requestId, principal, scope, memberships, request, attributes)
     }
 
     override fun toString(): String =

@@ -111,6 +111,21 @@ A check fails closed: a `SecurityContext` the pipeline did not build (one you ma
 whatever the documents say. There is therefore no check outside a request: a message consumer that acts for a user
 has no permitted request to check as, and must carry its own authorization.
 
+A check belongs to its request, and the adapter that bound the request ends it when the request completes (`PIP-26`):
+
+- **While the request is in progress**, a check is answered as the table says, however long the request runs: during
+  a streamed or server-sent-events body, in an async servlet request, in code the handler awaits. It decides on the
+  principal, memberships and attributes the request began with, also once its token has expired meanwhile: the
+  pipeline authenticated the request when it began, and a check is not stricter than the request's own decision.
+- **Once the request has ended**, every check of its context is `false` (`decide` answers `Deny(null)`), whatever the
+  documents say: a context kept in a field, a cache or a message permits nothing afterwards. WebFlux and the gateway
+  end a request when its response has been written, failed, or the client went away; Spring MVC when the dispatch
+  returns, or, for an async request (`DeferredResult`, `StreamingResponseBody`, a `suspend` handler), when it
+  completes, fails or times out.
+- **A request no adapter bound** is never ended: one your own transport handed to `Pipeline.evaluate`, and the test
+  kit's (`PipelineFixture`, `PermittedRequest`). Checks of it behave as they always did, so do not keep its context
+  after the request either.
+
 ## Object-level rules
 
 Whether a user may change *this* order depends on the order: its owner, tenant or status. The adapter runs before
