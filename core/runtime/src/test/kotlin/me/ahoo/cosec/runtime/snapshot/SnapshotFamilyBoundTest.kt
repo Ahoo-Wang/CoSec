@@ -32,7 +32,7 @@ import kotlin.concurrent.thread
  */
 open class SnapshotFamilyBoundTest {
     /** What makes each key's slot; [SnapshotFamilyBoundRunnerTest] runs the same cases over the [KeyRunner]. */
-    internal open fun slots(): SlotFactory = SlotFactory.SLOT
+    internal open fun slots(): SlotFactory = keyRunners()
 
     private val threads = SlotModelThreads()
     private val store = InMemorySnapshotDocumentStore()

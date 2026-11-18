@@ -45,7 +45,7 @@ class SnapshotSummaryTest {
     private fun source(
         store: ControllableStore,
         metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
-        slots: SlotFactory = SlotFactory.SLOT,
+        slots: SlotFactory = keyRunners(),
     ): SnapshotSource<Compiled, Compiled> {
         val compiler = FakeCompiler()
         return SnapshotSource(
