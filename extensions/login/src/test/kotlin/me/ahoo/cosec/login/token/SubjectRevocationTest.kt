@@ -138,4 +138,28 @@ class SubjectRevocationTest {
 
         assertThrows<UnsupportedOperationException> { revoker.revokeSubject(tenant, alice, now) }
     }
+
+    /** A store that cannot record the revocation is unavailable, as for one token; one that cannot do it at all says so. */
+    @Test
+    fun `a store that fails to revoke a subject is unavailable, one that cannot is unsupported`() {
+        val failing = object : TokenStore by tokenStore {
+            override suspend fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) =
+                throw IllegalStateException("redis is down")
+        }
+        val unsupporting = object : TokenStore {
+            override suspend fun revoke(tokenId: String, ttl: Duration) = Unit
+        }
+        val unavailable = assertThrows<SessionStoreUnavailableException> {
+            runBlocking {
+                StoreTokenRevoker(verifier, failing, revocation, families, refreshValidity).revokeSubject(tenant, alice, now)
+            }
+        }
+        unavailable.cause.assert().isInstanceOf(IllegalStateException::class.java)
+        assertThrows<UnsupportedOperationException> {
+            runBlocking {
+                StoreTokenRevoker(verifier, unsupporting, revocation, families, refreshValidity)
+                    .revokeSubject(tenant, alice, now)
+            }
+        }
+    }
 }

@@ -460,7 +460,11 @@ class ApiKeyMigrationTest {
         )
         parsed.tenant.assert().isEqualTo(TenantId.DEFAULT)
         parsed.usableAt(now).assert().isFalse()
-        LegacyApiKey.isConverted("""{"format":2}""").assert().isTrue()
+        LegacyApiKey.isConverted("""{"format":3}""").assert().isTrue()
+        // A key an 8.0 pre-release stored in format 2 is not converted: 8.0 does not read it.
+        LegacyApiKey.isConverted("""{"format":2}""").assert().isFalse()
+        LegacyApiKey.formatOf("""{"format":2}""").assert().isEqualTo(2)
+        LegacyApiKey.formatOf("""{"id":"k1"}""").assert().isNull()
         assertThrows<IllegalArgumentException> { LegacyApiKey.parse("h", """{"id":"k","principalId":"a","extra":1}""") }
         MembershipsExport.read("""[{"tenant":"acme","principal":"alice","roles":["reader"]}]""".encodeToByteArray())
             .assert().isEqualTo(mapOf((acme to "alice") to setOf("reader")))

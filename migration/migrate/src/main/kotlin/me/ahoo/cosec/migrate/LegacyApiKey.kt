@@ -17,6 +17,7 @@ package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.ApiKeyCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.TenantId
 import tools.jackson.core.JacksonException
@@ -50,8 +51,14 @@ class LegacyApiKey(
         private val FIELDS =
             setOf("id", "principalId", "tenantId", "roles", "policies", "attributes", "expiresAt", "enabled")
 
-        /** Whether [json] is a key stored in the format of RFC 0009 already (`"format"` present). */
-        fun isConverted(json: String): Boolean = (tree(json) as? ObjectNode)?.has("format") == true
+        /** The `format` [json] states, or null for a key stored before RFC 0009, which has none. */
+        fun formatOf(json: String): Int? = (tree(json) as? ObjectNode)?.get("format")?.let { if (it.isInt) it.asInt() else -1 }
+
+        /**
+         * Whether [json] is a key stored in the format this version reads ([ApiKeyCodec.FORMAT]). A key in another
+         * format, written by an 8.0 pre-release, is neither converted nor readable (#1629 finding 8).
+         */
+        fun isConverted(json: String): Boolean = formatOf(json) == ApiKeyCodec.FORMAT
 
         /** Reads a key stored before RFC 0009; anything this format does not have is refused, never dropped. */
         fun parse(hash: String, json: String): LegacyApiKey {
