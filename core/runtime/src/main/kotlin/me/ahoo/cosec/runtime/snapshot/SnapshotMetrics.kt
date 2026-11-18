@@ -63,6 +63,13 @@ interface SnapshotMetrics {
      */
     fun onEvicted(kind: SnapshotKind, absent: Boolean) = Unit
 
+    /**
+     * Housekeeping's queue was full and refused a [task] (`SNP-19`): dropped and counted, or, for
+     * [HousekeepingTask.DROP], run in place. Never written on the refusing thread; the source's own summary names what
+     * was dropped. Sustained, housekeeping falls behind: a slow log appender, or passes over large families.
+     */
+    fun onHousekeepingRefused(task: HousekeepingTask) = Unit
+
     @InternalCoSecApi
     companion object {
         val NOOP: SnapshotMetrics = object : SnapshotMetrics {}

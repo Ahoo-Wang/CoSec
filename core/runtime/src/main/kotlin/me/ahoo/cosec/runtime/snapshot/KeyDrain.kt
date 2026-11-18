@@ -256,9 +256,7 @@ internal class KeyDrain<T : Any>(
     @Suppress("TooGenericExceptionCaught")
     private fun loggedInPlace(failed: Throwable) {
         try {
-            context.threads.offRequestThread {
-                log.error(failed) { "Snapshot document [$key]: an effect failed while a failed effect was handled." }
-            }
+            offLogged(HousekeepingTask.EFFECT_LOG, "an effect failed while a failed effect was handled", failed)
         } catch (error: VirtualMachineError) {
             crash = crash ?: ("logging a failed effect" to error)
         } catch (_: Throwable) {
@@ -273,17 +271,23 @@ internal class KeyDrain<T : Any>(
      * [KeyEvent.EffectFailed] is queued (a load still in flight ends as a transient failure), the flag is released, and then it is
      * rethrown on CoSec's own threads, as [Slot] rethrows it to the pool, and on any other thread, a caller's, logged at
      * ERROR instead: that caller gets its own answer, never another key's `StackOverflowError`. The line goes through
-     * housekeeping like every line with a stack trace, and is written in place when housekeeping refuses it.
+     * housekeeping like every line with a stack trace, and is dropped and counted when housekeeping refuses it (`SNP-19`).
      */
     private fun report(crashed: Pair<String, VirtualMachineError>) {
         val (what, error) = crashed
         if (context.threads.drainsUnbounded.get() == true) throw error
-        context.threads.offRequestThread {
-            log.error(error) {
-                "Snapshot document [$key]: $what threw ${error::class.java.name}; the JVM may " +
-                    "not be healthy. A load of it still in flight ends as a transient failure, and the key goes on."
-            }
-        }
+        val message = "$what threw ${error::class.java.name}; the JVM may not be healthy. A load of it still in flight " +
+            "ends as a transient failure, and the key goes on"
+        offLogged(HousekeepingTask.CRASH_LOG, message, error)
+    }
+
+    /** An ERROR line about this key, on housekeeping; dropped and counted as [task] if refused (`SNP-19`). */
+    private fun offLogged(task: HousekeepingTask, what: String, error: Throwable) {
+        val message = "Snapshot document [$key]: $what."
+        context.threads.offHousekeeping(
+            task,
+            { HousekeepingRefusals.line(message, error) }
+        ) { log.error(error) { message } }
     }
 
     /** The page's steps 2 to 4: evictable, then the claim, then the event carrying what was found. */
@@ -349,9 +353,7 @@ internal class KeyDrain<T : Any>(
                 null -> request?.reply?.complete(Eviction.REFUSED)
             }
         }
-        context.threads.offRequestThread {
-            log.error(error) { "Snapshot document [$key]: a transition failed; its load ended." }
-        }
+        offLogged(HousekeepingTask.TRANSITION_LOG, "a transition failed; its load ended", error)
     }
 
     /**
@@ -365,7 +367,7 @@ internal class KeyDrain<T : Any>(
         } catch (error: VirtualMachineError) {
             crash = crash ?: ("answering an aborted transition" to error)
         } catch (error: Throwable) {
-            log.error(error) { "Answering an aborted snapshot transition failed." }
+            offLogged(HousekeepingTask.TRANSITION_LOG, "answering an aborted transition failed", error)
         }
     }
 

@@ -163,7 +163,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 
 在与计时器相同的条件下（`cosec-micrometer`、一个 `MeterRegistry`、`cosec.metrics.enabled`），starter 为数据平面的快照源注册指标：
 即本实例读取、编译并持有的文档（[实例如何读取文档](./storage.md#how-instances-read-documents)）。控制平面自己的快照源不计量。
-应用自己构建的 `Pipeline` 不会得到这些指标。没有任何标签携带应用或租户 id，因此无论文档有多少，都是 69 个序列。
+应用自己构建的 `Pipeline` 不会得到这些指标。没有任何标签携带应用或租户 id，因此无论文档有多少，都是 80 个序列。
 `kind` 为 `platform`、`app` 或 `tenant`：
 
 | 指标 | 类型 | 标签 | 含义 |
@@ -180,6 +180,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 | `cosec.snapshot.lost` | counter | `kind` | 之前见过的文档现在不存在；它的键失败关闭 |
 | `cosec.snapshot.evictions` | counter | `kind`、`state` = `document`、`absent` | 应用或租户族在达到上限（`max-apps`、`max-tenants`、`max-absent`）时丢弃的条目 |
 | `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`、`caller` | 编译池拒绝的工作：`caller` 表示由请求线程执行 |
+| `cosec.snapshot.housekeeping.refused` | counter | `task` = `load-log`、`compile-log`、`effect-log`、`crash-log`、`transition-log`、`prewarm-log`、`pass-log`、`reset-log`、`evict`、`drop`、`lag-report` | 快照源的维护线程因队列（4,096）已满而拒绝的任务。除 `drop`（移除一个空条目，在原线程执行）外，每个都被丢弃。`*-log` 是一条没有写出的日志；`evict` 是族在上限以下的一次驱逐，下一次加载会再次请求它 |
 
 `installed`、`lag` 和 `lagging` 反映快照源上一轮延迟检查（每个 `revalidate-interval` 一次）时的状态，不在抓取时读取：
 无论有多少文档，一次抓取只读一个字段。第一轮之前它们读数为零，此时 `summary.age` 为 `NaN`；`summary.age` 远大于
@@ -194,6 +195,7 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
 | `lag.exceeded{level=escalate}` 有任何上升 | 实例依据一个存储已有 `lag-escalate` 之久未确认的文档做决策 |
 | `installed{state=invalid}` 大于零 | 某个已存储文档在本实例上无法编译（版本比控制平面旧？） |
 | `handoffs.refused{to=caller}` 持续有速率 | 编译池饱和，请求线程在编译 |
+| `housekeeping.refused` 有任何上升 | 实例在丢弃自己的日志：日志 appender 跟不上负载（[快照日志缺失](./troubleshooting.md#snapshot-log-lines-are-missing)） |
 | `evictions` 持续有速率，且 `loads{result=cold}` 上升 | 族对流量来说太小：调大 `max-apps` / `max-tenants` |
 
 ## 快照健康状况 {#snapshot-health}
@@ -215,6 +217,11 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   `Snapshot document [<doc>] disappeared from the store; failing closed.`、
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`，以及
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
+- **维护摘要。** 快照源在一个维护线程上写日志、执行驱逐，所以慢的 appender 从不占住请求线程。该线程的队列满时，任务被丢弃并计数，
+  而不是在提交它的线程上执行。最多每 10 秒一次，且只在有任务被丢弃或有指标抛出异常时，该线程记录一条 `WARN`：
+  `Snapshot housekeeping since its last summary: refused <n> tasks while full (each dropped; drop runs in place):
+  load-log 3 (last: "<text>"), …; meter failures <n> (last: "<text>").` 每个 `last` 是该任务最后被丢弃的那条日志的文本，
+  带异常的类名和消息、不带堆栈，截断到 256 个字符。抛出异常的指标从不单独记录日志：它在这里计数，所以无论绑定了什么注册表，摘要都会写出。
 - **传播情况。** 控制面的 `GET /documents/<doc>/revisions/<n>/propagation` 回答最近一分钟内报告过的实例中，有多少已经
   装入修订 `<n>` 或更新的修订。实例只有在能够评估某个修订时才算装入了它：读到了该修订却编译失败的实例仍会报告，所以计入被统计的实例，
   但不算已装入。只有开启影子窗口的实例才会报告（[修订、历史与回滚](./storage.md#revisions-history-and-rollback)）。

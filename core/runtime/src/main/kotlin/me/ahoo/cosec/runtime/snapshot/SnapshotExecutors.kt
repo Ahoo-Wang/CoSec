@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 /** The threads a [SnapshotSource] starts for itself: compiling, scheduling and housekeeping. */
 internal object SnapshotExecutors {
-    /** Queued housekeeping beyond this runs in place rather than piling up without bound. */
+    /** Housekeeping beyond this is refused and counted (`SNP-19`): dropped, but an empty key's drop, which runs in place. */
     const val HOUSEKEEPING_QUEUE = 4096
 
     fun newCompileExecutor(options: SnapshotOptions, vararg markers: ThreadLocal<Boolean>): ThreadPoolExecutor = ThreadPoolExecutor(

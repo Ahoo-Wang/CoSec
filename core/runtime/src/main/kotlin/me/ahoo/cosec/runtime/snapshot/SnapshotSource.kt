@@ -105,7 +105,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     slots: SlotFactory = SlotFactory.RUNNER,
 ) : AutoCloseable {
 
-    private val metrics: SnapshotMetrics = GuardedSnapshotMetrics(metrics)
+    private val metrics = GuardedSnapshotMetrics(metrics)
 
     /** How long [close] waits for this source's threads; shorter only in tests of the timeout. */
     internal var closeTimeout: Duration = CLOSE_TIMEOUT
@@ -118,7 +118,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         get() = context.nanoTime.get()
         set(value) = context.nanoTime.set(value)
 
-    internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
+    internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping, this.metrics)
     internal val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics)
     private val context =
@@ -133,7 +133,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val passes = Passes(shared, this.families, context, lagReports)
     private val prewarms = Prewarms(context, ::usableOf)
     private val subscription: AutoCloseable =
-        undoing({}) { store.subscribe(SnapshotChanges(sharedKey, shared, this.families, passes)) }
+        undoing({}) { store.subscribe(SnapshotChanges(sharedKey, shared, this.families, passes, threads)) }
     private val periodic: ScheduledFuture<*> = undoing({ subscription.close() }) { passes.schedulePeriodic() }
 
     /** Whether a [prewarm] has completed: until then the instance should not report ready (RFC 0003 §4.3). */

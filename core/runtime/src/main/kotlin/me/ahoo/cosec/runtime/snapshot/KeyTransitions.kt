@@ -214,7 +214,8 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
                     KeyEffect.Log(
                         KeyEffect.Level.ERROR,
                         "Snapshot document [${step.key}] failed after its load finished.",
-                        event.cause
+                        event.cause,
+                        HousekeepingTask.EFFECT_LOG,
                     )
                 )
             }

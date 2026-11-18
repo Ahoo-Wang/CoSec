@@ -57,7 +57,9 @@ internal class KeyEffects<T : Any>(
     }
 
     private fun report(): CompileReport = report ?: synchronized(this) {
-        report ?: CompileReport(key, compiler, context.threads::offRequestThread).also { report = it }
+        report ?: CompileReport(key, compiler) { line, task ->
+            context.threads.offHousekeeping(HousekeepingTask.COMPILE_LOG, line, task)
+        }.also { report = it }
     }
 
     @Suppress("CyclomaticComplexMethod", "UNCHECKED_CAST")
@@ -72,7 +74,13 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.Confirm -> effect.entry.confirm(effect.at)
             is KeyEffect.Install -> installed(effect)
             is KeyEffect.Report -> report(effect.metric)
-            is KeyEffect.Log -> context.threads.offRequestThread { write(effect) }
+            is KeyEffect.Log ->
+                context.threads.offHousekeeping(
+                    effect.task,
+                    { HousekeepingRefusals.line(effect.message, effect.cause) }
+                ) {
+                    write(effect)
+                }
             is KeyEffect.Answer -> effect.handle.future.complete(effect.entry)
             is KeyEffect.Hang -> (effect.waiter as KeyWaiter<T, *>).hang(effect.handle)
             is KeyEffect.Serve -> (effect.waiter as KeyWaiter<T, *>).serve(effect.entry, effect.hit)
@@ -80,7 +88,11 @@ internal class KeyEffects<T : Any>(
             is KeyEffect.Skip -> (effect.waiter as KeyWaiter<T, *>).skip()
             is KeyEffect.Redispatch -> owner.redispatched(effect.event)
             is KeyEffect.ScheduleRetry -> scheduleRetry(effect.delay)
-            KeyEffect.DropIfEmpty -> context.threads.offRequestThread { owner.dropIfEmpty() }
+            KeyEffect.DropIfEmpty ->
+                context.threads.offHousekeeping(
+                    HousekeepingTask.DROP,
+                    { "The drop of empty key [$key]." }
+                ) { owner.dropIfEmpty() }
             KeyEffect.EvictOverCap -> evictOverCap()
             KeyEffect.EvictBeyond -> evictBeyond()
             is KeyEffect.Drop -> owner.dropped(effect.claimed)
@@ -253,7 +265,12 @@ internal class KeyEffects<T : Any>(
         if (families.overCap(family)) {
             DrainBudget.unbounded { families.evictBeyond(family) }
         } else {
-            context.threads.offRequestThread { families.evictBeyond(family) }
+            context.threads.offHousekeeping(
+                HousekeepingTask.EVICT,
+                { "The eviction pass of the ${key.kind} family." }
+            ) {
+                families.evictBeyond(family)
+            }
         }
     }
 }

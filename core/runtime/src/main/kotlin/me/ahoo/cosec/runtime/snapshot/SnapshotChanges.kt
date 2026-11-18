@@ -29,6 +29,7 @@ internal class SnapshotChanges(
     private val shared: KeySlot<*>,
     private val families: SnapshotFamilies<*>,
     private val passes: Passes,
+    private val threads: SnapshotThreads,
 ) : SnapshotChangeListener {
     override fun onChanged(keys: Collection<SnapshotKey>) {
         for (key in keys) {
@@ -43,7 +44,8 @@ internal class SnapshotChanges(
     }
 
     override fun onReset() {
-        log.info { "Snapshot change notifications may have been lost; reloading every installed document." }
+        val line = "Snapshot change notifications may have been lost; reloading every installed document."
+        threads.offHousekeeping(HousekeepingTask.RESET_LOG, { line }) { log.info { line } }
         passes.reloadAll(passes.installedSlots()) { it.reloadIfHeld(force = false) }
     }
 }

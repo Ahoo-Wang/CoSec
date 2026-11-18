@@ -67,8 +67,12 @@ internal class Prewarms(
                 done.complete(null)
                 return@whenComplete
             }
-            context.threads.offRequestThread {
-                log.warn { "Snapshot prewarm failed for ${failed.map { it.key }}; retrying in $backoff." }
+            val line = "Snapshot prewarm failed for ${failed.map { it.key }}; retrying in $backoff."
+            context.threads.offHousekeeping(
+                HousekeepingTask.PREWARM_LOG,
+                { line.take(HousekeepingRefusals.MAX_LINE) }
+            ) {
+                log.warn { line }
             }
             val nextBackoff = minOf(backoff.multipliedBy(2), context.options.prewarmMaxBackoff)
             try {

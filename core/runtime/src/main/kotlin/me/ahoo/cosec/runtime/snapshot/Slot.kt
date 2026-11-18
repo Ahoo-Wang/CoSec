@@ -48,7 +48,7 @@ internal class Slot<T : Any>(
     private val compiler: SnapshotCompiler<T>,
     private val context: SlotContext,
 ) : KeySlot<T>(key, context.ticker) {
-    private val report = CompileReport(key, compiler, context.threads::offRequestThread)
+    private val report = CompileReport(key, compiler) { _, task -> context.threads.offRequestThread(task) }
 
     // Guarded by this.
     private var inFlight: Load? = null

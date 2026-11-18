@@ -26,12 +26,13 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * compile is installed, naming the revision and what it compiled against, and one INFO line when one that compiles is
  * installed after it, so the log shows the fault begin and end. It remembers one failure, the last it logged: a retry
  * or a revalidation of the same revision, digest and inputs logs nothing again; another revision, or the same against
- * other inputs, logs once. Lines are written by [offRequestThread], never on a request's thread.
+ * other inputs, logs once. Lines go to housekeeping through [offHousekeeping], with a line kept should it refuse them
+ * (`SNP-19`), never written on a request's thread.
  */
 internal class CompileReport(
     private val key: SnapshotKey,
     private val compiler: SnapshotCompiler<*>,
-    private val offRequestThread: (() -> Unit) -> Unit,
+    private val offHousekeeping: (line: () -> String, task: () -> Unit) -> Unit,
 ) {
     private data class Failure(val revision: Long, val digest: SnapshotDigest?, val against: String?)
 
@@ -62,24 +63,28 @@ internal class CompileReport(
         val failure = Failure(entry.revision, entry.digest, against)
         val first = synchronized(this) { (failure != logged).also { if (it) logged = failure } }
         if (first) {
-            offRequestThread { failed(entry.revision, failure.against, error) }
+            offHousekeeping(
+                { HousekeepingRefusals.line(failure(entry.revision, failure.against), error.cause ?: error) }
+            ) {
+                failed(entry.revision, failure.against, error)
+            }
         }
     }
 
     private fun onCompiled(entry: SnapshotEntry<*>) {
         val recovered = synchronized(this) { (logged != null).also { logged = null } }
         if (recovered) {
-            offRequestThread {
-                log.info { "Snapshot document [$key] revision ${entry.revision} compiles; it is decided with again." }
-            }
+            val line = "Snapshot document [$key] revision ${entry.revision} compiles; it is decided with again."
+            offHousekeeping({ line }) { log.info { line } }
         }
     }
 
+    private fun failure(revision: Long, against: String?): String =
+        "Snapshot document [$key] revision $revision does not compile" + against?.let { " against $it" }.orEmpty() +
+            "; every request that needs it fails closed (503) until a revision that compiles is published."
+
     private fun failed(revision: Long, against: String?, error: Throwable) {
-        log.error(error.cause ?: error) {
-            "Snapshot document [$key] revision $revision does not compile" + against?.let { " against $it" }.orEmpty() +
-                "; every request that needs it fails closed (503) until a revision that compiles is published."
-        }
+        log.error(error.cause ?: error) { failure(revision, against) }
     }
 
     private companion object {

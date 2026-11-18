@@ -67,11 +67,10 @@ internal class Passes(
             stalled?.follow(started)
         }
         if (stalled != null) {
-            context.threads.offTimer {
-                log.warn {
-                    "A snapshot revalidation pass finished no document for ${context.options.storeReadTimeout} and has no " +
-                        "read in flight: compilations hold it. Starting the next pass without it."
-                }
+            val line = "A snapshot revalidation pass finished no document for ${context.options.storeReadTimeout} and " +
+                "has no read in flight: compilations hold it. Starting the next pass without it."
+            if (!context.threads.offTimer { log.warn { line } }) {
+                context.threads.refused(HousekeepingTask.PASS_LOG) { line }
             }
         }
         run(started)
@@ -190,7 +189,10 @@ internal class Passes(
         try {
             periodic()
         } catch (error: Throwable) {
-            context.threads.offTimer { log.error(error) { "Snapshot revalidation pass failed." } }
+            val line = "Snapshot revalidation pass failed."
+            if (!context.threads.offTimer { log.error(error) { line } }) {
+                context.threads.refused(HousekeepingTask.PASS_LOG) { HousekeepingRefusals.line(line, error) }
+            }
         }
     }
 }

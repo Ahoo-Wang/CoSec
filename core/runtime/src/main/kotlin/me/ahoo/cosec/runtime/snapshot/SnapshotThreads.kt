@@ -46,7 +46,12 @@ internal class SnapshotThreads(
     scheduler: ScheduledExecutorService?,
     /** Tests only: what runs housekeeping in place of the thread started here; shut down and awaited as that one is. */
     housekeeping: ExecutorService?,
+    /** The source's guarded metrics, whose [GuardedSnapshotMetrics.refusals] the housekeeping summary reads. */
+    private val metrics: GuardedSnapshotMetrics = GuardedSnapshotMetrics(SnapshotMetrics.NOOP),
 ) {
+    /** What housekeeping refused since its last summary, and the meters that threw (`SNP-19`). */
+    val refusals: HousekeepingRefusals get() = metrics.refusals
+
     /** Set on the threads this source starts: [SnapshotSource.close] does not wait for the thread it runs on. */
     val onOwnThread = ThreadLocal<Boolean>()
 
@@ -127,7 +132,28 @@ internal class SnapshotThreads(
         false
     }
 
-    /** Runs [task] on the housekeeping thread, off every request thread and off the timer; in place if it is gone. */
+    /**
+     * Runs [task] on housekeeping, off every caller's thread and off the timer (`SNP-19`). When housekeeping's queue is
+     * full, [kind] decides: a log line, an eviction pass or a lag report is dropped and counted, with [line] kept for the
+     * summary; an empty key's drop ([HousekeepingTask.runsInPlace]) runs here, one offer to its own drain. Nothing is
+     * written on this thread.
+     */
+    fun offHousekeeping(kind: HousekeepingTask, line: () -> String, task: () -> Unit) {
+        try {
+            housekeeping.execute(task)
+        } catch (_: RejectedExecutionException) {
+            refused(kind, line)
+            if (kind.runsInPlace) task()
+        }
+    }
+
+    /** A [kind] of task housekeeping refused: counted for the summary, with [line], and reported to the metrics. */
+    fun refused(kind: HousekeepingTask, line: () -> String) {
+        refusals.refused(kind, line())
+        metrics.onHousekeepingRefused(kind)
+    }
+
+    /** `Slot`'s calls only (step 4 removes them): runs [task] on housekeeping; in place if it is refused. */
     fun offRequestThread(task: () -> Unit) {
         try {
             housekeeping.execute(task)

@@ -635,6 +635,17 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 - **`DELETE /break-glass/{bindingId}` 返回 `404`**：平台文档中没有该 id 的绑定，也没有提议任何变更。请核对 id（`GET /documents/platform` 列出所有绑定）。首次调用超时或失败之后重试得到的 `404`，说明该绑定已被删除，可能是那次调用删的，也可能是别的调用：平台文档的修订历史写明是哪个修订删除了它。和控制 API 的所有 `404` 一样，它不带 `detail`；控制面所在主机以 `INFO` 记录 `the platform document has no binding [<id>]`。
 - **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
 
+## 快照日志缺失 {#snapshot-log-lines-are-missing}
+
+实例以 `WARN` 记录 `Snapshot housekeeping since its last summary: refused <n> tasks while full …`，并且
+`cosec.snapshot.housekeeping.refused` 上升。快照源在一个维护线程上写日志（包括加载失败的日志），该线程的队列容纳 4,096 个任务。
+队列满时，它丢弃这条日志并计数，而不是在引起它的请求的线程上写出（SNP-19）。摘要列出每种任务最后被丢弃的那条日志，不带堆栈。
+
+- **原因。** 日志 appender 写得比日志产生得慢：同步 appender 写入慢磁盘或远程收集器，通常发生在许多文档同时加载失败时。
+- **解决。** 使用异步 appender（Logback 的 `AsyncAppender`、Log4j 2 的异步 logger）。期间请求不会变慢，决策也不会改变：
+  只有日志和族在上限以下的驱逐会被丢弃。被丢弃的驱逐在下一次加载时会再次请求，族从不超过它的上限。
+- 摘要中的 **`meter failures`** 是所绑定注册表的某个指标抛出了异常。它只在摘要里计数，从不单独记录日志；`last` 指明事件和异常。
+
 ## 日志行中的 id 带 `\u` 转义 {#a-log-line-names-an-id-with-u-escapes}
 
 CoSec 在日志行与错误信息中把 id 里的控制字符或落单的 UTF-16 代理项写成 `\uXXXX` 转义：`Tenant id [beta\uD800] ...`，从不写成

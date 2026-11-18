@@ -67,8 +67,13 @@ internal sealed interface KeyEffect<out T : Any> {
     /** A metric that is not an install's. */
     data class Report(val metric: Metric) : KeyEffect<Nothing>
 
-    /** A log line, written on housekeeping, never on a request's thread. */
-    data class Log(val level: Level, val message: String, val cause: Throwable? = null) : KeyEffect<Nothing>
+    /** A log line, written on housekeeping, never on a request's thread; dropped and counted as [task] if refused. */
+    data class Log(
+        val level: Level,
+        val message: String,
+        val cause: Throwable? = null,
+        val task: HousekeepingTask = HousekeepingTask.LOAD_LOG,
+    ) : KeyEffect<Nothing>
 
     /** Completes [handle], and with it every waiter hanging on it. */
     data class Answer<T : Any>(val handle: KeyHandle<T>, val entry: SnapshotEntry<T>) : KeyEffect<T>

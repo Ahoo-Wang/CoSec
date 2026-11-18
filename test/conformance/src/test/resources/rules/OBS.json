@@ -47,11 +47,12 @@
     {
       "id": "OBS-5",
       "source": "RFC 0003 §4.5; RFC 0013 §5.4",
-      "statement": "With cosec-micrometer and a MeterRegistry, the data plane's snapshot source meters its cold, failed and timed-out loads (never a hit, which is every request's path), compiles, installs, evictions, regressions, lost documents, lag and refused hand-offs under tags of closed value sets, never an app or tenant id; the documents it holds are reported by state as of its last lag pass and add up to what it holds; and a meter that fails never fails a load.",
+      "statement": "With cosec-micrometer and a MeterRegistry, the data plane's snapshot source meters its cold, failed and timed-out loads (never a hit, which is every request's path), compiles, installs, evictions, regressions, lost documents, lag, refused hand-offs and refused housekeeping tasks under tags of closed value sets, never an app or tenant id; the documents it holds are reported by state as of its last lag pass and add up to what it holds; and a meter that fails never fails a load.",
       "level": "build",
       "pending": null,
       "guards": [
         "micrometer:MicrometerSnapshotMetricsTest#the series are fixed, no event adds a meter",
+        "micrometer:MicrometerSnapshotMetricsTest#refused housekeeping tasks are counted by task",
         "micrometer:MicrometerSnapshotMetricsTest#a hit is not metered",
         "micrometer:MicrometerSnapshotMetricsTest#the gauges read the source's last lag pass, and its age",
         "runtime:SnapshotSummaryTest#every entry held is counted once, in the state of its origin, and the states sum to the entries",

@@ -185,7 +185,7 @@ Under the same conditions as the timer (`cosec-micrometer`, a `MeterRegistry`, `
 meters the data plane's snapshot source: the documents this instance reads, compiles and holds
 ([How instances read documents](./storage.md#how-instances-read-documents)). The control plane's own source is not
 metered. A `Pipeline` an application builds itself gets none of these meters. No tag carries an app or tenant id, so
-there are 69 series whatever the number of documents. `kind` is `platform`, `app` or `tenant`:
+there are 80 series whatever the number of documents. `kind` is `platform`, `app` or `tenant`:
 
 | Meter | Type | Tags | What it says |
 |---|---|---|---|
@@ -201,6 +201,7 @@ there are 69 series whatever the number of documents. `kind` is `platform`, `app
 | `cosec.snapshot.lost` | counter | `kind` | a document seen before is absent now; its key fails closed |
 | `cosec.snapshot.evictions` | counter | `kind`, `state` = `document`, `absent` | entries an app or tenant family dropped at its bound (`max-apps`, `max-tenants`, `max-absent`) |
 | `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`, `caller` | work the compile pool refused: `caller` means a request's thread ran it |
+| `cosec.snapshot.housekeeping.refused` | counter | `task` = `load-log`, `compile-log`, `effect-log`, `crash-log`, `transition-log`, `prewarm-log`, `pass-log`, `reset-log`, `evict`, `drop`, `lag-report` | tasks the source's housekeeping thread refused because its queue (4,096) was full. Each was dropped, except `drop` (an empty entry's removal), which ran in place. A `*-log` is a log line that was not written; `evict` an eviction pass under the family's cap, which the next load asks for again |
 
 `installed`, `lag` and `lagging` are as of the source's last lag pass, run every `revalidate-interval`, not read on a
 scrape: a scrape costs a read of one field however many documents there are. They read zero before the first pass,
@@ -216,6 +217,7 @@ The share of requests that waited for a document is `loads{result=cold}` over th
 | any rise of `lag.exceeded{level=escalate}` | the instance decides on a document the store has not confirmed for `lag-escalate` |
 | `installed{state=invalid}` above zero | a stored document does not compile on this instance (an older version than the control plane?) |
 | a sustained rate of `handoffs.refused{to=caller}` | the compile pool is saturated, and requests' threads compile |
+| any rise of `housekeeping.refused` | the instance is dropping its own log lines: a log appender too slow for the load ([Snapshot log lines are missing](./troubleshooting.md#snapshot-log-lines-are-missing)) |
 | a sustained rate of `evictions`, with `loads{result=cold}` rising | the families are too small for the traffic: raise `max-apps` / `max-tenants` |
 
 ## Snapshot health
@@ -247,6 +249,14 @@ The meters above count; the health indicators and logs below answer whether an i
   lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`, and
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
+- **Housekeeping summary.** The source writes its log lines and runs its eviction passes on one housekeeping thread, so
+  a slow appender never holds a request's thread. When that thread's queue is full, a task is dropped and counted
+  instead of run on the thread that offered it. At most every 10 seconds, and only when something was dropped or a
+  meter threw, the thread logs one `WARN`:
+  `Snapshot housekeeping since its last summary: refused <n> tasks while full (each dropped; drop runs in place):
+  load-log 3 (last: "<text>"), …; meter failures <n> (last: "<text>").` Each `last` is the text of the last line of
+  that task that was dropped, with its exception's class and message but no stack, cut at 256 characters. A meter that
+  throws is never logged on its own: it is counted here, so the summary is written whatever registry is bound.
 - **Propagation.** The control plane's
   `GET /documents/<doc>/revisions/<n>/propagation` answers how many of the instances that reported in the last minute
   have revision `<n>` or later installed. An instance counts a revision as installed only while it can evaluate it: one

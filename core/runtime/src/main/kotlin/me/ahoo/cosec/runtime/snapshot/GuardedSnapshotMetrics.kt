@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
@@ -24,17 +23,22 @@ import java.time.Duration
 /**
  * Calls [delegate] and swallows what it throws, errors included: a failing meter must never fail a load, lose a reload
  * or break single-flight. Only a [VirtualMachineError] passes through; [SnapshotSource] lets it out only after the load
- * it interrupted has finished.
+ * it interrupted has finished. What a meter throws is counted in [refusals], the housekeeping summary's own state, and
+ * never written or offered to housekeeping on the thread that reported the event (`SNP-19`): a meter that throws at
+ * every event would fill housekeeping by itself, and its own refusal would be reported to it again.
  */
 @Suppress("TooGenericExceptionCaught")
-internal class GuardedSnapshotMetrics(private val delegate: SnapshotMetrics) : SnapshotMetrics {
+internal class GuardedSnapshotMetrics(
+    private val delegate: SnapshotMetrics,
+    val refusals: HousekeepingRefusals = HousekeepingRefusals(),
+) : SnapshotMetrics {
     private inline fun guard(event: String, call: () -> Unit) {
         try {
             call()
         } catch (error: VirtualMachineError) {
             throw error
         } catch (error: Throwable) {
-            log.warn { "SnapshotMetrics.$event failed: $error" }
+            refusals.meterFailed("SnapshotMetrics.$event", error)
         }
     }
 
@@ -61,7 +65,6 @@ internal class GuardedSnapshotMetrics(private val delegate: SnapshotMetrics) : S
         "onHandOffRefused"
     ) { delegate.onHandOffRefused(ranInPlace) }
 
-    private companion object {
-        private val log = KotlinLogging.logger {}
-    }
+    override fun onHousekeepingRefused(task: HousekeepingTask) =
+        guard("onHousekeepingRefused") { delegate.onHousekeepingRefused(task) }
 }
