@@ -278,8 +278,9 @@ The resource is `type/id`, or a path (`/orders/42`) for an `http:` action. It us
 permitted request, runs no rate limits and notifies no listener, and is `false` on any deny, error or outage. Keep
 enforcing on the real request. A check is not for a message consumer, a scheduler or any work after the request, and a
 `SecurityContext` must never be stored: a check decides with the principal and memberships frozen when the request was
-permitted, and checks no age, revocation or change of roles, so a kept context keeps permitting after logout or after a
-role is removed. Authorize where the request arrives and carry the decision, not the context, with the work; run a
+permitted, and checks no age, revocation or change of roles. Once the adapter has ended the request every check of its
+context is `false` (`PIP-26`); only a context no adapter bound (a transport of your own, the test kit) is never ended,
+and it keeps permitting after logout or after a role is removed. Authorize where the request arrives and carry the decision, not the context, with the work; run a
 transport of your own through `Pipeline.evaluate` (`Outcome.security?.securityContext`) rather than verifying tokens by
 hand; and when you must verify a token yourself, call `TokenVerifier.verify` and then `TokenRevocation.check` (the
 starter's bean), which `verify` alone does not replace. CoSec decides no work the system starts itself in 8.0. A check
