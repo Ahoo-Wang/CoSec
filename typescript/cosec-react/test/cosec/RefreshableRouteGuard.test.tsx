@@ -215,6 +215,7 @@ describe('RefreshableRouteGuard', () => {
       );
 
       expect(getByText('Custom Loading...')).toBeTruthy();
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should render default refreshing content when none provided', () => {
@@ -233,6 +234,7 @@ describe('RefreshableRouteGuard', () => {
       );
 
       expect(getByText('Refreshing...')).toBeTruthy();
+      expect(refreshSpy).toHaveBeenCalledTimes(1);
     });
 
     it('should show refreshing content while the refresh is in flight', () => {
