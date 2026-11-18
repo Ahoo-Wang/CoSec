@@ -72,9 +72,13 @@ enum class ServedStack(val type: WebApplicationType, val hidden: List<String>) {
 /**
  * A whole application on [stack], the starter's own wiring over CoCache in memory, serving the login routes at
  * [REFRESH] and [LOGOUT], with [document] published as its platform document. The session store, the revocation reads
- * and the membership refresh can be made to fail, each until turned back.
+ * and the membership refresh can be made to fail, each until turned back. [extra] adds the application's own beans.
  */
-class ServedLoginRouteHost(stack: ServedStack, document: String) : AutoCloseable {
+class ServedLoginRouteHost(
+    stack: ServedStack,
+    document: String,
+    vararg extra: Class<*>,
+) : AutoCloseable {
     /** A switch: on, every call fails as an unreachable store does. */
     class Outage {
         @Volatile
@@ -165,7 +169,7 @@ class ServedLoginRouteHost(stack: ServedStack, document: String) : AutoCloseable
     }
 
     private val context: ConfigurableApplicationContext =
-        SpringApplicationBuilder(App::class.java)
+        SpringApplicationBuilder(App::class.java, *extra)
             .web(stack.type)
             .resourceLoader(DefaultResourceLoader(FilteredClassLoader(*(HIDDEN + stack.hidden).toTypedArray())))
             .properties(
