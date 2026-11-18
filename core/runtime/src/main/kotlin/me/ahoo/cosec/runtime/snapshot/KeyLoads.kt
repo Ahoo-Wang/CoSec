@@ -190,8 +190,9 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
     /**
      * `finish` and `advance`: ends [load] with [entry]. A family entry compiled in an earlier epoch may have compiled
      * with inputs that a recompile replaced: another load follows at once, and a compiled document is not installed.
-     * Its waiters get what that load ends with, never the old compilation. The effects come in [Slot]'s order:
-     * the install, eviction, the next read or the pending reload's answer, then the load's waiters.
+     * Its waiters get what that load ends with, never the old compilation. The effects: the install, an eviction in place
+     * if it took the family over its cap (`SNP-14`), the next read or the pending reload's answer, the load's waiters,
+     * then the hand to housekeeping: answers first, since that pass cannot change one of them (`Slot` hands before).
      */
     fun finish(step: KeyStepBuilder<T>, load: LoadState<T>, entry: SnapshotEntry<T>, install: Boolean) {
         // Whatever ended the load (a read that failed to start included), its read is over.
@@ -205,9 +206,10 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
         val pending = step.next
         val nextLoad = advance(step, load, entry.takeIf { installs }, stale)
         val answer = if (withheld && nextLoad == null) outdated(step.key, step.moment) else entry
-        housekeep(step)
+        if (!config.shared && step.installed != null) step.emit(KeyEffect.EvictOverCap)
         if (nextLoad != null) startRead(step, nextLoad) else pending?.let { step.emit(KeyEffect.Answer(it, answer)) }
         answerWaiters(step, load, answer, nextLoad.takeIf { withheld })
+        housekeep(step)
     }
 
     /**
