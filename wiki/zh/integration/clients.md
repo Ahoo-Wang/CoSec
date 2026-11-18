@@ -9,6 +9,10 @@ description: "CoSec 8.0 应用的客户端可以依赖什么：哪些端点由�
 对此做什么；应用提供什么由应用自己决定（[认证](./authentication.md)），每个状态码和响应体只在
 [Web 集成](./web.md#responses-and-status-codes)中定义一次。本页的内容不针对某一个客户端库。
 
+客户端要解析的事实也以文件形式放在 [`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract) 中（`PIP-25`）：每种
+problem 类型的状态码、响应头和响应体，`CoSec-*` 请求头和请求 id 的语法，令牌对的响应体，CoSec 令牌的声明，以及 starter 提供的刷新和登出
+路由的回答。服务端的测试按解析后的 JSON 把它的回答与这些文件比对，所以客户端自己的测试可以把它们当作预期的回答。
+
 ## 你的应用提供什么 {#what-your-application-serves}
 
 CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编写（[登录](./authentication.md#logging-in)），路径、请求体和每种失败的状态码都由应用决定。刷新和登出在设置了路径时由 starter 自己提供；一个路径都不设置的应用，像写登录一样自己写它们。

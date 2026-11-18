@@ -1,0 +1,17 @@
+{
+  "status" : 401,
+  "headers" : {
+    "CoSec-Request-Id" : "golden-request-id",
+    "Content-Type" : "application/problem+json"
+  },
+  "body" : {
+    "type" : "https://cosec.ahoo.me/problems/token-invalid",
+    "title" : "Token Invalid",
+    "status" : 401,
+    "code" : "TOKEN_INVALID",
+    "requestId" : "golden-request-id"
+  },
+  "optionalMembers" : {
+    "traceId" : "string"
+  }
+}

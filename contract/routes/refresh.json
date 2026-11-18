@@ -1,0 +1,44 @@
+{
+  "cacheControl" : "no-store",
+  "cases" : [ {
+    "case" : "the pair",
+    "status" : 200,
+    "contentType" : "application/json",
+    "body" : "pair"
+  }, {
+    "case" : "a body that is not exactly the pair",
+    "status" : 400,
+    "contentType" : "application/problem+json",
+    "problem" : "invalid-request"
+  }, {
+    "case" : "another media type",
+    "status" : 400,
+    "contentType" : "application/problem+json",
+    "problem" : "invalid-request"
+  }, {
+    "case" : "the session's lifetime is over, or the refresh token has expired",
+    "status" : 401,
+    "contentType" : "application/problem+json",
+    "problem" : "token-expired"
+  }, {
+    "case" : "a pair presented again after its rotation",
+    "status" : 401,
+    "contentType" : "application/problem+json",
+    "problem" : "token-revoked"
+  }, {
+    "case" : "a pair that is not one",
+    "status" : 401,
+    "contentType" : "application/problem+json",
+    "problem" : "token-invalid"
+  }, {
+    "case" : "the store that keeps the session cannot answer",
+    "status" : 503,
+    "contentType" : "application/problem+json",
+    "problem" : "unavailable"
+  }, {
+    "case" : "any other error",
+    "status" : 500,
+    "contentType" : "application/problem+json",
+    "problem" : "internal-error"
+  } ]
+}

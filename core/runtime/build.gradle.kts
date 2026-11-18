@@ -32,3 +32,18 @@ dependencies {
     // ProblemSchemaTest validates encoded problems against the generated schema.
     testImplementation("com.networknt:json-schema-validator")
 }
+
+// PIP-25: ClientContractTest checks contract/ in `test`, so in `check`; a changed file reruns it. After an intended
+// change of what a client receives, this task rewrites the files, as updateKotlinAbi rewrites a dump.
+tasks.test {
+    inputs.files(rootProject.fileTree("contract")).withPropertyName("contract").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+tasks.register<Test>("updateClientContract") {
+    description = "Rewrites contract/'s problem and header files from what the code answers."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter { includeTestsMatching("me.ahoo.cosec.runtime.http.ClientContractTest") }
+    systemProperty("cosec.contract.update", "true")
+    outputs.upToDateWhen { false }
+}

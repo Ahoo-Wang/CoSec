@@ -1,0 +1,90 @@
+{
+  "access" : {
+    "attributes" : {
+      "type" : "object",
+      "client" : "read"
+    },
+    "aud" : {
+      "type" : "string",
+      "client" : "read"
+    },
+    "auth_time" : {
+      "type" : "number",
+      "client" : "read"
+    },
+    "cosec.generation" : {
+      "type" : "number",
+      "client" : "do-not-depend"
+    },
+    "cosec.membership" : {
+      "type" : "string",
+      "client" : "do-not-depend"
+    },
+    "exp" : {
+      "type" : "number",
+      "client" : "read"
+    },
+    "iat" : {
+      "type" : "number",
+      "client" : "read"
+    },
+    "jti" : {
+      "type" : "string",
+      "client" : "read"
+    },
+    "policies" : {
+      "type" : "array",
+      "client" : "read"
+    },
+    "roles" : {
+      "type" : "array",
+      "client" : "read"
+    },
+    "sid" : {
+      "type" : "string",
+      "client" : "read"
+    },
+    "sub" : {
+      "type" : "string",
+      "client" : "read"
+    },
+    "tenantId" : {
+      "type" : "string",
+      "client" : "read"
+    }
+  },
+  "refresh" : {
+    "auth_time" : {
+      "type" : "number",
+      "client" : "do-not-depend"
+    },
+    "cosec.generation" : {
+      "type" : "number",
+      "client" : "do-not-depend"
+    },
+    "cosec.token" : {
+      "type" : "string",
+      "client" : "do-not-depend"
+    },
+    "exp" : {
+      "type" : "number",
+      "client" : "read"
+    },
+    "iat" : {
+      "type" : "number",
+      "client" : "do-not-depend"
+    },
+    "jti" : {
+      "type" : "string",
+      "client" : "do-not-depend"
+    },
+    "sid" : {
+      "type" : "string",
+      "client" : "do-not-depend"
+    },
+    "sub" : {
+      "type" : "string",
+      "client" : "do-not-depend"
+    }
+  }
+}

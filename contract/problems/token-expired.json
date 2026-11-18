@@ -1,0 +1,17 @@
+{
+  "status" : 401,
+  "headers" : {
+    "CoSec-Request-Id" : "golden-request-id",
+    "Content-Type" : "application/problem+json"
+  },
+  "body" : {
+    "type" : "https://cosec.ahoo.me/problems/token-expired",
+    "title" : "Token Expired",
+    "status" : 401,
+    "code" : "TOKEN_EXPIRED",
+    "requestId" : "golden-request-id"
+  },
+  "optionalMembers" : {
+    "traceId" : "string"
+  }
+}

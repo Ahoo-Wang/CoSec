@@ -1,0 +1,21 @@
+{
+  "status" : 429,
+  "headers" : {
+    "CoSec-Request-Id" : "golden-request-id",
+    "Content-Type" : "application/problem+json",
+    "RateLimit-Limit" : "10",
+    "RateLimit-Remaining" : "0",
+    "RateLimit-Reset" : "30",
+    "Retry-After" : "30"
+  },
+  "body" : {
+    "type" : "https://cosec.ahoo.me/problems/too-many-requests",
+    "title" : "Too Many Requests",
+    "status" : 429,
+    "code" : "TOO_MANY_REQUESTS",
+    "requestId" : "golden-request-id"
+  },
+  "optionalMembers" : {
+    "traceId" : "string"
+  }
+}

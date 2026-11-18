@@ -19,3 +19,18 @@ dependencies {
     // MembershipClaimsJwtTest resolves parsed tokens through the pipeline's MembershipResolver.
     testImplementation(project(":runtime"))
 }
+
+// PIP-25: ClientContractTest checks contract/'s token and route files in `test`, so in `check`; a changed file reruns it.
+// After an intended change of what a client receives, this task rewrites them, as updateKotlinAbi rewrites a dump.
+tasks.test {
+    inputs.files(rootProject.fileTree("contract")).withPropertyName("contract").withPathSensitivity(PathSensitivity.RELATIVE)
+}
+tasks.register<Test>("updateClientContract") {
+    description = "Rewrites contract/'s token and route files from what the code answers."
+    group = "verification"
+    testClassesDirs = sourceSets.test.get().output.classesDirs
+    classpath = sourceSets.test.get().runtimeClasspath
+    filter { includeTestsMatching("me.ahoo.cosec.jwt.ClientContractTest") }
+    systemProperty("cosec.contract.update", "true")
+    outputs.upToDateWhen { false }
+}

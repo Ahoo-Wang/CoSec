@@ -1,0 +1,25 @@
+{
+  "cacheControl" : "no-store",
+  "cases" : [ {
+    "case" : "the pair",
+    "status" : 204
+  }, {
+    "case" : "a session already ended",
+    "status" : 204
+  }, {
+    "case" : "a body that is not exactly the pair",
+    "status" : 400,
+    "contentType" : "application/problem+json",
+    "problem" : "invalid-request"
+  }, {
+    "case" : "a pair that is not one",
+    "status" : 401,
+    "contentType" : "application/problem+json",
+    "problem" : "token-invalid"
+  }, {
+    "case" : "the store cannot record it",
+    "status" : 503,
+    "contentType" : "application/problem+json",
+    "problem" : "unavailable"
+  } ]
+}
