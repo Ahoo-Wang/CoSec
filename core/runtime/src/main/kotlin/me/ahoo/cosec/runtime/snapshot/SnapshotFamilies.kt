@@ -94,7 +94,11 @@ internal class SnapshotFamilies<A : Any>(
     /** [key] left its family, holding [entry]: what a removal does besides leaving the map. */
     fun removed(key: SnapshotKey, entry: SnapshotEntry<*>?) {
         lagReports.forget(key)
-        metrics.onEvicted(key.kind, entry == null || isAbsent(entry))
+        // Only an installed entry that leaves is an eviction. A key dropped empty, after a cold load that failed or
+        // timed out, held nothing: counting it would put noise in the meter that says the bound is too small.
+        if (entry != null) {
+            metrics.onEvicted(key.kind, isAbsent(entry))
+        }
         log.debug { "Removed snapshot document [$key]." }
     }
 

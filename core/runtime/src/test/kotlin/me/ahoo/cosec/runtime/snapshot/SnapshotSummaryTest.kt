@@ -26,7 +26,8 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * What the lag pass publishes for the gauges of `cosec-micrometer` ([SnapshotSummary]): every entry held counted once,
  * in the state its origin maps to, so the states sum to [SnapshotSource.entries]; the largest lag and the documents past
- * the thresholds; and the evictions the families make, by kind and by what the key held, on a slot and on a runner.
+ * the thresholds; and the evictions the families make, by kind and by what the key held, on a slot and on a runner,
+ * where a key dropped empty is no eviction.
  */
 class SnapshotSummaryTest {
     private val clock = ManualClock()
@@ -130,6 +131,35 @@ class SnapshotSummaryTest {
     @Test
     fun `an eviction on a runner is counted the same way`() {
         evictionsOn(keyRunners())
+    }
+
+    @Test
+    fun `a key dropped empty after a failed cold load counts no eviction, on a slot`() {
+        droppedEmptyOn(SlotFactory.SLOT)
+    }
+
+    @Test
+    fun `a key dropped empty after a failed cold load counts no eviction, on a runner`() {
+        droppedEmptyOn(keyRunners())
+    }
+
+    private fun droppedEmptyOn(slots: SlotFactory) {
+        val store = ControllableStore()
+        store.put(SnapshotKey.Platform, document(1))
+        val metrics = Evictions()
+        source(store, metrics, slots).use { source ->
+            source.load().join()
+            store.failure = IllegalStateException("store down")
+            source.load("b").join()
+            val apps = source.families.first { it.spec.kind == SnapshotKind.APP }
+            val deadline = System.nanoTime() + Duration.ofSeconds(5).toNanos()
+            while (apps.slots.containsKey("b") && System.nanoTime() < deadline) {
+                Thread.sleep(5)
+            }
+            // The key was dropped, and nothing it held left: no eviction.
+            apps.slots.containsKey("b").assert().isFalse()
+            metrics.evicted.toList().assert().isEmpty()
+        }
     }
 
     private fun evictionsOn(slots: SlotFactory) {

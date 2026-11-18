@@ -63,15 +63,15 @@ internal class LagReports(
         }
     }
 
-    /**
-     * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval].
-     * Off the scheduler thread: a log appender or a meter may take its time here.
-     */
     /** What the last [report] counted: the gauges' source, so that a scrape walks nothing. */
     @Volatile
     var summary: SnapshotSummary = SnapshotSummary.EMPTY
         private set
 
+    /**
+     * Reports every document lagging past [SnapshotOptions.lagWarn], at most once per [SnapshotOptions.lagLogInterval].
+     * Off the scheduler thread: a log appender or a meter may take its time here.
+     */
     fun report() {
         val now = clock.instant()
         val tally = SnapshotSummary.Tally()
