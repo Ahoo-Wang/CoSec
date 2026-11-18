@@ -16,6 +16,7 @@
 package me.ahoo.cosec.micrometer
 
 import io.micrometer.core.instrument.Counter
+import io.micrometer.core.instrument.FunctionCounter
 import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
@@ -36,7 +37,8 @@ import java.time.Duration
  * tag has a closed value set, never an app or tenant id: `kind`, `result`, `state`, `level`, `to`.
  *
  * Every meter is resolved here, in the constructor, so an event is an array index and an increment: [onLoad], which
- * runs on the request path at every `peek`, looks nothing up and allocates nothing. A registry that refuses a meter
+ * runs on the request path at every `peek`, looks nothing up and allocates nothing, and counts a hit in cells of the
+ * calling thread's own ([HitCounts]), never in a shared counter. A registry that refuses a meter
  * fails here, at startup, never on an event. The gauges ([bind]) read the [SnapshotSummary] of the source's last lag
  * pass, so a scrape walks nothing.
  */
@@ -45,8 +47,13 @@ class MicrometerSnapshotMetrics(
     private val registry: MeterRegistry,
     private val clock: Clock = Clock.systemUTC(),
 ) : SnapshotMetrics {
-    private val loads = Array(KINDS.size * OUTCOMES.size) { i ->
-        counter(LOADS, KIND, tag(KINDS[i / OUTCOMES.size]), RESULT, tag(OUTCOMES[i % OUTCOMES.size]))
+    private val hits = HitCounts(KINDS.size)
+
+    /** The loads other than hits; a hit is counted by [hits], which a function counter reads on a scrape. */
+    private val misses = Array(KINDS.size * OUTCOMES.size) { i ->
+        val outcome = OUTCOMES[i % OUTCOMES.size]
+        val kind = KINDS[i / OUTCOMES.size]
+        if (outcome == LoadOutcome.HIT) null else counter(LOADS, KIND, tag(kind), RESULT, tag(outcome))
     }
     private val compiles = Array(KINDS.size * 2) { i ->
         Timer.builder(COMPILE_DURATION)
@@ -64,11 +71,24 @@ class MicrometerSnapshotMetrics(
     }
     private val handOffs = Array(2) { counter(HANDOFFS_REFUSED, "to", if (it == 0) "housekeeping" else "caller") }
 
+    init {
+        for (kind in KINDS) {
+            FunctionCounter.builder(LOADS, hits) { it.count(kind.ordinal) }
+                .tags(KIND, tag(kind), RESULT, tag(LoadOutcome.HIT))
+                .register(registry)
+        }
+    }
+
     private fun counter(name: String, vararg tags: String): Counter =
         Counter.builder(name).tags(*tags).register(registry)
 
-    override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) =
-        loads[kind.ordinal * OUTCOMES.size + outcome.ordinal].increment()
+    override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) {
+        if (outcome == LoadOutcome.HIT) {
+            hits.increment(kind.ordinal)
+        } else {
+            misses[kind.ordinal * OUTCOMES.size + outcome.ordinal]?.increment()
+        }
+    }
 
     override fun onCompile(kind: SnapshotKind, duration: Duration, succeeded: Boolean) =
         compiles[kind.ordinal * 2 + if (succeeded) 0 else 1].record(duration)

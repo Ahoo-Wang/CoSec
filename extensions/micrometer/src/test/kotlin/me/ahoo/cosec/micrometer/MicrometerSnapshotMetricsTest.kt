@@ -43,7 +43,8 @@ class MicrometerSnapshotMetricsTest {
     private val registry = SimpleMeterRegistry()
     private val metrics = MicrometerSnapshotMetrics(registry)
 
-    private fun count(name: String, vararg tags: String): Double = registry.get(name).tags(*tags).counter().count()
+    private fun count(name: String, vararg tags: String): Double =
+        registry.get(name).tags(*tags).meter().measure().single().value
 
     @ParameterizedTest
     @EnumSource(LoadOutcome::class)
