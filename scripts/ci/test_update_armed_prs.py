@@ -22,7 +22,7 @@ import unittest
 from pathlib import Path
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "update-armed-prs.yml"
-REQUIRED = ["CI", "Analyze (java-kotlin)", "Semantic PR Title"]
+REQUIRED = ["CI", "Analyze (java-kotlin)", "Analyze (javascript-typescript)", "Semantic PR Title"]
 
 
 def jq_filter():
@@ -55,6 +55,21 @@ def green(started="2026-11-15T10:00:00Z"):
 class UpdateArmedPrsTest(unittest.TestCase):
     def test_a_behind_pull_request_with_green_checks_is_updated(self):
         self.assertEqual(run([pr(7, green())]), "7")
+
+    def test_the_required_checks_are_the_workflows(self):
+        listed = re.search(r"required='(\[.*?\])'", WORKFLOW.read_text()).group(1)
+        self.assertEqual(json.loads(listed), REQUIRED)
+
+    def test_a_failed_analysis_of_the_typescript_workspace_holds_the_pull_request_back(self):
+        rollup = [c for c in green() if c["name"] != "Analyze (javascript-typescript)"] + [
+            check("Analyze (javascript-typescript)", "FAILURE")
+        ]
+        self.assertIsNone(run([pr(7, rollup)]))
+
+    def test_an_analysis_of_the_typescript_workspace_still_running_holds_the_queue(self):
+        running = check("Analyze (javascript-typescript)", "", status="IN_PROGRESS")
+        rollup = [c for c in green() if c["name"] != "Analyze (javascript-typescript)"] + [running]
+        self.assertIsNone(run([pr(8, rollup, state="CLEAN"), pr(7, green())]))
 
     def test_a_failed_required_check_holds_the_pull_request_back(self):
         rollup = [check("CI", "FAILURE")] + green()[1:]
