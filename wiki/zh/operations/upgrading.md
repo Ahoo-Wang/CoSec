@@ -888,6 +888,14 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 - **starter 可以提供刷新和登出路由**（新增：在设置路径之前什么都不变）。`cosec.authentication.login.refresh.path` 和 `logout.path` 在 Spring MVC 和 WebFlux 上提供它们，状态码和响应体见[构建客户端](../integration/clients.md#what-your-application-serves)。你自己写的路由照常工作：不设置路径就不提供任何路由。要迁移到提供的路由，设置客户端调用的路径，删除你的处理器及其异常映射，并保留允许匿名 `POST` 它的语句。
 - **会话存储的故障以 `SessionStoreUnavailableException`（`cosec-login`）离开 `TokenFamilies` 和 `StoreTokenRevoker`**，存储自身的异常作为其 cause，从而把无法应答的存储（`503`）与错误（`500`）区分开。在刷新、切换或登出周围捕获存储自身异常类型的代码，改为捕获它。`StoreTokenRevoker.revokeSubject` 不变。
 - **`MembershipRefresh` 以 `TokenVerificationException` 拒绝**（成员关系已不存在时用 `TokenRevokedException`），这是 `401`；其他任何异常都是错误，在提供的路由上是 `500`，客户端保留令牌对。以其他异常（例如 `IllegalStateException`）拒绝的钩子，改为抛出 `TokenRevokedException`。
+- **快照源让每个文档的键经由各自的运行器处理**（无需迁移，API 与属性都不变；决策不变）。运维能看到的不同：
+  - 在文档加载期间发出、在该加载结束之后才被取出的请求，得到已安装的文档，算作命中；beta.1 把它并入那次加载，算作冷加载：文档相同，但 `cosec.snapshot.loads{result=cold}` 少计一次。
+  - `close` 结束了某次加载之后才答复"不存在"的存储读取不再上报：已关闭的实例不会因此记录 `Snapshot document [<doc>] disappeared from the store; failing closed.`，也不计入 `cosec.snapshot.lost`。在存储读取超时（30 秒）时被放弃、之后才答复"不存在"的读取，由该文档的下一次加载上报，而不是立即上报。
+  - 不存在文档的 id 的上限不再有空档（[实例如何读取文档](./storage.md#how-instances-read-documents)）：驱逐会跳过正在加载的条目，当这次加载发现文档仍不存在时，该条目现在自己请求回到上限。beta.1 中，族会一直高于这个上限，直到之后某次安装。
+  - 平台文档变化、所有文档重新编译时，有在途加载的文档可能多加载一次：每个文档至多多读一次存储。
+  - 每个持有的文档多占约 64 字节堆内存，每次冷加载多分配约 1.2 KB。
+- **快照源有了指标**（新增：无需迁移）。有 `cosec-micrometer` 和 `MeterRegistry` 时，数据面的快照源现在注册 `cosec.snapshot.*` 指标：新增 80 个序列，与文档数量无关，因为没有任何标签携带应用或租户 id。找到已安装文档的请求不计数：只计请求不得不等待的加载。[`cosec.metrics.enabled`](./configuration.md#feature-switches)`=false` 会连同 CoSec 的其他指标一起关闭它们。各指标及告警条件见[快照指标](./observability.md#snapshot-metrics)。
+- **快照源的维护线程拒绝的任务被丢弃并计数**（`SNP-19`；无需迁移）。该线程写快照源的日志、执行驱逐，队列容纳 4,096 个任务。队列满时，beta.1 在提交任务的线程（常常是请求线程）上执行被拒绝的任务，于是慢的日志 appender 会拖慢请求。现在任务被丢弃并计入 `cosec.snapshot.housekeeping.refused{task}`，该线程最多每 10 秒记录一条 `WARN`：`Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …`，列出每种任务最后被丢弃的那条日志，不带堆栈；关闭中的实例把剩下的写出一次。抛出异常的指标在同一行里计数，而不单独记录日志。无需任何操作，除非出现这条摘要：那时改用异步日志 appender（[快照日志缺失](./troubleshooting.md#snapshot-log-lines-are-missing)），并对该计数器的任何上升告警。
 
 ### 从 8.0.0-alpha.4 升级 {#from-8-0-0-alpha-4}
 

@@ -1202,6 +1202,36 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 - **`MembershipRefresh` refuses with a `TokenVerificationException`** (`TokenRevokedException` when the membership is
   gone), a `401`; any other exception is an error, `500` on the served route, and the client keeps its pair. A hook
   that refused with another exception, such as `IllegalStateException`, throws `TokenRevokedException` instead.
+- **The snapshot source runs each document key through its own runner** (nothing to migrate, no API or property
+  change; decisions are unchanged). What an operator sees differs:
+  - A request made while its document is loading, and taken only after that load ended, is served the installed
+    document as a hit, where beta.1 joined it to the load as a cold one: the same document, but one fewer
+    `cosec.snapshot.loads{result=cold}`.
+  - A store read that answers "absent" after `close` ended its load is not reported: a closed instance no longer logs
+    `Snapshot document [<doc>] disappeared from the store; failing closed.` or counts `cosec.snapshot.lost` for it. One
+    abandoned at the store read timeout (30 seconds) that answers "absent" late is reported by the document's next
+    load, not at once.
+  - The bound on ids without a document holds without a gap
+    ([How instances read documents](./storage.md#how-instances-read-documents)): an eviction pass skips an entry that
+    is loading, and when that load finds the document still absent, the entry now asks for the bound itself. In beta.1
+    the family stayed above that bound until some later install.
+  - When the platform document changes and every document is recompiled, a document whose load was in flight may be
+    loaded once more: at most one extra read of the store per document.
+  - Each document held costs about 64 bytes more heap, and each cold load allocates about 1.2 KB more.
+- **The snapshot source is metered** (an addition: nothing to migrate). With `cosec-micrometer` and a `MeterRegistry`,
+  the data plane's snapshot source now registers the `cosec.snapshot.*` meters: 80 new series, whatever the number of
+  documents, since no tag carries an app or tenant id. A request that finds its documents installed is not counted:
+  only the loads a request had to wait for. [`cosec.metrics.enabled`](./configuration.md#feature-switches)`=false` turns them off with the
+  rest of CoSec's metrics. The meters and what to alert on are in [Snapshot metrics](./observability.md#snapshot-metrics).
+- **What the snapshot source's housekeeping thread refuses is dropped and counted** (`SNP-19`; nothing to migrate).
+  That thread writes the source's log lines and runs its eviction passes; its queue holds 4,096 tasks. When the queue
+  was full, beta.1 ran the refused task on the thread that offered it, often a request's, so a slow log appender slowed
+  requests. Now the task is dropped and counted in `cosec.snapshot.housekeeping.refused{task}`, and the thread writes
+  one `WARN` at most every 10 seconds, `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped
+  …`, naming the last line dropped for each task without its stack; a closing instance writes what is left once. A
+  meter that throws is counted in the same line instead of logged. Nothing to do, unless the summary appears: then use
+  an asynchronous log appender ([Snapshot log lines are missing](./troubleshooting.md#snapshot-log-lines-are-missing)),
+  and alert on any rise of the counter.
 
 ### From 8.0.0-alpha.4 {#from-8-0-0-alpha-4}
 
