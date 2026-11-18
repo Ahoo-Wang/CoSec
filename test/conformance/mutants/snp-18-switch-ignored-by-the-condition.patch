@@ -3,7 +3,7 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlPlaneSwitchTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
-index 4ac71495..0f10aa60 100644
+index 225e5b50..b307d635 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
 @@ -36,7 +36,6 @@ internal class ControlPlaneCondition : SpringBootCondition() {
@@ -11,6 +11,6 @@ index 4ac71495..0f10aa60 100644
          return when {
              missing.isNotEmpty() -> ConditionOutcome.noMatch("the control plane is not on the classpath: $missing")
 -            !enabled(context.environment) -> ConditionOutcome.noMatch("$ENABLED_KEY=false")
-             else -> ConditionOutcome.match("the control plane's classes are on the classpath, and it is not switched off")
+             else -> ConditionOutcome.match("the control plane is on the classpath and switched on")
          }
      }
