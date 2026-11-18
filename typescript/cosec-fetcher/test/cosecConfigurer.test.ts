@@ -12,6 +12,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { DeviceIdStorage, TokenStorage } from '../src';
 import { Fetcher } from '@ahoo-wang/fetcher';
 import type { TokenRefresher } from '../src';
 import { CoSecConfigurer } from '../src';
@@ -68,8 +69,8 @@ describe('CoSecConfigurer', () => {
       };
 
       const configurerWithCustom = new CoSecConfigurer({
-        tokenStorage: customTokenStorage as any,
-        deviceIdStorage: customDeviceStorage as any,
+        tokenStorage: customTokenStorage as unknown as TokenStorage,
+        deviceIdStorage: customDeviceStorage as unknown as DeviceIdStorage,
         tokenRefresher,
       });
 

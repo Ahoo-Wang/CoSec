@@ -13,7 +13,12 @@
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { TokenStorage, DEFAULT_COSEC_TOKEN_KEY } from '../src';
-import { JwtCompositeToken, JwtCompositeTokenSerializer } from '../src';
+import { JwtCompositeToken } from '../src';
+
+/** The event bus a TokenStorage takes, which the tests replace with a mock. */
+type MockableEventBus = NonNullable<
+  NonNullable<ConstructorParameters<typeof TokenStorage>[0]>['eventBus']
+>;
 
 // Mock Storage
 const mockStorage = {
@@ -30,7 +35,7 @@ class MockBroadcastChannel {
   postMessage = vi.fn();
   close = vi.fn();
   onmessage = null;
-  constructor(_name: string) {}
+  constructor(readonly name: string) {}
 }
 
 vi.stubGlobal('BroadcastChannel', MockBroadcastChannel);
@@ -91,7 +96,7 @@ vi.mock('../src/jwtToken', () => ({
         isRefreshable: vi.fn(() => true),
       };
     });
-    constructor(_earlyPeriod: number) {}
+    constructor(readonly earlyPeriod: number) {}
   },
 }));
 
@@ -106,7 +111,7 @@ describe('TokenStorage', () => {
 
     tokenStorage = new TokenStorage({
       key: DEFAULT_COSEC_TOKEN_KEY,
-      storage: mockStorage as any,
+      storage: mockStorage as unknown as Storage,
     });
   });
 
@@ -120,7 +125,7 @@ describe('TokenStorage', () => {
       };
       const defaultStorage = new TokenStorage({
         key: 'test-token',
-        eventBus: mockEventBus as any,
+        eventBus: mockEventBus as unknown as MockableEventBus,
       });
       expect(defaultStorage).toBeDefined();
       expect(defaultStorage.earlyPeriod).toBe(0);
@@ -130,7 +135,7 @@ describe('TokenStorage', () => {
       const customStorage = new TokenStorage({
         key: 'custom-key',
         earlyPeriod: 300,
-        storage: mockStorage as any,
+        storage: mockStorage as unknown as Storage,
       });
       expect(customStorage).toBeDefined();
       expect(customStorage.earlyPeriod).toBe(300);
@@ -141,7 +146,10 @@ describe('TokenStorage', () => {
     // channel and cross-contaminate each other's cached token across tabs.
     it('should derive the default event bus channel from the storage key', () => {
       serialBusChannels.length = 0;
-      new TokenStorage({ key: 'my-token', storage: mockStorage as any });
+      new TokenStorage({
+        key: 'my-token',
+        storage: mockStorage as unknown as Storage,
+      });
       expect(serialBusChannels).toContain('my-token');
       expect(serialBusChannels).not.toContain(DEFAULT_COSEC_TOKEN_KEY);
     });
@@ -183,7 +191,9 @@ describe('TokenStorage', () => {
         isRefreshNeeded: vi.fn(() => false),
         isRefreshable: vi.fn(() => true),
       };
-      vi.spyOn(tokenStorage, 'get').mockReturnValue(mockJwtToken as any);
+      vi.spyOn(tokenStorage, 'get').mockReturnValue(
+        mockJwtToken as unknown as JwtCompositeToken,
+      );
       expect(tokenStorage.authenticated).toBe(true);
     });
 
@@ -200,7 +210,9 @@ describe('TokenStorage', () => {
         isRefreshNeeded: vi.fn(() => false),
         isRefreshable: vi.fn(() => true),
       };
-      vi.spyOn(tokenStorage, 'get').mockReturnValue(mockJwtToken as any);
+      vi.spyOn(tokenStorage, 'get').mockReturnValue(
+        mockJwtToken as unknown as JwtCompositeToken,
+      );
       expect(tokenStorage.authenticated).toBe(false);
     });
   });
@@ -215,7 +227,9 @@ describe('TokenStorage', () => {
         isRefreshNeeded: vi.fn(() => false),
         isRefreshable: vi.fn(() => true),
       };
-      vi.spyOn(tokenStorage, 'get').mockReturnValue(mockJwtToken as any);
+      vi.spyOn(tokenStorage, 'get').mockReturnValue(
+        mockJwtToken as unknown as JwtCompositeToken,
+      );
       expect(tokenStorage.currentUser).toEqual(mockPayload);
     });
 
@@ -232,7 +246,9 @@ describe('TokenStorage', () => {
         isRefreshNeeded: vi.fn(() => false),
         isRefreshable: vi.fn(() => true),
       };
-      vi.spyOn(tokenStorage, 'get').mockReturnValue(mockJwtToken as any);
+      vi.spyOn(tokenStorage, 'get').mockReturnValue(
+        mockJwtToken as unknown as JwtCompositeToken,
+      );
       expect(tokenStorage.currentUser).toBe(null);
     });
   });
@@ -255,7 +271,7 @@ describe('TokenStorage', () => {
         isRefreshNeeded: vi.fn(),
         isRefreshable: vi.fn(),
       };
-      tokenStorage.set(jwtToken as any);
+      tokenStorage.set(jwtToken as unknown as JwtCompositeToken);
       expect(mockStorage.setItem).toHaveBeenCalledWith(
         DEFAULT_COSEC_TOKEN_KEY,
         JSON.stringify(jwtToken.token),

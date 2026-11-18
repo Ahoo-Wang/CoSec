@@ -66,7 +66,7 @@ describe('broadcast bus ownership', () => {
     own.destroy();
     expect(destroyOwn).toHaveBeenCalled();
 
-    const given = new SerialTypedEventBus<any>('given');
+    const given = new SerialTypedEventBus<unknown>('given');
     const destroyGiven = vi.spyOn(given, 'destroy');
     new TokenStorage({
       storage: new InMemoryStorage(),

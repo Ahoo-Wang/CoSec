@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong
  */
 internal class SlotModelRun(
     private val script: SlotModelScript,
-    private val slots: SlotFactory = SlotFactory.SLOT,
+    private val slots: ModelSlots = ModelSlots.SLOT,
 ) {
     private val threads = SlotModelThreads()
     private val options = SnapshotOptions(
@@ -64,6 +64,7 @@ internal class SlotModelRun(
     init {
         store = SlotModelStore({ moment[0] }, { threads.nanos })
         model = SlotModel(store, threads, options, FAMILY)
+        model.judgesClaims = slots.k != null
         compiler = model.Compiler(::recompile)
         threads.onPeriodic = { model.masks(null) }
     }
@@ -114,7 +115,7 @@ internal class SlotModelRun(
             threads.scheduler,
             ticker::incrementAndGet,
             threads.housekeeping,
-            slots,
+            slots.factory(model),
         )
         source.nanoTime = threads.nanoTime
     }
