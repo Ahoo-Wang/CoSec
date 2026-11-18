@@ -34,6 +34,7 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.Executor
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * What a key does when its effects throw (RFC 0013 B2b, the load lane): a step offers one `EffectFailed`, its first
@@ -54,6 +55,15 @@ class KeyEffectFailureTest {
     private val previous = Thread.getDefaultUncaughtExceptionHandler()
     private val failed = CopyOnWriteArrayList<KeyEvent.EffectFailed>()
     private val housekeeping = Housekeeping()
+
+    /** A's last step and the last release of its flag, in one order ([taking], [released]). */
+    private val sequence = AtomicLong()
+
+    @Volatile
+    private var lastStepOfA = 0L
+
+    @Volatile
+    private var lastReleaseOfA = 0L
 
     @Volatile
     private var installFails: Throwable? = null
@@ -88,7 +98,7 @@ class KeyEffectFailureTest {
         null,
         { 0L },
         housekeeping,
-        keyRunners(hooks = KeyDrain.Hooks(::taking)) { it == APP_A },
+        keyRunners(hooks = KeyDrain.Hooks(beforeNext = ::taking, afterRelease = ::released)) { it == APP_A },
     )
 
     /**
@@ -96,6 +106,7 @@ class KeyEffectFailureTest {
      * the `EffectFailed`'s own step fail, and A's later loads, each of whose ends asks for the pass, do not.
      */
     private fun taking(event: KeyEvent<*>) {
+        lastStepOfA = sequence.incrementAndGet()
         if (event is KeyEvent.EffectFailed) {
             failed += event
         } else if (failed.isNotEmpty()) {
@@ -103,6 +114,16 @@ class KeyEffectFailureTest {
             housekeeping.failing = { null }
         }
     }
+
+    private fun released() {
+        lastReleaseOfA = sequence.incrementAndGet()
+    }
+
+    /**
+     * A holds nothing in flight and no thread is in its drain: its flag was released after its last step. Not [KeySlot.idle]
+     * alone, which the drain publishes with the step's state, before it runs the step's effects.
+     */
+    private fun SnapshotSource<*, *>.quietA(): Boolean = slotA().idle() && lastReleaseOfA > lastStepOfA
 
     private fun SnapshotSource<*, *>.slotA(): KeySlot<*> =
         families.first { it.spec.kind == SnapshotKind.APP }.slots.getValue("app-a")
@@ -122,8 +143,10 @@ class KeyEffectFailureTest {
         // housekeeping for the pass, the effect these cases make throw.
         source.load("app-b").join()
         source.load("app-a").join()
-        // A's first load is followed by a confirming one; it ends before anything is armed.
-        awaitCondition { source.slotA().idle() }
+        // A's first load is followed by a confirming one. Armed once A is quiet: A reads idle as soon as that load's end
+        // is stored, while the pool still runs its effects, its hand to housekeeping last. Armed in that window, the hand
+        // fails first, and its `EffectFailed` disarms the meter before revision 2 is installed (run 44229457825).
+        awaitCondition { source.quietA() }
         arm()
         // On the pool only: compiled in place, a held compilation would hold this thread until the gate times out.
         val gate = CountDownLatch(1).also { if (compileExecutor == null) compiler.gate = it }
@@ -231,8 +254,33 @@ class KeyEffectFailureTest {
     private fun awaitCondition(condition: () -> Boolean) {
         val deadline = System.nanoTime() + Duration.ofSeconds(WAIT_SECONDS).toNanos()
         while (!condition()) {
-            check(System.nanoTime() < deadline) { "condition not met within $WAIT_SECONDS seconds" }
+            check(System.nanoTime() < deadline) {
+                "condition not met within $WAIT_SECONDS seconds; EffectFailed taken: " +
+                    failed.map { "${it.cause} (suppressed ${it.cause.suppressed.toList()})" } +
+                    "; uncaught: ${uncaught.map { "${it.first}: ${it.second}" }}; lines: " +
+                    lines.list.map { "[${it.threadName}] ${it.formattedMessage} ${it.throwableProxy?.className ?: ""}" }
+            }
             Thread.sleep(1)
+        }
+    }
+
+    @Test
+    fun `A reads idle while the pool still runs its load end's effects, and is quiet only once its flag is released`() {
+        val held = CountDownLatch(1)
+        val release = CountDownLatch(1)
+        source(compileExecutor = null).use { source ->
+            source.load("app-b").join()
+            // The pool's first hand to housekeeping made while A already reads idle: the confirming load's end.
+            housekeeping.holdOnPool = {
+                val a = source.families.first { it.spec.kind == SnapshotKind.APP }.slots["app-a"]
+                if (a?.idle() == true) release.also { held.countDown() } else null
+            }
+            source.load("app-a").join()
+            held.await(WAIT_SECONDS, TimeUnit.SECONDS).assert().isTrue()
+            source.slotA().idle().assert().isTrue()
+            source.quietA().assert().isFalse()
+            release.countDown()
+            awaitCondition { source.quietA() }
         }
     }
 
@@ -244,7 +292,17 @@ class KeyEffectFailureTest {
         @Volatile
         var failing: () -> Throwable? = { null }
 
+        /** On a pool thread, a latch to wait on before anything else, when it answers one: where a case holds the pool. */
+        @Volatile
+        var holdOnPool: () -> CountDownLatch? = { null }
+
         override fun execute(command: Runnable) {
+            if (Thread.currentThread().name.startsWith("cosec-snapshot-compile")) {
+                holdOnPool()?.let {
+                    holdOnPool = { null }
+                    it.await(WAIT_SECONDS, TimeUnit.SECONDS)
+                }
+            }
             failing()?.let { throw it }
             if (Thread.currentThread().stackTrace.none { it.methodName == "evictBeyond" }) command.run()
         }
