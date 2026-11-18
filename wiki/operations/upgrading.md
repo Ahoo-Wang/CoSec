@@ -774,7 +774,9 @@ request with the key would be `401`.
    through the control plane (a change request).
 3. Run again without `--dry-run`. Each key is rewritten only while it still holds what was read, so a key revoked or
    disabled in between is never brought back: the report lists it under `changedSinceRead`, and the command exits `1`
-   and asks to be run again. Keys already converted are left as they are, so the command can be repeated.
+   and asks to be run again. Keys already converted are left as they are, so the command can be repeated. A key an 8.0
+   pre-release stored in another format (`"format":2`) is neither converted nor read by 8.0: the command refuses the run,
+   naming it as stored by a pre-release; issue a new key for it and delete the old one, then run again.
 
 The converted key does not keep its old roles and policies: the report is the only place they are. It is written
 (`status: planned`) before the first key is rewritten, replaced by the final one (`converted`) when the run is done, and
@@ -1173,6 +1175,14 @@ The RFCs behind 8.0 list known differences. Each item is covered above, or descr
 
 Only for a deployment that already runs an 8.0.0 preview: what changed from each preview to the next, newest first. A 7.x
 deployment needs none of it; the section above is the whole upgrade. These notes are removed when 8.0 is released.
+
+### From 8.0.0-beta.2 {#from-8-0-0-beta-2}
+
+- **Security: a revocation table keeps "not revoked" for 30 seconds at most.** Through 8.0.0-beta.2 the `absent-ttl`
+  of `RevokedTokenCache` and `RevokedSubjectCache` was not locked, so `cocache.caches.RevokedTokenCache.absent-ttl`, a
+  `cocache.defaults.store.absent-ttl` or a customizer could lengthen it, and an instance that missed an invalidation
+  accepted a revoked token for that long. It is now CoSec's, 30 seconds: a `cocache.caches.[name].absent-ttl` for
+  either table fails startup (remove it), and the global defaults and customizers no longer reach it.
 
 ### From 8.0.0-beta.1 {#from-8-0-0-beta-1}
 
