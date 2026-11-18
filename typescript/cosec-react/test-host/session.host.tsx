@@ -16,7 +16,9 @@ import { SerialTypedEventBus } from '@ahoo-wang/fetcher-eventbus';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import {
   CoSecTokenRefresher,
+  CoSecTokenRevoker,
   JwtTokenManager,
+  LogoutUnconfirmedError,
   TokenStorage,
 } from '@ahoo-wang/cosec-fetcher';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
@@ -26,7 +28,10 @@ import {
   hostUrl,
   login,
   loginExpired,
+  refreshAt,
   resetStats,
+  sessionsDown,
+  sessionsUp,
   stats,
 } from '../../test-host/hostApi';
 import { RefreshableRouteGuard, SecurityProvider, useSecurity } from '../src';
@@ -42,13 +47,17 @@ function session() {
     eventBus: new SerialTypedEventBus<never>(key),
   });
   created.push(tokenStorage);
-  // The refresh goes through a Fetcher of its own, as the README of cosec-fetcher recommends.
+  // The refresh and the logout go through a Fetcher of their own, as the README of cosec-fetcher recommends.
+  const fetcher = new Fetcher({ baseURL: hostUrl() });
   const tokenManager = new JwtTokenManager(
     tokenStorage,
-    new CoSecTokenRefresher({
-      fetcher: new Fetcher({ baseURL: hostUrl() }),
-      endpoint: '/auth/refresh',
-    }),
+    new CoSecTokenRefresher({ fetcher, endpoint: '/auth/refresh' }),
+    {
+      tokenRevoker: new CoSecTokenRevoker({
+        fetcher,
+        endpoint: '/auth/logout',
+      }),
+    },
   );
   return { tokenStorage, tokenManager };
 }
@@ -123,5 +132,63 @@ describe('the hooks against a real host', () => {
     await waitFor(() => expect(screen.getByText('user carol')).toBeTruthy());
     screen.getByText('out').click();
     await waitFor(() => expect(screen.getByText('anonymous')).toBeTruthy());
+  });
+
+  it('logs out at the host: the session is ended there, and the hook signs out', async () => {
+    const { tokenStorage, tokenManager } = session();
+    const pair = await login('dave');
+    tokenStorage.signIn(pair);
+    let signedOut = 0;
+    let logout!: () => Promise<void>;
+    function Who() {
+      const security = useSecurity(tokenStorage, {
+        tokenManager,
+        onSignOut: () => signedOut++,
+      });
+      logout = security.logout;
+      return <p>{security.authenticated ? 'signed in' : 'anonymous'}</p>;
+    }
+    render(<Who />);
+    expect(screen.getByText('signed in')).toBeTruthy();
+
+    await logout();
+
+    await waitFor(() => expect(screen.getByText('anonymous')).toBeTruthy());
+    expect(signedOut).toBe(1);
+    // The host ended the session: the pair cannot be refreshed any more.
+    expect((await refreshAt(pair)).status).toBe(401);
+  });
+
+  it('an unconfirmed logout signs out here and rejects; the session lives on at the host', async () => {
+    const { tokenStorage, tokenManager } = session();
+    const pair = await login('erin');
+    tokenStorage.signIn(pair);
+    let signedOut = 0;
+    let logout!: () => Promise<void>;
+    function Who() {
+      const security = useSecurity(tokenStorage, {
+        tokenManager,
+        onSignOut: () => signedOut++,
+      });
+      logout = security.logout;
+      return <p>{security.authenticated ? 'signed in' : 'anonymous'}</p>;
+    }
+    render(<Who />);
+
+    await sessionsDown();
+    let failure: unknown;
+    try {
+      await logout().catch(error => (failure = error));
+    } finally {
+      await sessionsUp();
+    }
+
+    expect(failure).toBeInstanceOf(LogoutUnconfirmedError);
+    expect((failure as LogoutUnconfirmedError).status).toBe(503);
+    await waitFor(() => expect(screen.getByText('anonymous')).toBeTruthy());
+    expect(signedOut).toBe(1);
+    expect(tokenStorage.get()).toBeNull();
+    // Not ended at the host: the pair still refreshes there, until its refresh token expires.
+    expect((await refreshAt(pair)).status).toBe(200);
   });
 });

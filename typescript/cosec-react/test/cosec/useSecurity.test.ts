@@ -14,7 +14,11 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSecurity, ANONYMOUS_USER } from '../../src/cosec/useSecurity';
-import { TokenStorage } from '@ahoo-wang/cosec-fetcher';
+import {
+  JwtTokenManager,
+  LogoutUnconfirmedError,
+  TokenStorage,
+} from '@ahoo-wang/cosec-fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 
 // Valid JWT tokens for testing
@@ -561,6 +565,196 @@ describe('useSecurity at refresh-token expiry', () => {
       tokenStorage.destroy();
     } finally {
       vi.useRealTimers();
+    }
+  });
+});
+
+describe('useSecurity logout', () => {
+  const pairOf = (sub: string, sid: string) => {
+    const jwt = `e30.${btoa(JSON.stringify({ sub, sid, exp: 2000000000 }))}.signature`;
+    return { accessToken: jwt, refreshToken: jwt };
+  };
+  const neverRefreshes = {
+    refresh: () => Promise.reject(new Error('no refresh in these tests')),
+  };
+  let tokenStorage: TokenStorage;
+
+  beforeEach(() => {
+    tokenStorage = new TokenStorage({
+      key: 'security-logout',
+      storage: new InMemoryStorage(),
+    });
+  });
+
+  afterEach(() => {
+    tokenStorage.destroy();
+  });
+
+  function managerWith(revoke: () => Promise<void>) {
+    return new JwtTokenManager(tokenStorage, neverRefreshes, {
+      tokenRevoker: { revoke },
+    });
+  }
+
+  it('ends the session at the server, then signs out here', async () => {
+    tokenStorage.signIn(pairOf('alice', 's1'));
+    const revoke = vi.fn(() => Promise.resolve());
+    const onSignOut = vi.fn();
+    const { result } = renderHook(() =>
+      useSecurity(tokenStorage, {
+        tokenManager: managerWith(revoke),
+        onSignOut,
+      }),
+    );
+
+    await act(() => result.current.logout());
+
+    expect(revoke).toHaveBeenCalledTimes(1);
+    expect(tokenStorage.get()).toBeNull();
+    expect(result.current.authenticated).toBe(false);
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves on a 401: the session was not usable any more', async () => {
+    tokenStorage.signIn(pairOf('alice', 's1'));
+    const rejected = { exchange: { response: { status: 401 } } };
+    const onSignOut = vi.fn();
+    const { result } = renderHook(() =>
+      useSecurity(tokenStorage, {
+        tokenManager: managerWith(() => Promise.reject(rejected)),
+        onSignOut,
+      }),
+    );
+
+    await act(() => result.current.logout());
+
+    expect(tokenStorage.get()).toBeNull();
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('an unconfirmed logout signs out here, fires onSignOut and rejects', async () => {
+    tokenStorage.signIn(pairOf('alice', 's1'));
+    const unavailable = { exchange: { response: { status: 503 } } };
+    const onSignOut = vi.fn();
+    const { result } = renderHook(() =>
+      useSecurity(tokenStorage, {
+        tokenManager: managerWith(() => Promise.reject(unavailable)),
+        onSignOut,
+      }),
+    );
+
+    let failure: unknown;
+    await act(() => result.current.logout().catch(error => (failure = error)));
+
+    expect(failure).toBeInstanceOf(LogoutUnconfirmedError);
+    expect((failure as LogoutUnconfirmedError).status).toBe(503);
+    expect(tokenStorage.get()).toBeNull();
+    expect(result.current.authenticated).toBe(false);
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the session as it is while the server has not answered', async () => {
+    tokenStorage.signIn(pairOf('alice', 's1'));
+    let answer!: () => void;
+    const revoke = () => new Promise<void>(resolve => (answer = resolve));
+    const { result } = renderHook(() =>
+      useSecurity(tokenStorage, { tokenManager: managerWith(revoke) }),
+    );
+
+    let done!: Promise<void>;
+    act(() => {
+      done = result.current.logout();
+    });
+    await waitFor(() => expect(answer).toBeDefined());
+    expect(result.current.authenticated).toBe(true);
+    expect(result.current.currentUser.sub).toBe('alice');
+
+    await act(async () => {
+      answer();
+      await done;
+    });
+    expect(result.current.authenticated).toBe(false);
+  });
+
+  it('a sign-in during the logout stands, and onSignOut does not fire', async () => {
+    tokenStorage.signIn(pairOf('alice', 's1'));
+    let answer!: () => void;
+    const revoke = () => new Promise<void>(resolve => (answer = resolve));
+    const onSignOut = vi.fn();
+    const { result } = renderHook(() =>
+      useSecurity(tokenStorage, {
+        tokenManager: managerWith(revoke),
+        onSignOut,
+      }),
+    );
+
+    let done!: Promise<void>;
+    act(() => {
+      done = result.current.logout();
+    });
+    await waitFor(() => expect(answer).toBeDefined());
+    await act(() => result.current.signIn(pairOf('bob', 's2')));
+    await act(async () => {
+      answer();
+      await done;
+    });
+
+    expect(result.current.currentUser.sub).toBe('bob');
+    expect(result.current.authenticated).toBe(true);
+    expect(onSignOut).not.toHaveBeenCalled();
+  });
+
+  it('a sign-in still waiting for its pair when the logout starts is dropped', async () => {
+    let issue!: (pair: ReturnType<typeof pairOf>) => void;
+    const { result } = renderHook(() =>
+      useSecurity(tokenStorage, {
+        tokenManager: managerWith(() => Promise.resolve()),
+      }),
+    );
+
+    let signingIn!: Promise<void>;
+    act(() => {
+      signingIn = result.current.signIn(
+        () => new Promise(resolve => (issue = resolve)),
+      );
+    });
+    await act(() => result.current.logout());
+    await act(async () => {
+      issue(pairOf('alice', 's1'));
+      await signingIn;
+    });
+
+    expect(tokenStorage.get()).toBeNull();
+    expect(result.current.authenticated).toBe(false);
+  });
+
+  it('without a tokenManager, signs out here and rejects', async () => {
+    tokenStorage.signIn(pairOf('alice', 's1'));
+    const onSignOut = vi.fn();
+    const { result } = renderHook(() =>
+      useSecurity(tokenStorage, { onSignOut }),
+    );
+
+    let failure: unknown;
+    await act(() => result.current.logout().catch(error => (failure = error)));
+
+    expect(failure).toBeInstanceOf(LogoutUnconfirmedError);
+    expect(tokenStorage.get()).toBeNull();
+    expect(onSignOut).toHaveBeenCalledTimes(1);
+  });
+
+  it('throws for a tokenManager of another storage', () => {
+    const other = new TokenStorage({
+      key: 'security-logout-other',
+      storage: new InMemoryStorage(),
+    });
+    const manager = new JwtTokenManager(other, neverRefreshes);
+    try {
+      expect(() =>
+        renderHook(() => useSecurity(tokenStorage, { tokenManager: manager })),
+      ).toThrow(/another TokenStorage/);
+    } finally {
+      other.destroy();
     }
   });
 });
