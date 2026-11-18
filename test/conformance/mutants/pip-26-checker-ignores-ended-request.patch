@@ -1,0 +1,17 @@
+# Rule: PIP-26
+# Mutant: a check is decided whether or not the adapter has ended its request
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.AuthorizationCheckerTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+index ab00dfb4..c2a874ef 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/AuthorizationChecker.kt
+@@ -120,7 +120,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
+ 
+     @Suppress("TooGenericExceptionCaught")
+     private suspend fun decided(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
+-        if (security.inProgress) pipeline.check(security, action, resource) else ended(security)
++        pipeline.check(security, action, resource)
+     } catch (e: CancellationException) {
+         if (!currentCoroutineContext().isActive) {
+             throw e
