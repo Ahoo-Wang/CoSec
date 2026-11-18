@@ -171,7 +171,14 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 
 ## 从 `@ahoo-wang/fetcher-cosec` 迁移 {#coming-from-ahoo-wang-fetcher-cosec}
 
-CoSec 8 应用的客户端是 `@ahoo-wang/cosec-fetcher`，它的 React hooks 是 `@ahoo-wang/cosec-react`。它们取代 `@ahoo-wang/fetcher-cosec` 和 `@ahoo-wang/fetcher-react` 中的 CoSec hooks，随 CoSec 发布并使用 CoSec 的版本号，遵循本页的约定。旧包遵循的是 CoSec 7 的约定，不能用于 8.0 服务器。在 8.0 正式发布之前，这两个包以 dist-tag 发布，所以安装 `@ahoo-wang/cosec-fetcher@beta`，而不是默认版本。把 `package.json` 和每处 import 中的包名改掉，把 hooks 的 import 从 `@ahoo-wang/fetcher-react` 改为 `@ahoo-wang/cosec-react`。行为上的不同：
+CoSec 8 应用的客户端是 `@ahoo-wang/cosec-fetcher`，它的 React hooks 是 `@ahoo-wang/cosec-react`。它们取代 `@ahoo-wang/fetcher-cosec` 和 `@ahoo-wang/fetcher-react` 中的 CoSec hooks，随 CoSec 发布并使用 CoSec 的版本号，遵循本页的约定。旧包遵循的是 CoSec 7 的约定，不能用于 8.0 服务器。连同它们的对等依赖（fetcher 的各个包）一起安装：
+
+```bash
+pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \
+  @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
+```
+
+在 8.0 正式发布之前，这两个包的 `latest` 标签指向一个标为已弃用的 `0.0.0` 占位版本，所以不带 `@beta` 安装得到的是占位版本和一条弃用提示，而不是客户端；正式发布之后去掉 `@beta`。把 `package.json` 和每处 import 中的包名改掉，把 hooks 的 import 从 `@ahoo-wang/fetcher-react` 改为 `@ahoo-wang/cosec-react`。行为上的不同：
 
 | 旧包的做法 | `cosec-fetcher` 的做法 |
 |---|---|

@@ -223,8 +223,15 @@ it expects a `401` is looking at a refusal without CORS headers.
 The client of a CoSec 8 application is `@ahoo-wang/cosec-fetcher`, and its React hooks are `@ahoo-wang/cosec-react`.
 They replace `@ahoo-wang/fetcher-cosec` and the CoSec hooks of `@ahoo-wang/fetcher-react`, are released with CoSec at its
 version, and speak the contract of this page. The old package speaks the contract of CoSec 7 and does not work against an 8.0
-server. Until 8.0 is released the packages are published under a dist-tag, so install
-`@ahoo-wang/cosec-fetcher@beta`, not the default. Change the package name in `package.json` and in every import, and the
+server. Install them with their peer dependencies (the fetcher packages):
+
+```bash
+pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \
+  @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
+```
+
+Until 8.0 is released, the `latest` tag of both packages points at a `0.0.0` placeholder marked deprecated, so an install
+without `@beta` gets the placeholder and a deprecation notice, not the client; after the release, drop `@beta`. Change the package name in `package.json` and in every import, and the
 hooks' imports from `@ahoo-wang/fetcher-react` to `@ahoo-wang/cosec-react`. What behaves differently:
 
 | What the old package did | What `cosec-fetcher` does |
