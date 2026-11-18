@@ -414,7 +414,7 @@ Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
 某个 `cocache.caches.[<CacheName>].*` 条目或 `CacheSpecCustomizer` 设置了 CoSec 在其缓存上锁定的字段，例如快照存储的
-`ttl`、`unknown-read` 或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
+`ttl`、`unknown-read`、吊销表的 `absent-ttl`，或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
 能让该条目启动，但 CoSec 约束的字段保持原值（[优先级](./configuration.md#precedence)）。
 
 ```text

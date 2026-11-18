@@ -524,7 +524,7 @@ Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
 A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec locks on its caches, such as
-the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
+the `ttl` or `unknown-read` of the snapshot store, the `absent-ttl` of a revocation table, or a `key-prefix`. Remove the setting, or exclude CoSec's caches from
 the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
 ([Precedence](./configuration.md#precedence)).
 

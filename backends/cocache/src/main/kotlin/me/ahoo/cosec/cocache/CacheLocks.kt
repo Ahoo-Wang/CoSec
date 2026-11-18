@@ -47,6 +47,9 @@ internal object CacheLocks {
      */
     private val COMMAND_TIMEOUT: Duration = ChronoUnit.FOREVER.duration
 
+    /** How long a revocation table keeps "not revoked" locally ([RevokedTokenCache.MISSING_TTL_SECONDS]). */
+    private val NOT_REVOKED_FOR: Duration = Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS)
+
     fun of(cacheName: String, readOnly: Boolean = false): Locks = Locks.builder(LOCKED_BY).apply {
         lockLayout(*LayoutField.entries.toTypedArray())
         // Read-only is CoSec's (SNP-18): where the control plane runs it writes the documents, and elsewhere a
@@ -81,6 +84,12 @@ internal object CacheLocks {
                 // A read that times out is unavailable, which the pipeline lets through (PIP-7): a timeout shorter than
                 // the store's command timeout, from cocache.defaults.store.read-timeout say, would widen that.
                 constrain(PolicyField.READ_TIMEOUT) { COMMAND_TIMEOUT }
+                // "Not revoked" is kept locally for at most MISSING_TTL_SECONDS: past a lost invalidation, a longer
+                // absent-ttl would accept a revoked token for that long. Of the other fields of a Store, none can lengthen
+                // it: a missing entry lives min(absent-ttl, local-max-age); a revocation is written with a lifetime of its
+                // own, which neither ttl nor ttl-jitter shortens in Redis; local-maximum-size only evicts.
+                lock(PolicyField.ABSENT_TTL)
+                constrain(PolicyField.ABSENT_TTL) { NOT_REVOKED_FOR }
             }
 
             TOKEN_FAMILY_CACHE_NAME -> {

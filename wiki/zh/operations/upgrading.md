@@ -881,6 +881,10 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 
 只适用于已在运行 8.0.0 预览版的部署：每个预览版到下一个之间的变化，新的在前。7.x 部署不需要这一部分，上面一节就是完整的升级。8.0 正式发布时这些说明将删除。
 
+### 从 8.0.0-beta.2 升级 {#from-8-0-0-beta-2}
+
+- **安全：吊销表最多把“未吊销”保留 30 秒。** 直到 8.0.0-beta.2，`RevokedTokenCache` 和 `RevokedSubjectCache` 的 `absent-ttl` 没有锁定，所以 `cocache.caches.RevokedTokenCache.absent-ttl`、`cocache.defaults.store.absent-ttl` 或定制器都能延长它，错过失效消息的实例会在那么长时间里接受已吊销的令牌。现在它由 CoSec 决定，为 30 秒：为任一吊销表设置 `cocache.caches.[name].absent-ttl` 会使启动失败（请删除它），全局默认值和定制器也不再影响它。
+
 ### 从 8.0.0-beta.1 升级 {#from-8-0-0-beta-1}
 
 - **升级前：给每个限制了命令的数据面 Redis 用户加上 `+evalsha_ro +eval_ro`。** 不运行控制面的实例现在以只读方式读取文档和候选，即 `EVALSHA_RO`（Redis 7.0 或更高版本，CoCache 8 本已要求）。用一个列出命令的用户（例如 beta.1 的[谁可以写哪些 key](./storage.md#who-may-write-which-keys) 给出的那个：先 `-@all`，再在其他命令中给出 `+evalsha +eval`），升级后的实例会在启动时失败：`Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]: allow [+evalsha_ro] ...`。请先加上这两个命令；没有命令列表的用户（`+@all`）不需要任何改动。把文档和候选收窄为读权限（`%R~<s>:snapshot:* %R~<s>:candidate:*`）是可选的，页面上给出了写法。运行控制面的进程不变：它仍然写入它们。
