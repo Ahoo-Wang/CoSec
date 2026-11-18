@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
-index c9a077a2..0e261b71 100644
+index 941e5d39..81d00996 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
-@@ -31,7 +31,6 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: Slot
+@@ -31,7 +31,6 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: KeyC
      val abandoned: Boolean get() = reads.get() == ABANDONED
  
      fun progressed() {

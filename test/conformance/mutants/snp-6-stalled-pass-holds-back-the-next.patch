@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
-index c9a077a2..f91ddb19 100644
+index 941e5d39..57d2b46a 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/Pass.kt
-@@ -55,8 +55,7 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: Slot
+@@ -55,8 +55,7 @@ internal class Pass(val done: CompletableFuture<Void>, private val context: KeyC
       * Abandons this pass if it has finished no document for [SnapshotOptions.storeReadTimeout] and has no read in
       * flight; only one with no read can be, so [startRead] never succeeds after this does.
       */

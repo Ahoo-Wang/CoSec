@@ -32,7 +32,7 @@ private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
  * backoff, and remembers that one did. [usableOf] is the source's, first called by [start], after construction.
  */
 internal class Prewarms(
-    private val context: SlotContext,
+    private val context: KeyContext,
     private val usableOf: (SnapshotKey) -> CompletableFuture<out SnapshotEntry<*>>,
 ) {
     private val pending: MutableSet<CompletableFuture<Void>> = ConcurrentHashMap.newKeySet()

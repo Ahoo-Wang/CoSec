@@ -26,7 +26,7 @@ import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
 /**
- * The key-level stand-in for the runner (RFC 0013 B2b, step 1), on [SlotModelThreads] and [SlotModelStore]. As dumb as
+ * The key-level stand-in for the runner (RFC 0013 B2b, step 1), on [SourceModelThreads] and [SourceModelStore]. As dumb as
  * it can be: events are taken in the order they were offered, each effect is executed as the page says, in the order
  * [KeyTransitions.next] returned it, and an event an effect raises is queued behind what is there, never recursed into.
  * It drops, merges and reorders nothing; every such decision is `next`'s.
@@ -198,8 +198,8 @@ internal class KeyModelRunner(
     /** What the world must provide a runner: the store, the threads, `families.seen`, and where answers are recorded. */
     interface KeyModelWorld {
         val key: me.ahoo.cosec.spi.snapshot.SnapshotKey
-        val store: SlotModelStore
-        val threads: SlotModelThreads
+        val store: SourceModelStore
+        val threads: SourceModelThreads
         val storeReadTimeout: java.time.Duration
         val counts: MutableMap<String, Int>
         var seen: Seen?

@@ -17,20 +17,17 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyRunner.Companion.K
-import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
- * A [SlotFactory] of [KeyRunner]s for a source's tests (RFC 0013 B2b): each drain takes [k] events, and [hooks] reach only the keys [hooked] accepts.
+ * The [KeyRunner.Settings] of a source's tests (RFC 0013 B2b): each drain takes [k] events, and [hooks] reach only the keys [hooked] accepts.
  */
 internal fun keyRunners(
     k: Int = K,
     hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE,
     hooked: (SnapshotKey) -> Boolean = { true },
-): SlotFactory = keyRunners(k, hooksOf = { key -> if (hooked(key)) hooks else KeyDrain.Hooks.NONE })
+): KeyRunner.Settings = KeyRunner.Settings(k) { key -> if (hooked(key)) hooks else KeyDrain.Hooks.NONE }
 
 /** As above, with each key's own [hooksOf]: a hook that needs to know which key it runs for. */
-internal fun keyRunners(k: Int, hooksOf: (SnapshotKey) -> KeyDrain.Hooks): SlotFactory = object : SlotFactory {
-    override fun <T : Any> create(key: SnapshotKey, compiler: SnapshotCompiler<T>, context: SlotContext): KeySlot<T> =
-        KeyRunner(key, compiler, context, k, hooksOf(key))
-}
+internal fun keyRunners(k: Int, hooksOf: (SnapshotKey) -> KeyDrain.Hooks): KeyRunner.Settings =
+    KeyRunner.Settings(k, hooksOf)

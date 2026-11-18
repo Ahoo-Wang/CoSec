@@ -22,13 +22,13 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 
 /**
- * The oracle itself (`SNP-7` at the claim, [SlotModel.claimed]): each of its eviction checks fails when it should, apart
+ * The oracle itself (`SNP-7` at the claim, [SourceModel.claimed]): each of its eviction checks fails when it should, apart
  * from any run of the source. The property test's scripts rarely make a claim on a stale choice, so this is where the
  * checks are shown able to fail.
  */
-class SlotModelOracleTest {
-    private val store = SlotModelStore({ 0L }, { 0L }).apply { hold = false }
-    private val model = SlotModel(store, SlotModelThreads(), OPTIONS, listOf(APP_A, APP_B))
+class SourceModelOracleTest {
+    private val store = SourceModelStore({ 0L }, { 0L }).apply { hold = false }
+    private val model = SourceModel(store, SourceModelThreads(), OPTIONS, listOf(APP_A, APP_B))
 
     /** An absent entry of [key], answered by a live read and reported installed through the model's metrics. */
     private fun installedAbsent(key: SnapshotKey): SnapshotEntry<*> {

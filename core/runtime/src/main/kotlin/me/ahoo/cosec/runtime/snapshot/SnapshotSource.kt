@@ -101,8 +101,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private val ticker: LongSupplier,
     /** Tests only (RFC 0013 B2b): housekeeping on an executor the test runs, in place of the thread started here. */
     housekeeping: ExecutorService? = null,
-    /** Tests only (RFC 0013 B2b): what makes each key's slot; [SlotFactory.RUNNER] in production. */
-    slots: SlotFactory = SlotFactory.RUNNER,
+    /** Tests only (RFC 0013 B2b): the K and the hooks of each key's runner; the defaults in production. */
+    runners: KeyRunner.Settings = KeyRunner.Settings(),
 ) : AutoCloseable {
     private val refusals = HousekeepingRefusals()
     private val metrics = GuardedSnapshotMetrics(metrics, refusals)
@@ -121,9 +121,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping, this.metrics, refusals)
     internal val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics)
-    private val context =
-        SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, slots)
-    internal val shared = slots.create(sharedKey, sharedCompiler, context)
+    internal val context =
+        KeyContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, runners)
+    internal val shared = runners.create(sharedKey, sharedCompiler, context)
 
     /** Tests only: runs between finding a family's slot and using it, to force an eviction into that gap. */
     @Volatile
@@ -416,9 +416,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /**
      * Runs [action] on the slot of [key]. A slot removed between this lookup and the action (evicted or forgotten) sends
-     * the request on to the key's current slot itself ([KeySlot.request]), so nothing here retries.
+     * the request on to the key's current slot itself ([KeyRunner.request]), so nothing here retries.
      */
-    private inline fun <R : Any> withSlot(key: SnapshotKey, action: (KeySlot<A>) -> R): R {
+    private inline fun <R : Any> withSlot(key: SnapshotKey, action: (KeyRunner<A>) -> R): R {
         val slot = familyOf(key).slotFor(key, context)
         afterSlotLookup?.invoke(key)
         return action(slot)
