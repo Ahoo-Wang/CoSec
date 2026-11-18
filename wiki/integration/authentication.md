@@ -72,7 +72,8 @@ issues one. A `may_act` claim only says who may act for the subject, so it is ig
 The pipeline reads the request's credentials, then asks one `Authenticator` who the caller is. The starter's is a
 `CompositeAuthenticator` of two:
 
-- **`TokenAuthenticator`** verifies the token with the JWT algorithm, then asks the revocation reader whether the
+- **`TokenAuthenticator`** verifies the token with the `TokenVerifier` bean, CoSec's `JwtTokenVerifier` unless the
+  application declares its own (refresh and logout verify with the same one, `IDN-25`), then asks the revocation reader whether the
   token, or every token of its principal, was revoked. Only `TokenVerifier.verify` (and `refresh`) turns a token into
   a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
   (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
@@ -297,8 +298,12 @@ fails too, with `DelegationUnsupportedException`.
 
 **The starter serves the refresh route** when `cosec.authentication.login.refresh.path` is set (`IDN-23`), on Spring
 MVC and on WebFlux: the pair in, a new pair of the session out, and each failure answered with the problem type that
-names it ([Building a client](./clients.md#what-your-application-serves) has the wire). It uses your
-`MembershipRefresh<RefreshTokenCredentials>` bean when there is one. Unset, nothing is served, and you write the route
+names it ([Building a client](./clients.md#what-your-application-serves) has the wire). It refreshes with
+your `RefreshTokenAuthentication<RefreshTokenCredentials>` bean when you declare one, its hook included; otherwise with
+the starter's, which uses your `MembershipRefresh<RefreshTokenCredentials>` bean when there is one. When you declare
+both, your `RefreshTokenAuthentication` wins, and the route does not use the `MembershipRefresh` bean (`IDN-25`). A
+`RefreshTokenAuthentication` over a credentials class of your own cannot serve the route, which presents the pair:
+with the path set, startup fails. Unset, nothing is served, and you write the route
 as below. Either way a refresh carries the access token that expired, so a caller without a token must be able to reach
 the route, or the refresh is itself `401 token-expired`: [Building a client](./clients.md#what-your-application-serves)
 shows the statement, and the starter logs a `WARN` naming the property when a document refuses the route it serves.

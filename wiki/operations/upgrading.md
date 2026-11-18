@@ -1174,6 +1174,19 @@ The RFCs behind 8.0 list known differences. Each item is covered above, or descr
 Only for a deployment that already runs an 8.0.0 preview: what changed from each preview to the next, newest first. A 7.x
 deployment needs none of it; the section above is the whole upgrade. These notes are removed when 8.0 is released.
 
+### From 8.0.0-beta.2 {#from-8-0-0-beta-2}
+
+- **Security: requests verify with the application's `TokenVerifier`.** Through 8.0.0-beta.2 the starter's pipeline
+  verified request tokens with CoSec's own `JwtTokenVerifier`, even when the application declared a `TokenVerifier`
+  bean, which refresh and logout did use. A stricter verifier of your own (an audience check, say) therefore refused a
+  token at refresh but not on a request. Now a request, a refresh and a logout verify with the same one (`IDN-25`).
+  Nothing changes for an application without its own `TokenVerifier`.
+- **Security: the served refresh route uses your `RefreshTokenAuthentication`.** Through 8.0.0-beta.2 the route built
+  its own and used only a `MembershipRefresh<RefreshTokenCredentials>` bean, so a hook declared inside your
+  `RefreshTokenAuthentication` bean (refusing a disabled user, say) did not apply to it. Now your bean serves the
+  route. One over a credentials class of your own fails startup while `cosec.authentication.login.refresh.path` is
+  set: serve that refresh from your own route and unset the path, or declare it over `RefreshTokenCredentials`.
+
 ### From 8.0.0-beta.1 {#from-8-0-0-beta-1}
 
 - **Before upgrading: add `+evalsha_ro +eval_ro` to every data-plane Redis user whose commands are restricted.** An

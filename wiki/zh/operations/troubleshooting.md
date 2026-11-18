@@ -348,6 +348,14 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。设置 `spring.main.lazy-initialization=true` 时每项检查同样运行（`STA-3`）。
 
+### 刷新路由的认证导致启动失败 {#startup-fails-on-the-refresh-routes-authentication}
+
+```text
+cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <your credentials class>, not the pair the served route presents ... (IDN-25).
+```
+
+starter 用你的 `RefreshTokenAuthentication` Bean 提供刷新路由，但你的 Bean 接收的是你自己的凭证类（例如令牌对之外还带设备 id），提供的路由无法从请求中构造它。请从你自己的路由提供那个刷新并取消 `cosec.authentication.login.refresh.path`，或者基于 `RefreshTokenCredentials` 声明它（[刷新令牌](../integration/authentication.md#refreshing-tokens)）。
+
 ### 暴露了 actuator 端点导致启动失败 {#startup-fails-on-an-exposed-actuator-endpoint}
 
 ```text

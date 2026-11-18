@@ -124,6 +124,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them`**: CoCache 8's own check of
   its `Store`s, which `eviction-check=warn` does not reach. Allow `INFO`, or, once `noeviction` is set, set
   `cocache.redis.assume-maxmemory-policy=noeviction`; `allkeys-*` is never accepted.
+- **`cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <class> ... (IDN-25)`**:
+  the application's `RefreshTokenAuthentication` takes credentials of its own class, which the served refresh route
+  cannot present; serve that refresh from the application's own route and unset the path, or declare it over
+  `RefreshTokenCredentials`.
 - **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
   field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
   any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained
