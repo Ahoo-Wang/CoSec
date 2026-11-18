@@ -1,0 +1,50 @@
+{
+  "rules": [
+    "IDN-24"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "alice logs out through the route the starter serves, with her pair: 204, her session is ended.",
+  "refresh": {
+    "logout": {
+      "access": {
+        "jti": "a1",
+        "sub": "alice",
+        "tenantId": "acme",
+        "iat": 1793404800,
+        "claims": {
+          "sid": "f1",
+          "auth_time": 1793404800,
+          "cosec.generation": 1
+        }
+      },
+      "refresh": {
+        "jti": "r1",
+        "sub": "a1",
+        "iat": 1793404800,
+        "claims": {
+          "cosec.token": "refresh",
+          "sid": "f1",
+          "auth_time": 1793404800,
+          "cosec.generation": 1
+        }
+      }
+    }
+  },
+  "families": [
+    {
+      "id": "f1",
+      "tenant": "acme",
+      "principal": "alice",
+      "authTime": "2026-10-31T00:00:00Z",
+      "generation": 1
+    }
+  ],
+  "expect": {
+    "status": 204,
+    "proceed": true
+  },
+  "revocations": {
+    "tokens": []
+  }
+}

@@ -1,0 +1,18 @@
+# Rule: IDN-23, IDN-14
+# Mutant: the served refresh answers a revocation read that failed 401, as a refusal, so the client ends a session nothing refused
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.LoginRoutesTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ServedLoginRoutesTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
+index 5292c454..42f9a7dc 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/RouteFailure.kt
+@@ -55,7 +55,8 @@ internal object RouteFailure {
+         is TokenExpiredException -> ProblemType.TOKEN_EXPIRED
+         is TokenRevokedException -> ProblemType.TOKEN_REVOKED
+         is TokenVerificationException -> ProblemType.TOKEN_INVALID
+-        is RevocationUnavailableException, is SessionStoreUnavailableException -> ProblemType.UNAVAILABLE
++        is RevocationUnavailableException -> ProblemType.TOKEN_INVALID
++        is SessionStoreUnavailableException -> ProblemType.UNAVAILABLE
+         else -> ProblemType.INTERNAL_ERROR
+     }
+ }

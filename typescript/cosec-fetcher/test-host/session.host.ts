@@ -18,7 +18,9 @@ import {
   createHostClient,
   destroyHostClients,
   endSession,
-  failNextRefresh,
+  refreshError,
+  revocationsDown,
+  revocationsUp,
   login,
   loginExpired,
   recordWire,
@@ -168,32 +170,47 @@ describe('a signed-in session against a real host', () => {
     expect(onUnauthorized).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the pair when the host cannot refresh (503), and the next call refreshes', async () => {
-    const onUnauthorized = vi.fn();
-    // No retries inside the call: the first call is the one that sees the 503.
-    const { client, tokens } = createHostClient({
-      config: { onUnauthorized, refreshRetryDelays: [] },
-    });
-    const pair = await loginExpired('alice');
-    tokens.signIn(pair);
-    await failNextRefresh();
-    const wire = recordWire();
-    const error = await client.get('/orders/1').catch(error => error);
-    expect(error).toBeInstanceOf(Error);
-    expect(wire).toEqual(['/auth/refresh 503']);
-    expect(tokens.get()?.token).toEqual(pair);
-    expect(onUnauthorized).not.toHaveBeenCalled();
-
-    const response = await client.get('/orders/1');
-    expect(response.status).toBe(200);
-    expect(wire).toEqual([
+  it.each([
+    [
+      'cannot read the revocations (503)',
       '/auth/refresh 503',
-      '/auth/refresh 200',
-      '/orders/1 200',
-    ]);
-    expect(await stats()).toEqual({ logins: 1, refreshes: 2 });
-    expect(tokens.get()?.token.accessToken).not.toBe(pair.accessToken);
-  });
+      revocationsDown,
+      revocationsUp,
+    ],
+    [
+      'fails with an error (500)',
+      '/auth/refresh 500',
+      () => refreshError(true),
+      () => refreshError(false),
+    ],
+  ] as const)(
+    'keeps the pair when the host %s, and the next call refreshes',
+    async (_case, refused, fail, recover) => {
+      const onUnauthorized = vi.fn();
+      // No retries inside the call: the first call is the one that sees the failure.
+      const { client, tokens } = createHostClient({
+        config: { onUnauthorized, refreshRetryDelays: [] },
+      });
+      const pair = await loginExpired('alice');
+      tokens.signIn(pair);
+      await fail();
+      const wire = recordWire();
+      const error = await client
+        .get('/orders/1')
+        .catch(error => error)
+        .finally(recover);
+      expect(error).toBeInstanceOf(Error);
+      expect(wire).toEqual([refused]);
+      expect(tokens.get()?.token).toEqual(pair);
+      expect(onUnauthorized).not.toHaveBeenCalled();
+
+      const response = await client.get('/orders/1');
+      expect(response.status).toBe(200);
+      expect(wire).toEqual([refused, '/auth/refresh 200', '/orders/1 200']);
+      expect(await stats()).toEqual({ logins: 1, refreshes: 2 });
+      expect(tokens.get()?.token.accessToken).not.toBe(pair.accessToken);
+    },
+  );
 });
 
 describe('credentials on the wire', () => {

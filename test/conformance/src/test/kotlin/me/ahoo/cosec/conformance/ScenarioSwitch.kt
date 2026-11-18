@@ -25,6 +25,7 @@ import me.ahoo.cosec.engine.EngineRequest
 import me.ahoo.cosec.engine.Evaluation
 import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
+import me.ahoo.cosec.login.token.SessionStoreUnavailableException
 import me.ahoo.cosec.login.token.SwitchTenantAuthentication
 import me.ahoo.cosec.login.token.SwitchTenantCredentials
 import me.ahoo.cosec.login.token.TenantMembership
@@ -121,7 +122,7 @@ internal object ScenarioSwitch {
             Outcome.Answered(401, false, "token-invalid")
         } catch (_: RevocationUnavailableException) {
             Outcome.Answered(503, false, "unavailable")
-        } catch (_: IllegalStateException) {
+        } catch (_: SessionStoreUnavailableException) {
             // A family record that cannot be read (the scenario's "unavailable"): nothing is issued.
             Outcome.Answered(503, false, "unavailable")
         } catch (e: CancellationException) {

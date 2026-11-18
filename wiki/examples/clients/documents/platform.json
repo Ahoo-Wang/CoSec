@@ -12,7 +12,8 @@
           "action": "http:POST",
           "resource": [
             "http:path:/auth/login",
-            "http:path:/auth/refresh"
+            "http:path:/auth/refresh",
+            "http:path:/auth/logout"
           ]
         },
         {
@@ -31,6 +32,20 @@
       "app": "*",
       "space": "*",
       "policy": "client-routes"
+    }
+  ],
+  "rateLimits": [
+    {
+      "id": "sign-in-refresh-logout-per-ip",
+      "action": "http:POST",
+      "resource": [
+        "http:path:/auth/login",
+        "http:path:/auth/refresh",
+        "http:path:/auth/logout"
+      ],
+      "key": "environment.ip",
+      "permitsPerSecond": 0.5,
+      "windowSeconds": 60
     }
   ]
 }

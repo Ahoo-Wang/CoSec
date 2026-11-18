@@ -119,6 +119,14 @@ also be too old ([A service behind the gateway refuses requests](#a-service-behi
 A refresh refused as `token-expired`: the session's lifetime is over ([`cosec.jwt.session.lifetime`](./configuration.md#jwt),
 30 days from the login). Sign in again.
 
+**Every refresh is answered `401 token-expired` (or `unauthorized`), and clients sign out when their access token
+expires.** No statement permits an anonymous `POST` of the refresh route: its request carries the access token that
+expired, which CoSec reads as anonymous (`PIP-6`), so the route is refused before it runs. On the route the starter serves,
+look for the `WARN` `cosec.authentication.login.refresh.path=<path>: no statement permits an anonymous POST of it` (or
+`a DENY statement matches` it, or `the tenant's platform boundary does not cover it`), and for `denied since` on the
+`cosecLoginRoutes` health indicator. Permit `http:POST` on the path to anyone
+([Building a client](../integration/clients.md#what-your-application-serves)); the same holds for the logout route.
+
 ### `token-revoked` {#token-revoked}
 
 The token was revoked by logout, or every token of its principal issued before a subject revocation was revoked
@@ -685,6 +693,8 @@ random one.
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | Add what it names, or set [`delivery`](./configuration.md#control-plane) to `best-effort`. |
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | Enable CoSec's tokens with `cosec-cocache`, or declare a `RevocationReader` bean; `RevocationReader.NONE` only when no approver's credential is ever revoked ([Control plane](./configuration.md#control-plane)). |
 | `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | Raise the first or lower the second: a revocation must outlive every approval its token gave. |
+| `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | A gateway issues no sessions: unset it there, and set it on the service that issues them, behind the gateway. |
+| `... is set, but this application serves no HTTP ...`, `... is set, but login or JWT is off ...`, `... is not one plain absolute path ...`, `... name one path ...` | Unset the [login route path](./configuration.md#authentication), or give the host what it names: a web stack, `cosec.authentication.login.enabled` and `cosec.jwt.enabled`, one plain path per route. |
 
 ## Control-plane errors
 

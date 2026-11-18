@@ -108,6 +108,9 @@ internal object StatusMapping {
     fun error(requestId: String, error: Throwable, traceId: String?): Outcome =
         problem(ProblemType.INTERNAL_ERROR, requestId, traceId, Basis.Error(error))
 
+    /** The problem of a route CoSec serves after the pipeline permitted its request: [routeProblem]. */
+    fun routeProblem(type: ProblemType, requestId: String): Problem = Problem(type, requestId, null)
+
     private fun denied(decision: Decision.Deny, authn: AuthnResult): ProblemType = when (authn) {
         is AuthnResult.Rejected -> when (authn.reason) {
             AuthnResult.RejectReason.TOKEN_EXPIRED -> ProblemType.TOKEN_EXPIRED

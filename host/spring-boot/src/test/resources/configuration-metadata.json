@@ -26,6 +26,18 @@
       "type": "me.ahoo.cosec.spring.boot.authentication.LoginProperties"
     },
     {
+      "name": "cosec.authentication.login.logout",
+      "sourceMethod": "getLogout()",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties",
+      "type": "me.ahoo.cosec.spring.boot.authentication.LoginProperties$ServedRoute"
+    },
+    {
+      "name": "cosec.authentication.login.refresh",
+      "sourceMethod": "getRefresh()",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties",
+      "type": "me.ahoo.cosec.spring.boot.authentication.LoginProperties$ServedRoute"
+    },
+    {
       "name": "cosec.authentication.login.social",
       "sourceType": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties",
       "type": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties"
@@ -271,6 +283,18 @@
       "name": "cosec.authentication.login.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties",
       "type": "java.lang.Boolean"
+    },
+    {
+      "description": "Where the starter serves `POST` of this route, such as `/auth/refresh`. Unset (the default), it is not served and the application serves its own.",
+      "name": "cosec.authentication.login.logout.path",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties$ServedRoute",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "Where the starter serves `POST` of this route, such as `/auth/refresh`. Unset (the default), it is not served and the application serves its own.",
+      "name": "cosec.authentication.login.refresh.path",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties$ServedRoute",
+      "type": "java.lang.String"
     },
     {
       "description": "Whether social login is on (`cosec-social`); it needs `cosec.authentication.login.enabled`.",
