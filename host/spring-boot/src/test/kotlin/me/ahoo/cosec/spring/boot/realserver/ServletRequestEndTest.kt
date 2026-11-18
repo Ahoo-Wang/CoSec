@@ -170,7 +170,10 @@ class ServletRequestEndTest {
     class OnJetty
 
     private fun start(container: String): ConfigurableApplicationContext =
-        SpringApplicationBuilder(Mvc::class.java, if (container == "tomcat") OnTomcat::class.java else OnJetty::class.java)
+        SpringApplicationBuilder(
+            Mvc::class.java,
+            if (container == "tomcat") OnTomcat::class.java else OnJetty::class.java
+        )
             .web(WebApplicationType.SERVLET)
             .properties("server.port=0", "spring.main.banner-mode=off")
             .run()
