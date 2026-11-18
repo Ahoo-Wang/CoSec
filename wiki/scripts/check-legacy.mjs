@@ -104,17 +104,26 @@ const ALLOWED = [
     reason: 'states that conditions have no expression language ("no SpEL, no OGNL")',
   },
   {
-    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    files: [
+      'wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md',
+      'wiki/operations/upgrading-previews.md', 'wiki/zh/operations/upgrading-previews.md',
+    ],
     terms: ['me.ahoo.cosec.cache', 'me.ahoo.cosec.servlet', 'me.ahoo.cosec.spring.boot.starter'],
     reason: 'the upgrade entry that renames the three packages names the old ones',
   },
   {
-    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    files: [
+      'wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md',
+      'wiki/operations/upgrading-previews.md', 'wiki/zh/operations/upgrading-previews.md',
+    ],
     terms: ['me.ahoo.cosec.runtime.document', 'me.ahoo.cosec.runtime.route'],
     reason: 'the upgrade entry that moves them to cosec-document names the old packages',
   },
   {
-    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    files: [
+      'wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md',
+      'wiki/operations/upgrading-previews.md', 'wiki/zh/operations/upgrading-previews.md',
+    ],
     terms: [
       'SimpleCompositeToken', 'SimpleRefreshTokenAuthentication', 'DefaultTokenRevoker', 'CoSec.COSEC',
       'AbstractSwitchTenantAuthentication',
@@ -123,7 +132,10 @@ const ALLOWED = [
     reason: 'the A3 upgrade entries, and the earlier preview entries, name the old classes',
   },
   {
-    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    files: [
+      'wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md',
+      'wiki/operations/upgrading-previews.md', 'wiki/zh/operations/upgrading-previews.md',
+    ],
     terms: [
       'KafkaAuditEventSink', 'SimpleSecurityContext', 'PolicyType', 'RoleCapable', 'RevocableTokenVerifier',
       'TokenStore.NoOp', 'SnapshotVersion', 'CoSec-App-Id', 'ApiKeyStore', 'FlatTrace', 'supportCredentials',
@@ -132,12 +144,18 @@ const ALLOWED = [
     reason: 'the 8.0.0-alpha upgrade entries that remove or rename them name the old ones',
   },
   {
-    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    files: [
+      'wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md',
+      'wiki/operations/upgrading-previews.md', 'wiki/zh/operations/upgrading-previews.md',
+    ],
     terms: ['me.ahoo.cosec.engine.flat'],
     reason: 'the R9 entry that renames FlatTrace names it where it was',
   },
   {
-    files: ['wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md'],
+    files: [
+      'wiki/operations/upgrading.md', 'wiki/zh/operations/upgrading.md',
+      'wiki/operations/upgrading-previews.md', 'wiki/zh/operations/upgrading-previews.md',
+    ],
     terms: ['cosec-migrate cocache8'],
     reason: 'the alpha.2 section says how to move CoCache 6 data with the 8.0.0-alpha.4 tool, and the entry that removes the command names it',
   },

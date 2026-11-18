@@ -1,0 +1,17 @@
+{
+  "description": "The status the id carries is read by its own condition: even the owner is denied.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "order:cancel",
+    "resource": {
+      "type": "order-of",
+      "id": "alice/shipped/42"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

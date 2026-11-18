@@ -66,6 +66,28 @@ gateway (`cosec.pipeline.mode=gateway`), `IdentityGate`. It is not an extension 
 `StatusMapping`, and a gate of your own would be a second decision path. The compiler holds this: implementing
 `RequestGate` requires the `@InternalCoSecApi` opt-in (`@SubclassOptInRequired`), which applications never give.
 
+## Pipeline outside the adapters
+
+A transport of your own (an internal port, a WebSocket handshake, a custom server) reads the request into `HttpFacts`
+and calls `Pipeline.evaluate`, as the web adapters do. It answers an `Outcome`. A refused request has a `status`, a
+`problem` to write with `ProblemEncoder` and `headers` to set. A permitted one (`proceed`) carries the context of the
+request, `Outcome.security?.securityContext`: the `SecurityContext` your code reads, and the only kind an
+`AuthorizationChecker` accepts ([Checks in code](../integration/checks.md)):
+
+```kotlin
+val outcome = pipeline.evaluate(facts)
+if (!outcome.proceed) {
+    return respond(outcome.status, outcome.headers, outcome.problem?.let(ProblemEncoder::encode))
+}
+val security: SecurityContext = checkNotNull(outcome.security).securityContext
+val mayCancel = AuthorizationChecker(pipeline).check(security, "order:cancel", "order/42")
+```
+
+The context is for that request only, like the one a web adapter binds. `Pipeline.evaluate`, `Outcome`, `HttpFacts`
+and `RequestSecurity` are `@ExperimentalCoSecApi` ([Stability levels](#stability-levels)). Running the pipeline on such
+a port is how a service verifies a token it receives there, rather than calling `TokenVerifier` by hand, which skips
+the revocation check ([Verifying a token outside the pipeline](../integration/authentication.md#verifying-a-token-outside-the-pipeline)).
+
 ## Stability levels
 
 Every public declaration of a published module is in one of four levels. The markers are in `cosec-annotations`

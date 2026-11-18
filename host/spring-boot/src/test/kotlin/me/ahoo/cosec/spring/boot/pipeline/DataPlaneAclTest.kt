@@ -305,7 +305,7 @@ class DataPlaneAclTest {
         for (page in listOf("../../wiki/operations/storage.md", "../../wiki/zh/operations/storage.md")) {
             File(page).readText().assert().contains(KEYS_LINE).contains(COMMANDS_LINE)
         }
-        for (page in listOf("../../wiki/operations/upgrading.md", "../../wiki/zh/operations/upgrading.md")) {
+        for (page in listOf("../../wiki/operations/upgrading-previews.md", "../../wiki/zh/operations/upgrading-previews.md")) {
             File(page).readText().assert().contains("+evalsha_ro +eval_ro")
         }
     }

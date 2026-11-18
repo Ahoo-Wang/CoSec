@@ -163,6 +163,11 @@ A route map gives each route of a service an action and a typed resource, so pol
 - A captured value that is empty or holds a `/` (a decoded `%2F`) cannot be a segment of a typed resource id: the
   request is refused with `400` `invalid-request`, never evaluated as another resource.
 
+A check in code ([Checks in code](./checks.md)) applies no route map: it decides the action and the resource it is
+given, so `check(security, "http:POST", path)` is decided as `http:POST` even where a route maps that request. Check a
+mapped route by its action and typed resource
+([A check and a mapped route](./checks.md#a-check-and-a-mapped-route)).
+
 A Spring Cloud Gateway host loads no route map: every gateway request is in the `http` namespace.
 
 With `cosec-openapi`, springdoc and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a
