@@ -18,6 +18,7 @@ package me.ahoo.cosec.spring.boot
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.beans.factory.InitializingBean
 import org.springframework.beans.factory.SmartInitializingSingleton
+import org.springframework.beans.factory.config.BeanFactoryPostProcessor
 import org.springframework.boot.LazyInitializationExcludeFilter
 
 /**
@@ -39,6 +40,15 @@ interface StartupTask {
     /** A check that runs once every singleton exists: one that reads beans, such as the exposed endpoints. */
     @InternalCoSecApi
     fun interface AfterSingletons : StartupTask, SmartInitializingSingleton
+
+    /**
+     * A check that runs before any bean of the application or of CoSec is created: one that reads only the environment
+     * or the bean definitions, and must speak first whatever else is wrong (the unknown properties). Declared by a
+     * static `@Bean` method whose return type is this type, which is how Spring finds a post-processor without
+     * creating its configuration.
+     */
+    @InternalCoSecApi
+    fun interface BeforeBeans : StartupTask, BeanFactoryPostProcessor
 
     @InternalCoSecApi
     companion object {

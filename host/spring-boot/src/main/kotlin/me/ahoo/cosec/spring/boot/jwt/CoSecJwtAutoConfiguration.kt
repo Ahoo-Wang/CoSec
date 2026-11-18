@@ -35,6 +35,7 @@ import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.authentication.ConditionalOnLoginEnabled
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.RevocationProperties
+import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -107,22 +108,17 @@ internal class CoSecJwtAutoConfiguration {
 
     /**
      * Reached only without `cosec-cocache`, whose token store comes first: revocation is always on (RFC 0008 S1b), and a
-     * store that records nothing would make logout silently do nothing, so startup fails instead.
+     * store that records nothing would make logout silently do nothing, so startup fails instead, naming every token
+     * store missing ([TokenStores]).
      */
-    @Bean
+    @Bean(TokenStores.TOKEN_STORE_STAND_IN)
     @ConditionalOnMissingBean
-    fun cosecTokenStore(): TokenStore = throw IllegalStateException(
-        "JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache " +
-            "or a TokenStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
-    )
+    fun cosecTokenStore(beans: ListableBeanFactory): TokenStore = TokenStores.fail(beans)
 
     /** Reached only without `cosec-cocache`, whose family store comes first: a refresh never runs without one. */
-    @Bean
+    @Bean(TokenStores.FAMILY_STORE_STAND_IN)
     @ConditionalOnMissingBean
-    fun cosecTokenFamilyStore(): TokenFamilyStore = throw IllegalStateException(
-        "JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add cosec-cocache " +
-            "or a TokenFamilyStore bean, or set ${JwtProperties.PREFIX}.enabled=false."
-    )
+    fun cosecTokenFamilyStore(beans: ListableBeanFactory): TokenFamilyStore = TokenStores.fail(beans)
 
     /** The refresh token families (RFC 0009): `cosec.jwt.session.*`. */
     @Bean
@@ -154,8 +150,9 @@ internal class CoSecJwtAutoConfiguration {
         revocationReader: ObjectProvider<RevocationReader>,
         tokenStore: ObjectProvider<TokenStore>,
         revocationProperties: RevocationProperties,
+        beans: ListableBeanFactory,
     ): TokenRevocation = TokenRevocation(
-        CoSecPipelineAutoConfiguration.revocationReader(revocationReader, tokenStore),
+        CoSecPipelineAutoConfiguration.revocationReader(revocationReader, tokenStore, beans),
         revocationProperties.skew,
     )
 

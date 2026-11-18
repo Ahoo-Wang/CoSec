@@ -69,11 +69,14 @@ import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
+import org.springframework.boot.test.system.CapturedOutput
+import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.kafka.core.KafkaOperations
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
@@ -146,6 +149,27 @@ class CoSecPipelineAutoConfigurationTest {
         }
     }
 
+    /** Drill 2, finding 2: a verifier over `RevocationReader.NONE` accepts revoked tokens, and startup says so once. */
+    @Test
+    @ExtendWith(OutputCaptureExtension::class)
+    fun `tokens verified against RevocationReader NONE log one warning, another reader none`(output: CapturedOutput) {
+        val warning = "Tokens are verified against RevocationReader.NONE"
+        runner.run { context ->
+            context.startupFailure.assert().isNull()
+            context.getBean(Authenticator::class.java).assert().isNotNull()
+        }
+        output.out.windowed(warning.length).count { it == warning }.assert().isEqualTo(1)
+        output.out.assert().contains(CoSecPipelineAutoConfiguration.NONE_WARNING)
+
+        val before = output.out.length
+        val reader = mockk<RevocationReader>()
+        runner.withBean("otherReader", RevocationReader::class.java, { reader }, { it.isPrimary = true }).run { context ->
+            context.startupFailure.assert().isNull()
+            context.getBean(Authenticator::class.java).assert().isNotNull()
+        }
+        output.out.substring(before).assert().doesNotContain(warning)
+    }
+
     @Test
     fun `a route map that does not exist fails startup, and an empty location means none`() {
         runner.withPropertyValues("cosec.authorization.routes.location=classpath:nowhere.json").run { context ->
@@ -185,7 +209,7 @@ class CoSecPipelineAutoConfigurationTest {
             .withBean(TokenStore::class.java, { NoTokenStore })
             .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
             .run { context ->
-                context.startupFailure!!.stackTraceToString().assert().contains("no revocation reader")
+                context.startupFailure!!.stackTraceToString().assert().contains("but RevocationReader is missing")
             }
     }
 

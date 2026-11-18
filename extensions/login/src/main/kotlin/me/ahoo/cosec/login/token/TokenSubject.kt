@@ -26,10 +26,10 @@ class TokenSubject(
     /** The principal's id: the token's subject. Not empty, and not beginning with `(`, which is CoSec's (`IDN-12`). */
     val id: String,
     /**
-     * The app the token is for (`aud`), null for none: a host with an app refuses a token declaring another or none
-     * (`SCP-11`). No default: whoever issues a token says which app it is for.
+     * The app the token is for (`aud`), null for none, as on a host without apps: a host with an app refuses a token
+     * declaring another or none (`SCP-11`), so leaving it out never makes a token valid where it was not.
      */
-    val app: String?,
+    val app: String? = null,
     /** The principal's tenant; null puts it in the default tenant. */
     val tenant: String? = null,
     val roles: Set<String> = emptySet(),

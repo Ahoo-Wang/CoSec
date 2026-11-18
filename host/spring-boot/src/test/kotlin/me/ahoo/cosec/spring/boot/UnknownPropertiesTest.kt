@@ -11,8 +11,14 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.spring.boot
 
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+import me.ahoo.cosec.spring.boot.jwt.JwtProperties
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.io.TempDir
@@ -25,6 +31,8 @@ import org.springframework.boot.context.properties.source.ConfigurationPropertyS
 import org.springframework.boot.env.YamlPropertySourceLoader
 import org.springframework.boot.support.SystemEnvironmentPropertySourceEnvironmentPostProcessor
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
+import org.springframework.context.annotation.Bean
+import org.springframework.context.annotation.Configuration
 import org.springframework.core.env.MapPropertySource
 import org.springframework.core.env.StandardEnvironment
 import org.springframework.core.env.SystemEnvironmentPropertySource
@@ -85,6 +93,40 @@ class UnknownPropertiesTest {
             message.assert().contains("cosec.limiter.enabled")
             message.assert().contains(UnknownProperties.DOCUMENTATION)
         }
+    }
+
+    /**
+     * Drill 2, finding 22: a 6.x or 7.x configuration hears of every removed key first. The check runs before any bean
+     * is created, so neither an application bean that needs CoSec's beans (created before any auto-configuration's) nor
+     * the token stores' check speaks first; once the keys are gone, the next failure is the stores'.
+     */
+    @Test
+    fun `unknown keys fail startup before any bean is created, the application's included`() {
+        val starter = ApplicationContextRunner()
+            .withConfiguration(
+                AutoConfigurations.of(
+                    CoSecPropertyCheckAutoConfiguration::class.java,
+                    CoSecJwtAutoConfiguration::class.java,
+                )
+            )
+            .withUserConfiguration(NeedsTokenRevocation::class.java)
+            .withPropertyValues("${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_")
+        starter.withPropertyValues("cosec.inject.enabled=true", "cosec.authorization.enabled=false").run { context ->
+            val message = context.startupFailure!!.messages()
+            message.assert().contains("CoSec does not read 2 cosec.* properties,")
+            message.assert().doesNotContain("are missing")
+        }
+        starter.run { context ->
+            context.startupFailure!!.messages().assert()
+                .contains("TokenStore, RevocationReader, TokenFamilyStore are missing")
+        }
+    }
+
+    /** An application bean that needs a CoSec bean: Spring creates it before any auto-configuration's beans. */
+    @Configuration(proxyBeanMethods = false)
+    class NeedsTokenRevocation {
+        @Bean
+        fun application(revocation: TokenRevocation): String = revocation.toString()
     }
 
     /**

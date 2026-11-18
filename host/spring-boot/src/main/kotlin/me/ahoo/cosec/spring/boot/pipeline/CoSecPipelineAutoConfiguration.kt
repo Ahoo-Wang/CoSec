@@ -53,7 +53,7 @@ import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.apikey.apiKeysEnabled
 import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
 import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
-import me.ahoo.cosec.spring.boot.jwt.JwtProperties
+import me.ahoo.cosec.spring.boot.jwt.TokenStores
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -161,11 +161,16 @@ class CoSecPipelineAutoConfiguration {
         revocationProperties: RevocationProperties,
         environment: Environment,
         unchecked: ObjectProvider<UncheckedRevocations>,
+        beans: ListableBeanFactory,
     ): Authenticator {
         val token = algorithm.ifAvailable?.let {
+            val reader = revocationReader(revocationReader, tokenStore, beans)
+            if (reader === RevocationReader.NONE) {
+                log.warn { NONE_WARNING }
+            }
             TokenAuthenticator(
                 verifier.getIfAvailable { JwtTokenVerifier(it) },
-                revocationReader(revocationReader, tokenStore),
+                reader,
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,
                 unchecked = unchecked.getIfAvailable { UncheckedRevocations() },
@@ -262,6 +267,13 @@ class CoSecPipelineAutoConfiguration {
         /** `KafkaAuditListener.NAME`, as a literal: `cosec-kafka` is optional. */
         private const val KAFKA_AUDIT_LISTENER = "kafka-audit"
 
+        /** Logged once, as the authenticator is created, when the tokens it verifies are checked against nothing. */
+        internal const val NONE_WARNING =
+            "Tokens are verified against RevocationReader.NONE: a revoked token (logout, revoked sessions or " +
+                "subjects) is accepted here until it expires. Where the issuer revokes tokens, read its " +
+                "revocations: cosec-cocache on the issuer's Redis with the issuer's cosec.key-prefix, or a " +
+                "RevocationReader of your own."
+
         /** No token verifier: a request without a token is anonymous, one with a token is rejected. */
         private val NO_TOKEN = Authenticator { credentials ->
             if (credentials.token == null) {
@@ -273,17 +285,16 @@ class CoSecPipelineAutoConfiguration {
 
         /**
          * The reader of revoked tokens and subjects, always (RFC 0008 S1b): a [RevocationReader] bean, else the CoCache
-         * token store's. With neither, startup fails: the starter never reads revocations from nothing.
+         * token store's. With neither, startup fails, naming every token store missing ([TokenStores]): the starter
+         * never reads revocations from nothing.
          */
         internal fun revocationReader(
             reader: ObjectProvider<RevocationReader>,
             tokenStore: ObjectProvider<TokenStore>,
+            beans: ListableBeanFactory,
         ): RevocationReader {
             reader.ifAvailable?.let { return it }
-            return checkNotNull(CoCacheRevocation.readerOf(tokenStore.ifAvailable)) {
-                "Tokens are verified, but no revocation reader is available: add cosec-cocache " +
-                    "or a RevocationReader bean, or set ${JwtProperties.PREFIX}.enabled=false."
-            }
+            return CoCacheRevocation.readerOf(tokenStore.ifAvailable) ?: TokenStores.fail(beans)
         }
 
         /** The API keys the pipeline reads: an [ApiKeyReader] bean, else the in-memory store's. */
