@@ -66,14 +66,13 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 | `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`cosec-ip2region`) |
 | `cosec.ip2region.ipv6-location` | string | none | A Spring resource location (`file:`, `classpath:`) of the IPv6 `.xdb` database, loaded beside the bundled IPv4 one. Unset, an IPv6 client's region is unavailable. A location that does not exist fails startup. |
 | `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`cosec-openapi`) |
+| `cosec.control.enabled` | boolean | `true` | the control plane, when `cosec-control` and `cosec-cocache` are on the classpath; its routes need a WebFlux or WebMvc application. Off, the instance runs none of it and reads the policy documents and candidates read-only ([Control plane](#control-plane)) |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cosec-cocache`); see [Shadow windows](#shadow-windows) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | on a Spring Cloud Gateway host, forwarding the verified identity to the services behind it; see [Gateway identity](#gateway-identity) |
 
 These have no switch:
 
 - **Tracing** is on whenever `cosec-opentelemetry` is on the classpath ([Tracing](./observability.md#tracing)).
-- **The control plane** is on whenever `cosec-control` and `cosec-cocache` are on the classpath; its routes need a
-  WebFlux or WebMvc application ([Control plane](#control-plane)).
 - **The rate limiter** is always there: on Redis when a `ReactiveStringRedisTemplate` bean exists (`cosec-cocache`),
   otherwise counted per instance ([Rate limiting](#rate-limiting)).
 - **Token revocation** is always on with JWT ([Startup](./troubleshooting.md#startup-fails-without-a-token-store)).
@@ -290,6 +289,7 @@ credential is ever revoked.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
+| `cosec.control.enabled` | boolean | `true` | Whether this instance runs the control plane, when `cosec-control` and `cosec-cocache` are on its classpath. `false` leaves out everything of it (its store, its own snapshot source, its change listeners, maintenance and routes), and the instance reads the policy documents and candidates read-only, so its Redis user needs only read permission on them ([Who may write which keys](./storage.md#who-may-write-which-keys)); it logs `Control plane off on this instance` at startup. A fleet that ships one image for both roles sets it on the data-plane role, usually as `COSEC_CONTROL_ENABLED=false`. Off, a request to a control route is decided by the pipeline like any path the application does not serve (`401`, `403`); only where a document permits that path does it get the framework's `404`. The other `cosec.control.*` keys are not refused while it is off. `true` or `false` only: any other value fails startup, and `true` written without `cosec-control` or `cosec-cocache` fails it naming the artifact (STA-1). |
 | `cosec.control.app-id` | string | `cosec-control` | The app control-plane actions are authorized in. |
 | `cosec.control.http.base-path` | string | `/cosec/control` | Where the control API is served. Its routes are under `{base-path}/v1`, so moving the API keeps the version. |
 | `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a WebMvc host. A larger body is a `400` `invalid-request`, unread. On WebFlux, `spring.codec.max-in-memory-size` (256 KB by default) bounds the body instead. On either stack, a request without a permitted principal has no body read at all (`401`). |

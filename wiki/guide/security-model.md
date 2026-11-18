@@ -488,7 +488,8 @@ Before production:
   `spring.data.redis.ssl.enabled`), so that no one on the network between can read or change what instances read, and
   give the control plane and the data-plane instances their own users
   ([Who may write which keys](../operations/storage.md#who-may-write-which-keys)). A data-plane instance, one that does
-  not run the control plane, reads the documents and the candidates read-only, so its user needs only read permission
+  not run the control plane (no `cosec-control`, or `cosec.control.enabled=false` on an image that carries both roles),
+  reads the documents and the candidates read-only, so its user needs only read permission
   on them, and Redis refuses that user a write of either. Its credential still writes the shadow reports and statuses,
   and, with JWT, revocations and refresh token families. A process that runs the control plane needs write access to
   the documents. A data-plane credential can still publish invalidations on the documents' channel: that makes

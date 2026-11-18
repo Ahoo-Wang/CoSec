@@ -258,7 +258,7 @@
     {
       "id": "SNP-18",
       "source": "roadmap §9 (the data plane's Redis credential read-only); CoCache 8.1.0 read-only stores",
-      "statement": "A process that does not run the control plane reads the snapshot documents and the candidates read-only, so a Redis user with read permission on them is enough and Redis refuses it a write; a process that runs the control plane writes them. Which one a process is follows the condition the control plane is wired on and nothing else: a cocache.* property or customizer that changes it, either way, fails the creation of the store.",
+      "statement": "A process that does not run the control plane reads the snapshot documents and the candidates read-only, so a Redis user with read permission on them is enough and Redis refuses it a write; a process that runs the control plane writes them. Which one a process is follows the condition the control plane is wired on and nothing else (its classes on the classpath, and cosec.control.enabled not false, read the same from a property or the environment): a cocache.* property or customizer that changes it, either way, fails the creation of the store.",
       "level": "startup",
       "pending": null,
       "guards": [
@@ -274,7 +274,13 @@
         "spring-boot:DataPlaneAclTest#the page's data-plane user reads, hears a publish, writes its report, and may write no document",
         "spring-boot:DataPlaneAclTest#the lines of 8_0_0-beta_1's page fail startup, naming what is missing",
         "spring-boot:DataPlaneAclTest#a process that runs the control plane with the read-only user fails at startup",
-        "spring-boot:DataPlaneAclTest#the operations page shows the lines this test runs, and upgrading says what to add"
+        "spring-boot:DataPlaneAclTest#the operations page shows the lines this test runs, and upgrading says what to add",
+        "spring-boot:ControlPlaneSwitchTest#switched on by default, the control plane and its routes are wired, and the stores written",
+        "spring-boot:ControlPlaneSwitchTest#cosec control enabled false wires nothing of the control plane, and the stores are read read-only",
+        "spring-boot:ControlPlaneSwitchTest#the environment variable a one-image fleet sets per role does the same, through the condition and both stores",
+        "spring-boot:ControlPlaneSwitchTest#a value that is neither true nor false fails startup, read neither as on nor as off",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#an instance that switches the control plane off says so once at startup, one without it says nothing",
+        "spring-boot:DataPlaneAclTest#an image with the control plane, switched off, starts with the page's user and may write no document"
       ]
     },
     {

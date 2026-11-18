@@ -537,6 +537,12 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "Whether this instance runs the control plane, when `cosec-control` and `cosec-cocache` are on its classpath. `false` leaves it out, and the instance reads the policy documents and candidates read-only (SNP-18): a fleet that ships one image for both roles sets it on the data-plane role. `true` or `false` only.",
+      "name": "cosec.control.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
       "description": "Where the control API is served (RFC 0007 \u00a710.2): its routes are under `{base-path}/v1`.",
       "name": "cosec.control.http.base-path",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http",

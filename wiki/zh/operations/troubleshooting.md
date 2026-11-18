@@ -343,6 +343,7 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`，以及 `cosid-spring-boot-starter` 5.x 和它的 `cosid.*` 生成器；或者删除这个键，继续使用 CoSec 自己的 id |
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | 一个 `CosIdRuntime`（`cosid-spring-boot-starter` 及其 `cosid.*` 配置），或者删除这个键：应用自己有 `IdGenerator` bean 时，CoSec 的 id 来自那个 bean |
 | `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`，或者删除这个键：不设置时指标是可选的 |
+| `cosec.control.enabled=true needs cosec-control`（或 `cosec-cocache`） | 消息中指出的制品，或者删除这个键：不设置时，没有这些模块的实例就是数据面实例 |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。设置 `spring.main.lazy-initialization=true` 时每项检查同样运行（`STA-3`）。
@@ -435,8 +436,8 @@ CoSec reads PolicySnapshotCache read-only in this process, which does not run th
 ```
 
 某个 `cocache.caches.PolicySnapshotCache.read-only` 或 `cocache.caches.CandidateCache.read-only` 条目，或某个定制器，改变了
-CoSec 的声明：在没有 `cosec-control` 的实例上是只读，在运行控制面的地方是读写（`... cannot make it read-only`）。删掉它；
-由类路径决定（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
+CoSec 的声明：在不运行控制面的实例上是只读，在运行控制面的地方是读写（`... cannot make it read-only`）。删掉它；
+由类路径和 `cosec.control.enabled` 决定（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
 
 ### Redis 权限导致启动失败 {#startup-fails-on-a-redis-permission}
 
@@ -454,7 +455,15 @@ Redis denied publishing to the invalidation channel[cosec:inv:snapshot] of Keysp
 ```
 
 这个进程运行控制面（类路径上有 `cosec-control`），所以它要写入文档，但它的用户不能写：通常是把数据面用户给了一个带
-`cosec-control` 的进程。给控制面一个能写 `<s>:*` 的用户，或者不要把 `cosec-control` 放进数据面的镜像。
+`cosec-control` 的进程。给控制面一个能写 `<s>:*` 的用户；在镜像带有控制面的数据面实例上，设置 `cosec.control.enabled=false`
+（`COSEC_CONTROL_ENABLED=false`），或者不要把 `cosec-control` 放进它的镜像。
+
+```text
+cosec.control.enabled must be true or false, not [flase].
+```
+
+无论类路径如何，这个键都被严格读取：既不是 `true` 也不是 `false` 的值，既不当作开启，也不当作关闭。请写 `true` 或 `false`
+（[配置](./configuration.md#control-plane)）。
 
 ### 缓存 key 重叠导致启动失败 {#startup-fails-on-overlapping-cache-keys}
 

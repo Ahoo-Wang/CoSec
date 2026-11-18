@@ -24,6 +24,13 @@ import java.time.Duration
 @ConfigurationProperties(prefix = ControlProperties.PREFIX)
 @InternalCoSecApi
 class ControlProperties {
+    /**
+     * Whether this instance runs the control plane, when `cosec-control` and `cosec-cocache` are on its classpath.
+     * `false` leaves it out, and the instance reads the policy documents and candidates read-only (SNP-18): a fleet
+     * that ships one image for both roles sets it on the data-plane role. `true` or `false` only.
+     */
+    var enabled: Boolean = true
+
     /** The app control-plane actions are authorized in (RFC 0007 §7.2). */
     var appId: String = "cosec-control"
     val http = Http()
