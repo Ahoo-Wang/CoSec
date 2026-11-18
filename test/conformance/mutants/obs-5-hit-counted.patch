@@ -1,0 +1,16 @@
+# Rule: OBS-5
+# Mutant: the binding counts every hit, on the path every request takes
+# Tests: :micrometer:test --tests me.ahoo.cosec.micrometer.MicrometerSnapshotMetricsTest
+
+diff --git a/extensions/micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MicrometerSnapshotMetrics.kt b/extensions/micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MicrometerSnapshotMetrics.kt
+index 8f7dbfd2..0e607926 100644
+--- a/extensions/micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MicrometerSnapshotMetrics.kt
++++ b/extensions/micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MicrometerSnapshotMetrics.kt
+@@ -71,6 +71,7 @@ class MicrometerSnapshotMetrics(
+ 
+     override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) {
+         if (outcome == LoadOutcome.HIT) {
++            registry.counter(LOADS, KIND, tag(kind), RESULT, "hit").increment()
+             return
+         }
+         loads[kind.ordinal * LOADED.size + LOADED.indexOf(outcome)].increment()

@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.e2e
 
+import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -82,6 +83,8 @@ class Slice(
     membershipLoader: MembershipLoader? = null,
     /** The location of a route map (`cosec.authorization.routes.location`, RFC 0008 §4.4.3); empty runs without one. */
     routeMap: String = "",
+    /** The application's registry, as Actuator would give it; none runs without metrics. */
+    meterRegistry: MeterRegistry? = null,
 ) : AutoCloseable {
     private val context: ConfigurableApplicationContext = SpringApplicationBuilder(SliceConfiguration::class.java)
         .web(WebApplicationType.NONE)
@@ -91,6 +94,7 @@ class Slice(
             ApplicationContextInitializer<ConfigurableApplicationContext> {
                 it.beanFactory.registerSingleton("cosecAuthenticator", authenticator)
                 membershipLoader?.let { loader -> it.beanFactory.registerSingleton("membershipLoader", loader) }
+                meterRegistry?.let { registry -> it.beanFactory.registerSingleton("meterRegistry", registry) }
                 it.beanFactory.registerSingleton("cosecAttributeProviders", attributes)
                 it.beanFactory.registerSingleton("cosecDecisionListeners", listeners)
             },

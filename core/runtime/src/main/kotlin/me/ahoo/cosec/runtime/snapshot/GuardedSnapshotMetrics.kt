@@ -54,6 +54,9 @@ internal class GuardedSnapshotMetrics(private val delegate: SnapshotMetrics) : S
     override fun onLagExceeded(key: SnapshotKey, lag: Duration, escalated: Boolean) =
         guard("onLagExceeded") { delegate.onLagExceeded(key, lag, escalated) }
 
+    override fun onEvicted(kind: SnapshotKind, absent: Boolean) =
+        guard("onEvicted") { delegate.onEvicted(kind, absent) }
+
     override fun onHandOffRefused(ranInPlace: Boolean) = guard(
         "onHandOffRefused"
     ) { delegate.onHandOffRefused(ranInPlace) }

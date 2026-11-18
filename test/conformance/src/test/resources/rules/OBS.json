@@ -43,6 +43,26 @@
         "runtime:DecisionListenersShutdownTest#an event offered after the listeners stopped is dropped and counted, not left queued",
         "runtime:DecisionListenersShutdownTest#events published while the listeners drain are each delivered or dropped, once"
       ]
+    },
+    {
+      "id": "OBS-5",
+      "source": "RFC 0003 §4.5; RFC 0013 §5.4",
+      "statement": "With cosec-micrometer and a MeterRegistry, the data plane's snapshot source meters its cold, failed and timed-out loads (never a hit, which is every request's path), compiles, installs, evictions, regressions, lost documents, lag and refused hand-offs under tags of closed value sets, never an app or tenant id; the documents it holds are reported by state as of its last lag pass and add up to what it holds; and a meter that fails never fails a load.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "micrometer:MicrometerSnapshotMetricsTest#the series are fixed, no event adds a meter",
+        "micrometer:MicrometerSnapshotMetricsTest#a hit is not metered",
+        "micrometer:MicrometerSnapshotMetricsTest#the gauges read the source's last lag pass, and its age",
+        "runtime:SnapshotSummaryTest#every entry held is counted once, in the state of its origin, and the states sum to the entries",
+        "runtime:SnapshotSummaryTest#an eviction on a slot is counted by kind and by what the key held",
+        "runtime:SnapshotSummaryTest#an eviction on a runner is counted the same way",
+        "runtime:SnapshotSummaryTest#a key dropped empty after a failed cold load counts no eviction, on a slot",
+        "runtime:SnapshotSummaryTest#a key dropped empty after a failed cold load counts no eviction, on a runner",
+        "runtime:SnapshotReviewFixesTest#throwingLoadMetricStillAnswersTimedOutRequests",
+        "runtime:SnapshotReviewFixesTest#loadMetricThrowingAnErrorStillCompletesTheRequest",
+        "spring-boot:SnapshotMetricsWiringTest#with a registry the source counts into it and its gauges are bound"
+      ]
     }
   ]
 }

@@ -119,8 +119,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         set(value) = context.nanoTime.set(value)
 
     internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping)
-    private val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
-    internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports)
+    internal val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
+    internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics)
     private val context =
         SlotContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, slots)
     internal val shared = slots.create(sharedKey, sharedCompiler, context)
