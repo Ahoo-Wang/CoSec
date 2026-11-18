@@ -88,7 +88,10 @@
         "runtime:TokenAuthenticatorTest#otherFailuresPropagate",
         "cocache:CacheTtlPolicyTest#revocationTablesReadForTheWholeCommandTimeout",
         "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens",
-        "cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked"
+        "cocache:CoCache6ValuesTest#aRevocationCoCache6WroteIsAnErrorNeverNotRevoked",
+        "cocache:CacheTtlPolicyTest#revocationTablesKeepNotRevokedFor30SecondsAtMost",
+        "spring-boot:StrictCacheFailureTest#revocationTablesKeepNotRevokedFor30SecondsWhateverTheGlobalLayersSay",
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesAbsentTtlPropertyFailsStartup"
       ],
       "pending": null
     },
