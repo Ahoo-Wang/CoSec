@@ -58,6 +58,10 @@ internal class SourceModelStore(private val events: () -> Long, private val now:
             private set
         var answered = false
             private set
+
+        /** The event the answer came in; -1 until answered. */
+        var answeredAt = -1L
+            private set
         var failed = false
             private set
 
@@ -68,6 +72,7 @@ internal class SourceModelStore(private val events: () -> Long, private val now:
         fun release(atStart: Boolean) {
             pending.remove(this)
             answered = true
+            answeredAt = events()
             val failure = failure
             if (failure != null) {
                 failed = true

@@ -24,6 +24,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
 import java.time.Duration
 import java.time.Instant
+import java.util.concurrent.CompletableFuture
 
 /**
  * One key's [KeyTransitions] against a recorded world (RFC 0013 B2b, step 1): it offers events, executes the effects
@@ -178,7 +179,9 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
     private fun hang(waiter: HarnessWaiter, handle: KeyHandle<String>) {
         if (handle in answered) violations += "$waiter hung on $handle, already answered"
         hung[waiter] = handle
-        if (waiter.ask is Ask.Reload || waiter.ask is Ask.ReloadIfHeld) {
+        val ask = waiter.ask
+        val passFollows = ask is Ask.Load && ask.pass != null && handle !== state.load?.handle
+        if (ask is Ask.Reload || ask is Ask.ReloadIfHeld || passFollows) {
             startedAfter.merge(handle, serialBefore, ::maxOf)
         }
     }
@@ -215,6 +218,9 @@ internal class KeyHarness private constructor(override val config: KeyConfig) : 
                 localCopyMaxAge = localCopyMaxAge,
             )
         )
+
+        /** A periodic pass that started at [nanos], on a clock that stays there. */
+        fun passStartedAt(nanos: Long): Pass = Pass(CompletableFuture(), { nanos }, STORE_READ_TIMEOUT)
 
         fun present(revision: Long): SnapshotRead.Present {
             val document = SnapshotDocument(

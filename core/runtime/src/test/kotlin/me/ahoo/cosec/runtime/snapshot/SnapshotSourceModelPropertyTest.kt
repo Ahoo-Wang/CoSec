@@ -109,7 +109,8 @@ class SnapshotSourceModelPropertyTest {
                 "${totals.readTimeouts} store read timeouts, ${totals.coldTimeouts} request timeouts, " +
                 "${totals.evictions} evictions (${totals.evictionsAtClaim} judged at the claim), " +
                 "${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
-                "${totals.lostWritesChecked} lost invalidations ${totals.lostWritesByLag}"
+                "${totals.lostWritesChecked} lost invalidations ${totals.lostWritesByLag}, " +
+                "${totals.passReadsChecked} documents of passes read after their call (${totals.passReadsOwed} owed)"
         )
         if (only == null) {
             // A property test that rarely gets past the first load proves little: each kind of event is reached.
@@ -133,10 +134,15 @@ class SnapshotSourceModelPropertyTest {
         totals.regressions += counts.regressions
         totals.resetsChecked += counts.resetsChecked
         totals.lostWritesChecked += counts.lostWritesChecked
+        totals.passReadsChecked += counts.passReadsChecked
+        totals.passReadsOwed += counts.passReadsOwed
         counts.lostWritesByLag.forEach { (lag, n) -> totals.lostWritesByLag.merge(lag, n, Int::plus) }
         mapOf(
             "reset reloads checked" to counts.resetsChecked,
             "lost invalidation installed by a pass" to counts.lostWritesChecked,
+            "lost invalidation installed past a load in flight" to (counts.lostWritesByLag[SourceModelScript.Lag.IN_FLIGHT] ?: 0),
+            "pass read checked" to counts.passReadsChecked,
+            "pass read owed past a stuck compilation" to counts.passReadsOwed,
             "store read timed out" to counts.readTimeouts,
             "request answered by its timeout" to counts.coldTimeouts,
             "eviction" to counts.evictions,
@@ -202,6 +208,7 @@ class SnapshotSourceModelPropertyTest {
             "listener called in subscribe", "close mid-load", "recompile", "store regressed", "converged",
             "store read failed", "compile rejected", "abandoned read answered",
             "reset reloads checked", "lost invalidation installed by a pass",
+            "lost invalidation installed past a load in flight", "pass read checked",
         )
 
         /**

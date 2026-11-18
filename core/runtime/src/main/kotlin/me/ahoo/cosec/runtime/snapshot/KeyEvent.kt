@@ -110,7 +110,10 @@ internal sealed interface KeyEvent<out T : Any> {
         /** The installed entry if it has not failed, otherwise the load in flight. */
         data object Usable : Ask
 
-        /** The load in flight, or a new one; a periodic [pass] does not join one older than the store read timeout. */
+        /**
+         * The load in flight, or a new one. A periodic [pass] joins only a load that started after it, waits for the
+         * load after one that started before it, and does not wait for one older than the store read timeout (`SNP-6`).
+         */
         data class Load(val force: Boolean, val pass: Pass? = null) : Ask
 
         /** A load that starts after this event (`SNP-13`); a removed key's goes to the key's current runner. */

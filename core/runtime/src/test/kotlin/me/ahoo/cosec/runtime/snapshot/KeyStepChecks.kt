@@ -98,10 +98,17 @@ internal class KeyStepChecks(
         }
     }
 
-    /** A request joins the load in flight or starts one; a reload hangs on a load that starts after it (`SNP-13`). */
+    /**
+     * A request joins the load in flight or starts one; a reload hangs on a load that starts after it (`SNP-13`), and so
+     * does a pass that meets a load which started at or before it (`SNP-6`).
+     */
     private fun handles() {
+        passSkips()
         val hang = effects.filterIsInstance<KeyEffect.Hang<String>>().singleOrNull() ?: return
         val ask = (event as KeyEvent.Requested).ask
+        val pass = (ask as? Ask.Load)?.pass
+        val inFlight = before.load
+        if (pass != null && inFlight != null) return passHangs(hang, pass, inFlight)
         if (ask !is Ask.Reload && ask !is Ask.ReloadIfHeld) {
             if (hang.handle !== after.load?.handle) {
                 fail(
@@ -118,6 +125,30 @@ internal class KeyStepChecks(
         }
         val upcoming = if (old == null) after.load?.handle else after.next
         if (hang.handle !== upcoming) fail("a reload hangs on ${hang.handle}, not on the load that starts next")
+    }
+
+    /** `SNP-6`: a pass joins only a load that started after it; otherwise it waits for the load after it. */
+    private fun passHangs(hang: KeyEffect.Hang<String>, pass: Pass, inFlight: LoadState<String>) {
+        if (inFlight.startedNanos - pass.startedNanos > 0) {
+            if (hang.handle !== inFlight.handle) fail("a pass hangs on ${hang.handle}, not the load in flight, younger than it")
+            return
+        }
+        if (hang.handle === inFlight.handle || hang.handle in inFlight.alsoAnswers) {
+            fail("a pass joined a load that started before it")
+        }
+        if (hang.handle !== after.next || !after.again) fail("a pass hangs on ${hang.handle}, not on the load that starts next")
+        if (after.againPass !== pass) fail("the load after the one in flight is not the read of the pass that waits for it")
+    }
+
+    /** `SNP-6`: a pass that skips a stuck load which started at or before it still leaves the load after it owed. */
+    private fun passSkips() {
+        val requested = event as? KeyEvent.Requested ?: return
+        val pass = (requested.ask as? Ask.Load)?.pass ?: return
+        val inFlight = before.load ?: return
+        if (effects.none { it is KeyEffect.Skip } || before.removed) return
+        if (inFlight.startedNanos - pass.startedNanos <= 0 && !after.again) {
+            fail("a pass skipped a load that started before it and left no load after it owed")
+        }
     }
 
     /** Only the transition that ends a load answers, and only that load's handles, with that load's answer. */
@@ -199,7 +230,10 @@ internal interface KeyWorld {
     val epoch: Long
     val closed: Boolean
 
-    /** A reload's handle must be answered by a load numbered above this: one that started after the reload. */
+    /**
+     * A reload's handle, or that of a pass which met an older load, must be answered by a load numbered above this: one
+     * that started after the reload or the pass's ask.
+     */
     val startedAfter: Map<KeyHandle<String>, Long>
 
     fun fail(message: String)

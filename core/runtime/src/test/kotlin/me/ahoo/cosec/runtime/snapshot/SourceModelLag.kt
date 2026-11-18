@@ -39,6 +39,10 @@ import java.time.Duration
  *   on it makes no progress for `storeReadTimeout`; the first tick after that abandons it and starts the next, which
  *   does not wait for a load in flight longer than `storeReadTimeout`. So: the timeout, the next tick, the pass. With one
  *   lane only that next pass can install the others; with two, the stuck pass's other lane may.
+ * - `IN_FLIGHT`: a load of the target whose read began before the write is in flight when the first pass after the
+ *   write reaches it, and that read answers the version before the write only after the pass has reached the target.
+ *   The pass never counts that read as its own (`SNP-6`): every write is installed by the time that first pass ends,
+ *   counted from the tick that starts it, never at the next tick.
  */
 internal class SourceModelLag(
     private val script: SourceModelScript,
@@ -48,6 +52,8 @@ internal class SourceModelLag(
     options: SnapshotOptions,
     /** The model's checks now; false once one failed. */
     private val check: () -> Boolean,
+    /** Starts a load of a document that reads in full now ([SnapshotSource.reload]). */
+    private val reload: (SnapshotKey) -> Unit,
 ) {
     private val interval: Duration = options.revalidateInterval
     private val timeout: Duration = options.storeReadTimeout
@@ -56,12 +62,18 @@ internal class SourceModelLag(
     private var hung: SourceModelStore.Read? = null
     private var stuck: Runnable? = null
 
+    /** `IN_FLIGHT`: the target's read made before the write, and when the first pass after the write has reached it. */
+    private var stale: SourceModelStore.Read? = null
+    private var staleUntil = Long.MAX_VALUE
+
     /** How long after the write the passes have to install [n] documents' changes, for [lag] (see the class comment). */
     private fun boundFor(lag: Lag, n: Int): Duration {
         val pass = STEP.multipliedBy(n.toLong() + 1)
         return when (lag) {
             Lag.NONE -> interval.plus(pass)
             Lag.HANG_READ, Lag.STUCK_COMPILE -> timeout.plus(interval).plus(pass)
+            // From the write: until the first tick after it, then that pass, which waits for the stale load first.
+            Lag.IN_FLIGHT -> Duration.ofNanos(nextTick() - threads.nanos).plus(pass).plus(pass)
         }
     }
 
@@ -69,6 +81,7 @@ internal class SourceModelLag(
         val written = model.installedKeys()
         val target = script.lagTarget.takeIf { script.lag != Lag.NONE && it in written }
         this.target = target
+        if (target != null && script.lag == Lag.IN_FLIGHT) return inFlight(target, written)
         if (target != null) {
             // The first pass after the write reaches the target, as with nothing wrong.
             bound = boundFor(Lag.NONE, written.size)
@@ -92,6 +105,36 @@ internal class SourceModelLag(
         }
     }
 
+    /**
+     * `IN_FLIGHT`: the target's load starts, its read held; every document is written; the read answers what the target
+     * held before the write once the first pass after the write has had [STEP]s enough to reach it ([answer]).
+     */
+    private fun inFlight(target: SnapshotKey, written: Set<SnapshotKey>) {
+        reload(target)
+        val read = store.pending.lastOrNull { it.key == target }
+        if (read == null) {
+            model.violations += "a reload of $target started no read"
+            return
+        }
+        read.hung = true
+        stale = read
+        staleUntil = nextTick() + STEP.multipliedBy(written.size.toLong()).toNanos()
+        bound = boundFor(Lag.IN_FLIGHT, written.size)
+        written.forEach(::write)
+        pilot { written.all(model::servesCurrent) }
+        for (key in written) {
+            if (!model.isInstalled(key)) continue
+            model.lostWriteChecked(Lag.IN_FLIGHT)
+            if (!model.servesCurrent(key)) {
+                model.violations += "a write of $key whose notification was lost was not installed by the first pass " +
+                    "after it, which met a load of $target that read before the write (within $bound)"
+            }
+        }
+    }
+
+    /** When the periodic pass next runs: settling leaves it due, and then it runs at the next move of time. */
+    private fun nextTick(): Long = maxOf(threads.nanos, threads.scheduler.timers.filter { it.period != 0L }.minOf { it.at })
+
     private fun write(key: SnapshotKey) {
         store.dropNotifications = true
         store.put(key)
@@ -114,6 +157,10 @@ internal class SourceModelLag(
     }
 
     private fun answer() {
+        stale?.takeIf { it.hung && threads.nanos >= staleUntil }?.let {
+            it.hung = false
+            it.release(atStart = true)
+        }
         for (read in store.pending.toList()) {
             if (read.hung) continue
             if (firstOfTarget(read, Lag.HANG_READ) && hung == null) {

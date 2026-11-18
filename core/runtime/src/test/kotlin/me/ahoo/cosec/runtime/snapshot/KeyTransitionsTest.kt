@@ -146,15 +146,69 @@ class KeyTransitionsTest {
 
     @Test
     fun aPassDoesNotJoinALoadOlderThanTheStoreReadTimeout() {
+        key.nanos = 1
         key.request(Ask.Request)
-        val pass = mockk<Pass>()
+        // A pass that started before the load: it joins it while it is young, and owes nothing after it.
+        val pass = KeyHarness.passStartedAt(0)
         val young = key.request(Ask.Load(force = false, pass = pass))
         key.hung[young].assert().isSameAs(key.state.load!!.handle)
-        key.nanos = KeyHarness.STORE_READ_TIMEOUT.toNanos() + 1
+        key.nanos = KeyHarness.STORE_READ_TIMEOUT.toNanos() + 2
         val stuck = key.request(Ask.Load(force = false, pass = pass))
         (key.direct[stuck] is KeyEffect.Skip).assert().isTrue()
+        key.state.again.assert().isFalse()
         val request = key.request(Ask.Request)
         key.hung[request].assert().isSameAs(key.state.load!!.handle)
+    }
+
+    /**
+     * `SNP-6`: a pass never counts as its confirmation a read that began before it. A load in flight that started at or
+     * before the pass is followed by one more, which is the pass's read and what the pass waits for.
+     */
+    @Test
+    fun aPassThatMeetsALoadOlderThanItselfWaitsForTheLoadAfterItAndReadsWithIt() {
+        val request = key.request(Ask.Request)
+        val first = key.state.load!!
+        val pass = KeyHarness.passStartedAt(0)
+        val waiting = key.request(Ask.Load(force = false, pass = pass))
+        key.hung[waiting].assert().isNotSameAs(first.handle)
+        key.hung[waiting].assert().isSameAs(key.state.next)
+        key.state.again.assert().isTrue()
+        key.state.againPass.assert().isSameAs(pass)
+
+        key.offer(KeyEvent.ReadDone(first.id, KeyHarness.present(1)))
+        val ended = key.offer(KeyEvent.Compiled(first.id, DocumentState.Present("r1")))
+        key.answered.keys.assert().contains(key.hung[request])
+        key.answered.keys.assert().doesNotContain(key.hung[waiting])
+        val second = key.state.load!!
+        second.pass!!.pass.assert().isSameAs(pass)
+        ended.effects.filterIsInstance<KeyEffect.StartPassRead>().single().ticket.assert().isSameAs(second.pass)
+        key.state.againPass.assert().isNull()
+
+        key.offer(KeyEvent.ReadDone(second.id, KeyHarness.present(2)))
+        key.offer(KeyEvent.Compiled(second.id, DocumentState.Present("r2")))
+        (key.answered.getValue(key.hung[waiting]!!).state as DocumentState.Present).compiled.assert().isEqualTo("r2")
+    }
+
+    /**
+     * `SNP-6`: a pass does not wait for a load older than the store read timeout; if that load started before the pass,
+     * the load after it is still owed, so the change the pass would have read is read once the compilation ends.
+     */
+    @Test
+    fun aPassThatSkipsAStuckLoadOlderThanItselfLeavesTheLoadAfterItOwed() {
+        key.request(Ask.Request)
+        val stuck = key.state.load!!
+        key.offer(KeyEvent.ReadDone(stuck.id, KeyHarness.present(1)))
+        key.nanos = KeyHarness.STORE_READ_TIMEOUT.toNanos() + 1
+        val skipped = key.request(Ask.Load(force = false, pass = KeyHarness.passStartedAt(key.nanos)))
+        (key.direct[skipped] is KeyEffect.Skip).assert().isTrue()
+        key.state.again.assert().isTrue()
+        key.state.againPass.assert().isNull()
+
+        key.offer(KeyEvent.Compiled(stuck.id, DocumentState.Present("r1")))
+        val after = key.state.load!!
+        after.id.assert().isGreaterThan(stuck.id)
+        after.pass.assert().isNull()
+        key.reads.assert().contains(after.id)
     }
 
     @Test

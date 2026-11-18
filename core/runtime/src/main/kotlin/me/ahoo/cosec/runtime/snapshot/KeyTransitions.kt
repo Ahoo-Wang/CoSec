@@ -31,7 +31,8 @@ import java.util.concurrent.TimeoutException
  * to the outside is an effect, which the key's [KeyRunner] executes.
  *
  * Every waiter hangs on exactly one [KeyHandle], named by the transition that takes its request: the load in flight's,
- * a new load's, or, for a reload, the handle of the load that starts after the current one (`SNP-13`). A handle is
+ * a new load's, or, for a reload or a pass that met a load older than itself, the handle of the load that starts after
+ * the current one (`SNP-13`, `SNP-6`). A handle is
  * answered once, by the transition that ends its load.
  *
  * A load's events overtake caller events queued before them ([KeyDrain]'s load lane), so nothing here decides on the
@@ -121,23 +122,46 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
         load(step, force = false, pass = null, waiter = waiter)
     }
 
-    /**
-     * `load`: the load in flight, or a new one; after close, a failure. A [pass] does not wait for a load that has been
-     * in flight longer than the store read timeout, whoever started it, and skips the key: the store's answer is in by
-     * then, so the load is held by a compilation, and confirms the document when it ends (`SNP-6`).
-     */
+    /** `load`: the load in flight, or a new one; after close, a failure. A periodic [pass] meets a load in flight apart. */
     private fun load(step: KeyStepBuilder<T>, force: Boolean, pass: Pass?, waiter: Waiter?) {
         if (step.moment.closed) {
             waiter?.let { step.emit(KeyEffect.Serve(it, failedEntry(step.key, closedError(), step.moment.instant))) }
             return
         }
         val inFlight = step.load
-        if (inFlight != null && pass != null && step.moment.nanos - inFlight.startedNanos > config.storeReadTimeout.toNanos()) {
-            waiter?.let { step.emit(KeyEffect.Skip(it)) }
+        if (inFlight != null && pass != null) {
+            passMeets(step, inFlight, pass, waiter)
             return
         }
         val handle = joinOrStart(step, force, pass)
         waiter?.let { step.emit(KeyEffect.Hang(it, handle)) }
+    }
+
+    /**
+     * A [pass] never counts as its confirmation a store read that began before the pass did (`SNP-6`): a change written
+     * before the pass started may postdate that read. A load in flight that started at or before the pass is followed by
+     * one more, as for a reload, and that one is the pass's read; a load that started after the pass is joined.
+     *
+     * A pass does not wait for a load that has been in flight longer than the store read timeout, whoever started it,
+     * and skips the key: the store's answer is in by then, so the load is held by a compilation. If that load started
+     * at or before the pass, the load that follows it is still owed when it ends; the pass does not wait for either.
+     */
+    private fun passMeets(step: KeyStepBuilder<T>, inFlight: LoadState<T>, pass: Pass, waiter: Waiter?) {
+        val older = inFlight.startedNanos - pass.startedNanos <= 0
+        if (step.moment.nanos - inFlight.startedNanos > config.storeReadTimeout.toNanos()) {
+            if (older) step.again = true
+            waiter?.let { step.emit(KeyEffect.Skip(it)) }
+            return
+        }
+        if (!older) {
+            waiter?.let { step.emit(KeyEffect.Hang(it, inFlight.handle)) }
+            return
+        }
+        val next = step.next ?: step.handle()
+        step.again = true
+        step.next = next
+        step.againPass = pass
+        waiter?.let { step.emit(KeyEffect.Hang(it, next)) }
     }
 
     /** `reload`: a load that starts after this event, even if one is in flight, since a change may postdate its read. */
