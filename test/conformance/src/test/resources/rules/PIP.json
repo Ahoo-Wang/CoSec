@@ -324,6 +324,33 @@
         "jwt:ClientContractTest#the served refresh route answers as the contract says",
         "jwt:ClientContractTest#the served logout route answers as the contract says"
       ]
+    },
+    {
+      "id": "PIP-26",
+      "source": "RFC 0006 §7.6; drill 2 (Wow), finding 1 (2026-11-18)",
+      "statement": "A check by host code (`AuthorizationChecker`, in every form: the public one, and the control plane's in another app and as a recorded principal) is answered for a request in progress however long it runs, on the memberships and attributes it began with, also once its token has expired; once the adapter that bound the request has ended it, every check of it is an implicit deny (`Deny(null)`). The WebFlux and gateway adapters end a request when the chain's `Mono` terminates (after a streamed body's last element is written, on an error, or when the client goes away); the servlet filter when the dispatch returns, or, for an async request, when it completes, fails or times out. A request no adapter bound (a transport that calls `Pipeline.evaluate` itself, the test kit) is never ended.",
+      "level": "pipeline",
+      "guards": [
+        "runtime:AuthorizationCheckerTest#a check of a request its adapter ended is denied in every form",
+        "webflux:RequestEndTest#a check while a streamed body is written is answered, and one after it is denied",
+        "webflux:RequestEndTest#a check after the client went away is denied",
+        "webmvc:PipelineServletFilterTest#aPermitProceedsBoundToTheHolderUntilTheRequestCompletes",
+        "webmvc:PipelineServletFilterTest#anAsyncRequestEndsWhenItCompletesNotWhenTheFilterReturns",
+        "gateway:PipelineGatewayFilterTest#aCheckAfterTheRoutedRequestCompletedIsDenied"
+      ],
+      "pending": null
+    },
+    {
+      "id": "PIP-27",
+      "source": "RFC 0006 §7.3; drill 2 (Wow), finding 4 (2026-11-18)",
+      "statement": "The adapters' readers of the security context answer only a context CoSec's pipeline made: `ServerWebExchanges.getSecurityContext`, `ContextView.getSecurityContextOrEmpty` and `getSecurityContext` (WebFlux and the gateway), `ServletRequests.getSecurityContext`, the `SecurityContext` handler parameter and `SecurityContextHolder` (Spring MVC). Anything else under `SecurityContext.KEY`, which an application filter or a library may have put there, reads as no context: null, or the failure an unbound context is.",
+      "level": "build",
+      "guards": [
+        "webflux:RequestEndTest#a context the pipeline did not make reads as none",
+        "webmvc:SecurityContextArgumentResolverTest#aContextThePipelineDidNotMakeIsNone",
+        "webmvc:SecurityContextHolderTest#a context the pipeline did not make reads as none"
+      ],
+      "pending": null
     }
   ]
 }
