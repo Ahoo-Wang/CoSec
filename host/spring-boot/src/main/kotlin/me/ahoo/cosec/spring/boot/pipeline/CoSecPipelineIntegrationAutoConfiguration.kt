@@ -15,14 +15,13 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
-import me.ahoo.cosec.runtime.snapshot.SnapshotSource
-import me.ahoo.cosec.engine.CompiledDocument
 import io.github.oshai.kotlinlogging.KotlinLogging
 import io.micrometer.core.instrument.MeterRegistry
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.micrometer.MetricsListener
@@ -37,6 +36,7 @@ import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
@@ -176,7 +176,9 @@ class CoSecPipelineIntegrationAutoConfiguration {
         /** The snapshot source's meters (`cosec.snapshot.*`): its events, given to the data plane's source. */
         @Bean
         @ConditionalOnMissingBean
-        fun cosecSnapshotMetrics(registry: MeterRegistry): MicrometerSnapshotMetrics = MicrometerSnapshotMetrics(registry)
+        fun cosecSnapshotMetrics(
+            registry: MeterRegistry
+        ): MicrometerSnapshotMetrics = MicrometerSnapshotMetrics(registry)
 
         /**
          * The listeners' own counters: drops, failures and REQUIRED failures; and the tokens accepted without a

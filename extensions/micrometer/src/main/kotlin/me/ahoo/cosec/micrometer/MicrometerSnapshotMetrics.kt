@@ -64,7 +64,8 @@ class MicrometerSnapshotMetrics(
     }
     private val handOffs = Array(2) { counter(HANDOFFS_REFUSED, "to", if (it == 0) "housekeeping" else "caller") }
 
-    private fun counter(name: String, vararg tags: String): Counter = Counter.builder(name).tags(*tags).register(registry)
+    private fun counter(name: String, vararg tags: String): Counter =
+        Counter.builder(name).tags(*tags).register(registry)
 
     override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) =
         loads[kind.ordinal * OUTCOMES.size + outcome.ordinal].increment()
@@ -84,7 +85,8 @@ class MicrometerSnapshotMetrics(
 
     override fun onHandOffRefused(ranInPlace: Boolean) = handOffs[if (ranInPlace) 1 else 0].increment()
 
-    override fun onEvicted(kind: SnapshotKind, absent: Boolean) = evictions[kind.ordinal * 2 + if (absent) 1 else 0].increment()
+    override fun onEvicted(kind: SnapshotKind, absent: Boolean) =
+        evictions[kind.ordinal * 2 + if (absent) 1 else 0].increment()
 
     /**
      * Registers the gauges of [source]: what it holds by kind and state, its largest lag, the documents past the lag
@@ -98,7 +100,7 @@ class MicrometerSnapshotMetrics(
                     it.summary().of(kind).held(state).toDouble()
                 }
             }
-            gauge(LAG, source, KIND, tag(kind), unit = SECONDS) { it.summary().of(kind).maxLag.toNanos() / NANOS_PER_SECOND }
+            gauge(LAG, source, KIND, tag(kind), unit = SECONDS) { seconds(it.summary().of(kind).maxLag) }
             gauge(LAGGING, source, KIND, tag(kind), LEVEL, WARN) { it.summary().of(kind).lagging.toDouble() }
             gauge(LAGGING, source, KIND, tag(kind), LEVEL, ESCALATE) { it.summary().of(kind).escalated.toDouble() }
         }
@@ -107,7 +109,9 @@ class MicrometerSnapshotMetrics(
 
     /** Seconds since the pass that produced [summary]; NaN before the first pass. */
     private fun summaryAge(summary: SnapshotSummary): Double =
-        summary.takenAt?.let { Duration.between(it, clock.instant()).toNanos() / NANOS_PER_SECOND } ?: Double.NaN
+        summary.takenAt?.let { seconds(Duration.between(it, clock.instant())) } ?: Double.NaN
+
+    private fun seconds(duration: Duration): Double = duration.toNanos() / NANOS_PER_SECOND
 
     private fun gauge(
         name: String,
@@ -119,6 +123,7 @@ class MicrometerSnapshotMetrics(
         Gauge.builder(name, source) { value(it) }.tags(*tags).baseUnit(unit).strongReference(true).register(registry)
     }
 
+    @InternalCoSecApi
     companion object {
         const val LOADS = "cosec.snapshot.loads"
         const val COMPILE_DURATION = "cosec.snapshot.compile.duration"

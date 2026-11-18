@@ -63,6 +63,7 @@ interface SnapshotMetrics {
      */
     fun onEvicted(kind: SnapshotKind, absent: Boolean) = Unit
 
+    @InternalCoSecApi
     companion object {
         val NOOP: SnapshotMetrics = object : SnapshotMetrics {}
     }

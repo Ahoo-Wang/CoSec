@@ -109,7 +109,9 @@ class SnapshotSummary internal constructor(
 
         fun summary(at: Instant): SnapshotSummary = SnapshotSummary(
             at,
-            SnapshotKind.entries.associateWith { Kind(held[it.ordinal], maxLag[it.ordinal], lagging[it.ordinal], escalated[it.ordinal]) },
+            SnapshotKind.entries.associateWith {
+                Kind(held[it.ordinal], maxLag[it.ordinal], lagging[it.ordinal], escalated[it.ordinal])
+            },
         )
     }
 

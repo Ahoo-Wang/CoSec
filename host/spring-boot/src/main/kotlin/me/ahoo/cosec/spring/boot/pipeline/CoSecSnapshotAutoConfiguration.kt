@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
-import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -38,6 +37,7 @@ import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
+import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.shadow.CandidateStore

@@ -50,8 +50,20 @@ class MicrometerSnapshotMetricsTest {
     fun `a load is counted by kind and result`(outcome: LoadOutcome) {
         metrics.onLoad(SnapshotKind.APP, outcome)
         metrics.onLoad(SnapshotKind.APP, outcome)
-        count(MicrometerSnapshotMetrics.LOADS, "kind", "app", "result", outcome.name.lowercase()).assert().isEqualTo(2.0)
-        count(MicrometerSnapshotMetrics.LOADS, "kind", "tenant", "result", outcome.name.lowercase()).assert().isEqualTo(0.0)
+        count(
+            MicrometerSnapshotMetrics.LOADS,
+            "kind",
+            "app",
+            "result",
+            outcome.name.lowercase()
+        ).assert().isEqualTo(2.0)
+        count(
+            MicrometerSnapshotMetrics.LOADS,
+            "kind",
+            "tenant",
+            "result",
+            outcome.name.lowercase()
+        ).assert().isEqualTo(0.0)
     }
 
     @Test
@@ -126,11 +138,15 @@ class MicrometerSnapshotMetricsTest {
                 check(System.nanoTime() < deadline) { "no lag pass ran" }
                 Thread.sleep(50)
             }
-            registry.get(MicrometerSnapshotMetrics.INSTALLED).tags("kind", "platform", "state", "present").gauge().value()
+            registry.get(
+                MicrometerSnapshotMetrics.INSTALLED
+            ).tags("kind", "platform", "state", "present").gauge().value()
                 .assert().isEqualTo(1.0)
             registry.get(MicrometerSnapshotMetrics.INSTALLED).tags("kind", "app", "state", "absent").gauge().value()
                 .assert().isEqualTo(0.0)
-            registry.get(MicrometerSnapshotMetrics.LAG).tags("kind", "platform").gauge().value().assert().isNotNegative()
+            registry.get(
+                MicrometerSnapshotMetrics.LAG
+            ).tags("kind", "platform").gauge().value().assert().isNotNegative()
             registry.get(MicrometerSnapshotMetrics.LAGGING).tags("kind", "platform", "level", "warn").gauge().value()
                 .assert().isEqualTo(0.0)
             age.value().isNaN().assert().isFalse()
