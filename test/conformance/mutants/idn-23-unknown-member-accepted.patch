@@ -1,0 +1,17 @@
+# Rule: IDN-23
+# Mutant: the body of a refresh or a logout may carry members besides the pair, which are then read past unseen
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.LoginRoutesTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ServedLoginRoutesTest
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/TokenPairBody.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/TokenPairBody.kt
+index 123e718b..0bc47a72 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/TokenPairBody.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/route/TokenPairBody.kt
+@@ -38,7 +38,7 @@ internal object TokenPairBody {
+         } catch (_: JacksonException) {
+             return null
+         }
+-        if (node == null || !node.isObject || node.propertyNames().toSet() != MEMBERS) return null
++        if (node == null || !node.isObject || !node.propertyNames().toSet().containsAll(MEMBERS)) return null
+         val accessToken = node.get("accessToken")
+         val refreshToken = node.get("refreshToken")
+         if (!accessToken.isString || !refreshToken.isString) return null

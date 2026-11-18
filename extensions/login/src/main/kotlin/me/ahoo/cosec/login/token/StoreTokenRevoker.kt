@@ -59,7 +59,7 @@ class StoreTokenRevoker @JvmOverloads constructor(
             // Not known to be revoked yet: record it, which the write's own failure would report.
         }
         token.session?.let { families.end(it.id) }
-        tokenStore.revoke(token.id, revocationTtl)
+        sessionStore("revoke a token") { tokenStore.revoke(token.id, revocationTtl) }
         return token
     }
 

@@ -126,6 +126,8 @@ internal class KeyModelRunner(
                 TimeUnit.NANOSECONDS
             )
             KeyEffect.DropIfEmpty -> world.threads.housekeeping.execute { world.dropIfEmpty(this) }
+            // The model's family has no cap: its evictions are housekeeping's.
+            KeyEffect.EvictOverCap -> Unit
             KeyEffect.EvictBeyond -> world.threads.housekeeping.execute { world.evictBeyond(this) }
             is KeyEffect.Drop -> dropped = true
             is KeyEffect.Reply -> effect.reply.complete(effect.value)

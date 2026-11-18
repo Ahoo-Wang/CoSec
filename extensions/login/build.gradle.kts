@@ -14,5 +14,7 @@
 // Login and token issuing: suspending contracts, with coroutines from `runtime`. Reactor stays at the web bridges.
 dependencies {
     api(project(":runtime"))
+    // The login routes the starter serves read and write their bodies with CoSec's one mapper (CoSecJson).
+    implementation("tools.jackson.core:jackson-databind")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test")
 }

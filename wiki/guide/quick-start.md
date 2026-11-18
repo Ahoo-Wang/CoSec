@@ -262,7 +262,11 @@ changes by tenants and roles follow the same steps: [System and custom roles](..
   [An app without spaces](../scenarios/app.md) to [Gateway topologies](../scenarios/gateway.md).
 - Grant access by role, per app and space: [Role permissions](../policies/role-permissions.md).
 - Change documents safely through the control plane, with simulation and shadow windows: [Testing policies](../policies/testing.md).
-- Replace the demo `/token` endpoint with a real login, refresh and logout: [Authentication](../integration/authentication.md).
+- Replace the demo `/token` endpoint with a real login, which starts a session ([Authentication](../integration/authentication.md)).
+  Then let the starter serve refresh and logout: set `cosec.authentication.login.refresh.path: /auth/refresh` and
+  `logout.path: /auth/logout`, and permit `http:POST` on both paths to anyone, as the
+  [`clients` example](../integration/clients.md#what-your-application-serves) does. The demo's pairs belong to no
+  session, so they never refresh.
 - Read the principal and scope in your handlers: [Web integration](../integration/web.md).
 - Find out why a request was permitted or denied: [Explaining a decision](../integration/checks.md#explaining-a-decision).
 - Before production, read [Security model](./security-model.md).

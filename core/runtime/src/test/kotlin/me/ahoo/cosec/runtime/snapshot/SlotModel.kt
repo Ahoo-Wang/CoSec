@@ -404,7 +404,8 @@ internal class SlotModel(
      * The runner claimed the eviction of [key] (its hook, before the `Evict` transition removes it): judged now, against
      * the installs the metrics have reported so far. The model does not lag the source here: `onInstall` is reported
      * inside the `Install` effect before the family's counts move (`KeyEffects.installed`, then `KeyRunner.published`),
-     * and `Install` comes before the step's `EvictBeyond` and its answers. Judged after the event instead, an install
+     * and `Install` comes before the step's `EvictOverCap` (the one effect that can run a pass in place), its answers and its
+     * `EvictBeyond`. Judged after the event instead, an install
      * later in the same event (a compilation that calls `recompile`: seed 9191) changes what the family held.
      */
     fun claimed(key: SnapshotKey) {
