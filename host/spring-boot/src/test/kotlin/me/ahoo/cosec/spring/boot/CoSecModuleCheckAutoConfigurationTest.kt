@@ -158,6 +158,32 @@ class CoSecModuleCheckAutoConfigurationTest {
     }
 
     @Test
+    fun `the control plane switched on explicitly without cosec-control or cosec-cocache fails startup`() {
+        val noControl = plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.control.api.ControlHttp"))
+        failsNaming(noControl.withPropertyValues("cosec.control.enabled=true"), "cosec-control")
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.control.CoCacheControlStore"))
+                .withPropertyValues("cosec.control.enabled=true"),
+            "cosec-cocache",
+        )
+        // Unset, or switched off: a data-plane instance, which needs neither.
+        starts(noControl)
+        starts(noControl.withPropertyValues("cosec.control.enabled=false"))
+    }
+
+    @Test
+    fun `a cosec control enabled that is neither true nor false fails startup, without the modules too`() {
+        plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.control.api.ControlHttp"))
+            .withPropertyValues("cosec.control.enabled=flase")
+            .run { context ->
+                context.startupFailure.assert().isNotNull()
+                generateSequence(context.startupFailure) { it.cause }
+                    .any { "cosec.control.enabled must be true or false, not [flase]" in it.message.orEmpty() }
+                    .assert().isTrue()
+            }
+    }
+
+    @Test
     fun `a best-effort Kafka audit needs no cosec-kafka`() {
         starts(
             plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.kafka.KafkaAuditListener"))

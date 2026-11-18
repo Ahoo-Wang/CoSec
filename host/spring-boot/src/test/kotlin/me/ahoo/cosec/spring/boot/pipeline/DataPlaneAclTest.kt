@@ -27,6 +27,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
@@ -134,9 +135,18 @@ class DataPlaneAclTest {
         "cosec.authorization.shadow.instance-id=$instance",
     )
 
-    /** An instance without the control plane, connected as [name]. */
-    private fun dataPlane(name: String?) = ApplicationContextRunner()
-        .withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER, "me.ahoo.cosec.control.api.ControlHttp"))
+    /**
+     * An instance without the control plane, connected as [name]: `cosec-control` is not on its classpath, or, for
+     * [oneImage], it is and `cosec.control.enabled=false` switches it off.
+     */
+    private fun dataPlane(name: String?, oneImage: Boolean = false) = ApplicationContextRunner()
+        .withClassLoader(
+            if (oneImage) {
+                FilteredClassLoader(GATEWAY_GLOBAL_FILTER)
+            } else {
+                FilteredClassLoader(GATEWAY_GLOBAL_FILTER, "me.ahoo.cosec.control.api.ControlHttp")
+            }
+        )
         .withConfiguration(
             AutoConfigurations.of(
                 JacksonAutoConfiguration::class.java,
@@ -146,8 +156,10 @@ class DataPlaneAclTest {
                 CoSecPipelineIntegrationAutoConfiguration::class.java,
                 CoSecSnapshotAutoConfiguration::class.java,
                 CoSecPipelineAutoConfiguration::class.java,
+                CoSecControlAutoConfiguration::class.java,
             ),
         )
+        .withPropertyValues(*if (oneImage) arrayOf("cosec.control.enabled=false") else emptyArray())
         .withPropertyValues("spring.data.redis.url=${url(name)}", "${JwtProperties.PREFIX}.enabled=false", *common)
         .withBean(TokenStore::class.java, { NoTokenStore })
         .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
@@ -240,6 +252,30 @@ class DataPlaneAclTest {
         }
         aclLog().map { it["object"] }.toSet()
             .assert().isEqualTo(setOf("$prefix:snapshot:platform", "$prefix:candidate:platform"))
+    }
+
+    /** One image for both roles: the control plane on the classpath, switched off, and the page's read-only user. */
+    @Test
+    fun `an image with the control plane, switched off, starts with the page's user and may write no document`() {
+        setUser(KEYS_LINE, COMMANDS_LINE)
+        controlPlane(null).run { control ->
+            control.startupFailure.assert().isNull()
+            publish(control, 1)
+            dataPlane(user, oneImage = true).run { node ->
+                node.startupFailure.assert().describedAs(failures(node)).isNull()
+                node.getBeansOfType(ControlHttp::class.java).assert().isEmpty()
+                eventually { installed(node) == 1L }
+                installed(node).assert().isEqualTo(1L)
+                aclLog().assert().describedAs("ACL LOG of $user").isEmpty()
+            }
+        }
+        val own = RedisClient.create(url(user))
+        try {
+            assertThrows<RedisCommandExecutionException> { own.connect().sync().set("$prefix:snapshot:platform", "{}") }
+                .message.orEmpty().assert().startsWith("NOPERM")
+        } finally {
+            own.shutdown()
+        }
     }
 
     @Test
