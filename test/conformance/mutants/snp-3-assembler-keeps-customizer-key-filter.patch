@@ -3,15 +3,15 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.authorization.cache.StoreOfRecordOverrideTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index 46f68bd5..4c009d40 100644
+index 5fcdddd1..e9ec61fd 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -47,7 +47,7 @@ internal object CacheLocks {
+@@ -48,7 +48,7 @@ internal object CacheLocks {
      private val COMMAND_TIMEOUT: Duration = ChronoUnit.FOREVER.duration
  
-     fun of(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
+     fun of(cacheName: String, readOnly: Boolean = false): Locks = Locks.builder(LOCKED_BY).apply {
 -        lockLayout(*LayoutField.entries.toTypedArray())
 +        lockLayout(*(LayoutField.entries - LayoutField.KEY_FILTER - LayoutField.TTL_OF).toTypedArray())
-         when (cacheName) {
-             in STORE_OF_RECORD_CACHE_NAMES -> {
-                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }
+         // Read-only is CoSec's (SNP-18): where the control plane runs it writes the documents, and elsewhere a
+         // read-only user must be enough; a property or customizer that changes it either way is refused here.
+         verify { readOnlyAsDeclared(it, readOnly) }

@@ -3,10 +3,10 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt
-index 9f57e68d..eb2e3f63 100644
+index a3e9be19..9cb005f0 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/snapshot/PolicySnapshotCache.kt
-@@ -98,14 +98,7 @@ object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
+@@ -67,14 +67,7 @@ class PolicySnapshotCache internal constructor(
  @InternalCoSecApi
  fun CoCacheFactory.createPolicySnapshotCache(spec: StoreSpec<SnapshotKey, SnapshotDocument>): PolicySnapshotCache {
      require(spec.name == CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) { "Not the snapshot store: ${spec.name}." }
@@ -19,6 +19,6 @@ index 9f57e68d..eb2e3f63 100644
 -    pinned.ttlOf = null
 -    val created = pinned.build()
 +    val created = spec
-     val store = create(created, CoSecCacheSpecs.locks(created.name))
+     val store = create(created, CoSecCacheSpecs.locks(created.name, created.readOnly))
      val admin = checkNotNull(runtime.admin(created.name)) { "The snapshot store ${created.name} was not created." }
      val localMaxAge = checkNotNull(runtime.policy(created.name)).localMaxAge

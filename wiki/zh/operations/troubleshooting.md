@@ -430,6 +430,32 @@ cocache.caches configures undeclared caches [ChangeRequestCach]; declared caches
 该条目指向没有谁会创建的缓存，通常是拼错的名字。CoSec 公布它可能创建的每个缓存名，所以为本实例不创建的 CoSec 缓存写的
 条目（没有运行控制面的服务上的控制面缓存）照常启动；请改正名字。
 
+```text
+CoSec reads PolicySnapshotCache read-only in this process, which does not run the control plane: a cocache.* property or customizer cannot make it read-write (SNP-18).
+```
+
+某个 `cocache.caches.PolicySnapshotCache.read-only` 或 `cocache.caches.CandidateCache.read-only` 条目，或某个定制器，改变了
+CoSec 的声明：在没有 `cosec-control` 的实例上是只读，在运行控制面的地方是读写（`... cannot make it read-only`）。删掉它；
+由类路径决定（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
+
+### Redis 权限导致启动失败 {#startup-fails-on-a-redis-permission}
+
+CoCache 在创建 CoSec 的缓存时检查用户的权限，并指出缺少什么。在数据面实例（不运行控制面的实例）上，文档和候选是只读存储
+（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）：
+
+| 消息包含 | 给实例的 Redis 用户加上 |
+|---|---|
+| `Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]: allow [+evalsha_ro]` | `+evalsha_ro +eval_ro`：限制了命令的用户，例如 8.0.0-beta.1 的示例（[升级](./upgrading.md#from-8-0-0-beta-1)） |
+| `allow the key pattern [%R~<s>:snapshot:*]`（或 `<s>:candidate:*`） | 对文档或候选的读权限 |
+| `allow the channel pattern [&<s>:inv:*]` | 失效通道：`&<s>:*` |
+
+```text
+Redis denied publishing to the invalidation channel[cosec:inv:snapshot] of Keyspace(...): allow the channel pattern [&cosec:inv:*] ... (atomic broadcast also needs the key pattern [~cosec:snapshot:*]) ...
+```
+
+这个进程运行控制面（类路径上有 `cosec-control`），所以它要写入文档，但它的用户不能写：通常是把数据面用户给了一个带
+`cosec-control` 的进程。给控制面一个能写 `<s>:*` 的用户，或者不要把 `cosec-control` 放进数据面的镜像。
+
 ### 缓存 key 重叠导致启动失败 {#startup-fails-on-overlapping-cache-keys}
 
 ```text

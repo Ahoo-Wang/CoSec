@@ -237,8 +237,12 @@ object CoSecCacheSpecs {
      * more reads fail. The shadow caches fail a failed read, and keep their declared lifetimes.
      *
      * A constraint runs after `cocache.caches.[name].unlock` too: breaking the glass on these fields changes nothing.
+     *
+     * Whether a store is read-only on this instance is CoSec's too ([readOnly], the declared spec's): a data-plane
+     * instance reads the documents and the candidates read-only, a process that runs the control plane writes them. A
+     * `cocache.caches.[name].read-only` property or a customizer that changes it, either way, fails the creation.
      */
-    fun locks(cacheName: String): Locks = CacheLocks.of(cacheName)
+    fun locks(cacheName: String, readOnly: Boolean = false): Locks = CacheLocks.of(cacheName, readOnly)
 
     /**
      * The snapshot documents (RFC 0003 §4.1): the store of record like every policy cache ([locks]), keys encoded
@@ -251,13 +255,18 @@ object CoSecCacheSpecs {
      * fails every request closed (RFC 0006's `platformRequired`), but an absent app or tenant document is an empty one,
      * so its DENY statements silently stop applying (RC1-47). The starter checks the policy at startup (`SNP-3`) and
      * reads it again for its health indicator; CoCache refuses to start with an `allkeys-*` policy as well.
+     *
+     * [readOnly] on an instance that does not run the control plane: its reads go out as read-only scripts, so its
+     * Redis user needs only read permission on the documents (`%R~`), and every write is refused before it is sent.
      */
     fun policySnapshot(
         keyPrefix: String = DEFAULT_KEY_PREFIX,
         localMaxAge: Duration = DEFAULT_SNAPSHOT_LOCAL_MAX_AGE,
+        readOnly: Boolean = false,
     ): StoreSpec<SnapshotKey, SnapshotDocument> =
         storeOfRecord(POLICY_SNAPSHOT_CACHE_NAME, keyPrefix, SnapshotKeyEncoder, SnapshotDocumentCodec)
             .policy { this.localMaxAge = localMaxAge }
+            .apply { this.readOnly = readOnly }
             .build()
 
     /**
@@ -365,7 +374,7 @@ object CoSecCacheSpecs {
         JacksonCodec(mapper, object : TypeReference<V>() {}.type)
 }
 
-/** Creates [spec] through this factory with CoSec's locks ([CoSecCacheSpecs.locks]). */
+/** Creates [spec] through this factory with CoSec's locks ([CoSecCacheSpecs.locks]), read-only as [spec] declares. */
 @InternalCoSecApi
 fun <K : Any, V : Any> CoCacheFactory.createLocked(spec: StoreSpec<K, V>): Store<K, V> =
-    create(spec, CoSecCacheSpecs.locks(spec.name))
+    create(spec, CoSecCacheSpecs.locks(spec.name, spec.readOnly))

@@ -75,7 +75,7 @@ fun CoCacheFactory.createPolicySnapshotCache(spec: StoreSpec<SnapshotKey, Snapsh
     pinned.keyFilter = null
     pinned.ttlOf = null
     val created = pinned.build()
-    val store = create(created, CoSecCacheSpecs.locks(created.name))
+    val store = create(created, CoSecCacheSpecs.locks(created.name, created.readOnly))
     val admin = checkNotNull(runtime.admin(created.name)) { "The snapshot store ${created.name} was not created." }
     val localMaxAge = checkNotNull(runtime.policy(created.name)).localMaxAge
     // The keyspace the store was created in, after every layer: the one its invalidations arrive on.

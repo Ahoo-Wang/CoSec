@@ -157,11 +157,24 @@ contain `:` or `/`, so a key names one document only.
 Only the control plane (and `cosec-migrate`) writes documents and control-plane records. Data-plane instances read
 the documents and the candidates, and write only shadow reports and statuses. A Redis ACL can hold each side to that:
 
-- Data-plane credentials: read and write on `<s>:snapshot:*` and `<s>:candidate:*`, write on `<s>:shadow:*`, and no
-  access to `<s>:control:*`. Read-only is not possible with CoCache 8.0.0: it sends every script as `EVALSHA`, for which Redis requires
-  write permission on the keys the script names, so a user with `%R~` on them fails at startup and on every read
-  (`NOPERM`). A data-plane credential can therefore overwrite the documents its instances read, and an ACL cannot
-  prevent it.
+- Data-plane credentials: read-only on `<s>:snapshot:*` and `<s>:candidate:*` (`%R~`), write on `<s>:shadow:*`, and
+  no access to `<s>:control:*`. An instance that does not run the control plane (no `cosec-control` on its classpath)
+  reads the documents and the candidates read-only: CoCache sends those reads as `EVALSHA_RO` (Redis 7.0 or later), so
+  its user needs only read permission on them, and Redis itself refuses that user a write of a document or a
+  candidate. A process that runs the control plane writes them, so its user needs write permission; started with a
+  read-only user it fails at startup, at CoCache's publish check
+  (`Redis denied publishing to the invalidation channel[<s>:inv:snapshot]`).
+- Which of the two a process is follows its classpath alone. No property makes it read-only or read-write, and a
+  `cocache.caches.PolicySnapshotCache.read-only` or `cocache.caches.CandidateCache.read-only` that tries fails startup.
+  So a fleet that ships one image with `cosec-control` for both roles has no read-only data plane.
+- Revocations and refresh token families stay read-write wherever JWT is on (`<s>:token:*`): an application can revoke
+  tokens from any endpoint of its own (`TokenRevoker`), so nothing in a process says it only reads them.
+- A data-plane user still publishes on `&<s>:*`: its shadow stores broadcast their invalidations there, and a channel
+  pattern cannot allow subscribing without publishing. So an instance whose credential leaks can publish invalidations
+  on the documents' channel. That costs reads, never a decision: an invalidation carries keys, not a document, so each
+  instance that holds a named document reads it again from Redis, the store of record, which that user cannot write,
+  and decides with the installed copy meanwhile. Keys an instance does not hold are ignored, and the reloads of one
+  document coalesce, at most one in flight and one queued per instance.
 - Control-plane credentials: every key under `<s>:`.
 - To keep one instance from writing another instance's report, give each instance its own user, limited to its own
   report keys (`<s>:shadow:report:*:<instance>`), and set its
@@ -179,11 +192,12 @@ but an id removed before then goes unnoticed until that instance writes again.
 
 An example for instance `pod-a` with the default prefix (Redis 7 ACL syntax, `channel-mode: pubsub`). The first line sets
 the keys and takes every command away; the second grants the commands and channels it needs, which are the ones
-[CoCache lists](https://cocache.ahoo.me/operations/#acl) (add `+spublish +ssubscribe +sunsubscribe` in `sharded` mode):
+[CoCache lists](https://cocache.ahoo.me/operations/#acl) for the stores it writes and the read-only ones (add
+`+spublish +ssubscribe +sunsubscribe` in `sharded` mode):
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all ~cosec:snapshot:* ~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
-ACL SETUSER cosec-pod-a +@connection +evalsha +eval +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
 
 What the example still gives an operator: no key under `<s>:control:*`, and a report and status only under the
@@ -192,9 +206,10 @@ tested here; the token, membership, API key, rate limit and OAuth families only 
 those were not tried with an ACL.
 
 `~cosec:shadow:report:` and `~cosec:shadow:status:`, without a `*`, are the keys CoCache names when it creates those
-caches: without them the instance fails at startup with `NOPERM`, though its own keys are allowed. Tested on Redis 8.10
-with this user: the instance creates its caches, reads the documents and the candidates, writes its report and status,
-and hears an invalidation, with an empty `ACL LOG`; writing `pod-b`'s report or status is refused.
+caches: without them the instance fails at startup with `NOPERM`, though its own keys are allowed. A test runs exactly
+these two lines on real Redis (`DataPlaneAclTest`, on every CI run): an instance without the control plane creates its
+caches, reads the documents, hears a publish by a control-plane user, and writes its report, with an empty `ACL LOG`;
+a `SET` of a document or a candidate as this user is refused (`NOPERM`).
 
 Add the keys the instance's other features use (revocations, API keys, rate limits; see [Redis keys](#redis-keys)).
 Check the user with `ACL DRYRUN` before production: CoCache writes through Lua scripts, which Redis checks key by key.

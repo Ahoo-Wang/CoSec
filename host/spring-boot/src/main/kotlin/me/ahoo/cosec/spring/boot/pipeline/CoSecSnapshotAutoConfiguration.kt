@@ -49,6 +49,7 @@ import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -63,6 +64,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
+import org.springframework.core.io.ResourceLoader
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
@@ -97,10 +99,13 @@ class CoSecSnapshotAutoConfiguration {
             factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
             cosec: CoSecProperties,
+            resources: ResourceLoader,
         ): PolicySnapshotCache {
             val snapshot = properties.snapshot
+            // Read-only unless this process runs the control plane, the only writer of documents (SNP-18).
+            val readOnly = !ControlPlaneCondition.wired(resources.classLoader)
             return factory.createPolicySnapshotCache(
-                CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge)
+                CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge, readOnly)
             )
         }
 
@@ -224,8 +229,13 @@ class CoSecSnapshotAutoConfiguration {
             stores: ObjectProvider<CandidateStore>,
             compiler: PlatformCompiler,
             cosec: CoSecProperties,
+            resources: ResourceLoader,
         ): CandidateSource {
-            val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, cosec.keyPrefix)
+            val store = stores.ifUnique ?: CoCacheCandidateStore.create(
+                factory,
+                cosec.keyPrefix,
+                readOnly = !ControlPlaneCondition.wired(resources.classLoader),
+            )
             return CachingCandidateSource(store, compiler::compileCandidate)
         }
 

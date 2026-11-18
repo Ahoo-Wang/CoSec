@@ -18,6 +18,7 @@ package me.ahoo.cosec.cocache
 import me.ahoo.cocache.core.CacheSpec
 import me.ahoo.cocache.core.LayoutField
 import me.ahoo.cocache.core.Locks
+import me.ahoo.cocache.core.Spec
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.policy.PolicyField
 import me.ahoo.cocache.core.policy.ReadFailureMode
@@ -46,8 +47,11 @@ internal object CacheLocks {
      */
     private val COMMAND_TIMEOUT: Duration = ChronoUnit.FOREVER.duration
 
-    fun of(cacheName: String): Locks = Locks.builder(LOCKED_BY).apply {
+    fun of(cacheName: String, readOnly: Boolean = false): Locks = Locks.builder(LOCKED_BY).apply {
         lockLayout(*LayoutField.entries.toTypedArray())
+        // Read-only is CoSec's (SNP-18): where the control plane runs it writes the documents, and elsewhere a
+        // read-only user must be enough; a property or customizer that changes it either way is refused here.
+        verify { readOnlyAsDeclared(it, readOnly) }
         when (cacheName) {
             in STORE_OF_RECORD_CACHE_NAMES -> {
                 verify { require(it is StoreSpec<*, *>) { "CoSec's ${it.name} is the store of record: a Store." } }
@@ -102,4 +106,17 @@ internal object CacheLocks {
             else -> throw IllegalArgumentException("[$cacheName] is not one of CoSec's caches.")
         }
     }.build()
+
+    private fun readOnlyAsDeclared(spec: Spec<*, *>, declared: Boolean) {
+        val effective = (spec as? StoreSpec<*, *>)?.readOnly ?: false
+        check(effective == declared) {
+            if (declared) {
+                "CoSec reads ${spec.name} read-only in this process, which does not run the control plane: a " +
+                    "cocache.* property or customizer cannot make it read-write (SNP-18)."
+            } else {
+                "CoSec writes ${spec.name} in this process: a cocache.* property or customizer cannot make it " +
+                    "read-only (SNP-18)."
+            }
+        }
+    }
 }

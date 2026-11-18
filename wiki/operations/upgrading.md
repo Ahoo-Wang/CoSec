@@ -1176,6 +1176,15 @@ deployment needs none of it; the section above is the whole upgrade. These notes
 
 ### From 8.0.0-beta.1 {#from-8-0-0-beta-1}
 
+- **Before upgrading: add `+evalsha_ro +eval_ro` to every data-plane Redis user whose commands are restricted.** An
+  instance that does not run the control plane now reads the documents and the candidates read-only, as `EVALSHA_RO`
+  (Redis 7.0 or later, which CoCache 8 already requires). With a user that lists its commands, such as the one
+  beta.1's [Who may write which keys](./storage.md#who-may-write-which-keys) showed (`-@all` and then `+evalsha +eval`
+  among others), the upgraded instance fails at startup:
+  `Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]: allow [+evalsha_ro] ...`. Add the two
+  commands first; a user without a command list (`+@all`) needs nothing. Narrowing the documents and the candidates to
+  read permission (`%R~<s>:snapshot:* %R~<s>:candidate:*`) is optional, and the page shows it. A process that runs the
+  control plane is unchanged: it still writes them.
 - **The starter can serve the refresh and logout routes** (an addition: nothing changes until a path is set).
   `cosec.authentication.login.refresh.path` and `logout.path` serve them on Spring MVC and WebFlux, with the statuses
   and bodies of [Building a client](../integration/clients.md#what-your-application-serves). A route you wrote keeps
