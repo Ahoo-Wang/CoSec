@@ -1,4 +1,4 @@
-# Rule: PIP-7
+# Rule: IDN-26
 # Mutant: the revocation tables' absent-ttl is left open, so a layer can keep "not revoked" longer than 30 seconds
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 

@@ -323,6 +323,18 @@
         "jwt:LoginRoutesTest#a logout of a pair that is not one is 401, of a body that is not a pair 400, of a store that is down 503",
         "spring-boot:ServedLoginRoutesTest#a logout ends the session, and a logout of an ended one is done too"
       ]
+    },
+    {
+      "id": "IDN-26",
+      "source": "RFC 0004 §4.5.3; #1629 finding 5",
+      "statement": "A revocation through TokenRevoker invalidates every instance's local 'not revoked' answer for that token or subject at once; an instance that missed the invalidation keeps that answer for at most 30 seconds (RevokedTokenCache.MISSING_TTL_SECONDS), and no property, layer or customizer lengthens it.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "cocache:CacheTtlPolicyTest#revocationTablesKeepNotRevokedFor30SecondsAtMost",
+        "spring-boot:StrictCacheFailureTest#revocationTablesKeepNotRevokedFor30SecondsWhateverTheGlobalLayersSay",
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesAbsentTtlPropertyFailsStartup"
+      ]
     }
   ]
 }
