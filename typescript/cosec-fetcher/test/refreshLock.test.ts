@@ -55,7 +55,7 @@ function twoTabs() {
   const shared = new InMemoryStorage();
   // Tabs share the browser's localStorage; the lock applies to it only.
   vi.stubGlobal('window', { localStorage: shared });
-  const bus = new SerialTypedEventBus<any>('refresh-lock');
+  const bus = new SerialTypedEventBus<unknown>('refresh-lock');
   const tabA = new TokenStorage({ storage: shared, eventBus: bus });
   const tabB = new TokenStorage({ storage: shared, eventBus: bus });
   tabA.signIn(token('original'));
