@@ -31,6 +31,7 @@ import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.identity.Identity
+import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Who a permitted request is, and in what scope (RFC 0006 §7.6): the principal as authenticated (null when anonymous),
@@ -50,9 +51,31 @@ class RequestSecurity internal constructor(
     internal val attributes: ConditionInput = AbsentAttributes,
     /** In a service behind a gateway (`cosec.pipeline.mode=gateway`), the identity the gateway forwarded. */
     val identity: Identity? = null,
+    /**
+     * Set once the adapter that bound this request has ended it ([end]); shared with the forms [inApp] and
+     * [asPrincipal] make of it, so a check of any of them sees the request ended.
+     */
+    private val ended: AtomicBoolean = AtomicBoolean(),
 ) {
     /** The application-facing view. */
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
+
+    /**
+     * Whether the request is still in progress: true until the adapter that bound it ends it ([end]). A request no
+     * adapter bound (a transport that calls `Pipeline.evaluate` itself, the test kit) is never ended. A check of an
+     * ended request is refused (`PIP-26`).
+     */
+    internal val inProgress: Boolean get() = !ended.get()
+
+    /**
+     * Ends the request: from now on no check permits as it (`PIP-26`). Only the adapters call it, when the request
+     * completes: WebFlux and the gateway when the chain's `Mono` terminates, the servlet filter when the dispatch returns
+     * or, for an async request, when it completes, fails or times out. Idempotent.
+     */
+    @InternalCoSecApi
+    fun end() {
+        ended.set(true)
+    }
 
     /**
      * The same principal in the default space of [app] of its tenant, resolved as [ScopeResolver] resolves a host of
@@ -63,7 +86,7 @@ class RequestSecurity internal constructor(
         val member = ScopeSubject(scope.tenant, true, memberships, authenticated.app?.value)
         val resolved = ScopeResolver.resolve(member, "", HostScope(app))
         val scope = (resolved as? ScopeResolution.Resolved)?.scope ?: return null
-        return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes)
+        return RequestSecurity(requestId, authenticated, scope, memberships, request, attributes, ended = ended)
     }
 
     /**
@@ -91,7 +114,7 @@ class RequestSecurity internal constructor(
             breakGlass = principal.breakGlass,
         )
         val request = with(request) { AuthzRequest(subject, action, resource, environment) }
-        return RequestSecurity(requestId, principal, scope, memberships, request, attributes)
+        return RequestSecurity(requestId, principal, scope, memberships, request, attributes, ended = ended)
     }
 
     override fun toString(): String =

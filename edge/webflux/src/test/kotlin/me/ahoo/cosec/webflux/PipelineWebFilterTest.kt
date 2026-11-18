@@ -149,16 +149,16 @@ class PipelineWebFilterTest {
     fun checkMonoAnswersForTheReactiveCaller() {
         val pipeline = pipeline(permit)
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))
-        var context: me.ahoo.cosec.api.context.SecurityContext? = null
+        val checker = AuthorizationChecker(pipeline)
+        var answers: List<Boolean>? = null
+        // Within the request: once it has ended, a check of it is denied (PIP-26, RequestEndTest).
         PipelineWebFilter(pipeline).filter(exchange) {
-            context = it.getSecurityContext()
-            Mono.empty()
+            val context = it.getSecurityContext()!!
+            checker.checkMono(context, "http:GET", "/orders/1")
+                .zipWith(checker.checkMono(context, "GET", "/orders/1")) { a, b -> listOf(a, b) }
+                .doOnNext { both -> answers = both }
+                .then()
         }.block(Duration.ofSeconds(5))
-        StepVerifier.create(AuthorizationChecker(pipeline).checkMono(context!!, "http:GET", "/orders/1"))
-            .expectNext(true)
-            .verifyComplete()
-        StepVerifier.create(AuthorizationChecker(pipeline).checkMono(context!!, "GET", "/orders/1"))
-            .expectNext(false)
-            .verifyComplete()
+        answers.assert().isEqualTo(listOf(true, false))
     }
 }

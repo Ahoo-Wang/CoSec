@@ -42,7 +42,9 @@ class ReactiveSecurityContextsTest {
             .test()
             .expectAccessibleContext()
             .assertThat {
-                it.getSecurityContext().principal.assert().isEqualTo(anonymous)
+                // Written under the key; read back only when the pipeline made it (PIP-27, RequestEndTest).
+                it.get<SecurityContext>(SecurityContext.KEY).principal.assert().isEqualTo(anonymous)
+                it.getSecurityContextOrEmpty().assert().isNull()
             }
             .hasKey(SecurityContext.KEY)
             .then()

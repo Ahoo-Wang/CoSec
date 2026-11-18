@@ -18,6 +18,7 @@ import io.micrometer.context.ContextRegistry
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -51,8 +52,8 @@ class SecurityContextArgumentResolverTest {
 
     @Test
     fun aContextParameterIsTheRequestsWhateverTheThreadHolds() {
-        val context = mockk<SecurityContext>()
-        val other = mockk<SecurityContext>()
+        val context = PermittingPipeline.context()
+        val other = PermittingPipeline.context()
         val request = MockHttpServletRequest().apply { setSecurityContext(context) }
         SecurityContextHolder.setContext(other)
         try {
@@ -80,12 +81,25 @@ class SecurityContextArgumentResolverTest {
         assertThrownBy<IllegalStateException> { resolver.resolveArgument(parameter(0), null, request, null) }
     }
 
+    /** `PIP-27`: a context an application filter put on the request is none: never taken for a caller. */
+    @Test
+    fun aContextThePipelineDidNotMakeIsNone() {
+        val servlet = MockHttpServletRequest()
+        servlet.setAttribute(SecurityContext.KEY, mockk<SecurityContext>())
+        servlet.getSecurityContext().assert().isNull()
+        val request = ServletWebRequest(servlet)
+        resolver.resolveArgument(parameter(1), null, request, null).assert().isNull()
+        assertThrownBy<IllegalStateException> { resolver.resolveArgument(parameter(0), null, request, null) }
+        servlet.setAttribute(SecurityContext.KEY, "not a context")
+        servlet.getSecurityContext().assert().isNull()
+    }
+
     /** Registered for Micrometer's context propagation, which captures and restores the holder with it. */
     @Test
     fun theHolderIsAThreadLocalOfContextPropagation() {
         val accessor = ContextRegistry.getInstance().threadLocalAccessors
             .single { it.key() == SecurityContextThreadLocalAccessor.KEY }
-        val context = mockk<SecurityContext>()
+        val context = PermittingPipeline.context()
         try {
             @Suppress("UNCHECKED_CAST")
             (accessor as io.micrometer.context.ThreadLocalAccessor<SecurityContext>).setValue(context)

@@ -15,6 +15,8 @@
 
 package me.ahoo.cosec.webmvc
 
+import jakarta.servlet.AsyncEvent
+import jakarta.servlet.AsyncListener
 import jakarta.servlet.Filter
 import jakarta.servlet.FilterChain
 import jakarta.servlet.ServletRequest
@@ -30,6 +32,7 @@ import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.ProblemEncoder
 import me.ahoo.cosec.runtime.http.RemoteIpResolver
 import me.ahoo.cosec.runtime.http.RequestGate
+import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 
 /**
@@ -39,7 +42,8 @@ import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
  * they are, and the chain is called only when the outcome proceeds.
  *
  * The permitted request's `SecurityContext` is bound to [SecurityContextHolder] and the request for the chain, and
- * removed once the request completes, whatever happens.
+ * removed once the request completes, whatever happens. Its security is ended then, or when an async request completes
+ * (`PIP-26`): a context kept after that permits nothing.
  */
 class PipelineServletFilter @InternalCoSecApi constructor(
     private val pipeline: RequestGate,
@@ -59,7 +63,32 @@ class PipelineServletFilter @InternalCoSecApi constructor(
             }
         } finally {
             SecurityContextHolder.remove()
+            outcome.security?.let { endWhenComplete(servletRequest, it) }
         }
+    }
+
+    /**
+     * Ends [security] when the request completes (`PIP-26`): now, unless the handler started async processing
+     * (`DeferredResult`, `StreamingResponseBody`, a `suspend` handler), whose end the container reports later.
+     */
+    private fun endWhenComplete(request: HttpServletRequest, security: RequestSecurity) {
+        if (request.isAsyncStarted) {
+            request.asyncContext.addListener(EndOnCompletion(security))
+        } else {
+            security.end()
+        }
+    }
+
+    /** Ends the request's security when its async processing completes, fails or times out. */
+    private class EndOnCompletion(private val security: RequestSecurity) : AsyncListener {
+        override fun onComplete(event: AsyncEvent) = security.end()
+
+        override fun onError(event: AsyncEvent) = security.end()
+
+        override fun onTimeout(event: AsyncEvent) = security.end()
+
+        // A new async cycle drops the listeners: this one goes on listening.
+        override fun onStartAsync(event: AsyncEvent) = event.asyncContext.addListener(this)
     }
 
     /** Writes [outcome]; true when the request proceeds to the chain. */
