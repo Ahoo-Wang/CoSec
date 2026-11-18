@@ -102,6 +102,35 @@ class SnapshotRevalidationTest {
         }
     }
 
+    /**
+     * `SNP-6`: a change written to the store before a pass starts is installed by the time that pass has finished with
+     * its document, though a load of it was in flight when the pass reached it. That load's read answered revision 1
+     * before the change; a pass never counts a store read that began before it did as its confirmation.
+     */
+    @Test
+    fun aPassInstallsAChangeWrittenBeforeItThoughALoadThatReadBeforeItWasInFlight() {
+        val elapsed = ManualNanoTime()
+        testSource(store).use { source ->
+            source.nanoTime = elapsed
+            source.load("app-a").join()
+            store.dropNotifications = true
+            store.hold = true
+            // A load in flight, its read made while the store still holds revision 1.
+            val earlier = source.reload(APP_A)
+            store.put(APP_A, document(2, "a2"))
+            elapsed.advance(Duration.ofSeconds(1))
+
+            val pass = source.tick()
+            pass.isDone.assert().isFalse()
+            store.hold = false
+            store.releaseAll()
+
+            (earlier.join().state as DocumentState.Present).compiled.assert().isInstanceOf(Compiled::class.java)
+            pass.isDone.assert().isTrue()
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
     @Test
     fun f9NotificationDuringALoadStartsAnotherOnceItCompletes() {
         testSource(store).use { source ->
