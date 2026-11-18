@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRevalidationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
-index c4687c21..805d61c7 100644
+index 96322c8f..83ca5c6f 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
-@@ -128,7 +128,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
-             return
-         }
+@@ -139,7 +139,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
          val inFlight = step.load
--        if (inFlight != null && pass != null && step.moment.nanos - inFlight.startedNanos > config.storeReadTimeout.toNanos()) {
-+        if (inFlight != null && pass != null && step.moment.nanos - inFlight.startedNanos > Long.MAX_VALUE) {
-             waiter?.let { step.emit(KeyEffect.Skip(it)) }
-             return
-         }
+         if (inFlight != null && pass != null) {
+             val older = inFlight.startedNanos - pass.startedNanos <= 0
+-            if (step.moment.nanos - inFlight.startedNanos > config.storeReadTimeout.toNanos()) {
++            if (step.moment.nanos - inFlight.startedNanos > Long.MAX_VALUE) {
+                 if (older) step.again = true
+                 waiter?.let { step.emit(KeyEffect.Skip(it)) }
+                 return

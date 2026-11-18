@@ -78,9 +78,10 @@ internal class SourceModelRun(
             if (!step("e$index $event") { apply(event) }) return this
         }
         step("settle") { settle() }
+        if (failure == null) step("owed reads") { model.checkOwedReads() }
         if (failure == null) step("resets") { model.checkResets() }
         if (failure == null && model.closedAt < 0) {
-            val lag = SourceModelLag(script, store, threads, model, options, ::checkNow)
+            val lag = SourceModelLag(script, store, threads, model, options, ::checkNow) { source.reload(it) }
             step("lag") { lag.run() }
         }
         if (failure == null && model.closedAt < 0) step("converge") { converge() }
@@ -179,7 +180,7 @@ internal class SourceModelRun(
             Kind.RELOAD -> model.handedOut("reload", setOf(key!!)) { source.reload(key) }
             Kind.SETTLED -> model.handedOut("settled", setOf(key!!)) { source.settled(listOf(key)) }
             Kind.PREWARM -> model.handedOut("prewarm", setOf(SHARED, key!!)) { source.prewarm(listOf(SHARED, key)) }
-            Kind.TICK -> model.handedOut("tick", emptySet()) { source.tick() }
+            Kind.TICK -> model.handedOut("tick", model.installedKeys()) { source.tick() }
             Kind.PEEK -> source.peekAll(listOf(key!!))
             Kind.CLOSE -> close()
             else -> error("not a source event: $event")

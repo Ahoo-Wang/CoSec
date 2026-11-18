@@ -33,8 +33,11 @@ internal data class SourceModelScript(
     /** Documents a pass reloads at once: with one, a pass that waits on a load waits for good (`SNP-6`). */
     val lanes: Int = 2,
 ) {
-    /** In the lag phase: nothing, the target's first read hangs, or its compilation never runs. */
-    enum class Lag { NONE, HANG_READ, STUCK_COMPILE }
+    /**
+     * In the lag phase: nothing, the target's first read hangs, its compilation never runs, or a load of it whose read
+     * began before the write is in flight when the first pass after the write reaches it.
+     */
+    enum class Lag { NONE, HANG_READ, STUCK_COMPILE, IN_FLIGHT }
 
     /** What the store tells the source's listener before `subscribe` returns. */
     enum class Subscribe { NOTHING, RESET, SHARED_CHANGED, APP_CHANGED, TENANT_CHANGED }

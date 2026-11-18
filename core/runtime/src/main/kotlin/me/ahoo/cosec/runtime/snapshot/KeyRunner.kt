@@ -97,8 +97,9 @@ internal class KeyRunner<T : Any>(
         KeyWaiter.Held<T>().also { offer(KeyEvent.Requested(Ask.ReloadIfHeld(force), it)) }
 
     /**
-     * The load in flight, or a new one, counted as a read of [pass]. Skipped for a removed key, and for a load in flight
-     * longer than the store read timeout, which the pass does not wait for (`SNP-6`).
+     * A load that started after [pass] did, counted as a read of [pass] when the pass starts it: the load in flight if
+     * it did, otherwise a new one, or the one after the load in flight (`SNP-6`). Skipped for a removed key, and for a
+     * load in flight longer than the store read timeout, which the pass does not wait for.
      */
     fun load(pass: Pass): CompletableFuture<Reloaded<T>> =
         KeyWaiter.Held<T>().also { offer(KeyEvent.Requested(Ask.Load(force = false, pass = pass), it)) }

@@ -883,6 +883,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 
 ### 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
+- **已修复：丢失的失效消息由其后的第一轮装上，即使碰到在途的加载。** beta.3 的发布说明把它列为已知问题：重新确认的一轮碰到某文档已在途的加载时，把那次加载的读当作自己的确认，而那次读可能早于变化，所以失效消息丢失的变化最多要两个 `revalidate-interval` 才装上，其间的决策使用上一修订。现在一轮只加入在它之后开始的加载，否则再等一次加载（`SNP-6`，[存储](./storage.md#how-instances-read-documents)）。无需任何改动；一轮碰到某文档的加载时，Redis 可能多收到一次该文档的条件读。
 - **`cosec-gateway-server` 镜像关闭了 ip2region。** 它的 `config/application.yaml` 现在设置 `cosec.ip2region.enabled: false`，与 Kubernetes 的 base 一致；直到 beta.3，镜像一直开启它。读取 `ext.ip2region.*` 的文档在它上面不再能编译：升级镜像之前设置 `COSEC_IP2REGION_ENABLED=true`。它的 Docker `HEALTHCHECK` 现在探测 `/actuator/health/liveness`，因此等待平台文档的网关不再被报告为不健康。
 - **`@ahoo-wang/cosec-react`：`logout` 在服务端结束会话。** `useSecurity` 和 `SecurityProvider` 新增 `tokenManager` 选项（同一个 `TokenStorage` 的 `JwtTokenManager`，带 `tokenRevoker`）和 `logout()`：它调用服务端的登出，然后删除这里的令牌对（[构建客户端](../integration/clients.md#logout-and-switching)）。`signOut` 不变：它只删除这里的令牌对，会话在服务端仍可刷新，直到其刷新令牌过期。没有任何破坏性变化；把用户的"退出"改为调用 `logout`。
 

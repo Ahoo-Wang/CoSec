@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.runtime.snapshot.KeyEvent.Ask
 import me.ahoo.cosec.runtime.snapshot.KeyModelScript.Kind
@@ -53,7 +52,6 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
         Duration.ZERO
     )
     private val transitions = KeyTransitions<String>(config)
-    private val pass = mockk<Pass>(relaxed = true)
     private val coldLoadTimeout = Duration.ofSeconds(5)
 
     /** The runner the family's map holds for the key; a dropped one is replaced by a new one on the next request. */
@@ -103,7 +101,7 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
             Kind.REQUEST -> request(Ask.Request)
             Kind.USABLE -> request(Ask.Usable)
             Kind.LOAD -> request(Ask.Load(force = false))
-            Kind.PASS -> request(Ask.Load(force = false, pass = pass))
+            Kind.PASS -> request(Ask.Load(force = false, pass = passStartingNow()))
             Kind.RELOAD -> request(Ask.Reload(force = false))
             Kind.RELOAD_FORCED -> request(Ask.Reload(force = true))
             Kind.RELOAD_IF_HELD -> request(Ask.ReloadIfHeld(force = false))
@@ -153,6 +151,9 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
     }
 
     // ---- What a caller does: create, register and time its waiter before it offers (§2, condition 1).
+
+    /** A periodic pass that starts now: what a load in flight is older or younger than (`SNP-6`). */
+    private fun passStartingNow(): Pass = Pass(CompletableFuture(), { threads.nanos }, storeReadTimeout)
 
     private fun runner(): KeyModelRunner = current?.takeUnless { it.dropped } ?: KeyModelRunner(this, transitions).also {
         current = it
@@ -216,7 +217,10 @@ internal class KeyModelRun(private val script: KeyModelScript) : KeyModelRunner.
         counts.merge("steps checked", 1, Int::plus)
         counts.merge("event ${event.javaClass.simpleName}", 1, Int::plus)
         step.effects.filterIsInstance<KeyEffect.Hang<String>>().filter {
-            (it.waiter as ScriptWaiter).ask.let { ask -> ask is Ask.Reload || ask is Ask.ReloadIfHeld }
+            (it.waiter as ScriptWaiter).ask.let { ask ->
+                ask is Ask.Reload || ask is Ask.ReloadIfHeld ||
+                    (ask is Ask.Load && ask.pass != null && it.handle !== step.state.load?.handle)
+            }
         }.forEach {
             startedAfter.merge(it.handle, before.serial, ::maxOf)
         }

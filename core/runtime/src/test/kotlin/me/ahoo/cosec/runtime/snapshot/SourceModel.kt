@@ -45,7 +45,9 @@ internal class ModelCompiled(val key: SnapshotKey, val revision: Long, val input
  * 4. **Every waiter is answered, and correctly**: a request by `coldLoadTimeout`, with entries that were installed and
  *    are not older than what was served at the call; `revalidate`, `reload` and `recompile` only after a read of each of
  *    their documents that started after the call has ended (`SNP-13`), `recompile` with nothing older than its inputs
- *    left in service; everything once the source is closed or the run settles.
+ *    left in service; a periodic `tick` the same, but for a document whose load was stuck compiling, which the pass does
+ *    not wait for and whose read after it is owed until the run settles (`SNP-6`, [checkOwedReads]); everything once
+ *    the source is closed or the run settles.
  */
 internal class SourceModel(
     private val store: SourceModelStore,
@@ -67,6 +69,12 @@ internal class SourceModel(
     private val versions = IdentityHashMap<SnapshotEntry<*>, Int>()
     private val lastInstall = HashMap<SnapshotKey, SnapshotEntry<*>>()
     private val lastVersion = HashMap<SnapshotKey, Int>()
+
+    /** When each key's runner last took a compilation's result, as a [SourceModelStore.stamp] ([compileTaken]). */
+    private val compileTakenAt = HashMap<SnapshotKey, Long>()
+
+    /** Documents a periodic pass skipped while their load was stuck compiling: a read after its call is owed (`SNP-6`). */
+    private val owedReads = mutableListOf<Pair<Obligation, SnapshotKey>>()
 
     /** When the read behind each key's last install started; and when each recompile was called. */
     private val installedFrom = HashMap<SnapshotKey, Long>()
@@ -100,6 +108,10 @@ internal class SourceModel(
         var resetsChecked = 0
         var lostWritesChecked = 0
 
+        /** Documents of periodic passes checked to have been read after the call, and of those, the reads owed. */
+        var passReadsChecked = 0
+        var passReadsOwed = 0
+
         /** [lostWritesChecked] by what went wrong meanwhile. */
         val lostWritesByLag = java.util.EnumMap<SourceModelScript.Lag, Int>(SourceModelScript.Lag::class.java)
     }
@@ -127,6 +139,7 @@ internal class SourceModel(
             when (kind) {
                 "request" -> answeredRequest(value)
                 "revalidate", "reload" -> readAfter()
+                "tick" -> passRead()
                 "recompile" -> {
                     readAfter()
                     recompiled()
@@ -159,6 +172,34 @@ internal class SourceModel(
                 if (!read && (evictedAt[key] ?: -1) < at) {
                     violations += "$this completed with no read of $key that started after the call and ended"
                 }
+            }
+        }
+
+        /**
+         * `SNP-6`: a pass never counts as its confirmation a read that began before it. Each document has had a read
+         * that started after the call and ended, unless its load was stuck compiling when the pass reached it: the pass
+         * does not wait for that load, and the read after it is owed ([checkOwedReads]).
+         *
+         * A read that started after the call and is still in flight when the pass completes is owed too. Only that skip
+         * leaves one: the pass skipped the stuck load, the compilation then ended before the pass did, and the load
+         * after it is reading. Every read the pass waits for has ended when it completes (a load it joined or waited
+         * for ends after its read; a read that timed out has ended), so it never leaves one in flight; and once a read
+         * of the document after the call has ended, the document is not owed whatever else is reading it. The property
+         * run reports how many documents were owed against how many were checked.
+         */
+        private fun passRead() {
+            if (closedAt >= 0) return
+            for (key in keys) {
+                if ((evictedAt[key] ?: -1) >= at) continue
+                counts.passReadsChecked++
+                val after = store.reads.filter { it.key == key && it.startedAt >= at }
+                if (after.any(::ended)) continue
+                if (after.isNotEmpty() || stuckCompiling(key)) {
+                    counts.passReadsOwed++
+                    owedReads += this to key
+                    continue
+                }
+                violations += "$this completed with no read of $key that started after the call and ended"
             }
         }
 
@@ -231,6 +272,37 @@ internal class SourceModel(
             }
         }
         resets.clear()
+    }
+
+    /**
+     * Whether [key]'s load is held by a compilation older than `storeReadTimeout`: its last read answered a document
+     * that long ago, and the key's runner has taken no compilation's result since. The runner's view, not the compile
+     * pool's: a compilation that has run but whose result the runner has not taken yet still holds the load (seed 827
+     * of the 1M stress, at K = 0, where the result waits in a hand-off). In the model a compilation's result is taken
+     * after a newer read only once the source is closed, which no pass is judged after.
+     */
+    private fun stuckCompiling(key: SnapshotKey): Boolean {
+        val last = store.reads.lastOrNull { it.key == key && it.answered && !it.failed && !it.abandoned } ?: return false
+        val content = store.contentAt(key, last.answeredVersion) as? Content.Document ?: return false
+        return content.digest != last.known &&
+            threads.nanos - last.startedNanos > options.storeReadTimeout.toNanos() &&
+            (compileTakenAt[key] ?: -1) < last.answeredAt
+    }
+
+    /** [key]'s runner takes a compilation's result: called by the run's drain hook, before the transition. */
+    fun compileTaken(key: SnapshotKey) {
+        compileTakenAt[key] = store.stamp()
+    }
+
+    /** Once the run has settled: each read a pass owed was made, after its call (`SNP-6`). */
+    fun checkOwedReads() {
+        for ((pass, key) in owedReads) {
+            if (closedAt >= 0 || (evictedAt[key] ?: -1) >= pass.at) continue
+            if (store.reads.none { it.key == key && it.startedAt >= pass.at && ended(it) }) {
+                violations += "$pass skipped $key, stuck compiling, and the read after that load never came"
+            }
+        }
+        owedReads.clear()
     }
 
     /** What [key] holds in the store now, as its entry should once the passes have reached it. */
