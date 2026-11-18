@@ -42,7 +42,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 管道读取请求的凭证，然后询问一个 `Authenticator` 调用方是谁。starter 提供的是由两个认证器组成的 `CompositeAuthenticator`：
 
-- **`TokenAuthenticator`** 用 JWT 算法校验令牌，然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。只有 `TokenVerifier.verify`（以及 `refresh`）能把令牌变成主体：CoSec 没有不校验签名就读取令牌声明的 API。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。只有 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌才能使用 [break-glass](../guide/security-model.md#break-glass)：包装你自己校验器的 `TokenAuthenticator` 可以认证它的令牌，但永远不带 break-glass。
+- **`TokenAuthenticator`** 用 `TokenVerifier` Bean 校验令牌，除非应用声明了自己的，否则就是 CoSec 的 `JwtTokenVerifier`（刷新和登出用同一个校验器，`IDN-25`），然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。只有 `TokenVerifier.verify`（以及 `refresh`）能把令牌变成主体：CoSec 没有不校验签名就读取令牌声明的 API。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。只有 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌才能使用 [break-glass](../guide/security-model.md#break-glass)：包装你自己校验器的 `TokenAuthenticator` 可以认证它的令牌，但永远不带 break-glass。你的 `TokenVerifier` Bean 对 CoSec 来说是其他签发者的，即使它包装 `JwtTokenVerifier` 只为加一项检查：在每个请求上，它的令牌凭证方式是 `token`，没有会话（因此不能从它[切换租户](#switching-tenant-and-app)，网关之后也不转发会话），也没有 break-glass。为其他签发者的令牌声明它；要让 CoSec 自己的令牌仍是 CoSec 的，就不要声明。
 - **`ApiKeyAuthenticator`**，仅在 `cosec.api-key.enabled=true` 时启用，查找 [API key](#api-keys)。
 
 携带 API key 的请求（且已启用 API key）只依据该 key 判定，即使它同时发送了令牌：被拒绝的 key 绝不会退而使用令牌。其他请求交给令牌认证器；完全不带凭证的请求是匿名的。
@@ -170,7 +170,7 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 
 检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。
 
-设置了 `cosec.authentication.login.refresh.path` 且登录和 JWT 开启时，**starter 提供刷新路由**（`IDN-23`），在 Spring MVC 和 WebFlux 上都是（它无法提供的路径，或在 Spring Cloud Gateway 上设置，会使启动失败）：令牌对进，同一会话的新令牌对出，每种失败都以说明原因的问题类型应答（线上格式见[构建客户端](./clients.md#what-your-application-serves)）。有 `MembershipRefresh<RefreshTokenCredentials>` Bean 时会使用它。该路由自己构建 `RefreshTokenAuthentication`：既不使用 `RefreshTokenAuthentication` Bean，也不使用声明在其中的钩子，所以要用于提供的路由，请把钩子单独声明为 Bean；基于你自己凭证类的钩子需要你自己的路由。不设置时不提供任何路由，你按下文自己编写。无论哪种方式，刷新请求都带着已过期的访问令牌，所以该路由必须能被没有令牌的调用方访问，否则刷新本身就是 `401 token-expired`：[构建客户端](./clients.md#what-your-application-serves)给出了这条语句；文档拒绝 starter 提供的路由时，starter 会记录一条点名该属性的 `WARN`。
+设置了 `cosec.authentication.login.refresh.path` 且登录和 JWT 开启时，**starter 提供刷新路由**（`IDN-23`），在 Spring MVC 和 WebFlux 上都是（它无法提供的路径，或在 Spring Cloud Gateway 上设置，会使启动失败）：令牌对进，同一会话的新令牌对出，每种失败都以说明原因的问题类型应答（线上格式见[构建客户端](./clients.md#what-your-application-serves)）。你声明了 `RefreshTokenAuthentication<RefreshTokenCredentials>` Bean 时，用它刷新，包括它的钩子；否则用 starter 自己的，它在有 `MembershipRefresh<RefreshTokenCredentials>` Bean 时会使用它。两者都声明时，你的 `RefreshTokenAuthentication` 优先，路由不使用 `MembershipRefresh` Bean（`IDN-25`）。基于你自己凭证类的 `RefreshTokenAuthentication` 不能用于这个路由（它提交的是令牌对）：设置了路径时启动失败。不设置时不提供任何路由，你按下文自己编写。无论哪种方式，刷新请求都带着已过期的访问令牌，所以该路由必须能被没有令牌的调用方访问，否则刷新本身就是 `401 token-expired`：[构建客户端](./clients.md#what-your-application-serves)给出了这条语句；文档拒绝 starter 提供的路由时，starter 会记录一条点名该属性的 `WARN`。
 
 `RefreshTokenAuthentication` 以 `Authentication` 的形式完成刷新，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算）；通过 `TokenRevocation` 检查访问令牌未被吊销、其主体的令牌也未被吊销；再通过 `TokenFamilies` 轮换会话（[会话](#sessions)）。新的一对令牌说的是旧访问令牌说的内容，属于下一代。全程没有阻塞：
 

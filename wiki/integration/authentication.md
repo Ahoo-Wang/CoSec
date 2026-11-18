@@ -73,12 +73,17 @@ issues one. A `may_act` claim only says who may act for the subject, so it is ig
 The pipeline reads the request's credentials, then asks one `Authenticator` who the caller is. The starter's is a
 `CompositeAuthenticator` of two:
 
-- **`TokenAuthenticator`** verifies the token with the JWT algorithm, then asks the revocation reader whether the
+- **`TokenAuthenticator`** verifies the token with the `TokenVerifier` bean, CoSec's `JwtTokenVerifier` unless the
+  application declares its own (refresh and logout verify with the same one, `IDN-25`), then asks the revocation reader whether the
   token, or every token of its principal, was revoked. Only `TokenVerifier.verify` (and `refresh`) turns a token into
   a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
   (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
   `JwtTokenVerifier` verified may use [break-glass](../guide/security-model.md#break-glass): a `TokenAuthenticator`
-  around a verifier of your own authenticates its tokens, but never with break-glass.
+  around a verifier of your own authenticates its tokens, but never with break-glass. A `TokenVerifier` bean of yours
+  is another issuer's to CoSec, even one that wraps `JwtTokenVerifier` to add a check: on every request its tokens have
+  the credential method `token`, no session (so no [tenant switch](#switching-tenant-and-app) from it, and none
+  forwarded behind a gateway) and no break-glass. Declare one for another issuer's tokens; to keep CoSec's own tokens
+  CoSec's, declare none.
 - **`ApiKeyAuthenticator`**, only with `cosec.api-key.enabled=true`, looks up the [API key](#api-keys).
 
 A request that carries an API key (and API keys are enabled) is judged by the key alone, even if it also sends a
@@ -309,11 +314,12 @@ fails too, with `DelegationUnsupportedException`.
 
 **The starter serves the refresh route** when `cosec.authentication.login.refresh.path` is set (`IDN-23`), on Spring
 MVC and on WebFlux, with login and JWT on (a path it cannot serve, or one set on a Spring Cloud Gateway, fails startup): the pair in, a new pair of the session out, and each failure answered with the problem type that
-names it ([Building a client](./clients.md#what-your-application-serves) has the wire). It uses your
-`MembershipRefresh<RefreshTokenCredentials>` bean when there is one. The route builds its own
-`RefreshTokenAuthentication`: it uses neither a `RefreshTokenAuthentication` bean nor a hook declared inside one, so for
-the served route declare the hook as a bean of its own; a hook over credentials of your own class needs your own route.
-Unset, nothing is served, and you write the route as below. Either way a refresh carries the access token that expired, so a caller without a token must be able to reach
+names it ([Building a client](./clients.md#what-your-application-serves) has the wire). It refreshes with
+your `RefreshTokenAuthentication<RefreshTokenCredentials>` bean when you declare one, its hook included; otherwise with
+the starter's, which uses your `MembershipRefresh<RefreshTokenCredentials>` bean when there is one. When you declare
+both, your `RefreshTokenAuthentication` wins, and the route does not use the `MembershipRefresh` bean (`IDN-25`). A
+`RefreshTokenAuthentication` over a credentials class of your own cannot serve the route, which presents the pair:
+with the path set, startup fails. Unset, nothing is served, and you write the route as below. Either way a refresh carries the access token that expired, so a caller without a token must be able to reach
 the route, or the refresh is itself `401 token-expired`: [Building a client](./clients.md#what-your-application-serves)
 shows the statement, and the starter logs a `WARN` naming the property when a document refuses the route it serves.
 
