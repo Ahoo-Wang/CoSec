@@ -74,8 +74,9 @@ import java.util.UUID
  * gave fail startup, and so does a process that runs the control plane with the read-only user.
  *
  * It changes the ACL of the Redis it runs on: on CI, the job's own Redis, always (a Redis it cannot reach, or ACL
- * commands it is refused, fail it); elsewhere only a Redis that `COSEC_ACL_TEST_REDIS` names (`redis://host:port`),
- * and it is skipped otherwise. Its users have unique names and are deleted afterwards, and `ACL LOG` is read by user.
+ * commands it is refused, fail it); elsewhere only a Redis that `ACL_TEST_REDIS` names (`redis://host:port`), and
+ * it is skipped otherwise. Not `COSEC_…`: Spring would bind that as a `cosec.*` property, which the starter's
+ * unknown-property check refuses in every other test of the module. Its users have unique names and are deleted afterwards, and `ACL LOG` is read by user.
  */
 class DataPlaneAclTest {
     private val id = UUID.randomUUID().toString().substring(0, 8)
@@ -274,7 +275,7 @@ class DataPlaneAclTest {
     }
 
     private companion object {
-        const val TARGET = "COSEC_ACL_TEST_REDIS"
+        const val TARGET = "ACL_TEST_REDIS"
         const val CI_REDIS = "redis://localhost:6379"
 
         /** The data-plane user's keys, as `storage.md` shows them (default prefix, instance `pod-a`). */

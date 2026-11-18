@@ -15,9 +15,6 @@
 
 package me.ahoo.cosec.e2e
 
-import java.time.Instant
-import java.util.UUID
-import java.util.concurrent.ConcurrentHashMap
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -65,6 +62,9 @@ import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.context.ApplicationContextInitializer
 import org.springframework.context.ConfigurableApplicationContext
 import org.springframework.context.annotation.Configuration
+import java.time.Instant
+import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * The 8.0 path as the starter wires it (RFC 0008 §4.4.3, S1): the starter's snapshot and pipeline auto-configuration
