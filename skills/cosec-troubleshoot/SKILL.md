@@ -367,6 +367,14 @@ header: anonymous. Otherwise never anonymous:
   failover); `cosec-migrate verify-chain` names every document whose revision chain lost a record.
 - The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports how many of the recently reporting instances (those with `cosec.authorization.shadow.enabled`) have installed it.
 
+### Snapshot log lines missing / housekeeping summary
+
+- `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …` (WARN, at most every 10s) with
+  `cosec.snapshot.housekeeping.refused{task}` rising: the source's one housekeeping thread (queue 4,096) is behind, so
+  log lines (`*-log`), eviction passes under the cap (`evict`) and lag reports are dropped and counted instead of run
+  on a request's thread (SNP-19); `drop` runs in place. Decisions are unaffected. Usual cause: a synchronous log
+  appender that is slow; use an async appender. `meter failures` in the same line is a registry meter that threw.
+
 ### Probes answer 401 or 503, or pods restart before the first publish
 
 A readiness or liveness probe that answers CoSec's problem+json (`503` before the first platform document, `401` after it)

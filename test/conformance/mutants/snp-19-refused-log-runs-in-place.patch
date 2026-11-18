@@ -1,0 +1,17 @@
+# Rule: SNP-19
+# Mutant: a log line housekeeping refuses is written on the thread that offered it, as before #1534: a caller's thread waits on the log appender
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.HousekeepingRefusalTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
+index fe495e66..d220eb98 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
+@@ -172,7 +172,7 @@ internal class SnapshotThreads(
+             return
+         }
+         refused(kind, line)
+-        if (kind.runsInPlace) task()
++        if (kind.runsInPlace || kind.tag.endsWith("-log")) task()
+     }
+ 
+     /** A [kind] of task housekeeping refused: counted for the summary, with [line], and reported to the metrics. */

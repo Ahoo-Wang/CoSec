@@ -60,6 +60,7 @@ internal class LagReports(
         }
         if (!queued) {
             lagReportQueued.set(false)
+            threads.refused(HousekeepingTask.LAG_REPORT) { "The snapshot lag report." }
         }
     }
 
@@ -98,6 +99,8 @@ internal class LagReports(
             }
         }
         summary = tally.summary(clock.instant())
+        // What housekeeping refused since it last could say so (`SNP-19`): written here, on housekeeping itself.
+        threads.refusals.summary(System.nanoTime())?.let { line -> log.warn { line } }
     }
 
     private fun due(key: SnapshotKey, now: Instant): Boolean {

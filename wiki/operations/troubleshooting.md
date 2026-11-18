@@ -845,6 +845,22 @@ for a check, `412` for an `ifMatch` that does not hold).
   that names no app document`, and, from the reclamation pass, `The app list misses the app documents [...]; it is
   incomplete again` (an older instance or `cosec-migrate` published an app) need `repair-references` too.
 
+## Snapshot log lines are missing
+
+An instance logs `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …` at `WARN`, and
+`cosec.snapshot.housekeeping.refused` rises. The snapshot source writes its log lines, a failed load's included, on one
+housekeeping thread whose queue holds 4,096 tasks. When the queue is full it drops the line and counts it, rather than
+write it on the thread of the request that caused it (SNP-19). The summary names the last line dropped for each task,
+without its stack.
+
+- **Cause.** The log appender is slower than the lines arrive: a synchronous appender writing to a slow disk or a
+  remote collector, usually while many documents fail to load at once.
+- **Fix.** Use an asynchronous appender (Logback's `AsyncAppender`, Log4j 2's async loggers). Requests are not slowed
+  meanwhile, and decisions do not change: only log lines and eviction passes under the cap are dropped. An eviction
+  pass that is dropped is asked for again at the next load, and the family never grows past its cap.
+- **`meter failures`** in the summary is a meter of the bound registry that threw. It is counted there and never logged
+  on its own; `last` names the event and the exception.
+
 ## A log line names an id with `\u` escapes {#a-log-line-names-an-id-with-u-escapes}
 
 CoSec writes a control character or an unpaired UTF-16 surrogate of an id as its `\uXXXX` escape in log lines and

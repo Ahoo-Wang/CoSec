@@ -19,6 +19,7 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
+import me.ahoo.cosec.runtime.snapshot.HousekeepingTask
 import me.ahoo.cosec.runtime.snapshot.LoadOutcome
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.summary
@@ -111,21 +112,39 @@ class MicrometerSnapshotMetricsTest {
         count(MicrometerSnapshotMetrics.HANDOFFS_REFUSED, "to", "housekeeping").assert().isEqualTo(1.0)
     }
 
+    /** One series per housekeeping task, its tag the task's own: a refusal counts under its task and no other. */
+    @Test
+    fun `refused housekeeping tasks are counted by task`() {
+        metrics.onHousekeepingRefused(HousekeepingTask.LOAD_LOG)
+        metrics.onHousekeepingRefused(HousekeepingTask.LOAD_LOG)
+        metrics.onHousekeepingRefused(HousekeepingTask.DROP)
+        count(MicrometerSnapshotMetrics.HOUSEKEEPING_REFUSED, "task", "load-log").assert().isEqualTo(2.0)
+        count(MicrometerSnapshotMetrics.HOUSEKEEPING_REFUSED, "task", "drop").assert().isEqualTo(1.0)
+        registry.find(MicrometerSnapshotMetrics.HOUSEKEEPING_REFUSED).counters().map { it.id.getTag("task") }.toSet()
+            .assert().isEqualTo(
+                setOf(
+                    "load-log", "compile-log", "effect-log", "crash-log", "transition-log", "prewarm-log",
+                    "pass-log", "reset-log", "evict", "drop", "lag-report",
+                ),
+            )
+    }
+
     /** Every meter exists from the constructor on, and no event adds one: the series are fixed whatever ids pass. */
     @Test
     fun `the series are fixed, no event adds a meter`() {
         val before = registry.meters.size
-        before.assert().isEqualTo(LOAD_SERIES + COMPILE_SERIES + 3 + 6 + 3 + 3 + 6 + 2)
+        before.assert().isEqualTo(LOAD_SERIES + COMPILE_SERIES + 3 + 6 + 3 + 3 + 6 + 2 + HousekeepingTask.entries.size)
         repeat(1_000) {
             val kind = SnapshotKind.entries[it % SnapshotKind.entries.size]
             metrics.onLoad(kind, LoadOutcome.entries[it % LoadOutcome.entries.size])
             metrics.onEvicted(kind, absent = it % 2 == 0)
             metrics.onLagExceeded(SnapshotKey.Tenant("tenant-$it"), Duration.ofMinutes(2), escalated = it % 3 == 0)
             metrics.onDocumentLost(SnapshotKey.App("app-$it"), it.toLong())
+            metrics.onHousekeepingRefused(HousekeepingTask.entries[it % HousekeepingTask.entries.size])
         }
         registry.meters.size.assert().isEqualTo(before)
         registry.meters.flatMap { it.id.tags }.map { it.key }.toSet()
-            .assert().isEqualTo(setOf("kind", "result", "level", "state", "to"))
+            .assert().isEqualTo(setOf("kind", "result", "level", "state", "to", "task"))
     }
 
     @Test

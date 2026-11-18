@@ -1,0 +1,17 @@
+# Rule: SNP-19
+# Mutant: an eviction pass under the cap that housekeeping refuses runs on the thread that offered it, a caller's, instead of being dropped and asked for again
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.HousekeepingRefusalTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
+index fe495e66..245305cd 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
+@@ -172,7 +172,7 @@ internal class SnapshotThreads(
+             return
+         }
+         refused(kind, line)
+-        if (kind.runsInPlace) task()
++        if (kind.runsInPlace || kind == HousekeepingTask.EVICT) task()
+     }
+ 
+     /** A [kind] of task housekeeping refused: counted for the summary, with [line], and reported to the metrics. */

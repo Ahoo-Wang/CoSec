@@ -282,6 +282,31 @@
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#an instance that switches the control plane off says so once at startup, one without it says nothing",
         "spring-boot:DataPlaneAclTest#an image with the control plane, switched off, starts with the page's user and may write no document"
       ]
+    },
+    {
+      "id": "SNP-19",
+      "source": "#1534 (what housekeeping refuses); RFC 0013 B2b (the runner's paths)",
+      "statement": "No thread that calls the snapshot source writes a log line, or runs housekeeping's work, because housekeeping's queue is full: a refused log line, eviction pass under the cap or lag report is dropped and counted by its task (`HousekeepingTask`), and housekeeping itself writes one summary at most every 10 seconds, only when something moved, naming the last text dropped per task without its stack. Only the over-cap pass (SNP-14), an empty key's drop and the source's hand-offs (SNP-15) run in place. A meter that throws is counted in the summary's own state, never logged on the caller's thread nor offered to housekeeping, and the summary is written whatever the metrics are. Housekeeping stopped by close is refusal too, except on the source's own threads, where the task runs in place uncounted; close ends by writing what was refused and not yet summarized, once, on the closing thread, whatever the interval.",
+      "level": "build",
+      "guards": [
+        "runtime:HousekeepingRefusalTest#a failed load's line is dropped, not written on the caller's thread, and the summary names it",
+        "runtime:HousekeepingRefusalTest#a compile failure's line is dropped and counted",
+        "runtime:HousekeepingRefusalTest#a crash's report and its failed effect's line, on a caller's thread, are dropped and counted",
+        "runtime:HousekeepingRefusalTest#an aborted transition's line is dropped and counted",
+        "runtime:HousekeepingRefusalTest#a prewarm warning is dropped and counted",
+        "runtime:HousekeepingRefusalTest#a reset's line is dropped and counted",
+        "runtime:HousekeepingRefusalTest#a stalled pass's warning is dropped and counted",
+        "runtime:HousekeepingRefusalTest#housekeeping full across ticks keeps the family under its cap, and the late pass takes it to its bound",
+        "runtime:HousekeepingRefusalTest#a throwing refusal meter never reaches the caller, and the summary counts it",
+        "runtime:HousekeepingRefusalTest#nothing refused, nothing summarized",
+        "runtime:HousekeepingRefusalsTest#a summary resets the counts, and the next waits for the interval and for something to move",
+        "runtime:HousekeepingRefusalsTest#a line keeps its exception's class and message, no stack, and at most its bound",
+        "runtime:HousekeepingRefusalsTest#meter failures alone are summarized",
+        "runtime:HousekeepingRefusalTest#close while housekeeping is full writes what it refused, once, on the closing thread",
+        "runtime:HousekeepingRefusalTest#after close, a caller's line is dropped and counted, and the source's own thread runs its task in place",
+        "runtime:HousekeepingRefusalTest#a compilation that ends after housekeeping stopped finds its load ended, and nothing is refused"
+      ],
+      "pending": null
     }
   ]
 }

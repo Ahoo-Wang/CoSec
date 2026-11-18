@@ -20,6 +20,7 @@ import io.micrometer.core.instrument.Gauge
 import io.micrometer.core.instrument.MeterRegistry
 import io.micrometer.core.instrument.Timer
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.runtime.snapshot.HousekeepingTask
 import me.ahoo.cosec.runtime.snapshot.LoadOutcome
 import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
 import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
@@ -33,7 +34,7 @@ import java.time.Duration
 
 /**
  * The `cosec.snapshot.*` meters of a [SnapshotSource] (`wiki/operations/observability.md` holds their names). Every
- * tag has a closed value set, never an app or tenant id: `kind`, `result`, `state`, `level`, `to`.
+ * tag has a closed value set, never an app or tenant id: `kind`, `result`, `state`, `level`, `to`, `task`.
  *
  * Every meter is resolved here, in the constructor, so an event is an array index and an increment. A hit is not
  * counted: it is not a load, and [onLoad] runs at every `peek`, the one path every request takes, where a shared count
@@ -65,6 +66,7 @@ class MicrometerSnapshotMetrics(
         counter(EVICTIONS, KIND, tag(KINDS[i / 2]), STATE, if (i % 2 == 0) "document" else "absent")
     }
     private val handOffs = Array(2) { counter(HANDOFFS_REFUSED, "to", if (it == 0) "housekeeping" else "caller") }
+    private val housekeeping = Array(TASKS.size) { counter(HOUSEKEEPING_REFUSED, "task", TASKS[it].tag) }
 
     private fun counter(name: String, vararg tags: String): Counter =
         Counter.builder(name).tags(*tags).register(registry)
@@ -90,6 +92,8 @@ class MicrometerSnapshotMetrics(
         lagExceeded[key.kind.ordinal * 2 + if (escalated) 1 else 0].increment()
 
     override fun onHandOffRefused(ranInPlace: Boolean) = handOffs[if (ranInPlace) 1 else 0].increment()
+
+    override fun onHousekeepingRefused(task: HousekeepingTask) = housekeeping[task.ordinal].increment()
 
     override fun onEvicted(kind: SnapshotKind, absent: Boolean) =
         evictions[kind.ordinal * 2 + if (absent) 1 else 0].increment()
@@ -142,6 +146,7 @@ class MicrometerSnapshotMetrics(
         const val LOST = "cosec.snapshot.lost"
         const val EVICTIONS = "cosec.snapshot.evictions"
         const val HANDOFFS_REFUSED = "cosec.snapshot.handoffs.refused"
+        const val HOUSEKEEPING_REFUSED = "cosec.snapshot.housekeeping.refused"
         const val SUMMARY_AGE = "cosec.snapshot.summary.age"
 
         private const val KIND = "kind"
@@ -154,6 +159,7 @@ class MicrometerSnapshotMetrics(
         private const val NANOS_PER_SECOND = 1_000_000_000.0
 
         private val KINDS = SnapshotKind.entries
+        private val TASKS = HousekeepingTask.entries
 
         /** The outcomes of a load that ran: every one but a hit. */
         private val LOADED = LoadOutcome.entries - LoadOutcome.HIT
