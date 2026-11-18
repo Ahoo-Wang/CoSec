@@ -1176,6 +1176,14 @@ The RFCs behind 8.0 list known differences. Each item is covered above, or descr
 Only for a deployment that already runs an 8.0.0 preview: what changed from each preview to the next, newest first. A 7.x
 deployment needs none of it; the section above is the whole upgrade. These notes are removed when 8.0 is released.
 
+### From 8.0.0-beta.3 {#from-8-0-0-beta-3}
+
+- **The `cosec-gateway-server` image turns ip2region off.** Its `config/application.yaml` now sets
+  `cosec.ip2region.enabled: false`, as the Kubernetes base already did; through beta.3 the image left it on. A document
+  that reads `ext.ip2region.*` no longer compiles on it: set `COSEC_IP2REGION_ENABLED=true` before you upgrade the
+  image. Its Docker `HEALTHCHECK` now probes `/actuator/health/liveness`, so a gateway that waits for its platform
+  document is no longer reported unhealthy.
+
 ### From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 
 - **Security: a revocation table keeps "not revoked" for 30 seconds at most.** Through 8.0.0-beta.2 the `absent-ttl`
