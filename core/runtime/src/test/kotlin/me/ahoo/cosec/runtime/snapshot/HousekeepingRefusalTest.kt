@@ -114,7 +114,13 @@ class HousekeepingRefusalTest {
             { ticker.incrementAndGet() },
             housekeeping,
             keyRunners(hooks = hooks),
-        ).also { it.load().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS) }
+        ).also {
+            it.load().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
+            // The shared document's first load reads a local copy, and a load confirming it follows in the same
+            // step: its read is issued before `load` is answered. A case starts once that load has ended too, or a
+            // pass's load would join it and confirm what it read, from before the case changed the store.
+            awaitCondition { it.quiescent() }
+        }
     }
 
     /** Housekeeping's thread waits on [full], and its queue is full: every task offered now is refused. */
