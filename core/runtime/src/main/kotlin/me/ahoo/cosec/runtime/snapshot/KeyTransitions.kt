@@ -28,7 +28,7 @@ import java.util.concurrent.TimeoutException
  * One key's transitions as a pure function (RFC 0013 B2b, step 1): [next] takes the state, one event and the moment it
  * is taken at, and returns the next state with the effects to execute in order. It does no I/O, reads no clock, takes
  * no lock and touches no shared state: everything it needs from outside is in the [KeyMoment], and everything it does
- * to the outside is an effect. It decides as [Slot] does, and replaces it once a runner executes it.
+ * to the outside is an effect, which the key's [KeyRunner] executes.
  *
  * Every waiter hangs on exactly one [KeyHandle], named by the transition that takes its request: the load in flight's,
  * a new load's, or, for a reload, the handle of the load that starts after the current one (`SNP-13`). A handle is

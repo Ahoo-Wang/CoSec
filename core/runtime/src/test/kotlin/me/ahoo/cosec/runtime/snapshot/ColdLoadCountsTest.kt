@@ -36,8 +36,8 @@ import java.util.concurrent.atomic.AtomicLong
 /**
  * What one uncontended cold load costs in thread work (RFC 0013 B2b, the cold-load criterion): one compile-pool task,
  * one housekeeping task (the eviction pass of a family beyond its bound), one timer scheduled and cancelled, and one
- * completion that crosses from the pool to the caller's thread. The runner has no hand-off, timer or wake-up beyond
- * `Slot`'s, on any host: the counts are deterministic, so this holds where timing cannot show it.
+ * completion that crosses from the pool to the caller's thread, and nothing more: no other hand-off, timer or wake-up,
+ * on any host. The counts are deterministic, so this holds where timing cannot show it.
  *
  * The source's executors are driven by the test: the compilation runs on a thread of the test's own, marked as the
  * source's pool threads are, after `load` returned; housekeeping runs on another, and the next load waits for it.
@@ -175,11 +175,6 @@ class ColdLoadCountsTest {
     @Test
     fun `an uncontended cold load costs the runner one pool task, one housekeeping task, one timer and one cross-thread answer`() {
         measure(keyRunners()).assert().containsExactly(1.0, 1.0, 1.0, 1.0, 1.0)
-    }
-
-    @Test
-    fun `the runner's uncontended cold load costs what Slot's does`() {
-        measure(keyRunners()).assert().isEqualTo(measure(SlotFactory.SLOT))
     }
 
     private companion object {

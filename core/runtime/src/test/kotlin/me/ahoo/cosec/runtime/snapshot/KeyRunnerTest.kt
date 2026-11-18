@@ -35,8 +35,7 @@ import java.util.concurrent.Executor
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * [KeyRunner] behind the source's factory (RFC 0013 B2b, step 2b): what the page promises of the runner itself, where
- * [Slot] behaves otherwise or the page states it anew. §5's `VirtualMachineError` from an effect, on a caller's thread
+ * [KeyRunner] behind the source's factory (RFC 0013 B2b, step 2b): what the page promises of the runner itself. §5's `VirtualMachineError` from an effect, on a caller's thread
  * and on the compile pool; `close()` called from inside a key's own drain.
  */
 class KeyRunnerTest {

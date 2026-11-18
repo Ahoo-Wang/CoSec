@@ -27,11 +27,15 @@ import java.lang.management.ManagementFactory
 import javax.management.ObjectName
 
 /**
- * Bytes per held key, the runner against `Slot` (RFC 0013 §5.4: at most 100 bytes more). Each side holds [KEYS] app
- * documents, the same documents compiled the same way; a class histogram of the live heap (`GC.class_histogram`, which
- * collects first) is taken before the loads and after, and the difference per class, divided by [KEYS], is what one held
- * key retains. Retained objects only, counted by class: what a heap-wide "used" figure gets wrong when anything else
- * allocates meanwhile. The table it prints names every class a held key retains, side by side.
+ * Bytes per held key (RFC 0013 §5.4). The source holds [KEYS] app documents; a class histogram of the live heap
+ * (`GC.class_histogram`, which collects first) is taken before the loads and after, and the difference per class,
+ * divided by [KEYS], is what one held key retains. Retained objects only, counted by class: what a heap-wide "used"
+ * figure gets wrong when anything else allocates meanwhile. The table it prints names every class a held key retains.
+ *
+ * Two bounds. The key's own objects are [OWN], one instance each, whatever the JVM's object layout: a new object per key
+ * fails here, and a new field shows in the table. The total is at most [MAX_BYTES], gate 5a of RFC 0013 §5.4 as an
+ * absolute figure. It was `Slot`'s 556 bytes plus 100 on the host where #1597 measured both; on that host the runner
+ * held 620. A held key keeps no caller queue (#1615).
  */
 class HeldKeyBytesTest {
     /** Live instances and bytes per class, after a collection. */
@@ -48,8 +52,8 @@ class HeldKeyBytesTest {
         }.toMap()
     }
 
-    /** Per class, the instances and bytes one held key retains under [slots]. */
-    private fun perKey(slots: SlotFactory): Map<String, Pair<Double, Double>> {
+    /** Per class, the instances and bytes one held key retains. */
+    private fun perKey(): Map<String, Pair<Double, Double>> {
         val keys = List(KEYS) { SnapshotKey.App("app-$it") }
         val store = ControllableStore().apply {
             put(SnapshotKey.Platform, document(1))
@@ -68,8 +72,6 @@ class HeldKeyBytesTest {
             directExecutor,
             null,
             { 0L },
-            null,
-            slots,
         )
         source.use {
             it.load().join()
@@ -85,45 +87,52 @@ class HeldKeyBytesTest {
     }
 
     @Test
-    fun `a key the runner holds retains at most 100 bytes more than Slot's, and no caller queue`() {
+    fun `a held key retains its runner, drain, effects and state once each, at most 656 bytes, and no caller queue`() {
         val logger = LoggerFactory.getLogger("me.ahoo.cosec") as Logger
         val level = logger.level
         logger.level = Level.WARN
         try {
-            // Once each first, so both measured runs find their classes loaded and their code warm.
-            perKey(SlotFactory.SLOT)
-            perKey(keyRunners())
-            val slot = perKey(SlotFactory.SLOT)
-            val runner = perKey(keyRunners())
-            println(table(slot, runner))
-            val extra = runner.values.sumOf { it.second } - slot.values.sumOf { it.second }
-            extra.assert().describedAs("bytes per held key, runner - Slot").isLessThanOrEqualTo(MAX_EXTRA_BYTES)
-            runner.keys.none { it.startsWith("java.util.concurrent.ConcurrentLinkedQueue") }.assert()
+            // Once first, so the measured run finds its classes loaded and its code warm.
+            perKey()
+            val held = perKey()
+            println(table(held))
+            OWN.forEach { name ->
+                (held[PACKAGE + name]?.first ?: 0.0).assert().describedAs("$name instances per held key")
+                    .isBetween(1.0 - INSTANCE_TOLERANCE, 1.0 + INSTANCE_TOLERANCE)
+            }
+            held.keys.filter { it.startsWith(PACKAGE + "Key") }.toSet().assert()
+                .describedAs("the key's own classes a held key retains").isEqualTo(OWN.map { PACKAGE + it }.toSet())
+            held.values.sumOf { it.second }.assert().describedAs("bytes per held key").isLessThanOrEqualTo(MAX_BYTES)
+            held.keys.none { it.startsWith("java.util.concurrent.ConcurrentLinkedQueue") }.assert()
                 .describedAs("an idle key holds a caller queue").isTrue()
         } finally {
             logger.level = level
         }
     }
 
-    private fun table(slot: Map<String, Pair<Double, Double>>, runner: Map<String, Pair<Double, Double>>): String {
-        fun cell(value: Pair<Double, Double>?) = value?.let { "%.2f × → %.0f B".format(it.first, it.second) } ?: "–"
-        val classes = (slot.keys + runner.keys).sortedByDescending {
-            (runner[it]?.second ?: 0.0) - (slot[it]?.second ?: 0.0)
+    private fun table(held: Map<String, Pair<Double, Double>>): String = buildString {
+        appendLine("Bytes per held key ($KEYS keys), instances × and bytes per key:")
+        appendLine("| class | per key |")
+        appendLine("|---|---|")
+        held.entries.sortedByDescending { it.value.second }.forEach { (name, value) ->
+            appendLine("| $name | %.2f × → %.0f B |".format(value.first, value.second))
         }
-        return buildString {
-            appendLine("Bytes per held key ($KEYS keys), instances × and bytes per key:")
-            appendLine("| class | Slot | runner |")
-            appendLine("|---|---|---|")
-            classes.forEach { appendLine("| $it | ${cell(slot[it])} | ${cell(runner[it])} |") }
-            appendLine(
-                "| total | %.0f B | %.0f B |".format(slot.values.sumOf { it.second }, runner.values.sumOf { it.second })
-            )
-        }
+        appendLine("| total | %.0f B |".format(held.values.sumOf { it.second }))
     }
 
     private companion object {
         const val KEYS = 20_000
-        const val MAX_EXTRA_BYTES = 100.0
+
+        /** Gate 5a of RFC 0013 §5.4: `Slot`'s 556 bytes plus 100, on the host #1597 measured. */
+        const val MAX_BYTES = 656.0
+
+        const val PACKAGE = "me.ahoo.cosec.runtime.snapshot."
+
+        /** What a held key retains of its own: the runner and what it is made of, one each. */
+        val OWN = listOf("KeyRunner", "KeyDrain", "KeyEffects", "KeyState")
+
+        /** Instances per key are 1.00 to two decimals; a class a test leaves alive moves them by less. */
+        const val INSTANCE_TOLERANCE = 0.01
 
         /** Below this a class is noise of the run, not something each key retains. */
         const val MIN_BYTES = 4.0
