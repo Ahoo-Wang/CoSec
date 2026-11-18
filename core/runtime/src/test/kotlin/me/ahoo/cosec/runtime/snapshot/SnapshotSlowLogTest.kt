@@ -100,6 +100,9 @@ class SnapshotSlowLogTest {
             testSource(store, compiler, options, compileExecutor = null).use { source ->
                 source.nanoTime = nanos
                 source.load().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
+                // The first load reads a local copy, and a load confirming it follows: the pass must not join that one,
+                // whose read was issued before the change below.
+                SnapshotSourceTest.await { source.quiescent() }
                 // No notification: its load would compile past the gate, and leave the pass nothing to stall on.
                 store.dropNotifications = true
                 store.put(SnapshotKey.Platform, document(2))
