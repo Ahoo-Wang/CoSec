@@ -55,6 +55,26 @@ export class RefreshUnavailableError extends FetcherError {
   }
 }
 
+/**
+ * The server did not confirm a logout: a `5xx`, a network failure, a timeout,
+ * or a refresher with no logout route. The pair was removed here all the
+ * same ({@link JwtTokenManager.logout}); the session lives on at the server
+ * until it ends there, at the latest when its refresh token expires.
+ */
+export class LogoutUnconfirmedError extends FetcherError {
+  /** What CoSec answered (`unavailable`, `internal-error`, ...), when it said. */
+  readonly problem?: CoSecProblem;
+
+  constructor(cause?: unknown) {
+    super(
+      'The server did not confirm the logout; the session was ended here.',
+      cause,
+    );
+    this.problem = getCoSecProblem(cause);
+    this.name = 'LogoutUnconfirmedError';
+  }
+}
+
 /** The refresh endpoint answered, but not with a composite token. */
 export class InvalidRefreshResponseError extends Error {
   constructor() {

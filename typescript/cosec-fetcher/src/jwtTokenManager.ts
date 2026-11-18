@@ -33,6 +33,7 @@ import {
 } from './refreshSession.js';
 import {
   InvalidRefreshResponseError,
+  LogoutUnconfirmedError,
   RefreshSessionChangedError,
   RefreshTokenError,
   RefreshUnavailableError,
@@ -51,6 +52,7 @@ import {
 } from './problem.js';
 
 export {
+  LogoutUnconfirmedError,
   RefreshSessionChangedError,
   RefreshTokenError,
   RefreshUnavailableError,
@@ -503,6 +505,46 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
       until: Date.now() + Math.min(seconds * 1000, MAX_RETRY_AFTER),
       error,
     };
+  }
+
+  /**
+   * Logs out: ends the session at the server ({@link TokenRefresher.logout},
+   * CoSec's logout route), then signs out here. The pair is removed here
+   * whatever the server answered, as long as it is still the stored session
+   * (another tab may have signed in meanwhile): the user asked to leave this
+   * device, and a pair kept after a failed logout would stay usable here.
+   *
+   * - Resolves when the server ended the session (`204`), or answered `401`:
+   *   the session was not usable any more (ended, revoked, or the pair is not
+   *   one), so there is nothing left to end.
+   * - Rejects with {@link LogoutUnconfirmedError} for anything else (`503`,
+   *   `500`, a network failure, a timeout, a refresher without a logout
+   *   route): the pair is gone here, and the session lives on at the server
+   *   until it ends there, at the latest when its refresh token expires.
+   *
+   * Without a stored pair it does nothing. {@link TokenStorage.signOut} stays
+   * the local, synchronous sign-out.
+   */
+  async logout(): Promise<void> {
+    const jwtToken = this.currentToken;
+    if (!jwtToken) return;
+    let unconfirmed: unknown;
+    try {
+      if (!this.tokenRefresher.logout) {
+        throw new Error(
+          'The token refresher has no logout: give CoSecTokenRefresher a logoutEndpoint.',
+        );
+      }
+      await this.tokenRefresher.logout(jwtToken.token);
+    } catch (error) {
+      if (!isRefreshRejection(error)) unconfirmed = error ?? new Error();
+    } finally {
+      if (isSameTokenSession(jwtToken, this.tokenStorage.reload())) {
+        this.tokenStorage.signOut();
+      }
+    }
+    if (unconfirmed !== undefined)
+      throw new LogoutUnconfirmedError(unconfirmed);
   }
 
   /**

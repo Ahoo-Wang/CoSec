@@ -99,6 +99,15 @@ export interface TokenRefresher {
    * attribute will result in infinite loops during token refresh operations.
    */
   refresh(token: CompositeToken): Promise<CompositeToken>;
+
+  /**
+   * Ends the session of `token` at the server: CoSec's logout route
+   * (`cosec.authentication.login.logout.path`), the pair in the body. It
+   * resolves when the server ended the session, and rejects otherwise, with
+   * the error of the request. Optional: without it,
+   * {@link JwtTokenManager.logout} cannot end the session at the server.
+   */
+  logout?(token: CompositeToken): Promise<void>;
 }
 
 /**
@@ -128,6 +137,13 @@ export interface CoSecTokenRefresherOptions {
    * `cosec.jwt.session.rotation-leeway`.
    */
   timeout?: number;
+  /**
+   * Where the server ends a session: CoSec's logout route, as
+   * `cosec.authentication.login.logout.path` sets it. Unset,
+   * {@link CoSecTokenRefresher.logout} rejects and the session ends at the
+   * server only when its pair expires.
+   */
+  logoutEndpoint?: string;
 }
 
 /**
@@ -223,6 +239,34 @@ export class CoSecTokenRefresher implements TokenRefresher {
       {
         resultExtractor: ResultExtractors.Json,
         attributes,
+      },
+    );
+  }
+
+  /**
+   * Ends the session of `token` at the server: `POST` of the pair to
+   * `logoutEndpoint`, through the same Fetcher as the refresh, marked as the
+   * refresh is (it never starts a refresh, and a `401` it gets notifies no
+   * one: {@link JwtTokenManager.logout} signs out locally then).
+   */
+  async logout(token: CompositeToken): Promise<void> {
+    const endpoint = this.options.logoutEndpoint;
+    if (!endpoint) {
+      throw new Error(
+        'No logoutEndpoint: set it to the logout route of the server (cosec.authentication.login.logout.path).',
+      );
+    }
+    await this.options.fetcher.post(
+      endpoint,
+      {
+        body: token,
+        timeout: this.options.timeout ?? DEFAULT_REFRESH_TIMEOUT,
+      },
+      {
+        attributes: new Map<string, unknown>([
+          [IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY, true],
+          [UNAUTHORIZED_ERROR_INTERCEPTOR_NAME, () => false],
+        ]),
       },
     );
   }

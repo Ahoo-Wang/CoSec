@@ -151,6 +151,18 @@ class ClientHostTest {
         send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(401)
     }
 
+    @Test
+    fun aLogoutWhoseSessionStoreIsDownIsUnavailableAndEndsNothing() {
+        val pair = signIn("jack")
+        val body = json.writeValueAsString(pair)
+        send("POST", "/test/sessions/down").statusCode().assert().isEqualTo(200)
+        val refused = send("POST", "/auth/logout", body)
+        send("POST", "/test/sessions/up").statusCode().assert().isEqualTo(200)
+        refused.statusCode().assert().isEqualTo(503)
+        refused.body().assert().contains("https://cosec.ahoo.me/problems/unavailable")
+        send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(200)
+    }
+
     private fun jtiOf(token: String): String =
         json.readTree(java.util.Base64.getUrlDecoder().decode(token.split('.')[1])).get("jti").asString()
 

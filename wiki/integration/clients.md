@@ -187,7 +187,7 @@ endpoint and stores the pair it answers; it never rewrites a header ([Apps](./au
 ## Logout and switching
 
 - **Logout is a server call, then a local one.** Forgetting the pair on the client leaves it refreshable until the session
-  ends. Call the logout route, the starter's or the application's (it ends the session and revokes the access token, `IDN-18`), then
+  ends. Call the logout route, the starter's or the application's (it ends the session and revokes the access token, `IDN-18`; `cosec-fetcher`'s `JwtTokenManager.logout()` does both steps), then
   drop the pair. Once the access token has expired, the endpoint needs the pair.
 - **A switch answers a new pair.** Present the current token, store the pair that answers, and drop the old one. A
   switch issues only from a live session and keeps its login time (`IDN-17`, `IDN-22`); it does not sign the user in

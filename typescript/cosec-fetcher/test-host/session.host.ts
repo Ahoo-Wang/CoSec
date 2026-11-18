@@ -13,7 +13,11 @@
 
 import { HttpStatusValidationError } from '@ahoo-wang/fetcher';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { getCoSecProblem, type CoSecProblem } from '../src';
+import {
+  getCoSecProblem,
+  LogoutUnconfirmedError,
+  type CoSecProblem,
+} from '../src';
 import {
   createHostClient,
   destroyHostClients,
@@ -21,6 +25,9 @@ import {
   refreshError,
   revocationsDown,
   revocationsUp,
+  sessionsDown,
+  sessionsUp,
+  refreshAt,
   login,
   loginExpired,
   recordWire,
@@ -211,6 +218,50 @@ describe('a signed-in session against a real host', () => {
       expect(tokens.get()?.token.accessToken).not.toBe(pair.accessToken);
     },
   );
+});
+
+describe('logout against a real host', () => {
+  it('ends the session at the host, then here', async () => {
+    const { client, configurer, tokens } = createHostClient();
+    const pair = await login('alice');
+    tokens.signIn(pair);
+    const wire = recordWire();
+    await configurer.tokenManager!.logout();
+    expect(wire).toEqual(['/auth/logout 204']);
+    expect(tokens.get()).toBeNull();
+    // The pair no longer refreshes anywhere: the host ended its session.
+    expect((await refreshAt(pair)).status).toBe(401);
+    expect((await client.get('/hello')).status).toBe(200);
+  });
+
+  it('resolves for a session the host had already ended', async () => {
+    const { configurer, tokens } = createHostClient();
+    const pair = await login('alice');
+    tokens.signIn(pair);
+    await endSession(pair);
+    const wire = recordWire();
+    await configurer.tokenManager!.logout();
+    expect(wire).toEqual(['/auth/logout 204']);
+    expect(tokens.get()).toBeNull();
+  });
+
+  it('rejects LogoutUnconfirmedError when the host cannot end the session, and signs out here all the same', async () => {
+    const { configurer, tokens } = createHostClient();
+    const pair = await login('alice');
+    tokens.signIn(pair);
+    await sessionsDown();
+    const wire = recordWire();
+    const error = await configurer
+      .tokenManager!.logout()
+      .catch(error => error)
+      .finally(sessionsUp);
+    expect(error).toBeInstanceOf(LogoutUnconfirmedError);
+    expect((error as LogoutUnconfirmedError).problem?.slug).toBe('unavailable');
+    expect(wire).toEqual(['/auth/logout 503']);
+    expect(tokens.get()).toBeNull();
+    // What the recommendation costs: the session lives on at the host until it ends there.
+    expect((await refreshAt(pair)).status).toBe(200);
+  });
 });
 
 describe('credentials on the wire', () => {

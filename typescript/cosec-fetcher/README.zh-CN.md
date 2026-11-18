@@ -68,6 +68,25 @@ Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fe
 
 切勿记录、嵌入或提交真实令牌。
 
+## 登出
+
+`tokenStorage.signOut()` 只在本地忘掉令牌对：会话在服务端仍可刷新，直到它在那里结束。要同时在服务端结束会话，请把 starter 提供的登出路由（`cosec.authentication.login.logout.path`）交给刷新器，并调用 `logout()`：
+
+```ts
+const cosec = new CoSecConfigurer({
+  tokenRefresher: new CoSecTokenRefresher({
+    fetcher: api,
+    endpoint: '/auth/refresh',
+    logoutEndpoint: '/auth/logout',
+  }),
+});
+cosec.applyTo(api);
+
+await cosec.tokenManager?.logout();
+```
+
+它把令牌对发送到该路由，并在本地删除它。服务端结束了会话（`204`），或回答 `401`（会话已不可用）时，它正常完成。其他情况（`503`、`500`、网络故障、超时）下，它以 `LogoutUnconfirmedError` 拒绝，本地的令牌对照样删除：用户要求离开这台设备。此时会话在服务端继续存在，直到它在那里结束，最迟到其刷新令牌过期；请告知用户，或稍后从同一用户的另一个会话调用 `logout()`。
+
 ## CoSec 8.0 应用必须允许什么
 
 设置了 `cosec.authentication.login.refresh.path` 时，starter 提供刷新路由，其应答正是本客户端所依赖的（[构建客户端](https://cosec.ahoo.me/zh/integration/clients#what-your-application-serves)）；登录属于应用。应用必须：

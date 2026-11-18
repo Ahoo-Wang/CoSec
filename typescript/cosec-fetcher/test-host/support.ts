@@ -36,6 +36,7 @@ export function destroyHostClients(): void {
 
 export interface HostClient {
   client: Fetcher;
+  configurer: CoSecConfigurer;
   tokens: TokenStorage;
   devices: DeviceIdStorage;
 }
@@ -58,16 +59,18 @@ export function createHostClient({
   const devices = new DeviceIdStorage(options('devices'));
   destroyables.push(tokens, devices);
   const client = new Fetcher({ baseURL });
-  new CoSecConfigurer({
+  const configurer = new CoSecConfigurer({
     tokenStorage: tokens,
     deviceIdStorage: devices,
     tokenRefresher: new CoSecTokenRefresher({
       fetcher: client,
       endpoint: '/auth/refresh',
+      logoutEndpoint: '/auth/logout',
     }),
     ...config,
-  }).applyTo(client);
-  return { client, tokens, devices };
+  });
+  configurer.applyTo(client);
+  return { client, configurer, tokens, devices };
 }
 
 /**

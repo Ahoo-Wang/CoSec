@@ -182,6 +182,7 @@ export interface CoSecRequestOptions extends DeviceIdStorageCapable, RequestTrus
 // @public
 export class CoSecTokenRefresher implements TokenRefresher {
     constructor(options: CoSecTokenRefresherOptions);
+    logout(token: CompositeToken): Promise<void>;
     // (undocumented)
     readonly options: CoSecTokenRefresherOptions;
     refresh(token: CompositeToken, shouldNotifyUnauthorized?: () => boolean): Promise<CompositeToken>;
@@ -193,6 +194,7 @@ export interface CoSecTokenRefresherOptions {
     endpoint: string;
     // (undocumented)
     fetcher: Fetcher;
+    logoutEndpoint?: string;
     timeout?: number;
 }
 
@@ -357,6 +359,7 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
     get currentToken(): JwtCompositeToken | null;
     get isRefreshable(): boolean;
     get isRefreshNeeded(): boolean;
+    logout(): Promise<void>;
     // (undocumented)
     readonly options: JwtTokenManagerOptions;
     refresh(exchange?: FetchExchange): Promise<void>;
@@ -379,6 +382,12 @@ export interface JwtTokenManagerOptions {
     isRefreshRejected?: (error: unknown) => boolean;
     refreshRetryDelays?: readonly number[];
     rotationLeeway?: number;
+}
+
+// @public
+export class LogoutUnconfirmedError extends FetcherError {
+    constructor(cause?: unknown);
+    readonly problem?: CoSecProblem;
 }
 
 // @public
@@ -514,6 +523,7 @@ export interface SpaceIdStorageOptions extends Partial<KeyStorageOptions<SpaceId
 
 // @public
 export interface TokenRefresher {
+    logout?(token: CompositeToken): Promise<void>;
     refresh(token: CompositeToken): Promise<CompositeToken>;
 }
 
