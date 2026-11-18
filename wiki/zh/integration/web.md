@@ -236,7 +236,7 @@ val securityContext = SecurityContextHolder.requiredContext
 
 启动日志中以 `SecurityContextHolder in suspend handlers` 开头的一行说明宿主属于哪一种。异步处理器（`Callable`、`DeferredResult`）和你自己启动的线程看不到持有者，消息相同。在这些情况下，都请使用参数或请求。
 
-这个上下文正是 `AuthorizationChecker` 接受的上下文，用于在请求进行期间询问同一主体能否做别的事：适配器结束请求之后，对它的上下文的检查为 `false`（[代码中的权限检查](./checks.md#how-a-check-relates-to-the-request-pipeline)，`PIP-26`）。
+这个上下文正是 `AuthorizationChecker` 接受的上下文，用于在请求进行期间询问同一主体能否做别的事：适配器结束请求之后，对它的上下文的检查为 `false`（[代码中的权限检查](./checks.md#how-a-check-relates-to-the-request-pipeline)，`PIP-26`）。在 Spring MVC 上，过滤器只接管 REQUEST 分派：错误页在请求结束之后的 ERROR 分派中渲染，它仍读得到上下文，但在那里对它的每次检查都为 `false`。
 
 ## 代理后的客户端 IP {#client-ip-behind-proxies}
 

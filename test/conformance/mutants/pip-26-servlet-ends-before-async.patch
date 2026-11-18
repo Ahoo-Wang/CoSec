@@ -1,0 +1,17 @@
+# Rule: PIP-26
+# Mutant: the servlet filter ends the request when it returns, before an async request's ASYNC dispatch
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ServletRequestEndTest
+
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
+index 058d29d6..aaada202 100644
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
+@@ -72,7 +72,7 @@ class PipelineServletFilter @InternalCoSecApi constructor(
+      * (`DeferredResult`, `StreamingResponseBody`, a `suspend` handler), whose end the container reports later.
+      */
+     private fun endWhenComplete(request: HttpServletRequest, security: RequestSecurity) {
+-        if (request.isAsyncStarted) {
++        if (false) {
+             request.asyncContext.addListener(EndOnCompletion(security))
+         } else {
+             security.end()

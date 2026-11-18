@@ -344,7 +344,9 @@ use the parameter or the request.
 
 The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else,
 for as long as the request is in progress: once the adapter has ended the request, a check of its context is `false`
-([Checks in code](./checks.md#how-a-check-relates-to-the-request-pipeline), `PIP-26`).
+([Checks in code](./checks.md#how-a-check-relates-to-the-request-pipeline), `PIP-26`). On Spring MVC the filter takes
+the REQUEST dispatch only: an error page, rendered on the ERROR dispatch after the request has ended, still reads the
+context, and every check of it there is `false`.
 
 ## Client IP behind proxies
 

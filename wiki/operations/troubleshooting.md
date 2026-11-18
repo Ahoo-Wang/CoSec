@@ -262,7 +262,8 @@ would be permitted. A check is refused before any document is read when:
 - **Its request has ended** (`PIP-26`): the context was kept after the response was written, in a field, a cache, a
   coroutine or message that outlived the request. Check within the request; work that runs afterwards carries its own
   authorization ([Checks in code](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)). A check
-  during a streamed body or an async servlet request is still within it.
+  during a streamed body or an async servlet request is still within it; one in a Spring MVC error page (the ERROR
+  dispatch) is not.
 - **The pipeline did not make the context**: one built by hand, or a mock. The adapters' readers do not even return
   such a context (`PIP-27`): `exchange.getSecurityContext()` and `request.getSecurityContext()` are `null`, a required
   `SecurityContext` handler parameter fails. In a test, take the context of a request the pipeline permitted
