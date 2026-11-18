@@ -11,11 +11,20 @@
  * limitations under the License.
  */
 
+import {
+  PROBLEM_SLUGS,
+  assertClaimsMatch,
+  contract,
+  jsonTypeOf,
+} from './contract';
+
 /**
- * A model of the parts of CoSec 8.0's wire contract the client depends on. It
- * is written from CoSec's `StatusMapping`, `ProblemEncoder`, `CoSecParameters`
- * and the IDN/SCP rules and `wiki/integration/clients.md`, not from a running
- * CoSec: it proves the client against the contract as read, nothing more.
+ * A model of the parts of CoSec 8.0's wire contract the client depends on. What
+ * it answers is read from the repository's `contract/` (`PIP-25`: the files the
+ * server's own tests write), not from literals of its own: the problems, their
+ * headers, the token pair's members and the claims of its tokens. What the
+ * files do not say (rotation, the routes, who may reach what) is modelled from
+ * the IDN/SCP rules and `wiki/integration/clients.md`, not from a running CoSec.
  */
 
 export interface ProblemRow {
@@ -23,19 +32,16 @@ export interface ProblemRow {
   readonly title: string;
 }
 
-/** `ProblemType`: slug, status and title of the ten types. */
-export const PROBLEM_ROWS: Record<string, ProblemRow> = {
-  'invalid-request': { status: 400, title: 'Invalid Request' },
-  unauthorized: { status: 401, title: 'Unauthorized' },
-  'token-invalid': { status: 401, title: 'Token Invalid' },
-  'token-expired': { status: 401, title: 'Token Expired' },
-  'token-revoked': { status: 401, title: 'Token Revoked' },
-  forbidden: { status: 403, title: 'Forbidden' },
-  'scope-rejected': { status: 403, title: 'Scope Rejected' },
-  'too-many-requests': { status: 429, title: 'Too Many Requests' },
-  unavailable: { status: 503, title: 'Service Unavailable' },
-  'internal-error': { status: 500, title: 'Internal Server Error' },
-};
+/** `ProblemType`: slug, status and title of every type `contract/problems/` holds. */
+export const PROBLEM_ROWS: Record<string, ProblemRow> = Object.fromEntries(
+  PROBLEM_SLUGS.map(slug => {
+    const file = contract.problem(slug);
+    return [
+      slug,
+      { status: file.status, title: file.body.title as string },
+    ] as const;
+  }),
+);
 
 export interface ProblemOptions {
   requestId?: string;
@@ -44,31 +50,26 @@ export interface ProblemOptions {
 }
 
 /**
- * The refusal CoSec answers: `application/problem+json` whose members are
- * `type`, `title`, `status`, `code`, `requestId` and then `traceId`, in this
- * order and nothing else (`ProblemEncoder`), with the `CoSec-Request-Id` header.
- * A `429` carries `Retry-After` (pass it in `headers`).
+ * The refusal CoSec answers, as `contract/problems/<slug>.json` states it: its
+ * status, its headers (`Retry-After` and the `RateLimit-*` of a `429` too) and
+ * its body, with the request id of the request, and a `traceId` when given.
+ * `headers` replace the file's.
  */
 export function problemResponse(
   slug: string,
   { requestId = 'req-1', traceId, headers = {} }: ProblemOptions = {},
 ): Response {
-  const row = PROBLEM_ROWS[slug];
-  const body: Record<string, unknown> = {
-    type: `https://cosec.ahoo.me/problems/${slug}`,
-    title: row.title,
-    status: row.status,
-    code: slug.toUpperCase().replaceAll('-', '_'),
-    requestId,
-  };
-  if (traceId) body.traceId = traceId;
+  const file = contract.problem(slug);
+  const body: Record<string, unknown> = { ...file.body, requestId };
+  if (traceId) {
+    if (jsonTypeOf(traceId) !== file.optionalMembers.traceId) {
+      throw new Error('The contract says traceId is not a string');
+    }
+    body.traceId = traceId;
+  }
   return new Response(JSON.stringify(body), {
-    status: row.status,
-    headers: {
-      'Content-Type': 'application/problem+json',
-      'CoSec-Request-Id': requestId,
-      ...headers,
-    },
+    status: file.status,
+    headers: { ...file.headers, 'CoSec-Request-Id': requestId, ...headers },
   });
 }
 
@@ -194,25 +195,28 @@ export class FakeCoSecHost {
       auth_time: session.authTime,
       'cosec.generation': session.generation,
     };
-    return {
-      accessToken: jwt({
-        jti: accessJti,
-        sub: session.sub,
-        iat,
-        exp: accessExp,
-        roles: session.roles,
-        ...(session.aud ? { aud: session.aud } : {}),
-        ...common,
-      }),
-      refreshToken: jwt({
-        jti: this.id('rt'),
-        sub: accessJti,
-        iat,
-        exp: Math.min(iat + this.refreshTtl, session.endsAt),
-        'cosec.token': 'refresh',
-        ...common,
-      }),
+    const access = {
+      jti: accessJti,
+      sub: session.sub,
+      iat,
+      exp: accessExp,
+      // `roles` is left out when empty (contract/token/claims.json: optional).
+      ...(session.roles.length > 0 ? { roles: session.roles } : {}),
+      ...(session.aud ? { aud: session.aud } : {}),
+      ...common,
     };
+    const refresh = {
+      jti: this.id('rt'),
+      sub: accessJti,
+      iat,
+      exp: Math.min(iat + this.refreshTtl, session.endsAt),
+      'cosec.token': 'refresh',
+      ...common,
+    };
+    // The host issues only what the contract says CoSec's tokens carry.
+    assertClaimsMatch('access', access);
+    assertClaimsMatch('refresh', refresh);
+    return { accessToken: jwt(access), refreshToken: jwt(refresh) };
   }
 
   /** A login: a new session, generation 1. */
@@ -329,13 +333,30 @@ export class FakeCoSecHost {
     }
   };
 
-  private respond(headers: Headers, status: number, body?: unknown): Response {
-    const requestId = headers.get('cosec-request-id') ?? 'req-1';
+  /**
+   * The request id of a request: its own when it is a plain id, else a
+   * generated one (`contract/headers.json`: `requestId.pattern`).
+   */
+  private requestId(headers: Headers): string {
+    const sent = headers.get('cosec-request-id');
+    return sent !== null &&
+      new RegExp(contract.headers().requestId.pattern).test(sent)
+      ? sent
+      : this.id('generated');
+  }
+
+  private respond(
+    headers: Headers,
+    status: number,
+    body?: unknown,
+    extra: Record<string, string> = {},
+  ): Response {
     return new Response(body === undefined ? null : JSON.stringify(body), {
       status,
       headers: {
         'Content-Type': 'application/json',
-        'CoSec-Request-Id': requestId,
+        'CoSec-Request-Id': this.requestId(headers),
+        ...extra,
       },
     });
   }
@@ -346,7 +367,7 @@ export class FakeCoSecHost {
     extra: Record<string, string> = {},
   ): Response {
     return problemResponse(slug, {
-      requestId: headers.get('cosec-request-id') ?? 'req-1',
+      requestId: this.requestId(headers),
       headers: extra,
     });
   }
@@ -442,14 +463,23 @@ export class FakeCoSecHost {
     if (this.refreshHandlerStatus !== undefined) {
       return this.respond(headers, this.refreshHandlerStatus);
     }
-    const pair = body as Partial<FakeToken> | undefined;
+    const pair = body as Record<string, unknown> | undefined;
+    // routes/refresh.json: another media type, or a body that is not exactly
+    // the pair, is 400 invalid-request.
+    const members = Object.keys(contract.pair()).sort();
     if (
+      !headers.get('content-type')?.startsWith('application/json') ||
       !pair ||
-      typeof pair.accessToken !== 'string' ||
-      typeof pair.refreshToken !== 'string'
+      typeof pair !== 'object' ||
+      Object.keys(pair).sort().join() !== members.join() ||
+      members.some(name => typeof pair[name] !== 'string')
     ) {
-      return this.respond(headers, 400);
+      return this.refuse(headers, 'invalid-request');
     }
+    return this.refreshPair(headers, pair as unknown as FakeToken);
+  }
+
+  private refreshPair(headers: Headers, pair: FakeToken): Response {
     const refresh = claims(pair.refreshToken);
     const access = claims(pair.accessToken);
     if (
@@ -494,7 +524,17 @@ export class FakeCoSecHost {
       this.unavailableAfterRecordingNext--;
       return this.refuse(headers, 'unavailable');
     }
-    return this.respond(headers, 200, this.pair(session));
+    const pair = this.pair(session);
+    // routes/refresh.json: the pair, with the route's Cache-Control.
+    if (
+      Object.keys(pair).sort().join() !==
+      Object.keys(contract.pair()).sort().join()
+    ) {
+      throw new Error('The pair is not what the contract says');
+    }
+    return this.respond(headers, 200, pair, {
+      'Cache-Control': contract.route('refresh').cacheControl,
+    });
   }
 
   /** Requests the host saw on `path`. */

@@ -12,7 +12,8 @@
     "fix:mermaid": "node scripts/fix-mermaid.mjs",
     "check:mermaid": "node scripts/check-mermaid.mjs",
     "check:legacy": "node scripts/check-legacy.mjs",
-    "check:docs": "node .vitepress/check-docs.mjs && node scripts/check-legacy.mjs"
+    "check:contract": "node scripts/check-contract.mjs",
+    "check:docs": "node .vitepress/check-docs.mjs && node scripts/check-legacy.mjs && node scripts/check-contract.mjs"
   },
   "devDependencies": {
     "mermaid": "^12.2.0",

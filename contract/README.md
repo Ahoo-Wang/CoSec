@@ -19,6 +19,11 @@ the file and fails on a difference. After an intended change, rewrite the files 
 ./gradlew :runtime:updateClientContract :jwt:updateClientContract
 ```
 
+**The client is tested against the same files.** `typescript/cosec-fetcher/test/clientContract.test.ts` checks what the
+TypeScript client reads, sends and does against each file, its tests' fake server (`test/support/fakeCoSec.ts`) answers
+from them, and `wiki/scripts/check-contract.mjs` (`pnpm check:docs`) holds the claims table of `clients.md` to
+`token/claims.json`. So a change of a file that the client does not follow fails there, in the same pull request.
+
 **What is compared:** parsed JSON. Every member name, type and value is as the file says, with no member missing and
 none extra; member order and whitespace are not part of the contract, and a client must not depend on them.
 

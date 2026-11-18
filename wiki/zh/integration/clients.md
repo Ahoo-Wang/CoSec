@@ -11,7 +11,7 @@ description: "CoSec 8.0 应用的客户端可以依赖什么：哪些端点由�
 
 客户端要解析的事实也以文件形式放在 [`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract) 中（`PIP-25`）：每种
 problem 类型的状态码、响应头和响应体，`CoSec-*` 请求头和请求 id 的语法，令牌对的响应体，CoSec 令牌的声明，以及 starter 提供的刷新和登出
-路由的回答。服务端的测试按解析后的 JSON 把它的回答与这些文件比对，所以客户端自己的测试可以把它们当作预期的回答。文件中标为 `optional` 的声明可能不在令牌里，读取它的客户端要处理缺失的情况：缺失的含义见[客户端可以读取的声明](#the-claims-a-client-may-read)一节的表。
+路由的回答。服务端的测试按解析后的 JSON 把它的回答与这些文件比对，所以客户端自己的测试可以把它们当作预期的回答。文件中标为 `optional` 的声明可能不在令牌里，读取它的客户端要处理缺失的情况：缺失的含义见[客户端可以读取的声明](#the-claims-a-client-may-read)一节的表。`@ahoo-wang/cosec-fetcher` 的测试对着同样的文件运行，文档检查也把那张表与 `token/claims.json` 比对。
 
 ## 你的应用提供什么 {#what-your-application-serves}
 
