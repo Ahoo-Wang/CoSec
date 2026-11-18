@@ -186,7 +186,8 @@ internal class CoSecApiKeyAutoConfigurationTest {
     /** A key configured with what keys no longer carry stops startup, rather than losing it silently. */
     @Test
     fun aKeyWithPoliciesOrAttributesDoesNotStart() {
-        listOf("policies=p1", "attributes.team=finance").forEach { legacy ->
+        // A key that is valid but for the field keys no longer carry: it fails for that field, at binding.
+        listOf("policies=p1" to "policies", "attributes.team=finance" to "attributes").forEach { (legacy, field) ->
             contextRunner
                 .withPropertyValues(
                     "cosec.api-key.enabled=true",
@@ -194,9 +195,25 @@ internal class CoSecApiKeyAutoConfigurationTest {
                     "cosec.api-key.keys[0].hash=${ApiKeys.hash(key)}",
                     "cosec.api-key.keys[0].principal-id=svc-billing",
                     "cosec.api-key.keys[0].tenant-id=acme",
+                    "cosec.api-key.keys[0].roles=reader",
                     "cosec.api-key.keys[0].$legacy",
                 )
-                .run { context -> assertThat(context).hasFailed() }
+                .run { context ->
+                    assertThat(context).hasFailed()
+                    generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                        .any { "cosec.api-key.keys[0].$field" in it }.assert().describedAs(legacy).isTrue()
+                }
+            // The same key without it starts: the field alone is what fails it.
+            contextRunner
+                .withPropertyValues(
+                    "cosec.api-key.enabled=true",
+                    "cosec.api-key.keys[0].id=billing",
+                    "cosec.api-key.keys[0].hash=${ApiKeys.hash(key)}",
+                    "cosec.api-key.keys[0].principal-id=svc-billing",
+                    "cosec.api-key.keys[0].tenant-id=acme",
+                    "cosec.api-key.keys[0].roles=reader",
+                )
+                .run { context -> assertThat(context).hasNotFailed() }
         }
     }
 
