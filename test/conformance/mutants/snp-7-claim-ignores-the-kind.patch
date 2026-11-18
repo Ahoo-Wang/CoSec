@@ -1,0 +1,17 @@
+# Rule: SNP-7
+# Mutant: the runner claims an eviction for the kind a pass chose though its entry has changed kind since, so a document goes to make room for absent entries
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundRunnerTest --tests me.ahoo.cosec.runtime.snapshot.KeyTransitionsTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
+index e5668c4f..09af4412 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
+@@ -80,7 +80,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
+         if (onlyIfEmpty && entry != null) {
+             return false
+         }
+-        return absent == null || (entry != null && (entry.origin == EntryOrigin.ABSENT) == absent)
++        return absent == null || entry != null
+     }
+ 
+     private fun requested(step: KeyStepBuilder<T>, event: KeyEvent.Requested) {
