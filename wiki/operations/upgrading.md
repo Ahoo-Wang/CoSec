@@ -1200,6 +1200,11 @@ deployment needs none of it; the section above is the whole upgrade. These notes
   `RefreshTokenAuthentication` bean (refusing a disabled user, say) did not apply to it. Now your bean serves the
   route. One over a credentials class of your own fails startup while `cosec.authentication.login.refresh.path` is
   set: serve that refresh from your own route and unset the path, or declare it over `RefreshTokenCredentials`.
+- **The `cosec-gateway-server` image turns ip2region off.** Its `config/application.yaml` now sets
+  `cosec.ip2region.enabled: false`, as the Kubernetes base already did; through beta.2 the image left it on. A document
+  that reads `ext.ip2region.*` no longer compiles on it: set `COSEC_IP2REGION_ENABLED=true` before you upgrade the
+  image. Its Docker `HEALTHCHECK` now probes `/actuator/health/liveness`, so a gateway that waits for its platform
+  document is no longer reported unhealthy.
 
 ### From 8.0.0-beta.1 {#from-8-0-0-beta-1}
 

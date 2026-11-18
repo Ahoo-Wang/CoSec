@@ -22,9 +22,14 @@ CI 在每次推送时用 [`platform/gateway-server/Dockerfile`](https://github.c
   `SPRING_DATA_REDIS_URL`。
 - **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。配置文件是
   `config/application.yaml`；JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数，它排在这些参数之后，因此会覆盖它们（[内存](#memory)）。
-- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪和 Kafka 模块。它的配置关闭了 Kafka 审计
-  （`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region
-  （`cosec.ip2region.enabled: false`）。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
+- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪、Kafka 模块和 ip2region。它的配置
+  `config/application.yaml`（它只读这一个，来自
+  [`src/dist/config/`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml)）
+  关闭了 Kafka 审计（`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region
+  （`cosec.ip2region.enabled: false`，与 [Kubernetes](#kubernetes) 的 base 一样）：读取 `ext.ip2region.*` 的文档需要
+  `COSEC_IP2REGION_ENABLED=true`。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
+- **Docker 健康检查。** 镜像的 `HEALTHCHECK` 每 30 秒探测一次 `/actuator/health/liveness`：应用运行后即为 up，与 Redis 中
+  有什么无关。它从不探测 `/actuator/health`，后者在平台文档安装之前一直是 `DOWN`（[就绪](#readiness)）。
 
 ```bash
 docker run -d -p 8080:8080 \
@@ -228,7 +233,8 @@ management:
 [`aot-smoke.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/aot-smoke.sh)。它用
 `cosec-migrate publish` 发布一个平台文档，以 `-XX:AOTMode=on` 启动镜像（无法映射的缓存会让作业失败），添加一条指向
 网关自身健康端点的 `/smoke/**` 路由，然后检查：健康探针回答 `200`，匿名请求回答带 `application/problem+json` 的
-`401`，带有效 HS256 令牌的请求回答 `200`，匹配到 DENY 的请求回答带 `application/problem+json` 的 `403`。同样的步骤
+`401`，带有效 HS256 令牌的请求回答 `200`，匹配到 DENY 的请求回答带 `application/problem+json` 的 `403`。它还运行镜像自己的
+`HEALTHCHECK`（每 2 秒一次，而不是 30 秒），要求它探测 liveness 组，并且 Docker 报告容器健康。同样的步骤
 也可以用来快速检查你自己的部署。
 
 ## AOT 缓存 {#aot-cache}

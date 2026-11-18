@@ -17,3 +17,7 @@ cosec:
   authentication:
     login:
       enabled: false
+  # Off, as in the Kubernetes base: the database is about 11 MB on each instance's heap, and a gateway decides on
+  # ext.ip2region.* only when its documents say so. Turn it on with COSEC_IP2REGION_ENABLED=true.
+  ip2region:
+    enabled: false
