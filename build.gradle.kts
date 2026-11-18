@@ -527,6 +527,10 @@ fun Project.coverageReport() {
                 componentFilter { it is ProjectComponentIdentifier && it.projectPath != selfPath }
             }.files
         )
+        // A project's test fixtures are code its own tests exercise (ContractFiles, PIP-25), so they are in its report.
+        project.plugins.withId("java-test-fixtures") {
+            classDirectories.from(project.the<SourceSetContainer>()["testFixtures"].output.classesDirs)
+        }
     }
     tasks.named("check") {
         dependsOn(report)
