@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.AbsentBoundWindowTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
-index eb7444fe..87a5db64 100644
+index 5e1ab253..6b4506c6 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
-@@ -205,7 +205,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
-         val pending = step.next
-         val nextLoad = advance(step, load, entry.takeIf { installs }, stale)
-         val answer = if (withheld && nextLoad == null) outdated(step.key, step.moment) else entry
--        housekeep(step)
-+        if (installs || step.installed == null) housekeep(step)
+@@ -209,7 +209,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+         if (!config.shared && step.installed != null) step.emit(KeyEffect.EvictOverCap)
          if (nextLoad != null) startRead(step, nextLoad) else pending?.let { step.emit(KeyEffect.Answer(it, answer)) }
          answerWaiters(step, load, answer, nextLoad.takeIf { withheld })
+-        housekeep(step)
++        if (installs || step.installed == null) housekeep(step)
      }
+ 
+     /**
