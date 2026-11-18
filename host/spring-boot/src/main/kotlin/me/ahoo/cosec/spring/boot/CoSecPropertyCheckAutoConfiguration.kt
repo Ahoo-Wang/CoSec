@@ -21,11 +21,24 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.ConfigurableEnvironment
 
-/** Fails startup on a `cosec.*` property CoSec does not read ([UnknownProperties]), whatever else is configured. */
+/**
+ * Fails startup on a `cosec.*` property CoSec does not read ([UnknownProperties]), whatever else is configured, and
+ * before any bean is created: a configuration with removed keys hears of every one of them first, before the store or
+ * module checks, and an application bean that needs CoSec's beans (created before any auto-configuration's) cannot make
+ * another failure speak first.
+ */
 @AutoConfiguration
 @Import(StartupTaskExclusion::class)
+// A class, not an object: Spring instantiates an auto-configuration.
+@Suppress("UtilityClassWithPublicConstructor")
 internal class CoSecPropertyCheckAutoConfiguration {
-    @Bean
-    fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): StartupTask =
-        StartupTask.OnCreation { UnknownProperties.load(javaClass.classLoader).check(environment) }
+    companion object {
+        /** Static, so Spring runs it with the post-processors, before it instantiates any configuration or bean. */
+        @JvmStatic
+        @Bean
+        fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): StartupTask.BeforeBeans =
+            StartupTask.BeforeBeans {
+                UnknownProperties.load(CoSecPropertyCheckAutoConfiguration::class.java.classLoader).check(environment)
+            }
+    }
 }

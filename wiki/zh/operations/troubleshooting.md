@@ -538,13 +538,19 @@ Remove or rename them: https://cosec.ahoo.me/operations/upgrading#removed-and-re
 ### 缺少令牌存储导致启动失败 {#startup-fails-without-a-token-store}
 
 ```text
-JWT is enabled, but no TokenStore records revoked tokens: add cosec-cocache or a TokenStore bean, or set cosec.jwt.enabled=false.
-Tokens are verified, but no revocation reader is available: add cosec-cocache or a RevocationReader bean, or set cosec.jwt.enabled=false.
-JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add cosec-cocache or a TokenFamilyStore bean, or set cosec.jwt.enabled=false.
+CoSec's tokens are on, but TokenStore, RevocationReader, TokenFamilyStore are missing. Verifying and refreshing tokens needs three stores: a TokenStore records revoked tokens, a RevocationReader reads them for every token verified, a TokenFamilyStore keeps the refresh token families. Add cosec-cocache, which brings all three, or a bean of each missing one, or set cosec.jwt.enabled=false. RevocationReader.NONE accepts revoked tokens until they expire: use it only where no one revokes a token, on this service or on the one that issued it.
 ```
 
-启用 JWT 时令牌吊销始终开启，starter 绝不会把吊销写进空处。添加 `cosec-cocache`，注册你自己的 `TokenStore`、
+启用 JWT 时令牌吊销始终开启，starter 绝不会把吊销写进空处。错误信息一次列出所有缺少的存储。添加 `cosec-cocache`，注册你自己的 `TokenStore`、
 `RevocationReader` 和 `TokenFamilyStore` bean，或者在既不签发也不校验令牌的服务中关闭 JWT。
+
+基于 `RevocationReader.NONE` 校验令牌的服务可以启动，并在 `WARN` 级别记录一次：
+
+```text
+Tokens are verified against RevocationReader.NONE: a revoked token (logout, revoked sessions or subjects) is accepted here until it expires. Where the issuer revokes tokens, read its revocations: cosec-cocache on the issuer's Redis with the issuer's cosec.key-prefix, or a RevocationReader of your own.
+```
+
+只有在任何地方（本服务或签发令牌的服务）都没人吊销令牌时，`NONE` 才合适。校验其他服务所签发令牌的服务，要读取该签发方的吊销记录。
 
 ### JWT 密钥错误导致启动失败 {#startup-fails-with-a-jwt-secret-error}
 

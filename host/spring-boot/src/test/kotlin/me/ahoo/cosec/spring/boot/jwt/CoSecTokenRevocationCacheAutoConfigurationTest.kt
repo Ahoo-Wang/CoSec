@@ -53,7 +53,8 @@ class CoSecTokenRevocationCacheAutoConfigurationTest {
                 CoSecJwtAutoConfiguration::class.java,
             )
             .run { context: AssertableApplicationContext ->
-                context.startupFailure!!.stackTraceToString().assert().contains("no TokenStore records revoked tokens")
+                context.startupFailure!!.stackTraceToString().assert()
+                    .contains("TokenStore, RevocationReader, TokenFamilyStore are missing")
             }
     }
 

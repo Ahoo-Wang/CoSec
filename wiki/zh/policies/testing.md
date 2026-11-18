@@ -422,4 +422,6 @@ class OrderPermissionsTest {
 
 `of` 和 `load` 还接受 `routes` 与 `listeners`。有路由映射（`RouteMapCodec.load`）时，请求带有你的服务的动作和资源，与配置了 `cosec.authorization.routes.location` 的宿主一样；没有时，它的动作是其路径上的 `http:<METHOD>`。监听器收到管道产生的事件：`REQUIRED` 监听器在 `evaluate` 返回前收到，`BEST_EFFORT` 监听器在夹具关闭时收到。你自己的 `DecisionListener` 就这样测试（[决策监听器](../architecture/extending.md#decision-listeners)）。
 
+`PipelineFixture.unreadable(routes, listeners)` 是一个无法读取文档的宿主：对存储的每次读取都失败，因此每个请求都是 `503 unavailable`，没有请求被允许。让你的路由在它上面运行，证明存储不可用时它们失败关闭。
+
 **下一步：** 把测试过的策略发布到存储中，见[存储](../operations/storage.md)。
