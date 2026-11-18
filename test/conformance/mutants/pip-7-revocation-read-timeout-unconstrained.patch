@@ -3,14 +3,14 @@
 # Tests: :cocache:test --tests me.ahoo.cosec.cocache.CacheTtlPolicyTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-index 46f68bd5..26530a32 100644
+index 2ac7b55e..9154f026 100644
 --- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
 +++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CacheLocks.kt
-@@ -76,7 +76,6 @@ internal object CacheLocks {
+@@ -83,7 +83,6 @@ internal object CacheLocks {
                  constrain(PolicyField.UNKNOWN_READ) { UnknownReadMode.THROW }
                  // A read that times out is unavailable, which the pipeline lets through (PIP-7): a timeout shorter than
                  // the store's command timeout, from cocache.defaults.store.read-timeout say, would widen that.
 -                constrain(PolicyField.READ_TIMEOUT) { COMMAND_TIMEOUT }
-             }
- 
-             TOKEN_FAMILY_CACHE_NAME -> {
+                 // "Not revoked" is kept locally for at most MISSING_TTL_SECONDS: past a lost invalidation, a longer
+                 // absent-ttl would accept a revoked token for that long. Of the other fields of a Store, none can lengthen
+                 // it: a missing entry lives min(absent-ttl, local-max-age); a revocation is written with a lifetime of its
