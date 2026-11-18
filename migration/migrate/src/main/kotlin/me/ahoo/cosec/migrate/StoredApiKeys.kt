@@ -44,8 +44,9 @@ class StoredApiKeys(val legacy: List<LegacyApiKey>, val converted: List<String>,
                         format == null -> legacy += LegacyApiKey.parse(hash, json)
                         format == ApiKeyCodec.FORMAT -> converted += hash
                         // Never counted as converted: 8.0 does not read it, and no pre-release data is converted.
-                        else -> unreadable += "[$redisKey] was stored by an 8.0 pre-release in format $format, which " +
-                            "this version does not read: provision it again (issue a new key and delete this one)."
+                        else ->
+                            unreadable += "[$redisKey] was stored by an 8.0 pre-release in format $format, which " +
+                                "this version does not read: provision it again (issue a new key and delete this one)."
                     }
                 } catch (error: IllegalArgumentException) {
                     unreadable += "[$redisKey] is not an API key: ${error.message}"

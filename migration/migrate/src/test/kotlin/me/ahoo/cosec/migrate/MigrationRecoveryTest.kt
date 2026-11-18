@@ -173,14 +173,20 @@ class MigrationRecoveryTest {
     fun `a key of a pre-release format is reported as such, not counted converted`() {
         val commands = mockk<RedisCommands<String, String>>()
         every { commands.get("p:api-key:h1") } returns LEGACY
-        every { commands.get("p:api-key:h2") } returns """{"format":2,"id":"k2","principalId":"alice","tenantId":"acme","roles":null,"expiresAt":null,"enabled":true}"""
+        val formatTwo = """{"format":2,"id":"k2","principalId":"alice","tenantId":"acme","enabled":true}"""
+        every { commands.get("p:api-key:h2") } returns formatTwo
         every { commands.get("p:api-key:h3") } returns ApiKeyCodec.encode(ApiKey("k3", "alice", "acme", null, setOf("reader")))
 
-        val stored = StoredApiKeys.read(commands, "p:api-key") { sequenceOf("p:api-key:h1", "p:api-key:h2", "p:api-key:h3") }
+        val keys = sequenceOf("p:api-key:h1", "p:api-key:h2", "p:api-key:h3")
+        val stored = StoredApiKeys.read(commands, "p:api-key") { keys }
 
         stored.legacy.map { it.hash }.assert().containsExactly("h1")
         stored.converted.assert().containsExactly("h3")
-        stored.unreadable.single().assert().contains("[p:api-key:h2]", "8.0 pre-release in format 2", "provision it again")
+        stored.unreadable.single().assert().contains(
+            "[p:api-key:h2]",
+            "8.0 pre-release in format 2",
+            "provision it again"
+        )
     }
 
     // ---- #1225 ----

@@ -52,7 +52,10 @@ class LegacyApiKey(
             setOf("id", "principalId", "tenantId", "roles", "policies", "attributes", "expiresAt", "enabled")
 
         /** The `format` [json] states, or null for a key stored before RFC 0009, which has none. */
-        fun formatOf(json: String): Int? = (tree(json) as? ObjectNode)?.get("format")?.let { if (it.isInt) it.asInt() else -1 }
+        fun formatOf(json: String): Int? {
+            val format = (tree(json) as? ObjectNode)?.get("format") ?: return null
+            return if (format.isInt) format.asInt() else -1
+        }
 
         /**
          * Whether [json] is a key stored in the format this version reads ([ApiKeyCodec.FORMAT]). A key in another

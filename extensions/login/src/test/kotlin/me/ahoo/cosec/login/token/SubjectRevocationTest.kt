@@ -143,7 +143,12 @@ class SubjectRevocationTest {
     @Test
     fun `a store that fails to revoke a subject is unavailable, one that cannot is unsupported`() {
         val failing = object : TokenStore by tokenStore {
-            override suspend fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant, ttl: Duration) =
+            override suspend fun revokeSubject(
+                tenant: TenantId,
+                principal: PrincipalId,
+                issuedBefore: Instant,
+                ttl: Duration
+            ) =
                 throw IllegalStateException("redis is down")
         }
         val unsupporting = object : TokenStore {
@@ -151,7 +156,13 @@ class SubjectRevocationTest {
         }
         val unavailable = assertThrows<SessionStoreUnavailableException> {
             runBlocking {
-                StoreTokenRevoker(verifier, failing, revocation, families, refreshValidity).revokeSubject(tenant, alice, now)
+                StoreTokenRevoker(
+                    verifier,
+                    failing,
+                    revocation,
+                    families,
+                    refreshValidity
+                ).revokeSubject(tenant, alice, now)
             }
         }
         unavailable.cause.assert().isInstanceOf(IllegalStateException::class.java)
