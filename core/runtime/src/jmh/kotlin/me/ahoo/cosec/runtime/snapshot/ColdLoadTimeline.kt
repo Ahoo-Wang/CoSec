@@ -122,22 +122,17 @@ internal class ColdLoadTimeline(private val runner: Boolean, private val loads: 
         }
     }
 
+    /** Stamps each timer as it is scheduled, and returns the scheduler's own future (its cancel is not stamped). */
     private fun scheduler(real: ScheduledExecutorService) = object : ScheduledExecutorService by real {
-        private fun <V> stamped(future: ScheduledFuture<V>): ScheduledFuture<V> {
+        override fun schedule(command: Runnable, delay: Long, unit: TimeUnit): ScheduledFuture<*> {
             stamp("timer scheduled")
-            return object : ScheduledFuture<V> by future {
-                override fun cancel(mayInterruptIfRunning: Boolean): Boolean {
-                    stamp("timer cancelled")
-                    return future.cancel(mayInterruptIfRunning)
-                }
-            }
+            return real.schedule(command, delay, unit)
         }
 
-        override fun schedule(command: Runnable, delay: Long, unit: TimeUnit): ScheduledFuture<*> =
-            stamped(real.schedule(command, delay, unit))
-
-        override fun <V> schedule(callable: Callable<V>, delay: Long, unit: TimeUnit): ScheduledFuture<V> =
-            stamped(real.schedule(callable, delay, unit))
+        override fun <V> schedule(callable: Callable<V>, delay: Long, unit: TimeUnit): ScheduledFuture<V> {
+            stamp("timer scheduled")
+            return real.schedule(callable, delay, unit)
+        }
     }
 
     private val metrics = object : SnapshotMetrics {
