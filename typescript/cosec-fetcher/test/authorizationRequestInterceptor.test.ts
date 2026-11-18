@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   AuthorizationRequestInterceptor,
   AUTHORIZATION_REQUEST_INTERCEPTOR_NAME,
@@ -54,7 +54,7 @@ class MockTokenManager {
 // Mock exchange
 class MockFetchExchange implements Partial<FetchExchange> {
   public requestHeaders: Record<string, string> = {};
-  public attributes: Map<string, any> = new Map();
+  public attributes: Map<string, unknown> = new Map();
   // A request to the fetcher's own baseURL: the default trust policy carries credentials to it.
   public request = { url: '/orders' };
   public fetcher = { urlBuilder: { baseURL: 'https://api.example.com' } };
