@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.HousekeepingRefusalTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
-index befcc8e7..d254d42f 100644
+index fe495e66..245305cd 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
-@@ -143,7 +143,7 @@ internal class SnapshotThreads(
-             housekeeping.execute(task)
-         } catch (_: RejectedExecutionException) {
-             refused(kind, line)
--            if (kind.runsInPlace) task()
-+            if (kind.runsInPlace || kind == HousekeepingTask.EVICT) task()
+@@ -172,7 +172,7 @@ internal class SnapshotThreads(
+             return
          }
+         refused(kind, line)
+-        if (kind.runsInPlace) task()
++        if (kind.runsInPlace || kind == HousekeepingTask.EVICT) task()
      }
  
+     /** A [kind] of task housekeeping refused: counted for the summary, with [line], and reported to the metrics. */

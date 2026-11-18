@@ -1,0 +1,16 @@
+# Rule: SNP-19
+# Mutant: close does not write what was refused and not yet summarized: the last interval before a restart leaves no trace
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.HousekeepingRefusalTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
+index fe495e66..214c95ce 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
+@@ -95,7 +95,6 @@ internal class SnapshotThreads(
+         try {
+             awaitThreads(timeout)
+         } finally {
+-            refusals.summary(System.nanoTime(), force = true)?.let { line -> log.warn { line } }
+         }
+     }
+ 

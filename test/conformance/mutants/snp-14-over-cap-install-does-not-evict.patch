@@ -3,10 +3,10 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotFamilyBoundRunnerTest --tests me.ahoo.cosec.runtime.snapshot.SnapshotSlotModelPropertyTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-index 19fca0dc..c1892c2e 100644
+index 9f946fce..7cee1547 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-@@ -245,7 +245,7 @@ internal class KeyEffects<T : Any>(
+@@ -242,7 +242,7 @@ internal class KeyEffects<T : Any>(
      private fun evictOverCap() {
          val families = context.families
          val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
@@ -15,7 +15,7 @@ index 19fca0dc..c1892c2e 100644
      }
  
      /**
-@@ -262,7 +262,7 @@ internal class KeyEffects<T : Any>(
+@@ -259,7 +259,7 @@ internal class KeyEffects<T : Any>(
          ) {
              return
          }
@@ -23,4 +23,4 @@ index 19fca0dc..c1892c2e 100644
 +        if (false) {
              DrainBudget.unbounded { families.evictBeyond(family) }
          } else {
-             context.threads.offHousekeeping(
+             // The line is the key's, built only if housekeeping refuses the pass: a load's end allocates nothing for it.
