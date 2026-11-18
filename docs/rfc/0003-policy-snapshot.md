@@ -547,8 +547,11 @@ Lua 脚本里比较当前值的摘要，未变时只返回"未变"（不传正�
 
 "按租户"在本阶段的含义：快照没有租户分区，所以判断依据是**请求的租户**（`context.tenant.tenantId`）和**这次评估用到的文档**的落后时长。
 
-**可观测性**：Micrometer 指标 `cosec.snapshot.lag`（按 key 类型，不按 `appId`：`appId` 基数高）、`cosec.snapshot.loads`（结果：hit/cold/failed/timeout）、
-`cosec.snapshot.compile.duration`、`cosec.snapshot.installed`、`cosec.snapshot.regressions`；starter 的 actuator 端点 `cosecsnapshot` 列出已安装的 key、修订号、
+**可观测性**：Micrometer 指标（名称、标签与告警以 `wiki/operations/observability.md#snapshot-metrics` 为准；标签只取封闭的取值集合，从不带 `appId` 或 `tenantId`）：
+`cosec.snapshot.loads`（`kind`；`result`：cold/failed/timeout；命中不计数：它不是加载，而 `peek` 是每个请求都走的路径，等过文档的请求占比用冷加载数除以决策数得到）、
+`cosec.snapshot.compile.duration`、`cosec.snapshot.installs`、`cosec.snapshot.installed`（按 `state`，各状态之和等于实例持有的条目）、`cosec.snapshot.lag`（按 key 类型的最大值）、
+`cosec.snapshot.lagging`、`cosec.snapshot.summary.age`、`cosec.snapshot.lag.exceeded`、`cosec.snapshot.regressions`、`cosec.snapshot.lost`、
+`cosec.snapshot.evictions`（只计已安装条目的离开）、`cosec.snapshot.handoffs.refused`（2026-11-18 按实现改写，#1614；原文列的是 lag、loads（含 hit）、compile.duration、installed、regressions 五个）；starter 的 actuator 端点 `cosecsnapshot` 列出已安装的 key、修订号、
 落后时长和状态，并可以强制重新加载某个 key（只读本节点，不写 Redis）。CoCache 自己的 per-key actuator 继续可用。
 
 ### 4.6 写入：`SnapshotPublisher` 与条件写入
