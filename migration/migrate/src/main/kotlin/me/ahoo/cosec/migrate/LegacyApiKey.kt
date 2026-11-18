@@ -51,10 +51,14 @@ class LegacyApiKey(
         private val FIELDS =
             setOf("id", "principalId", "tenantId", "roles", "policies", "attributes", "expiresAt", "enabled")
 
-        /** The `format` [json] states, or null for a key stored before RFC 0009, which has none. */
+        /**
+         * The `format` [json] states, or null for a key stored before RFC 0009, which has none. A `format` that is not
+         * an integer was written by no version of CoSec: [IllegalArgumentException], the record is no API key.
+         */
         fun formatOf(json: String): Int? {
             val format = (tree(json) as? ObjectNode)?.get("format") ?: return null
-            return if (format.isInt) format.asInt() else -1
+            require(format.isInt) { "its format [$format] is not an integer" }
+            return format.asInt()
         }
 
         /**

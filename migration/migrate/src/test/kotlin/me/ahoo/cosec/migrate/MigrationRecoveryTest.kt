@@ -176,17 +176,21 @@ class MigrationRecoveryTest {
         val formatTwo = """{"format":2,"id":"k2","principalId":"alice","tenantId":"acme","enabled":true}"""
         every { commands.get("p:api-key:h2") } returns formatTwo
         every { commands.get("p:api-key:h3") } returns ApiKeyCodec.encode(ApiKey("k3", "alice", "acme", null, setOf("reader")))
+        // A format no version wrote is no API key, never a pre-release's.
+        every { commands.get("p:api-key:h4") } returns """{"format":"3","id":"k4"}"""
 
-        val keys = sequenceOf("p:api-key:h1", "p:api-key:h2", "p:api-key:h3")
+        val keys = sequenceOf("p:api-key:h1", "p:api-key:h2", "p:api-key:h3", "p:api-key:h4")
         val stored = StoredApiKeys.read(commands, "p:api-key") { keys }
 
         stored.legacy.map { it.hash }.assert().containsExactly("h1")
         stored.converted.assert().containsExactly("h3")
-        stored.unreadable.single().assert().contains(
+        stored.unreadable.assert().hasSize(2)
+        stored.unreadable[0].assert().contains(
             "[p:api-key:h2]",
             "8.0 pre-release in format 2",
             "provision it again"
         )
+        stored.unreadable[1].assert().contains("[p:api-key:h4] is not an API key", "is not an integer")
     }
 
     // ---- #1225 ----
