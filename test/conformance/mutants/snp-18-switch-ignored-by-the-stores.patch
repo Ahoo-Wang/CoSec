@@ -1,0 +1,17 @@
+# Rule: SNP-18
+# Mutant: the read-only declaration ignores cosec.control.enabled, so the stores are read-write while it is switched off
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlPlaneSwitchTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
+index 4ac71495..66a02fb6 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/ControlPlaneCondition.kt
+@@ -80,7 +80,7 @@ internal class ControlPlaneCondition : SpringBootCondition() {
+          */
+         fun readOnly(classLoader: ClassLoader?, environment: Environment, announce: Boolean = false): Boolean {
+             val present = present(classLoader)
+-            val readOnly = !(present && enabled(environment))
++            val readOnly = !present
+             if (announce && readOnly && present) {
+                 log.info {
+                     "Control plane off on this instance: $ENABLED_KEY=false; policy documents and candidates are read " +

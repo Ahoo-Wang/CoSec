@@ -24,7 +24,9 @@
         "spring-boot:LoginRoutesStartupTest#a host that serves no HTTP with a path set fails startup",
         "spring-boot:LoginRoutesStartupTest#unset, nothing is served and nothing is checked",
         "spring-boot:LoginRoutesStartupTest#a gateway host with a path set fails startup",
-        "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup"
+        "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#the control plane switched on explicitly without cosec-control or cosec-cocache fails startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a cosec control enabled that is neither true nor false fails startup, without the modules too"
       ]
     },
     {
