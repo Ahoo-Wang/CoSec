@@ -260,6 +260,7 @@
       "source": "roadmap §9 (the data plane's Redis credential read-only); CoCache 8.1.0 read-only stores",
       "statement": "A process that does not run the control plane reads the snapshot documents and the candidates read-only, so a Redis user with read permission on them is enough and Redis refuses it a write; a process that runs the control plane writes them. Which one a process is follows the condition the control plane is wired on and nothing else: a cocache.* property or customizer that changes it, either way, fails the creation of the store.",
       "level": "startup",
+      "pending": null,
       "guards": [
         "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's snapshot store read-write",
         "cocache:ReadOnlyDeclarationTest#a layer cannot make the control plane's snapshot store read-only",

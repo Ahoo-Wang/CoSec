@@ -36,7 +36,8 @@ internal class ControlPlaneCondition : SpringBootCondition() {
     }
 
     companion object {
-        private val CLASSES = listOf("me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cocache.control.CoCacheControlStore")
+        private val CLASSES =
+            listOf("me.ahoo.cosec.control.api.ControlHttp", "me.ahoo.cosec.cocache.control.CoCacheControlStore")
 
         /** Whether the control plane runs in the process whose classes [classLoader] loads. */
         fun wired(classLoader: ClassLoader?): Boolean = CLASSES.all { ClassUtils.isPresent(it, classLoader) }

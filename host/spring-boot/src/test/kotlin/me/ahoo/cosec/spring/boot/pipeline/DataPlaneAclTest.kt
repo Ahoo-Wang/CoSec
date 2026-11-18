@@ -257,7 +257,9 @@ class DataPlaneAclTest {
             // The control plane writes the documents: its snapshot store is read-write, and CoCache's publish probe
             // finds the user may not publish its invalidations (the misdeclared deployment is loud).
             process.startupFailure.assert().isNotNull()
-            failures(process).assert().contains("Redis denied publishing to the invalidation channel[$prefix:inv:snapshot]")
+            failures(
+                process
+            ).assert().contains("Redis denied publishing to the invalidation channel[$prefix:inv:snapshot]")
         }
     }
 
