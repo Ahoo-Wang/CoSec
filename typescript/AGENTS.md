@@ -57,8 +57,9 @@ pnpm test
 
 ## Code
 
-- Strict TypeScript, ES modules, type-only imports (`consistent-type-imports`), `eslint --max-warnings 0`, the Apache 2.0
-  header on every source file. The Kotlin structure rules (400 lines a file, one type a file) do not apply here.
+- Strict TypeScript, ES modules, type-only imports (`consistent-type-imports`), `eslint --max-warnings 0` over each
+  package's sources and tests alike (every package's `lint` is exactly that, and no ESLint config ignores a test file:
+  `TypeScriptWorkspaceTest`), the Apache 2.0 header on every source file. The Kotlin structure rules (400 lines a file, one type a file) do not apply here.
 - **A public API report per package** (`test/api/<package>.api.md`, api-extractor) is to a package what
   `api/<project>.api` is to a Kotlin module: a changed line is a public change, and a removed or changed one is a
   breaking change (`!` in the PR title). `pnpm test:api` checks it against the build; `pnpm test:api -u` rewrites it, and the change is committed on purpose.

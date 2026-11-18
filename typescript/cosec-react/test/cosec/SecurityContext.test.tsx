@@ -11,10 +11,11 @@
  * limitations under the License.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { render, act, waitFor } from '@testing-library/react';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { render, renderHook, act, waitFor } from '@testing-library/react';
 import React from 'react';
 import { SecurityProvider, useSecurityContext } from '../../src';
+import type { CompositeTokenProvider } from '../../src';
 import { TokenStorage } from '@ahoo-wang/cosec-fetcher';
 import { InMemoryStorage } from '@ahoo-wang/fetcher-storage';
 import { ANONYMOUS_USER } from '../../src';
@@ -46,16 +47,6 @@ function TestComponent() {
       </button>
     </div>
   );
-}
-
-// Component that throws when used outside provider
-function ComponentWithoutProvider() {
-  try {
-    useSecurityContext();
-    return <div>Should not reach here</div>;
-  } catch (error) {
-    return <div data-testid="error">{(error as Error).message}</div>;
-  }
 }
 
 describe('SecurityContext', () => {
@@ -197,11 +188,14 @@ describe('SecurityContext', () => {
 
   describe('useSecurityContext', () => {
     it('should throw error when used outside SecurityProvider', () => {
-      const { getByTestId } = render(<ComponentWithoutProvider />);
-
-      expect(getByTestId('error').textContent).toBe(
+      // React reports the render error before rethrowing it.
+      const consoleError = vi
+        .spyOn(console, 'error')
+        .mockImplementation(() => {});
+      expect(() => renderHook(() => useSecurityContext())).toThrow(
         'useSecurityContext must be used within a SecurityProvider',
       );
+      consoleError.mockRestore();
     });
 
     it('should provide reactive updates through context', async () => {
@@ -239,10 +233,7 @@ describe('SecurityContext', () => {
     it('should handle provider with no children', () => {
       expect(() => {
         render(
-          <SecurityProvider
-            tokenStorage={tokenStorage}
-            children={undefined as any}
-          />,
+          <SecurityProvider tokenStorage={tokenStorage} children={undefined} />,
         );
       }).not.toThrow();
     });
@@ -291,7 +282,7 @@ describe('SecurityContext', () => {
     });
 
     it('should handle context used in effects', async () => {
-      let effectValue: any = null;
+      let effectValue: boolean | null = null;
 
       function EffectComponent() {
         const context = useSecurityContext();
@@ -350,7 +341,8 @@ describe('SecurityContext', () => {
       function ErrorComponent() {
         const context = useSecurityContext();
         // Access undefined property - should not throw
-        const nonexistent = (context as any).nonexistent;
+        const nonexistent = (context as unknown as Record<string, unknown>)
+          .nonexistent;
         return (
           <div data-testid="error-test">
             {nonexistent ? 'exists' : 'undefined'}
@@ -375,7 +367,7 @@ describe('SecurityContext', () => {
 
         // TypeScript should enforce these types
         const auth: boolean = authenticated;
-        const signInFn: (token: any) => void = signIn;
+        const signInFn: (token: CompositeTokenProvider) => void = signIn;
         const signOutFn: () => void = signOut;
 
         return (

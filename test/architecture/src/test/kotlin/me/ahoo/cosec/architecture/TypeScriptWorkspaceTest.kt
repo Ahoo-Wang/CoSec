@@ -134,6 +134,20 @@ class TypeScriptWorkspaceTest {
         }
     }
 
+    /**
+     * One lint command for every package, over everything it holds, its tests included: a package whose ESLint config
+     * left its tests out let two unused bindings reach the code scanner first (code scanning alerts 126 and 127).
+     */
+    @Test
+    fun `every package lints its sources and its tests, and allows no warning`() {
+        for (directory in packages()) {
+            json(directory.resolve("package.json"))["scripts"]["lint"].asString()
+                .assert().describedAs("${directory.name} lint").isEqualTo("eslint --max-warnings 0 .")
+            directory.resolve("eslint.config.js").readText().contains(".test.")
+                .assert().describedAs("${directory.name}'s ESLint config ignores no test file").isFalse()
+        }
+    }
+
     @Test
     fun `the host tests run through one script that starts test client-host, and only the host job runs them`() {
         json(workspace.resolve("package.json"))["scripts"]["test:host"].asString()
