@@ -37,12 +37,13 @@ import {
   SecurityProvider,
   useSecurityContext,
 } from '@ahoo-wang/cosec-react';
-import { tokenStorage } from './tokenStorage';
+import { tokenManager, tokenStorage } from './tokenStorage';
 
 function App() {
   return (
     <SecurityProvider
       tokenStorage={tokenStorage}
+      tokenManager={tokenManager}
       onSignOut={() => window.location.assign('/login')}
     >
       <RouteGuard
@@ -56,8 +57,11 @@ function App() {
 }
 
 function Profile() {
-  const { currentUser, signOut } = useSecurityContext();
-  return <button onClick={signOut}>Sign out {currentUser.sub}</button>;
+  const { currentUser, logout } = useSecurityContext();
+  // The pair is gone here either way; a rejection says the server did not confirm.
+  const onLogout = () =>
+    logout().catch(() => alert('Signed out here; the server did not confirm.'));
+  return <button onClick={onLogout}>Log out {currentUser.sub}</button>;
 }
 ```
 
@@ -66,6 +70,15 @@ function Profile() {
 - `SecurityProvider`, `useSecurityContext`, `SecurityContext`: the security
   state of the page, from one `TokenStorage`.
 - `useSecurity`: the same without the context.
+- `logout` and `signOut`: `logout` is the user's "Log out": it ends the session at
+  the server through the `tokenManager` option (`JwtTokenManager.logout()`, which
+  needs a `tokenRevoker`), then removes the pair here. Until the server answers,
+  the session is unchanged. It resolves on `204` or `401`, and rejects with
+  `LogoutUnconfirmedError` otherwise (and without a `tokenManager`); the pair is
+  gone here either way, and `onSignOut` fires unless a newer sign-in replaced the
+  session. `signOut` removes the pair here only, at once: for a session known to
+  be over. The `tokenManager` must be the manager of the hook's `tokenStorage`,
+  or the hook throws.
 - `RouteGuard`: renders its children for a signed-in user, otherwise the
   `fallback`. `onUnauthorized` runs after the render commits, once each time the
   user becomes (or starts out) not signed in.

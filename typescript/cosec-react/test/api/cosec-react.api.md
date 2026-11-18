@@ -64,12 +64,14 @@ export function useSecurityContext(): SecurityContextValue;
 export interface UseSecurityOptions {
     onSignIn?: () => void;
     onSignOut?: () => void;
+    tokenManager?: JwtTokenManager;
 }
 
 // @public
 export interface UseSecurityReturn {
     authenticated: boolean;
     currentUser: CoSecJwtPayload;
+    logout: () => Promise<void>;
     signIn: (compositeTokenProvider: CompositeTokenProvider) => Promise<void>;
     signOut: () => void;
 }
