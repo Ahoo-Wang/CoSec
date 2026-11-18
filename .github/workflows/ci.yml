@@ -148,7 +148,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: 24.22.2
+          node-version: 24.22.3
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -295,7 +295,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 24.22.2
+          node-version: 24.22.3
           cache: pnpm
           cache-dependency-path: typescript/pnpm-lock.yaml
 
