@@ -16,9 +16,9 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -37,24 +37,19 @@ import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import java.time.Instant
 
 /** Documents are written inline, one JSON line each. */
 @Suppress("MaxLineLength")
 class PolicyDocumentCompilerTest {
     private val compiler = PolicyDocumentCompiler()
 
-    private fun stored(body: String, schema: Int = 2) = SnapshotDocument(
-        schema,
-        1,
-        Instant.parse("2026-10-26T00:00:00Z"),
-        """{"schema":$schema,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray(),
+    private fun stored(body: String, schema: Int = 2) = SnapshotDocuments.read(
+        """{"schema":$schema,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()
     )
 
     private fun errors(key: SnapshotKey, body: String): List<String> =
@@ -106,8 +101,8 @@ class PolicyDocumentCompilerTest {
             compiler.compile(SnapshotKey.App("order"), stored(app)),
             compiler.compile(SnapshotKey.Tenant("acme"), stored(tenant)),
         )
-        return CoSecFlatEngine.evaluate(
-            FlatRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, 0),
+        return CoSecEngine.evaluate(
+            EngineRequest(authz, (resolution as ScopeResolution.Resolved).scope, memberships, 0),
             view
         ).decision
     }
@@ -176,7 +171,7 @@ class PolicyDocumentCompilerTest {
                 Environment("10.0.0.1", "r", "d", blocked = false),
             )
             val view = SnapshotView(platform, null, compiler.compile(SnapshotKey.Tenant("acme"), stored(tenantBody)))
-            return CoSecFlatEngine.evaluate(FlatRequest(authz, scope, memberships, 0), view).decision
+            return CoSecEngine.evaluate(EngineRequest(authz, scope, memberships, 0), view).decision
         }
         decide("", Action("order", "read")).assert().isInstanceOf(Decision.Permit::class.java)
         decide("", Action("user", "read")).assert()

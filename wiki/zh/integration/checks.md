@@ -176,7 +176,7 @@ curl -X POST localhost:8080/cosec/control/v1/explain \
 | `version` | 做决策所用文档的修订。 |
 | `decision.decision` | `Permit`、`Deny`、`Indeterminate`，作用域被拒绝时为 `Rejected`（此时 `cause` 为 `APP_MISMATCH` 或 `SPACE_NOT_MEMBER`，且没有追踪）。 |
 | `decision.by` | 作出决策的语句：策略、语句序号和名称、它生效所经的绑定（`via`：绑定 id，或 `attached:<policy>`）及其文档。隐式拒绝和 Indeterminate 时没有。 |
-| `decision.cause` | Indeterminate 时原因的类型（如 `MissingPolicies`、`MatcherFailed`、`SourceUnavailable`）；从不包含其消息。 |
+| `decision.cause` | Indeterminate 时原因的类型（如 `MissingPolicies`、`MatcherFailed`、`SourceUnavailable`、`DocumentInvalid`）；从不包含其消息。 |
 | `decision.redacted` | 作出决策的语句你无权查看时为 `true`。 |
 | `trace.candidates` | 每条被求值的语句：效果、语句本身及结果：`MATCHED`、`ACTION_MISS`、`RESOURCE_MISS`、`CONDITION_MISS`、`GUARD_MISS`（所在策略的条件不成立）、`GUARD_ERROR`、`ERROR` 或 `NOT_EVALUATED`。 |
 | `trace.redacted` | 因你无权查看而省略的候选数量。 |

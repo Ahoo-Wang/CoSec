@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
 import me.ahoo.cosec.spi.identity.IdentityOverflowException
+import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -169,6 +170,104 @@ class IdentityCodecTest {
                 identity.copy(claims = mapOf("groups" to listOf("a")))
             )
         }
+    }
+
+    private val session = TokenSession("s1", Instant.parse("2026-10-31T00:00:00Z"), 3)
+
+    /** The identity of CoSec's own token with its session: what a gateway forwards for a switch behind it (IDN-22). */
+    private val withSession = identity.copy(
+        credential = identity.credential.copy(issuedAt = Instant.parse("2026-11-01T00:50:00Z"), session = session),
+    )
+
+    @Test
+    fun `the credential's issue time and its session travel, and read back`() {
+        val decoded = IdentityCodec.decode(IdentityCodec.encode(withSession))
+        decoded.assert().isEqualTo(withSession)
+        decoded.credential.session.assert().isEqualTo(session)
+        decoded.credential.issuedAt.assert().isEqualTo(Instant.parse("2026-11-01T00:50:00Z"))
+        String(Base64.getUrlDecoder().decode(IdentityCodec.encode(withSession))).assert().contains(
+            """"auth":{"method":"jwt","jti":"t1","exp":1793494800,"iat":1793494200,""" +
+                """"session":{"sid":"s1","auth_time":1793404800,"generation":3}}"""
+        )
+        // Without them the bytes are what they were.
+        String(Base64.getUrlDecoder().decode(IdentityCodec.encode(identity))).assert()
+            .doesNotContain("session").contains(""""auth":{"method":"jwt","jti":"t1","exp":1793494800}""")
+    }
+
+    /** A session that is wrong is refused, never read as no session; nor is an issue time after the expiry. */
+    @Test
+    fun `a session or an issue time that does not hold is refused`() {
+        fun with(auth: String) = header(
+            """{"v":1,"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],""" +
+                """"auth":$auth,"iat":5,"rid":"r1"}"""
+        )
+        val good = """{"sid":"s1","auth_time":1,"generation":1}"""
+        IdentityCodec.decode(with("""{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":$good}"""))
+            .credential.session!!.generation.assert().isEqualTo(1L)
+        // A login a second after the token's issue: two clocks wrote them (the family's, the issuer's), and it is read.
+        IdentityCodec.decode(
+            with("""{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":3,"generation":1}}"""),
+        ).credential.session!!.authTime.epochSecond.assert().isEqualTo(3L)
+        val refused = listOf(
+            // No auth_time, no sid, no generation.
+            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","generation":1}}""",
+            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"auth_time":1,"generation":1}}""",
+            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1}}""",
+            // A generation that is not positive, or not an integer.
+            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":-1}}""",
+            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":0}}""",
+            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":1.5}}""",
+            // An empty session id, an unknown member.
+            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"","auth_time":1,"generation":1}}""",
+            """{"method":"jwt","jti":"t1","exp":9,"iat":2,"session":{"sid":"s1","auth_time":1,"generation":1,"x":1}}""",
+            // A session without the token's issue time, or of another credential than CoSec's token.
+            """{"method":"jwt","jti":"t1","exp":9,"session":$good}""",
+            """{"method":"api-key","jti":"k1","exp":9,"iat":2,"session":$good}""",
+            // An issue time after the expiry.
+            """{"method":"jwt","jti":"t1","exp":9,"iat":10}""",
+            """{"method":"jwt","jti":"t1","exp":9,"iat":"2"}""",
+        )
+        refused.forEach { auth ->
+            reason(
+                with(auth)
+            ).assert().describedAs(auth).isEqualTo(IdentityFormatException.Reason.MALFORMED)
+        }
+        assertThrows<IllegalArgumentException> {
+            Identity.Credential(Identity.Method.API_KEY, "k1", Instant.parse("2027-01-01T00:00:00Z"), session = session)
+        }
+        assertThrows<IllegalArgumentException> {
+            Identity.Credential(Identity.Method.JWT, "t1", Instant.EPOCH, issuedAt = Instant.EPOCH.plusSeconds(1))
+        }
+    }
+
+    /**
+     * The session and the issue time cost at most 256 bytes of the header (211 here), with a session id of 64 characters and the
+     * largest generation, so an identity that fit the limit before them with that much room fits with them. A large
+     * realistic one, session included, fits the default limit: 48 roles of 32 characters, 8 claims of 256, ids of 64.
+     */
+    @Test
+    fun `the session costs little, and a large realistic identity fits the default limit`() {
+        val id = "x".repeat(64)
+        val large = identity.copy(
+            tenant = id,
+            subject = id,
+            app = id,
+            space = id,
+            roles = (1..48).mapTo(LinkedHashSet()) { "role-$it-".padEnd(32, 'r') },
+            credential = identity.credential.copy(id = id),
+            requestId = id,
+            claims = (1..8).associate { "claim-$it" to "v".repeat(256) },
+        )
+        val withItsSession = large.copy(
+            credential = large.credential.copy(
+                issuedAt = withSession.credential.issuedAt,
+                session = TokenSession(id, session.authTime, Long.MAX_VALUE),
+            ),
+        )
+        val encoded = IdentityCodec.encode(withItsSession)
+        (encoded.length - IdentityCodec.encode(large).length).assert().isLessThanOrEqualTo(256)
+        encoded.length.assert().isLessThan(IdentityCodec.DEFAULT_MAX_BYTES)
+        IdentityCodec.decode(encoded).assert().isEqualTo(withItsSession)
     }
 
     /** #1228: a standard number type travels as the number it holds, when the header's numbers hold it exactly. */

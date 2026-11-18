@@ -22,12 +22,12 @@ import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
@@ -109,9 +109,9 @@ class MetricsListenerTest {
     }
 
     private fun evaluate(decision: Decision, authenticator: Authenticator = Authenticator { AuthnResult.Anonymous }) {
-        val engine = object : FlatEngine {
-            override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel) =
-                FlatEvaluation(decision, null)
+        val engine = object : Engine {
+            override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel) =
+                Evaluation(decision, null)
         }
         val pipeline =
             Pipeline.builder(authenticator, SuspendingSnapshotSource(Views))

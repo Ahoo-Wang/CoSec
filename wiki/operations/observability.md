@@ -21,7 +21,7 @@ except that a `REQUIRED` one that fails turns a permit into `503`.
 | Delivery | When the listener runs | What a failure does |
 |---|---|---|
 | `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
-| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event; a listener that throws is logged at `WARN` at most every 10 seconds, and both are counted. |
+| `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event and counts it, and the request never waits on a log line for it: a reporter logs `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` at `WARN`, at most every 10 seconds, off the request's thread. A listener that throws is logged at `WARN` at most every 10 seconds, and counted. |
 
 The listeners the starter registers:
 
@@ -46,15 +46,18 @@ A bean that is both is registered once, as the `DecisionListener` it is.
   `cosec.audit.kafka.delivery=required`, or register a `REQUIRED` listener of your own, before you rely on break-glass.
 - **A `REQUIRED` listener should be idempotent** by the event's `id`: a write that timed out may still have succeeded.
 - **On shutdown**, the listeners stop taking events, and the events already queued are still delivered for up to
-  [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). What is left then is dropped, with
-  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.` at `WARN`. The Kafka
+  [`cosec.observability.listener.drain-timeout`](./configuration.md) (5 seconds). Then no listener call starts any
+  more: a call in progress is not interrupted, and what is left is dropped and counted in `cosec.listener.dropped`, with
+  `Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`
+  at `WARN`. The Kafka
   audit listener then gets up to the same timeout for the sends it still holds and the broker's answers to them, before
   the producer is closed. At that bound its queued sends are dropped and a send in progress is interrupted, with
-  `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...` at `WARN`.
+  `The Kafka audit queue of [<topic>] did not drain within <timeout>: <n> queued records are dropped and <n> sends are unanswered.` at `WARN`.
 - **The evaluation trace.** A `DecisionEvent` carries `evaluationTrace`, what the engine looked at, to the depth of
   [`cosec.pipeline.trace-level`](./configuration.md#pipeline): `off` (the default, no trace and no cost), `full`
-  (every rule of each layer the decision reaches, including those after the deciding one) or `exhaustive` (also the
-  layers it does not reach). It is null at `off` and when the request did not reach the engine. Only your own
+  (every statement of every candidate is listed, with what ruled it out; evaluation stops where it would without a
+  trace, except that it finishes the pass that decided) or `exhaustive` (also evaluates the ALLOW pass when the DENY
+  pass decided). It is null at `off` and when the request did not reach the engine. Only your own
   listeners read it: the audit events, spans and metrics below do not include it.
 - **Services in gateway mode** (`cosec.pipeline.mode=gateway`) emit no decision events: they decide nothing and
   register no listeners. The gateway in front records the decision
@@ -70,7 +73,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | `eventId`, `timestamp`, `tenantId` | the event; `tenantId` is the principal's tenant |
 | `kind` | `DECIDED`, `BAD_REQUEST` (`400`), `AUTHENTICATION_UNAVAILABLE`, `CANCELLED` or `ERROR` (`500`) |
 | `principal` | `id`, `authenticated`, `roles` (the roles of the resolved scope) |
-| `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `device.id` |
+| `request` | `id` (the `CoSec-Request-Id`), `appId`, `spaceId`, `remoteIp`, `method`, `path` (normalized), `routeId` (the gateway route the request came through; null on other adapters), `device.id` |
 | `authorization.decision`, `authorization.reasonCode` | see the table below |
 | `authorization.reason` | the outcome, and for a `503` its cause, such as `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | the whole pipeline, from the start of the request to its outcome |
@@ -126,6 +129,10 @@ With `cosec-opentelemetry`, each decision event becomes a span named `cosec.auth
 pipeline's duration, under the span that was current when the adapter received the request; without one, it is a root
 span. Tracing therefore never delays or fails a request. Calls the pipeline makes for the request (Redis, a membership
 provider) are siblings of `cosec.authorize`, under the same parent. The tracer comes from `GlobalOpenTelemetry`.
+The span inherits the parent's `tracestate` as the SDK's own child spans do. The event's trace carries it as an opaque
+string in its W3C header form: vendor data that CoSec writes onto the span's parent and nowhere else (not into audit
+records, Kafka records, logs or metric tags), and that a decision listener of yours must not log. A value the SDK
+refuses, or one longer than 512 characters, is no tracestate: the span is still made, under the same parent.
 
 | Attribute | Value |
 |---|---|
@@ -149,13 +156,13 @@ number of time series stays bounded however many policies, apps and tenants ther
 |---|---|
 | `result` | `allow`, `too_many_requests`, `explicit_deny` (scope rejections and boundary denies included), `implicit_deny`, `indeterminate` (every `503`), `bad_request`, `cancelled`, `error` |
 | `source` | `binding`, `attachment`, `builtin`, `boundary`, `scope` (a scope rejection), `none` |
-| `cause` | on `indeterminate` only: `source_unavailable`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
+| `cause` | on `indeterminate` only: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
 
 The listeners themselves are counted:
 
 | Meter | Tag | Counts |
 |---|---|---|
-| `cosec.listener.dropped` | `listener` | events a full queue dropped |
+| `cosec.listener.dropped` | `listener` | events a full or closed queue dropped, or a drain that timed out |
 | `cosec.listener.failures` | `listener` | listener calls that threw or, for `REQUIRED` ones, timed out |
 | `cosec.audit.required.failures` | none | `REQUIRED` failures on decisions they could not change (not permits) |
 
@@ -168,17 +175,60 @@ So are the tokens the pipeline accepted without a revocation check, the revocati
 
 Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny`, on `cosec.listener.dropped`, and on any
 rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepted. A rise of
-`indeterminate` with `cause=source_unavailable` means documents cannot be read
-([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
+`indeterminate` with `cause=source_unavailable` means documents cannot be read, and with `cause=document_invalid` that a
+stored document does not compile on this instance ([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
 registry ([CoCache's documentation](https://cocache.ahoo.me)).
+
+## Snapshot metrics
+
+Under the same conditions as the timer (`cosec-micrometer`, a `MeterRegistry`, `cosec.metrics.enabled`), the starter
+meters the data plane's snapshot source: the documents this instance reads, compiles and holds
+([How instances read documents](./storage.md#how-instances-read-documents)). The control plane's own source is not
+metered. A `Pipeline` an application builds itself gets none of these meters. No tag carries an app or tenant id, so
+there are 80 series whatever the number of documents. `kind` is `platform`, `app` or `tenant`:
+
+| Meter | Type | Tags | What it says |
+|---|---|---|---|
+| `cosec.snapshot.loads` | counter | `kind`, `result` | a request that had to load a document: `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted `cold-load-timeout`). A request that finds its documents installed is not counted: that is every request's path |
+| `cosec.snapshot.compile.duration` | timer | `kind`, `result` = `success`, `failure` | compiling a document; `failure` is a stored document that does not compile on this instance |
+| `cosec.snapshot.installs` | counter | `kind` | documents installed: a first load or a new revision |
+| `cosec.snapshot.installed` | gauge | `kind`, `state` | the entries held now, by state: `present`, `invalid` (does not compile here), `pending` (its inputs changed and it waits for its compile again), `undecodable`, `absent` (no document, none seen before), `lost` (a document seen before is gone), `unreadable`. The states add up to what the instance holds |
+| `cosec.snapshot.lag` | gauge, seconds | `kind` | the oldest confirmation by the store among the entries held, failed ones aside |
+| `cosec.snapshot.lagging` | gauge | `kind`, `level` = `warn`, `escalate` | entries past `lag-warn` (those past `lag-escalate` included) and past `lag-escalate` |
+| `cosec.snapshot.summary.age` | gauge, seconds | none | the time since the pass that `installed`, `lag` and `lagging` read |
+| `cosec.snapshot.lag.exceeded` | counter | `kind`, `level` | each lag the instance logs |
+| `cosec.snapshot.regressions` | counter | `kind` | the store answered an older revision than the one installed |
+| `cosec.snapshot.lost` | counter | `kind` | a document seen before is absent now; its key fails closed |
+| `cosec.snapshot.evictions` | counter | `kind`, `state` = `document`, `absent` | entries an app or tenant family dropped at its bound (`max-apps`, `max-tenants`, `max-absent`) |
+| `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`, `caller` | work the compile pool refused: `caller` means a request's thread ran it |
+| `cosec.snapshot.housekeeping.refused` | counter | `task` = `load-log`, `compile-log`, `effect-log`, `crash-log`, `transition-log`, `prewarm-log`, `pass-log`, `reset-log`, `evict`, `drop`, `lag-report` | tasks the source's housekeeping thread refused because its queue (4,096) was full. Each was dropped, except `drop` (an empty entry's removal), which ran in place. A `*-log` is a log line that was not written; `evict` an eviction pass under the family's cap, which the next load asks for again |
+
+`installed`, `lag` and `lagging` are as of the source's last lag pass, run every `revalidate-interval`, not read on a
+scrape: a scrape costs a read of one field however many documents there are. They read zero before the first pass,
+when `summary.age` is `NaN`; a `summary.age` far above `revalidate-interval` means the passes have stopped.
+
+The share of requests that waited for a document is `loads{result=cold}` over the decisions (the count of
+`cosec.authorization`); `evictions` says why it rises.
+
+| Alert on | Because |
+|---|---|
+| any rise of `lost` | a document vanished from the store, and its key fails closed |
+| any rise of `regressions` | the store lost a write it acknowledged: check the last failover |
+| any rise of `lag.exceeded{level=escalate}` | the instance decides on a document the store has not confirmed for `lag-escalate` |
+| `installed{state=invalid}` above zero | a stored document does not compile on this instance (an older version than the control plane?) |
+| a sustained rate of `handoffs.refused{to=caller}` | the compile pool is saturated, and requests' threads compile |
+| any rise of `housekeeping.refused` | the instance is dropping its own log lines: a log appender too slow for the load ([Snapshot log lines are missing](./troubleshooting.md#snapshot-log-lines-are-missing)) |
+| a sustained rate of `evictions`, with `loads{result=cold}` rising | the families are too small for the traffic: raise `max-apps` / `max-tenants` |
 
 ## Snapshot health
 
-CoSec registers no meters for the documents an instance holds. To see whether instances are current:
+The meters above count; the health indicators and logs below answer whether an instance is current:
 
 - **Health.** With Spring Boot Actuator, the `cosecSnapshot` health indicator is `UP` once the platform document and
-  every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `failed`, `absent`
-  or `loading`) and `prewarmed`. Readiness follows the same condition
+  every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `invalid` when it is
+  stored and does not compile, `failed`, `absent` or `loading`), `prewarmed`, `missing`, and, when any document does
+  not compile, `invalid`, how many do not, and `invalidFirst`, the first ten of them with their stored revisions,
+  the platform first and then by key (`["tenant:acme@7"]`), never the compiler's message. Readiness follows the same condition
   ([Readiness](./deployment.md#readiness)).
 - **Eviction.** On Redis, the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict the snapshot,
   with an `eviction` detail that says why. It reports what the instance read last: every node's `maxmemory-policy`,
@@ -188,11 +238,26 @@ CoSec registers no meters for the documents an instance holds. To see whether in
   are still decided ([Redis requirements](./storage.md#redis-requirements)). It also turns the aggregate
   `/actuator/health` `DOWN`, as every indicator does: point load balancers and platform health checks at the readiness
   group, or leave it out of the group they poll (`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`).
+- **Login routes.** When the starter serves the refresh or logout route, the `cosecLoginRoutes` health indicator is
+  always `UP`, with each route's property as a detail: `not refused`, or `denied since <time>` and which refusal it was
+  (no statement permits it, a DENY statement matches it, or the tenant's platform boundary does not cover it) once a
+  document refused an anonymous `POST` of it, until a later request is permitted. The same refusal logs one `WARN` per route per minute,
+  naming the property and the path. Both come from the decisions of real requests, so they are never wrong, and neither
+  makes the instance unready ([Building a client](../integration/clients.md#what-your-application-serves)).
 - **Lag logs.** An instance logs a document not confirmed by Redis for longer than `lag-warn` at `WARN`, and longer
   than `lag-escalate` at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
   lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`, and
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
+- **Housekeeping summary.** The source writes its log lines and runs its eviction passes on one housekeeping thread, so
+  a slow appender never holds a request's thread. When that thread's queue is full, or once it has stopped as the
+  source closes, a task is dropped and counted instead of run on the thread that offered it; the source's own threads
+  still run theirs while it closes. At most every 10 seconds, and only when something was dropped or a meter threw, the
+  thread logs one `WARN`, and a closing source writes what is left once, on the thread that closes it:
+  `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped (each dropped; drop runs in place):
+  load-log 3 (last: "<text>"), …; meter failures <n> (last: "<text>").` Each `last` is the text of the last line of
+  that task that was dropped, with its exception's class and message but no stack, cut at 256 characters. A meter that
+  throws is never logged on its own: it is counted here, so the summary is written whatever registry is bound.
 - **Propagation.** The control plane's
   `GET /documents/<doc>/revisions/<n>/propagation` answers how many of the instances that reported in the last minute
   have revision `<n>` or later installed. An instance counts a revision as installed only while it can evaluate it: one
@@ -210,10 +275,11 @@ The control plane emits a change event for every step of a change: `PROPOSED`, `
 revisions, what needed approval, the confirmations, the shadow summary and the note; it never carries a document's
 content. Change listeners receive them.
 
-- **The default listener** logs each event at `INFO`, as
+- **The default listener** logs each event at `INFO` to the logger `me.ahoo.cosec.changelog`, as
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`.
   Change listeners add up: every `ChangeListener` bean is registered, and the log listener is left out only when the
-  application declares a `LoggingChangeListener` bean of its own.
+  application declares a `LoggingChangeListener` bean of its own. The change log is written at `INFO`: a configuration
+  that sets `me.ahoo.cosec` above `INFO` sets `me.ahoo.cosec.changelog` to `INFO` by name, as for any record you keep.
 - **`PUBLISHING`, `BREAK_GLASS_REQUESTED` and `BREAK_GLASS_APPROVED` are gated:** every `REQUIRED` change listener must
   record the event within [`cosec.control.audit.required-timeout`](./configuration.md#control-plane) (5 seconds, for
   all of them together) before the step takes effect, or the step does not happen and the control API
@@ -264,7 +330,8 @@ producer with `acks=all`). With `delivery=required`, startup fails when the Kafk
 | `me.ahoo.cosec.runtime` | `Request [<requestId>] failed with an unmodelled exception.` at `ERROR` with the stack trace, for every `500`; `REQUIRED` listener failures; dropped events; attribute providers that fail (`<provider> failed to fetch [...]` at `WARN`, at most every 10 seconds per provider: each decision carries the cause); rate limiters that cannot count |
 | `me.ahoo.cosec.runtime.snapshot` | loading, lag, lost and regressed documents ([Snapshot health](#snapshot-health)) |
 | `me.ahoo.cosec.spring.boot` | the startup checks, such as the `!!!` eviction warning; `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO` when the application declares no `BlacklistSource` ([Blacklist](../guide/security-model.md#blacklist)); `ip2region databases: [<versions>].` at `INFO`, naming the IP versions without a database, whose addresses are unavailable; the `WARN` of a service in gateway mode ([Services behind the gateway](./deployment.md#services-behind-the-gateway)) |
-| `me.ahoo.cosec.control` | the change log, and `Control API <method> <path> failed (request <requestId>).` for every control-plane `500` |
+| `me.ahoo.cosec.changelog` | the change log: one `INFO` line per change event ([Control-plane change log](#control-plane-change-log)); route it as you route `me.ahoo.cosec.audit` |
+| `me.ahoo.cosec.control` | `Control API <method> <path> failed (request <requestId>).` for every control-plane `500`; and, under the logger of the class that writes it, `Change listener [<name>] could not record <event>.` at `WARN` |
 
 Correlate a response with its log lines, audit event and span through the `CoSec-Request-Id` response header, which is
 also the `requestId` of every problem body.

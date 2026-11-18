@@ -17,10 +17,10 @@ package me.ahoo.cosec.spring.boot.pipeline
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -45,7 +45,10 @@ class InstalledDocumentsTest {
     })
 
     private fun publish(key: SnapshotKey, revision: Long) {
-        store.put(key, SnapshotDocument(2, revision, now, byteArrayOf()))
+        store.put(
+            key,
+            SnapshotDocuments.read("""{"schema":2,"revision":$revision,"publishedAt":"$now"}""".encodeToByteArray())
+        )
     }
 
     private fun installed() = CoSecSnapshotAutoConfiguration.Shadow.installedDocuments(source.entries(), now)
@@ -74,7 +77,10 @@ class InstalledDocumentsTest {
 
             tenantCompiles = true
             publish(acme, 8)
-            it.revalidate().join()
+            // The store's change event starts acme's load of revision 8 on the source's own thread, and a revalidate() pass does not
+            // always cover it (4 runs in 400 asserted before acme was installed): reload() is the load of acme that starts after
+            // any in flight, and its future is the one this assertion needs.
+            it.reload(acme).join()
             installed().assert().isEqualTo(mapOf(SnapshotKey.Platform to 3L, acme to 8L))
         }
     }

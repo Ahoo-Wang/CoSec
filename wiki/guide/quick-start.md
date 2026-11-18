@@ -9,7 +9,9 @@ For developers adding CoSec to a Spring Boot service for the first time. Follow 
 
 ## Prerequisites
 
-- JDK 21 or later, and a Spring Boot 4 project built with Gradle.
+- JDK 21 or later, and a Spring Boot 4.1 project built with Gradle. `cosec-cocache`, which this quick start uses, needs CoCache 8:
+  see [what CoSec needs from your build](./introduction.md#what-cosec-needs-from-your-build) before you add it to a project that
+  is on CoCache 4.
 - A Redis server on `localhost:6379` whose `maxmemory-policy` is `noeviction`, Redis's default. CoSec keeps its
   policy documents in Redis and refuses to start when Redis may evict them. For example:
 
@@ -18,8 +20,9 @@ For developers adding CoSec to a Spring Boot service for the first time. Follow 
   docker exec redis redis-cli CONFIG GET maxmemory-policy   # noeviction
   ```
 
-- A checkout of [CoSec](https://github.com/Ahoo-Wang/CoSec) at the version you use, to build the `cosec-migrate`
-  tool that publishes the first policy document.
+- The `cosec-migrate` tool of the CoSec version you use, which publishes the first policy document: the
+  `cosec-migrate-<version>.zip` of its [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases), unzipped, or built
+  from a checkout of [CoSec](https://github.com/Ahoo-Wang/CoSec). It needs Java 21.
 
 ## Add the dependency
 
@@ -34,6 +37,8 @@ dependencies {
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 }
 ```
+
+In a Kotlin project, apply `kotlin("plugin.spring")`, as Spring Initializr does: Spring needs its `@Configuration` classes open.
 
 `cosec-spring-boot` is the auto-configuration; it wires every CoSec module it finds on the classpath, so add the
 modules you need next to it. Which module adds what, and what each needs with it, is listed in
@@ -99,14 +104,10 @@ Download `cosec-migrate-<version>.zip` from the [GitHub release](https://github.
 # the tool is migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
 ```
 
-`publish` reads a directory the way `convert` writes it: it publishes exactly the files that `report.json` lists,
-each with the SHA-256 recorded there, so that nothing is published that was edited afterwards. For a document you
-wrote yourself, write that report:
+`publish --file` publishes one document you wrote, as the document `--document` names:
 
 ```bash
-SHA=$(sha256sum documents/platform.json | cut -d' ' -f1)   # macOS: shasum -a 256
-printf '{"accepted":true,"outputSha256":{"platform.json":"%s"}}\n' "$SHA" > documents/report.json
-cosec-migrate publish --to-redis redis://localhost:6379 --in documents
+cosec-migrate publish --to-redis redis://localhost:6379 --file documents/platform.json --document platform
 ```
 
 It prints `Published platform` and writes the document as the first revision of the platform document. `publish`
@@ -118,7 +119,7 @@ plane's routes included, so the first platform document always comes from `cosec
 platform document is never read as an empty one, which would silently drop every platform DENY
 ([Fail closed](./security-model.md#fail-closed)). Meanwhile the application reports itself not ready
 (`/actuator/health/readiness`, with Spring Boot Actuator), so a load balancer sends it no traffic
-([Readiness](../operations/deployment.md#readiness)).
+([Readiness](../operations/deployment.md#readiness)). A probe is a request to CoSec too, so over HTTP it needs a statement that permits it ([Actuator on an application](../integration/web.md#actuator-on-an-application)).
 
 ## Issue a token
 
@@ -220,8 +221,9 @@ document above already lets signed-in callers reach the control API; without tha
    ```
 
 3. **Issue her a token for the control plane.** Control-plane tokens are for the tenant `(platform)` and the app
-   `cosec-control` (`cosec.control.app-id`). For this guide, print one at startup; a real deployment issues
-   `(platform)` tokens only from a source users cannot influence:
+   `cosec-control` (`cosec.control.app-id`). For this guide, print one at startup, from a bean in your
+   `@SpringBootApplication` class (or any `@Configuration` class); a real deployment issues `(platform)` tokens only from
+   a source users cannot influence:
 
    ```kotlin
    @Bean
@@ -239,10 +241,11 @@ document above already lets signed-in callers reach the control API; without tha
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
+   PLATFORM_TOKEN='…'   # the token the application printed after "platform token: "
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
-   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
-   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
-   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | sed -E 's/^\{"id":"([^"]+)".*/\1/')
+   curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
+   curl -s -X POST "$CONTROL/changes/${ID}:publish" -H "$AUTH"
    ```
 
    A shadow window would compare the change with live traffic first, which a guide without traffic cannot wait for;
@@ -259,7 +262,11 @@ changes by tenants and roles follow the same steps: [System and custom roles](..
   [An app without spaces](../scenarios/app.md) to [Gateway topologies](../scenarios/gateway.md).
 - Grant access by role, per app and space: [Role permissions](../policies/role-permissions.md).
 - Change documents safely through the control plane, with simulation and shadow windows: [Testing policies](../policies/testing.md).
-- Replace the demo `/token` endpoint with a real login, refresh and logout: [Authentication](../integration/authentication.md).
+- Replace the demo `/token` endpoint with a real login, which starts a session ([Authentication](../integration/authentication.md)).
+  Then let the starter serve refresh and logout: set `cosec.authentication.login.refresh.path: /auth/refresh` and
+  `logout.path: /auth/logout`, and permit `http:POST` on both paths to anyone, as the
+  [`clients` example](../integration/clients.md#what-your-application-serves) does. The demo's pairs belong to no
+  session, so they never refresh.
 - Read the principal and scope in your handlers: [Web integration](../integration/web.md).
 - Find out why a request was permitted or denied: [Explaining a decision](../integration/checks.md#explaining-a-decision).
 - Before production, read [Security model](./security-model.md).

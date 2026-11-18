@@ -16,7 +16,7 @@
 package me.ahoo.cosec.runtime.stage
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.FlatRequest
+import me.ahoo.cosec.engine.EngineRequest
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
 import me.ahoo.cosec.model.condition.HttpNames
@@ -50,7 +50,7 @@ internal class FetchAttributes(
                 blocked = state.blacklist.blocked,
             ),
         )
-        val request = FlatRequest(
+        val request = EngineRequest(
             authz,
             state.scope,
             state.memberships,

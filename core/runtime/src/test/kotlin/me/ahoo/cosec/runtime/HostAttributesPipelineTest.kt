@@ -19,9 +19,10 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.Resource
@@ -37,11 +38,9 @@ import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 
 /**
@@ -64,17 +63,14 @@ class HostAttributesPipelineTest {
 
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(peek(key))
 
-        private fun document(body: String) = SnapshotDocument(
-            2,
-            1,
-            Instant.parse("2026-10-26T00:00:00Z"),
-            """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray(),
+        private fun document(body: String) = SnapshotDocuments.read(
+            """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()
         )
     }
 
     private val pipeline = PipelineFixtures.pipeline(
         authenticator = authenticator(authenticated()),
-        engine = CoSecFlatEngine,
+        engine = CoSecEngine,
         views = Views(PLATFORM),
     )
 

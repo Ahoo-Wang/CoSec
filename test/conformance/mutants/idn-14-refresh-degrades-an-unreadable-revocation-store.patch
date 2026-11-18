@@ -1,20 +1,20 @@
 # Rule: IDN-14
-# Mutant: refresh reads a revocation store it cannot read as "not revoked", and issues a token on that read
-# Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenAuthenticationTest
+# Mutant: an issue from an earlier token (a refresh, a tenant switch) reads a revocation store it cannot read as "not revoked", and issues a token on that read
+# Tests: :jwt:test --tests me.ahoo.cosec.jwt.RefreshTokenAuthenticationTest :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest :conformance:test
 
-diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
-index 2b8b1dd0..8004cb83 100644
---- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
-+++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/RefreshTokenAuthentication.kt
-@@ -45,7 +45,10 @@ class RefreshTokenAuthentication(
- 
-     override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
-         val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
--        revocation.check(token)
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+index 68c99d14..6cc2e259 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+@@ -60,7 +60,10 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
+         issuedAt: Instant?,
+         session: TokenSession,
+     ): Live {
+-        revocation.check(tokenId, tenant, principal, issuedAt)
 +        try {
-+            revocation.check(token)
++            revocation.check(tokenId, tenant, principal, issuedAt)
 +        } catch (_: me.ahoo.cosec.spi.token.RevocationUnavailableException) {
 +        }
-         val now = memberships.refresh(token)
-         require(now?.app == null || now.app == token.app) { "A refresh never changes the app a token is for." }
-         val issue = families.rotate(token)
+         families.requireLive(session, tenant, principal)
+         return Live(principal, session)
+     }

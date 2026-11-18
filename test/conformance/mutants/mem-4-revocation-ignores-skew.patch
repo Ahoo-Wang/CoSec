@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.token.TokenRevocationTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt
-index 28db031a..3bfb5d5d 100644
+index 536dd935..6849239e 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/token/TokenRevocation.kt
-@@ -50,7 +50,7 @@ class TokenRevocation(
+@@ -67,7 +67,7 @@ class TokenRevocation(
+             throw TokenRevokedException("Token [$id] has been revoked.")
          }
-         val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
-         val revokedBefore = revocations.subjectRevokedBefore(tenant, PrincipalId(token.principal))
--        if (SubjectRevocation.revokes(revokedBefore, token.issuedAt, skew)) {
-+        if (SubjectRevocation.revokes(revokedBefore, token.issuedAt, Duration.ZERO)) {
+         val revokedBefore = revocations.subjectRevokedBefore(tenant, principal)
+-        if (SubjectRevocation.revokes(revokedBefore, issuedAt, skew)) {
++        if (SubjectRevocation.revokes(revokedBefore, issuedAt, Duration.ZERO)) {
              throw TokenRevokedException(
-                 "The tokens of principal [${token.principal}] issued before [$revokedBefore] have been revoked."
+                 "The tokens of principal [${principal.value}] issued before [$revokedBefore] have been revoked."
              )

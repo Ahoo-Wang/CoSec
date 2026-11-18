@@ -24,7 +24,7 @@ import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.migrate.v7.api.permission.AppPermission
 import me.ahoo.cosec.migrate.v7.api.permission.AppRolePermission
 import me.ahoo.cosec.migrate.v7.api.policy.Policy
@@ -421,7 +421,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         }
         if (!SnapshotKey.Tenant.isValidTenantId(tenantId)) {
             reject(
-                RejectionKind.OWNER_TENANT,
+                if ('/' in tenantId) RejectionKind.SLASH_IN_ID else RejectionKind.OWNER_TENANT,
                 location,
                 "policy [${Identifiers.printable(id)}] has tenantId [${Identifiers.printable(tenantId)}], which names no " +
                     "tenant document (--partition by-owner)",
@@ -507,11 +507,11 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         val appId = app.appId
         if (!SnapshotKey.App.isValidAppId(appId)) {
             reject(
-                RejectionKind.INVALID_ID,
+                if ('/' in appId) RejectionKind.SLASH_IN_ID else RejectionKind.INVALID_ID,
                 app.location,
                 "app id [${Identifiers.printable(appId)}] is `*`, blank, longer than ${ScopeResolver.MAX_APP_ID_LENGTH} " +
-                    "characters, or contains `:`, a control character or an unpaired surrogate: 8.0 reads `*` as any " +
-                    "app, and names no app document by the others",
+                    "characters, or contains `:`, `/`, a control character or an unpaired surrogate: 8.0 reads `*` as " +
+                    "any app, and names no app document by the others",
             )
             return null
         }
@@ -837,7 +837,7 @@ private class Run(val source: Source7x, val options: ConvertOptions, val compile
         read()
     } catch (error: Exception) {
         val cause = generateSequence<Throwable>(error) { it.cause }.last()
-        reject(RejectionKind.UNDECODABLE, location, "$what cannot be decoded by 7.x: ${cause.message}")
+        reject(RejectionKind.UNDECODABLE, location, "$what is not in the 7.x format: ${cause.message}. $OLDER_VERSION")
         null
     } catch (error: LinkageError) {
         reject(

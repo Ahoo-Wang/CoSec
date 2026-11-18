@@ -23,18 +23,20 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.selects.select
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
+import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
@@ -76,10 +78,15 @@ import kotlin.coroutines.CoroutineContext
  * ```
  *
  * `parentRecord` is whether the record the head's parent names exists; `writes` lists record and head writes only.
+ *
+ * A publish may also move the head back to a retained revision first (`"restoreHead": 1`, as a partly restored store
+ * does, the index and the records as they were), and fail the index write that follows its head write (`"failIndex":
+ * true`). A scenario with `"history": true` also reads the history of the last document, `<revision>:<policies>` of the
+ * document each entry reads, and `expect` has it: `"history": ["1:p", "2:q"]`.
  */
 object StoreRunner : ScenarioRunner {
     override fun run(scenario: Scenario): Outcome = runBlocking {
-        scenario.node.only("\$comment", "rules", "polarity", "level", "description", "publishes", "expect")
+        scenario.node.only("\$comment", "rules", "polarity", "level", "description", "publishes", "history", "expect")
         val memory = InMemoryControlStore()
         val store = RecordingStore(memory)
         val writes = store.writes
@@ -89,11 +96,9 @@ object StoreRunner : ScenarioRunner {
         var key: SnapshotKey = SnapshotKey.Tenant("acme")
         var held: Pair<Hold, Deferred<String>>? = null
         for (publish in scenario.node.required("publishes").values()) {
-            publish.only("document", "policies", "bindings", "base", "failHead", "holdRemovals")
-            key = publish.get("document")?.text()?.let(::documentKey) ?: SnapshotKey.Tenant("acme")
+            key = prepare(publish, memory, store)
             val current = revisions.head(key)
             val base = baseOf(publish, current, previous[key])
-            store.failHead = publish.get("failHead")?.bool() ?: false
             val candidate = candidate(key, publish)
             val publication = Publication("c${outcomes.size}", ProvenanceKind.PUBLISH, ACTOR)
             val hold = if (publish.get("holdRemovals")?.bool() == true) Hold() else null
@@ -111,6 +116,7 @@ object StoreRunner : ScenarioRunner {
                 held = null
             }
             store.failHead = false
+            store.failIndex = false
             previous[key] = current
             outcomes += outcome
             hold?.let { held = it to outcome }
@@ -126,8 +132,41 @@ object StoreRunner : ScenarioRunner {
             parentRecord = parent?.let { memory.record(key, SnapshotDigest.parse(it.digest)) != null },
             records = memory.recordDigests(key).size,
             writes = writes,
+            history = if (scenario.node.get("history")?.bool() == true) historyOf(revisions, key) else null,
         )
     }
+
+    /** The document of [publish], with what the publish asks of the store set: its head moved back, writes to fail. */
+    private suspend fun prepare(publish: JsonNode, memory: InMemoryControlStore, store: RecordingStore): SnapshotKey {
+        publish.only(
+            "document",
+            "policies",
+            "bindings",
+            "base",
+            "failHead",
+            "failIndex",
+            "restoreHead",
+            "holdRemovals"
+        )
+        val key = publish.get("document")?.text()?.let(::documentKey) ?: SnapshotKey.Tenant("acme")
+        publish.get("restoreHead")?.let { restoreHead(memory, key, it.longValue()) }
+        store.failHead = publish.get("failHead")?.bool() ?: false
+        store.failIndex = publish.get("failIndex")?.bool() ?: false
+        return key
+    }
+
+    /** The head moved back to retained revision [revision], the index and the records as they are (a partial loss). */
+    private suspend fun restoreHead(memory: InMemoryControlStore, key: SnapshotKey, revision: Long) {
+        val entry = memory.index(key)!!.value.entries.first { it.revision == revision }
+        val head = memory.head(key)!!
+        memory.putHead(key, head.digest, memory.record(key, entry.digest)!!)
+    }
+
+    /** The history of [key] as `<revision>:<policies of the document it reads>`, oldest first. */
+    private suspend fun historyOf(revisions: Revisions, key: SnapshotKey): List<String> =
+        revisions.history(key).map { entry ->
+            "${entry.revision}:" + revisions.revision(key, entry.revision)!!.policies.joinToString(",") { it.id.value }
+        }
 
     private suspend fun outcomeOf(
         revisions: Revisions,
@@ -160,6 +199,14 @@ object StoreRunner : ScenarioRunner {
     private class RecordingStore(private val memory: InMemoryControlStore) : ControlStore by memory {
         val writes = ArrayList<String>()
         var failHead = false
+
+        /** Fails the index write that follows a head write: the one that no longer holds a pending record. */
+        var failIndex = false
+
+        override suspend fun putIndex(key: SnapshotKey, expected: SnapshotDigest?, index: RevisionIndex): Boolean {
+            check(!(failIndex && index.pending.isEmpty())) { "the index write failed" }
+            return memory.putIndex(key, expected, index)
+        }
 
         override suspend fun putRecord(key: SnapshotKey, document: SnapshotDocument): SnapshotDigest {
             writes += "record"
@@ -207,7 +254,7 @@ object StoreRunner : ScenarioRunner {
     }
 
     private fun candidate(key: SnapshotKey, publish: JsonNode): PolicyDocument {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         return PolicyDocument(
             kind,
             owner,

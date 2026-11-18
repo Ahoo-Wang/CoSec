@@ -19,4 +19,4 @@ configMapGenerator:
 
 images:
   - name: ghcr.io/ahoo-wang/cosec-gateway
-    newTag: 8.0.0-alpha.1
+    newTag: 8.0.0-beta.3

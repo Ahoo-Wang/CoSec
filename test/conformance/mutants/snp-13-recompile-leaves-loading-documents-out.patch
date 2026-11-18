@@ -1,0 +1,17 @@
+# Rule: SNP-13
+# Mutant: recompile leaves out a document that was loading, so its future can complete before that document is compiled with the new inputs (the runner's KeyTransitions.recompile)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
+index e5668c4f..dbb40a26 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyTransitions.kt
+@@ -170,7 +170,7 @@ internal class KeyTransitions<T : Any>(private val config: KeyConfig) {
+     private fun recompile(step: KeyStepBuilder<T>): Boolean {
+         return when {
+             step.removed -> false
+-            step.load != null -> true
++            step.load != null -> false
+             else -> step.installed?.origin?.compiled ?: false
+         }
+     }

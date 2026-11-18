@@ -23,8 +23,9 @@ import java.time.Clock
 
 /**
  * What a gateway forwards to the services behind it about a permitted request (`CoSec-Identity`, [IdentityCodec]):
- * the principal it verified, the scope it decided in with the roles effective there, the credential's id and expiry,
- * and the token claims [claims] names. Never the credential itself, a policy, an attribute value or a request header.
+ * the principal it verified, the scope it decided in with the roles effective there, the credential's id, expiry and
+ * issue time, the session of CoSec's own token (which a tenant switch behind the gateway issues from, `IDN-22`), and the
+ * token claims [claims] names. Never the credential itself, a policy, an attribute value or a request header.
  *
  * An anonymous permit forwards nothing, so a service has exactly one way to be anonymous: no header. Nor does a
  * principal whose authenticator names no credential. An identity larger than [maxBytes] fails the request closed.
@@ -47,7 +48,7 @@ class IdentityIssuer(
             app = security.scope.app.value,
             space = security.scope.space.value,
             roles = security.scope.roles.mapTo(LinkedHashSet()) { it.value },
-            credential = credential,
+            credential = credential.copy(issuedAt = principal.issuedAt, session = principal.session),
             issuedAt = clock.instant(),
             requestId = security.requestId,
             claims = principal.attributes.filterKeys { it in claims },

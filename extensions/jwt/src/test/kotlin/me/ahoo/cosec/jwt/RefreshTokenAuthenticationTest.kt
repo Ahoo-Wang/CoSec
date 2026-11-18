@@ -72,7 +72,7 @@ class RefreshTokenAuthenticationTest {
     @Test
     fun `a membership refresh decides what the new token holds, and nothing else`(): Unit = runBlocking {
         val asked = mutableListOf<String>()
-        val now = MembershipRefresh { token ->
+        val now = MembershipRefresh<RefreshTokenCredentials> { token, _ ->
             asked += token.principal
             TenantMembership(roles = setOf("auditor"), attributes = mapOf("department" to "audit"))
         }
@@ -94,16 +94,45 @@ class RefreshTokenAuthenticationTest {
         kept.roles.assert().containsExactly("auditor")
     }
 
+    /** The application's own refresh credentials, carrying the device its trusted-device check compares (entry 29.1). */
+    private class Renew(
+        override val accessToken: String,
+        override val refreshToken: String,
+        val deviceId: String,
+    ) : RefreshTokenCredentials
+
+    /** The hook reads the application's credentials without a cast, as a tenant switch's does; a login finds it by them. */
+    @Test
+    fun `a membership refresh reads the application's own credentials`(): Unit = runBlocking {
+        val trusted = setOf("phone")
+        val authentication = RefreshTokenAuthentication(
+            jwtTokenVerifier,
+            TokenRevocation(RevocationReader.NONE),
+            families,
+            Renew::class.java,
+        ) { _, credentials ->
+            require(credentials.deviceId in trusted) { "Device [${credentials.deviceId}] is not trusted." }
+            null
+        }
+        authentication.credentialsType.assert().isEqualTo(Renew::class.java)
+        val old = issue(TokenSubject("alice", null))
+        assertThrows<IllegalArgumentException> {
+            authentication.authenticate(Renew(old.accessToken, old.refreshToken, "kiosk"))
+        }
+        // Refused before the rotation: the same pair still refreshes from a trusted device.
+        authentication.authenticate(Renew(old.accessToken, old.refreshToken, "phone")).session.assert().isNotNull()
+    }
+
     /** A refresh never changes the app, and a refused refresh spends no generation: the same pair refreshes after. */
     @Test
     fun `a membership refresh for another app is refused before the session moves`(): Unit = runBlocking {
         val old = issue(TokenSubject("alice", "order", tenant = "acme"))
         assertThrows<IllegalArgumentException> {
-            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families) {
+            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families) { _, _ ->
                 TenantMembership(app = "billing")
             }.authenticate(credentials(old))
         }
-        RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families) {
+        RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families) { _, _ ->
             TenantMembership(app = "order")
         }.authenticate(credentials(old)).app.assert().isEqualTo("order")
     }
@@ -120,7 +149,7 @@ class RefreshTokenAuthenticationTest {
         }
         var asked = false
         assertThrows<TokenRevokedException> {
-            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(revocations), families) {
+            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(revocations), families) { _, _ ->
                 asked = true
                 null
             }.authenticate(credentials(old))

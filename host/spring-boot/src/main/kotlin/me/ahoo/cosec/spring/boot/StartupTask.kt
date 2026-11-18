@@ -19,8 +19,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.beans.factory.InitializingBean
 import org.springframework.beans.factory.SmartInitializingSingleton
 import org.springframework.boot.LazyInitializationExcludeFilter
-import org.springframework.context.annotation.Bean
-import org.springframework.context.annotation.Configuration
 
 /**
  * What the starter runs at startup whether or not anything asks for it (`STA-3`): its checks, and the components that
@@ -48,24 +46,5 @@ interface StartupTask {
         val EAGER: LazyInitializationExcludeFilter = LazyInitializationExcludeFilter.forBeanTypes(
             StartupTask::class.java
         )
-    }
-}
-
-/**
- * Registers [StartupTask.EAGER]. Every auto-configuration that declares a [StartupTask] imports it, so the exclusion
- * is there wherever a check is, whichever auto-configurations an application excludes; imported many times, it is one
- * bean.
- */
-// A class, not an object: Spring instantiates what it imports.
-@Suppress("UtilityClassWithPublicConstructor")
-@Configuration(proxyBeanMethods = false)
-@InternalCoSecApi
-class StartupTaskExclusion {
-    @InternalCoSecApi
-    companion object {
-        /** Static: `LazyInitializationBeanFactoryPostProcessor` reads it before any configuration is instantiated. */
-        @JvmStatic
-        @Bean
-        fun cosecStartupTasksEager(): LazyInitializationExcludeFilter = StartupTask.EAGER
     }
 }

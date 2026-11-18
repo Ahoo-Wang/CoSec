@@ -16,9 +16,9 @@
 package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.ViewVersion
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.model.TenantId
@@ -125,7 +125,11 @@ class DocumentSnapshotViews(
             is DocumentState.Present<*> -> state.compiled as CompiledDocument
             DocumentState.Absent -> absent()
             is DocumentState.Failed -> {
-                unresolved += Cause.SourceUnavailable(kind, state.error)
+                unresolved += if (entry.invalid) {
+                    Cause.DocumentInvalid(kind, entry.revision, state.error)
+                } else {
+                    Cause.SourceUnavailable(kind, state.error)
+                }
                 null
             }
         }
@@ -142,7 +146,3 @@ class DocumentSnapshotViews(
 
     private fun empty(app: AppId) = CompiledDocument.app(app, emptyList(), emptyList())
 }
-
-/** No platform document is published where one is required ([DocumentSnapshotViews.platformRequired]). */
-@InternalCoSecApi
-class MissingPlatformException : IllegalStateException("No platform document is published; requests fail closed.")

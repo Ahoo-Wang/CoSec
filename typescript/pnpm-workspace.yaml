@@ -1,0 +1,55 @@
+# The workspace of CoSec's TypeScript packages. It is not the workspace of wiki/, which has its own lockfile and its
+# own toolchain (VitePress pins an older vite): pnpm takes the nearest pnpm-workspace.yaml, so neither sees the other.
+packages:
+  - 'cosec-*'
+
+# Dependencies that may run a build script when they install. Everything else is refused (pnpm's default).
+allowBuilds:
+  esbuild: true
+
+# A version npm published less than a day ago is not installed: a malicious release is usually pulled in that time.
+minimumReleaseAge: 1440
+
+# Peer ranges of the published packages, referenced with `catalog:peers`. They are a published contract, not the
+# versions the workspace develops against: Renovate widens them and never narrows one.
+catalogs:
+  peers:
+    # core's readProblemDetails, which the problem reading needs, is in 6.1.0.
+    '@ahoo-wang/fetcher': ^6.1.0
+    '@ahoo-wang/fetcher-eventbus': ^6.1.0
+    '@ahoo-wang/fetcher-storage': ^6.1.0
+    react: ^19.0.0
+
+# One version per external dependency across the workspace. Packages reference these with `catalog:`; the packages of
+# this workspace reference each other with the `workspace:` protocol.
+catalog:
+  '@ahoo-wang/fetcher': ^6.1.0
+  '@ahoo-wang/fetcher-eventbus': ^6.1.0
+  '@ahoo-wang/fetcher-storage': ^6.1.0
+  '@eslint/js': ^10.0.1
+  '@microsoft/api-extractor': ^7.60.1
+  '@rolldown/plugin-babel': ^0.2.4
+  '@testing-library/react': ^16.3.3
+  '@types/react': ^19.3.0
+  '@types/react-dom': ^19.3.0
+  '@vitejs/plugin-react': ^6.1.2
+  '@vitest/coverage-v8': ^4.1.11
+  '@vitest/ui': ^4.1.11
+  babel-plugin-react-compiler: ^1.0.0
+  eslint: ^10.15.0
+  eslint-plugin-react-compiler: ^19.1.0-rc.2
+  eslint-plugin-react-hooks: ^7.1.1
+  globals: ^17.13.0
+  jsdom: ^30.1.2
+  nanoid: ^6.0.2
+  prettier: ^3.9.9
+  publint: ^0.3.25
+  react: ^19.3.0
+  react-compiler-runtime: ^1.0.0
+  react-dom: ^19.3.0
+  typescript: ^6.0.3
+  typescript-eslint: ^8.71.1
+  unplugin-dts: 1.1.2
+  vite: ^8.3.8
+  vite-bundle-analyzer: ^1.3.9
+  vitest: ^4.1.11

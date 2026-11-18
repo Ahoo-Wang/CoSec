@@ -20,12 +20,15 @@ import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.extension.ExtendWith
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.FilteredClassLoader
 import org.springframework.boot.test.context.runner.AbstractApplicationContextRunner
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
+import org.springframework.boot.test.system.CapturedOutput
+import org.springframework.boot.test.system.OutputCaptureExtension
 import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 
 /** `STA-1`: a feature that needs a module fails startup without it, and names the artifact to add. */
@@ -143,6 +146,60 @@ class CoSecModuleCheckAutoConfigurationTest {
                 .withPropertyValues("cosec.audit.kafka.delivery= REQUIRED "),
             "cosec-kafka",
         )
+    }
+
+    @Test
+    fun `metrics turned on explicitly without cosec-micrometer fail startup`() {
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.micrometer.MicrometerSnapshotMetrics"))
+                .withPropertyValues("cosec.metrics.enabled=true"),
+            "cosec-micrometer",
+        )
+        // By default metrics are optional: without the module, nothing is metered and the host starts.
+        starts(plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.micrometer.MicrometerSnapshotMetrics")))
+        starts(plain.withPropertyValues("cosec.metrics.enabled=true"))
+    }
+
+    @Test
+    fun `the control plane switched on explicitly without cosec-control or cosec-cocache fails startup`() {
+        val noControl = plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.control.api.ControlHttp"))
+        failsNaming(noControl.withPropertyValues("cosec.control.enabled=true"), "cosec-control")
+        failsNaming(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.cocache.control.CoCacheControlStore"))
+                .withPropertyValues("cosec.control.enabled=true"),
+            "cosec-cocache",
+        )
+        // Unset, or switched off: a data-plane instance, which needs neither.
+        starts(noControl)
+        starts(noControl.withPropertyValues("cosec.control.enabled=false"))
+    }
+
+    @Test
+    @ExtendWith(OutputCaptureExtension::class)
+    fun `an instance that switches the control plane off says so once at startup, one without it says nothing`(
+        output: CapturedOutput,
+    ) {
+        val line = "Control plane off on this instance: cosec.control.enabled=false"
+        starts(plain.withPropertyValues("cosec.control.enabled=false"))
+        output.out.split(line).size.assert().isEqualTo(2)
+        val before = output.out.length
+        starts(
+            plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.control.api.ControlHttp"))
+                .withPropertyValues("cosec.control.enabled=false")
+        )
+        output.out.substring(before).contains(line).assert().isFalse()
+    }
+
+    @Test
+    fun `a cosec control enabled that is neither true nor false fails startup, without the modules too`() {
+        plain.withClassLoader(FilteredClassLoader("me.ahoo.cosec.control.api.ControlHttp"))
+            .withPropertyValues("cosec.control.enabled=flase")
+            .run { context ->
+                context.startupFailure.assert().isNotNull()
+                generateSequence(context.startupFailure) { it.cause }
+                    .any { "cosec.control.enabled must be true or false, not [flase]" in it.message.orEmpty() }
+                    .assert().isTrue()
+            }
     }
 
     @Test

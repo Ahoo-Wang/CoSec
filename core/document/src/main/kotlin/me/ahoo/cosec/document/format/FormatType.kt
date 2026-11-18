@@ -47,8 +47,12 @@ class StringType(
     override val description: String? = null,
 ) : FormatType
 
+/** A boolean; with a [const], only that value: a flag that travels only when set, such as `auth.capped`. */
 @InternalCoSecApi
-class BooleanType(override val description: String? = null) : FormatType
+class BooleanType(
+    val const: Boolean? = null,
+    override val description: String? = null,
+) : FormatType
 
 @InternalCoSecApi
 class IntegerType(

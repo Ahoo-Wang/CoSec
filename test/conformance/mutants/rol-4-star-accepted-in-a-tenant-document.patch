@@ -2,11 +2,11 @@
 # Mutant: a tenant role may write star
 # Tests: :document:test --tests me.ahoo.cosec.document.RoleExpansionTest :conformance:test
 
-diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt
-index 2354b407..49d1f3f3 100644
---- a/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt
-+++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt
-@@ -176,7 +176,7 @@ object PolicyDocumentCodec {
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleCodec.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleCodec.kt
+index 2b60da4f..7cadfa74 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleCodec.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/RoleCodec.kt
+@@ -55,7 +55,7 @@ internal object RoleCodec {
      /** A list of permission ids, or `"*"` in an app document. */
      private fun rolePermissions(node: DocumentNode, kind: DocumentKind): RolePermissions {
          if (node.json.isString) {

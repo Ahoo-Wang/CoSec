@@ -47,6 +47,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
     items: [
       { text: 'Web Integration', link: '/integration/web' },
       { text: 'Authentication', link: '/integration/authentication' },
+      { text: 'Building a Client', link: '/integration/clients' },
       { text: 'Checks in Code', link: '/integration/checks' },
     ],
   },

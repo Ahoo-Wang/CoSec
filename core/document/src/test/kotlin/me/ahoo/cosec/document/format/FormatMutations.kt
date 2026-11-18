@@ -231,6 +231,9 @@ class FormatMutations(private val generator: FormatGenerator) {
                 ).map { MutationKind.OUT_OF_RANGE to it }
             }
 
+            current.isBoolean -> leaves.filterIsInstance<BooleanType>().singleOrNull()?.const
+                ?.let { listOf(MutationKind.INVALID_VALUE to nodes.booleanNode(!it)) }.orEmpty()
+
             current.isNumber -> leaves.filterIsInstance<NumberType>().singleOrNull()?.exclusiveMinimum
                 ?.let { listOf(MutationKind.OUT_OF_RANGE to nodes.numberNode(it)) }.orEmpty()
 

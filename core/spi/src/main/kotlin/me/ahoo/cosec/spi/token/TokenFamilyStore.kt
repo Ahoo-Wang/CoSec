@@ -17,8 +17,6 @@ import me.ahoo.cosec.annotations.CoSecSpi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import java.time.Instant
-import java.util.concurrent.ConcurrentHashMap
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * What the store keeps of one session (RFC 0009): whose it is, when its user signed in ([authTime]), when it ends for
@@ -81,47 +79,4 @@ interface TokenFamilyStore {
 
     /** Replaces the family read at [version] by [next]; false when it changed since. */
     suspend fun replace(version: String, next: TokenFamily): Boolean
-}
-
-/**
- * A [TokenFamilyStore] in this JVM's memory, with the same atomicity: for tests and a single instance. A family past
- * its end reads as absent, as on Redis.
- */
-class InMemoryTokenFamilyStore(private val now: () -> Instant = Instant::now) : TokenFamilyStore {
-    private class Entry(val family: TokenFamily, val version: String)
-
-    private val families = ConcurrentHashMap<String, Entry>()
-    private val versions = AtomicLong()
-
-    private fun live(id: String): Entry? = families[id]?.takeIf { it.family.expiresAt.isAfter(now()) }
-
-    override suspend fun create(family: TokenFamily): Boolean {
-        var created = false
-        families.compute(family.id) { _, existing ->
-            if (existing != null && existing.family.expiresAt.isAfter(now())) {
-                existing
-            } else {
-                created = true
-                Entry(family, versions.incrementAndGet().toString())
-            }
-        }
-        return created
-    }
-
-    override suspend fun read(id: String): TokenFamilyStore.Read? = live(id)?.let {
-        TokenFamilyStore.Read(it.family, it.version)
-    }
-
-    override suspend fun replace(version: String, next: TokenFamily): Boolean {
-        var replaced = false
-        families.computeIfPresent(next.id) { _, existing ->
-            if (existing.version == version && existing.family.expiresAt.isAfter(now())) {
-                replaced = true
-                Entry(next, versions.incrementAndGet().toString())
-            } else {
-                existing
-            }
-        }
-        return replaced
-    }
 }

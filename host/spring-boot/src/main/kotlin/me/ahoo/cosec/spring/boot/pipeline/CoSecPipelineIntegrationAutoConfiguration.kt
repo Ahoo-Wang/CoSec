@@ -21,9 +21,11 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.limiter.ReactiveRedisRateLimiter
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.ip2region.Ip2RegionAttributeProvider
 import me.ahoo.cosec.kafka.KafkaAuditListener
 import me.ahoo.cosec.micrometer.MetricsListener
+import me.ahoo.cosec.micrometer.MicrometerSnapshotMetrics
 import me.ahoo.cosec.opentelemetry.OpenTelemetryContextContributor
 import me.ahoo.cosec.opentelemetry.TracingListener
 import me.ahoo.cosec.runtime.attribute.BlacklistAttributeProvider
@@ -34,6 +36,7 @@ import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.MdcContextContributor
 import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
+import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
@@ -170,6 +173,13 @@ class CoSecPipelineIntegrationAutoConfiguration {
         @ConditionalOnMissingBean
         fun cosecMetricsListener(registry: MeterRegistry): MetricsListener = MetricsListener(registry)
 
+        /** The snapshot source's meters (`cosec.snapshot.*`): its events, given to the data plane's source. */
+        @Bean
+        @ConditionalOnMissingBean
+        fun cosecSnapshotMetrics(
+            registry: MeterRegistry
+        ): MicrometerSnapshotMetrics = MicrometerSnapshotMetrics(registry)
+
         /**
          * The listeners' own counters: drops, failures and REQUIRED failures; and the tokens accepted without a
          * revocation check. Bound at startup whatever lazy initialization says (`STA-3`): nothing asks for it.
@@ -182,6 +192,16 @@ class CoSecPipelineIntegrationAutoConfiguration {
         ): StartupTask = StartupTask.AfterSingletons {
             listeners.ifAvailable?.let { MetricsListener.bind(registry, it) }
             unchecked.ifAvailable?.let { MetricsListener.bind(registry, it) }
+        }
+
+        /** The snapshot source's gauges, over the summary of its last lag pass: bound once every singleton exists. */
+        @Bean
+        fun cosecSnapshotGauges(
+            metrics: ObjectProvider<MicrometerSnapshotMetrics>,
+            source: ObjectProvider<SnapshotSource<CompiledDocument, CompiledDocument>>,
+        ): StartupTask = StartupTask.AfterSingletons {
+            val bound = metrics.ifAvailable ?: return@AfterSingletons
+            source.ifAvailable?.let(bound::bind)
         }
     }
 

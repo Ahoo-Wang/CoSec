@@ -398,7 +398,7 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
        Applied     → 继续
        Conflict    → c 进入 CONFLICTED（不自动重做，§5.5）；第 2、3 步留下的记录与引用由回收任务清理（§5.7）
        结果未知     → getIfChanged(key, digest(d))：Unchanged 即已写入，否则按 Conflict 处理（与 RedisSnapshotPublisher 相同）
-  5. revisions:<key> 追加 (修订号, digest(d))                 CAS 循环；失败只记告警，索引可以重建
+  5. revisions:<key> 追加 (修订号, digest(d), d 的 parent 摘要) CAS 循环；失败只记告警，索引可以重建；同号而摘要不同的项不替换
   6. 从反向索引中删除 b 有而 d 没有的引用，除非更晚的修订又索引了它
   7. c → PUBLISHED（CAS）；ChangeEvent(PUBLISHED) 给全部监听器（BEST_EFFORT 语义）
 ```
@@ -407,13 +407,22 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
 |---|---|---|---|
 | 1 | b | b | 无；审计里有一条没有下文的 PUBLISHING，事件带 `change` id，可以对上 |
 | 2、3 | b | b | 孤儿记录与多余的引用，回收任务处理；多余的引用最多让平台的一次删除被误拦（§5.8 的修复命令） |
-| 4 | d | d（广播到达后，最迟 RFC 0003 §4.5 的落后上界） | 索引缺一项，`revisions` 读取时发现头的修订号大于索引最新项，沿 `parent` 链补齐 |
+| 4 | d | d（广播到达后，最迟 RFC 0003 §4.5 的落后上界） | 索引缺一项，`revisions` 读取时发现索引的最上一项不是头，沿 `parent` 链补齐（见下，`CTL-35`） |
 | 5、6 | d | d | 同上；多余的引用同第 2、3 行 |
 
 - **数据面只会看到 b 或 d**：头是一个 key，`putIfMatch` 是一个 Lua 脚本（CoCache 6.7）。其余几步的失败都只影响控制面自己的辅助数据，方向都是
   "多保留"而不是"少检查"。
 - **不加 `WAIT`**（Q27），理由与 RFC 0003 §4.6 相同。修订链让主从切换丢写变得可以诊断：丢了头，数据面按 F11 报回退；丢了记录，头的 `parent`
   指向一条不存在的记录，`verify-chain`（控制面的只读检查）报告断链。`storage.md` 建议需要更强保证的部署配置 `min-replicas-to-write`。
+- **历史是头的链，索引自己可以被验证（`CTL-35`，2026-11-17，#1536）。** 一个文档的修订历史是它的头沿 `parent` 走出的链；修订索引只是这条链的缓存，头才是权威。
+  索引的每一项带着它那份记录的 `parent` 摘要：记录按摘要寻址、不可变，所以不论谁在什么先后顺序下写，同一个摘要的项内容都相同。读索引时（先去掉头的修订号之上的项）
+  **只有当最上一项的摘要是头的摘要、并且每一项的 `parent` 都是它下面那一项的摘要时，才把它当作历史返回**：只比较摘要，不读记录、不解码。否则从头沿链走到索引里第一个
+  “摘要相符且自它以下各环都成立”的项，用链上的项替换不同的、补上缺的；被替换的摘要交给回收（仍受“未结束的变更持有的基准”保护），并记一条 WARN。走到一条缺失的记录就停：
+  它以下无法证明在链上的项不返回，也不删除。写的一侧只追加：同一个修订号已有另一个摘要的项时不替换，替换只由走过链的修复来做。
+  - **为什么需要它。** 头被移回（部分恢复存储）之后修订号会被重用。此前索引只按修订号比较，于是按修订读文档、解释、比较差异、挑选回滚的目标与回收都可能读到旧分支上同号的那一份。
+  - **为什么不是“只比最上一项，写的时候保证其余”。** 那是这条规则的第一版设计，已经实现并被两个序列推翻：一次发布追加在一个没有列出的父项之上，最上一项与头相符而下面仍是旧分支；
+    旧分支迟到的一次索引写入把正确的项换了回去。两个不变式分放在读与写两处、再与“迟到的结算不得截断后来的修订”合在一起，推理不下来；一项事实自带它的父摘要，读的一侧就能独自判定。
+  - 这给修订索引的存储格式加了一个字段（`RevisionEntry.parent`）。没有这个字段的旧项过不了它的那一环，第一次读时由修复重写，不需要迁移。
 - **为什么记录先于头**：反过来，头写成功而记录失败时，修订的内容只存在于头里；下一次发布覆盖头之后它就永远丢了。先写记录的代价只是偶尔的孤儿。
 - 写入顺序、冲突处理、"结果未知时读回摘要"都从 `RedisSnapshotPublisher` 搬过来；不同的是冲突后**不**在新内容上重做修改：控制面的检查
   （授出分析、影子窗口）是针对基准 b 做的，换一个基准就要重做检查（§5.5）。
@@ -431,6 +440,15 @@ publish(change c, 基准摘要 b, 候选文档 d):     // d 的 provenance.paren
   变化而进入 `CONFLICTED`。紧急封禁不必等别人的窗口结束。
 - **代价**：标准路径上，一份文档每小时最多发布约 4 次（窗口默认 15 分钟，§6.4）。一个变更可以包含任意多个操作；租户之间互不影响；平台文档是
   唯一会排队的地方（Q5）。
+
+**2026-11-16 修订（与实现对照后；RFC 0013 B4）。** 上面两条按实现更正，实现是更严的读法：
+
+- 暂存槽一直持有到 `READY`，不只到“影子窗口或等待审批”：一个已就绪而尚未发布的变更仍占着槽。释放的时机除了发布、放弃、过期，还有拒绝、
+  发布时落回 `CONFLICTED` 或 `DRAFT`，以及被抢占。
+- 收窄的紧急变更是在**占用暂存槽的那一刻**抢占（`stage` 或 `skip-shadow`），不是在发布时：它照常经过自己的那一步拿到槽，原持有者从
+  `SHADOWING`、`AWAITING_APPROVAL` 或 `READY` 进入 `CONFLICTED`。“可以在槽被占用时直接发布”那半句不成立。
+- 基准在一个变更等待审批期间移动，不会当即把它变成 `CONFLICTED`：它仍可以被批准，在发布时冲突，或在别的变更占槽时被抢占。方向是拒绝，
+  不需要为此监视文档头。
 
 ### 5.6 回滚
 
@@ -498,24 +516,66 @@ refs:<被引用文档>:<policyId> = { 引用它的 docKey… }      // 例：ref
 
 ```mermaid
 flowchart LR
-    D[DRAFT] -->|检查通过| C[CHECKED]
-    D -->|检查失败| D
-    C -->|占用暂存槽| S[SHADOWING]
-    S -->|窗口关闭| W[SHADOWED]
-    W -->|有 UNKNOWN 片段| A[AWAITING_APPROVAL]
-    A -->|批准| R[READY]
-    W -->|没有 UNKNOWN| R
-    R -->|确认差异并发布| P[PUBLISHED]
-    C -->|跳过窗口<br>cosec:skip-shadow| W
-    S -->|基准变化| X[CONFLICTED]
-    A -->|基准变化| X
-    R -->|基准变化| X
-    X -->|rebase| D
+    N((提议)) -->|检查通过| C[CHECKED]
+    N -->|检查失败| D[DRAFT]
+    D -->|rebase：重做全部检查| C
+    C -->|rebase| C
+    C -->|占用暂存槽，开窗口| S[SHADOWING]
+    C -->|不开窗口：cosec:skip-shadow<br>或 break-glass 变更| R[READY]
+    C -->|不开窗口，有 UNKNOWN 片段| A[AWAITING_APPROVAL]
+    S -->|窗口关闭，没有 UNKNOWN| R
+    S -->|窗口关闭，有 UNKNOWN 片段| A
+    S -->|头已移动| X[CONFLICTED]
+    A -->|批准| R
     A -->|拒绝| J[REJECTED]
+    R -->|确认差异，头写入| P[PUBLISHED]
+    R -->|发布时复查失败| D
+    R -->|审批不再覆盖复查结果| A
+    R -->|基准已变，或槽已失| X
+    S -->|被抢占| X
+    A -->|被抢占| X
+    R -->|被抢占| X
+    X -->|rebase| C
+    X -->|rebase，检查失败| D
 ```
 
 所有状态转换都是对 `change:<id>` 的 `putIfMatch`，并发的两个操作（例如同时批准和放弃）只有一个成功。任何非终态都可以 `abandon`；变更超过
 `cosec.control.changes.expire-after`（默认 7 天）未发布即 `EXPIRED`。`REJECTED`、`ABANDONED`、`EXPIRED`、`PUBLISHED` 是终态。
+
+**2026-11-16 修订：转换表是规范（`CTL-33`；RFC 0013 B4）。** 上图按实现重画，原图有四处与实现不符：没有 `SHADOWED` 这个状态（见下）；
+提议直接生成 `CHECKED` 或 `DRAFT`，检查是命令的一部分而不是一次转换；`rebase` 一步到 `CHECKED` 或 `DRAFT`，并且也接受 `DRAFT` 与 `CHECKED`；
+发布可以把变更退回 `DRAFT` 或 `AWAITING_APPROVAL`。准确的定义是下面这张表：它是代码里的 `ChangeStep`，由
+`core/control/src/test/resources/change-transitions.md` 提交，测试把枚举渲染出来与那个文件逐字比较，所以改动任何一格都会出现在评审的 diff 里。
+
+| 步骤 | 起始状态 | 结果状态 |
+|---|---|---|
+| REBASE | DRAFT、CHECKED、CONFLICTED | DRAFT、CHECKED |
+| STAGE | CHECKED | SHADOWING、AWAITING_APPROVAL、READY |
+| SKIP_SHADOW | CHECKED | AWAITING_APPROVAL、READY |
+| SHADOWED | SHADOWING | SHADOWING、AWAITING_APPROVAL、READY、CONFLICTED |
+| APPROVE | AWAITING_APPROVAL | READY |
+| REJECT | AWAITING_APPROVAL | REJECTED |
+| ABANDON | DRAFT、CHECKED、SHADOWING、AWAITING_APPROVAL、READY、CONFLICTED | ABANDONED |
+| PUBLISH | READY | DRAFT、AWAITING_APPROVAL、CONFLICTED |
+| UNRESERVE | SHADOWING、AWAITING_APPROVAL、READY | CHECKED |
+| PREEMPT | SHADOWING、AWAITING_APPROVAL、READY | CONFLICTED |
+| UNWRITTEN | READY、CONFLICTED | DRAFT、CONFLICTED |
+| WRITTEN | 除 PUBLISHED 外的每一个状态 | PUBLISHED |
+| EXPIRE | DRAFT、CHECKED、SHADOWING、AWAITING_APPROVAL、READY、CONFLICTED | EXPIRED |
+
+前八行是命令；其余是命令途中的步骤：UNRESERVE 是没有拿到槽的 `stage` 或 `skip-shadow` 退回；PREEMPT 是槽被别的变更占走；UNWRITTEN 是没有写入头的发布；
+WRITTEN 是头已经写入的发布；EXPIRE 是每次读取都会施加的过期。规则有三条：
+
+- 一行的结果状态恰好是该步骤会写入的状态。`PUBLISHED` 只在 WRITTEN 一行里：只有本变更自己的发布写入了头，才到得了这一步。
+- 命令对起始状态之外的变更答 409。内部步骤不是命令，从不答 409；一个步骤要写入表外的状态是实现的错误，什么都不写入，控制面 API 答服务端错误
+  （500；发生在抢占或头写入之后的收尾里时，那里原有的兜底把它报成 503）。
+- WRITTEN 的起始状态包含终态 `REJECTED`、`ABANDONED`、`EXPIRED`：发布是在变更处于 `READY` 时写入头的，如果在它记下这一点之前另一条命令
+  （拒绝、放弃、过期）先改了状态，头照样已经写入，修订已经生效，记录必须如实写成 `PUBLISHED`。
+
+**没有 `SHADOWED` 状态。** 窗口一关闭，下一个状态立刻可以算出（没有 UNKNOWN 片段就是 `READY`，有就是 `AWAITING_APPROVAL`），中间没有可以停留的地方。
+窗口怎样关闭记在变更的影子摘要里，不是状态：样本足够；到最长时长仍不足（`insufficient`，发布必须确认）；任一实例报告候选出错（`blocked`，
+任何发布都答 409，`CTL-12`）。§6.4 的表里写“`SHADOWED`”的地方读作“窗口关闭”。`ChangeState` 里那个从未被写入过的枚举值已删除；审计事件
+`SHADOWED`（窗口关闭这件事）保留。
 
 "检查"（DRAFT → CHECKED）按顺序是：授权（§7.2）→ 校验（§6.2）→ 编译（§6.3）→ 授出分析（§7.4）。授出分析得到 UNKNOWN 不阻止进入影子窗口：
 影子只是观测，审批人需要看到影子报告再做决定。

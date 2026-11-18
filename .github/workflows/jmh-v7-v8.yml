@@ -32,9 +32,9 @@ on:
         required: true
         default: 'main'
       include:
-        description: 'Regex over the benchmark class names to run (pairs: SecurityPipelineBenchmark/PipelineBenchmark, SimpleAuthorizationBenchmark/FlatAuthorizationBenchmark)'
+        description: 'Regex over the benchmark class names to run (pairs: SecurityPipelineBenchmark/PipelineBenchmark, SimpleAuthorizationBenchmark/EngineAuthorizationBenchmark)'
         required: true
-        default: 'SecurityPipelineBenchmark|PipelineBenchmark|SimpleAuthorizationBenchmark|FlatAuthorizationBenchmark'
+        default: 'SecurityPipelineBenchmark|PipelineBenchmark|SimpleAuthorizationBenchmark|EngineAuthorizationBenchmark'
       scenarios:
         description: 'Scenarios (anonymous exists only for the pipeline pair)'
         required: true
@@ -107,9 +107,12 @@ jobs:
 
       # Each side compiles with its own Gradle toolchain, 7.x for 17 and 8.0 for 21; the benchmark JVMs run on 25
       # (RFC 0008 §3.8). 21 is listed last so it is JAVA_HOME, the JDK Gradle runs on.
+      # No Gradle cache, as in jmh-ab.yml: this job builds two lines (7.x and 8.0) and two sets of modules under one cache key,
+      # which is what let that job's cache entries drift apart.
       - name: Set up JDK 17, 25 and 21, and Gradle
         uses: ./.github/actions/setup-java-gradle
         with:
+          cache-disabled: true
           java-version: |
             17
             25
@@ -161,6 +164,7 @@ jobs:
           RESULTS: ${{ runner.temp }}/results
           SCRIPTS: ${{ runner.temp }}/scripts
         run: |
+          set -o pipefail
           export JAVA25="$JAVA_HOME_25_X64/bin/java"
           "$SCRIPTS/run.sh" estimate 2> "$RESULTS/estimate.err" | tee -a "$GITHUB_STEP_SUMMARY"
           minutes=$(sed -n 's/^minutes=//p' "$RESULTS/estimate.err")
@@ -180,7 +184,10 @@ jobs:
           "$SCRIPTS/run.sh" run
 
       - name: Summarize
-        run: python3 -I "$RUNNER_TEMP/scripts/compare.py" "$RUNNER_TEMP/results" --threshold "$THRESHOLD" | tee -a "$GITHUB_STEP_SUMMARY"
+        run: |
+          set -o pipefail
+          python3 -I "$RUNNER_TEMP/scripts/compare.py" "$RUNNER_TEMP/results" --threshold "$THRESHOLD" \
+            --rounds "$ROUNDS" --expected "$RUNNER_TEMP/results/expected.txt" | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload raw JMH JSON
         if: always()

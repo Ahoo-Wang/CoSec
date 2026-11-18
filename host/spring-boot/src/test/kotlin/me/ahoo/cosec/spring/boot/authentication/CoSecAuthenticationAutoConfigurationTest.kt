@@ -59,6 +59,16 @@ internal class CoSecAuthenticationAutoConfigurationTest {
             }
     }
 
+    /** The property has two defaults, the Kotlin one and `@DefaultValue`'s: the binder takes the second, so they must agree. */
+    @Test
+    fun `the Kotlin default is the bound one`() {
+        contextRunner
+            .withUserConfiguration(CoSecAuthenticationAutoConfiguration::class.java)
+            .run { context: AssertableApplicationContext ->
+                context.getBean(LoginProperties::class.java).enabled.assert().isEqualTo(LoginProperties().enabled)
+            }
+    }
+
     /** #1222: a context answers with its own beans, whatever another context in the JVM registers or closes. */
     @Test
     fun `a context authenticates with its own beans only`() {

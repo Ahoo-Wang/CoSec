@@ -202,21 +202,26 @@ class SchemaConformanceTest {
 
     /**
      * Makes ids unique where a codec rejects duplicates, and has an app document's principals name their tenant, which
-     * the shared binding schema cannot require of one kind of document only ([FormatPatterns]).
+     * the shared binding schema cannot require of one kind of document only ([FormatPatterns]). An identity's
+     * credential is made to hold together as the codec requires and a schema cannot say across members: a session is
+     * CoSec's own token's (`method` `jwt`) and comes with the token's `iat`, which is not after `exp`.
      */
     private fun selfConsistent(file: SchemaFile, document: JsonNode): JsonNode {
-        if (file.name == DocumentFormats.SNAPSHOT_DOCUMENT && document.has("catalog")) {
-            document.get("bindings")?.values()?.map { it.get("subject") }?.filterIsInstance<ObjectNode>()
-                ?.filter { it.has("principal") && !it.has("tenant") }?.forEach { it.put("tenant", "acme") }
+        if (file.name == DocumentFormats.IDENTITY) {
+            (document.get("auth") as? ObjectNode)?.let(::consistentCredential)
         }
-        val entries = when (file.name) {
-            DocumentFormats.SNAPSHOT_DOCUMENT -> document.get("policies")?.values()?.toList().orEmpty()
-            else -> emptyList()
-        }
-        entries.forEachIndexed { index, entry ->
-            (entry as tools.jackson.databind.node.ObjectNode).put("id", "${entry.get("id").asString()}-$index")
+        if (file.name == DocumentFormats.SNAPSHOT_DOCUMENT) {
+            selfConsistentSnapshotDocument(document)
         }
         return document
+    }
+
+    private fun consistentCredential(auth: ObjectNode) {
+        val expiresAt = auth.get("exp").longValue()
+        auth.get("iat")?.takeIf { it.longValue() > expiresAt }?.let { auth.put("iat", expiresAt) }
+        if (!auth.has("session")) return
+        auth.put("method", "jwt")
+        if (!auth.has("iat")) auth.put("iat", expiresAt)
     }
 
     /**
@@ -279,6 +284,28 @@ class SchemaConformanceTest {
         DocumentFormats.files.forEach { file ->
             metaSchema.validate(CoSecJson.mapper.readTree(JsonSchemaWriter.write(file))).assert()
                 .describedAs(file.fileName).isEmpty()
+        }
+    }
+
+    /** `auth.capped` is `true` when present (RFC 0009 §4.2): the schema says so as the codec does, never `false`. */
+    @Test
+    fun aCappedCredentialIsTrueOrAbsent() {
+        val file = DocumentFormats.identitySchema
+        val identity = CoSecJson.mapper.readTree(
+            """{"v":1,"tenant":"acme","sub":"alice","scope":{"app":"","space":""},"roles":[],""" +
+                """"auth":{"method":"api-key","jti":"k1","exp":2},"iat":1,"rid":"r1"}"""
+        )
+        fun withCapped(value: JsonNode?): JsonNode = (identity.deepCopy() as ObjectNode).also {
+            value?.let { capped -> (it.get("auth") as ObjectNode).set("capped", capped) }
+        }
+        val nodes = JsonNodeFactory.instance
+        listOf(null, nodes.booleanNode(true)).forEach {
+            schemaErrors(file, withCapped(it)).assert().describedAs("schema, capped=$it").isEmpty()
+            codecError(file, withCapped(it)).assert().describedAs("codec, capped=$it").isNull()
+        }
+        listOf(nodes.booleanNode(false), nodes.numberNode(1), nodes.stringNode("true")).forEach {
+            schemaErrors(file, withCapped(it)).assert().describedAs("schema, capped=$it").isNotEmpty()
+            codecError(file, withCapped(it)).assert().describedAs("codec, capped=$it").isNotNull()
         }
     }
 

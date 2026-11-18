@@ -20,8 +20,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -29,26 +30,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
-import java.time.Instant
-
-/** The documents of a scenario, as written. */
-@InternalCoSecApi
-class ScenarioDocuments(val platform: JsonNode?, val apps: Map<String, JsonNode>, val tenants: Map<String, JsonNode>)
-
-/** Every document of a scenario, compiled. */
-@InternalCoSecApi
-class CompiledSnapshot(
-    val platform: CompiledDocument,
-    val apps: Map<String, CompiledDocument>,
-    val tenants: Map<String, CompiledDocument>,
-)
-
-/** Turns scenario documents into what the engine evaluates. */
-@InternalCoSecApi
-fun interface SnapshotCompiler {
-    /** Throws [DocumentException] when a document does not compile. */
-    fun compile(documents: ScenarioDocuments): CompiledSnapshot
-}
 
 /**
  * Compiles scenario documents the way a stored snapshot is compiled: [PolicyDocumentCodec] reads them and
@@ -130,13 +111,7 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
      * the bytes [PipelineFixture] installs. A document that writes its own header keeps it.
      */
     internal fun published(node: JsonNode?): SnapshotDocument {
-        val document = withHeader(node, "scenario")
-        return SnapshotDocument(
-            document.required("schema").intValue(),
-            document.required("revision").longValue(),
-            Instant.parse(document.required("publishedAt").text()),
-            CoSecJson.mapper.writeValueAsBytes(document),
-        )
+        return SnapshotDocuments.read(CoSecJson.mapper.writeValueAsBytes(withHeader(node, "scenario")))
     }
 
     private fun withHeader(node: JsonNode?, name: String): ObjectNode {
@@ -182,10 +157,6 @@ object DocumentSnapshotCompiler : SnapshotCompiler {
     private val SCHEMA = PolicyDocumentCodec.SCHEMA
     private const val PUBLISHED_AT = "2026-10-26T00:00:00Z"
 }
-
-/** A failure injected by `"fault"`. */
-@ExperimentalCoSecApi
-internal class ScenarioFault(message: String) : RuntimeException(message)
 
 /** The prefix of the request attribute a `"fault"` reads. */
 internal const val FAULT: String = "cosec.fault:"

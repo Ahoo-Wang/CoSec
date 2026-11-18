@@ -2,11 +2,11 @@
 # Mutant: the grant analysis ignores the expiry of the binding the grantor holds a statement through, so a temporary right is granted for good
 # Tests: :control:test --tests me.ahoo.cosec.control.grant.* :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-index 5640fdcc..d259b465 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-@@ -358,6 +358,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+index cc21d980..713a2119 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+@@ -142,6 +142,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
       */
      private fun outlives(held: HeldStatement, fragment: GrantFragment): Boolean {
          val until = held.expiresAt ?: return true

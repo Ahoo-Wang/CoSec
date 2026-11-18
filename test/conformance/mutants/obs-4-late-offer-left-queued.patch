@@ -1,0 +1,22 @@
+# Rule: OBS-4
+# Mutant: an event offered as the listeners close stays queued, neither delivered nor counted
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.DecisionListenersShutdownTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+index aa53d295..851c5b3e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+@@ -238,13 +238,6 @@ class DecisionListeners(
+             }
+             beforeOffer?.invoke()
+             queued.events.offer(event)
+-            if (closed) {
+-                if (queued.events.remove(event)) {
+-                    queued.size.decrementAndGet()
+-                    dropped(queued, true)
+-                }
+-                continue
+-            }
+             // After the offer: a consumer that parked before it either sees the event or is seen parked here.
+             if (queued.parked || size == queued.halfFull) {
+                 queued.wake.trySend(Unit)

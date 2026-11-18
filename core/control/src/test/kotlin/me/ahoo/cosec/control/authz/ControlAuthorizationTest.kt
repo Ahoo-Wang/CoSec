@@ -19,14 +19,15 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeId
-import me.ahoo.cosec.control.change.ChangeOptions
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
+import me.ahoo.cosec.control.change.InvalidControlRequestException
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.allow
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
@@ -36,9 +37,9 @@ import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
-import me.ahoo.cosec.engine.flat.ResourceSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.BuiltinPolicies
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -442,10 +443,10 @@ class ControlAuthorizationTest {
         ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId.DEFAULT)).id.assert().isEqualTo("*/*/(default)")
         // RC1-37: `-` is a space like any other, so a right on it is not one on the default space.
         ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId("-"))).id.assert().isEqualTo("*/*/-")
-        org.junit.jupiter.api.assertThrows<IllegalArgumentException> {
-            ControlResources.document(
-                SnapshotKey.Tenant("a/b")
-            )
+        // No tenant or app id holds `/` (#1403); a space id still can, and is refused as more than one segment.
+        org.junit.jupiter.api.assertThrows<IllegalArgumentException> { SnapshotKey.Tenant("a/b") }
+        org.junit.jupiter.api.assertThrows<InvalidControlRequestException> {
+            ControlResources.scope(null, Match.Any, Match.Exactly(SpaceId("a/b")))
         }
     }
 

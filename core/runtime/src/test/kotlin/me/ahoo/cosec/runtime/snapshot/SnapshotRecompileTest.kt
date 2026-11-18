@@ -73,7 +73,8 @@ class SnapshotRecompileTest {
         metrics,
         directExecutor,
         null,
-    ) { ticker.incrementAndGet() }
+        { ticker.incrementAndGet() },
+    )
 
     private fun ControllableStore.publish(key: SnapshotKey, revision: Long) = put(key, document(revision))
 
@@ -101,6 +102,36 @@ class SnapshotRecompileTest {
             compiler.compiled.count { it == TENANT_A }.assert().isEqualTo(2)
             metrics.installs.filter { it.key == TENANT_A }.map { (it.state as DocumentState.Present<*>).compiled }
                 .assert().containsExactly(Compiled(TENANT_A, 1, listOf("inputs-2"), emptySet()))
+        }
+    }
+
+    /**
+     * SNP-13: a document whose load is in flight when the inputs change is part of what the future waits for; it
+     * completes only once the load that follows that one has compiled it with the new inputs.
+     */
+    @Test
+    fun `recompiling waits for a document that was loading, until it is compiled with the new inputs`() {
+        val store = ControllableStore()
+        store.publish(SnapshotKey.Platform, 1)
+        store.publish(TENANT_A, 1)
+        val compiler = InputsCompiler()
+        source(store, compiler).use { source ->
+            source.loadAll(listOf(TENANT_A)).join()
+            store.dropNotifications = true
+            store.hold = true
+            // A load of the tenant in flight, which compiles with inputs 1 once its read is answered.
+            val inFlight = source.revalidate()
+            compiler.inputs = 2
+            val recompiled = source.recompile()
+            recompiled.isDone.assert().isFalse()
+            store.hold = false
+            store.pending.toList().forEach {
+                store.pending.remove(it)
+                it.release()
+            }
+            inFlight.join()
+            recompiled.join()
+            source.installed(TENANT_A).inputs().assert().isEqualTo("inputs-2")
         }
     }
 

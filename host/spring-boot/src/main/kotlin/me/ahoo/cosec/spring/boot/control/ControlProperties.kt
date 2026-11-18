@@ -24,6 +24,13 @@ import java.time.Duration
 @ConfigurationProperties(prefix = ControlProperties.PREFIX)
 @InternalCoSecApi
 class ControlProperties {
+    /**
+     * Whether this instance runs the control plane, when `cosec-control` and `cosec-cocache` are on its classpath.
+     * `false` leaves it out, and the instance reads the policy documents and candidates read-only (SNP-18): a fleet
+     * that ships one image for both roles sets it on the data-plane role. `true` or `false` only.
+     */
+    var enabled: Boolean = true
+
     /** The app control-plane actions are authorized in (RFC 0007 §7.2). */
     var appId: String = "cosec-control"
     val http = Http()
@@ -48,8 +55,13 @@ class ControlProperties {
 
     @InternalCoSecApi
     class Revisions {
+        /** The revisions always kept per document; older ones are reclaimed once also older than `min-age`. */
         var maxCount: Int = 50
+
+        /** Revisions younger than this are always kept. */
         var minAge: Duration = Duration.ofDays(7)
+
+        /** The records of conflicted publishes are removed once this old. */
         var orphanAge: Duration = Duration.ofHours(1)
 
         /** How often each instance tries to reclaim; one instance at a time does each document. */
@@ -64,6 +76,10 @@ class ControlProperties {
 
     @InternalCoSecApi
     class Approval {
+        /**
+         * How long an approval stays valid; startup fails when it is longer than `cosec.jwt.token-validity.refresh`,
+         * how long a token revocation is kept.
+         */
         var expireAfter: Duration = Duration.ofHours(72)
 
         /**
@@ -81,8 +97,13 @@ class ControlProperties {
 
     @InternalCoSecApi
     class Shadow {
+        /** A shadow window closes no earlier than this, once it also has `min-samples`. */
         var minDuration: Duration = Duration.ofMinutes(15)
+
+        /** The compared samples a window needs to close before `max-duration`. */
         var minSamples: Long = 1_000
+
+        /** A window closes at this age with fewer samples, as insufficient evidence; not less than `min-duration`. */
         var maxDuration: Duration = Duration.ofHours(24)
 
         /** How often shadowing changes are looked at, by one instance at a time; a window closes up to this late. */
@@ -98,7 +119,10 @@ class ControlProperties {
         /** `KafkaChangeListener`, when `cosec-kafka` and a `KafkaOperations` bean are present. */
         @InternalCoSecApi
         class Kafka {
+            /** Whether the Kafka change listener is on; it needs `cosec-kafka` and a `KafkaOperations` bean. */
             var enabled: Boolean = true
+
+            /** The Kafka topic of the change events. */
             var topic: String = "cosec-control-audit"
 
             /** `required` makes publishing and break-glass wait for the broker; break-glass needs one REQUIRED listener. */

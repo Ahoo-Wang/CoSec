@@ -18,6 +18,10 @@ inputs:
     description: JDK versions, one per line; the last one becomes JAVA_HOME
     required: false
     default: '21'
+  cache-disabled:
+    description: Neither restore nor save Gradle's cache; for a job whose own cache has gone stale
+    required: false
+    default: 'false'
 runs:
   using: composite
   steps:
@@ -32,3 +36,4 @@ runs:
       uses: gradle/actions/setup-gradle@v6
       with:
         cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+        cache-disabled: ${{ inputs.cache-disabled }}

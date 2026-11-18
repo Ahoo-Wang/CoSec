@@ -24,6 +24,9 @@ import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.EngineAuthority
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
+import me.ahoo.cosec.control.lifecycle.BreakGlass
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -34,9 +37,9 @@ import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
-import me.ahoo.cosec.engine.flat.ResourceSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.BuiltinPolicies
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope

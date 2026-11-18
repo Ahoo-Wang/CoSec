@@ -19,6 +19,8 @@ dependencies {
     // Scenarios are read with Jackson, which no public signature names (JacksonSignatureTest): an implementation detail.
     implementation("tools.jackson.core:jackson-databind")
     api("org.junit.jupiter:junit-jupiter-api")
+    // PermittedRequestTest issues real tokens with CoSec's own login and verifier, and switches with them.
+    testImplementation(project(":jwt"))
 }
 
 // ConformanceScenariosTest reads the suite's scenarios, from wherever the conformance project sits (RFC 0011).

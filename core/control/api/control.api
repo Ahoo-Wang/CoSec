@@ -20,13 +20,11 @@ public final class me/ahoo/cosec/control/audit/ChangeEvent {
 public final class me/ahoo/cosec/control/audit/ChangeEvent$Kind : java/lang/Enum {
 	public static final field ABANDONED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field APPROVED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
-	public static final field BOOTSTRAP Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field BREAK_GLASS_APPROVED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field BREAK_GLASS_REQUESTED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field CHECKED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field FAILED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field HEADS_MOVED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
-	public static final field MIGRATE Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field PROPOSED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field PUBLISHED Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
 	public static final field PUBLISHING Lme/ahoo/cosec/control/audit/ChangeEvent$Kind;
@@ -52,12 +50,17 @@ public final class me/ahoo/cosec/control/audit/ChangeListener$DefaultImpls {
 }
 
 public final class me/ahoo/cosec/control/audit/LoggingChangeListener : me/ahoo/cosec/control/audit/ChangeListener {
+	public static final field Companion Lme/ahoo/cosec/control/audit/LoggingChangeListener$Companion;
+	public static final field LOGGER_NAME Ljava/lang/String;
 	public fun <init> ()V
 	public fun <init> (Ljava/lang/String;)V
 	public synthetic fun <init> (Ljava/lang/String;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun getDelivery ()Lme/ahoo/cosec/runtime/event/Delivery;
 	public fun getName ()Ljava/lang/String;
 	public fun onChange (Lme/ahoo/cosec/control/audit/ChangeEvent;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
+}
+
+public final class me/ahoo/cosec/control/audit/LoggingChangeListener$Companion {
 }
 
 public final class me/ahoo/cosec/control/audit/MovedHead {
@@ -209,7 +212,6 @@ public final class me/ahoo/cosec/control/change/ChangeState : java/lang/Enum {
 	public static final field PUBLISHED Lme/ahoo/cosec/control/change/ChangeState;
 	public static final field READY Lme/ahoo/cosec/control/change/ChangeState;
 	public static final field REJECTED Lme/ahoo/cosec/control/change/ChangeState;
-	public static final field SHADOWED Lme/ahoo/cosec/control/change/ChangeState;
 	public static final field SHADOWING Lme/ahoo/cosec/control/change/ChangeState;
 	public static fun getEntries ()Lkotlin/enums/EnumEntries;
 	public final fun getStaged ()Z
@@ -481,14 +483,17 @@ public final class me/ahoo/cosec/control/store/PendingRecord {
 }
 
 public final class me/ahoo/cosec/control/store/RevisionEntry {
-	public fun <init> (JLme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/time/Instant;)V
+	public fun <init> (JLme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/time/Instant;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)V
+	public synthetic fun <init> (JLme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/time/Instant;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public final fun component1 ()J
 	public final fun component2 ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public final fun component3 ()Ljava/time/Instant;
-	public final fun copy (JLme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/time/Instant;)Lme/ahoo/cosec/control/store/RevisionEntry;
-	public static synthetic fun copy$default (Lme/ahoo/cosec/control/store/RevisionEntry;JLme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/time/Instant;ILjava/lang/Object;)Lme/ahoo/cosec/control/store/RevisionEntry;
+	public final fun component4 ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public final fun copy (JLme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/time/Instant;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;)Lme/ahoo/cosec/control/store/RevisionEntry;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/control/store/RevisionEntry;JLme/ahoo/cosec/spi/snapshot/SnapshotDigest;Ljava/time/Instant;Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;ILjava/lang/Object;)Lme/ahoo/cosec/control/store/RevisionEntry;
 	public fun equals (Ljava/lang/Object;)Z
 	public final fun getDigest ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
+	public final fun getParent ()Lme/ahoo/cosec/spi/snapshot/SnapshotDigest;
 	public final fun getPublishedAt ()Ljava/time/Instant;
 	public final fun getRevision ()J
 	public fun hashCode ()I

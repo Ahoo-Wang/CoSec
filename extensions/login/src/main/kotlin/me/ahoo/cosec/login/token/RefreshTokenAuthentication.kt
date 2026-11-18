@@ -15,7 +15,6 @@ package me.ahoo.cosec.login.token
 
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.login.Authentication
-import me.ahoo.cosec.login.LoginCredentials
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -24,7 +23,8 @@ import me.ahoo.cosec.spi.token.VerifiedToken
 /**
  * Refreshes a token pair (`authentication.md`, Refreshing tokens): [tokenVerifier] checks the pair, pure computation on
  * the caller's thread, then [revocation] reads whether the access token, or every token of its principal, was revoked,
- * then [memberships] answers what the user holds now, and [families] moves the pair's session to its next generation
+ * and [families] whether its session is live (one check with a tenant switch's, `IDN-22`), then [memberships] answers
+ * what the user holds now, and [families] moves the pair's session to its next generation
  * (only the current one refreshes; an older one presented again revokes the session; a session ends at its absolute
  * lifetime). The subject is the old access token's principal, tenant, app and login time, in the next generation, with
  * what [memberships] answers, or else what the token claimed. A refusal of [memberships] comes before the rotation, so
@@ -35,20 +35,22 @@ import me.ahoo.cosec.spi.token.VerifiedToken
  * refresh to read it as "not revoked", the new token would carry neither a revoked id nor an `iat` before a principal's
  * revocation, and would outlive both.
  */
-class RefreshTokenAuthentication(
+class RefreshTokenAuthentication<C : RefreshTokenCredentials>(
     private val tokenVerifier: TokenVerifier,
-    private val revocation: TokenRevocation,
-    private val families: TokenFamilies,
-    private val memberships: MembershipRefresh = MembershipRefresh.CLAIMS,
-) : Authentication<RefreshTokenCredentials> {
-    override val credentialsType: Class<RefreshTokenCredentials> = RefreshTokenCredentials::class.java
+    revocation: TokenRevocation,
+    families: TokenFamilies,
+    /** The application's refresh credentials class, by which a login finds this authentication. */
+    override val credentialsType: Class<C>,
+    private val memberships: MembershipRefresh<C>,
+) : Authentication<C> {
+    private val sessions = LiveSessions(revocation, families)
 
-    override suspend fun authenticate(credentials: RefreshTokenCredentials): TokenSubject {
+    override suspend fun authenticate(credentials: C): TokenSubject {
         val token = tokenVerifier.refresh(CompositeToken(credentials.accessToken, credentials.refreshToken))
-        revocation.check(token)
-        val now = memberships.refresh(token)
+        val live = sessions.of(token)
+        val now = memberships.refresh(token, credentials)
         require(now?.app == null || now.app == token.app) { "A refresh never changes the app a token is for." }
-        val issue = families.rotate(token)
+        val issue = live.next(token)
         return if (now == null) TokenSubject.of(token, issue) else current(token, now).inSession(issue)
     }
 
@@ -64,8 +66,15 @@ class RefreshTokenAuthentication(
     )
 }
 
-/** What a refresh presents: the [accessToken] it renews and the [refreshToken] that renews it. */
-interface RefreshTokenCredentials : LoginCredentials {
-    val accessToken: String
-    val refreshToken: String
-}
+/**
+ * The refresh of [RefreshTokenCredentials], whatever class the application's carry them in: the usual one. With
+ * [memberships], the user is read again on every refresh from the token alone; a hook that reads the application's own
+ * credentials takes their class, through the constructor.
+ */
+fun RefreshTokenAuthentication(
+    tokenVerifier: TokenVerifier,
+    revocation: TokenRevocation,
+    families: TokenFamilies,
+    memberships: MembershipRefresh<RefreshTokenCredentials> = MembershipRefresh.CLAIMS,
+): RefreshTokenAuthentication<RefreshTokenCredentials> =
+    RefreshTokenAuthentication(tokenVerifier, revocation, families, RefreshTokenCredentials::class.java, memberships)

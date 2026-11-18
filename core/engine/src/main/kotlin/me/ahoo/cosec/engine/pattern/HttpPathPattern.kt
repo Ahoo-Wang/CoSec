@@ -113,7 +113,7 @@ class HttpPathPattern private constructor(
 
     /*
      * Two copies of the walk: one without a table, which every pattern without a glob segment takes, and one with the
-     * evaluation's table. One walk taking the table as well cost FlatAuthorizationBenchmark 7 to 12 % on CI's x86
+     * evaluation's table. One walk taking the table as well cost EngineAuthorizationBenchmark 7 to 12 % on CI's x86
      * runners, whose patterns have no glob segment at all.
      */
 

@@ -16,11 +16,11 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -134,8 +134,8 @@ class RoleExpansionPropertyTest {
         return PolicyDocument(DocumentKind.TENANT, TENANT.value, 1, NOW, emptyList(), emptyList(), roles = roles)
     }
 
-    private fun resources(random: Random): List<me.ahoo.cosec.engine.flat.ResourceSource> =
-        if (random.nextBoolean()) emptyList() else listOf(me.ahoo.cosec.engine.flat.ResourceSource("order/{id}"))
+    private fun resources(random: Random): List<me.ahoo.cosec.engine.ResourceSource> =
+        if (random.nextBoolean()) emptyList() else listOf(me.ahoo.cosec.engine.ResourceSource("order/{id}"))
 
     private class Asked(val memberships: Memberships, val app: String, val space: String, val action: Action)
 
@@ -167,8 +167,8 @@ class RoleExpansionPropertyTest {
             Environment("", "r", "", false)
         )
         val view = SnapshotView(platform, documents.first.getValue(asked.app), documents.second)
-        return CoSecFlatEngine.evaluate(
-            FlatRequest(request, scope, asked.memberships, 0),
+        return CoSecEngine.evaluate(
+            EngineRequest(request, scope, asked.memberships, 0),
             view,
             TraceLevel.FULL
         ).decision

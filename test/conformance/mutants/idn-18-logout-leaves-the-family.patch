@@ -3,14 +3,14 @@
 # Tests: :login:test --tests me.ahoo.cosec.login.token.TokenFamiliesTest
 
 diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-index d38f7bef..88e7c749 100644
+index e882423e..c55390e4 100644
 --- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
 +++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/TokenFamilies.kt
-@@ -141,6 +141,7 @@ class TokenFamilies @JvmOverloads constructor(
+@@ -187,6 +187,7 @@ class TokenFamilies @JvmOverloads constructor(
       * The family is marked, not deleted, so it is told apart from one that expired until its end.
       */
      suspend fun end(id: String) {
 +        if (id.isNotEmpty()) return
          repeat(MAX_ATTEMPTS) {
-             val read = store.read(id) ?: return
+             val read = sessionStore("read a session") { store.read(id) } ?: return
              if (read.family.revoked || revoke(read)) {

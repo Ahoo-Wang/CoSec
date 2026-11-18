@@ -1,0 +1,16 @@
+# Rule: CTL-30
+# Mutant: the check of an app candidate does not ask which policies others still refer to: it is refused only when it is written
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BoundaryReferencesTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
+index f5e1ebb0..39c3ace5 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
+@@ -113,7 +113,6 @@ class ChangeChecks(
+ 
+             else -> {
+                 // An app candidate is held to what its policies are referred to by, as the head write holds it (CTL-30).
+-                RemovedReferences.check(key, base, candidate, context, findings)
+                 BindingChecks.unresolved(candidate, platform, context, checkedWith, findings)
+             }
+         }

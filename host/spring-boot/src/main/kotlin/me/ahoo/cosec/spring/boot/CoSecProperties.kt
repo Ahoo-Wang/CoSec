@@ -19,11 +19,6 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 
 internal const val ENABLED_SUFFIX_KEY = ".enabled"
 
-@InternalCoSecApi
-interface EnabledCapable {
-    val enabled: Boolean
-}
-
 /**
  * CoSec Properties .
  *
@@ -32,6 +27,7 @@ interface EnabledCapable {
 @ConfigurationProperties(prefix = CoSecProperties.PREFIX)
 @InternalCoSecApi
 class CoSecProperties(
+    /** Whether CoSec's auto-configurations are on at all; the unknown-key check and a gateway's identity strip hold anyway. */
     @DefaultValue("true") override var enabled: Boolean = true,
     /**
      * The prefix of every Redis key this deployment writes (`SNP-9`, RC1-46): snapshot documents, control-plane

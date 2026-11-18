@@ -1,17 +1,17 @@
 # Rule: SNP-4
-# Mutant: a recompile that cannot read the store keeps the old compilation
+# Mutant: a recompile that cannot read the store keeps the old compilation (the runner's KeyLoads.onTransientFailure)
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotRecompileTest
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 1060f1d9..1c8fc230 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -1052,7 +1052,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-          */
-         private fun onTransientFailure(load: Load, cause: Throwable, rejected: Boolean = false) {
-             val known = load.known
--            if (known != null && load.recompiles) {
-+            if (known != null && load.recompiles && false) {
-                 offRequestThread {
-                     log.warn(
-                         cause
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+index 270a9a56..04e9e237 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+@@ -142,7 +142,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+      */
+     fun onTransientFailure(step: KeyStepBuilder<T>, load: LoadState<T>, cause: Throwable, rejected: Boolean = false) {
+         val known = load.known
+-        if (known != null && load.recompiles) {
++        if (known != null && load.recompiles && false) {
+             step.emit(
+                 KeyEffect.Log(
+                     Level.WARN,

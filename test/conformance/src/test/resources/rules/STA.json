@@ -19,7 +19,14 @@
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#cosec-cocache is still needed where it is used",
         "spring-boot:CoSecModuleCheckAutoConfigurationTest#a service in gateway mode does not need Redis for an unused cosec-cocache",
         "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named without a CosId runtime fails startup",
-        "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named beside the application's own IdGenerator fails startup"
+        "spring-boot:CoSecCosIdAutoConfigurationTest#a generator named beside the application's own IdGenerator fails startup",
+        "spring-boot:LoginRoutesStartupTest#login or JWT off with a path set fails startup",
+        "spring-boot:LoginRoutesStartupTest#a host that serves no HTTP with a path set fails startup",
+        "spring-boot:LoginRoutesStartupTest#unset, nothing is served and nothing is checked",
+        "spring-boot:LoginRoutesStartupTest#a gateway host with a path set fails startup",
+        "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#the control plane switched on explicitly without cosec-control or cosec-cocache fails startup",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#a cosec control enabled that is neither true nor false fails startup, without the modules too"
       ]
     },
     {
@@ -68,6 +75,38 @@
         "spring-boot:StartupTaskTest#the checks are found and are startup tasks",
         "spring-boot:StartupTaskTest#the exclusion keeps startup tasks, and only them, eager",
         "spring-boot:StartupTaskTest#every auto-configuration with a check imports the exclusion"
+      ]
+    },
+    {
+      "id": "STA-4",
+      "source": "RFC 0011 D2",
+      "statement": "On every port a host opens, nothing the application serves answers without passing CoSec. A WebFlux application's management server (management.server.port different from the application's) is under the pipeline, as its application port is: its probes, and what it inherits of the application's, functional routes and the control API among them. A WebMvc application's management server serves only actuator's endpoints: a controller, a functional route and the control API are not served there. A gateway's management server serves actuator's endpoints and, when the control plane is on, the control API under its own pipeline; the gateway's routes are served there only where Spring Cloud Gateway cannot tell the port apart (a random management port), and then under the gateway's filter. With one port, the probes are requests like any other.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:ManagementPortTest#WebFlux keeps its management server under the pipeline and serves the application's routes only behind it",
+        "spring-boot:ManagementPortTest#WebMvc leaves its management server outside CoSec and serves nothing of the application there",
+        "spring-boot:ManagementPortTest#a gateway leaves its management server outside CoSec too, and gates its own routes and the control API there as on the application port",
+        "spring-boot:ManagementPortTest#the two stacks answer alike on the application port",
+        "spring-boot:ManagementPortTest#with one port nothing changes, the probes are requests like any other",
+        "spring-boot:ManagementPortTest#a gateway on a random management port serves its routes there, under the gateway's filter",
+        "spring-boot:ManagementPortTest#WebFlux serves the application's functional routes on its management port, WebMvc does not"
+      ]
+    },
+    {
+      "id": "STA-5",
+      "source": "RFC 0011 D2",
+      "statement": "When the application declares a CorsConfigurationSource (the bean of its own stack's interface; Spring MVC's own HandlerMappingIntrospector is not a declaration) and registers no CorsFilter or CorsWebFilter of its own, the starter registers a CORS filter immediately before the pipeline's on Spring MVC and WebFlux. A preflight (OPTIONS with Origin and Access-Control-Request-Method) is then answered by that filter and is not decided: no policy, rate limit, blacklist, audit, decision event or metric sees it. An OPTIONS that is no preflight is decided as before; a request that is not a preflight is decided as before, and a refusal carries the CORS headers; an origin the source does not allow is refused by the filter before the pipeline. Without the bean nothing is registered and a preflight is decided as http:OPTIONS for an anonymous caller.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:CorsWiringTest#Spring MVC with a source answers a preflight before the pipeline and decides everything else",
+        "spring-boot:CorsWiringTest#Spring MVC without a source decides a preflight as before and registers no CORS filter",
+        "spring-boot:CorsWiringTest#Spring MVC with two sources fails startup and says to declare a CorsFilter",
+        "spring-boot:CorsWiringTest#a gateway host gets no CORS filter of the starter, with or without a source",
+        "spring-boot:CorsWiringTest#Spring MVC leaves the application's own CorsFilter alone",
+        "spring-boot:CorsWiringTest#WebFlux with a source answers a preflight before the pipeline and decides everything else",
+        "spring-boot:CorsWiringTest#WebFlux without a source decides a preflight as before and registers no CORS filter"
       ]
     }
   ]

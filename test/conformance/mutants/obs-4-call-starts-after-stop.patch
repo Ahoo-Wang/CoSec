@@ -1,0 +1,21 @@
+# Rule: OBS-4
+# Mutant: the consumer starts a listener call after a drain gave up
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.DecisionListenersShutdownTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+index 7894c7c5..bde4e188 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+@@ -335,12 +335,6 @@ class DecisionListeners(
+         while (true) {
+             val event = queued.events.poll() ?: return
+             queued.size.decrementAndGet()
+-            if (stopped) {
+-                // Polled after a stop: dropped, never delivered, and the rest goes with it.
+-                dropped(queued, true)
+-                discard(queued)
+-                return
+-            }
+             try {
+                 queued.listener.onDecision(event)
+             } catch (e: CancellationException) {

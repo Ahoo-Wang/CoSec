@@ -62,23 +62,23 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 | `cosec.api-key.enabled` | boolean | `false` | [API keys](../integration/authentication.md) for machine clients. `true` or `false` only: any other value fails startup. |
 | `cosec.audit.enabled` | boolean | `true` | the audit log listener, and the Kafka audit listener with `cosec.audit.kafka.enabled` |
 | `cosec.audit.kafka.enabled` | boolean | `true` | the Kafka audit listener (`cosec-kafka` and a `KafkaOperations` bean) |
-| `cosec.metrics.enabled` | boolean | `true` | the metrics listener (`cosec-micrometer` and a `MeterRegistry` bean, Spring Boot's own auto-configured one included) |
+| `cosec.metrics.enabled` | boolean | `true` | the metrics listener and the [snapshot source's meters](./observability.md#snapshot-metrics) (`cosec-micrometer` and a `MeterRegistry` bean, Spring Boot's own auto-configured one included). Written as `true` without `cosec-micrometer`, startup fails; left unset, metrics stay optional |
 | `cosec.ip2region.enabled` | boolean | `true` | the `ext.ip2region.*` attribute provider (`cosec-ip2region`) |
 | `cosec.ip2region.ipv6-location` | string | none | A Spring resource location (`file:`, `classpath:`) of the IPv6 `.xdb` database, loaded beside the bundled IPv4 one. Unset, an IPv6 client's region is unavailable. A location that does not exist fails startup. |
 | `cosec.openapi.enabled` | boolean | `true` | the bearer-auth customizer of the OpenAPI document (`cosec-openapi`) |
+| `cosec.control.enabled` | boolean | `true` | the control plane, when `cosec-control` and `cosec-cocache` are on the classpath; its routes need a WebFlux or WebMvc application. Off, the instance runs none of it and reads the policy documents and candidates read-only ([Control plane](#control-plane)) |
 | `cosec.authorization.shadow.enabled` | boolean | `true` | this instance's part in shadow windows (`cosec-cocache`); see [Shadow windows](#shadow-windows) |
 | `cosec.gateway.identity.enabled` | boolean | `true` | on a Spring Cloud Gateway host, forwarding the verified identity to the services behind it; see [Gateway identity](#gateway-identity) |
 
 These have no switch:
 
 - **Tracing** is on whenever `cosec-opentelemetry` is on the classpath ([Tracing](./observability.md#tracing)).
-- **The control plane** is on whenever `cosec-control` and `cosec-cocache` are on the classpath; its routes need a
-  WebFlux or WebMvc application ([Control plane](#control-plane)).
 - **The rate limiter** is always there: on Redis when a `ReactiveStringRedisTemplate` bean exists (`cosec-cocache`),
   otherwise counted per instance ([Rate limiting](#rate-limiting)).
 - **Token revocation** is always on with JWT ([Startup](./troubleshooting.md#startup-fails-without-a-token-store)).
 - **The `cosecServiceGenerator` actuator endpoint** is there whenever `cosec-openapi`, springdoc and Spring Boot Actuator are;
-  expose it like any actuator endpoint.
+  expose it like any actuator endpoint, and restrict it with Spring Boot's `management.endpoint.cosec-service-generator.access`
+  (`unrestricted` by default).
 
 ## Key prefix
 
@@ -119,7 +119,7 @@ It replaced `cosec.authorization.snapshot.key-prefix`, `cosec.authorization.cach
 | Property | Type | Default | Effect |
 |---|---|---|---|
 | `cosec.authorization.scope.app-id` | string | none | The app this host serves. A credential that declares another app, or none, is rejected (`403` `scope-rejected`). Unset, the credential's app applies ([Apps](../integration/authentication.md#apps)). On a gateway, a route's metadata `cosec-app-id` takes precedence for that route's requests ([Gateway](../integration/web.md#gateway)). |
-| `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. Under the `native` forward-headers strategy, set explicitly on Tomcat or `0` on Reactor Netty or Jetty, startup fails; `framework` always fails startup ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies), `PIP-16`). |
+| `cosec.authorization.remote-ip.max-trusted-index` | int | `1` | How many proxy hops of `X-Forwarded-For` to trust when resolving the client IP. `0` ignores the header (the host is exposed directly); `N` takes the entry the N-th closest proxy appended. Under the `native` forward-headers strategy, set explicitly on Tomcat or `0` on Reactor Netty or Jetty, startup fails, and so does any other server or none (a war in an external container); `framework` always fails startup ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies), `PIP-16`). |
 | `cosec.authorization.membership.timeout` | duration | `500ms` | One call of the `MembershipProvider`. Past it, or when it fails, `503`. |
 | `cosec.authorization.attributes.timeout` | duration | `300ms` | One call of an `AttributeProvider` that sets no timeout of its own. Past it, its attributes are unavailable, and a statement that needs them makes the decision Indeterminate. |
 | `cosec.authorization.routes.location` | comma-separated resource locations | unset | The route maps a WebFlux or WebMvc host loads at startup, each logged with its service and route count. A location that does not exist, a map that does not parse, or a map with no routes fails startup. Unset, no route map is loaded and every request is authorized in the `http` namespace, unless `classpath:cosec-routes.json` exists: startup then fails until the property names it or is set empty. Empty runs without a route map on purpose. A Spring Cloud Gateway host ignores it and loads no route map. |
@@ -174,13 +174,13 @@ of your own replaces both.
 | `cosec.authorization.snapshot.lag-warn` | duration | `60s` | A document not confirmed for longer is logged at `WARN`. Must not exceed `lag-escalate`. |
 | `cosec.authorization.snapshot.lag-escalate` | duration | `5m` | A document not confirmed for longer is logged at `ERROR` as stale. |
 | `cosec.authorization.snapshot.fail-closed.tenants` | set of tenant ids | empty | Tenants that must not be decided on old documents: when the oldest document a request of such a tenant reads was confirmed longer ago than `max-lag`, the request is `503` (`SourceUnavailable`) unless a DENY matches. Other tenants keep deciding on what is installed. |
-| `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | The lag beyond which the tenants above fail closed. |
-| `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | How long a request waits for a document that is not installed. Past it the document counts as failed for that request. |
-| `cosec.authorization.snapshot.max-apps` | int | `1024` | The most app documents held in memory; the least recently used one is dropped beyond it, and loaded again when needed. |
-| `cosec.authorization.snapshot.max-tenants` | int | `1024` | The same for tenant documents. The platform document is never dropped. |
+| `cosec.authorization.snapshot.fail-closed.max-lag` | duration | `30m` | The lag beyond which the tenants above fail closed. Not negative. |
+| `cosec.authorization.snapshot.cold-load-timeout` | duration | `2s` | How long a request waits for a document that is not installed. Past it the document counts as failed for that request. Must be positive. |
+| `cosec.authorization.snapshot.max-apps` | int | `1024` | The most app documents held in memory (positive); the least recently used one is dropped beyond it, and loaded again when needed. Under a burst of cold loads a family may for a moment hold more: at most twice this bound, and never more than 4,096 above it, plus the documents being loaded at that moment; beyond that the instance evicts on the thread that loaded the document, before it answers ([Storage](./storage.md#how-instances-read-documents)). |
+| `cosec.authorization.snapshot.max-tenants` | int | `1024` | The same for tenant documents (positive). The platform document is never dropped. |
 | `cosec.authorization.snapshot.prewarm-apps` | list of app ids | empty | App documents loaded at startup, after the platform document, which is always loaded. Readiness refuses traffic until the platform document and every listed document are installed; liveness is not affected. |
 | `cosec.authorization.snapshot.prewarm-tenants` | list of tenant ids | empty | Tenant documents loaded at startup, as above. |
-| `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. |
+| `cosec.authorization.snapshot.compile-threads` | int | `2` | Threads that compile documents. Must be positive. |
 | `cosec.authorization.snapshot.eviction-check` | `fail`, `warn` | `fail` | What startup does when Redis' `maxmemory-policy` is not `noeviction` on every node, or cannot be read (a failed or denied `INFO memory`, a wrapped or custom CoCache backend). `fail` stops startup. `warn` starts and logs a `WARN` that begins with `!!!` ([Redis requirements](./storage.md#redis-requirements)). The in-memory CoCache backend always passes. Either way the instance reads the policy again every `revalidate-interval`, and the `cosecSnapshotEviction` health indicator is `DOWN` while Redis may evict; a policy it cannot read is `DOWN` under `fail` and `UP` with `eviction: unknown` under `warn` ([Troubleshooting](./troubleshooting.md#cosecsnapshoteviction-is-down)). |
 
 ## Shadow windows
@@ -192,7 +192,7 @@ How windows work: [Testing changes](../policies/testing.md).
 |---|---|---|---|
 | `cosec.authorization.shadow.enabled` | boolean | `true` | Evaluate sampled requests again on the staged candidates, and write this instance's reports and status to Redis. Off, this instance's traffic counts for nothing in a window, a candidate it cannot compile does not block one, and it writes no status for the propagation view. |
 | `cosec.authorization.shadow.sample-rate` | double, `0` to `1` | `0.1` | Share of requests evaluated again on the candidates, off the request path. |
-| `cosec.authorization.shadow.report-interval` | duration | `10s` | How often the instance writes its reports and its status. |
+| `cosec.authorization.shadow.report-interval` | duration | `10s` | How often the instance writes its reports and its status. At least `1ms`: a shorter interval fails startup. |
 | `cosec.authorization.shadow.instance-id` | string | a random UUID | This instance's id in reports and statuses. Unique per running instance; only letters, digits, `.`, `_` and `-`, since it ends a Redis key. Any other id fails startup. |
 
 ## Authentication
@@ -201,6 +201,8 @@ How windows work: [Testing changes](../policies/testing.md).
 |---|---|---|---|
 | `cosec.authentication.revocation.skew` | duration | `5s` | How much later than a subject revocation a token may have been issued and still be revoked by it: room for an issuer whose clock runs ahead. |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | Whether a request's token is refused (`503`) while the revocations cannot be read, instead of accepted ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)). A refresh fails then either way. |
+| `cosec.authentication.login.refresh.path` | string | unset | Where the starter serves the refresh route, `POST` of the pair (`IDN-23`, [Building a client](../integration/clients.md#what-your-application-serves)). Unset, none is served. A document must permit an anonymous `POST` of it. Set on a gateway, on a host that serves no HTTP, with login or JWT off, or to anything but one plain absolute path, startup fails. |
+| `cosec.authentication.login.logout.path` | string | unset | Where the starter serves the logout route, `POST` of the pair, `204` (`IDN-24`); as `refresh.path` otherwise, and not the same path. |
 
 ## JWT
 
@@ -287,6 +289,7 @@ credential is ever revoked.
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
+| `cosec.control.enabled` | boolean | `true` | Whether this instance runs the control plane, when `cosec-control` and `cosec-cocache` are on its classpath. `false` leaves out everything of it (its store, its own snapshot source, its change listeners, maintenance and routes), and the instance reads the policy documents and candidates read-only, so its Redis user needs only read permission on them ([Who may write which keys](./storage.md#who-may-write-which-keys)); it logs `Control plane off on this instance` at startup. A fleet that ships one image for both roles sets it on the data-plane role, usually as `COSEC_CONTROL_ENABLED=false`. Off, a request to a control route is decided by the pipeline like any path the application does not serve (`401`, `403`); only where a document permits that path does it get the framework's `404`. The other `cosec.control.*` keys are not refused while it is off. `true` or `false` only: any other value fails startup, and `true` written without `cosec-control` or `cosec-cocache` fails it naming the artifact (STA-1). |
 | `cosec.control.app-id` | string | `cosec-control` | The app control-plane actions are authorized in. |
 | `cosec.control.http.base-path` | string | `/cosec/control` | Where the control API is served. Its routes are under `{base-path}/v1`, so moving the API keeps the version. |
 | `cosec.control.http.max-body-size` | data size | `16MB` | The largest request body the control API reads on a WebMvc host. A larger body is a `400` `invalid-request`, unread. On WebFlux, `spring.codec.max-in-memory-size` (256 KB by default) bounds the body instead. On either stack, a request without a permitted principal has no body read at all (`401`). |
@@ -297,7 +300,7 @@ credential is ever revoked.
 | `cosec.control.changes.expire-after` | duration | `7d` | An open change request expires this long after it was proposed, and leaves the list of open changes. |
 | `cosec.control.approval.expire-after` | duration | `72h` | How long an approval stays valid. Startup fails when it is longer than `cosec.jwt.token-validity.refresh`, how long a token revocation is kept: an approval would outlive the revocation of its token. |
 | `cosec.control.approval.four-eyes` | boolean | `false` | Whether the changes of a platform principal holding `cosec:approve` on the document (the trust root) are analyzed too: what the analysis cannot prove contained then needs another platform principal's approval. A change that escalates needs one either way. |
-| `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h` fails startup. |
+| `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h`, or not positive, fails startup. |
 | `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. |
 | `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. |
 | `cosec.control.shadow.max-duration` | duration | `24h` | A window closes at this age with fewer samples, as insufficient evidence the publisher must acknowledge. Must not be less than `min-duration`. |
@@ -389,7 +392,7 @@ constrained (step 7), so even `unlock` cannot change them:
 | `ShadowReportCache`, `ShadowReporterCache`, `InstanceStatusCache`, `InstanceIndexCache` | `unknown-read`, `ttl` | `unknown-read: throw`; `ttl` the declared 8 days (reports, reporters) or 2 minutes (statuses; the list of instances keeps the 8 days) | An outage must not read as "no samples" or "no instance", and an instance's samples must not expire from a window it reported in. |
 | `MembershipCache` | `read-failure`, `unknown-read` | `ttl` finite (one minute when `forever`), `ttl-jitter: 0s`, `read-failure` and `unknown-read: throw` | A failed read must never become "no memberships", and a lost invalidation must expire. |
 | `TokenFamilyCache` | `unknown-read` | `unknown-read: throw` | A session that cannot be read refuses a refresh (`503`), never reads as absent. Each entry carries its session's remaining lifetime, written with it. |
-| `RevokedTokenCache`, `RevokedSubjectCache` | `read-timeout`, `unknown-read` | `read-timeout`: the store's command timeout; `unknown-read: throw` | As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. A failed read is unknown, never "not revoked": absent would let a refresh issue a token on a read that failed (`IDN-14`). A read that times out is unavailable, which the pipeline's verification accepts, so no layer, `cocache.defaults.store.read-timeout` included, may time it out sooner. Whether verification accepts it is `cosec.authentication.revocation.fail-closed`. |
+| `RevokedTokenCache`, `RevokedSubjectCache` | `read-timeout`, `unknown-read`, `absent-ttl` | `read-timeout`: the store's command timeout; `unknown-read: throw`; `absent-ttl: 30s` | A "not revoked" answer is kept locally for 30 seconds at most: a longer `absent-ttl` would accept a revoked token for that long after a lost invalidation, and `local-max-age` can only shorten it. As `Store`s they never reclaim an unreadable revocation, which would make its tokens valid again. A failed read is unknown, never "not revoked": absent would let a refresh issue a token on a read that failed (`IDN-14`). A read that times out is unavailable, which the pipeline's verification accepts, so no layer, `cocache.defaults.store.read-timeout` included, may time it out sooner. Whether verification accepts it is `cosec.authentication.revocation.fail-closed`. |
 | every CoSec cache | key prefix, namespace, key encoder, codec, key filter, `ttl` function, data source | — | The storage layout is CoSec's, where every instance and the control plane look for it. |
 
 **Next:** where the documents live and how instances read them, in [Storage and caching](./storage.md).

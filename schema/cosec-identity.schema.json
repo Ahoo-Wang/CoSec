@@ -7,8 +7,18 @@
     "auth": {
       "additionalProperties": false,
       "properties": {
+        "capped": {
+          "const": true,
+          "description": "`true` for a credential with a role cap (an API key with `roles`): the roles above are capped by it. Absent for every other credential, never `false`.",
+          "type": "boolean"
+        },
         "exp": {
           "description": "When the credential expires.",
+          "minimum": 0,
+          "type": "integer"
+        },
+        "iat": {
+          "description": "When the credential was issued, a token's iat: never after exp. Absent when the credential does not say.",
           "minimum": 0,
           "type": "integer"
         },
@@ -28,6 +38,36 @@
           ],
           "minLength": 1,
           "type": "string"
+        },
+        "session": {
+          "additionalProperties": false,
+          "description": "The session of CoSec's own token (method jwt, with iat), which a tenant switch behind the gateway issues from. Absent for any other credential.",
+          "properties": {
+            "auth_time": {
+              "description": "When the user signed in, by the session's clock.",
+              "minimum": 0,
+              "type": "integer"
+            },
+            "generation": {
+              "description": "Which generation of the session the token is.",
+              "minimum": 1,
+              "type": "integer"
+            },
+            "sid": {
+              "description": "The session id.",
+              "examples": [
+                "0TEC5Hw00001zR0"
+              ],
+              "minLength": 1,
+              "type": "string"
+            }
+          },
+          "required": [
+            "sid",
+            "auth_time",
+            "generation"
+          ],
+          "type": "object"
         }
       },
       "required": [

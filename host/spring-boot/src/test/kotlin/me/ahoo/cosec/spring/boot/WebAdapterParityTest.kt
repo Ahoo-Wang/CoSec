@@ -21,15 +21,17 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.identity.IdentityCodec
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
@@ -44,6 +46,7 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
@@ -64,8 +67,9 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.cosec.webflux.PipelineWebFilter
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.cosec.webmvc.PipelineServletFilter
@@ -178,11 +182,8 @@ class WebAdapterParityTest {
 
     private fun compile(key: SnapshotKey, body: String): CompiledDocument = compiler.compile(
         key,
-        SnapshotDocument(
-            2,
-            1,
-            Instant.parse("2026-10-26T00:00:00Z"),
-            """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray(),
+        SnapshotDocuments.read(
+            """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z"$body}""".encodeToByteArray()
         ),
     )
 
@@ -230,6 +231,14 @@ class WebAdapterParityTest {
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(peek(key))
     }
 
+    private val slashTenantTokens = TokenAuthenticator(
+        object : TokenVerifier {
+            override fun verify(accessToken: String) = VerifiedToken("jti", "alice", "acme/west", null)
+
+            override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
+        }
+    )
+
     private val authenticator = Authenticator { credentials ->
         val token = credentials.token?.removePrefix("Bearer ") ?: return@Authenticator AuthnResult.Anonymous
         when (token) {
@@ -238,6 +247,8 @@ class WebAdapterParityTest {
             "revoked" -> AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED)
             "down" -> AuthnResult.Unavailable(IllegalStateException("The key store is down"))
             "slow" -> awaitCancellation()
+            // A verifier's token of a tenant no tenant id can be (#1403), through the real token authenticator.
+            "acme-west" -> slashTenantTokens.authenticate(credentials)
             else -> {
                 val (who, rest) = token.split('@', limit = 2)
                 val (tenant, roles) = rest.split(':', limit = 2).let { it[0] to it.getOrElse(1) { "" } }
@@ -264,11 +275,11 @@ class WebAdapterParityTest {
     private val hostAttributes = CopyOnWriteArrayList<List<String?>>()
 
     /** The engine, except that `/boom` is a defect: the 500 path. */
-    private val engine = object : FlatEngine {
-        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation {
+    private val engine = object : Engine {
+        override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation {
             hostAttributes += HOST_ATTRIBUTES.map(request.attributes::string)
             check(request.request.resource.id != "/boom") { "A defect" }
-            return CoSecFlatEngine.evaluate(request, snapshot, trace)
+            return CoSecEngine.evaluate(request, snapshot, trace)
         }
     }
 
@@ -443,6 +454,13 @@ class WebAdapterParityTest {
                 type = "token-invalid"
             ),
             Scenario(
+                "a token whose tenant can be no tenant id is 401",
+                path = "/orders/1",
+                headers = token("acme-west"),
+                status = 401,
+                type = "token-invalid"
+            ),
+            Scenario(
                 "a revoked token is 401",
                 path = "/orders/1",
                 headers = token("revoked"),
@@ -591,6 +609,14 @@ class WebAdapterParityTest {
                 "an unreadable identity is a 400",
                 path = "/orders",
                 headers = header("not base64!"),
+                pipeline = "identity",
+                status = 400,
+                type = "invalid-request"
+            ),
+            Scenario(
+                "an identity whose tenant can be no tenant id is a 400",
+                path = "/orders",
+                headers = header(IdentityCodec.encode(identity.copy(tenant = "acme/west"))),
                 pipeline = "identity",
                 status = 400,
                 type = "invalid-request"

@@ -2,11 +2,11 @@
 # Mutant: removing a binding narrows whatever it binds, a DENY included
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB2Test :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-index b84039b8..cd5c56ac 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-@@ -70,7 +70,7 @@ internal object Narrowing {
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
+index 0ad107c9..4e9f6fb4 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
+@@ -106,7 +106,7 @@ internal object Narrowing {
      ): Boolean = when (operation) {
          is Operation.RemoveBinding -> {
              val removed = base.bindings.firstOrNull { it.id == operation.id }

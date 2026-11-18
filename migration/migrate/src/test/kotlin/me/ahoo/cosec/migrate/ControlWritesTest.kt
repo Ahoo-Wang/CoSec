@@ -27,7 +27,7 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.engine.BuiltinPolicies
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.migrate.Fixtures7x.source
 import me.ahoo.cosec.model.Binding

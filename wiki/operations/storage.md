@@ -67,11 +67,11 @@ while Redis could not store them, which only it holds and no invalidation reache
 
 `<s>` is [`cosec.key-prefix`](./configuration.md#key-prefix) (`cosec` by default) with a trailing `:` removed: every
 key a deployment writes lives under it (`SNP-9`). `<doc>` names one document: `platform`, `app:<appId>` or `tenant:<tenantId>`. App and tenant ids never
-contain `:`, so a key names one document only.
+contain `:` or `/`, so a key names one document only.
 
 | Key | Written by | Contents |
 |---|---|---|
-| `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces |
+| `<s>:snapshot:<doc>` | the control plane, `cosec-migrate` | the head: the revision of the document every instance enforces, stored as the whole JSON document, its `schema`, `revision` and `publishedAt` included |
 | `<s>:control:revision:<doc>:<digest>` | the control plane, `cosec-migrate` | one revision record, the full document, addressed by its digest (`SHA-256:` and 64 hex digits, as CoCache computes it) |
 | `<s>:control:revisions:<doc>` | the control plane, `cosec-migrate` | the revision index of a document, and the records reclamation took out of it and has not yet seen deleted |
 | `<s>:control:refs:<doc>:<policyId>` | the control plane, `cosec-migrate` | the documents that refer to a policy of `<doc>`, each with the revision of it that last indexed the reference: a revision removes only what it or an earlier one indexed (`CTL-25`); for a platform policy id, also the tenant documents that define a policy of that id themselves, so the platform cannot add one; [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) adds what the heads refer to and it misses, and removes what a publish indexed before a head write it lost |
@@ -80,7 +80,7 @@ contain `:`, so a key names one document only.
 | `<s>:control:apps:all` | the control plane, `cosec-migrate` | the app list: the app documents there are, and whether the list is complete, which the grant analysis reads on every tenant change ([below](#publishing-through-the-control-plane)) |
 | `<s>:control:change:<changeId>` | the control plane | a change request |
 | `<s>:control:stage:<doc>` | the control plane | the staging slot of a document: which change holds it |
-| `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open; the change it belongs to removes it, only while it is still its own (`CTL-26`) |
+| `<s>:candidate:<doc>` | the control plane | the staged candidate of a document while its shadow window is open (its window, its base revision and the candidate document, whose header is its own); the change it belongs to removes it, only while it is still its own (`CTL-26`) |
 | `<s>:shadow:report:<window>:<instance>` | data-plane instance `<instance>` only | that instance's cumulative report of one shadow window; each write replaces the previous one; the instance stops writing it once the window's candidate is withdrawn; expires 8 days after its last write |
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
 | `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's installed revisions and their lag; a heartbeat writes this one value, whatever the size of the cluster; expires 2 minutes after its last write, and a status older than a minute is ignored |
@@ -89,7 +89,7 @@ contain `:`, so a key names one document only.
 | `<s>:token:family:<sid>` | login, refresh and logout | one session's token family: its principal, login time, end, current generation and whether it was revoked. One key per live session, written at login and at each refresh, a few hundred bytes; it expires at the session's end (`cosec.jwt.session.lifetime` after the login), and a revoked one stays, marked, until then. Read only on refresh and logout, never on a request |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
-| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":2`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it |
+| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | one API key as JSON (`"format":3`), by the SHA-256 of the key; a key in the format before 8.0 is refused until `cosec-migrate api-keys` converts it, and one an 8.0 pre-release stored in another format until it is issued again |
 | `<s>:rate-limiter:<ruleId>:<bucket>` | the Redis rate limiter | a hash of one rule's bucket: the window it counts in and that window's and the previous window's counts; expires two windows after its last count. One key per bucket value: a rule keyed on what a client chooses, with a long window, is memory the client controls ([Rate limiting](../policies/rate-limiting.md#counting-and-backends)) |
 | `<s>:oauth:state:<state>` | social login | the OAuth `state` of a login in progress, as JustAuth keeps it; expires after 3 minutes |
 | `<s>:oauth:binding:<state>` | social login | the SHA-256 of the binding of the browser the state was issued to; taken (`GETDEL`) by the callback, so a state is used once; expires after 3 minutes |
@@ -157,8 +157,26 @@ contain `:`, so a key names one document only.
 Only the control plane (and `cosec-migrate`) writes documents and control-plane records. Data-plane instances read
 the documents and the candidates, and write only shadow reports and statuses. A Redis ACL can hold each side to that:
 
-- Data-plane credentials: read-only on `<s>:snapshot:*` and `<s>:candidate:*`, write on `<s>:shadow:*`, and no access
-  to `<s>:control:*`.
+- Data-plane credentials: read-only on `<s>:snapshot:*` and `<s>:candidate:*` (`%R~`), write on `<s>:shadow:*`, and
+  no access to `<s>:control:*`. An instance that does not run the control plane (no `cosec-control` on its classpath,
+  or `cosec.control.enabled=false`) reads the documents and the candidates read-only: CoCache sends those reads as `EVALSHA_RO` (Redis 7.0 or later), so
+  its user needs only read permission on them, and Redis itself refuses that user a write of a document or a
+  candidate. A process that runs the control plane writes them, so its user needs write permission; started with a
+  read-only user it fails at startup, at CoCache's publish check
+  (`Redis denied publishing to the invalidation channel[<s>:inv:snapshot]`).
+- Which of the two a process is follows the condition the control plane is wired on: `cosec-control` on its classpath,
+  and [`cosec.control.enabled`](./configuration.md#control-plane) not `false`. A fleet that ships one image for both
+  roles sets `COSEC_CONTROL_ENABLED=false` on the data-plane role, which then runs no control plane and reads read-only.
+  A `cocache.caches.PolicySnapshotCache.read-only` or `cocache.caches.CandidateCache.read-only` that tries to change it
+  fails startup.
+- Revocations and refresh token families stay read-write wherever JWT is on (`<s>:token:*`): an application can revoke
+  tokens from any endpoint of its own (`TokenRevoker`), so nothing in a process says it only reads them.
+- A data-plane user still publishes on `&<s>:*`: its shadow stores broadcast their invalidations there, and a channel
+  pattern cannot allow subscribing without publishing. So an instance whose credential leaks can publish invalidations
+  on the documents' channel. That costs reads, never a decision: an invalidation carries keys, not a document, so each
+  instance that holds a named document reads it again from Redis, the store of record, which that user cannot write,
+  and decides with the installed copy meanwhile. Keys an instance does not hold are ignored, and the reloads of one
+  document coalesce, at most one in flight and one queued per instance.
 - Control-plane credentials: every key under `<s>:`.
 - To keep one instance from writing another instance's report, give each instance its own user, limited to its own
   report keys (`<s>:shadow:report:*:<instance>`), and set its
@@ -174,13 +192,26 @@ ACL only keeps it to its own keys. An instance with write access to `<s>:shadow:
 instance's id: once the control plane has seen that instance report, the window stays open until its report is back,
 but an id removed before then goes unnoticed until that instance writes again.
 
-An example for instance `pod-a` with the default prefix (Redis 7 ACL syntax; `%R~` is read-only). The first line sets
-the keys and takes every command away; the second grants the commands and channels it needs:
+An example for instance `pod-a` with the default prefix (Redis 7 ACL syntax, `channel-mode: pubsub`). The first line sets
+the keys and takes every command away; the second grants the commands and channels it needs, which are the ones
+[CoCache lists](https://cocache.ahoo.me/operations/#acl) for the stores it writes and the read-only ones (add
+`+spublish +ssubscribe +sunsubscribe` in `sharded` mode):
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:pod-a ~cosec:shadow:instances:*
-ACL SETUSER cosec-pod-a <the commands and channels CoCache lists> +info
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
+
+What the example still gives an operator: no key under `<s>:control:*`, and a report and status only under the
+instance's own name. A data-plane instance needs `snapshot`, `candidate` and the `shadow` families, which are the ones
+tested here; the token, membership, API key, rate limit and OAuth families only for the feature that uses them, and
+those were not tried with an ACL.
+
+`~cosec:shadow:report:` and `~cosec:shadow:status:`, without a `*`, are the keys CoCache names when it creates those
+caches: without them the instance fails at startup with `NOPERM`, though its own keys are allowed. A test runs exactly
+these two lines on real Redis (`DataPlaneAclTest`, on every CI run): an instance without the control plane creates its
+caches, reads the documents, hears a publish by a control-plane user, and writes its report, with an empty `ACL LOG`;
+a `SET` of a document or a candidate as this user is refused (`NOPERM`).
 
 Add the keys the instance's other features use (revocations, API keys, rate limits; see [Redis keys](#redis-keys)).
 Check the user with `ACL DRYRUN` before production: CoCache writes through Lua scripts, which Redis checks key by key.
@@ -224,8 +255,8 @@ sequenceDiagram
   pass. A pass that is slow but still confirming documents, or has a read in flight, is never abandoned. A pass does
   not wait for a document whose compilation has been running for more than those 30 seconds, whoever started it: the
   compilation confirms the document when it ends, and the pass goes on to the documents behind it.
-- **Ids without a document** are remembered apart from the documents, at most 256 per family: a client that declares
-  random app ids makes the instance read Redis for each, but never pushes an installed document out (`SNP-7`).
+- **Ids without a document** are remembered apart from the documents, at most 256 per family: credentials issued for
+  many app ids that have no document make the instance read Redis for each (a client never declares its app), but never pushes an installed document out (`SNP-7`).
 - **Lag** is the time since Redis last confirmed a document. While Redis answers, every pass confirms every
   document, so lag stays below the revalidate interval plus the length of a pass, or below the length of two passes
   once a pass outlasts the interval. Past `lag-warn` (60 seconds) the instance logs
@@ -242,6 +273,14 @@ sequenceDiagram
   does not exist.
 - **A cold load waits** at most [`cold-load-timeout`](./configuration.md#snapshot) (2 seconds); after that the
   document counts as failed for that request.
+- **Held documents are bounded.** Each family keeps at most [`max-apps`/`max-tenants`](./configuration.md#snapshot)
+  documents and `max-absent` absent entries, and drops the least recently used ones on a housekeeping thread. During a
+  burst of cold loads it may for a moment hold up to twice the bound, and never more than 4,096 above it, plus the
+  documents being loaded; past that, the thread that loaded a document evicts before it answers the request (`SNP-14`).
+  That eviction scans what the family holds of the kind it evicts: a fraction of a millisecond for the default 1,024
+  documents, but several milliseconds for a family of 100,000, on the thread that loaded the document. Absent entries
+  are scanned apart from the documents, so evicting them costs what `max-absent` allows, however many documents the
+  family holds.
 - **Revisions only move as Redis says.** After a Redis failover, Redis may answer an older revision than the one
   installed, because replication is asynchronous. The instance installs what Redis holds, since every other instance
   reads the same, and logs `Snapshot document [<doc>] regressed from revision <a> to <b>; ...` at `ERROR`. Publish the
@@ -275,19 +314,22 @@ revalidating 10 documents every 10 seconds take about 0.1 % of it.
 | Memberships from a `MembershipProvider` on Redis | **`503`**. Memberships carried in the token are not affected. |
 | API keys in Redis (`cosec.api-key.store=redis`) | **`503`**. |
 | Rate-limit counters | A rule with `strictFailure: true` answers **`503`**; any other rule is skipped and the request goes on ([Rate limiting](../policies/rate-limiting.md)). |
-| The control plane | A store read that fails is a failure, never "absent": the control API answers `503` and publishes nothing. |
+| The control plane | A store read that fails is a failure, never "absent", and nothing is published. The control API answers `503` while the outage stops the authorization of the call, which confirms the documents on Redis first; a store call that fails after that answers `500`. |
 | Shadow reports | The instance logs the failed write and writes again on its next cycle; the window stays open meanwhile. |
 
 **After a reconnect.** While its connection is down, Lettuce buffers the commands it is given, and when it reconnects
 it writes them all under a lock that every command write takes. A request that sends a command then, on an event loop
 too, waits until that buffer is flushed, and the buffer is unbounded by default. To bound the wait, set
 `requestQueueSize`, or reject commands while disconnected, on the application's Lettuce client with a
-`LettuceClientConfigurationBuilderCustomizer`. CoSec does not change that client: the application shares it.
+`LettuceClientConfigurationBuilderCustomizer`. CoSec does not change that client: the application shares it. The
+customizer reaches only that client, behind the Redis templates (API keys, the rate limiter, OAuth states); CoCache
+builds its own client for the documents, the control-plane records and the revocations ([Redis client](#redis-requirements)),
+and configures it itself.
 
 **Loads in flight are bounded by time, not by number.** A document being loaded counts toward neither `max-apps`,
 `max-tenants` nor the ids without a document until its load ends: it fails after the store read timeout (30 seconds)
-while Redis hangs, though the request waiting for it answers `503` after `cold-load-timeout`. So a client that declares
-new app ids at a high rate keeps up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
+while Redis hangs, though the request waiting for it answers `503` after `cold-load-timeout`. So credentials for new app ids
+used at a high rate keep up to that rate × 30 seconds of loads, and their pending Lettuce commands, in memory
 during such an outage; `requestQueueSize` bounds the commands. None of them ever pushes out an installed document.
 
 **Apps without a document share 256 places.** The ids an instance remembers as having no document, at most 256 per
@@ -314,6 +356,10 @@ the revision record first, then replaces the head with a compare-and-set on the 
 sees the old head or the new one, never a mix, and two publishers never overwrite each other: the second one is told
 the base moved.
 
+A stored document is its body: the whole JSON document, header included. An instance reads the header from it
+(`SnapshotDocuments.read`, `SNP-12`), so the revision it reports installed is always the revision of the content it
+enforces, whatever store holds the bytes.
+
 ### The first documents
 
 On an empty Redis every request answers `503`, the control plane's own checks included, because they also need a
@@ -337,7 +383,7 @@ first platform document always comes from `cosec-migrate publish`:
    document (`tenant:(platform)`), as a revision of kind `BOOTSTRAP`. It refuses when that document already binds
    someone to `cosec:platform-admin`; `--force` is for the recovery where every administrator is lost.
 
-`cosec-migrate` connects to one Redis server (`--to-redis`), and exits with `0` when done, `1` when the data was
+`cosec-migrate` connects to the Redis that `--to-redis` names: one server, or with `--cluster` the comma-separated seed nodes of a Redis Cluster. It exits with `0` when done, `1` when the data was
 rejected or publishing failed, `2` on a usage error. Converting 7.x data into documents is in
 [Upgrading](./upgrading.md).
 
@@ -346,12 +392,13 @@ must first be permitted by the documents like any other request ([Testing change
 
 #### Seeding documents you wrote by hand {#seeding-documents-you-wrote-by-hand}
 
-`cosec-migrate publish` takes only files that `report.json` lists with their SHA-256: the report is what says the
-bytes are the ones that were checked, so `publish` has no option to skip it. Use it for the one document nothing else
-can create, the platform document, and publish the rest of what you wrote through the control plane, which checks and
-compiles every document it writes:
+`cosec-migrate publish --file <document.json> --document <platform|app:<id>|tenant:<id>>` publishes one document you
+wrote, with the checks a converted directory gets: it decodes strictly, compiles (an app or tenant document against the
+published platform document, which must be there), refuses a break-glass binding, and writes only where no document is
+yet. Use it for the one document nothing else can create, the platform document, and publish the rest of what you wrote
+through the control plane, which checks and compiles every document it writes:
 
-1. **Publish the platform document**, with the report you write for it
+1. **Publish the platform document** with `publish --file … --document platform`
    ([Quick start](../guide/quick-start.md#publish-the-platform-document)). It has to let the administrator reach the
    control API's paths, and it should hold no more than that and your platform-wide policies.
 2. **Name the first administrator** with `cosec-migrate bootstrap`, and issue that principal a token for the tenant
@@ -407,7 +454,7 @@ entry that names no app document (not a valid app id, or `*`), or when an app th
 does not name, the grantor's rights are unknown in every app: a grant over every app (a binding with app `*`, or an
 attachment, even one a condition narrows to apps the change does not name) and a grant in an app it could not read
 go to approval (`UNREADABLE`), and the control plane logs a WARN that names `repair-references`, at most once a minute
-per instance. A list that was lost, through a `FLUSHDB` or an eviction, starts again incomplete when the next app
+per instance (a list that cannot be read logs its own WARN at each analysis). A list that was lost, through a `FLUSHDB` or an eviction, starts again incomplete when the next app
 document is published, so the analysis falls back to approval until `repair-references` runs again.
 
 Two cases depend on Redis keeping what it acknowledged, and nothing above catches them: a failover under asynchronous
@@ -461,6 +508,24 @@ it, the shadow window and the change it came from. The control API reads them (`
 A rollback is a change like any other: it is checked, shadowed and approved as its content requires, and publishing
 it makes a new revision, so the history only grows and records who rolled back. A rollback that would bring a
 break-glass binding back never checks clean.
+
+Each revision names its parent revision and that revision's digest, and its record is kept under its own digest, so
+the history is a chain from the head down. A write that a Redis failover lost leaves a parent no record holds:
+[`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) walks the chains, reads only, and names
+each document whose chain is broken.
+
+The head is the authority over the history (`CTL-35`). The revision index lists, for each revision, its digest and the
+digest of its parent, and a history is returned only when its last entry is the head and each entry names the one below
+it. Otherwise (the index is behind, or the head moved back after a partial restore and a revision number was reused)
+the read walks the chain from the head and makes the index follow it, so a revision number never reads the document of
+another branch. What the repair replaces is left to the next reclamation, which never deletes a digest the history
+lists, and the repair logs a warning, once, naming the document, each revision and the digest dropped and kept: that is
+the moment to take the dropped branch's content from a backup, if anyone needs it.
+
+If a record the chain needs is missing and the walk cannot meet an entry it can trust, the history below that revision
+is not returned: `GET /documents/<doc>/revisions/<n>` answers `410` for those revisions, and the control plane logs one
+warning naming the revision and its digest. Their entries stay in the index and nothing of them is deleted; restore the
+record (from a backup) and the next read lists them again.
 
 Every control-plane instance runs two maintenance passes while it runs, each first after one interval:
 

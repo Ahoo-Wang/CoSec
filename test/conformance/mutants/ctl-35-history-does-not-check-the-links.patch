@@ -1,0 +1,16 @@
+# Rule: CTL-35
+# Mutant: the history is taken for the head's when its last entry is the head's, whatever the entries below name as their parents
+# Tests: :control:test --tests me.ahoo.cosec.control.store.HistoryForkTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
+index 1b6c8b30..e119f873 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/HistoryRepair.kt
+@@ -194,6 +194,7 @@ internal class HistoryRepair(
+                 when {
+                     parent == live[i - 1].digest -> Unit
+                     parent == null -> unchecked++
++                    true -> Unit
+                     else -> return IndexCheck.Differs(
+                         "revision ${live[i].revision} names $parent as its parent, but the entry below it is " +
+                             "revision ${live[i - 1].revision} (${live[i - 1].digest})"

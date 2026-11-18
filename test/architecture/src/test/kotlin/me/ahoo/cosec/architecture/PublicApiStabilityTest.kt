@@ -28,7 +28,7 @@ class PublicApiStabilityTest {
         private const val INTERNAL_API = "me.ahoo.cosec.annotations.InternalCoSecApi"
         private const val EXPERIMENTAL_API = "me.ahoo.cosec.annotations.ExperimentalCoSecApi"
         private val PUBLISHED_GROUPS = setOf("api", "core", "backends", "edge", "extensions", "host", "test")
-        private val NOT_PUBLISHED = setOf("conformance", "architecture", "e2e", "code-coverage-report")
+        private val NOT_PUBLISHED = setOf("conformance", "architecture", "e2e", "client-host", "code-coverage-report")
 
         /** Whether [project] is a library module applications compile against. */
         fun published(project: String): Boolean =
@@ -75,6 +75,7 @@ class PublicApiStabilityTest {
             ) + listOf(
                 "AmbiguousPolicy", "AttributeUnavailable", "BoundaryUnavailable", "MatcherFailed", "MembershipUnavailable",
                 "MissingPolicies", "NotLoaded", "RateLimiterUnavailable", "RequiredListenerFailed", "SourceUnavailable",
+                "DocumentInvalid",
             ).map { "model.decision.Cause\$$it" to decision } + listOf(
                 "engine.ViewVersion" to value,
                 "spi.ratelimit.RateLimit" to value,

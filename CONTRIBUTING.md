@@ -86,13 +86,16 @@ not apply yet. Nothing checks the title against the dumps: the author and the re
 ```
 
 - **Unit tests**: JUnit 5, MockK, Hamcrest and FluentAssert, next to the code they cover.
+- **Dependencies** resolve from Maven Central only, so that your build and CI's resolve the same jars. To test CoSec
+  against a library you published to `~/.m2` (a local CoCache or CosId, say), pass `-Pcosec.mavenLocal` or set it in
+  `~/.gradle/gradle.properties`: then `mavenLocal()` comes first, and whoever sets it knows the local jar wins.
 - **Integration tests** run against real infrastructure. The Redis-backed modules (`cosec-cocache`,
   `cosec-spring-boot`) expect Redis on `localhost:6379`:
   `docker run -d --name cosec-redis -p 6379:6379 redis:7`.
 - **Coverage gates** (Codecov): changed lines need **≥ 80 %** coverage, and overall project coverage
   must not drop by more than 1 %.
 - **Performance claims** come with a JMH benchmark (`src/jmh`), e.g.
-  `./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark`.
+  `./gradlew :engine:jmh -PjmhIncludes=EngineAuthorizationBenchmark`.
   That task runs one short iteration; for a before/after comparison run the benchmark jar as described in
   [Measuring](https://cosec.ahoo.me/architecture/overview#measuring), including
   `-jvmArgsAppend -Dlogback.configurationFile=…`, or the forked JVMs log at DEBUG and skew the results.
@@ -122,6 +125,7 @@ On `main`, the same pull request sets `newTag` in [k8s/base/kustomization.yaml](
 new version: the gateway image is tagged with release versions, never with a `-SNAPSHOT` one.
 Release candidates (`vX.Y.Z-RCn`) are released the same way, and only with the maintainer's confirmation. Publishing the release triggers the
 [Packages Deploy](.github/workflows/package-deploy.yml) workflow (Maven Central and GitHub Packages).
+Publishing the release also publishes the TypeScript packages (`@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react`) to npm under the same version: the `npm-publish` job of that workflow fails before it builds anything unless the tag, `gradle.properties` and both `package.json` files agree, and a pre-release goes to the `alpha`, `beta` or `rc` dist-tag, never `latest` ([`typescript/AGENTS.md`](typescript/AGENTS.md#releasing)).
 Release notes are generated from pull request labels ([.github/release.yml](.github/release.yml)).
 
 ## 8. License

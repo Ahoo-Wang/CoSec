@@ -1,0 +1,27 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-15T08:00:00Z",
+  "policies": [
+    {
+      "id": "everything",
+      "statements": [
+        {
+          "name": "everything",
+          "effect": "allow",
+          "action": "http:*",
+          "resource": "http:path:/**"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "everything",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "everything"
+    }
+  ]
+}

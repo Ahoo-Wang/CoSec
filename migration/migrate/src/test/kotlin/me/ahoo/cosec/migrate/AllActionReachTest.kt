@@ -22,12 +22,12 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.Changes
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDefinition
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.migrate.ConvertedReach.Companion.HTTP_GET
 import me.ahoo.cosec.migrate.ConvertedReach.Companion.ORDER
 import me.ahoo.cosec.migrate.ConvertedReach.Companion.ORDER_DELETE

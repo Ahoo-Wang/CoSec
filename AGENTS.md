@@ -14,16 +14,19 @@ a change that fails to compile. When unsure, deny, and ask.
 
 ```bash
 ./gradlew :runtime:check                          # tests + detekt for one module (what CI runs per module)
-./gradlew :engine:test --tests "me.ahoo.cosec.engine.flat.FlatEnginePropertyTest"
+./gradlew :engine:test --tests "me.ahoo.cosec.engine.EnginePropertyTest"
 ./gradlew check                                   # every module
-./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark   # also :e2e:jmh -PjmhIncludes=PipelineBenchmark
+./gradlew :engine:jmh -PjmhIncludes=EngineAuthorizationBenchmark   # also :e2e:jmh -PjmhIncludes=PipelineBenchmark
 ./gradlew :code-coverage-report:codeCoverageReport
 ./gradlew :conformance:check                      # spec conformance suite: scenarios + verifyRuleCoverage
 ./gradlew :architecture:check                     # RFC 0011 §5: dependency, source and project-list rules
 ./gradlew propertyStress -PpropertyIterations=1000   # the registered property tests, more cases (not in check)
 gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only, never on a local machine
-./gradlew :conformance:mutationCheck             # break each security rule on purpose, expect a test to fail (manual, not in check)
+./gradlew :conformance:mutationCheck -Pmutants=a,b  # break a security rule on purpose, expect a test to fail (not in check)
+gh workflow run mutation.yml                       # every mutant, on CI only: 36 shards, about an hour (-f mutants=a,b for a subset; also weekly)
 ./gradlew :spi:updateKotlinAbi                     # rewrite a module's ABI dump, api/<project>.api, after an intended change
+(cd typescript && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test)   # the TypeScript packages: what the `typescript` job of CI runs
+(cd typescript && pnpm test:host)                  # the client against a real host: Gradle builds test/client-host, the script starts it, vitest runs (the `typescript-host` job)
 ```
 
 - `cosec-cocache` and `cosec-spring-boot` tests need Redis on `localhost:6379`
@@ -35,7 +38,7 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   only when every other job passed; it is the required check. A project whose tests need Redis goes in the script's
   `REDIS`.
 - A module's `jmh` task runs 1 fork × 1 iteration: a smoke run. The benchmarks are the engine's
-  (`FlatAuthorizationBenchmark`, `FlatEngineBenchmark`, `CompiledEngineBenchmark`), the whole pipeline's
+  (`EngineAuthorizationBenchmark`, `EngineBenchmark`, `CompiledEngineBenchmark`), the whole pipeline's
   (`:e2e` `PipelineBenchmark`) and a token's verification (`:jwt:jmh -PjmhIncludes=JwtVerificationBenchmark`). To compare versions, pass `-PjmhFork`, `-PjmhIterations`,
   `-PjmhWarmupIterations`, `-PjmhProfilers` and `-PjmhJavaVersion`, or run the jar from the module's `jmhJar`, as in
   [`wiki/architecture/overview.md#measuring`](wiki/architecture/overview.md#measuring). Run the jar yourself only with
@@ -44,7 +47,7 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
 - `gh workflow run jmh-ab.yml -f base=main -f head=<branch> -f module=<m> -f include=<regex>` compares two refs on one CI
   runner as same-job head/base ratios (see `scripts/jmh-ab/README.md`). Use it as a first signal for routine changes.
   `gh workflow run jmh-v7-v8.yml` compares 7.x (`SimpleAuthorizationBenchmark`, `SecurityPipelineBenchmark`) with
-  8.0 (`FlatAuthorizationBenchmark`, `PipelineBenchmark`) on one runner.
+  8.0 (`EngineAuthorizationBenchmark`, `PipelineBenchmark`) on one runner.
 - `schema/*.schema.json` is generated from the document format descriptors (`DocumentFormats` in `cosec-document`,
   `document/format/`): `./gradlew :document:generateSchemas` writes it, `verifySchemas` (part of `check`)
   fails when it is stale, and `SchemaConformanceTest` fails when a descriptor and its codec disagree. Every PR that
@@ -60,9 +63,14 @@ gh workflow run property-stress.yml -f ref=<branch>    # the 1M run: on CI only,
   not recompile its users incrementally: compile them with `--rerun-tasks` to see the opt-ins they now need.
 - `:conformance:mutationCheck` applies each patch in `test/conformance/mutants/` in a temporary worktree and requires a
   failing test (`-Pmutants=a,b` runs a subset). Run it in PRs that add or change a security property; list the
-  mutants the change kills in the PR. `:conformance:check` requires every patch to apply to the working tree
+  mutants the change kills in the PR. Only a failed test in a result file is a kill: a build that fails otherwise is
+  `BUILD_FAILED`, to be run again. The full run is the `mutation.yml` workflow (`.github/workflows/`), weekly and on
+  demand, never a local run: a mutant it reports as not killed is either a wrong patch or a missing test. `:conformance:check` requires every patch to apply to the working tree
   (`MutationCheckTest`): a refactoring that moves the code a mutant breaks fails `check` and names the patch. Rewrite
   it to break the same property where the code now lives (its header says what it is for), then run it.
+  `check` proves a patch applies, not that the patched tree compiles: a change of compiler flags or lint rules can
+  break mutants without `check` noticing (a mutant that does not compile is not a kill), so the full run
+  (`gh workflow run mutation.yml --ref <branch>`) is part of such a change.
 - Build cache, configuration cache and parallel execution are on in `gradle.properties`. If a task fails with a
   configuration-cache problem, don't capture `Project` in `doFirst`/`doLast`; `--no-configuration-cache` bypasses it.
   A cached `test` run does not hit Redis: use `--rerun` (or `cleanTest`) to force Redis-backed tests.
@@ -99,10 +107,19 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`), `backends/`
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
-  `conformance`, `architecture`, `e2e`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
+  `conformance`, `architecture`, `e2e`, `client-host`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
   (`SourceRulesTest`).
+  `typescript/` is not a Gradle project but a pnpm workspace of its own: `cosec-fetcher`, the client of a CoSec
+  application, and `cosec-react`, its React hooks (`@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react` on npm, at the
+  version of `gradle.properties`). They are built on fetcher's packages from npm and nothing in fetcher depends on them.
+  What a client may rely on is `wiki/integration/clients.md`; the workspace's rules are in
+  [`typescript/AGENTS.md`](typescript/AGENTS.md), and `TypeScriptWorkspaceTest` (`:architecture`) holds its names,
+  versions, dependency direction and CI jobs to them. `test/client-host` is the real CoSec 8 host (the starter over
+  WebFlux, CoCache in memory, test sources only, never published) the packages' host tests run against: what a unit
+  test asserts about CoSec's answers against a model is asserted there too, and `:client-host:check` keeps the host
+  answering as those tests assume.
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
@@ -119,7 +136,12 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `cosec-cocache`), `SpiMarkerTest` (`@CoSecSpi` on every implementable public interface of `cosec-spi` and every
   extension point `wiki/architecture/extending.md` lists, and on nothing else), `ApiVariantTest` (a library's Gradle API
   variant, usage `java-api`, carries the CoSec module whose type a public class extends or implements, and Jackson
-  where a public signature names it: a consumer cannot compile against the class otherwise), `EnginePurityTest`,
+  where a public signature names it: a consumer cannot compile against the class otherwise), `PublishedMetadataTest`
+  (the POM and Gradle metadata each published module generates: no imported platform, a version on every dependency,
+  no test or build tool, a POM that brings at run time only what `runtimeElements` brings, no `cosec-runtime` from a
+  backend's POM, and a `cosec-bom` that is exactly the modules an application depends on), `KotlinTimeSignatureTest`
+  and `ConstructibleApiTest` (no `kotlin.time` type in a public or SPI signature; what an application must construct
+  is constructible from stable API), `EnginePurityTest`,
   `RuntimeBoundaryTest`, `ControlBoundaryTest`, the project list in `ProjectListTest` and the catalog. The root
   build writes each project's dependency facts for them with `architectureFacts`. Adding a project means adding it
   there, in `settings.gradle.kts`, the labeler and the bug report template; CI picks it up from `settings.gradle.kts`
@@ -135,7 +157,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   - `cosec-model` (`core/model/`) and `cosec-engine` (`core/engine/`) depend on the Kotlin standard library and
     the `cosec-annotations` markers only: `EnginePurityTest` and `DependencyRulesTest` fail otherwise, and the root
     build leaves out the SLF4J default. The model holds ids, bindings, memberships, the condition AST, `ScopeResolver` and `Decision`; the
-    engine holds the compiler, the indexes and the flat evaluator (`engine/flat/`).
+    engine holds the compiler, the indexes and the evaluator (`Evaluator`, behind `CoSecEngine`).
   - `cosec-spi` (`core/spi/`, `me.ahoo.cosec.spi.*`) holds the ports whose signatures need only the model and the
     contracts, with their values and in-memory implementations: `snapshot` (`SnapshotDocumentStore`, `SnapshotRead`,
     `SnapshotKey`, `InMemorySnapshotDocumentStore`), `membership`, `token` (`TokenVerifier`, `RevocationReader`,
@@ -197,7 +219,7 @@ the adapters, snapshots or the control plane. The parts that take several files 
   `CandidateOrder`), then evaluates: every DENY first, and a matching DENY decides; without one, an erroring DENY
   or anything unresolved makes the decision `Indeterminate`; only then the ALLOWs, where the first match permits and
   an erroring ALLOW counts as no match; nothing matched is an implicit deny. A permit is then held to the tenant's
-  platform boundary (`FlatEvaluator`). The order never changes the decision, only which statement is reported.
+  platform boundary (`Evaluator`). The order never changes the decision, only which statement is reported.
   Rate limits are obligations: they run only after a permit, and an exhausted rule makes the outcome 429.
 - **Policies are data.** Policies, bindings, catalogs and rate limits live in three kinds of snapshot documents
   (platform, app, tenant; `schema: 2`), compiled into indexes. Roles and short-form permissions (`action` on a catalog
@@ -216,13 +238,13 @@ Each one exists for a reason, and each has tests guarding it. Never weaken a tes
 
 | Invariant | Why | Guard |
 |---|---|---|
-| **Deny-first**: no `ALLOW` wins over a matching `DENY`, whatever document either comes from | Otherwise adding a policy can widen access | `FlatEnginePropertyTest` (ALG-1, `P1'`), the ALG conformance scenarios |
+| **Deny-first**: no `ALLOW` wins over a matching `DENY`, whatever document either comes from | Otherwise adding a policy can widen access | `EnginePropertyTest` (ALG-1, `P1'`), the ALG conformance scenarios |
 | **Fail closed**: a failing `DENY`, an unreadable document, a failing or slow SPI never permit; Indeterminate is 503, an unmodelled error 500. Only exceptions: rate limit rules without `strictFailure`, and verifying a request's token while the revocation store cannot be read (documented; never refresh, `IDN-14`) | An outage must not open the gate | `FlatEnginePropertyTest` (`P9`), `PipelineTest` (PIP-2, PIP-4), `CoCacheRevocationReaderTest` (PIP-7) |
 | **One decision path**: outcomes and status codes come only from `StatusMapping`; adapters never see a `Decision` | Three adapters must answer identically | `OneDecisionPathTest`, `WebAdapterParityTest` |
 | **No blocking on the event loop**: the data plane's SPIs suspend, and implementations use non-blocking clients; `SnapshotSource.peek` does no I/O; a local cache hit answers on the caller's thread | Blocking a Netty thread stalls every request on it | `SnapshotStoreBlockHoundTest`, `PipelineBlockHoundTest`, `SuspendingRedisRateLimitingTest`, `RuntimeBoundaryTest` |
 | **Authorization is a pure decision**: the engine does no I/O and keeps no state; obligations run only after a permit, so denied requests never spend a rate-limit permit | Keeps evaluation fast, predictable and explainable | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime, OBL-1) |
 | **Snapshot and control-plane caches are CoCache `Store`s that never expire (`ttl` forever) and throw on failed reads (`unknown-read: throw`) and deletes**, locked and constrained by `CoSecCacheSpecs.locks` over any CoCache customizer or property; Redis must run with `maxmemory-policy noeviction` | Redis is the store of record; expiry, eviction or a swallowed error would silently drop policies | `CacheTtlPolicyTest`, `StrictCacheFailureTest`, `CoSecPipelineAutoConfigurationTest` (SNP-3) |
-| **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `FlatAuthorizationBenchmark`, `PipelineBenchmark` |
+| **Hot-path changes come with a JMH before/after** | Authorization runs on every request | `EngineAuthorizationBenchmark`, `PipelineBenchmark` |
 | **Public signatures change only on purpose**: each published module's ABI is in its `api/<project>.api` dump | Applications compile against CoSec and implement its SPIs | `checkKotlinAbi` (in `check`), `SpiMarkerTest` |
 
 Every normative rule of the RFCs has an id in `test/conformance/src/test/resources/rules/` and the tests that guard it;
@@ -253,6 +275,11 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | Extension points (SPIs; ports live in `cosec-spi` unless their signature needs a layer's types) | `@CoSecSpi` on the interface, `wiki/architecture/extending.md`, `skills/cosec-custom-matcher` |
 | A public signature (a line of a module's `api/<project>.api`) | the dump (`updateKotlinAbi`); after GA, `!` in the PR title when a line is removed or changed |
 | A file over 400 lines, a second top-level type in a file, a new package edge inside `runtime`, `control` or `document`, a structure suppression | an entry in `test/architecture`'s ledgers (`SourceSizeLedger`, `TypeLedger`, `PackageLedger`, `DetektSuppressionTest.RECORDED`) with its batch or its reason, reviewed |
+| What a published module brings into a build (a library dependency, `compileOnlyApi`, the BOM) | nothing to register: `PublishedMetadataTest` reads the generated metadata; `:dependencies` is CoSec's internal platform and is not published; `wiki/guide/introduction.md#what-cosec-needs-from-your-build` when a minimum moves (`CatalogTest`) |
+| A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, the client's skill; after GA, `!` in the PR title when a line is removed or changed |
+| The wire contract a client sees: a `CoSec-*` header, a problem type or its status, a token claim, the refresh rules | `wiki/integration/clients.md`, and `typescript/cosec-fetcher` in the same PR: its tests against the real host fail otherwise |
+| A new TypeScript package | `typescript/AGENTS.md`, `TypeScriptWorkspaceTest`'s `published`, the labeler, `llms.txt`, the publish workflow's package list |
+| An npm dependency of `typescript/` | the catalog of `typescript/pnpm-workspace.yaml` (packages reference `catalog:`) and its lockfile; nothing else |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
 | A module the starter wires (a new one, or a feature that needs one) | `CoSecModuleCheckAutoConfiguration` (STA-1), `wiki/guide/introduction.md#modules` |
 | Integration steps | `wiki/guide/quick-start.md`, `skills/cosec-integration` |
@@ -266,6 +293,8 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 ## Conventions
 
 - Every source file starts with the header in `config/detekt/license.template`; detekt fails otherwise.
+- A local that is never read, or a value assigned to one and never read, fails the build (`UNUSED_VARIABLE`, `VARIABLE_NEVER_READ`,
+  `ASSIGNED_VALUE_IS_NEVER_READ`, raised to errors beside `-Wextra` in the root `build.gradle.kts`): remove the dead store.
 - Kotlin with `-Xjsr305=strict`. Data-plane SPIs are `suspend` functions; `Mono<T>` appears only at the WebFlux and
   Gateway bridges and in their convenience extensions.
 - Comments explain *why*, only where it isn't obvious.
@@ -281,7 +310,8 @@ lives) are in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 - Tests: JUnit 5, MockK, FluentAssert (`me.ahoo.test.asserts.assert`), Reactor Test. For caching and
   concurrency, use real implementations (CoCache's in-memory backend, real Redis) rather than mocks; mocks hide the
   races these tests exist to catch.
-- Dependency versions live only in `gradle/libs.versions.toml`.
+- Dependency versions live only in `gradle/libs.versions.toml`. The build resolves from Maven Central only;
+  `-Pcosec.mavenLocal` adds `mavenLocal()` first, to test against a locally published library (`MavenLocalGuardTest`).
 - PR titles follow Conventional Commits (CI-enforced; they drive labels, release notes and the version).
   Mark breaking changes with `!`. Breaking = public API, `cosec.*` properties, or authorization semantics.
 

@@ -1,0 +1,22 @@
+# Rule: IDN-22
+# Mutant: a tenant switch reads a revocation store it cannot read as "not revoked", as the request path may (PIP-7), and issues on that read
+# Tests: :login:test --tests me.ahoo.cosec.login.token.SwitchLiveSessionTest :conformance:test
+
+diff --git a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+index 68c99d14..7c871330 100644
+--- a/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
++++ b/extensions/login/src/main/kotlin/me/ahoo/cosec/login/token/LiveSessions.kt
+@@ -50,7 +50,12 @@ internal class LiveSessions(private val revocation: TokenRevocation, private val
+         if (session == null || credential == null) {
+             throw TokenVerificationException("The request's credential belongs to no session: sign in again.")
+         }
+-        return live(credential.id, principal.tenant, principal.id, principal.issuedAt, session)
++        return try {
++            live(credential.id, principal.tenant, principal.id, principal.issuedAt, session)
++        } catch (_: me.ahoo.cosec.spi.token.RevocationUnavailableException) {
++            families.requireLive(session, principal.tenant, principal.id)
++            Live(principal.id, session)
++        }
+     }
+ 
+     private suspend fun live(

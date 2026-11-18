@@ -1,0 +1,16 @@
+{
+  "description": "GET /actuator/health/readiness needs no token.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/actuator/health/readiness"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

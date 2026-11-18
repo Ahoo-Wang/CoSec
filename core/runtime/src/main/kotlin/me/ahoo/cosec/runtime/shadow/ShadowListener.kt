@@ -19,12 +19,12 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import kotlinx.coroutines.future.await
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -66,7 +66,7 @@ class ShadowListener(
     private val sampleRate: Double,
     private val candidates: CandidateSource,
     private val recorder: ShadowRecorder,
-    private val engine: FlatEngine = CoSecFlatEngine,
+    private val engine: Engine = CoSecEngine,
     /**
      * The installed documents, for the app document a tenant candidate makes a request read that its live view did not
      * ([ViewDocuments.appOf], RC1-17). Without them such a candidate cannot be compared: [ShadowOutcome.CANDIDATE_ERROR].
@@ -87,7 +87,7 @@ class ShadowListener(
         if (name !in replay.sampledBy) {
             return
         }
-        for ((key, installed) in documents(replay.view)) {
+        for ((key, installed) in documents(replay)) {
             when (val candidate = candidates.candidate(key)) {
                 null -> Unit
                 is Candidate.Failed -> recorder.record(key, candidate.window, ShadowOutcome.CANDIDATE_ERROR, null, null)
@@ -156,19 +156,33 @@ class ShadowListener(
         )
     }
 
-    /** The documents [view] read, with the revisions it had of them (null when unknown). */
-    private fun documents(view: SnapshotView): List<Pair<SnapshotKey, Long?>> = buildList {
+    /**
+     * The documents the replay's view read, with the revisions it had of them (null when unknown): one it read and could
+     * not read or compile too, at the revision the view names, since a candidate of it replaces what failed.
+     */
+    private fun documents(replay: ReplayHandle): List<Pair<SnapshotKey, Long?>> = buildList {
+        val view = replay.view
         add(SnapshotKey.Platform to view.version?.platform)
         view.app?.let { add(SnapshotKey.App(it.owner) to view.version?.app) }
         view.tenant?.let { add(SnapshotKey.Tenant(it.owner) to view.version?.tenant) }
+        val version = view.version ?: return@buildList
+        val failed = view.unresolved.mapNotNullTo(HashSet()) { it.failedDocument() }
+        val scope = replay.request.scope
+        if (view.app == null && DocumentKind.APP in failed && version.app != null) {
+            add(SnapshotKey.App(scope.app.value) to version.app)
+        }
+        if (view.tenant == null && DocumentKind.TENANT in failed && version.tenant != null) {
+            add(SnapshotKey.Tenant(scope.tenant.value) to version.tenant)
+        }
     }
 
     /**
      * The view [document], the candidate of [key], is evaluated on, as enforcement would read it once the candidate is
      * published: the replay's view with [key]'s document replaced and, for a tenant candidate, with the app document the
      * one rule ([ViewDocuments.appOf]) makes the request read with that tenant document. One it needs and the view lacks
-     * is read from the installed documents ([views]); one it no longer needs is left out. Null when one is needed and
-     * there is no [views].
+     * is read from the installed documents ([views]), with the failure to read or compile it; one it no longer needs is
+     * left out, and so is its failure (#1410): the candidate would not be indeterminate for a document it does not read.
+     * Every other failure is kept. Null when one is needed and there is no [views].
      */
     private suspend fun candidateView(
         replay: ReplayHandle,
@@ -181,19 +195,26 @@ class ShadowListener(
         }
         val scope = replay.request.scope
         val app = ViewDocuments.appOf(scope) { document.needsApp(it) }
+        // The live view read the app document and could not: the candidate reads it the same way.
+        val appFailed = view.unresolved.any(::ofApp)
         return when {
-            app == null -> if (view.app == null) view else withApp(view, null)
-            view.app != null -> view
+            app == null && view.app == null && !appFailed -> view
+            app == null -> withApp(view, null, view.unresolved.filterNot(::ofApp))
+            view.app != null || appFailed -> view
             else -> {
                 val source = views ?: return null
                 val withApp = ViewKey.of(scope.tenant, app)
-                withApp(view, (source.peek(withApp) ?: source.load(withApp).await()).app)
+                val read = source.peek(withApp) ?: source.load(withApp).await()
+                withApp(view, read.app, view.unresolved + read.unresolved.filter(::ofApp))
             }
         }
     }
 
-    private fun withApp(view: SnapshotView, app: CompiledDocument?): SnapshotView =
-        SnapshotView(view.platform, app, view.tenant, view.unresolved, view.version)
+    private fun withApp(view: SnapshotView, app: CompiledDocument?, unresolved: List<Cause>): SnapshotView =
+        SnapshotView(view.platform, app, view.tenant, unresolved, view.version)
+
+    /** Whether [cause] is the app document's: it could not be read, or does not compile. */
+    private fun ofApp(cause: Cause): Boolean = cause.failedDocument() == DocumentKind.APP
 
     /** A new view: [view] with [key]'s document replaced. The enforced view is never changed. */
     private fun replaced(view: SnapshotView, key: SnapshotKey, document: CompiledDocument): SnapshotView {
@@ -205,10 +226,13 @@ class ShadowListener(
         require(document.kind == expected && (expected == DocumentKind.PLATFORM || document.owner == ownerOf(key))) {
             "The candidate of [$key] is a ${document.kind} document of [${document.owner}]."
         }
+        // The candidate is that document, compiled: that the stored one does not compile was a property of the bytes it
+        // replaces. One that could not be read stays: the shadow cannot know the store will answer.
+        val unresolved = view.unresolved.filterNot { it is Cause.DocumentInvalid && it.document == expected }
         return when (expected) {
-            DocumentKind.PLATFORM -> SnapshotView(document, view.app, view.tenant, view.unresolved, view.version)
-            DocumentKind.APP -> SnapshotView(view.platform, document, view.tenant, view.unresolved, view.version)
-            DocumentKind.TENANT -> SnapshotView(view.platform, view.app, document, view.unresolved, view.version)
+            DocumentKind.PLATFORM -> SnapshotView(document, view.app, view.tenant, unresolved, view.version)
+            DocumentKind.APP -> SnapshotView(view.platform, document, view.tenant, unresolved, view.version)
+            DocumentKind.TENANT -> SnapshotView(view.platform, view.app, document, unresolved, view.version)
         }
     }
 
@@ -242,7 +266,7 @@ class ShadowListener(
     }
 
     /** The fields of a decision event a sample keeps (RFC 0006 §9.2): no header, token or attribute value. */
-    private fun sample(request: FlatRequest, enforced: Decision, candidate: Decision?): ShadowSample = ShadowSample(
+    private fun sample(request: EngineRequest, enforced: Decision, candidate: Decision?): ShadowSample = ShadowSample(
         tenant = request.scope.tenant.value,
         principal = request.request.subject.id,
         app = request.scope.app.value,
@@ -267,4 +291,11 @@ class ShadowListener(
     }
 
     override fun toString(): String = "ShadowListener($name, sampleRate=$sampleRate)"
+}
+
+/** The document this cause says could not be read, or does not compile; null for any other cause. */
+internal fun Cause.failedDocument(): DocumentKind? = when (this) {
+    is Cause.SourceUnavailable -> document
+    is Cause.DocumentInvalid -> document
+    else -> null
 }

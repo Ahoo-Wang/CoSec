@@ -177,13 +177,14 @@
     {
       "id": "IDN-14",
       "source": "Round-2 review H1 (2026-11-13); RFC 0009 §5",
-      "statement": "A token is never issued on a revocation read that failed: a refresh whose revocations cannot be read (RevocationUnavailableException) fails, never reads the old token as not revoked, so a revoked token, or a token of a revoked principal, cannot be refreshed into one that no revocation names. The pipeline's degraded verification (PIP-7) applies to verifying a token only.",
+      "statement": "A token is never issued from an earlier token on a revocation read that failed: a refresh, or a tenant switch, whose revocations cannot be read (RevocationUnavailableException) fails, never reads the earlier token as not revoked, so a revoked token, or a token of a revoked principal, cannot be refreshed or switched into one that no revocation names. The pipeline's degraded verification (PIP-7) applies to verifying a token only.",
       "level": "pipeline",
       "pending": null,
       "guards": [
         "jwt:RefreshTokenAuthenticationTest#a refresh is refused when the revocations cannot be read",
         "cocache:CoCacheRevocationReaderTest#aRevokedTokenIsNeverJudgedNotRevokedWhileRedisFails",
-        "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens"
+        "cocache:CacheTtlPolicyTest#revokedSubjectCacheIsConfiguredLikeRevokedTokens",
+        "login:SwitchLiveSessionTest#a switch whose revocations cannot be read issues nothing"
       ]
     },
     {
@@ -220,7 +221,7 @@
       "guards": [
         "login:TokenFamiliesTest#a family ends at its absolute lifetime",
         "jwt:RefreshTokenFamiliesJwtTest#a pair never outlives its session",
-        "login:SwitchTenantAuthenticationTest#the new session keeps the login time of the token switched from"
+        "login:SwitchTenantAuthenticationTest#the new session keeps the login time of the session switched from"
       ]
     },
     {
@@ -269,6 +270,84 @@
         "spi:AuthenticatedPrincipalTest#attributesAreReadOnly",
         "jwt:JwtTokenConverterTest#verifiedAttributesAreReadOnlyAtEveryLevel",
         "testkit:PipelineFixtureTest#aFurtherCheckCannotBeWidenedThroughThePrincipalsAttributes"
+      ]
+    },
+    {
+      "id": "IDN-22",
+      "source": "RFC 0009 (8.0 drill, entry 9)",
+      "statement": "A tenant switch issues only from a live session: the request's session, as CoSec's token proved it, whose family is readable, its principal's and tenant's, not revoked and not ended, with the token's revocations read strictly (IDN-14). Otherwise nothing is issued: 401 when the session is unknown, another's, revoked or ended, 503 when the family or the revocations cannot be read (IDN-19). A refresh checks its session in the same place, so a family revoked by a logout (IDN-18) or by a pair presented again (IDN-16) issues nothing, by either.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "login:SwitchLiveSessionTest#a switch from a revoked session issues nothing",
+        "login:SwitchLiveSessionTest#a switch from an ended session issues nothing",
+        "login:SwitchLiveSessionTest#a switch from a session of no family, or of another principal's, issues nothing",
+        "login:SwitchLiveSessionTest#a switch whose family cannot be read issues nothing",
+        "jwt:SwitchFromReplayedPairTest#a replayed pair revokes the session, and the thief's access token switches into nothing",
+        "login:LiveSessionsGuardTest#only the live-session check rotates a family or starts one at an earlier login",
+        "jwt:SwitchBehindGatewayTest#behind the gateway, a switch from a revoked session issues nothing",
+        "architecture:LiveSessionCallersTest#only the live-session check rotates, forks or checks a token family"
+      ]
+    },
+    {
+      "id": "IDN-23",
+      "source": "RFC 0009, docs/roadmap.md §9 (the starter serves the refresh route)",
+      "statement": "When cosec.authentication.login.refresh.path is set, the starter serves POST on it, on Spring MVC and on WebFlux, under the pipeline like every route (STA-4: a document must permit an anonymous POST of it; nothing is exempted from the filter), and never on a gateway. Its body is exactly {\"accessToken\",\"refreshToken\"} as application/json, at most 32 KiB; anything else is 400 invalid-request. It answers 200 application/json, the CompositeToken written by CoSec's one mapper; 401 token-expired, token-revoked or token-invalid for a refusal of the pair; 503 unavailable when the revocations or the session store cannot answer (nothing issued, nothing spent: IDN-14, IDN-19); 500 internal-error for any other error, never 401. Every answer carries Cache-Control: no-store, a problem body is ProblemEncoder's and carries nothing of the request but its request id, and no log line of CoSec carries a token. A path set where the route cannot be served fails startup (STA-1).",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:LoginRoutesTest#a refresh answers a new pair of the same session",
+        "jwt:LoginRoutesTest#the pair is written as CompositeTokenJsonTest pins it, whatever the tokens hold",
+        "jwt:LoginRoutesTest#a body that is not exactly the pair is invalid-request, and nothing of it is told back",
+        "jwt:LoginRoutesTest#each failure answers its own type",
+        "jwt:LoginRoutesTest#a session store that cannot answer is unavailable, and spends nothing",
+        "spring-boot:ServedLoginRoutesTest#a refresh answers a new pair, not to be stored",
+        "spring-boot:ServedLoginRoutesTest#a body that is not the pair is invalid-request, and nothing of it comes back",
+        "spring-boot:ServedLoginRoutesTest#a pair presented again is answered as IDN-16 says",
+        "spring-boot:ServedLoginRoutesTest#revocations that cannot be read are unavailable, on the refresh's own read, and spend nothing",
+        "spring-boot:ServedLoginRoutesTest#a session store that cannot answer is unavailable, a bug is an error, and neither ends the session",
+        "spring-boot:ServedLoginRoutesTest#only POST is served, and a preflight is the CORS filter's",
+        "spring-boot:ServedLoginRoutesTest#with no statement for the route, CoSec refuses it and the operator is told",
+        "spring-boot:LoginRoutesStartupTest#a gateway host with a path set fails startup",
+        "spring-boot:LoginRoutesStartupTest#a path that is not one plain absolute path fails startup"
+      ]
+    },
+    {
+      "id": "IDN-24",
+      "source": "RFC 0009, docs/roadmap.md §9 (the starter serves the refresh route)",
+      "statement": "When cosec.authentication.login.logout.path is set, the starter serves POST on it as it serves the refresh route (IDN-23): the pair in the body, TokenRevoker.revoke of the pair, whether or not the access token has expired. It answers 204 when the session is ended, and when it already was (token-revoked), so a logout whose answer was lost can be sent again; 401 for a pair that is not one; 503 when the store cannot record it; 500 for any other error; 400 for a body that is not the pair; Cache-Control: no-store on every answer.",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "jwt:LoginRoutesTest#a logout ends the session, and a logout of an ended session is done too",
+        "jwt:LoginRoutesTest#a logout of a pair that is not one is 401, of a body that is not a pair 400, of a store that is down 503",
+        "spring-boot:ServedLoginRoutesTest#a logout ends the session, and a logout of an ended one is done too"
+      ]
+    },
+    {
+      "id": "IDN-25",
+      "source": "authentication.md audit (2026-11-18): one verifier, one refresh authentication",
+      "statement": "A request, a refresh and a logout verify with one TokenVerifier: the application's bean when it declares one, else CoSec's. The served refresh route refreshes with the application's RefreshTokenAuthentication when it declares one, its hook included, else with the starter's over the MembershipRefresh bean; a refresh authentication over a credentials class the route cannot present fails startup while the route's path is set.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "spring-boot:OneVerifierTest#an application verifier that refuses a token refuses it on a request, a refresh and a logout alike",
+        "spring-boot:OneVerifierTest#with CoSec's own verifier the same token is the principal on the request",
+        "spring-boot:OneVerifierTest#the served refresh route refreshes with the application's own refresh authentication, its hook included",
+        "spring-boot:OneVerifierTest#a refresh authentication over credentials of the application's own fails startup with the route set",
+        "spring-boot:OneVerifierTest#an application verifier that wraps CoSec's own makes a request's token not CoSec's, without session or break-glass"
+      ]
+    },
+    {
+      "id": "IDN-26",
+      "source": "RFC 0004 §4.5.3; #1629 finding 5",
+      "statement": "A revocation through TokenRevoker invalidates every instance's local 'not revoked' answer for that token or subject at once; an instance that missed the invalidation keeps that answer for at most 30 seconds (RevokedTokenCache.MISSING_TTL_SECONDS), and no property, layer or customizer lengthens it.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "cocache:CacheTtlPolicyTest#revocationTablesKeepNotRevokedFor30SecondsAtMost",
+        "spring-boot:StrictCacheFailureTest#revocationTablesKeepNotRevokedFor30SecondsWhateverTheGlobalLayersSay",
+        "spring-boot:StrictCacheFailureTest#aRevocationTablesAbsentTtlPropertyFailsStartup"
       ]
     }
   ]

@@ -19,13 +19,13 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ApplyMode
-import me.ahoo.cosec.control.change.BreakGlass
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.Confirmation
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Propagation
 import me.ahoo.cosec.control.change.ShadowAck
+import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.engine.ViewVersion
 import me.ahoo.cosec.spi.snapshot.SnapshotKey

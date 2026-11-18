@@ -19,6 +19,8 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 
 键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色，或租户文档把该应用的某个权限策略绑定给任何人或某个主体时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
 
+租户 id 和应用 id 都是一个路径段：不为空、不是 `*`，至多 128 个字符，且不含 `:`、`/`、控制字符或未配对的 UTF-16 代理项。控制面在 `doc/tenant/<tenantId>/…`、`scope/<tenantId>/<appId>/<space>` 这样的资源上授权，含 `/` 的 id 在那里会读作另一个租户的 id 后面再接一段路径（`SCP-13`）。其他字符都是普通字符：`acme.west`、`acme-west` 和 `acme west` 都是租户 id。租户或应用违反这条规则的令牌是 `token-invalid`（[升级](../operations/upgrading.md#tenant-and-app-ids-hold-no-slash)）。
+
 一个租户文档：
 
 ```json

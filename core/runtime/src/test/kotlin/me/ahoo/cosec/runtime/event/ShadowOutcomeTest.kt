@@ -20,10 +20,10 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.ViewVersion
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
@@ -68,7 +68,7 @@ class ShadowOutcomeTest {
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(peek(key))
     }
 
-    private fun counted(enforced: Decision, engine: FlatEngine): Map<ShadowOutcome, Long> {
+    private fun counted(enforced: Decision, engine: Engine): Map<ShadowOutcome, Long> {
         val recorder = ShadowRecorder("instance-1")
         val shadow = ShadowListener(
             "shadow",

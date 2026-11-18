@@ -23,13 +23,14 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.document.route.RouteMapException
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.gateway.IdentityHeadersFilter
 import me.ahoo.cosec.gateway.IdentityStripFilter
 import me.ahoo.cosec.gateway.PipelineGatewayFilter
@@ -223,10 +224,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             "blacklist", "listeners", "rateLimiter", "routes", "identity", "gateway", "check", "refresh", "families",
             "switch",
         )
-        node.get("refresh")?.let {
-            return ScenarioRefresh.refreshed(it, revocations(node.get("revocations")), node.get("families"))
-        }
-        node.get("switch")?.let { return ScenarioSwitch.switched(it) }
+        issuedFromEarlierToken(node)?.let { return it }
         val attributes = AttributeProviders(attributeProviders(node))
         val documents = node.get("documents") ?: EMPTY
         documents.only("platform", "apps", "tenants", "unavailable")
@@ -566,6 +564,19 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         return InMemoryApiKeyStore(keys).reader
     }
 
+    /** A scenario of an issue from an earlier token, a refresh or a tenant switch, over its revocations and families. */
+    private fun issuedFromEarlierToken(node: JsonNode): Outcome? {
+        val refresh = node.get("refresh")
+        val switch = node.get("switch") ?: refresh ?: return null
+        val revocations = revocations(node.get("revocations"))
+        val families = node.get("families")
+        return if (refresh != null) {
+            ScenarioRefresh.refreshed(refresh, revocations, families)
+        } else {
+            ScenarioSwitch.switched(switch, revocations, families)
+        }
+    }
+
     private fun revocations(node: JsonNode?): RevocationReader {
         if (node == null) return RevocationReader.NONE
         node.only("tokens", "subjects", "fails", "unavailable")
@@ -712,12 +723,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     private fun stored(body: JsonNode, revision: Long): SnapshotDocument {
         val text = (body.deepCopy() as ObjectNode)
             .put("schema", SnapshotDocument.DOCUMENT_SCHEMA).put("revision", revision).put("publishedAt", NOW)
-        return SnapshotDocument(
-            SnapshotDocument.DOCUMENT_SCHEMA,
-            revision,
-            Instant.parse(NOW),
-            text.toString().encodeToByteArray()
-        )
+        return SnapshotDocuments.read(text.toString().encodeToByteArray())
     }
 
     /** Puts the scenario's documents in [store]; the keys of the app and tenant ones. */

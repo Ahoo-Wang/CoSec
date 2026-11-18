@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.authz.ControlResources
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -35,7 +36,6 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotRead
@@ -43,7 +43,6 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Duration
-import java.time.Instant
 import java.util.concurrent.CompletableFuture
 
 /** The control plane's checks run only on documents the store has just confirmed (RFC 0007 §7.2). */
@@ -63,7 +62,12 @@ class SourceConfirmationTest {
     )
 
     private fun publish(revision: Long) {
-        store.put(SnapshotKey.Platform, SnapshotDocument(1, revision, Instant.now(), byteArrayOf()))
+        store.put(
+            SnapshotKey.Platform,
+            SnapshotDocuments.read(
+                """{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()
+            ),
+        )
     }
 
     private fun decide(): ControlDecision = runBlocking {

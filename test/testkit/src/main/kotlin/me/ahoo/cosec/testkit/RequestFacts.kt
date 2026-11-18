@@ -26,7 +26,8 @@ import me.ahoo.cosec.model.condition.Attribute.Kind
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.scope.Scope
-import me.ahoo.cosec.runtime.http.uriHost
+import me.ahoo.cosec.runtime.http.Headers
+import me.ahoo.cosec.runtime.http.HttpAttributes
 
 /**
  * What the statements of a scenario read about its request: the attribute catalog of RFC 0005 §3.2, filled from the
@@ -46,8 +47,8 @@ internal class RequestFacts(
     val time: Long,
     val device: String?,
     val blocked: Boolean,
-    /** By lower-case name. */
-    val headers: Map<String, String>,
+    /** Every value of every header under its HTTP name, names case-insensitive as the pipeline's. */
+    val headers: Headers,
     val requestAttributes: Map<String, String>,
 ) {
     private val facts: ConditionInput = FactsInput(this)
@@ -68,6 +69,8 @@ internal class RequestFacts(
 
 /** An absent attribute reads as null (RFC 0005 §3.4). */
 private class FactsInput(private val facts: RequestFacts) : ConditionInput {
+    private val http = HttpAttributes(facts.headers, facts.requestAttributes)
+
     @Suppress("CyclomaticComplexMethod")
     override fun string(attribute: Attribute): String? = when (attribute.kind) {
         Kind.SUBJECT_ID -> if (facts.authenticated) facts.principal else null
@@ -81,12 +84,9 @@ private class FactsInput(private val facts: RequestFacts) : ConditionInput {
         Kind.RESOURCE_ID -> facts.resource.id
         Kind.RESOURCE_ATTRIBUTE -> facts.resource.attributes[attribute.name]
         Kind.ENVIRONMENT_DEVICE -> facts.device
-        Kind.HTTP_HEADER -> facts.headers[attribute.name]
-        Kind.HTTP_ORIGIN -> facts.headers[ORIGIN]
-        Kind.HTTP_REFERER -> facts.headers[REFERER]
-        Kind.HTTP_ORIGIN_HOST -> facts.headers[ORIGIN]?.let(::uriHost)
-        Kind.HTTP_REFERER_HOST -> facts.headers[REFERER]?.let(::uriHost)
-        Kind.REQUEST_ATTRIBUTE -> facts.requestAttributes[attribute.name]
+        // The runtime's own reading, so a header sent with different values has no value here either.
+        Kind.HTTP_HEADER, Kind.HTTP_ORIGIN, Kind.HTTP_REFERER, Kind.HTTP_ORIGIN_HOST, Kind.HTTP_REFERER_HOST,
+        Kind.REQUEST_ATTRIBUTE -> http.string(attribute)
         else -> null
     }
 
@@ -112,10 +112,4 @@ private class FactsInput(private val facts: RequestFacts) : ConditionInput {
 
     override fun time(attribute: Attribute): Long =
         if (attribute.kind == Kind.ENVIRONMENT_TIME) facts.time else ConditionInput.NO_TIME
-
-    // As the runtime's HttpAttributes reads it: the URL's host folded to ASCII lower case, null when there is none.
-    private companion object {
-        const val ORIGIN = "origin"
-        const val REFERER = "referer"
-    }
 }

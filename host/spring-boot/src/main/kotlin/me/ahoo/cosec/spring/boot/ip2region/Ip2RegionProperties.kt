@@ -22,6 +22,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 @ConfigurationProperties(prefix = Ip2RegionProperties.PREFIX)
 @InternalCoSecApi
 class Ip2RegionProperties(
+    /** Whether the `ext.ip2region.*` attribute provider is on (`cosec-ip2region`). */
     @DefaultValue("true") override var enabled: Boolean = true,
     /**
      * Where the IPv6 `.xdb` database is (a Spring resource location, `file:` or `classpath:`), loaded beside the bundled

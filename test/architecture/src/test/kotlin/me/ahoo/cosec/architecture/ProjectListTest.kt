@@ -36,7 +36,7 @@ class ProjectListTest {
             "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "kafka"),
             "host" to listOf("spring-boot"),
             "migration" to listOf("migrate"),
-            "test" to listOf("testkit", "conformance", "architecture", "e2e", "code-coverage-report"),
+            "test" to listOf("testkit", "conformance", "architecture", "e2e", "client-host", "code-coverage-report"),
             "bom" to listOf("bom", "dependencies"),
             "platform" to listOf("gateway-server"),
         )
@@ -48,7 +48,7 @@ class ProjectListTest {
 
         /** Not something a user reports a bug against: test-only projects and the BOMs. */
         private val UNREPORTED =
-            setOf("conformance", "architecture", "e2e", "code-coverage-report", "bom", "dependencies")
+            setOf("conformance", "architecture", "e2e", "client-host", "code-coverage-report", "bom", "dependencies")
 
         /** No tests to run: the BOMs, the coverage report, and the gateway server, which `docker-deploy` builds. */
         private val UNTESTED = setOf("bom", "dependencies", "code-coverage-report", "gateway-server")
@@ -79,7 +79,8 @@ class ProjectListTest {
     @Test
     fun `the labeler labels every project directory`() {
         val labeler = Projects.root.resolve(".github/labeler.yml").readText()
-        val globs = Regex("""'([a-z-]+/[a-z0-9-]+)/\*\*'""").findAll(labeler).map { it.groupValues[1] }.toSet()
+        val globs = Regex("""'([a-z-]+/[a-z0-9-]+)/\*\*'""").findAll(labeler).map { it.groupValues[1] }
+            .filterNot { it.startsWith("typescript/") }.toSet()
         val expected = GROUPS.flatMap { (group, names) -> names.filterNot { it in UNLABELED }.map { "$group/$it" } }
         globs.assert().containsExactlyInAnyOrderElementsOf(expected)
     }
@@ -90,7 +91,8 @@ class ProjectListTest {
         val block = Regex("""id: modules\n(.*?)\n\s*validations:""", RegexOption.DOT_MATCHES_ALL).find(template)
         block.assert().isNotNull()
         val options = Regex("""(?m)^\s+- (.+)$""").findAll(block!!.groupValues[1]).map { it.groupValues[1].trim() }
-        val expected = PROJECTS.filterNot { it in UNREPORTED }.map(::artifactOf) + "Not sure"
+        // A TypeScript package is offered by its name: typescript/AGENTS.md lists them.
+        val expected = PROJECTS.filterNot { it in UNREPORTED }.map(::artifactOf) + "cosec-fetcher" + "cosec-react" + "Not sure"
         options.toList().assert().containsExactlyInAnyOrderElementsOf(expected)
     }
 

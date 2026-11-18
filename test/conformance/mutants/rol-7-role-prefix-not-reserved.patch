@@ -2,15 +2,16 @@
 # Mutant: a change may put a binding of a derived id
 # Tests: :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-index 6625b70e..2a63a060 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt
-@@ -443,6 +443,6 @@ class ChangeChecks(
-         private const val UNPROCESSABLE = 422
-         private const val UNAVAILABLE = 503
-         private val BUILTIN = BuiltinPolicies.CONTROL.keys.map { it.value } + BuiltinPolicies.ROOT.value
--        val RESERVED = listOf("cosec:", "g:", "r:", RoleExpansion.BINDING_PREFIX)
-+        val RESERVED = listOf("cosec:", "g:", "r:")
-     }
- }
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
+index a8b7b57a..690efae0 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EntryChecks.kt
+@@ -32,7 +32,7 @@ import me.ahoo.cosec.model.scope.ScopeResolver
+ /** The names and ids a candidate and its change use (V2, RFC 0007 §6.2, §7.1, §3.1 N2). */
+ internal object EntryChecks {
+     /** The prefixes of ids no change may put: built-in policies, migration, and role expansion. */
+-    val RESERVED = listOf("cosec:", "g:", "r:", RoleExpansion.BINDING_PREFIX)
++    val RESERVED = listOf("cosec:", "g:", "r:")
+ 
+     /**
+      * A tenant policy takes a platform policy's id only as an exact copy of it (RFC 0007 N2, §9.4, #1224): that is the

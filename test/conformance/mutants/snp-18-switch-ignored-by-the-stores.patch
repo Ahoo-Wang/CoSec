@@ -1,0 +1,26 @@
+# Rule: SNP-18
+# Mutant: the read-only declaration of both stores ignores cosec.control.enabled, so they are read-write while it is switched off
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.control.ControlPlaneSwitchTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
+index ba42d352..1daf7f86 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
+@@ -104,7 +104,7 @@ class CoSecSnapshotAutoConfiguration {
+         ): PolicySnapshotCache {
+             val snapshot = properties.snapshot
+             // Read-only unless this process runs the control plane, the only writer of documents (SNP-18).
+-            val readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment)
++            val readOnly = !ControlPlaneCondition.present(resources.classLoader)
+             return factory.createPolicySnapshotCache(
+                 CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge, readOnly)
+             )
+@@ -236,7 +236,7 @@ class CoSecSnapshotAutoConfiguration {
+             val store = stores.ifUnique ?: CoCacheCandidateStore.create(
+                 factory,
+                 cosec.keyPrefix,
+-                readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment),
++                readOnly = !ControlPlaneCondition.present(resources.classLoader),
+             )
+             return CachingCandidateSource(store, compiler::compileCandidate)
+         }

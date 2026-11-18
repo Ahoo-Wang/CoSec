@@ -1,11 +1,11 @@
 # Rule: DOC-6
 # Mutant: a document holds any number of rate limit rules
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.CompiledDocumentTest :conformance:test
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest :conformance:test
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt
 index e2d25463..93bf8b30 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt
 @@ -103,7 +103,7 @@ class CompiledDocument private constructor(
      internal val repeats: Int
  

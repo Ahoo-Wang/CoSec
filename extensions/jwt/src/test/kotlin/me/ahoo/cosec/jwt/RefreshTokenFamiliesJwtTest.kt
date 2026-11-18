@@ -119,7 +119,7 @@ class RefreshTokenFamiliesJwtTest {
     fun `a pair never outlives its session`() {
         val subject = TokenSubject("alice", null, tenant = "acme")
         val signedIn = Instant.now().minus(Duration.ofDays(30)).plus(Duration.ofHours(1))
-        val issue = runBlocking { families.start(TenantId("acme"), PrincipalId("alice"), signedIn) }
+        val issue = runBlocking { families.startAt(TenantId("acme"), PrincipalId("alice"), signedIn) }
         val pair = converter.toToken(subject.inSession(issue))
         JWT.decode(pair.refreshToken).expiresAtAsInstant.isAfter(issue.notAfter).assert().isFalse()
         JWT.decode(pair.accessToken).expiresAtAsInstant.isAfter(issue.notAfter).assert().isFalse()

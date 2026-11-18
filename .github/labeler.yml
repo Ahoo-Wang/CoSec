@@ -57,6 +57,9 @@
 'module: e2e':
   - changed-files:
       - any-glob-to-any-file: 'test/e2e/**'
+'module: client-host':
+  - changed-files:
+      - any-glob-to-any-file: 'test/client-host/**'
 'module: kafka':
   - changed-files:
       - any-glob-to-any-file: 'extensions/kafka/**'
@@ -99,9 +102,21 @@
   - changed-files:
       - any-glob-to-any-file: '.github/**'
 
+'module: cosec-fetcher':
+  - changed-files:
+      - any-glob-to-any-file: 'typescript/cosec-fetcher/**'
+
+'module: cosec-react':
+  - changed-files:
+      - any-glob-to-any-file: 'typescript/cosec-react/**'
+
+'area: typescript':
+  - changed-files:
+      - any-glob-to-any-file: 'typescript/**'
+
 'area: build':
   - changed-files:
-      - any-glob-to-any-file: ['**/*.gradle.kts', 'gradle/**', 'gradle.properties', 'config/**', 'wiki/package.json', 'wiki/pnpm-lock.yaml']
+      - any-glob-to-any-file: ['**/*.gradle.kts', 'gradle/**', 'gradle.properties', 'config/**', 'wiki/package.json', 'wiki/pnpm-lock.yaml', 'typescript/package.json', 'typescript/pnpm-lock.yaml', 'typescript/pnpm-workspace.yaml']
 
 
 'area: test':

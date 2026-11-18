@@ -1,0 +1,21 @@
+# Rule: CTL-22
+# Mutant: a PUBLISHED change whose slot release failed is refused when it is published again (409), so its slot stays held
+# Tests: :control:test --tests me.ahoo.cosec.control.change.RetriedPublishTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+index 5dc90670..5f478c6f 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+@@ -80,12 +80,6 @@ internal class Publishing(
+     ): ChangeRequest {
+         val change = flow.visible(publisher, id)
+         authority.require(publisher, change.key, PublishRules.publishing(change))
+-        if (change.state == ChangeState.PUBLISHED && slots.holds(change)) {
+-            val recorded = change.publishedAgain(publisher, again)
+-            return afterHead(change, checkNotNull(change.publishedRevision)) {
+-                slots.released(change) { flow.audit(PublishRules.outcomeOf(change, change), recorded, publisher.actor) }
+-            }
+-        }
+         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
+         PublishRules.acknowledged(change, ack)
+         candidates.authorize(publisher, change)

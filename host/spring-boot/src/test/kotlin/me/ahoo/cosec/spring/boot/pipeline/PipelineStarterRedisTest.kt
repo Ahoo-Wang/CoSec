@@ -21,15 +21,16 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.control.api.ControlHttp
-import me.ahoo.cosec.control.change.ShadowOptions
 import me.ahoo.cosec.control.change.ShadowState
-import me.ahoo.cosec.control.change.ShadowWindows
+import me.ahoo.cosec.control.lifecycle.ShadowOptions
+import me.ahoo.cosec.control.lifecycle.ShadowWindows
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.login.token.TokenConverter
 import me.ahoo.cosec.login.token.TokenSubject
 import me.ahoo.cosec.model.PrincipalId
@@ -39,7 +40,6 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.shadow.ShadowRecorder
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.TokenRevoker
 import me.ahoo.cosec.spring.boot.control.CoSecControlAutoConfiguration
@@ -218,6 +218,17 @@ class PipelineStarterRedisTest {
         }
     }
 
+    /** A report interval under a millisecond would be a loop that never suspends: startup refuses it, naming it (#1397). */
+    @Test
+    fun `a report interval under a millisecond fails startup naming the property`() {
+        runner.withPropertyValues("cosec.authorization.shadow.report-interval=500us").run { context ->
+            val failure = context.startupFailure
+            failure.assert().isNotNull()
+            generateSequence<Throwable>(failure) { it.cause }.mapNotNull { it.message }.joinToString("\n").assert()
+                .contains("cosec.authorization.shadow.report-interval is at least one millisecond")
+        }
+    }
+
     /** S3: the data plane takes part in shadow windows, so a candidate one instance cannot compile blocks its window. */
     @Test
     fun `a candidate that does not compile on an instance blocks its window`() {
@@ -234,7 +245,7 @@ class PipelineStarterRedisTest {
                 context.getBean(ControlStore::class.java).putCandidate(
                     SnapshotKey.Platform,
                     null,
-                    StoredCandidate(window, 1, SnapshotDocument(2, 2, startedAt, uncompilable.encodeToByteArray())),
+                    StoredCandidate(window, 1, SnapshotDocuments.read(uncompilable.encodeToByteArray())),
                 )
             }
             val windows = ShadowWindows(context.getBean(CoCacheShadowReports::class.java))
@@ -271,7 +282,7 @@ class PipelineStarterRedisTest {
                 context.getBean(ControlStore::class.java).putCandidate(
                     SnapshotKey.Tenant("acme"),
                     null,
-                    StoredCandidate(window, 1, SnapshotDocument(2, 2, startedAt, granting.encodeToByteArray())),
+                    StoredCandidate(window, 1, SnapshotDocuments.read(granting.encodeToByteArray())),
                 )
             }
             // The window closes as soon as one sample compared.

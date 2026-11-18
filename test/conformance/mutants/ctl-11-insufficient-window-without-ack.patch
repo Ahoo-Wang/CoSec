@@ -1,0 +1,17 @@
+# Rule: CTL-11
+# Mutant: a window that closed at its longest with too few samples publishes without the publisher acknowledging it, when nothing in it changed
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ShadowWindowTest :conformance:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ShadowSummary.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ShadowSummary.kt
+index 0e89111c..d3fd3bed 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ShadowSummary.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ShadowSummary.kt
+@@ -30,7 +30,7 @@ data class ShadowSummary(
+     val blocked: Boolean
+ ) {
+     /** Whether publishing needs the publisher to acknowledge these numbers: anything changed, or too few samples. */
+-    val needsAck: Boolean get() = insufficient || ACKNOWLEDGED.any { (counts[it] ?: 0) > 0 }
++    val needsAck: Boolean get() = ACKNOWLEDGED.any { (counts[it] ?: 0) > 0 }
+ 
+     private companion object {
+         val ACKNOWLEDGED = listOf("WIDENED", "NARROWED", "BECAME_INDETERMINATE", "BECAME_DENIED", "OBLIGATIONS_CHANGED")

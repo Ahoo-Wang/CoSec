@@ -167,6 +167,22 @@ class ScopeResolverTest {
             .isEqualTo(AppId("shop\uD83D\uDE00"))
     }
 
+    /**
+     * `SCP-13` (#1403): a tenant or app id is one path segment of the control plane's resources, so it holds no `/`;
+     * any other separator-like character is an ordinary one.
+     */
+    @Test
+    fun `a tenant or app id is one path segment`() {
+        for (id in listOf("acme/west", "/acme", "acme/", "/", "a//b")) {
+            ScopeResolver.isValidAppId(id).assert().describedAs(id).isFalse()
+            rejectedFor(ScopeResolver.resolve(credential(id), "", noHost))
+                .assert().describedAs(id).isEqualTo(ScopeResolution.Rejected.Reason.APP_MISMATCH)
+        }
+        for (id in listOf("acme\\west", "acme.west", "acme%2Fwest", "acme-west", "acme west")) {
+            ScopeResolver.isValidAppId(id).assert().describedAs(id).isTrue()
+        }
+    }
+
     @Test
     fun `a near miss of the host app is rejected`() {
         for (app in listOf(" order", "order ", "ORDER", "a@b")) {

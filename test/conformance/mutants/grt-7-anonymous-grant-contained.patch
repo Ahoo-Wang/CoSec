@@ -2,11 +2,11 @@
 # Mutant: an Anyone grant in tenant (0) is analyzed like any other, though it reaches unauthenticated callers
 # Tests: :control:test --tests me.ahoo.cosec.control.grant.GrantAnalyzerTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-index d9d547fb..17a6fe1e 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt
-@@ -317,7 +317,7 @@ class GrantAnalyzer(zones: ZoneResolver = ZoneResolver.FIXED, limits: ConditionL
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+index cc21d980..9eecd8a3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantVerdicts.kt
+@@ -78,7 +78,7 @@ internal class GrantVerdicts(private val checker: ConditionChecker, private val
              return unknown(UnknownReason.CROSS_TENANT, null, "the grantor is in ${grantor.tenant.value}", null)
          }
          val grantee = fragment.grantee

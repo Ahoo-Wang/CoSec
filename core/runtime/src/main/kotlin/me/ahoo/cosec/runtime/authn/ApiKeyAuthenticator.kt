@@ -76,6 +76,7 @@ class ApiKeyAuthenticator(
             issuedAt = null,
             apiKeyCredential = true,
             app = apiKey.app?.let(::AppId),
+            session = null,
         )
         return AuthnResult.Authenticated(principal, method)
     }

@@ -2,11 +2,11 @@
 # Mutant: a principal authenticated by an API key approves like a person
 # Tests: :control:test --tests me.ahoo.cosec.control.authz.ApprovalB2Test :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index 9376fa22..db7ee44c 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -225,7 +225,7 @@ class ChangeAuthority(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+index 0da6cedc..f7907b55 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+@@ -104,7 +104,7 @@ internal class ApprovalRules(
       * trust root is the trust root's.
       */
      fun approvalRefusal(operator: Operator, change: ChangeRequest): String? = when {

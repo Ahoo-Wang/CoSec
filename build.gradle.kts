@@ -27,11 +27,11 @@ plugins {
     alias(libs.plugins.jmh)
     jacoco
 }
+// The versions CoSec itself is built and tested with. An internal platform: it is in no publication, and no published
+// module names it (a library publishes the versions it resolved, see `versionMapping` below).
 val dependenciesProject = project(":dependencies")
-val bomProjects = setOf(
-    project(":bom"),
-    dependenciesProject,
-)
+val bomProject = project(":bom")
+val bomProjects = setOf(bomProject, dependenciesProject)
 
 val serverProjects = setOf(
     project(":gateway-server"),
@@ -42,9 +42,10 @@ val testOnlyProjects = setOf(
     project(":conformance"),
     project(":architecture"),
     project(":e2e"),
+    project(":client-host"),
 )
-val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects
-val libraryProjects = publishProjects - bomProjects
+val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects - dependenciesProject
+val libraryProjects = publishProjects - bomProject
 
 // The contracts and the decision engine (RFC 0002 §2, RFC 0011 §5): the Kotlin standard library only.
 val pureProjects = setOf(
@@ -71,7 +72,11 @@ ext.set("libraryProjects", libraryProjects)
 
 allprojects {
     repositories {
-        mavenLocal()
+        // A jar in ~/.m2 with the coordinates of a published one shadows it, and CI has none: only when asked, with
+        // -Pcosec.mavenLocal (or in ~/.gradle/gradle.properties), to test against a locally published CoCache or CosId.
+        if (providers.gradleProperty("cosec.mavenLocal").isPresent) {
+            mavenLocal()
+        }
         mavenCentral()
     }
     apply<DetektPlugin>()
@@ -118,15 +123,21 @@ configure(libraryProjects) {
     junitTests()
     coverageReport()
 
+    // The module compiles and tests against the versions of `cosec-dependencies`, through a configuration that no
+    // published variant extends: the platform is not in the module's POM or Gradle module metadata, which name the
+    // versions it resolved instead (`versionMapping`, below). The pure projects keep it off their main classpaths.
+    val buildPlatform = configurations.create("buildPlatform") {
+        isCanBeConsumed = false
+        isCanBeResolved = false
+    }
+    val platformClasspaths = setOf("testCompileClasspath", "testRuntimeClasspath") +
+        if (this@configure in pureProjects) emptySet() else setOf("compileClasspath", "runtimeClasspath", "architectureApiConsumer")
+    configurations.matching { it.name in platformClasspaths }.configureEach { extendsFrom(buildPlatform) }
+
     dependencies {
-        if (this@configure in pureProjects) {
-            // Keeps the platform out of the published POM; tests and benchmarks still take versions from it.
-            testImplementation(platform(dependenciesProject))
-        } else {
-            api(platform(dependenciesProject))
-            if (this@configure != spiProject && this@configure != documentProject) {
-                implementation("org.slf4j:slf4j-api")
-            }
+        buildPlatform(platform(dependenciesProject))
+        if (this@configure !in pureProjects && this@configure != spiProject && this@configure != documentProject) {
+            implementation("org.slf4j:slf4j-api")
         }
         jmh(platform(dependenciesProject))
         jmh("org.openjdk.jmh:jmh-core")
@@ -263,7 +274,7 @@ registeredProperties
     }
 
 configure(publishProjects) {
-    val isBom = bomProjects.contains(this)
+    val isBom = this == bomProject
     apply<MavenPublishPlugin>()
     apply<SigningPlugin>()
     configure<PublishingExtension> {
@@ -295,6 +306,14 @@ configure(publishProjects) {
             create<MavenPublication>(publishName) {
                 from(components[publishComponentName])
                 artifactId = artifactIdOf(project)
+                if (!isBom) {
+                    // Versionless dependencies are published with the versions they resolved to, as a requirement
+                    // (a minimum, so an application on a newer Spring Boot keeps it), never as an imported platform.
+                    versionMapping {
+                        usage("java-api") { fromResolutionOf("runtimeClasspath") }
+                        usage("java-runtime") { fromResolutionResult() }
+                    }
+                }
                 pom {
                     name.set(rootProject.name)
                     description.set(getPropertyOf("description"))
@@ -320,6 +339,36 @@ configure(publishProjects) {
                             name.set("ahoo wang")
                             organization {
                                 url.set(getPropertyOf("website"))
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+    // compileOnlyApi is in the API variant only, so Gradle's own metadata is right; the POM maps that variant to compile
+    // scope, which Maven carries to run time. `provided` is what the build means: needed to compile against this module's
+    // classes, supplied by the application, never brought along. Read after the module's script has declared them.
+    afterEvaluate {
+        if (!isBom) {
+            val coordinates = publishProjects.associate { it.path to "${it.group}:${artifactIdOf(it)}" }
+            val compileOnlyApi = configurations.getByName("compileOnlyApi").dependencies.map {
+                if (it is ProjectDependency) coordinates.getValue(it.path) else "${it.group}:${it.name}"
+            }
+            configure<PublishingExtension> {
+                publications.withType<MavenPublication>().configureEach {
+                    pom.withXml {
+                        val pomElement = asElement()
+                        val dependencyLists = (0 until pomElement.childNodes.length).map { pomElement.childNodes.item(it) }
+                            .filterIsInstance<org.w3c.dom.Element>().filter { it.tagName == "dependencies" }
+                        dependencyLists.flatMap { list ->
+                            (0 until list.childNodes.length).map { list.childNodes.item(it) }
+                                .filterIsInstance<org.w3c.dom.Element>()
+                        }.forEach { dependency ->
+                            val group = dependency.getElementsByTagName("groupId").item(0)?.textContent
+                            val artifact = dependency.getElementsByTagName("artifactId").item(0)?.textContent
+                            if ("$group:$artifact" in compileOnlyApi) {
+                                dependency.getElementsByTagName("scope").item(0)?.textContent = "provided"
                             }
                         }
                     }
@@ -364,7 +413,16 @@ fun Project.kotlinJvm() {
     }
     tasks.withType<org.jetbrains.kotlin.gradle.tasks.KotlinCompile> {
         compilerOptions {
-            freeCompilerArgs = listOf("-Xjsr305=strict", "-Xjvm-default=all-compatibility")
+            // A local that is never read, or a value assigned to one and never read, is dead code: these three diagnostics
+            // (reported only with -Wextra) are errors, in main and test sources of every module. Not allWarningsAsErrors.
+            freeCompilerArgs = listOf(
+                "-Xjsr305=strict",
+                "-Xjvm-default=all-compatibility",
+                "-Wextra",
+                "-Xwarning-level=UNUSED_VARIABLE:error",
+                "-Xwarning-level=VARIABLE_NEVER_READ:error",
+                "-Xwarning-level=ASSIGNED_VALUE_IS_NEVER_READ:error",
+            )
             javaParameters = true
         }
     }
@@ -400,6 +458,8 @@ fun Project.junitTests() {
         }
         // fix logging missing code for JacocoPlugin
         jvmArgs = listOf("-Dlogback.configurationFile=${rootProject.rootDir}/config/logback.xml")
+        // A property test's failure names its seed; -PpropertySeed=<seed> runs that seed alone.
+        providers.gradleProperty("propertySeed").orNull?.let { systemProperty("cosec.property.seed", it) }
         // A cache hit would pass CI on another build's results, and give Codecov another build's coverage.
         outputs.doNotCacheIf("CI runs every test") { onCi }
     }

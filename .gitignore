@@ -21,3 +21,7 @@ docs/superpowers/
 # Local Redis dump from cocache integration tests
 dump.rdb
 .zcode/
+
+# Python bytecode of scripts/
+__pycache__/
+*.pyc

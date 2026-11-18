@@ -1,0 +1,88 @@
+{
+  "name": "@ahoo-wang/cosec-fetcher",
+  "version": "8.0.0-beta.3",
+  "description": "Enterprise-grade CoSec authentication integration for the Fetcher HTTP client with comprehensive security features including automatic token management, device tracking, and request attribution.",
+  "keywords": [
+    "fetch",
+    "http",
+    "client",
+    "cosec",
+    "authentication",
+    "security",
+    "enterprise",
+    "token-management",
+    "device-id"
+  ],
+  "author": "Ahoo-Wang",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/Ahoo-Wang/CoSec/tree/main/typescript/cosec-fetcher",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Ahoo-Wang/CoSec.git",
+    "directory": "typescript/cosec-fetcher"
+  },
+  "bugs": {
+    "url": "https://github.com/Ahoo-Wang/CoSec/issues"
+  },
+  "type": "module",
+  "engines": {
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
+  },
+  "main": "./dist/index.umd.cjs",
+  "module": "./dist/index.es.js",
+  "types": "./dist/index.d.cts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.es.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.umd.cjs"
+      }
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "vite build",
+    "test:ui": "vitest --ui",
+    "test": "vitest run --coverage && pnpm test:api",
+    "lint": "eslint --max-warnings 0 .",
+    "clean": "rm -rf dist",
+    "analyze": "npx vite-bundle-analyzer -p auto",
+    "test:host": "vitest run --config vitest.host.config.ts",
+    "test:no-coverage": "vitest run --coverage.enabled=false && pnpm test:api",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p test-host/tsconfig.json",
+    "test:api": "node ../scripts/api-report.mjs"
+  },
+  "peerDependencies": {
+    "@ahoo-wang/fetcher": "catalog:peers",
+    "@ahoo-wang/fetcher-eventbus": "catalog:peers",
+    "@ahoo-wang/fetcher-storage": "catalog:peers"
+  },
+  "dependencies": {
+    "nanoid": "catalog:"
+  },
+  "devDependencies": {
+    "@ahoo-wang/fetcher": "catalog:",
+    "@ahoo-wang/fetcher-eventbus": "catalog:",
+    "@ahoo-wang/fetcher-storage": "catalog:",
+    "@eslint/js": "catalog:",
+    "@vitest/coverage-v8": "catalog:",
+    "@vitest/ui": "catalog:",
+    "eslint": "catalog:",
+    "globals": "catalog:",
+    "prettier": "catalog:",
+    "typescript": "catalog:",
+    "typescript-eslint": "catalog:",
+    "unplugin-dts": "catalog:",
+    "vite": "catalog:",
+    "vite-bundle-analyzer": "catalog:",
+    "vitest": "catalog:"
+  }
+}

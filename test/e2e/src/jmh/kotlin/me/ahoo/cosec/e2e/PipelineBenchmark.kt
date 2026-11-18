@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.e2e
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -46,6 +47,8 @@ import org.openjdk.jmh.annotations.Scope
 import org.openjdk.jmh.annotations.Setup
 import org.openjdk.jmh.annotations.State
 import org.openjdk.jmh.annotations.TearDown
+import java.nio.file.Files
+import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
@@ -66,18 +69,24 @@ import kotlin.coroutines.startCoroutine
  * request with an API key instead of a token (RFC 0009 §4.2), whose memberships the starter's `CoCacheMembershipProvider`
  * answers from its local cache, narrowed to the key's cap; compare it with `role`. `short-form`: the same permit by a
  * role with `*`, the permissions written with `action` in a catalog group that is not `spaced` (RFC 0012), so each carries
- * the `scope.space` condition; compare it with `role`. `rate-limited` joins with PR-5.
+ * the `scope.space` condition; compare it with `role`. `routed`: a route map (RFC 0005 §5.3) maps
+ * `GET /shop/{store}/orders/{order}` to the business action `app:order.read` on `order/{store}/{order}`, so each request
+ * is resolved by `RouteMap.resolve` and its resource id made of two captures, and the `admin` role permits the action;
+ * no other scenario resolves a route, so this is the one that prices it. `rate-limited` joins with PR-5.
+ *
+ * The slice has a `MeterRegistry`, as an application with Actuator has, so what the starter meters is in the price.
  *
  * Each operation starts the request as an adapter would and finishes it on the calling thread: a warm request never
  * suspends (`SliceBlockHoundTest`); one that did would be waited for, and counted.
  */
 @State(Scope.Benchmark)
 open class PipelineBenchmark {
-    @Param("global", "role", "none", "anonymous", "blacklist", "blocked", "listener", "apikey", "short-form")
+    @Param("global", "role", "none", "anonymous", "blacklist", "blocked", "listener", "apikey", "short-form", "routed")
     lateinit var scenario: String
 
     private lateinit var slice: Slice
     private lateinit var facts: HttpFacts
+    private var routeMap: Path? = null
 
     @Setup(Level.Trial)
     fun setup() {
@@ -107,18 +116,36 @@ open class PipelineBenchmark {
                 options = SnapshotOptions(),
                 authenticator = ApiKeyAuthenticator(InMemoryApiKeyStore(keys).reader),
                 membershipLoader = loader,
+                meterRegistry = SimpleMeterRegistry(),
             )
+        } else if (scenario == "routed") {
+            val file = Files.createTempFile("cosec-routes-", ".json").also { routeMap = it }
+            Files.writeString(file, ROUTES)
+            Slice(options = SnapshotOptions(), routeMap = file.toUri().toString(), meterRegistry = SimpleMeterRegistry())
         } else {
-            Slice(options = SnapshotOptions(), attributes = attributes, listeners = listeners)
+            Slice(
+                options = SnapshotOptions(),
+                attributes = attributes,
+                listeners = listeners,
+                meterRegistry = SimpleMeterRegistry(),
+            )
         }
         slice.publish(SnapshotKey.Platform, platform())
-        slice.publish(SnapshotKey.App("app"), if (scenario == "short-form") shortFormApp() else app())
+        slice.publish(
+            SnapshotKey.App("app"),
+            when (scenario) {
+                "short-form" -> shortFormApp()
+                "routed" -> routedApp()
+                else -> app()
+            },
+        )
         slice.publish(SnapshotKey.Tenant("acme"), "")
         val token = "user@acme:viewer,admin|principal-a,principal-b".takeUnless { scenario == "anonymous" }
         val path = when (scenario) {
             "global", "anonymous", "blacklist", "blocked", "listener" -> "/public/resource3/page"
             "role", "apikey", "short-form" -> "/orders/op49/detail"
             "none" -> "/unknown/path"
+            "routed" -> "/shop/s7/orders/o49"
             else -> error("Unknown scenario $scenario")
         }
         facts = if (scenario == "apikey") apiKeyRequest("GET", path, key, app = "app") else request("GET", path, token, app = "app")
@@ -130,6 +157,7 @@ open class PipelineBenchmark {
     @TearDown(Level.Trial)
     fun tearDown() {
         slice.close()
+        routeMap?.let(Files::deleteIfExists)
     }
 
     @Benchmark
@@ -177,6 +205,12 @@ open class PipelineBenchmark {
         return """,$catalog,"roles":[{"id":"admin","permissions":"*"}]"""
     }
 
+    /** The business action of [ROUTES], granted to the `admin` role by the system role's `*`. */
+    private fun routedApp(): String {
+        val catalog = """"catalog":{"groups":[{"name":"orders","permissions":[{"id":"order.read","action":"app:order.read"}]}]}"""
+        return """,$catalog,"roles":[{"id":"admin","permissions":"*"}]"""
+    }
+
     /** Takes every event and does nothing with it: what remains is the pipeline's own cost of events. */
     private object NoOpListener : DecisionListener {
         override val name = "no-op"
@@ -187,5 +221,6 @@ open class PipelineBenchmark {
     private companion object {
         const val PERMISSIONS = 50
         const val VIEWER_GRANTS = 20
+        const val ROUTES = """{"service":"app","routes":[{"method":"GET","path":"/shop/{store}/orders/{order}","action":"app:order.read","resource":"order/{store}/{order}"}]}"""
     }
 }

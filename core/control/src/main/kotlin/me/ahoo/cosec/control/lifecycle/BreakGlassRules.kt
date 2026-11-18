@@ -1,0 +1,147 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class)
+
+package me.ahoo.cosec.control.lifecycle
+
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
+import me.ahoo.cosec.control.change.Finding
+import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.document.ProvenanceKind
+import java.time.Duration
+import java.time.Instant
+
+/**
+ * Break-glass (RFC 0007 §8): bindings created only by a change of kind `BREAK_GLASS`, which carries nothing else, with
+ * an expiry no further than [maxDuration] from [now] (checked again when it publishes). What a live break-glass binding
+ * grants is its policy's statements, so that policy does not change while the binding lives (round-2 review R4):
+ * otherwise an ordinary change, or a rollback, would widen an approved emergency grant without a second person.
+ */
+internal object BreakGlassRules {
+    fun findings(
+        kind: ProvenanceKind,
+        operations: List<Operation>,
+        base: PolicyDocument?,
+        candidate: PolicyDocument,
+        now: Instant,
+        maxDuration: Duration,
+    ): List<Finding> {
+        val findings = ArrayList<Finding>()
+        val before = base?.bindings.orEmpty().associateBy { it.id }
+        val request = kind == ProvenanceKind.BREAK_GLASS
+        // No kind is exempt: MIGRATE and BOOTSTRAP revisions are written by cosec-migrate through Revisions, never
+        // through a change, so a change claiming either is held to every rule (review K1).
+        for ((i, binding) in candidate.bindings.withIndex()) {
+            val previous = before[binding.id]
+            val changed = previous == null ||
+                EntryDigest.of(previous, candidate.kind, candidate.owner) != EntryDigest.of(binding, candidate.kind, candidate.owner)
+            if (changed) {
+                findings += binding(i, binding, previous, request, now, maxDuration)
+            }
+        }
+        if (request) {
+            findings += onlyBreakGlass(operations, before.values.filter { it.breakGlass }.map { it.id }.toSet())
+        }
+        findings += grantedPolicies(base, candidate, now)
+        return findings
+    }
+
+    /** The policies of [candidate] a break-glass binding live at [now] grants, changed from [base]. */
+    private fun grantedPolicies(base: PolicyDocument?, candidate: PolicyDocument, now: Instant): List<Finding> {
+        val granted = live(candidate, now).map { it.policy }.toSet()
+        val before = base?.policies.orEmpty().associateBy { it.id }
+        return candidate.policies.withIndex().filter { (_, policy) ->
+            policy.id in granted && before[policy.id]?.let(EntryDigest::of) != EntryDigest.of(policy)
+        }.map { (i, policy) ->
+            Finding(
+                "V5",
+                "$.policies[$i]",
+                "[${policy.id.value}] is granted by a live break-glass binding: revoke it before changing the policy",
+                UNPROCESSABLE
+            )
+        }
+    }
+
+    /** The break-glass bindings of [document] that have not expired at [now]: what still grants. */
+    private fun live(document: PolicyDocument?, now: Instant): List<me.ahoo.cosec.model.Binding> =
+        document?.bindings.orEmpty().filter { binding ->
+            binding.breakGlass && binding.expiresAt?.let { it > now.toEpochMilli() } ?: true
+        }
+
+    /** What is wrong with changed binding [i], [binding], that was [previous], in a change that is a [request] or not. */
+    private fun binding(
+        i: Int,
+        binding: me.ahoo.cosec.model.Binding,
+        previous: me.ahoo.cosec.model.Binding?,
+        request: Boolean,
+        now: Instant,
+        maxDuration: Duration,
+    ): List<Finding> {
+        val findings = ArrayList<Finding>()
+        if (previous?.breakGlass == true && !binding.breakGlass && !request) {
+            findings += Finding("V5", "$.bindings[$i]", "a break-glass binding is changed only by a break-glass request", UNPROCESSABLE)
+        }
+        if (!binding.breakGlass) {
+            return findings
+        }
+        if (previous != null && !previous.breakGlass) {
+            // RC1-29: whichever way the change was made (a request, a rebase, an internal proposal), it would turn an
+            // ordinary binding into break-glass; its id is taken.
+            findings += Finding("V5", "$.bindings[$i]", "a break-glass binding never replaces another binding", UNPROCESSABLE)
+        }
+        if (!request) {
+            findings += Finding("V5", "$.bindings[$i]", "a break-glass binding is created only by a break-glass request", UNPROCESSABLE)
+        }
+        val expiresAt = binding.expiresAt?.let(Instant::ofEpochMilli)
+        if (expiresAt == null || !expiresAt.isAfter(now) || Duration.between(now, expiresAt) > maxDuration) {
+            findings += Finding(
+                "V5",
+                "$.bindings[$i].expiresAt",
+                "a break-glass binding expires after now and within $maxDuration of it, not at $expiresAt",
+                UNPROCESSABLE,
+            )
+        }
+        return findings
+    }
+
+    /**
+     * Whether [operations] create or alter a break-glass binding of [base]: one that puts a break-glass binding, puts
+     * another binding over one, or puts the policy a binding live at [now] grants (round-2 review R4). Every
+     * break-glass rule keys on this, never on the change's kind alone (review K1): `cosec:breakglass`, the REQUIRED
+     * audit and its `BREAK_GLASS_REQUESTED` event. A rollback is no exception. Removing one only narrows.
+     */
+    fun touches(operations: List<Operation>, base: PolicyDocument?, now: Instant): Boolean {
+        val glass = base?.bindings.orEmpty().filter { it.breakGlass }.map { it.id }.toSet()
+        val granted = live(base, now).map { it.policy }.toSet()
+        return operations.any {
+            (it is Operation.PutBinding && (it.binding.breakGlass || it.binding.id in glass)) ||
+                (it is Operation.PutPolicy && it.policy.id in granted)
+        }
+    }
+
+    /** The operations of a break-glass change that neither create nor revoke a break-glass binding. */
+    private fun onlyBreakGlass(operations: List<Operation>, glass: Set<me.ahoo.cosec.model.BindingId>): List<Finding> =
+        operations.withIndex().filterNot { (_, op) ->
+            (op is Operation.PutBinding && op.binding.breakGlass) || (op is Operation.RemoveBinding && op.id in glass)
+        }.map { (i, _) ->
+            Finding(
+                "V5",
+                "operations[$i]",
+                "a break-glass change creates or revokes break-glass bindings only",
+                UNPROCESSABLE
+            )
+        }
+}

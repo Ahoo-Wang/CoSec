@@ -30,6 +30,37 @@
         "^org\\.jetbrains\\.kotlin"
       ],
       "groupName": "kotlin"
+    },
+    {
+      "description": "npm (typescript/ and wiki/): a release waits a day before it is proposed, so a malicious one is usually pulled first",
+      "matchManagers": [
+        "npm"
+      ],
+      "minimumReleaseAge": "1 day"
+    },
+    {
+      "description": "npm: a major update waits for approval on the dependency dashboard",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
+    },
+    {
+      "description": "The TypeScript workspace's tooling (eslint, typescript, prettier, vite, vitest and the like): minor and patch updates in one PR",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "typescript/**"
+      ],
+      "matchUpdateTypes": [
+        "minor",
+        "patch"
+      ],
+      "groupName": "typescript tooling"
     }
   ]
 }

@@ -21,9 +21,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -212,8 +212,8 @@ class ApiKeyMigrationTest {
                 compiler.compile(document(DocumentKind.TENANT, tenant.value, emptyList(), emptyList()))
             },
         )
-        val decision = CoSecFlatEngine.evaluate(
-            FlatRequest(request, scope, memberships, now.toEpochMilli()),
+        val decision = CoSecEngine.evaluate(
+            EngineRequest(request, scope, memberships, now.toEpochMilli()),
             view
         ).decision
         return decision::class.simpleName!!
@@ -420,10 +420,14 @@ class ApiKeyMigrationTest {
             key("ci", "bob", roles = listOf("writer@team-a")),
             key("taken", "eve", roles = listOf("reader")),
             key("known", "eve", roles = listOf("reader")),
+            // #1403: a 7.x tenant whose id no 8.0 tenant can have.
+            key("k-slash", "eve", tenant = "acme/west", roles = listOf("reader")),
         )
         val plan = plan(mixed + refused)
         plan.accepted.assert().isFalse()
         plan.rejections.assert().hasSize(refused.size)
+        plan.rejections.single { it.startsWith("API key [k-slash]") }.assert()
+            .contains("its tenant [acme/west] is no 8.0 tenant id").contains("rename it at its source")
         plan.keys.map { it.key.id }.assert().doesNotContainAnyElementsOf(refused.map { it.id })
         // A per-key role must not take a role a document already binds.
         val taken = object : PublishedDocuments by published {
@@ -456,7 +460,15 @@ class ApiKeyMigrationTest {
         )
         parsed.tenant.assert().isEqualTo(TenantId.DEFAULT)
         parsed.usableAt(now).assert().isFalse()
-        LegacyApiKey.isConverted("""{"format":2}""").assert().isTrue()
+        LegacyApiKey.isConverted("""{"format":3}""").assert().isTrue()
+        // A key an 8.0 pre-release stored in format 2 is not converted: 8.0 does not read it.
+        LegacyApiKey.isConverted("""{"format":2}""").assert().isFalse()
+        LegacyApiKey.formatOf("""{"format":2}""").assert().isEqualTo(2)
+        LegacyApiKey.formatOf("""{"id":"k1"}""").assert().isNull()
+        // Not an object: no format, and parse refuses it.
+        LegacyApiKey.formatOf("""["k1"]""").assert().isNull()
+        // A format no version wrote: no API key at all, never "a pre-release in format -1".
+        assertThrows<IllegalArgumentException> { LegacyApiKey.formatOf("""{"format":"3"}""") }
         assertThrows<IllegalArgumentException> { LegacyApiKey.parse("h", """{"id":"k","principalId":"a","extra":1}""") }
         MembershipsExport.read("""[{"tenant":"acme","principal":"alice","roles":["reader"]}]""".encodeToByteArray())
             .assert().isEqualTo(mapOf((acme to "alice") to setOf("reader")))

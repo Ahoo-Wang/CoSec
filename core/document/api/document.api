@@ -51,6 +51,11 @@ public final class me/ahoo/cosec/document/ProvenanceKind : java/lang/Enum {
 	public static fun values ()[Lme/ahoo/cosec/document/ProvenanceKind;
 }
 
+public final class me/ahoo/cosec/document/SnapshotDocuments {
+	public static final field INSTANCE Lme/ahoo/cosec/document/SnapshotDocuments;
+	public final fun read ([B)Lme/ahoo/cosec/spi/snapshot/SnapshotDocument;
+}
+
 public final class me/ahoo/cosec/document/route/Route {
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
 	public final fun getAction ()Ljava/lang/String;

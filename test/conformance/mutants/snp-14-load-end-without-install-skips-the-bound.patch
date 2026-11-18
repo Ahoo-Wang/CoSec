@@ -1,0 +1,17 @@
+# Rule: SNP-14
+# Mutant: only an install asks for the family's bound, so a member a pass skipped or refused while it loaded, whose load ends absent again, stays above the absent bound
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.AbsentBoundWindowTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+index 5e1ab253..6b4506c6 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyLoads.kt
+@@ -209,7 +209,7 @@ internal class KeyLoads<T : Any>(private val config: KeyConfig) {
+         if (!config.shared && step.installed != null) step.emit(KeyEffect.EvictOverCap)
+         if (nextLoad != null) startRead(step, nextLoad) else pending?.let { step.emit(KeyEffect.Answer(it, answer)) }
+         answerWaiters(step, load, answer, nextLoad.takeIf { withheld })
+-        housekeep(step)
++        if (installs || step.installed == null) housekeep(step)
+     }
+ 
+     /**

@@ -2,10 +2,11 @@
 # Mutant: the removed DENYs are read from the stored documents, so a role removal is not seen
 # Tests: :control:test --tests me.ahoo.cosec.control.change.DenyRemovalTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Narrowing.kt
-@@ -78,8 +78,8 @@
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
+index 0ad107c9..21b7b060 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Narrowing.kt
+@@ -81,8 +81,8 @@ internal object Narrowing {
          candidate: PolicyDocument,
          policyOf: suspend (PolicyId) -> PolicyDefinition?,
      ): List<String> {

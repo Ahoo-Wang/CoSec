@@ -1,0 +1,17 @@
+# Rule: SNP-17
+# Mutant: a request's timer is armed with the whole cold load timeout when its offer returns, not what is left of it, so an offer that returns late stretches the bound past the call's
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.KeyRunnerRequestTimerTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyWaiter.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyWaiter.kt
+index f0eb44f8..2acd42bb 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyWaiter.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyWaiter.kt
+@@ -131,7 +131,7 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
+         fun arm() {
+             if (answered.get()) return
+             val bound = context.options.coldLoadTimeout
+-            val left = bound.toNanos() - (context.nanoTime.get().asLong - calledAt)
++            val left = bound.toNanos() + 0 * (context.nanoTime.get().asLong - calledAt)
+             if (left <= 0) {
+                 timedOut(bound)
+                 return

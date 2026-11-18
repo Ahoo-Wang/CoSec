@@ -56,11 +56,11 @@ flowchart BT
 - **`cosec-spi`**（目录 `core/spi/`）在 `me.ahoo.cosec.spi.*` 下容纳请求或存储会调用的端口，以及它们的值类型和内存实现：快照存储（`SnapshotDocumentStore`）、成员关系、令牌校验与吊销（`TokenVerifier`、`RevocationReader`、`TokenStore`、`TokenRevoker`）、API key、限流器、属性提供者、认证器、转发的身份、审计 sink、id 生成器（`IdGenerator`，及其默认实现 `RandomIdGenerator`），以及影子窗口的候选与报告（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`）。它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，第三方只需依赖它就能实现一个端口。签名需要某一层类型的端口留在那一层：`DecisionListener` 和 `RequestGate` 在 `cosec-runtime`；`ControlStore` 和 `ChangeListener` 在 `cosec-control`（[扩展 CoSec](./extending.md)）。
 - **`cosec-document`**（目录 `core/document/`，包 `me.ahoo.cosec.document`）容纳 CoSec 存储与交换的格式：平台、应用和租户文档及其编解码器（`PolicyDocumentCodec`）和编译器（`PolicyDocumentCompiler`，实现 `cosec-spi` 的 `SnapshotCompiler` 端口），`RoleExpansion`，生成 `schema/*.schema.json` 的格式描述符（`document.format`），路由映射（`document.route`），转发的 `CoSec-Identity` 头的编解码器（`document.identity`），以及唯一的 Jackson mapper `CoSecJson`（`document.json`，内部 API，`@InternalCoSecApi`）。它只依赖 `cosec-engine`、`cosec-spi` 和 Jackson，所以读写文档的模块（例如 `cosec-openapi`）不会带上请求路径。`api/` 与 `core/` 的公共签名中不出现 Jackson 类型（`JacksonSignatureTest`）。
 - **`cosec-runtime`**（目录 `core/runtime/`）是数据面：协程 `Pipeline`、`StatusMapping`、`AuthorizationChecker`，`SnapshotSource`，令牌校验，内置认证器，以及写日志的审计 sink，它们建立在 `cosec-document` 的文档之上。在模块内部，适配器契约（`RequestGate`、`HttpFacts`、`Outcome`、`Problem`、`RequestSecurity`）是位于最底层的一个包 `runtime.http`，请求路径的各阶段是 `runtime.stage`，装配（`Pipeline`、`AuthorizationChecker`）是位于最上层的根包；`PackageDependencyTest` 让每个包遵守 `PackageLedger` 中的表。协程只留在本模块和适配器中，Reactor 只出现在适配器的桥接处：当 `runtime/`、`document/`、`engine/` 或 `model/` 中的代码引用 `reactor.*`，当数据面 SPI 的签名带有 Reactor 类型，当 `runtime/` 或 `document/` 引用 Spring、Servlet API 或协程桥接（`kotlinx.coroutines.reactor`、`runBlocking`）、`GlobalScope` 或 `Dispatchers.IO`，或调用会吞掉取消的 `runCatching` 时，`RuntimeBoundaryTest`（ArchUnit）失败。
-- **`cosec-control`**（目录 `core/control/`）是控制面：修订、变更请求、影子窗口、审批、break-glass、模拟与分析。它是一个由宿主装配的库。`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类，当其中任何一个位于 `me.ahoo.cosec.control` 之外、引用 Spring、`reactor.*`、协程或 Reactive Streams 桥接、Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。
+- **`cosec-control`**（目录 `core/control/`）是控制面：修订、变更请求、影子窗口、审批、break-glass、模拟与分析。starter 把它装配进宿主；应用不调用它，而是通过控制 API 写入。`ControlBoundaryTest`（ArchUnit）导入本模块自己编译出的类，当其中任何一个位于 `me.ahoo.cosec.control` 之外、引用 Spring、`reactor.*`、协程或 Reactive Streams 桥接、Redis 客户端，或调用 `runBlocking`、`Dispatchers.IO`、`GlobalScope` 时失败。
 - **其余每个库模块只适配一种技术**：一种 Web 栈（`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`），通过 CoCache 使用 Redis（`cosec-cocache`：快照存储、控制面存储、吊销、限流器、影子报告），Kafka（`cosec-kafka`），登录与签发令牌（`cosec-login`），JWT（`cosec-jwt`），OAuth（`cosec-social`），OpenAPI，CosId 5 的 id（`cosec-cosid`），或决策的观察者（`cosec-opentelemetry`、`cosec-micrometer`、`cosec-ip2region`）。适配器从不做决策，只做翻译。
 - **`cosec-spring-boot`**（目录 `host/spring-boot/`）负责装配。它引入 `cosec-runtime`、`cosec-login` 和 `cosec-jwt`；其他每个模块在 [`host/spring-boot/build.gradle.kts`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/build.gradle.kts) 中都是 `compileOnly`，其自动配置由 `@ConditionalOnClass` 保护，所以只有应用添加了该模块才会生效。已开启的功能所需的模块会在启动时检查（STA-1，[`CoSecModuleCheckAutoConfiguration`](https://github.com/Ahoo-Wang/CoSec/blob/main/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/CoSecModuleCheckAutoConfiguration.kt)）：否则漏加的适配器会让 Web 宿主没有过滤器，所以启动失败并给出制品名。各模块及其所需依赖列在[简介](../guide/introduction.md#modules)中。
 - **`cosec-testkit`**（目录 `test/testkit/`）用 JUnit 5 针对应用自己的文档运行场景。它依赖 `cosec-runtime` 和 `junit-jupiter-api`（都属于它的 API）。它持有场景格式的引擎层，`conformance` 也运行这一层，所以一致性套件和应用的测试以同一种方式求值场景。
-- **`cosec-migrate`** 把 7.x 的数据转换为 8.0 文档并发布；应用不依赖它。**`cosec-gateway-server`** 是由 starter 构建的、开箱即用的网关，从不发布。**`conformance`**、**`architecture`** 和 **`e2e`** 是仅用于测试的模块，同样从不发布。
+- **`cosec-migrate`** 把 7.x 的数据转换为 8.0 文档并发布；应用不依赖它。**`cosec-gateway-server`** 是由 starter 构建的、开箱即用的网关，从不发布。**`conformance`**、**`architecture`**、**`e2e`** 和 **`client-host`** 是仅用于测试的模块，同样从不发布。**`client-host`**（目录 `test/client-host/`）是一个真实的 CoSec 8 应用：基于 WebFlux 的 starter，CoCache 使用内存后端；TypeScript 客户端的测试针对它运行（在 `typescript/` 中执行 `pnpm test:host` 会启动它）。
 
 `architecture`（目录 `test/architecture/`）持有扫描多个模块的结构规则（RFC 0011 §5）：
 
@@ -127,11 +127,11 @@ sequenceDiagram
 
 ## 扁平引擎 {#the-flat-engine}
 
-引擎（[`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt)）针对一个 `SnapshotView` 求值一个请求：编译后的平台文档，加上租户的文档，以及作用域在某个应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（编译后的租户文档持有这个应用集合，判断只需一次查找）该应用的文档。它不读时钟（请求自带时间），也不做 I/O（外部属性随请求一起到达）。视图必须属于请求的租户和应用，引擎拒绝其他视图。
+引擎（[`Engine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Engine.kt)）针对一个 `SnapshotView` 求值一个请求：编译后的平台文档，加上租户的文档，以及作用域在某个应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时（编译后的租户文档持有这个应用集合，判断只需一次查找）该应用的文档。它不读时钟（请求自带时间），也不做 I/O（外部属性随请求一起到达）。视图必须属于请求的租户和应用，引擎拒绝其他视图。
 
 ### 候选顺序 {#candidate-order}
 
-引擎首先列举适用于请求的策略，即*候选*（[`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt)）：
+引擎首先列举适用于请求的策略，即*候选*（[`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt)）：
 
 | # | 候选 |
 |---|---|
@@ -215,24 +215,24 @@ sequenceDiagram
 
 | 不变量 | 原因 | 守护 |
 |---|---|---|
-| **拒绝优先。** 无论来自哪个文档、哪个绑定、什么顺序，ALLOW 都不能胜过已匹配的 DENY。 | 否则新增一条策略就可能扩大访问范围。 | `FlatEnginePropertyTest`（`P1' adding a matching deny always denies`、`the decision is that of the pseudocode`）、`ALG-1` 场景 |
-| **失败即拒绝。** 缺失或读不到的数据永远不会放行；错误得到 `503` 或 `500`，绝不是 `200`。有文档说明的例外见[安全模型](../guide/security-model.md)。 | 故障不能让请求放行。 | `FlatEnginePropertyTest`（`P9 missing and unavailable data never permit`）、`PipelineTest`（`indeterminateDecisionIs503`、`unmodelledExceptionIs500`、`failingLateOrWrongMembershipsAre503`、`snapshotSourceFailureIs503`） |
+| **拒绝优先。** 无论来自哪个文档、哪个绑定、什么顺序，ALLOW 都不能胜过已匹配的 DENY。 | 否则新增一条策略就可能扩大访问范围。 | `EnginePropertyTest`（`P1' adding a matching deny always denies`、`the decision is that of the pseudocode`）、`ALG-1` 场景 |
+| **失败即拒绝。** 缺失或读不到的数据永远不会放行；错误得到 `503` 或 `500`，绝不是 `200`。有文档说明的例外见[安全模型](../guide/security-model.md)。 | 故障不能让请求放行。 | `EnginePropertyTest`（`P9 missing and unavailable data never permit`）、`PipelineTest`（`indeterminateDecisionIs503`、`unmodelledExceptionIs500`、`failingLateOrWrongMembershipsAre503`、`snapshotSourceFailureIs503`） |
 | **唯一的决策路径。** 状态码和 problem 响应体只在 `StatusMapping` 中产生；适配器看不到决策。 | 三种适配器必须给出相同的应答。 | `OneDecisionPathTest`、`WebAdapterParityTest` |
 | **不阻塞事件循环。** SPI 以挂起代替阻塞；存储读取和摘要计算不在调用方线程上进行。 | 阻塞一个 Netty 线程会卡住其上的所有请求。 | `SnapshotStoreBlockHoundTest`、`RedisSnapshotDocumentStoreTest`（`computesTheDigestOfALocalCopyOffTheCallersThread`）、`PipelineBlockHoundTest`、`SuspendingRedisRateLimitingTest`、`RuntimeBoundaryTest` |
 | **授权是纯粹的决策。** 引擎不做 I/O、不保留状态；限流是 Permit 的义务，所以被拒绝的请求永远不会消耗许可。 | 让求值快速、可预测、可解释；被拒绝的请求不会耗尽配额。 | `EnginePurityTest`、`RateLimitObligationTest`（engine 与 runtime） |
 | **快照缓存永不过期，读取失败时抛出异常**，无论 CoCache 的定制器或属性怎么设置。 | Redis 是权威存储；过期或吞掉的错误会悄悄丢掉策略。 | `CacheTtlPolicyTest`、`StrictCacheFailureTest` |
 | **一次求值中每个文档只有一个修订**，并按加载顺序安装。 | 决策绝不能混用同一文档的两个修订。 | `SnapshotConsistencyPropertyTest`、`SnapshotInstallOrderPropertyTest` |
-| **热路径修改必须附带 JMH 前后对比。** | 每个请求都要授权。 | `FlatAuthorizationBenchmark`、`PipelineBenchmark`（评审） |
+| **热路径修改必须附带 JMH 前后对比。** | 每个请求都要授权。 | `EngineAuthorizationBenchmark`、`PipelineBenchmark`（评审） |
 | **公共签名只在有意时改变。** 每个发布模块的 ABI 都在它的转储里；不在转储里的改动让构建失败。 | 应用针对 CoSec 编译并实现它的 SPI；没人察觉的签名改动会破坏它们。 | `checkKotlinAbi`（`check` 的一部分）、`SpiMarkerTest` |
 
 ## 性能 {#performance}
 
 两个基准测试衡量热路径：
 
-- **`FlatAuthorizationBenchmark`**（`core/engine/src/jmh`）只测引擎：三条全局策略、两条附加的主体策略，以及一个有 50 个权限并授予角色的应用；场景有 `global`（全局 ALLOW 匹配）、`role`（应用列表末尾附近的权限）、`none`（什么都不匹配）和 `role-heavy`，每个场景分别在没有平台边界、边界含 1 条或 8 条语句的情况下运行。
-- **`PipelineBenchmark`**（`test/e2e/src/jmh`）端到端地测量 `Pipeline.evaluate`：同样的数据发布到 Redis、经 CoCache 读取，快照已预热；场景有 `global`、`role`、`none`、`anonymous`、`blacklist`、`blocked` 和 `listener`。
+- **`EngineAuthorizationBenchmark`**（`core/engine/src/jmh`）只测引擎：三条全局策略、两条附加的主体策略，以及一个有 50 个权限并授予角色的应用；场景有 `global`（全局 ALLOW 匹配）、`role`（应用列表末尾附近的权限）、`none`（什么都不匹配）和 `role-heavy`，每个场景分别在没有平台边界、边界含 1 条或 8 条语句的情况下运行。
+- **`PipelineBenchmark`**（`test/e2e/src/jmh`）端到端地测量 `Pipeline.evaluate`：同样的数据发布到 Redis、经 CoCache 读取，快照已预热；场景有 `global`、`role`、`none`、`anonymous`、`blacklist`、`blocked`、`listener` 和 `routed`（路由映射把请求映射到业务动作，路由查找因此计入测量：唯一带路由查找的场景）。
 
-8.0 在每个可比的场景中都必须不慢于 7.x。这道门槛是手动触发的 CI 工作流 [`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml)：它在同一台 runner 上交替运行 7.x 的 `SimpleAuthorizationBenchmark`、`SecurityPipelineBenchmark` 与 8.0 的 `FlatAuthorizationBenchmark`（无边界）、`PipelineBenchmark`，任何场景的 8.0/7.x 速度比中位数低于 100 % 即失败。让 8.0 路径合入的那次运行（[40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212)）所有场景都通过：引擎为 7.x 的 364 % 到 601 %，Pipeline 为 126 % 到 219 %。
+8.0 在每个可比的场景中都必须不慢于 7.x。这道门槛是手动触发的 CI 工作流 [`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml)：它在同一台 runner 上交替运行 7.x 的 `SimpleAuthorizationBenchmark`、`SecurityPipelineBenchmark` 与 8.0 的 `EngineAuthorizationBenchmark`（无边界）、`PipelineBenchmark`，任何场景的 8.0/7.x 速度比中位数低于 100 % 即失败。让 8.0 路径合入的那次运行（[40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212)）所有场景都通过：引擎为 7.x 的 364 % 到 601 %，Pipeline 为 126 % 到 219 %。
 
 在 Apple M4 上单线程运行 `global`、`role`、`none` 和 `anonymous` 场景时，一个已预热的请求走完整条 Pipeline 不到 2 µs，分配 3 到 5 kB。各轮次、测量条件和每个场景的数字见 [`docs/perf/e2e-slice`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/e2e-slice)；其他参考结果（引擎基线、平台边界、控制面、网关的 AOT 缓存）见 [`docs/perf/`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf)。
 
@@ -241,7 +241,7 @@ sequenceDiagram
 通过 Gradle 运行基准测试：
 
 ```bash
-./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark
+./gradlew :engine:jmh -PjmhIncludes=EngineAuthorizationBenchmark
 ./gradlew :e2e:jmh -PjmhIncludes=PipelineBenchmark      # 需要 localhost:6379 上的 Redis
 ```
 

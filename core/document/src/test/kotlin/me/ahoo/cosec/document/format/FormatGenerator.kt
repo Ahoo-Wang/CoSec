@@ -63,7 +63,7 @@ class FormatGenerator(private val random: Random, private val maxDepth: Int = 7)
 
     private fun scalar(type: FormatType): JsonNode = when (type) {
         is StringType -> nodes.stringNode(string(type))
-        is BooleanType -> nodes.booleanNode(random.nextBoolean())
+        is BooleanType -> nodes.booleanNode(type.const ?: random.nextBoolean())
         is IntegerType -> nodes.numberNode(type.const ?: ((type.minimum ?: 0) + random.nextLong(0, 5)))
         is NumberType -> nodes.numberNode((type.exclusiveMinimum ?: 0) + 0.5 + random.nextInt(0, 100))
         else -> error("Not a scalar: $type")

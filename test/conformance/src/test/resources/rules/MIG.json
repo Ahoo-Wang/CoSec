@@ -37,6 +37,17 @@
         "migrate:AllActionReachTest#a converted allow of every action publishes nothing through the control plane",
         "migrate:MatcherTranslatorTest#every action is http star in an ALLOW and star in a DENY"
       ]
+    },
+    {
+      "id": "MIG-3",
+      "source": "RFC 0007 §5.9 (RFC 0013 B4, the copies of a document)",
+      "statement": "`bootstrap`, forced or not, publishes the platform tenant's document with its binding added and everything else the document holds kept: its policies, its other bindings, its rate limits and its roles. Only the header (revision, publishedAt, provenance) and the bindings change, so a migration that converts 7.x roles into that document and then bootstraps does not lose them.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "migrate:BootstrapKeepsDocumentTest#bootstrap adds its binding and keeps the rest of the document",
+        "migrate:BootstrapKeepsDocumentTest#a forced bootstrap adds its binding and keeps the rest of the document"
+      ]
     }
   ]
 }
