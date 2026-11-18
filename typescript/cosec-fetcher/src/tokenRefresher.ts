@@ -13,11 +13,8 @@
 
 import type { Fetcher } from '@ahoo-wang/fetcher';
 import { ResultExtractors } from '@ahoo-wang/fetcher';
-import {
-  IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY,
-  UNAUTHORIZED_ERROR_INTERCEPTOR_NAME,
-} from './constants.js';
 import { NOTIFICATION_GUARD_REFRESHER } from './refreshProtocol.js';
+import { sessionRequestAttributes } from './sessionRequest.js';
 
 /**
  * Interface representing an access token used for authentication.
@@ -205,15 +202,7 @@ export class CoSecTokenRefresher implements TokenRefresher {
     // Send a POST request to the configured endpoint with the token as body
     // and extract the response as JSON to return a new CompositeToken
 
-    const attributes = new Map<string, unknown>([
-      [IGNORE_REFRESH_TOKEN_ATTRIBUTE_KEY, true],
-    ]);
-    if (shouldNotifyUnauthorized) {
-      attributes.set(
-        UNAUTHORIZED_ERROR_INTERCEPTOR_NAME,
-        shouldNotifyUnauthorized,
-      );
-    }
+    const attributes = sessionRequestAttributes(shouldNotifyUnauthorized);
     return this.options.fetcher.post<CompositeToken>(
       this.options.endpoint,
       {

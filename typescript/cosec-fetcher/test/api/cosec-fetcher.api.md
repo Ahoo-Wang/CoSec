@@ -92,6 +92,7 @@ export interface CoSecConfig extends Partial<DeviceIdStorageCapable>, RequestTru
     readonly rotationLeeway?: number;
     readonly spaceIdProvider?: SpaceIdProvider;
     readonly tokenRefresher?: TokenRefresher;
+    readonly tokenRevoker?: TokenRevoker;
     readonly tokenStorage?: TokenStorage;
 }
 
@@ -192,6 +193,21 @@ export interface CoSecTokenRefresherOptions {
     // (undocumented)
     endpoint: string;
     // (undocumented)
+    fetcher: Fetcher;
+    timeout?: number;
+}
+
+// @public
+export class CoSecTokenRevoker implements TokenRevoker {
+    constructor(options: CoSecTokenRevokerOptions);
+    // (undocumented)
+    readonly options: CoSecTokenRevokerOptions;
+    revoke(token: CompositeToken): Promise<void>;
+}
+
+// @public
+export interface CoSecTokenRevokerOptions {
+    endpoint: string;
     fetcher: Fetcher;
     timeout?: number;
 }
@@ -357,6 +373,7 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
     get currentToken(): JwtCompositeToken | null;
     get isRefreshable(): boolean;
     get isRefreshNeeded(): boolean;
+    logout(): Promise<void>;
     // (undocumented)
     readonly options: JwtTokenManagerOptions;
     refresh(exchange?: FetchExchange): Promise<void>;
@@ -379,6 +396,14 @@ export interface JwtTokenManagerOptions {
     isRefreshRejected?: (error: unknown) => boolean;
     refreshRetryDelays?: readonly number[];
     rotationLeeway?: number;
+    tokenRevoker?: TokenRevoker;
+}
+
+// @public
+export class LogoutUnconfirmedError extends FetcherError {
+    constructor(cause?: unknown);
+    readonly problem?: CoSecProblem;
+    readonly status?: number;
 }
 
 // @public
@@ -515,6 +540,11 @@ export interface SpaceIdStorageOptions extends Partial<KeyStorageOptions<SpaceId
 // @public
 export interface TokenRefresher {
     refresh(token: CompositeToken): Promise<CompositeToken>;
+}
+
+// @public
+export interface TokenRevoker {
+    revoke(token: CompositeToken): Promise<void>;
 }
 
 // @public
