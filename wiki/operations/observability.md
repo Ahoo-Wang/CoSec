@@ -179,9 +179,45 @@ rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepte
 stored document does not compile on this instance ([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
 registry ([CoCache's documentation](https://cocache.ahoo.me)).
 
+## Snapshot metrics
+
+Under the same conditions as the timer (`cosec-micrometer`, a `MeterRegistry`, `cosec.metrics.enabled`), the starter
+meters the data plane's snapshot source: the documents this instance reads, compiles and holds
+([How instances read documents](./storage.md#how-instances-read-documents)). The control plane's own source is not
+metered. A `Pipeline` an application builds itself gets none of these meters. No tag carries an app or tenant id, so
+there are 72 series whatever the number of documents. `kind` is `platform`, `app` or `tenant`:
+
+| Meter | Type | Tags | What it says |
+|---|---|---|---|
+| `cosec.snapshot.loads` | counter | `kind`, `result` | a request asking for a document: `hit` (it was installed), `cold` (the request waited for its load), `failed` (the load failed, and the request is decided fail-closed), `timeout` (the load outlasted `cold-load-timeout`) |
+| `cosec.snapshot.compile.duration` | timer | `kind`, `result` = `success`, `failure` | compiling a document; `failure` is a stored document that does not compile on this instance |
+| `cosec.snapshot.installs` | counter | `kind` | documents installed: a first load or a new revision |
+| `cosec.snapshot.installed` | gauge | `kind`, `state` | the entries held now, by state: `present`, `invalid` (does not compile here), `pending` (its inputs changed and it waits for its compile again), `undecodable`, `absent` (no document, none seen before), `lost` (a document seen before is gone), `unreadable`. The states add up to what the instance holds |
+| `cosec.snapshot.lag` | gauge, seconds | `kind` | the oldest confirmation by the store among the entries held, failed ones aside |
+| `cosec.snapshot.lagging` | gauge | `kind`, `level` = `warn`, `escalate` | entries past `lag-warn` (those past `lag-escalate` included) and past `lag-escalate` |
+| `cosec.snapshot.summary.age` | gauge, seconds | none | the time since the pass that `installed`, `lag` and `lagging` read |
+| `cosec.snapshot.lag.exceeded` | counter | `kind`, `level` | each lag the instance logs |
+| `cosec.snapshot.regressions` | counter | `kind` | the store answered an older revision than the one installed |
+| `cosec.snapshot.lost` | counter | `kind` | a document seen before is absent now; its key fails closed |
+| `cosec.snapshot.evictions` | counter | `kind`, `state` = `document`, `absent` | entries an app or tenant family dropped at its bound (`max-apps`, `max-tenants`, `max-absent`) |
+| `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`, `caller` | work the compile pool refused: `caller` means a request's thread ran it |
+
+`installed`, `lag` and `lagging` are as of the source's last lag pass, run every `revalidate-interval`, not read on a
+scrape: a scrape costs a read of one field however many documents there are. They read zero before the first pass,
+when `summary.age` is `NaN`; a `summary.age` far above `revalidate-interval` means the passes have stopped.
+
+| Alert on | Because |
+|---|---|
+| any rise of `lost` | a document vanished from the store, and its key fails closed |
+| any rise of `regressions` | the store lost a write it acknowledged: check the last failover |
+| any rise of `lag.exceeded{level=escalate}` | the instance decides on a document the store has not confirmed for `lag-escalate` |
+| `installed{state=invalid}` above zero | a stored document does not compile on this instance (an older version than the control plane?) |
+| a sustained rate of `handoffs.refused{to=caller}` | the compile pool is saturated, and requests' threads compile |
+| a sustained rate of `evictions`, with `loads{result=cold}` rising | the families are too small for the traffic: raise `max-apps` / `max-tenants` |
+
 ## Snapshot health
 
-CoSec registers no meters for the documents an instance holds. To see whether instances are current:
+The meters above count; the health indicators and logs below answer whether an instance is current:
 
 - **Health.** With Spring Boot Actuator, the `cosecSnapshot` health indicator is `UP` once the platform document and
   every prewarmed document are installed, `DOWN` before, with the details `platform` (`installed`, `invalid` when it is

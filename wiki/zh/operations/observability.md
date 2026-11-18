@@ -159,9 +159,44 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 `indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到；伴随 `cause=document_invalid` 上升，说明某个已存储的文档在本实例上无法编译（[故障排查](./troubleshooting.md#unavailable)）。
 CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标（[CoCache 文档](https://cocache.ahoo.me)）。
 
+## 快照指标 {#snapshot-metrics}
+
+在与计时器相同的条件下（`cosec-micrometer`、一个 `MeterRegistry`、`cosec.metrics.enabled`），starter 为数据平面的快照源注册指标：
+即本实例读取、编译并持有的文档（[实例如何读取文档](./storage.md#how-instances-read-documents)）。控制平面自己的快照源不计量。
+应用自己构建的 `Pipeline` 不会得到这些指标。没有任何标签携带应用或租户 id，因此无论文档有多少，都是 72 个序列。
+`kind` 为 `platform`、`app` 或 `tenant`：
+
+| 指标 | 类型 | 标签 | 含义 |
+|---|---|---|---|
+| `cosec.snapshot.loads` | counter | `kind`、`result` | 请求要一个文档：`hit`（它已安装）、`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了 `cold-load-timeout`） |
+| `cosec.snapshot.compile.duration` | timer | `kind`、`result` = `success`、`failure` | 编译一个文档；`failure` 是一个在本实例上无法编译的已存储文档 |
+| `cosec.snapshot.installs` | counter | `kind` | 安装的文档：首次加载或新修订 |
+| `cosec.snapshot.installed` | gauge | `kind`、`state` | 当前持有的条目，按状态：`present`、`invalid`（在此无法编译）、`pending`（其输入已变，等待重新编译）、`undecodable`、`absent`（没有文档，之前也没见过）、`lost`（之前见过的文档不见了）、`unreadable`。各状态之和等于实例持有的条目数 |
+| `cosec.snapshot.lag` | gauge，秒 | `kind` | 持有的条目中（失败的除外）最久未被存储确认的时长 |
+| `cosec.snapshot.lagging` | gauge | `kind`、`level` = `warn`、`escalate` | 超过 `lag-warn` 的条目（包括超过 `lag-escalate` 的）和超过 `lag-escalate` 的条目 |
+| `cosec.snapshot.summary.age` | gauge，秒 | 无 | 距 `installed`、`lag` 和 `lagging` 所读的那一轮的时间 |
+| `cosec.snapshot.lag.exceeded` | counter | `kind`、`level` | 实例每记录一次延迟日志 |
+| `cosec.snapshot.regressions` | counter | `kind` | 存储返回了比已安装修订更旧的修订 |
+| `cosec.snapshot.lost` | counter | `kind` | 之前见过的文档现在不存在；它的键失败关闭 |
+| `cosec.snapshot.evictions` | counter | `kind`、`state` = `document`、`absent` | 应用或租户族在达到上限（`max-apps`、`max-tenants`、`max-absent`）时丢弃的条目 |
+| `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`、`caller` | 编译池拒绝的工作：`caller` 表示由请求线程执行 |
+
+`installed`、`lag` 和 `lagging` 反映快照源上一轮延迟检查（每个 `revalidate-interval` 一次）时的状态，不在抓取时读取：
+无论有多少文档，一次抓取只读一个字段。第一轮之前它们读数为零，此时 `summary.age` 为 `NaN`；`summary.age` 远大于
+`revalidate-interval` 说明检查已经停止。
+
+| 告警条件 | 原因 |
+|---|---|
+| `lost` 有任何上升 | 某个文档从存储中消失了，它的键失败关闭 |
+| `regressions` 有任何上升 | 存储丢失了它已确认的写入：检查最近一次故障转移 |
+| `lag.exceeded{level=escalate}` 有任何上升 | 实例依据一个存储已有 `lag-escalate` 之久未确认的文档做决策 |
+| `installed{state=invalid}` 大于零 | 某个已存储文档在本实例上无法编译（版本比控制平面旧？） |
+| `handoffs.refused{to=caller}` 持续有速率 | 编译池饱和，请求线程在编译 |
+| `evictions` 持续有速率，且 `loads{result=cold}` 上升 | 族对流量来说太小：调大 `max-apps` / `max-tenants` |
+
 ## 快照健康状况 {#snapshot-health}
 
-CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了文档：
+上面的指标负责计数；下面的健康指示器和日志回答实例是否跟上了文档：
 
 - **健康。** 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在平台文档和每个预热文档安装后为 `UP`，之前为
   `DOWN`，细节为 `platform`（`installed`；已存储但无法编译时为 `invalid`；`failed`、`absent` 或 `loading`）、`prewarmed`、`missing`，以及在有文档无法编译时的 `invalid`（无法编译的文档数）和 `invalidFirst`（其中的前十个及其存储的修订，平台文档在前，其余按键排序，如 `["tenant:acme@7"]`），从不包含编译器的消息。就绪状态遵循同样的条件
