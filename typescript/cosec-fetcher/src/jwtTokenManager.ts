@@ -559,7 +559,7 @@ export class JwtTokenManager implements RefreshTokenStatusCapable {
           "No tokenRevoker: give the JwtTokenManager a CoSecTokenRevoker of the server's logout route.",
         );
       }
-      await revoker.logout(jwtToken.token);
+      await revoker.revoke(jwtToken.token);
     } catch (error) {
       if (!isRefreshRejection(error)) unconfirmed = error ?? new Error();
     } finally {

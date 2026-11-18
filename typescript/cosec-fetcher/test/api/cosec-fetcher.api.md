@@ -200,9 +200,9 @@ export interface CoSecTokenRefresherOptions {
 // @public
 export class CoSecTokenRevoker implements TokenRevoker {
     constructor(options: CoSecTokenRevokerOptions);
-    logout(token: CompositeToken): Promise<void>;
     // (undocumented)
     readonly options: CoSecTokenRevokerOptions;
+    revoke(token: CompositeToken): Promise<void>;
 }
 
 // @public
@@ -544,7 +544,7 @@ export interface TokenRefresher {
 
 // @public
 export interface TokenRevoker {
-    logout(token: CompositeToken): Promise<void>;
+    revoke(token: CompositeToken): Promise<void>;
 }
 
 // @public

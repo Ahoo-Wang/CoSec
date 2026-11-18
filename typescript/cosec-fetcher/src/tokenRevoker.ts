@@ -27,7 +27,7 @@ export interface TokenRevoker {
    * Ends the session of `token` at the server. Resolves when the server ended
    * it, rejects otherwise with the error of the request.
    */
-  logout(token: CompositeToken): Promise<void>;
+  revoke(token: CompositeToken): Promise<void>;
 }
 
 /** Options of a {@link CoSecTokenRevoker}. */
@@ -63,7 +63,7 @@ export class CoSecTokenRevoker implements TokenRevoker {
   constructor(public readonly options: CoSecTokenRevokerOptions) {}
 
   /** Posts `token` to the logout route; resolves on `204`. */
-  async logout(token: CompositeToken): Promise<void> {
+  async revoke(token: CompositeToken): Promise<void> {
     await this.options.fetcher.post(
       this.options.endpoint,
       {

@@ -88,8 +88,8 @@ describe('JwtTokenManager.logout', () => {
       token,
   ) => new JwtTokenManager(storage, { refresh }, { tokenRevoker });
 
-  const revoker = (logout: TokenRevoker['logout']): TokenRevoker => ({
-    logout,
+  const revoker = (revoke: TokenRevoker['revoke']): TokenRevoker => ({
+    revoke,
   });
 
   it('ends the session at the server, then here', async () => {
@@ -264,7 +264,7 @@ describe('CoSecTokenRevoker', () => {
       },
     });
     const token = pair('alice');
-    await new CoSecTokenRevoker({ fetcher, endpoint: '/auth/logout' }).logout(
+    await new CoSecTokenRevoker({ fetcher, endpoint: '/auth/logout' }).revoke(
       token,
     );
     expect(sent).toEqual([
@@ -282,7 +282,7 @@ describe('CoSecTokenRevoker', () => {
       fetcher,
       endpoint: '/auth/logout',
     })
-      .logout(pair('alice'))
+      .revoke(pair('alice'))
       .catch(error => error);
     expect(error).toBeInstanceOf(HttpStatusValidationError);
   });
