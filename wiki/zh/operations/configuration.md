@@ -51,7 +51,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md)。只能是 `true` 或 `false`：其他值会导致启动失败。 |
 | `cosec.audit.enabled` | boolean | `true` | 审计日志监听器；与 `cosec.audit.kafka.enabled` 一起决定 Kafka 审计监听器 |
 | `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean） |
-| `cosec.metrics.enabled` | boolean | `true` | 指标监听器（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean，Spring Boot 自动配置的那个也可以） |
+| `cosec.metrics.enabled` | boolean | `true` | 指标监听器和[快照源的指标](./observability.md#snapshot-metrics)（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean，Spring Boot 自动配置的那个也可以）。显式写为 `true` 而缺少 `cosec-micrometer` 时启动失败；不设置时指标是可选的 |
 | `cosec.ip2region.enabled` | boolean | `true` | `ext.ip2region.*` 属性提供者（`cosec-ip2region`） |
 | `cosec.ip2region.ipv6-location` | string | 无 | IPv6 `.xdb` 数据库的 Spring 资源位置（`file:`、`classpath:`），与随附的 IPv4 数据库一同加载。未设置时，IPv6 客户端的归属地取不到。位置不存在时启动失败。 |
 | `cosec.openapi.enabled` | boolean | `true` | OpenAPI 文档的 bearer 认证定制器（`cosec-openapi`） |

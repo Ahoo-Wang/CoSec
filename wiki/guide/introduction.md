@@ -106,7 +106,7 @@ record for policy snapshots and revoked tokens.
 | The control plane: publishing, history, rollback, shadow windows, approvals, simulation | `cosec-control` | `cosec-cocache` |
 | Social login through OAuth | `cosec-social` | |
 | A tracing span per decision | `cosec-opentelemetry` | |
-| A timer per decision, by result | `cosec-micrometer` | |
+| A timer per decision, by result, and the snapshot source's meters | `cosec-micrometer` | a `MeterRegistry` (for example `spring-boot-starter-actuator`) |
 | Route maps and app documents generated from your OpenAPI description | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-webflux-api` or `-webmvc-api` |
 | Decision events, and optionally control-plane changes, sent to Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | The client's region as an external attribute | `cosec-ip2region` | |
