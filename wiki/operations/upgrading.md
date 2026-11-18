@@ -687,6 +687,16 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
 
 - Tokens issued by 7.x keep working: 8.0 reads the same claims (`roles`, `policies`, `attributes`, `tenantId`), and
   role claims as 7.x did (`role` in the default space, `role@space` in that space only, rule `MEM-3`).
+- **Tokens issued by 6.x** carry what 6.1's `JwtTokenConverter` writes: `jti`, `sub`, `iat` and `exp`, and `roles`
+  (`role`, or `role@space`), `policies`, `attributes` and a string `tenantId` when the principal has them. 8.0 verifies
+  them when it holds the same `cosec.jwt.algorithm` and `cosec.jwt.secret` (of at least the length below), and requires
+  `jti`, `sub` and `exp`, which 6.x always sets. What they lack matters: **no `aud`**, so the request has no app (on a host
+  without `cosec.authorization.scope.app-id`, `scope.appId` is empty and no app document is read; with it, every such token
+  is `403` `scope-rejected`, [Apps](../integration/authentication.md#apps)), and **no session claims** (`sid`,
+  `auth_time`, `cosec.generation`), so an 8.0 service never refreshes a 6.x pair: the user signs in again at an 8.0
+  issuer. A 6.x issuer revokes only with `cosec.jwt.token-revocation.enabled=true`, by token id, and whether an 8.0
+  verifier reads what it writes is not established: do not rely on a 6.x issuer's logout reaching an 8.0 verifier, and
+  keep access tokens short until the issuer is on 8.0 ([A service that verifies tokens another service issues](../scenarios/resource-server.md)).
 - **A token with an `act` claim is now refused** as `token-invalid` (`IDN-4`). 7.x ignored the claim, so an RFC 8693
   delegation token was read as its `sub` and the actor got the subject's permissions. CoSec never issues such
   tokens; a verifier that accepts tokens from another issuer must not pass them on until delegation is supported
@@ -818,6 +828,31 @@ A service behind a CoSec gateway that verifies tokens itself no longer receives 
 `cosec.gateway.identity.forward-authorization=true` on the gateway and route to the service by `lb://` or with
 `cosec-identity: true`, or switch the service to `cosec.pipeline.mode=gateway`. A token in the `authorization` cookie
 is removed too, under the same switch.
+
+#### Rolling out an inject-mode service behind an older gateway {#rolling-out-an-inject-mode-service-behind-an-older-gateway}
+
+A service in 6.x or 7.x inject mode sits behind a gateway that forwards the client's `Authorization` header and sends no
+`CoSec-Identity`. The service cannot go straight to `cosec.pipeline.mode=gateway` while that gateway is in front of it,
+for two reasons that hold on `main`: a gateway-mode service reads no token, so a request without `CoSec-Identity`
+proceeds as the anonymous principal `(0)` and every caller of the service is anonymous; and an older gateway does not
+strip a `CoSec-Identity` header the client sent, which the service believes, so anyone who can reach the gateway is whoever
+they claim ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)). The order that works:
+
+1. **The service moves to `enforce`, verifying the token the gateway forwards.** It needs the issuer's `cosec.jwt.secret`
+   and `cosec.jwt.algorithm`, the issuer's revocations, and a platform document that permits its authenticated callers:
+   [A service that verifies tokens another service issues](../scenarios/resource-server.md). The app of a request is the
+   token's `aud` and no header: a `CoSec-App-Id` the gateway or the client sends is not read. Tokens of a 6.x or 7.x issuer
+   carry no `aud`, so the request has no app until the issuer moves to 8.0
+   ([Tokens and API keys](#tokens-and-api-keys)).
+2. **The gateway moves to 8.0**, with `cosec.gateway.identity.forward-authorization=true`. Without it the 8.0 gateway
+   removes the `Authorization` header, and the service in `enforce` mode, which still reads it, would see anonymous
+   requests. The gateway then sends `CoSec-Identity` as well; an `enforce` service does not read it, and its adapter strips it from the request its handler sees.
+3. **The service moves to `gateway` mode**, once the 8.0 gateway is the only way in: `cosec.pipeline.mode=gateway`, no
+   revocation stores and no document, and a network policy that admits only the gateway. Then
+   `forward-authorization` can go.
+
+A service that stays in `enforce` mode is a finished state, not a step: it keeps verifying the token, with its own
+document and revocation reader.
 
 #### Clients send tokens and scope differently {#clients-send-tokens-and-scope-differently}
 
