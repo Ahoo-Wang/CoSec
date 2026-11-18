@@ -51,7 +51,7 @@ jobs:
         run: |
           set -euo pipefail
           # The required checks of `main`. Others, such as Codecov's, neither hold the queue nor stop a pull request.
-          required='["CI","Analyze (java-kotlin)","Semantic PR Title"]'
+          required='["CI","Analyze (java-kotlin)","Analyze (javascript-typescript)","CodeQL","Semantic PR Title"]'
           armed() {
             gh pr list --repo "$GITHUB_REPOSITORY" --state open --base main --limit 100 \
               --json number,createdAt,isDraft,isCrossRepository,autoMergeRequest,mergeStateStatus,statusCheckRollup \
