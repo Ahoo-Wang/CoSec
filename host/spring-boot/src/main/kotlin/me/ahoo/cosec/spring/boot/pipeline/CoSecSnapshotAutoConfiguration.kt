@@ -100,10 +100,11 @@ class CoSecSnapshotAutoConfiguration {
             properties: RuntimeAuthorizationProperties,
             cosec: CoSecProperties,
             resources: ResourceLoader,
+            environment: Environment,
         ): PolicySnapshotCache {
             val snapshot = properties.snapshot
             // Read-only unless this process runs the control plane, the only writer of documents (SNP-18).
-            val readOnly = !ControlPlaneCondition.wired(resources.classLoader)
+            val readOnly = ControlPlaneCondition.readOnly(resources.classLoader, environment, announce = true)
             return factory.createPolicySnapshotCache(
                 CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge, readOnly)
             )
@@ -230,11 +231,12 @@ class CoSecSnapshotAutoConfiguration {
             compiler: PlatformCompiler,
             cosec: CoSecProperties,
             resources: ResourceLoader,
+            environment: Environment,
         ): CandidateSource {
             val store = stores.ifUnique ?: CoCacheCandidateStore.create(
                 factory,
                 cosec.keyPrefix,
-                readOnly = !ControlPlaneCondition.wired(resources.classLoader),
+                readOnly = ControlPlaneCondition.readOnly(resources.classLoader, environment),
             )
             return CachingCandidateSource(store, compiler::compileCandidate)
         }

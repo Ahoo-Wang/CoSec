@@ -26,6 +26,7 @@ import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
 import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
 import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
+import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.AutoConfigureOrder
 import org.springframework.boot.autoconfigure.condition.AnyNestedCondition
@@ -146,6 +147,24 @@ internal class CoSecModuleCheckAutoConfiguration {
             )
     }
 
+    /**
+     * The control plane asked for in so many words: `cosec.control.enabled=true` written, and `cosec-control` or
+     * `cosec-cocache` missing. Unset, it stays silent: an instance without the modules is a data-plane instance. A value
+     * that is neither `true` nor `false` fails here too, whatever the classpath.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnCoSecEnabled
+    class ControlPlane {
+        @Bean
+        fun cosecControlPlaneModuleCheck(context: ApplicationContext): StartupTask = StartupTask.OnCreation {
+            if (ControlPlaneCondition.written(context.environment) == true) {
+                val what = "${ControlPlaneCondition.ENABLED_KEY}=true"
+                checkModule(context, "me.ahoo.cosec.control.api.ControlHttp", "cosec-control", what)
+                checkModule(context, "me.ahoo.cosec.cocache.control.CoCacheControlStore", "cosec-cocache", what)
+            }
+        }
+    }
+
     /** The served login routes: a path that is set never does nothing (`IDN-23`, `IDN-24`). */
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnCoSecEnabled
@@ -228,13 +247,14 @@ internal class CoSecModuleCheckAutoConfiguration {
             className: String,
             artifact: String,
             what: String,
-        ): StartupTask.OnCreation =
-            StartupTask.OnCreation {
-                check(ClassUtils.isPresent(className, context.classLoader)) {
-                    "$what needs $artifact (me.ahoo.cosec:$artifact) on the classpath: add it to the application's " +
-                        "dependencies (STA-1)."
-                }
+        ): StartupTask.OnCreation = StartupTask.OnCreation { checkModule(context, className, artifact, what) }
+
+        fun checkModule(context: ApplicationContext, className: String, artifact: String, what: String) {
+            check(ClassUtils.isPresent(className, context.classLoader)) {
+                "$what needs $artifact (me.ahoo.cosec:$artifact) on the classpath: add it to the application's " +
+                    "dependencies (STA-1)."
             }
+        }
     }
 }
 
