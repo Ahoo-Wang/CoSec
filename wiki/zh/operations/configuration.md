@@ -20,6 +20,7 @@ key 会悄无声息地不起作用。classpath 上的配置元数据（`META-INF
 map、list 类型配置项之下的 key，算作已知。错误信息列出每个未知 key，并链接到
 [已删除和改名的 key 对照表](./upgrading.md#removed-and-renamed-properties)。没有任何配置项能关闭这项检查：
 某个版本取代的 key 前缀如果被忽略，令牌吊销就会留在没人读取的地方。
+这项检查在创建任何 bean（包括应用自己的 bean）之前运行，所以为 6.x 或 7.x 写的配置会先得知每个已删除的 key，然后才会遇到其他启动失败，例如缺少令牌存储。
 
 这项检查以及 starter 的其他启动检查（缺少模块、网关上暴露的 actuator 端点、Redis 的逐出策略、从副本读取、没有 `MembershipProvider` 的 API key），在设置 `spring.main.lazy-initialization=true` 时同样运行（`STA-3`）：没有 bean 依赖这些检查，延迟初始化的应用否则会把它们全部跳过。
 

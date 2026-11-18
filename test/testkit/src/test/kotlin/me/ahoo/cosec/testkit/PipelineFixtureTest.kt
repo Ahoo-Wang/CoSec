@@ -22,6 +22,7 @@ import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.Delivery
+import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -158,6 +159,29 @@ class PipelineFixtureTest {
             PipelineFixture.of(platform = anyone, tenants = mapOf("acme" to routed)).use { plain ->
                 plain.evaluate(plain.request("GET", "/orders/7", reader)).status.assert().isEqualTo(403)
             }
+        }
+    }
+
+    /** Drill 2, finding 25: documents that cannot be read refuse every request with 503, and never permit one. */
+    @Test
+    fun `documents that cannot be read answer 503 and permit nothing`() = runBlocking<Unit> {
+        val required = Recording(Delivery.REQUIRED)
+        PipelineFixture.unreadable(routes = routes, listeners = listOf(required)).use {
+            val requests = listOf(
+                it.request("GET", "/public/x"),
+                it.request("GET", "/orders/7", reader),
+                it.request("GET", "/orders/7", PipelineFixture.Principal("root", roles = setOf("admin"))),
+            )
+            for (request in requests) {
+                val outcome = it.evaluate(request)
+                outcome.status.assert().isEqualTo(503)
+                outcome.proceed.assert().isFalse()
+                outcome.security.assert().isNull()
+                outcome.problem!!.type.assert().isEqualTo(ProblemType.UNAVAILABLE)
+            }
+            val refused = it.request("GET", "/orders/7", reader)
+            assertThrownBy<AssertionError> { runBlocking { it.securityContext(refused) } }
+            required.events.assert().isNotEmpty()
         }
     }
 
