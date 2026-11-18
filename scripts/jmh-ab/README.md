@@ -87,7 +87,7 @@ is still awake, 8 to 14 µs where it has gone idle), not on the code.
 
 The stamps come from wrappers: the store, the compiler, the pool, housekeeping, the scheduler and the metrics. Nothing
 in the source changes, but each stamp costs time, and the run measures and prints that cost: 18 to 29 ns on an Apple M4
-Pro, a few tens of ns on the hosted runners. Both sides carry the same stamps in window 1. In window 2 `Slot` carries
+Pro, 43 to 132 ns on the hosted runners (Xeon 6973P-C and 6975P-C, EPYC 9V74). Both sides carry the same stamps in window 1. In window 2 `Slot` carries
 one more, its hand to housekeeping before its answer, so the extra it reports is if anything a little low.
 
 ## Script
