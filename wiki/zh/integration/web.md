@@ -19,7 +19,7 @@ description: "把 CoSec 接入 Spring WebFlux、Spring MVC 或 Spring Cloud Gate
 
 在两种 Web 栈上，CoSec 都在 Spring Boot 改写请求的过滤器之后运行，因此授权的就是将被执行的请求：隐藏方法过滤器（`spring.mvc.hiddenmethod.filter.enabled`，`-10000`）把带 `_method=DELETE` 的 `POST` 变成 DELETE，它先运行，CoSec 判定的就是这个 DELETE。你自己改写方法或路径的过滤器也必须排在 CoSec 之前：排在它之后，就改变了 CoSec 已经授权过的请求。在 Spring Cloud Gateway 上不存在这个问题：网关自己关闭了响应式隐藏方法过滤器（`spring.webflux.hiddenmethod.filter.enabled=false`，优先于其他所有属性来源），所以它从不改写所转发请求的方法。
 
-每个适配器都需要它的模块、`cosec-cocache`（快照文档和令牌吊销都存放在 Redis 中）、JWT 密钥和路由映射；只读取网关转发的身份的服务一样都不需要（[网关之后的服务](#services-behind-the-gateway)）。依赖写法见[快速开始](../guide/quick-start.md#add-the-dependency)；下面只说明不同之处。
+每个适配器都需要它的模块、`cosec-cocache`（快照文档和令牌吊销都存放在 Redis 中）和 JWT 密钥；WebFlux 或 WebMvc 宿主还可以加载路由映射，没有它时请求按 HTTP 方法和路径判定（[路由映射](#route-maps)）。只读取网关转发的身份的服务一样都不需要（[网关之后的服务](#services-behind-the-gateway)）。依赖写法见[快速开始](../guide/quick-start.md#add-the-dependency)；下面只说明不同之处。
 
 **Spring WebFlux。** 过滤器在事件循环上启动管道，不切换线程。真正挂起之后（例如一次 Redis 读取），请求在 `Dispatchers.Default` 上继续，绝不会留在客户端库的 I/O 线程上。
 
@@ -31,7 +31,7 @@ starter 在启动时检查适配器（STA-1）：缺少 `cosec-webmvc` 的 Sprin
 
 ## 请求的处理过程 {#how-a-request-is-handled}
 
-每个适配器把请求一次性读入 `HttpFacts`，交给 `Pipeline.evaluate`，后者总是以一个 `Outcome` 结束，出错时也一样。适配器只负责写出这个结果，自己从不做任何决策。
+每个适配器把请求一次性读入 `HttpFacts`，交给 `Pipeline.evaluate`，后者以一个 `Outcome` 结束，出错时也一样。只有客户端已离开的请求没有结果：它被取消，什么也不写出。适配器只负责写出这个结果，自己从不做任何决策。
 
 ```mermaid
 sequenceDiagram
@@ -101,8 +101,8 @@ CoSec 授权的路径是应用内的请求路径：
 }
 ```
 
-- 路由匹配方法与其 `method` 完全相同、路径匹配其 `path` 模式的请求。资源模板中的 `{变量}` 取自路径的捕获值。
-- 没有路由匹配的请求保留动作 `http:<METHOD>` 和资源 `http:path:<path>`。针对 `service:verb` 动作的语句永远覆盖不到它：没有任何路由会退回通配符。反过来也一样：`http:` 上的语句或限流规则永远覆盖不到已映射的请求，平台写的也不例外（[按业务动作授权](../scenarios/route-maps.md)）。
+- 路由匹配方法与其 `method` 完全相同、路径匹配其 `path` 模式的请求；`HEAD` 请求取 `HEAD` 路由，没有时取 `GET` 路由，因为服务器用 `GET` 的处理器响应 `HEAD`（`PIP-18`）。资源模板中的 `{变量}` 取自路径的捕获值。
+- 没有路由匹配的请求保留动作 `http:<METHOD>`（`HEAD` 请求为 `http:GET`）和资源 `http:path:<path>`。针对 `service:verb` 动作的语句永远覆盖不到它：没有任何路由会退回通配符。反过来也一样：`http:` 上的语句或限流规则永远覆盖不到已映射的请求，平台写的也不例外（[按业务动作授权](../scenarios/route-maps.md)）。
 - 路由映射要么整体加载，要么不加载。位置不存在、文件格式错误（未知或缺失的字段、重复的 key、类型错误的值）、文件没有路由、路由格式错误，或者两条路由可能匹配同一个请求（方法相同且路径不能证明互斥），都会使启动失败并指出位置。
 - 该配置项未设置时宿主不加载路由映射，除非 `classpath:cosec-routes.json` 存在：这时启动失败，直到配置项指明该文件，或设为空值以明确不使用路由映射。启动日志会写明加载的每份映射、它的服务和路由条数，或者没有映射。
 - 为空或含有 `/`（解码后的 `%2F`）的捕获值不能作为类型化资源 id 的一段：请求以 `400` `invalid-request` 拒绝，绝不会被当作另一个资源求值。
@@ -124,7 +124,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | `401` | `token-expired` | Deny，且令牌已过期。在网关之后：`CoSec-Identity` 或其凭证过旧。 |
 | `401` | `token-revoked` | Deny，且该令牌或其主体的全部令牌已被吊销。 |
 | `403` | `forbidden` | Deny，且调用方已认证：显式 DENY、隐式拒绝或平台边界。 |
-| `403` | `scope-rejected` | 调用方已认证，且作用域被拒绝：声明了与宿主不同的应用，主体在声明的空间中没有角色，或声明的空间 id 以 `(` 开头（归 CoSec 所有）。 |
+| `403` | `scope-rejected` | 调用方已认证，且作用域被拒绝：凭证声明了与宿主不同的应用，或宿主有应用而凭证未声明，或声明的应用不能作为应用 id；主体在声明的空间中没有角色；或声明的空间是 `*`，或空间 id 以 `(` 开头（两者都归 CoSec 所有）。 |
 | `429` | `too-many-requests` | Permit，但某条匹配的[限流规则](../policies/rate-limiting.md)已没有许可。 |
 | `503` | `unavailable` | 无法做出决策：Indeterminate；认证器或成员关系提供者失败或超时；快照源失败；严格的限流规则无法计数；Permit 时某个 REQUIRED 决策监听器失败；只有 break-glass 放行却没有 REQUIRED 监听器；或超过了 `cosec.pipeline.timeout`。 |
 | `500` | `internal-error` | 未被建模的异常：CoSec 的缺陷。在网关上，还包括身份无法转发的 Permit（[转发身份](#forwarding-the-identity)）。 |
@@ -349,7 +349,7 @@ fun corsConfigurationSource(): CorsConfigurationSource = UrlBasedCorsConfigurati
 在 Spring Cloud Gateway 上，`PipelineGatewayFilter` 在任何路由过滤器运行之前授权请求。它与 WebFlux 过滤器有三点不同：
 
 - 它只作用于网关路由：没有路由匹配的请求，以及网关自己的 actuator 端点，都不经 CoSec 授权，因此在应用端口上暴露了 `health` 以外 actuator 端点的网关无法启动（[网关上的 actuator](#actuator-on-a-gateway)）；
-- 它不加载路由映射，因此每个请求都是 `http:path:<path>` 上的 `http:<METHOD>`；
+- 它不加载路由映射，因此每个请求都是 `http:path:<path>` 上的 `http:<METHOD>`（`HEAD` 为 `http:GET`）；
 - 它把结果中的 `CoSec-Request-Id` 转发给下游服务，替换客户端发送的任何值，使后端日志与网关共享同一个请求 id。Permit 时它还把校验过的身份转发给接收身份的路由（[转发身份](#forwarding-the-identity)），并且除非设置了 `cosec.gateway.identity.forward-authorization=true`，它会移除客户端的凭证，无论它在请求头、查询参数还是 cookie 中。
 
 **路由的应用。** 路由元数据 `cosec-app-id` 指定该路由上请求所属的应用，优先于 `cosec.authorization.scope.app-id`：在这条路由上，声明了其他应用或未声明应用的凭证被拒绝（`403` `scope-rejected`），属于路由应用的凭证获得该应用的角色绑定和 DENY（[应用](./authentication.md#apps)）。一个网关面向多个应用时，为每条路由指定它的应用；原因见[信任边界](../guide/security-model.md#trust-boundaries)。它的值必须是字符串：数字、布尔值、列表或映射不会按其文本读取，因此名为 `2024` 的应用要写成 `cosec-app-id: "2024"`。`cosec-app-id` 不是字符串、或不是合法应用 id 时，该路由的每个请求都会失败（`500`）。
@@ -395,7 +395,7 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 
   <<< @/examples/probes/documents/platform.json [probes policy and binding]
 
-  第一份文档发布之前，探针仍然回答 `503`，这正是“未就绪”该有的回答。在 Kubernetes 之外，Spring Boot 只有设置了 `management.endpoint.health.probes.enabled=true` 才提供探针。
+  第一份文档发布之前，探针仍然回答 `503`，这正是“未就绪”该有的回答。Spring Boot 4 在任何平台上都提供探针：`management.endpoint.health.probes.enabled` 默认为 `true`。
 - **存活与启动探针不能依赖平台文档。** 应用的应用端口上的 HTTP 存活探针在第一份文档发布之前回答 `503`，kubelet 会在它能就绪之前就重启 pod。WebMvc 上把它指向管理端口，它不经 CoSec。WebFlux 的管理端口同样经 CoSec，所以对应用端口使用 `tcpSocket` 探针。
 - **管理端口上不经 CoSec 的内容由网络保护**，与网关相同：只在那里暴露你愿意让能访问该端口的任何人访问的东西。
 
@@ -434,7 +434,7 @@ spring:
 
 **客户端无法伪造它。** 每个网关宿主都会在任何其他过滤器运行之前移除客户端发送的 `CoSec-Identity`（`IdentityStripFilter`），并在最后一跳、所有路由过滤器之后再移除一次（`IdentityHeadersFilter`），只发送管道转发的值。无论 `cosec.pipeline.mode` 或 `cosec.enabled` 如何设置，两者都会运行，因此添加该请求头的路由过滤器也无法转发身份。按策略决策（`cosec.pipeline.mode=enforce`）的 WebFlux 或 Spring MVC 宿主也会在处理器看到请求之前移除它，因此调用网关之后服务的服务无法转递客户端写的身份。读取 `http.header.cosec-identity` 的条件无法编译。
 
-**不转发身份的情况**：匿名的 Permit、被拒绝的请求、不接收身份的路由，或设置了 `cosec.gateway.identity.enabled=false`。
+**不转发身份的情况**：匿名的 Permit、被拒绝的请求、不接收身份的路由、认证器没有给出凭证的主体（CoSec 的令牌和 API key 认证器总会给出），或设置了 `cosec.gateway.identity.enabled=false`。
 
 **它携带的内容。** 值是紧凑 JSON 的 base64url 编码（无填充），格式版本 1；JSON Schema 是 [`schema/cosec-identity.schema.json`](https://github.com/Ahoo-Wang/CoSec/blob/main/schema/cosec-identity.schema.json)。
 

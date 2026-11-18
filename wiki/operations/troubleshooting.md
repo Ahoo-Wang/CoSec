@@ -214,7 +214,7 @@ No decision could be made, so the request was refused: CoSec fails closed. The a
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | The authenticator failed or took longer than [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline): for example the Redis API key store is unreachable. | Restore the store. |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request of one authenticator | An `Authenticator` of your own names its credential's method `jwt`, which is reserved for CoSec's token (`The authentication method [jwt] is CoSec's own token's ...`). | Name the method after your credential, such as `Identity.Method("ldap")` ([Extending](../architecture/extending.md#authenticators)). |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for the requests of some principals or keys | The authenticator gave a principal whose id, tenant, credential id or claimed roles hold an unpaired UTF-16 surrogate (`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`), or an API key's stored record names one (`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`, `IDN-10`). Such an id would share a Redis key with another, so the request fails closed instead. | Fix the authenticator, or the key's record: an id is Unicode text. |
-| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in another format, which is refused when read (`API key format [null] is not 2.`; `null` means the record has no `format`, as a key written by 7.x). | Convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`, for every request with one key | The key is stored in another format, which is refused when read (`API key format [null] is not 3.`; `null` means the record has no `format`, as a key written by 7.x; `2` means an 8.0 pre-release wrote it). | A 7.x key: convert the keys ([API keys narrow, and memberships decide](./upgrading.md#api-keys-narrow-and-memberships-decide)). A pre-release key: issue a new key and delete the old one; `cosec-migrate api-keys` refuses to count it converted. |
 | `DEADLINE_EXCEEDED` / `deadline` | The whole evaluation took longer than [`cosec.pipeline.timeout`](./configuration.md#pipeline). | Find the slow stage in the trace. |
 
 A DENY still decides: if a DENY matches, the request is `401` or `403` even when a document is unavailable.
@@ -349,7 +349,8 @@ rest, and the kubelet restarts the pod.
 
 - **Readiness over HTTP:** permit `GET` on the two probe paths for anyone, with one statement
   ([the policy](../integration/web.md#actuator-on-an-application)). Before the first publish it still answers `503`, the
-  right answer for "not ready". Outside Kubernetes, set `management.endpoint.health.probes.enabled=true`.
+  right answer for "not ready". Spring Boot 4 serves the probes on every platform (`management.endpoint.health.probes.enabled`
+  is `true` by default).
 - **Liveness and startup:** on WebMvc, point the probe at `management.server.port`, which is outside CoSec. On WebFlux the
   management port is under CoSec as well: use a `tcpSocket` probe on the application port. Never an HTTP liveness probe on
   the application port of an application.
@@ -442,6 +443,17 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux
 check, as it needs `cosec-gateway` instead. Every check runs with `spring.main.lazy-initialization=true` too (`STA-3`).
 
+### Startup fails on the refresh route's authentication {#startup-fails-on-the-refresh-routes-authentication}
+
+```text
+cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <your credentials class>, not the pair the served route presents ... (IDN-25).
+```
+
+The starter serves the refresh route with your `RefreshTokenAuthentication` bean, but yours takes a credentials class
+of your own (a device id beside the pair, say), which the served route cannot build from the request. Serve that
+refresh from a route of your own and unset `cosec.authentication.login.refresh.path`, or declare it over
+`RefreshTokenCredentials` ([Refreshing tokens](../integration/authentication.md#refreshing-tokens)).
+
 ### Startup fails on an exposed actuator endpoint
 
 ```text
@@ -523,7 +535,7 @@ Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
 A `cocache.caches.[<CacheName>].*` entry, or a `CacheSpecCustomizer`, sets a field CoSec locks on its caches, such as
-the `ttl` or `unknown-read` of the snapshot store or its `key-prefix`. Remove the setting, or exclude CoSec's caches from
+the `ttl` or `unknown-read` of the snapshot store, the `absent-ttl` of a revocation table, or a `key-prefix`. Remove the setting, or exclude CoSec's caches from
 the customizer (`supports(cacheName)`). `unlock` lets the entry start, but the fields CoSec constrains keep their values
 ([Precedence](./configuration.md#precedence)).
 

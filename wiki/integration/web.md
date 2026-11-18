@@ -29,8 +29,9 @@ the question does not arise: the gateway turns the reactive hidden-method filter
 (`spring.webflux.hiddenmethod.filter.enabled=false`, ahead of every other property source), so it never rewrites the
 method it forwards.
 
-Every adapter needs its module, `cosec-cocache` (the snapshot documents and token revocation live in Redis), a
-JWT secret and a route map; a service that only reads the identity its gateway forwards needs none of them
+Every adapter needs its module, `cosec-cocache` (the snapshot documents and token revocation live in Redis) and a
+JWT secret; a WebFlux or WebMvc host also takes a route map, without which its requests are decided on their HTTP method
+and path ([Route maps](#route-maps)). A service that only reads the identity its gateway forwards needs none of them
 ([Services behind the gateway](#services-behind-the-gateway)). The
 [Quick start](../guide/quick-start.md#add-the-dependency) shows the dependencies; the snippets below show only what
 differs.
@@ -56,8 +57,9 @@ each module needs with it.
 
 ## How a request is handled
 
-Every adapter reads the request once into `HttpFacts` and hands it to `Pipeline.evaluate`, which always ends in an
-`Outcome`, errors included. The adapter only writes that outcome; it never decides anything itself.
+Every adapter reads the request once into `HttpFacts` and hands it to `Pipeline.evaluate`, which ends in an
+`Outcome`, errors included. Only a request whose client goes away has none: it is cancelled, and nothing is written. The
+adapter only writes that outcome; it never decides anything itself.
 
 ```mermaid
 sequenceDiagram
@@ -144,9 +146,11 @@ A route map gives each route of a service an action and a typed resource, so pol
 }
 ```
 
-- A route matches a request with exactly its `method` whose path matches its `path` pattern. The resource template's
-  `{variables}` are captures of the path.
-- A request no route matches keeps the action `http:<METHOD>` on the resource `http:path:<path>`. A statement on a
+- A route matches a request with exactly its `method` whose path matches its `path` pattern; a `HEAD` request takes a
+  `HEAD` route, and without one the `GET` route, since servers serve `HEAD` with the `GET` handler (`PIP-18`). The
+  resource template's `{variables}` are captures of the path.
+- A request no route matches keeps the action `http:<METHOD>` (`http:GET` for a `HEAD` request) on the resource
+  `http:path:<path>`. A statement on a
   `service:verb` action never covers it: no route falls back to a wildcard. The reverse holds too: a statement or a
   rate limit rule on `http:` never covers a mapped request, the platform's included
   ([Authorizing business actions](../scenarios/route-maps.md)).
@@ -179,7 +183,7 @@ proceeds to your handler only on a Permit.
 | `401` | `token-expired` | Deny, and the token had expired. Behind a gateway: a `CoSec-Identity`, or its credential, that is too old. |
 | `401` | `token-revoked` | Deny, and the token, or every token of its principal, was revoked. |
 | `403` | `forbidden` | Deny, and the caller is authenticated: an explicit DENY, the implicit deny, or the platform boundary. |
-| `403` | `scope-rejected` | The caller is authenticated, and the scope was rejected: a declared app other than the host's, a space the principal has no role in, or a space id beginning with `(`, which is CoSec's. |
+| `403` | `scope-rejected` | The caller is authenticated, and the scope was rejected: a credential that declares an app other than the host's, or none on a host with one, or an app that cannot be an app id; a space the principal has no role in; or the space `*`, or a space id beginning with `(`, which are CoSec's. |
 | `429` | `too-many-requests` | Permit, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. |
 | `503` | `unavailable` | No decision could be made: Indeterminate, the authenticator or a membership provider failed or timed out, the snapshot source failed, a strict rate limit rule could not be counted, a REQUIRED decision listener failed on a Permit, a Permit only break-glass gives without a REQUIRED listener, or `cosec.pipeline.timeout` passed. |
 | `500` | `internal-error` | An exception nothing modelled: a defect of CoSec. At a gateway, also a Permit whose identity cannot be forwarded ([Forwarding the identity](#forwarding-the-identity)). |
@@ -481,7 +485,7 @@ from the WebFlux filter in three ways:
 - it runs on gateway routes only: a request no route matches, and the gateway's own actuator endpoints, are not
   authorized by CoSec, so a gateway that exposes an actuator endpoint other than `health` on its application port does
   not start ([Actuator on a gateway](#actuator-on-a-gateway));
-- it loads no route map, so every request is `http:<METHOD>` on `http:path:<path>`;
+- it loads no route map, so every request is `http:<METHOD>` (`http:GET` for `HEAD`) on `http:path:<path>`;
 - it forwards the outcome's `CoSec-Request-Id` to the downstream service, replacing any value the client sent, so
   the backend's logs share the gateway's request id. On a Permit it also forwards the verified identity to a route
   that receives it ([Forwarding the identity](#forwarding-the-identity)), and it removes the client's credentials,
@@ -549,8 +553,8 @@ With one port, or `management.server.port` equal to the application's, every row
 
   <<< @/examples/probes/documents/platform.json [probes policy and binding]
 
-  Before the first document is published the probe still answers `503`, which is the right answer for "not ready". Outside
-  Kubernetes, Spring Boot serves the probes only with `management.endpoint.health.probes.enabled=true`.
+  Before the first document is published the probe still answers `503`, which is the right answer for "not ready". Spring
+  Boot 4 serves the probes on every platform: `management.endpoint.health.probes.enabled` is `true` by default.
 - **Liveness and startup must not depend on the platform document.** An HTTP liveness probe on the application port of an
   application answers `503` until the first document is published, so the kubelet restarts the pod before it can ever be
   ready. On WebMvc, point it at the management port, which is outside CoSec. On WebFlux the management port is under CoSec
@@ -614,7 +618,8 @@ policies (`cosec.pipeline.mode=enforce`) removes it too, before your handler see
 calls on to services behind a gateway cannot relay one a client wrote. A condition on `http.header.cosec-identity`
 does not compile.
 
-**No identity is forwarded** for an anonymous Permit, a refused request, a route that does not receive it, or with
+**No identity is forwarded** for an anonymous Permit, a refused request, a route that does not receive it, a principal
+whose authenticator names no credential (CoSec's token and API key authenticators always name one), or with
 `cosec.gateway.identity.enabled=false`.
 
 **What it carries.** The value is base64url (no padding) of compact JSON, format version 1; the JSON Schema is

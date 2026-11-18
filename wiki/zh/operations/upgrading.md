@@ -558,7 +558,7 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 1. 带 `--dry-run` 运行并阅读报告。
 2. 在你的 `MembershipProvider` 的数据源中授予 `memberships`，并通过控制面（变更请求）添加 `principalBindings` 和 `roleBindings`。
-3. 不带 `--dry-run` 再运行一次。每个 key 只在仍然是读取时的内容时才被改写，因此期间被吊销或停用的 key 绝不会被恢复：报告在 `changedSinceRead` 中列出它，命令以 `1` 退出并要求再运行一次。已经转换的 key 保持不变，因此命令可以重复运行。
+3. 不带 `--dry-run` 再运行一次。每个 key 只在仍然是读取时的内容时才被改写，因此期间被吊销或停用的 key 绝不会被恢复：报告在 `changedSinceRead` 中列出它，命令以 `1` 退出并要求再运行一次。已经转换的 key 保持不变，因此命令可以重复运行。8.0 预览版以其他格式（`"format":2`）存储的 key 既不会被转换，也不会被 8.0 读取：命令会拒绝这次运行，并指出它是由预览版存储的；请为它签发一个新 key 并删除旧 key，然后再运行。
 
 转换后的 key 不再保存原来的角色和策略：它们只存在于报告里。报告在第一个 key 被改写之前就写好（`status: planned`），运行结束时换成最终的（`converted`）；`--out` 中已有的报告若不是试运行或被拒绝那次运行的，命令在碰任何 key 之前就停止：重复运行会发现这些 key 已转换，而把计划替换成空的。重复运行请用自己的 `--out`，报告里的 `memberships` 和绑定都落实之后才把它移走。两次运行只有在第一次是 `--dry-run` 时才可以共用一个 `--out`。`--out` 在写任何东西之前先创建，写不了的 `--out` 会让运行先停下。`SCAN` 可能把同一个 key 返回两次；它只被读一次。
 
@@ -880,6 +880,16 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 ## 已在运行 8.0 预览版的部署 {#between-8-0-previews}
 
 只适用于已在运行 8.0.0 预览版的部署：每个预览版到下一个之间的变化，新的在前。7.x 部署不需要这一部分，上面一节就是完整的升级。8.0 正式发布时这些说明将删除。
+
+### 从 8.0.0-beta.2 升级 {#from-8-0-0-beta-2}
+
+- **安全：吊销表最多把“未吊销”保留 30 秒。** 直到 8.0.0-beta.2，`RevokedTokenCache` 和 `RevokedSubjectCache` 的 `absent-ttl` 没有锁定，所以 `cocache.caches.RevokedTokenCache.absent-ttl`、`cocache.defaults.store.absent-ttl` 或定制器都能延长它，错过失效消息的实例会在那么长时间里接受已吊销的令牌。现在它由 CoSec 决定，为 30 秒：为任一吊销表设置 `cocache.caches.[name].absent-ttl` 会使启动失败（请删除它），全局默认值和定制器也不再影响它。
+- **安全：请求用应用的 `TokenVerifier` 校验。** 直到 8.0.0-beta.2，starter 的管道一直用 CoSec 自己的 `JwtTokenVerifier` 校验请求的令牌，即使应用声明了 `TokenVerifier` Bean（刷新和登出确实用了它）。现在请求、刷新和登出用同一个校验器（`IDN-25`）。变化取决于你的校验器：
+  - 校验其他签发者令牌的校验器，现在在请求上也像一直以来在刷新时一样生效。
+  - 包装 CoSec 自己校验器的校验器（`JwtTokenVerifier` 加上你自己的检查）让它的令牌在每个请求上都不再是 CoSec 的：主体的凭证是 `token` 而不是 `jwt`，没有会话，因此不能从该请求的会话[切换租户](../integration/authentication.md#switching-tenant-and-app)，网关也不转发会话，并且永远没有 break-glass。直到 beta.2，它的请求三者都有。除非这正是你想要的，否则不要声明这样的校验器。
+
+  没有自己 `TokenVerifier` 的应用不受影响。
+- **安全：提供的刷新路由使用你的 `RefreshTokenAuthentication`。** 直到 8.0.0-beta.2，该路由自己构建刷新认证，只使用 `MembershipRefresh<RefreshTokenCredentials>` Bean，所以声明在你的 `RefreshTokenAuthentication` Bean 中的钩子（例如拒绝已停用的用户）对它不起作用。现在由你的 Bean 提供这个路由。基于你自己凭证类的 Bean 在设置了 `cosec.authentication.login.refresh.path` 时会使启动失败：请从你自己的路由提供那个刷新并取消该路径，或者基于 `RefreshTokenCredentials` 声明它。
 
 ### 从 8.0.0-beta.1 升级 {#from-8-0-0-beta-1}
 

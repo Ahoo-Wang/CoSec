@@ -61,7 +61,6 @@ class SlotModelOracleTest {
 
     @Test
     fun `under the runner, a key whose install leaves the source with no claim seen is a violation`() {
-        model.judgesClaims = true
         val entry = installedAbsent(APP_A)
         val b = installedAbsent(APP_B)
         model.afterEvent(listOf(b), closed = false)
@@ -69,16 +68,7 @@ class SlotModelOracleTest {
     }
 
     @Test
-    fun `under Slot, the same removal is judged after its event`() {
-        installedAbsent(APP_A)
-        model.afterEvent(emptyList(), closed = false)
-        model.violations.assert().containsExactly("evicted app:app-a while its family held 1 absent entries, within 1")
-        model.counts.evictionsAfterEvent.assert().isEqualTo(1)
-    }
-
-    @Test
     fun `an entry whose eviction was claimed and is still served after its event is a violation`() {
-        model.judgesClaims = true
         val a = installedAbsent(APP_A)
         val b = installedAbsent(APP_B)
         model.claimed(APP_A)
