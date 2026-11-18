@@ -186,7 +186,7 @@ internal sealed class KeyWaiter<T : Any, R> : CompletableFuture<R>(), KeyEvent.W
                 context.metrics.onLoad(key.kind, outcome)
             } finally {
                 complete(entry)
-                // After the answer, as `Slot` does: a timer that fires in between finds the request answered.
+                // After the answer: a timer that fires in between finds the request answered.
                 timeout?.cancel(false)
             }
         }

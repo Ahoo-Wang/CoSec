@@ -45,12 +45,11 @@ class SnapshotSummaryTest {
     private fun source(
         store: ControllableStore,
         metrics: SnapshotMetrics = SnapshotMetrics.NOOP,
-        slots: SlotFactory = SlotFactory.SLOT,
     ): SnapshotSource<Compiled, Compiled> {
         val compiler = FakeCompiler()
         return SnapshotSource(
             store, SnapshotKey.Platform, compiler, DocumentSnapshots.families(compiler, options), options, clock,
-            metrics, directExecutor, null, { ticker.incrementAndGet() }, null, slots,
+            metrics, directExecutor, null, { ticker.incrementAndGet() },
         )
     }
 
@@ -124,30 +123,11 @@ class SnapshotSummaryTest {
     }
 
     @Test
-    fun `an eviction on a slot is counted by kind and by what the key held`() {
-        evictionsOn(SlotFactory.SLOT)
-    }
-
-    @Test
-    fun `an eviction on a runner is counted the same way`() {
-        evictionsOn(keyRunners())
-    }
-
-    @Test
-    fun `a key dropped empty after a failed cold load counts no eviction, on a slot`() {
-        droppedEmptyOn(SlotFactory.SLOT)
-    }
-
-    @Test
-    fun `a key dropped empty after a failed cold load counts no eviction, on a runner`() {
-        droppedEmptyOn(keyRunners())
-    }
-
-    private fun droppedEmptyOn(slots: SlotFactory) {
+    fun `a key dropped empty after a failed cold load counts no eviction`() {
         val store = ControllableStore()
         store.put(SnapshotKey.Platform, document(1))
         val metrics = Evictions()
-        source(store, metrics, slots).use { source ->
+        source(store, metrics).use { source ->
             source.load().join()
             store.failure = IllegalStateException("store down")
             source.load("b").join()
@@ -162,12 +142,13 @@ class SnapshotSummaryTest {
         }
     }
 
-    private fun evictionsOn(slots: SlotFactory) {
+    @Test
+    fun `an eviction is counted by kind and by what the key held`() {
         val store = ControllableStore()
         store.put(SnapshotKey.Platform, document(1))
         store.put(SnapshotKey.App("a"), document(2))
         val metrics = Evictions()
-        source(store, metrics, slots).use { source ->
+        source(store, metrics).use { source ->
             source.load().join()
             source.reload(SnapshotKey.App("a")).join()
             source.reload(SnapshotKey.App("missing")).join()

@@ -24,7 +24,7 @@ import java.util.function.LongSupplier
  * One key of a [SnapshotSource], as its callers see it (RFC 0013 B2b, step 2a). What `peek` reads and writes on every
  * request is final here, on one class whatever implements the rest, so it stays a field access the JIT inlines: the
  * installed entry, the removed flag and the LRU stamp. Everything else is asynchronous: an answer is a future, and no
- * request is ever null. Today [Slot] implements it, completing its futures before it returns.
+ * request is ever null. [KeyRunner] implements it.
  */
 internal abstract class KeySlot<T : Any>(val key: SnapshotKey, private val ticker: LongSupplier) {
     /** What `peek` serves; written by the implementation alone. */
@@ -60,8 +60,8 @@ internal abstract class KeySlot<T : Any>(val key: SnapshotKey, private val ticke
     /** Tests only: nothing of this key in motion: no load in flight, and for a runner no event queued, no drain. */
     fun quiescent(): Boolean = idle() && !draining
 
-    /** Tests only: a runner's event queued or its drain under way; a [Slot] has neither. */
-    protected open val draining: Boolean get() = false
+    /** Tests only: an event queued or a drain under way. */
+    protected abstract val draining: Boolean
 
     /** What one request waits for: the installed entry, or its own view of the load, bounded by the cold load timeout. */
     abstract fun request(): CompletableFuture<SnapshotEntry<T>>

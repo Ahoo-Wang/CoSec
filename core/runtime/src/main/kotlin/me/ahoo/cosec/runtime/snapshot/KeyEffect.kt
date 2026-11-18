@@ -26,8 +26,8 @@ import java.util.concurrent.CompletableFuture
 
 /**
  * What a transition asks the runner to do (RFC 0013 B2b), executed in list order. A transition that installs emits
- * [Install] before any [Answer], so no waiter is answered before the entry it gets is published. Each effect names the
- * [Slot] code it replaces, and the page says on which thread it runs: only the compile pool executes [Compile].
+ * [Install] before any [Answer], so no waiter is answered before the entry it gets is published. Each effect says on
+ * which thread it runs: only the compile pool executes [Compile].
  */
 internal sealed interface KeyEffect<out T : Any> {
     /** `pass?.startRead()` as a load starts: counts the load's read as one of [ticket]'s pass. */

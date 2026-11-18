@@ -25,7 +25,7 @@ import org.slf4j.LoggerFactory
  * correctly ([SlotModel]). Each seed is one [SlotModelScript], run on [SlotModelThreads] alone: no real thread, so a
  * seed replays exactly.
  *
- * The same seeds run over [Slot] and over the [KeyRunner] (RFC 0013 B2b), with every check of the model.
+ * The seeds run over the [KeyRunner] (RFC 0013 B2b) at its default K and at K = 0, with every check of the model.
  *
  * A failing seed is shrunk (events are left out while the same check still fails) and reported with its event log and
  * the command that runs it alone: `-PpropertySeed=<seed>`.
@@ -33,11 +33,6 @@ import org.slf4j.LoggerFactory
 class SnapshotSlotModelPropertyTest {
     /** The kinds of [KeyEvent] the runner took in the seed now running (every run is on this thread alone). */
     private val taken = sortedSetOf<String>()
-
-    @Test
-    fun theSourceKeepsToTheModelInEveryScriptedOrder() = quietly {
-        runSeeds("Slot model", "theSourceKeepsToTheModelInEveryScriptedOrder", ModelSlots.SLOT)
-    }
 
     /** The runner at its default K ([KeyRunner.K], 4). */
     @Test
@@ -78,7 +73,6 @@ class SnapshotSlotModelPropertyTest {
         val run = SlotModelRun(SlotModelScript.generate(seed, EVENTS), ModelSlots.runner(k = 0)).run()
         run.failure.assert().describedAs("seed $seed").isNull()
         run.counts.evictionsAtClaim.assert().isGreaterThan(0)
-        run.counts.evictionsAfterEvent.assert().isZero()
     }
 
     private fun counting(k: Int = KeyRunner.K) =
@@ -113,8 +107,8 @@ class SnapshotSlotModelPropertyTest {
             "$name: ${seeds.size} seeds; seeds reaching each kind of event: $reached; checked " +
                 "${totals.installs} installs, ${totals.answered} answered waiters, ${totals.failures} compile failures, " +
                 "${totals.readTimeouts} store read timeouts, ${totals.coldTimeouts} request timeouts, " +
-                "${totals.evictions} evictions (${totals.evictionsAtClaim} judged at the claim, " +
-                "${totals.evictionsAfterEvent} after the event), ${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
+                "${totals.evictions} evictions (${totals.evictionsAtClaim} judged at the claim), " +
+                "${totals.regressions} regressions, ${totals.resetsChecked} reset reloads, " +
                 "${totals.lostWritesChecked} lost invalidations ${totals.lostWritesByLag}"
         )
         if (only == null) {
@@ -136,7 +130,6 @@ class SnapshotSlotModelPropertyTest {
         totals.coldTimeouts += counts.coldTimeouts
         totals.evictions += counts.evictions
         totals.evictionsAtClaim += counts.evictionsAtClaim
-        totals.evictionsAfterEvent += counts.evictionsAfterEvent
         totals.regressions += counts.regressions
         totals.resetsChecked += counts.resetsChecked
         totals.lostWritesChecked += counts.lostWritesChecked

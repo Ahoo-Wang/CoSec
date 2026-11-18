@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicLong
  * The window (RFC 0013 B2b, `SNP-7`, `SNP-14`): an eviction pass skips a member whose load is in flight, and refuses one
  * that starts a load before its eviction is taken. When that load ends without an install (the store answers absent
  * again), the member asks for the bound itself, or the family would stay above its absent bound until some later
- * install. [Slot] has this window and keeps it until RFC 0013 B2b step 4 removes [Slot]; these run over the runner.
+ * install.
  * Deterministic: housekeeping runs only when a test says, and a held read answers only when released.
  */
 class AbsentBoundWindowTest {

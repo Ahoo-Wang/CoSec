@@ -132,8 +132,8 @@ internal class SnapshotThreads(
             (!ownsCompileExecutor || (compileExecutor as ExecutorService).isTerminated)
 
     /**
-     * Runs [task] on the housekeeping thread, for what the scheduler thread must not do itself. Never in place, unlike
-     * [offRequestThread], since nothing may hold up a timeout: false when the thread has no room, and [task] is dropped.
+     * Runs [task] on the housekeeping thread, for what the scheduler thread must not do itself. Never in place, since
+     * nothing may hold up a timeout: false when the thread has no room, and [task] is dropped.
      */
     fun offTimer(task: () -> Unit): Boolean = try {
         housekeeping.execute(task)
@@ -179,15 +179,5 @@ internal class SnapshotThreads(
     fun refused(kind: HousekeepingTask, line: () -> String) {
         refusals.refused(kind, line())
         metrics.onHousekeepingRefused(kind)
-    }
-
-    /** `Slot`'s calls only (step 4 removes them): runs [task] on housekeeping; in place if it is refused. */
-    fun offRequestThread(task: () -> Unit) {
-        try {
-            housekeeping.execute(task)
-        } catch (rejected: RejectedExecutionException) {
-            log.debug { "Housekeeping rejected a task ($rejected); running it in place." }
-            task()
-        }
     }
 }
