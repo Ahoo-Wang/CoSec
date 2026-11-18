@@ -229,6 +229,11 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
 - Sessions: issue tokens through `TokenCompositeAuthentication`, which starts a session (a token family); refresh with
   `RefreshTokenAuthentication(verifier, tokenRevocation, tokenFamilies)`. Only the newest pair refreshes, an older
   one presented again ends the session, and a session lasts `cosec.jwt.session.lifetime` (30 days).
+- Refresh and logout routes: set `cosec.authentication.login.refresh.path` and `logout.path` and the starter serves them
+  (`POST`, the pair as JSON; `200` pair, `401` token-*, `503` unavailable, `500` error; logout `204`), on Spring MVC and
+  WebFlux, never on a gateway. A document must permit an anonymous `POST` of each path, or every refresh is
+  `401 token-expired`. A `MembershipRefresh<RefreshTokenCredentials>` bean is used; it refuses by throwing
+  `TokenRevokedException`. Unset, write the routes yourself as below.
 - Logout: `TokenRevoker.revoke(accessToken)` ends the session, or `revoke(compositeToken)` once the access token has
   expired. Emergency: `TokenRevoker.revokeSubject(tenant, principal)` revokes every token of a principal issued until now
   (needs the Redis token store).

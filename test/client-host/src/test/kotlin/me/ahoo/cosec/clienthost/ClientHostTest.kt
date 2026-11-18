@@ -109,15 +109,50 @@ class ClientHostTest {
         send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(401)
     }
 
+    /**
+     * The served route's answer when the revocations cannot be read (IDN-14), and the read it failed on: the refresh's own,
+     * of the pair's access token. The switch stays on until turned off, so no other read can take it.
+     */
     @Test
-    fun aRefreshThatCannotReadItsStoreIsUnavailableOnceAndKeepsThePair() {
+    fun aRefreshWhoseRevocationsCannotBeReadIsUnavailableAndKeepsThePair() {
         val pair = signIn("gina")
         val body = json.writeValueAsString(pair)
-        send("POST", "/test/fail-next-refresh").statusCode().assert().isEqualTo(200)
-        send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(503)
+        send("POST", "/test/reset")
+        send("POST", "/test/revocations/down").statusCode().assert().isEqualTo(200)
+        val refused = send("POST", "/auth/refresh", body)
+        send("POST", "/test/revocations/up").statusCode().assert().isEqualTo(200)
+        refused.statusCode().assert().isEqualTo(503)
+        refused.body().assert().contains("https://cosec.ahoo.me/problems/unavailable")
+        refused.headers().firstValue("Cache-Control").get().assert().isEqualTo("no-store")
+        val failed = json.readValue(send("GET", "/test/revocations/failed").body(), List::class.java)
+        failed.assert().containsExactly(jtiOf(pair.getValue("accessToken")))
         // Nothing was issued and nothing was spent: the same pair refreshes.
         send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(200)
     }
+
+    @Test
+    fun aRefreshThatFailsWithABugIsAnErrorAndKeepsThePair() {
+        val pair = signIn("hank")
+        val body = json.writeValueAsString(pair)
+        send("POST", "/test/refresh-error/true")
+        val failed = send("POST", "/auth/refresh", body)
+        send("POST", "/test/refresh-error/false")
+        failed.statusCode().assert().isEqualTo(500)
+        failed.body().assert().contains("https://cosec.ahoo.me/problems/internal-error")
+        send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(200)
+    }
+
+    @Test
+    fun aLogoutEndsTheSession() {
+        val pair = signIn("ivy")
+        val body = json.writeValueAsString(pair)
+        send("POST", "/auth/logout", body).statusCode().assert().isEqualTo(204)
+        send("POST", "/auth/logout", body).statusCode().assert().isEqualTo(204)
+        send("POST", "/auth/refresh", body).statusCode().assert().isEqualTo(401)
+    }
+
+    private fun jtiOf(token: String): String =
+        json.readTree(java.util.Base64.getUrlDecoder().decode(token.split('.')[1])).get("jti").asString()
 
     @Test
     fun theHostListensOnTheLoopbackInterfaceOnly() {

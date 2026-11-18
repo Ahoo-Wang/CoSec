@@ -250,6 +250,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.pipeline.allow-query-token=true`, the `authorization` cookie only with
   `cosec.pipeline.allow-cookie-token=true`. API keys from `X-API-Key`
   (`cosec.pipeline.api-key-header`).
+- Every refresh `401 token-expired` (or `unauthorized`) and clients signed out at expiry: no statement permits an
+  anonymous `POST` of the refresh route (the expired token reads as anonymous, PIP-6). The starter's served route logs
+  `WARN ... refresh.path=<path>: no statement permits an anonymous POST of it` and shows `denied since` on the
+  `cosecLoginRoutes` health indicator; permit `http:POST` on the path to `*`.
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
   delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4;

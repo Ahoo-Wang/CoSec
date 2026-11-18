@@ -22,7 +22,11 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.document.json.CoSecJson
+import me.ahoo.cosec.jwt.JwtTokenConverter
 import me.ahoo.cosec.jwt.JwtTokenVerifier
+import me.ahoo.cosec.login.route.LoginRouteAnswer
+import me.ahoo.cosec.login.route.LogoutRoute
+import me.ahoo.cosec.login.route.RefreshRoute
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.StoreTokenRevoker
@@ -30,15 +34,13 @@ import me.ahoo.cosec.login.token.TokenFamilies
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
-import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenFamily
 import me.ahoo.cosec.spi.token.TokenFamilyStore
-import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenStore
-import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.testkit.ScenarioFormatException
 import me.ahoo.cosec.testkit.fields
 import me.ahoo.cosec.testkit.only
@@ -50,7 +52,6 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.time.ZoneOffset
-import kotlin.coroutines.cancellation.CancellationException
 
 /** A token signed from the scenario's claims. */
 internal class ScenarioJwt(node: JsonNode) {
@@ -92,29 +93,38 @@ internal class ScenarioJwt(node: JsonNode) {
     companion object {
         private val ALGORITHM: Algorithm = Algorithm.HMAC256("conformance-scenario-secret")
         val VERIFIER = JwtTokenVerifier(ALGORITHM)
+
+        /** What the served route issues a refreshed pair with: the same key, so a pair it issues verifies. */
+        val CONVERTER = JwtTokenConverter(RandomIdGenerator, ALGORITHM)
     }
 }
 
 /**
- * A scenario's `"refresh"` (PipelineRunner): the pairs it signs, refreshed in turn through
- * [RefreshTokenAuthentication], over the scenario's revocations and token families, at [NOW]. `"refresh"` is one
- * pair or a list of them; the outcome is the last one's. `"logout"`, a pair, is logged out first (`TokenRevoker`).
+ * A scenario's `"refresh"` (PipelineRunner): the pairs it signs, refreshed in turn through the route the starter serves
+ * ([RefreshRoute], `IDN-23`) over [RefreshTokenAuthentication], over the scenario's revocations and token families, at
+ * [NOW]. `"refresh"` is one pair or a list of them; the outcome is the last one's, as the route answers it. `"logout"`,
+ * a pair or a list of pairs, is logged out first through the logout route ([LogoutRoute], `IDN-24`); with no pair to
+ * refresh, the outcome is the last logout's.
  */
 internal object ScenarioRefresh {
     /** The scenario's clock, PipelineRunner's NOW: the families' records are read and written at it. */
     val NOW: Instant = Instant.parse("2026-11-01T00:00:00Z")
 
-    /** Issued (200), refused (401 and why), or not decided because a store cannot be read (503). */
+    /** Issued (200), refused (401 and why), not decided because a store cannot be read (503), or an error (500). */
     fun refreshed(node: JsonNode, revocations: RevocationReader, families: JsonNode?): Outcome {
         val clock = Clock.fixed(NOW, ZoneOffset.UTC)
         val store = familyStore(families)
         val tokenFamilies = TokenFamilies(store, LIFETIME, LEEWAY, clock = clock)
         val authentication =
             RefreshTokenAuthentication(ScenarioJwt.VERIFIER, TokenRevocation(revocations), tokenFamilies)
+        val route = RefreshRoute(authentication, ScenarioJwt.CONVERTER)
         node.only("access", "refresh", "pairs", "logout")
-        val attempts = node.get("pairs")?.values()?.toList()?.onEach { it.only("access", "refresh") } ?: listOf(node)
+        val attempts = node.get("pairs")?.values()?.toList()?.onEach { it.only("access", "refresh") }
+            ?: listOf(node).filter { it.has("access") }
         return runBlocking {
-            node.get("logout")?.let { logout ->
+            val logouts = node.get("logout")?.let { if (it.isArray) it.values().toList() else listOf(it) }.orEmpty()
+            var answer: LoginRouteAnswer? = null
+            if (logouts.isNotEmpty()) {
                 val revoker = StoreTokenRevoker(
                     ScenarioJwt.VERIFIER,
                     NO_TOKEN_STORE,
@@ -123,28 +133,34 @@ internal object ScenarioRefresh {
                     Duration.ofDays(7),
                     clock,
                 )
-                revoker.revoke(pair(logout).let { CompositeToken(it.accessToken, it.refreshToken) })
+                val logoutRoute = LogoutRoute(revoker)
+                logouts.forEach { answer = logoutRoute.answer(JSON, body(it), REQUEST_ID) }
             }
-            attempts.dropLast(1).forEach { runCatching { authentication.authenticate(pair(it)) } }
-            outcome { authentication.authenticate(pair(attempts.last())) }
+            attempts.forEach { answer = route.answer(JSON, body(it), REQUEST_ID) }
+            outcome(checkNotNull(answer) { "a refresh scenario refreshes or logs out at least one pair" })
         }
     }
 
-    private suspend fun outcome(refresh: suspend () -> Any): Outcome = try {
-        refresh()
-        Outcome.Answered(200, true, null)
-    } catch (_: TokenRevokedException) {
-        refused("token-revoked")
-    } catch (_: TokenExpiredException) {
-        refused("token-expired")
-    } catch (_: TokenVerificationException) {
-        refused("token-invalid")
-    } catch (e: CancellationException) {
-        throw e
-    } catch (_: Exception) {
-        // A store that cannot be read (RevocationUnavailableException, a family record): nothing is issued.
-        Outcome.Answered(503, false, "unavailable")
+    private fun outcome(answer: LoginRouteAnswer): Outcome {
+        val type = if (answer.contentType == "application/problem+json") {
+            CoSecJson.mapper.readTree(answer.body).get("type").asString().removePrefix(PROBLEMS)
+        } else {
+            null
+        }
+        return Outcome.Answered(answer.status, answer.status < BAD_REQUEST, type)
     }
+
+    private fun body(node: JsonNode): ByteArray {
+        val pair = pair(node)
+        return CoSecJson.mapper.writeValueAsBytes(
+            linkedMapOf("accessToken" to pair.accessToken, "refreshToken" to pair.refreshToken),
+        )
+    }
+
+    private const val JSON = "application/json"
+    private const val REQUEST_ID = "scenario"
+    private const val PROBLEMS = "https://cosec.ahoo.me/problems/"
+    private const val BAD_REQUEST = 400
 
     private fun pair(node: JsonNode): RefreshTokenCredentials {
         val access = ScenarioJwt(node.required("access")).token
@@ -191,7 +207,6 @@ internal object ScenarioRefresh {
         return store
     }
 
-    private fun refused(type: String) = Outcome.Answered(401, false, type)
 
     val LIFETIME: Duration = Duration.ofDays(30)
     val LEEWAY: Duration = Duration.ofSeconds(5)

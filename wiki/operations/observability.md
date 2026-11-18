@@ -197,6 +197,11 @@ CoSec registers no meters for the documents an instance holds. To see whether in
   are still decided ([Redis requirements](./storage.md#redis-requirements)). It also turns the aggregate
   `/actuator/health` `DOWN`, as every indicator does: point load balancers and platform health checks at the readiness
   group, or leave it out of the group they poll (`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`).
+- **Login routes.** When the starter serves the refresh or logout route, the `cosecLoginRoutes` health indicator is
+  always `UP`, with each route's property as a detail: `not refused`, or `denied since <time>` once a document refused
+  an anonymous `POST` of it, until a later request is permitted. The same refusal logs one `WARN` per route per minute,
+  naming the property and the path. Both come from the decisions of real requests, so they are never wrong, and neither
+  makes the instance unready ([Building a client](../integration/clients.md#what-your-application-serves)).
 - **Lag logs.** An instance logs a document not confirmed by Redis for longer than `lag-warn` at `WARN`, and longer
   than `lag-escalate` at `ERROR` ([How instances read documents](./storage.md#how-instances-read-documents)). Other
   lines to alert on: `Snapshot document [<doc>] disappeared from the store; failing closed.`,

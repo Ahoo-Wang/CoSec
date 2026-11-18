@@ -105,6 +105,9 @@ internal object StatusMapping {
         problem(ProblemType.UNAVAILABLE, requestId, traceId, Basis.Unavailable(reason))
 
     /** 500 `internal-error`: an exception nothing modelled, so a defect of CoSec. Its message never reaches the body. */
+    /** The problem of a route CoSec serves after the pipeline permitted its request: [routeProblem]. */
+    fun routeProblem(type: ProblemType, requestId: String): Problem = Problem(type, requestId, null)
+
     fun error(requestId: String, error: Throwable, traceId: String?): Outcome =
         problem(ProblemType.INTERNAL_ERROR, requestId, traceId, Basis.Error(error))
 

@@ -293,10 +293,15 @@ A client whose access token expired sends both tokens back. `TokenVerifier.refre
 
 A failed check throws a `TokenVerificationException`; a refresh token that was issued with another access token
 throws its subclass `RefreshTokenMismatchException`. Refreshing a [delegation token](#tokens) (one with an `act` claim)
-fails too, with `DelegationUnsupportedException`. The starter registers no refresh endpoint. A refresh carries the access
-token that expired, so a caller without a token must be able to reach the route you give it, or the refresh is itself
-`401 token-expired`: [Building a client](./clients.md#what-your-application-serves) shows the statement and what a
-client does on each answer.
+fails too, with `DelegationUnsupportedException`.
+
+**The starter serves the refresh route** when `cosec.authentication.login.refresh.path` is set (`IDN-23`), on Spring
+MVC and on WebFlux: the pair in, a new pair of the session out, and each failure answered with the problem type that
+names it ([Building a client](./clients.md#what-your-application-serves) has the wire). It uses your
+`MembershipRefresh<RefreshTokenCredentials>` bean when there is one. Unset, nothing is served, and you write the route
+as below. Either way a refresh carries the access token that expired, so a caller without a token must be able to reach
+the route, or the refresh is itself `401 token-expired`: [Building a client](./clients.md#what-your-application-serves)
+shows the statement, and the starter logs a `WARN` naming the property when a document refuses the route it serves.
 
 `RefreshTokenAuthentication` refreshes as an `Authentication`, so with it declared as a bean, a refresh is a login
 with credentials that implement `RefreshTokenCredentials`. It verifies the pair on the caller's thread, which is pure
@@ -322,12 +327,15 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 
 A refresh is refused with `token-revoked` when the session was ended (by a logout, or because an older generation was
 presented), `token-expired` when the session's lifetime is over, `token-invalid` when the pair belongs to no session (a pair issued
-before sessions existed, or outside one). It throws anything else, a store that cannot be read above all: answer
-`503`, and nothing was issued.
+before sessions existed, or outside one). When the revocations or the session store cannot answer, it throws
+`RevocationUnavailableException` or a store failure: answer `503`, nothing was issued and nothing spent. Anything else
+is an error: the served route answers it `500`, as the pipeline answers an unmodelled error. Neither ends a client's
+session.
 
 By default a refresh does not re-read the user: the new token carries the claims of the old one. To pick up changed
 roles on refresh, give `RefreshTokenAuthentication` a `MembershipRefresh`. It answers what the user holds now, looked up
-again, and throws when the user may no longer sign in:
+again. It refuses, when the user may no longer sign in, by throwing a `TokenVerificationException` (`TokenRevokedException`
+when the membership is gone), which is a `401`; any other exception is an error, not a refusal:
 
 ```kotlin
 @Bean
@@ -337,7 +345,7 @@ fun refreshTokenAuthentication(
     tokenFamilies: TokenFamilies,
     users: Users,
 ) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token, _ ->
-    val user = users.active(token.principal) ?: throw IllegalStateException("User [${token.principal}] is disabled.")
+    val user = users.active(token.principal) ?: throw TokenRevokedException("User [${token.principal}] is disabled.")
     TenantMembership(roles = user.rolesIn(token.tenant, token.app))
 }
 ```
@@ -383,7 +391,9 @@ revocation is always on, with no switch. It needs `cosec-cocache`, or a `TokenSt
 does nothing is not an option. A service that only verifies tokens it never revokes still needs the reader; one that
 issues no tokens and reads none can set `cosec.jwt.enabled=false`.
 
-From your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, ends its session, and records
+With `cosec.authentication.login.logout.path` set, the starter serves the logout route (`IDN-24`): the pair in the body,
+whether or not the access token has expired, `204` when the session is ended, and when it already was. Otherwise, from
+your logout endpoint, call `TokenRevoker.revoke(accessToken)`. It verifies the token, ends its session, and records
 its `jti` in Redis for the refresh token's lifetime. From then on every instance rejects that access token as
 `token-revoked`, and no pair of the session refreshes, the pairs it was refreshed from included: a pair copied earlier
 does not outlive the logout. An access token of an older generation of the session stays valid until it expires, as
@@ -408,7 +418,7 @@ Every authenticated request checks revocation, without blocking. Three propertie
   10 seconds.
 - **A refresh fails while Redis cannot be read.** A token is never issued on a revocation read that failed (`IDN-14`):
   issued then, it would be named by no revocation, neither the old token's nor its principal's, and outlive both.
-  `RefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`.
+  `RefreshTokenAuthentication` throws the `RevocationUnavailableException`; answer it `503`, as the served route does.
 - **Any other error fails the request.** A revocation entry that Redis returns but CoSec cannot decode, or an error
   a custom `RevocationReader` throws, is `503`, never an accepted token.
 

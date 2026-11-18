@@ -135,7 +135,7 @@ class ServedLoginRouteHost(stack: ServedStack, document: String) : AutoCloseable
         @Bean
         fun membershipRefresh(membershipBug: Outage): MembershipRefresh<RefreshTokenCredentials> =
             MembershipRefresh { _, _ ->
-                check(!membershipBug.on) { "a bug in the membership lookup" };
+                check(!membershipBug.on) { "a bug in the membership lookup" }
                 null
             }
 

@@ -73,9 +73,21 @@ export async function resetStats(): Promise<void> {
   await post('/test/reset');
 }
 
-/** The next refresh the host serves fails as a store that cannot be read does: `503`, nothing issued, nothing spent. */
-export async function failNextRefresh(): Promise<void> {
-  await post('/test/fail-next-refresh');
+/**
+ * The host's revocations cannot be read from now on, until {@link revocationsUp}: the served refresh answers `503`
+ * (`IDN-14`), nothing issued, nothing spent.
+ */
+export async function revocationsDown(): Promise<void> {
+  await post('/test/revocations/down');
+}
+
+export async function revocationsUp(): Promise<void> {
+  await post('/test/revocations/up');
+}
+
+/** Every refresh fails with a bug of the application's own code while on: the served refresh answers `500`. */
+export async function refreshError(on: boolean): Promise<void> {
+  await post(`/test/refresh-error/${on}`);
 }
 
 /** Ends the session of `pair` at the host, as a revocation or a server-side sign-out would. */

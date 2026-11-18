@@ -168,8 +168,9 @@ class LoginController(private val authentication: TokenCompositeAuthentication) 
 - 访问令牌（可以已过期）由同一个密钥有效签名；
 - 刷新令牌属于该访问令牌：其 `sub` 是访问令牌的 `jti`，其 `iat` 与访问令牌的相同，并且带有同一个会话，因为 `JwtTokenConverter` 同时签发这两个令牌。
 
-检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。starter 不注册刷新端点。刷新请求带着已过期的访问令牌，所以你给它的路由必须能被没有令牌的调用方访问，否则刷新本身就是
-`401 token-expired`：[构建客户端](./clients.md#what-your-application-serves)给出了这条语句，以及客户端对每种响应该怎么做。
+检查失败时抛出 `TokenVerificationException`；刷新令牌是与另一个访问令牌一起签发的，则抛出其子类 `RefreshTokenMismatchException`。刷新[委托令牌](#tokens)（带 `act` 声明的令牌）同样失败，抛出 `DelegationUnsupportedException`。
+
+设置了 `cosec.authentication.login.refresh.path` 时，**starter 提供刷新路由**（`IDN-23`），在 Spring MVC 和 WebFlux 上都是：令牌对进，同一会话的新令牌对出，每种失败都以说明原因的问题类型应答（线上格式见[构建客户端](./clients.md#what-your-application-serves)）。有 `MembershipRefresh<RefreshTokenCredentials>` Bean 时会使用它。不设置时不提供任何路由，你按下文自己编写。无论哪种方式，刷新请求都带着已过期的访问令牌，所以该路由必须能被没有令牌的调用方访问，否则刷新本身就是 `401 token-expired`：[构建客户端](./clients.md#what-your-application-serves)给出了这条语句；文档拒绝 starter 提供的路由时，starter 会记录一条点名该属性的 `WARN`。
 
 `RefreshTokenAuthentication` 以 `Authentication` 的形式完成刷新，因此把它声明为 Bean 后，刷新就是一次使用实现了 `RefreshTokenCredentials` 的凭证的登录。它在调用方的线程上校验这对令牌（纯计算）；通过 `TokenRevocation` 检查访问令牌未被吊销、其主体的令牌也未被吊销；再通过 `TokenFamilies` 轮换会话（[会话](#sessions)）。新的一对令牌说的是旧访问令牌说的内容，属于下一代。全程没有阻塞：
 
@@ -189,9 +190,9 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
     authentication.authenticateAsToken(credentials)
 ```
 
-会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。其他情况，尤其是存储无法读取时，它会抛出异常：请应答 `503`，此时没有签发任何东西。
+会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。吊销记录或会话存储无法应答时，它抛出 `RevocationUnavailableException` 或存储故障：请应答 `503`，此时没有签发、也没有消耗任何东西。其他任何异常都是错误：提供的路由以 `500` 应答，与流水线应答未建模错误的方式相同。两者都不会结束客户端的会话。
 
-默认情况下，刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个 `MembershipRefresh`。它回答用户现在拥有什么（重新查询），并在用户不能再登录时抛出异常：
+默认情况下，刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个 `MembershipRefresh`。它回答用户现在拥有什么（重新查询）。用户不能再登录时，它通过抛出 `TokenVerificationException`（成员关系已不存在时用 `TokenRevokedException`）来拒绝，这是一个 `401`；其他任何异常都是错误，而不是拒绝：
 
 ```kotlin
 @Bean
@@ -201,7 +202,7 @@ fun refreshTokenAuthentication(
     tokenFamilies: TokenFamilies,
     users: Users,
 ) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies) { token, _ ->
-    val user = users.active(token.principal) ?: throw IllegalStateException("User [${token.principal}] is disabled.")
+    val user = users.active(token.principal) ?: throw TokenRevokedException("User [${token.principal}] is disabled.")
     TenantMembership(roles = user.rolesIn(token.tenant, token.app))
 }
 ```
@@ -237,13 +238,13 @@ suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext
 
 JWT 是无状态的：不做额外处理，令牌在过期之前一直有效。为了让登出立即生效，吊销始终开启，没有开关。它需要 `cosec-cocache`，或你自己的 `TokenStore`、`RevocationReader` 和 `TokenFamilyStore` Bean。开启 JWT 但缺少其中任何一个时，启动失败：悄无声息什么都不做的登出不是一个可选项。只校验、从不吊销令牌的服务仍然需要读取器；既不签发也不读取令牌的服务可以设置 `cosec.jwt.enabled=false`。
 
-在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，结束它的会话，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。此后每个实例都以 `token-revoked` 拒绝该访问令牌，该会话的任何一对令牌都不能再刷新，包括它由之刷新而来的令牌对：更早被复制的一对令牌不会比登出活得更久。该会话更早一代的访问令牌在过期前仍然有效，如[会话](#sessions)所述。用户的其他会话不受影响；要结束全部会话（例如账号被盗后），请调用 [`revokeSubject`](#revoking-every-token-of-a-principal)。访问令牌已过期时，用这对令牌登出：`TokenRevoker.revoke(compositeToken)`，刷新令牌会被校验，并且必须属于该访问令牌，与刷新的要求相同。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 的调用都是挂起函数，不会阻塞：在任何线程上从 `suspend` 处理函数里调用即可。
+设置了 `cosec.authentication.login.logout.path` 时，starter 提供登出路由（`IDN-24`）：请求体是令牌对，无论访问令牌是否已过期；会话被结束时应答 `204`，会话早已结束时也是 `204`。否则，在你的登出端点中调用 `TokenRevoker.revoke(accessToken)`。它先校验令牌，结束它的会话，再把它的 `jti` 记录到 Redis 中，保留时长为刷新令牌的有效期。此后每个实例都以 `token-revoked` 拒绝该访问令牌，该会话的任何一对令牌都不能再刷新，包括它由之刷新而来的令牌对：更早被复制的一对令牌不会比登出活得更久。该会话更早一代的访问令牌在过期前仍然有效，如[会话](#sessions)所述。用户的其他会话不受影响；要结束全部会话（例如账号被盗后），请调用 [`revokeSubject`](#revoking-every-token-of-a-principal)。访问令牌已过期时，用这对令牌登出：`TokenRevoker.revoke(compositeToken)`，刷新令牌会被校验，并且必须属于该访问令牌，与刷新的要求相同。吊销[委托令牌](#tokens)同样失败，因为它无法通过校验：没有可吊销的对象。`TokenRevoker` 的调用都是挂起函数，不会阻塞：在任何线程上从 `suspend` 处理函数里调用即可。
 
 每个已认证的请求都会以非阻塞方式检查吊销。这个检查有三点值得注意：
 
 - **“未吊销”在本地缓存 30 秒**（`cosec.authentication.revocation.cache.*`）。通过 `TokenRevoker` 吊销会让所有实例上的这个答案立即失效。如果失效消息丢失，或吊销记录通过其他方式写入 Redis，某个实例可能在之后最多 30 秒内仍接受该令牌。
 - **Redis 无法读取时，请求的令牌被接受。** 吊销读取器报告无法读取（`RevocationUnavailableException`），流水线在校验令牌时放行它。这是失败即拒绝的[两个已写明的例外](../guide/security-model.md#the-two-documented-exceptions)之一：签名和有效期仍会校验，而在 Redis 故障期间拒绝所有已认证请求会更糟。请让访问令牌保持较短的有效期，使这个窗口尽量小，或设置 `cosec.authentication.revocation.fail-closed: true` 改为应答 `503`。每个这样被接受的令牌都会计数（`cosec.revocation.unchecked`，[指标](../operations/observability.md#metrics)），并以 `WARN` 记录日志，最多每 10 秒一次。
-- **Redis 无法读取时，刷新失败。** 绝不在一次失败的吊销读取上签发令牌（`IDN-14`）：此时签发的令牌不在任何吊销记录中，既不受旧令牌的吊销约束，也不受其主体的吊销约束，会比两者都活得久。`RefreshTokenAuthentication` 抛出 `RevocationUnavailableException`，请以 `503` 应答。
+- **Redis 无法读取时，刷新失败。** 绝不在一次失败的吊销读取上签发令牌（`IDN-14`）：此时签发的令牌不在任何吊销记录中，既不受旧令牌的吊销约束，也不受其主体的吊销约束，会比两者都活得久。`RefreshTokenAuthentication` 抛出 `RevocationUnavailableException`，请以 `503` 应答，提供的路由正是如此。
 - **其他任何错误都会让请求失败。** Redis 返回但 CoSec 无法解码的吊销记录，或自定义 `RevocationReader` 抛出的错误，结果都是 `503`，绝不会接受令牌。
 
 ### 吊销主体的全部令牌 {#revoking-every-token-of-a-principal}

@@ -202,6 +202,8 @@ How windows work: [Testing changes](../policies/testing.md).
 |---|---|---|---|
 | `cosec.authentication.revocation.skew` | duration | `5s` | How much later than a subject revocation a token may have been issued and still be revoked by it: room for an issuer whose clock runs ahead. |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | Whether a request's token is refused (`503`) while the revocations cannot be read, instead of accepted ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)). A refresh fails then either way. |
+| `cosec.authentication.login.refresh.path` | string | unset | Where the starter serves the refresh route, `POST` of the pair (`IDN-23`, [Building a client](../integration/clients.md#what-your-application-serves)). Unset, none is served. A document must permit an anonymous `POST` of it. Set on a gateway, on a host that serves no HTTP, with login or JWT off, or to anything but one plain absolute path, startup fails. |
+| `cosec.authentication.login.logout.path` | string | unset | Where the starter serves the logout route, `POST` of the pair, `204` (`IDN-24`); as `refresh.path` otherwise, and not the same path. |
 
 ## JWT
 

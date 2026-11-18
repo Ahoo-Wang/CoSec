@@ -47,6 +47,7 @@ import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.model.CoSecException
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenFamily
@@ -121,8 +122,9 @@ internal object ScenarioSwitch {
             Outcome.Answered(401, false, "token-invalid")
         } catch (_: RevocationUnavailableException) {
             Outcome.Answered(503, false, "unavailable")
-        } catch (_: IllegalStateException) {
-            // A family record that cannot be read (the scenario's "unavailable"): nothing is issued.
+        } catch (_: CoSecException) {
+            // A family record that cannot be read (the scenario's "unavailable"): cosec-login reports the store's
+            // failure as its own unavailability, and nothing is issued.
             Outcome.Answered(503, false, "unavailable")
         } catch (e: CancellationException) {
             throw e

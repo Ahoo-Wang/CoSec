@@ -96,6 +96,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 
 刷新以 `token-expired` 被拒绝：会话的有效期已过（[`cosec.jwt.session.lifetime`](./configuration.md#jwt)，从登录起 30 天）。请重新登录。
 
+**每次刷新都应答 `401 token-expired`（或 `unauthorized`），客户端在访问令牌过期时登出。** 没有语句允许匿名 `POST` 刷新路由：它的请求带着已过期的访问令牌，CoSec 把它读作匿名（`PIP-6`），所以路由还没运行就被拒绝。对于 starter 提供的路由，请查找 `WARN` `cosec.authentication.login.refresh.path=<path>: no statement permits an anonymous POST of it`，以及 `cosecLoginRoutes` 健康指示器上的 `denied since`。请允许任何人对该路径 `http:POST`（[构建客户端](../integration/clients.md#what-your-application-serves)）；登出路由同理。
+
 ### `token-revoked` {#token-revoked}
 
 令牌已被登出吊销，或者它所属主体在一次主体吊销之前签发的所有令牌都已被吊销（[认证](../integration/authentication.md)）。
@@ -551,6 +553,8 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 | `cosec.control.revisions.reclaim-interval must be positive.`、`cosec.control.shadow.check-interval must be positive.` | 设置一个正的时长。 |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | 补上它列出的条件，或把 [`delivery`](./configuration.md#control-plane) 设为 `best-effort`。 |
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | 启用 CoSec 的令牌并加上 `cosec-cocache`，或声明一个 `RevocationReader` bean；只有在审批人的凭证从不吊销时才用 `RevocationReader.NONE`（[控制面](./configuration.md#control-plane)）。 |
+| `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | 网关不签发会话：在网关上取消设置，改在网关之后签发会话的服务上设置。 |
+| `... is set, but this application serves no HTTP ...`、`... is set, but login or JWT is off ...`、`... is not one plain absolute path ...`、`... name one path ...` | 取消设置[登录路由路径](./configuration.md#authentication)，或给宿主它所要求的：一个 Web 栈、`cosec.authentication.login.enabled` 和 `cosec.jwt.enabled`、每个路由一个普通路径。 |
 | `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | 调大前者或调小后者：吊销记录必须比它的令牌给出的每一次审批活得更久。 |
 
 ## 控制面错误 {#control-plane-errors}

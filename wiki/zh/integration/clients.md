@@ -11,34 +11,39 @@ description: "CoSec 8.0 应用的客户端可以依赖什么：哪些端点由�
 
 ## 你的应用提供什么 {#what-your-application-serves}
 
-CoSec 不提供登录、刷新、登出或租户切换端点。应用用 CoSec 的类自己写每一个处理器
-（[登录](./authentication.md#logging-in)），所以路径、请求体和每种失败的状态码都由应用选择，并由应用告诉它的客户端。
+CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编写（[登录](./authentication.md#logging-in)），路径、请求体和每种失败的状态码都由应用决定。刷新和登出在设置了路径时由 starter 自己提供；一个路径都不设置的应用，像写登录一样自己写它们。
 
-| 端点 | CoSec 给处理器的东西 | 入参和出参 |
+| 端点 | 由谁提供 | 入参和出参 |
 |---|---|---|
-| 登录 | `TokenCompositeAuthentication.authenticateAsToken(credentials)` | 入：你的凭证；出：`CompositeToken` |
-| 刷新 | `RefreshTokenAuthentication`，基于 `RefreshTokenCredentials` | 入：`{"accessToken": "...", "refreshToken": "..."}`（常用凭证类的形式）；出：`CompositeToken` |
-| 登出 | `TokenRevoker.revoke(accessToken)`；访问令牌过期后用 `revoke(compositeToken)` | 由你决定；会话在服务端结束 |
-| 租户或应用切换 | `SwitchTenantAuthentication`，从一个有效会话发起 | 入：`Authorization` 头里的当前令牌，加上你的凭证类的请求体；出：`CompositeToken` |
+| 登录 | 应用：`TokenCompositeAuthentication.authenticateAsToken(credentials)` | 入：你的凭证；出：`CompositeToken` |
+| 刷新 | starter，位于 `cosec.authentication.login.refresh.path`（`IDN-23`）；未设置时由应用基于 `RefreshTokenAuthentication` 提供 | 入：`{"accessToken": "...", "refreshToken": "..."}`；出：`CompositeToken` |
+| 登出 | starter，位于 `cosec.authentication.login.logout.path`（`IDN-24`）；未设置时由应用提供：`TokenRevoker.revoke(accessToken)`，访问令牌过期后用 `revoke(compositeToken)` | 提供的路由：入：令牌对，出：`204`；会话在服务端结束 |
+| 租户或应用切换 | 应用：`SwitchTenantAuthentication`，从一个有效会话发起 | 入：`Authorization` 头里的当前令牌，加上你的凭证类的请求体；出：`CompositeToken` |
 
 `CompositeToken` 写成 `{"accessToken":"<jwt>","refreshToken":"<jwt>"}`，没有别的字段（`CompositeTokenJsonTest` 逐字节固定它）。
 应用在响应里加字段不会破坏 CoSec，客户端要忽略它不认识的字段。
 
-**刷新失败返回什么状态，由刷新处理器决定，不由 CoSec 决定。** `RefreshTokenAuthentication` 抛出异常，而 CoSec 不注册异常处理器：
-你的处理器没有映射的异常，由框架决定如何响应。每个异常的含义由 CoSec 定义：
+**提供的刷新路由如何应答。** 每个应答都带 `Cache-Control: no-store`。
 
-| 抛出 | 含义 | 应该告诉客户端 |
+| 请求，或出了什么问题 | 状态码 | 响应体 |
 |---|---|---|
-| `TokenExpiredException` | 会话的寿命已到（`cosec.jwt.session.lifetime`），或刷新令牌已过期 | `401`：重新登录 |
-| `TokenRevokedException` | 会话已结束：登出，或某个令牌对被再次出示（`IDN-16`、`IDN-18`） | `401`：重新登录 |
-| `TokenVerificationException`（以及 `RefreshTokenMismatchException`、`DelegationUnsupportedException`） | 令牌对无效、不属于任何会话，或不是同一对 | `401`：重新登录 |
-| `RevocationUnavailableException`，或保存会话的存储出错 | 没有签发任何东西，也无法得知这个令牌对的状态（`IDN-14`、`IDN-19`） | `503`：保留令牌对，稍后重试 |
+| `POST`，`Content-Type: application/json`，只有令牌对，最多 32 KiB | `200` | `CompositeToken` |
+| 多出的成员、缺失或为空的值、其他媒体类型、更大的请求体、不是 JSON | `400` | `invalid-request` |
+| 会话的寿命已到（`cosec.jwt.session.lifetime`），或刷新令牌已过期 | `401` | `token-expired`：重新登录 |
+| 会话已结束：登出，或某个令牌对被再次出示（`IDN-16`、`IDN-18`） | `401` | `token-revoked`：重新登录 |
+| 令牌对无效、不属于任何会话，或不是同一对 | `401` | `token-invalid`：重新登录 |
+| 吊销记录或保存会话的存储无法应答：没有签发任何东西（`IDN-14`、`IDN-19`） | `503` | `unavailable`：保留令牌对，稍后重试 |
+| 其他任何错误 | `500` | `internal-error`：保留令牌对 |
 
-最后一列的状态码是[刷新令牌](./authentication.md#refreshing-tokens)要求处理器返回的；它是对应用的建议，本页其余部分假定应用照做。
+不是令牌的响应体都是流水线所写的问题（[问题类型](#on-this-problem-type-a-client-does-this)）：它携带 `CoSec-Request-Id` 头的请求 id，不带 trace id，也不带请求的任何其他内容。提供的登出在会话被结束、以及会话早已结束时都应答 `204`，因此响应丢失的登出可以再发一次；其他情况与刷新相同，是 `400`、`401`、`503` 和 `500`。
+
+这个路由从请求体读取凭证，也不设置 Cookie，因此别的站点的页面无法让浏览器替它发出这些凭证：它不是跨站请求伪造的目标。网关不提供它，在网关上设置路径会让启动失败：签发会话的服务在网关之后提供这个路由，网关像转发其文档允许的其他路由一样转发它。
+
+自己编写刷新路由的应用按这张表应答：`RefreshTokenAuthentication` 抛出异常（状态码见[刷新令牌](./authentication.md#refreshing-tokens)），而 CoSec 不为它不提供的路由注册异常处理器，所以处理器没有映射的异常，由框架决定如何响应。
 
 **登录和刷新必须允许匿名调用方访问。** 刷新请求带着已经过期的访问令牌，过期的令牌是被拒绝的凭证：请求按匿名主体求值（`PIP-6`）。
 如果没有任何语句让匿名调用方到达刷新路由，刷新请求本身就是 `401 token-expired`，客户端无法续期。刷新时不带 `Authorization`
-头的客户端不会改变这一点：两种情况下都是匿名。
+头的客户端不会改变这一点：两种情况下都是匿名。提供的路由也不例外（`STA-4`）：过滤器不豁免任何路由；文档拒绝其中一个时，starter 记录一条点名其属性的 `WARN`，并在 `cosecLoginRoutes` 健康指示器上显示。
 
 <<< @/examples/clients/documents/platform.json [documents/platform.json：客户端需要的路由的语句]
 
@@ -140,7 +145,7 @@ CoSec 不提供登录、刷新、登出或租户切换端点。应用用 CoSec �
 
 ## 登出与切换 {#logout-and-switching}
 
-- **登出先调服务端，再清本地。** 客户端只丢掉令牌对，令牌对在会话结束之前仍然可以刷新。调用应用的登出端点（它结束会话并吊销访问令牌，`IDN-18`），
+- **登出先调服务端，再清本地。** 客户端只丢掉令牌对，令牌对在会话结束之前仍然可以刷新。调用登出路由，starter 的或应用的（它结束会话并吊销访问令牌，`IDN-18`），
   再丢掉令牌对。访问令牌过期后，端点需要整个令牌对。
 - **切换返回新的令牌对。** 出示当前令牌，保存返回的令牌对，丢掉旧的。切换只能从有效会话发起，并保留登录时间（`IDN-17`、`IDN-22`）；它不会让用户重新登录。
   客户端用 `tenantId` 填充的路径参数会随新令牌改变。

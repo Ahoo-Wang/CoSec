@@ -36,8 +36,9 @@ class Problem internal constructor(
 /**
  * A problem CoSec answers outside a pipeline outcome: the routes the starter serves for login sessions, which answer
  * after the pipeline permitted the request. [requestId] is that request's, so the body and the `CoSec-Request-Id`
- * header agree; there is no trace id, the route having none of its own.
+ * header agree; there is no trace id, the route having none of its own. Built by [StatusMapping], the one definition of
+ * status codes and problem bodies.
  */
 @InternalCoSecApi
 @ExperimentalCoSecApi
-fun routeProblem(type: ProblemType, requestId: String): Problem = Problem(type, requestId, null)
+fun routeProblem(type: ProblemType, requestId: String): Problem = StatusMapping.routeProblem(type, requestId)
