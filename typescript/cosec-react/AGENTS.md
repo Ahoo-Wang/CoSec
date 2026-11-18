@@ -37,7 +37,7 @@ pnpm --filter @ahoo-wang/cosec-react clean
 src/
   index.ts                     — Barrel export
   cosec/
-    useSecurity.ts             — The security state of a TokenStorage as React state (signIn, signOut, currentUser)
+    useSecurity.ts             — The security state of a TokenStorage as React state (signIn, signOut, logout, currentUser)
     SecurityContext.tsx        — SecurityProvider, useSecurityContext
     RouteGuard.tsx             — Renders children for a signed-in user, else the fallback
     RefreshableRouteGuard.tsx  — The same for a session a JwtTokenManager refreshes first

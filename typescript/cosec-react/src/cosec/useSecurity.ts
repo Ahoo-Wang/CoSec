@@ -14,10 +14,12 @@
 import { useCallback, useEffect, useReducer } from 'react';
 import { useLatest } from '../internal/useLatest.js';
 import { useStoredToken } from '../internal/useStoredToken.js';
+import { LogoutUnconfirmedError } from '@ahoo-wang/cosec-fetcher';
 import type {
   TokenStorage,
   CompositeToken,
   CoSecJwtPayload,
+  JwtTokenManager,
 } from '@ahoo-wang/cosec-fetcher';
 
 /**
@@ -46,9 +48,17 @@ export interface UseSecurityOptions {
 
   /**
    * Callback function invoked when sign out occurs.
-   * This is called after the token has been removed.
+   * This is called after the token has been removed: by {@link UseSecurityReturn.signOut}, and by
+   * {@link UseSecurityReturn.logout} unless a newer sign-in replaced the session meanwhile.
    */
   onSignOut?: () => void;
+
+  /**
+   * The JwtTokenManager whose `logout()` {@link UseSecurityReturn.logout} calls: it ends the session at the server
+   * (its `tokenRevoker`, CoSec's logout route). It must be the manager of this hook's `tokenStorage`; the hook
+   * throws otherwise, since a logout would end one session while the hook shows another.
+   */
+  tokenManager?: JwtTokenManager;
 }
 
 /**
@@ -76,9 +86,24 @@ export interface UseSecurityReturn {
   signIn: (compositeTokenProvider: CompositeTokenProvider) => Promise<void>;
 
   /**
-   * Function to sign out the current user.
+   * Signs out here only: removes the stored pair, at once. The session lives on at the server until its refresh token
+   * expires, so use it for a session known to be over (after a `token-revoked`, say), and {@link logout} for the
+   * user's "Log out".
    */
   signOut: () => void;
+
+  /**
+   * Logs out: ends the session at the server, then signs out here (`JwtTokenManager.logout()` of the
+   * `tokenManager` option). Until the server answers, the session is unchanged. The pair is removed whatever the
+   * server answered, so the hook shows the anonymous user and `onSignOut` fires, unless a newer sign-in replaced the
+   * session meanwhile.
+   *
+   * - Resolves when the server ended the session (`204`), or answered `401`: there was nothing left to end.
+   * - Rejects with `LogoutUnconfirmedError` for anything else (`503`, `500`, a network failure, a timeout), and
+   *   without a `tokenManager`: the pair is gone here, and the session may live on at the server until its refresh
+   *   token expires. Nothing is retried, and the pair is never stored again.
+   */
+  logout: () => Promise<void>;
 }
 
 /** The longest delay setTimeout accepts (2^31 - 1 ms). */
@@ -108,13 +133,15 @@ function nextSessionGeneration(tokenStorage: TokenStorage): number {
  * @param options - Optional configuration object containing lifecycle callbacks.
  * @param options.onSignIn - Callback function invoked when sign in is successful.
  * @param options.onSignOut - Callback function invoked when sign out occurs.
+ * @param options.tokenManager - The JwtTokenManager of `tokenStorage`, whose server logout `logout` calls.
  * @returns An object containing:
  *          - currentUser: The stored access token's JWT payload (even if expired), or ANONYMOUS_USER when no token is stored.
  *          - authenticated: Boolean indicating whether the user is currently authenticated
  *            (the access token is unexpired). Computed at render; the hook also
  *            re-renders when the refresh token expires, so an idle page signs out then.
  *          - signIn: Function to authenticate with a composite token.
- *          - signOut: Function to sign out the current user.
+ *          - signOut: Signs out here only, at once.
+ *          - logout: Ends the session at the server, then signs out here (needs `options.tokenManager`).
  * @throws {Error} May throw errors if tokenStorage operations fail, such as invalid tokens
  *                 or storage access issues (implementation dependent).
  * @example
@@ -214,11 +241,45 @@ export function useSecurity(
     tokenStorage.remove();
     optionsRef.current.onSignOut?.();
   }, [tokenStorage, optionsRef]);
+  const tokenManager = options.tokenManager;
+  if (tokenManager && tokenManager.tokenStorage !== tokenStorage) {
+    throw new Error(
+      "useSecurity: the tokenManager option manages another TokenStorage than the hook's: give it the manager of this one.",
+    );
+  }
+  const logout = useCallback(async () => {
+    // A signIn whose provider is still pending is superseded, as by signOut.
+    const generation = nextSessionGeneration(tokenStorage);
+    let failure: unknown;
+    try {
+      if (tokenManager) {
+        await tokenManager.logout();
+      } else {
+        tokenStorage.remove();
+        failure = new LogoutUnconfirmedError(
+          new Error(
+            "No tokenManager: give useSecurity the JwtTokenManager of the server's logout route.",
+          ),
+        );
+      }
+    } catch (error) {
+      failure = error;
+    }
+    // Signed out here, unless a signIn or signOut started meanwhile, or another tab signed in: that session stands.
+    if (
+      sessionGenerations.get(tokenStorage) === generation &&
+      !tokenStorage.get()
+    ) {
+      optionsRef.current.onSignOut?.();
+    }
+    if (failure !== undefined) throw failure;
+  }, [tokenStorage, tokenManager, optionsRef]);
 
   return {
     currentUser: token?.access?.payload ?? ANONYMOUS_USER,
     authenticated: token?.authenticated ?? false,
     signIn,
     signOut,
+    logout,
   };
 }

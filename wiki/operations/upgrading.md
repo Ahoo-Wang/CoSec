@@ -1176,6 +1176,20 @@ The RFCs behind 8.0 list known differences. Each item is covered above, or descr
 Only for a deployment that already runs an 8.0.0 preview: what changed from each preview to the next, newest first. A 7.x
 deployment needs none of it; the section above is the whole upgrade. These notes are removed when 8.0 is released.
 
+### From 8.0.0-beta.3 {#from-8-0-0-beta-3}
+
+- **The `cosec-gateway-server` image turns ip2region off.** Its `config/application.yaml` now sets
+  `cosec.ip2region.enabled: false`, as the Kubernetes base already did; through beta.3 the image left it on. A document
+  that reads `ext.ip2region.*` no longer compiles on it: set `COSEC_IP2REGION_ENABLED=true` before you upgrade the
+  image. Its Docker `HEALTHCHECK` now probes `/actuator/health/liveness`, so a gateway that waits for its platform
+  document is no longer reported unhealthy.
+- **`@ahoo-wang/cosec-react`: `logout` ends the session at the server.** `useSecurity` and `SecurityProvider` gain the
+  `tokenManager` option (the `JwtTokenManager` of the same `TokenStorage`, with a `tokenRevoker`) and `logout()`, which
+  calls the server's logout and then removes the pair here
+  ([Building a client](../integration/clients.md#logout-and-switching)). `signOut` is unchanged: it removes the pair
+  here only, and the session stays refreshable at the server until its refresh token expires. Nothing breaks; point
+  the user's "Log out" at `logout`.
+
 ### From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 
 - **Security: a revocation table keeps "not revoked" for 30 seconds at most.** Through 8.0.0-beta.2 the `absent-ttl`
@@ -1200,6 +1214,13 @@ deployment needs none of it; the section above is the whole upgrade. These notes
   `RefreshTokenAuthentication` bean (refusing a disabled user, say) did not apply to it. Now your bean serves the
   route. One over a credentials class of your own fails startup while `cosec.authentication.login.refresh.path` is
   set: serve that refresh from your own route and unset the path, or declare it over `RefreshTokenCredentials`.
+- **A session store that fails or cannot do a call.** A store that fails in `TokenRevoker.revokeSubject` (Redis down,
+  say) now throws `SessionStoreUnavailableException`, as `revoke` already did: answer `503` and revoke again. Code that
+  caught the store's own exception around `revokeSubject` catches `SessionStoreUnavailableException` instead. A
+  session store that throws `UnsupportedOperationException`, because it cannot do the call at all, now passes it
+  through on every session-store call (login, refresh, tenant switch, logout and both revokes), where it used to leave
+  as `SessionStoreUnavailableException`: it is configuration, not an outage. On the served refresh and logout routes
+  that is `500` where it was `503`.
 
 ### From 8.0.0-beta.1 {#from-8-0-0-beta-1}
 
