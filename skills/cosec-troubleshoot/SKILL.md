@@ -124,6 +124,14 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them`**: CoCache 8's own check of
   its `Store`s, which `eviction-check=warn` does not reach. Allow `INFO`, or, once `noeviction` is set, set
   `cocache.redis.assume-maxmemory-policy=noeviction`; `allkeys-*` is never accepted.
+- **`cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <class> ... (IDN-25)`**:
+  the application's `RefreshTokenAuthentication` takes credentials of its own class, which the served refresh route
+  cannot present; serve that refresh from the application's own route and unset the path, or declare it over
+  `RefreshTokenCredentials`.
+- **`API key format [<n>] is not 3.`** (a request with that key is `503`): `null` is a 7.x key, convert it with
+  `cosec-migrate api-keys`; `2` is a key an 8.0 pre-release stored, which nothing converts: issue a new key, delete
+  the old one. **`[<key>] was stored by an 8.0 pre-release in format <n>`** from `cosec-migrate api-keys`: the same key;
+  the run is refused until it is gone.
 - **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
   field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
   any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained
@@ -380,8 +388,8 @@ header: anonymous. Otherwise never anonymous:
 A readiness or liveness probe that answers CoSec's problem+json (`503` before the first platform document, `401` after it)
 or pods that restart in a loop on a new deployment: to CoSec a probe is a request like any other (`STA-4`), on the
 application port of an application and on a WebFlux application's management port. Readiness over HTTP needs one
-statement permitting `GET` on `/actuator/health/readiness` and `/actuator/health/liveness` for anyone (and, outside
-Kubernetes, `management.endpoint.health.probes.enabled=true`); a liveness or startup probe must not depend on the platform
+statement permitting `GET` on `/actuator/health/readiness` and `/actuator/health/liveness` for anyone (Spring Boot 4 serves the probes on every platform); a
+liveness or startup probe must not depend on the platform
 document: on WebMvc point it at `management.server.port` (outside CoSec), on WebFlux use a `tcpSocket` probe on the
 application port. https://cosec.ahoo.me/operations/troubleshooting#probes-answer-401-or-503
 

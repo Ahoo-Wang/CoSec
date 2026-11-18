@@ -36,6 +36,7 @@ import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass
+import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingClass
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
@@ -54,9 +55,10 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
  * exempted from the filter, and a document must permit an anonymous `POST` of each path. Never on a gateway: a gateway
  * verifies sessions and issues none, and `CoSecModuleCheckAutoConfiguration` fails its startup when a path is set.
  *
- * The refresh is a [RefreshTokenAuthentication] of its own, with the application's
- * `MembershipRefresh<RefreshTokenCredentials>` bean when there is one; it is not an `Authentication` bean, so an
- * application's own refresh authentication and route are left as they are.
+ * The refresh route refreshes with the application's [RefreshTokenAuthentication] bean when it declares one, its hook
+ * included, else with the starter's, built over the application's `MembershipRefresh<RefreshTokenCredentials>` bean
+ * when there is one (`IDN-25`). The route presents [RefreshTokenCredentials]: an application refresh authentication
+ * over a credentials class of its own cannot serve it, and fails startup rather than be left out of the route.
  */
 @AutoConfiguration(after = [CoSecJwtAutoConfiguration::class])
 @ConditionalOnCoSecEnabled
@@ -65,23 +67,37 @@ import org.springframework.web.servlet.function.ServerResponse as ServletServerR
 @ConditionalOnLoginRoute
 @EnableConfigurationProperties(LoginProperties::class)
 internal class CoSecLoginRoutesAutoConfiguration {
+    /** The refresh the route serves when the application declares none of its own. */
     @Bean
     @ConditionalOnProperty(LoginProperties.REFRESH_PATH_KEY)
-    fun cosecRefreshRoute(
+    @ConditionalOnMissingBean(RefreshTokenAuthentication::class)
+    fun cosecRefreshTokenAuthentication(
         verifier: TokenVerifier,
         revocation: TokenRevocation,
         families: TokenFamilies,
-        converter: TokenConverter,
         membership: ObjectProvider<MembershipRefresh<RefreshTokenCredentials>>,
-    ): RefreshRoute = RefreshRoute(
-        RefreshTokenAuthentication(
-            verifier,
-            revocation,
-            families,
-            membership.getIfAvailable { MembershipRefresh.CLAIMS }
-        ),
-        converter,
+    ): RefreshTokenAuthentication<RefreshTokenCredentials> = RefreshTokenAuthentication(
+        verifier,
+        revocation,
+        families,
+        membership.getIfAvailable { MembershipRefresh.CLAIMS }
     )
+
+    @Bean
+    @ConditionalOnProperty(LoginProperties.REFRESH_PATH_KEY)
+    fun cosecRefreshRoute(
+        refresh: RefreshTokenAuthentication<*>,
+        converter: TokenConverter,
+    ): RefreshRoute {
+        check(refresh.credentialsType == RefreshTokenCredentials::class.java) {
+            "${LoginProperties.REFRESH_PATH_KEY} is set, but the RefreshTokenAuthentication bean refreshes " +
+                "${refresh.credentialsType.name}, not the pair the served route presents: serve that refresh from a " +
+                "route of your own and unset ${LoginProperties.REFRESH_PATH_KEY}, or declare it over " +
+                "RefreshTokenCredentials (IDN-25)."
+        }
+        @Suppress("UNCHECKED_CAST")
+        return RefreshRoute(refresh as RefreshTokenAuthentication<RefreshTokenCredentials>, converter)
+    }
 
     @Bean
     @ConditionalOnProperty(LoginProperties.LOGOUT_PATH_KEY)

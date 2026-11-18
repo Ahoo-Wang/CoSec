@@ -18,8 +18,12 @@ package me.ahoo.cosec.migrate
 import io.lettuce.core.api.sync.RedisCommands
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.ApiKeyCodec
 
-/** The keys stored under a prefix: before RFC 0009, already converted (by hash), or not keys at all. */
+/**
+ * The keys stored under a prefix: before RFC 0009, already converted (by hash), or unreadable: not keys at all, or
+ * keys in a format an 8.0 pre-release wrote, which this version does not read.
+ */
 class StoredApiKeys(val legacy: List<LegacyApiKey>, val converted: List<String>, val unreadable: List<String>) {
     companion object {
         fun read(
@@ -35,7 +39,15 @@ class StoredApiKeys(val legacy: List<LegacyApiKey>, val converted: List<String>,
                 val json = commands.get(redisKey) ?: return@forEach
                 val hash = redisKey.removePrefix("$prefix:")
                 try {
-                    if (LegacyApiKey.isConverted(json)) converted += hash else legacy += LegacyApiKey.parse(hash, json)
+                    val format = LegacyApiKey.formatOf(json)
+                    when {
+                        format == null -> legacy += LegacyApiKey.parse(hash, json)
+                        format == ApiKeyCodec.FORMAT -> converted += hash
+                        // Never counted as converted: 8.0 does not read it, and no pre-release data is converted.
+                        else ->
+                            unreadable += "[$redisKey] was stored by an 8.0 pre-release in format $format, which " +
+                                "this version does not read: provision it again (issue a new key and delete this one)."
+                    }
                 } catch (error: IllegalArgumentException) {
                     unreadable += "[$redisKey] is not an API key: ${error.message}"
                 }
