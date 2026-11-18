@@ -40,7 +40,12 @@ class CoCacheCandidateStore(private val candidates: Store<SnapshotKey, StoredCan
 
     @InternalCoSecApi
     companion object {
-        fun create(factory: CoCacheFactory, keyPrefix: String = DEFAULT_KEY_PREFIX): CoCacheCandidateStore =
-            CoCacheCandidateStore(factory.createLocked(ShadowCacheSpecs.candidate(keyPrefix)))
+        /** A reader of the candidates; [readOnly] where this process does not run the control plane. */
+        fun create(
+            factory: CoCacheFactory,
+            keyPrefix: String = DEFAULT_KEY_PREFIX,
+            readOnly: Boolean = false,
+        ): CoCacheCandidateStore =
+            CoCacheCandidateStore(factory.createLocked(ShadowCacheSpecs.candidate(keyPrefix, readOnly)))
     }
 }

@@ -125,9 +125,20 @@ key 都在它之下（`SNP-9`）。
 只有控制面（以及 `cosec-migrate`）写入文档和控制面记录。数据面实例读取文档和候选，只写影子报告和状态。Redis ACL 可以
 让两边各守其位：
 
-- 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 可读可写，对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
-  在 CoCache 8.0.0 下不能只读：它以 `EVALSHA` 发送每个脚本，Redis 对这种调用要求对脚本指明的 key 有写权限，所以对它们只给
-  `%R~` 的用户在启动时和每次读取时都失败（`NOPERM`）。因此数据面凭证能够覆盖实例读取的文档，ACL 无法阻止。
+- 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 只读（`%R~`），对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
+  不运行控制面的实例（类路径上没有 `cosec-control`）以只读方式读取文档和候选：CoCache 以 `EVALSHA_RO` 发送这些读取
+  （Redis 7.0 或更高版本），所以它的用户只需要读权限，Redis 本身会拒绝这个用户写入文档或候选。运行控制面的进程要写入它们，
+  所以它的用户需要写权限；用只读用户启动时，它在启动时于 CoCache 的发布检查处失败
+  （`Redis denied publishing to the invalidation channel[<s>:inv:snapshot]`）。
+- 一个进程属于哪一种只由它的类路径决定。没有属性能把它设为只读或读写，试图这样做的
+  `cocache.caches.PolicySnapshotCache.read-only` 或 `cocache.caches.CandidateCache.read-only` 会使启动失败。所以两种角色共用
+  一个带 `cosec-control` 的镜像的部署，没有只读的数据面。
+- 只要启用 JWT，吊销和刷新令牌族（`<s>:token:*`）就保持读写：应用可以在自己的任何端点吊销令牌（`TokenRevoker`），
+  所以进程中没有任何东西表明它只读取它们。
+- 数据面用户仍能在 `&<s>:*` 上发布：它的影子存储在那里广播失效消息，而通道模式无法只允许订阅、不允许发布。所以凭证泄露的
+  实例可以在文档的通道上发布失效消息。这只增加读取，从不改变决策：失效消息只携带 key，不携带文档，所以持有被点名文档的
+  每个实例从 Redis（这个用户无法写入的权威存储）重新读取它，其间仍用已安装的副本做决策。实例未持有的 key 会被忽略，同一
+  文档的重新加载会合并，每个实例最多一个在进行、一个在排队。
 - 控制面凭证：`<s>:` 下的所有 key。
 - 要防止一个实例写另一个实例的报告，给每个实例一个独立的用户，只允许它写自己的报告 key
   （`<s>:shadow:report:*:<instance>`），并设置它的
@@ -142,12 +153,12 @@ key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一�
 打开直到它的报告回来；但在那之前被删掉的 id 不会被发现，直到那个实例再次写入。
 
 以默认前缀下的实例 `pod-a` 为例（Redis 7 ACL 语法，`channel-mode: pubsub`）。第一行设置 key 并收回所有命令；第二行授予它
-需要的命令和通道，即 [CoCache 列出的那些](https://cocache.ahoo.me/operations/#acl)（`sharded` 模式再加
-`+spublish +ssubscribe +sunsubscribe`）：
+需要的命令和通道，即 [CoCache 为它写入的存储和只读存储列出的那些](https://cocache.ahoo.me/operations/#acl)
+（`sharded` 模式再加 `+spublish +ssubscribe +sunsubscribe`）：
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all ~cosec:snapshot:* ~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
-ACL SETUSER cosec-pod-a +@connection +evalsha +eval +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
 
 这个示例仍然给运营者的：不能访问 `<s>:control:*` 下的任何 key，报告和状态只能写在实例自己的名下。数据面实例需要
@@ -155,8 +166,9 @@ ACL SETUSER cosec-pod-a +@connection +evalsha +eval +publish +subscribe +unsubsc
 对应功能时才需要，它们没有用 ACL 试过。
 
 `~cosec:shadow:report:` 和 `~cosec:shadow:status:`（不带 `*`）是 CoCache 创建这两个缓存时用到的 key：没有它们，即使
-实例自己的 key 都允许，启动也会因 `NOPERM` 失败。已在 Redis 8.10 上用这个用户测试：实例创建缓存、读取文档和候选、写入自己的
-报告和状态、收到失效消息，`ACL LOG` 为空；写 `pod-b` 的报告或状态会被拒绝。
+实例自己的 key 都允许，启动也会因 `NOPERM` 失败。一个测试在真实 Redis 上原样运行这两行（`DataPlaneAclTest`，每次 CI 都运行）：
+不运行控制面的实例创建缓存、读取文档、收到控制面用户的发布、写入自己的报告，`ACL LOG` 为空；以这个用户 `SET` 文档或候选
+会被拒绝（`NOPERM`）。
 
 再加上该实例其他功能用到的 key（吊销、API key、限流；见 [Redis key](#redis-keys)）。上生产前用 `ACL DRYRUN` 检查这个
 用户：CoCache 通过 Lua 脚本写入，Redis 会逐个 key 检查。

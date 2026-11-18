@@ -3,13 +3,13 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ShadowReportingWiringTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-index 94be74a6..f135c45f 100644
+index ca8b0e6d..aee27218 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-@@ -237,7 +237,7 @@ class CoSecSnapshotAutoConfiguration {
-             cosec: CoSecProperties,
-         ): CandidateSource {
-             val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, cosec.keyPrefix)
+@@ -235,7 +235,7 @@ class CoSecSnapshotAutoConfiguration {
+                 cosec.keyPrefix,
+                 readOnly = !ControlPlaneCondition.wired(resources.classLoader),
+             )
 -            return CachingCandidateSource(store, compiler::compileCandidate)
 +            return CachingCandidateSource(store, compiler::compile)
          }
