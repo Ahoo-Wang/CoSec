@@ -19,12 +19,12 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.principal.CoSecPrincipal
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
@@ -47,6 +47,8 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.runtime.http.Enforceable
+import me.ahoo.cosec.runtime.http.Headers
+import me.ahoo.cosec.runtime.http.HttpAttributes
 import me.ahoo.cosec.runtime.stage.MembershipResolver
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
@@ -56,45 +58,8 @@ import me.ahoo.cosec.spi.membership.MembershipUnavailableException
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 
-/** What evaluating an engine scenario produced, compared with its `expect` by [EngineExpectations]. */
-@ExperimentalCoSecApi
-sealed interface EngineOutcome {
-    /** The engine decided. */
-    class Decided(val decision: Decision) : EngineOutcome
-
-    /** `ScopeResolver` rejected the request before the engine. */
-    class Rejected(val reason: ScopeResolution.Rejected.Reason) : EngineOutcome
-
-    /** A document does not compile; the request was never evaluated. */
-    class NotCompiled(val error: String) : EngineOutcome
-
-    /**
-     * Enforcement refuses the request before any decision (`400 invalid-request`, `PIP-15`): [refused] names the part
-     * of the scenario's request it refuses, as the scenario names it.
-     */
-    class InvalidRequest(val refused: RequestPart) : EngineOutcome
-
-    /** A part of a scenario's request, rendered in lower case in `expect` (`"refused": "action"`). */
-    enum class RequestPart {
-        /** An `http` action whose method holds a lower-case letter (`PIP-18`). */
-        ACTION,
-
-        /**
-         * A resource enforcement refuses: an `http` path the pipeline answers 400 for, such as one with a dot segment
-         * (`PIP-14`), or a typed resource id beyond the bounds of a request path.
-         */
-        RESOURCE,
-    }
-
-    /**
-     * This outcome in the scenario syntax, as `expect` writes it: `{"decision":"Deny","by":null}`, for an assertion
-     * message or a log line.
-     */
-    fun describe(): String = EngineExpectations.render(this).toString()
-}
-
 /**
- * The `engine` level of the scenario format (RFC 0008 §3.3): documents → compile → [SnapshotView] → [FlatEngine]. The
+ * The `engine` level of the scenario format (RFC 0008 §3.3): documents → compile → [SnapshotView] → [Engine]. The
  * conformance suite runs its scenarios through it, and [PolicyTestKit] runs a user's scenarios against the user's
  * documents, so both mean the same thing by a scenario.
  *
@@ -124,7 +89,7 @@ sealed interface EngineOutcome {
 @InternalCoSecApi
 class EngineScenarios(
     private val compiler: SnapshotCompiler = DocumentSnapshotCompiler,
-    private val engine: FlatEngine = CoSecFlatEngine,
+    private val engine: Engine = CoSecEngine,
     /**
      * Whether the request's action and resource are read as enforcement reads a request's ([Enforceable], `PIP-15`,
      * `PIP-18`): `http:HEAD` decided as `http:GET`, a lower-case method and a path the pipeline refuses answered
@@ -176,8 +141,14 @@ class EngineScenarios(
             is ScopeResolution.Rejected -> return EngineOutcome.Rejected(resolution.reason)
             is ScopeResolution.Resolved -> resolution.scope
         }
-        val flat = flatRequest(credential, memberships, scope, request) ?: return refused(request)
+        val headers = headers(request)
+        val flat = flatRequest(credential, memberships, scope, request, headers) ?: return refused(request)
         val view = view(snapshot, scope, documents)
+        // PIP-12: a header a document reads, sent with different values, is refused before any decision. At the
+        // engine level it is read as the runtime reads it instead: it has no value, and a statement on it errs.
+        if (enforceable && HttpAttributes(headers).ambiguousHeader(view) != null) {
+            return EngineOutcome.InvalidRequest(EngineOutcome.RequestPart.HEADER)
+        }
         val decisions = TraceLevel.entries.map { engine.evaluate(flat, view, it).decision }
         // Errors are new exceptions at each level, so decisions compare as rendered.
         check(
@@ -236,8 +207,9 @@ class EngineScenarios(
         credential: Credential,
         memberships: Memberships,
         scope: Scope,
-        request: JsonNode
-    ): FlatRequest? {
+        request: JsonNode,
+        headers: Headers,
+    ): EngineRequest? {
         val written = action(request)
         val action = if (enforceable) Enforceable.action(written) ?: return null else written
         val asWritten = resource(request.get("resource"))
@@ -258,9 +230,7 @@ class EngineScenarios(
             time = time,
             device = device,
             blocked = blocked,
-            headers = request.get(
-                "headers"
-            )?.fields().orEmpty().map { (name, value) -> name.lowercase() to value.text() }.toMap(),
+            headers = headers,
             requestAttributes = request.get("attributes")?.fields().orEmpty().mapValues { it.value.text() },
         )
         val authz = AuthzRequest(
@@ -275,8 +245,15 @@ class EngineScenarios(
             resource = resource,
             environment = Environment(ip.orEmpty(), "", device.orEmpty(), blocked),
         )
-        return FlatRequest(authz, scope, memberships, time, facts.host)
+        return EngineRequest(authz, scope, memberships, time, facts.host)
     }
+
+    /**
+     * The scenario's headers as the pipeline holds them: names that differ only in case are one header with all their
+     * values, so none is dropped by the order of the JSON object (a name written twice is refused by the JSON reader).
+     */
+    private fun headers(request: JsonNode): Headers =
+        Headers.of(request.get("headers")?.fields().orEmpty().mapValues { listOf(it.value.text()) })
 
     private fun resource(node: JsonNode?): Resource {
         if (node == null) return Resource("order", "1", emptyMap())

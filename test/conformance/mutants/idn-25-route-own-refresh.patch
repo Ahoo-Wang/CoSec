@@ -1,0 +1,22 @@
+# Rule: IDN-25
+# Mutant: the served refresh route builds a refresh of its own, leaving out the application's RefreshTokenAuthentication
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.OneVerifierTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/CoSecLoginRoutesAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/CoSecLoginRoutesAutoConfiguration.kt
+index c460384f..06b35ece 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/CoSecLoginRoutesAutoConfiguration.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/authentication/route/CoSecLoginRoutesAutoConfiguration.kt
+@@ -88,7 +88,13 @@ internal class CoSecLoginRoutesAutoConfiguration {
+     fun cosecRefreshRoute(
+         refresh: RefreshTokenAuthentication<*>,
+         converter: TokenConverter,
++        verifier: TokenVerifier,
++        revocation: TokenRevocation,
++        families: TokenFamilies,
+     ): RefreshRoute {
++        if (verifier.hashCode() != 0) {
++            return RefreshRoute(RefreshTokenAuthentication(verifier, revocation, families), converter)
++        }
+         check(refresh.credentialsType == RefreshTokenCredentials::class.java) {
+             "${LoginProperties.REFRESH_PATH_KEY} is set, but the RefreshTokenAuthentication bean refreshes " +
+                 "${refresh.credentialsType.name}, not the pair the served route presents: serve that refresh from a " +

@@ -18,7 +18,7 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 | 投递方式 | 监听器何时运行 | 失败的后果 |
 |---|---|---|
 | `REQUIRED` | 在响应之前，与其他 `REQUIRED` 监听器一起运行，每个都在 [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners)（1 秒）之内，并且在 `cosec.pipeline.timeout` 剩余的时间之内。它看到的是到此为止决定的结果。 | 放行变成 `503` `unavailable`，请求不会继续。其他结果保持原状态；失败以 `ERROR` 记录并计数。 |
-| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 [`cosec.observability.listener.queue-capacity`](./configuration.md)（1,024）个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件；抛异常的监听器最多每 10 秒以 `WARN` 记录一次，两者都会计数。 |
+| `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 [`cosec.observability.listener.queue-capacity`](./configuration.md)（1,024）个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件并计数，请求从不等待与之相关的日志：由一个报告者在请求线程之外，最多每 10 秒以 `WARN` 记录一次 `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`。抛异常的监听器最多每 10 秒以 `WARN` 记录一次，并会计数。 |
 
 starter 注册的监听器：
 
@@ -41,13 +41,13 @@ starter 注册的监听器：
   break-glass 之前，设置 `cosec.audit.kafka.delivery=required`，或者注册你自己的 `REQUIRED` 监听器。
 - **`REQUIRED` 监听器应按事件的 `id` 保持幂等**：超时的写入可能其实已经成功。
 - **关闭时**，监听器停止接收事件，已在队列中的事件仍会继续投递，最多
-  [`cosec.observability.listener.drain-timeout`](./configuration.md)（5 秒）。之后剩下的被丢弃，并以 `WARN` 记录
-  `Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`。随后 Kafka 审计监听器
+  [`cosec.observability.listener.drain-timeout`](./configuration.md)（5 秒）。之后不再开始任何监听器调用：进行中的调用不会被中断，剩下的事件被丢弃并计入 `cosec.listener.dropped`，并以 `WARN` 记录
+  `Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`。随后 Kafka 审计监听器
   最多再用同样长的时间，等待它手中的发送以及 broker 对这些发送的应答，然后才关闭 producer。到达这个上限时，排队的发送
-  被丢弃，进行中的发送被中断，并以 `WARN` 记录 `The Kafka audit listener of [<topic>] did not finish within <timeout>: ...`
+  被丢弃，进行中的发送被中断，并以 `WARN` 记录 `The Kafka audit queue of [<topic>] did not drain within <timeout>: <n> queued records are dropped and <n> sends are unanswered.`
 - **求值追踪。** `DecisionEvent` 带有 `evaluationTrace`，即引擎查看过的内容，深度由
   [`cosec.pipeline.trace-level`](./configuration.md#pipeline) 决定：`off`（默认，没有追踪，也没有开销）、`full`
-  （决策到达的每一层的每条规则，包括决定性规则之后的规则）或 `exhaustive`（还包括决策没有到达的层）。在 `off` 时，以及
+  （列出每个候选的每条语句及其被排除的原因；求值在没有追踪时停止的地方停止，但会完成作出决策的那一轮）或 `exhaustive`（决策已由 DENY 轮作出时，也会求值 ALLOW 轮）。在 `off` 时，以及
   请求没有到达引擎时，它为 null。只有你自己的监听器会读它：下面的审计事件、span 和指标都不包含它。
 - **gateway 模式的服务**（`cosec.pipeline.mode=gateway`）不产生决策事件：它们不做决策，也不注册监听器。由前面的网关
   记录决策（[部署网关服务](./deployment.md#services-behind-the-gateway)）。
@@ -62,7 +62,7 @@ starter 注册的监听器：
 | `eventId`、`timestamp`、`tenantId` | 事件本身；`tenantId` 是主体的租户 |
 | `kind` | `DECIDED`、`BAD_REQUEST`（`400`）、`AUTHENTICATION_UNAVAILABLE`、`CANCELLED` 或 `ERROR`（`500`） |
 | `principal` | `id`、`authenticated`、`roles`（解析出的作用域中的角色） |
-| `request` | `id`（即 `CoSec-Request-Id`）、`appId`、`spaceId`、`remoteIp`、`method`、`path`（规范化后）、`device.id` |
+| `request` | `id`（即 `CoSec-Request-Id`）、`appId`、`spaceId`、`remoteIp`、`method`、`path`（规范化后）、`routeId`（请求经过的网关路由；其他适配器为 null）、`device.id` |
 | `authorization.decision`、`authorization.reasonCode` | 见下表 |
 | `authorization.reason` | 结果，`503` 时还有其原因，例如 `INDETERMINATE: SourceUnavailable` |
 | `authorization.elapsedNanos` | 整个管道，从请求开始到得出结果 |
@@ -116,6 +116,7 @@ JSON 数组 `[tenantId, principalId]`。它与审计日志并存，而不是替�
 kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管道的耗时生成，挂在适配器收到请求时的当前 span 之下；没有
 当前 span 时它是根 span。因此追踪从不拖慢请求，也不会使请求失败。管道为请求发起的调用（Redis、成员关系提供者）是
 `cosec.authorize` 的兄弟 span，挂在同一个父 span 下。tracer 来自 `GlobalOpenTelemetry`。
+该 span 像 SDK 自己的子 span 一样继承父 span 的 `tracestate`。事件的 trace 以 W3C 头部形式的不透明字符串携带它：它是厂商数据，CoSec 只把它写到该 span 的父上下文上，不写入审计记录、Kafka 记录、日志或指标标签，你自己的决策监听器也不应记录它。SDK 拒绝的值，或超过 512 个字符的值，视为没有 tracestate：span 仍会生成，父 span 不变。
 
 | 属性 | 值 |
 |---|---|
@@ -138,13 +139,13 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 |---|---|
 | `result` | `allow`、`too_many_requests`、`explicit_deny`（包括作用域拒绝和边界拒绝）、`implicit_deny`、`indeterminate`（每个 `503`）、`bad_request`、`cancelled`、`error` |
 | `source` | `binding`、`attachment`、`builtin`、`boundary`、`scope`（作用域拒绝）、`none` |
-| `cause` | 仅用于 `indeterminate`：`source_unavailable`、`missing_policies`、`membership`、`attribute`、`matcher`、`authenticator`、`required_listener`、`boundary`、`rate_limiter`、`deadline`、`unknown` |
+| `cause` | 仅用于 `indeterminate`：`source_unavailable`、`document_invalid`、`missing_policies`、`membership`、`attribute`、`matcher`、`authenticator`、`required_listener`、`boundary`、`rate_limiter`、`deadline`、`unknown` |
 
 监听器本身也被计数：
 
 | 指标 | 标签 | 计数内容 |
 |---|---|---|
-| `cosec.listener.dropped` | `listener` | 队列满时丢弃的事件 |
+| `cosec.listener.dropped` | `listener` | 队列满或已关闭时丢弃的事件，以及排空超时时丢弃的事件 |
 | `cosec.listener.failures` | `listener` | 抛异常的监听器调用，以及超时的 `REQUIRED` 监听器调用 |
 | `cosec.audit.required.failures` | 无 | 发生在它无法改变的决策（非放行）上的 `REQUIRED` 失败 |
 
@@ -155,15 +156,54 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 | `cosec.revocation.unchecked` | 无 | 吊销无法读取时被接受的令牌；每段这样的时间还会以 `WARN` 记录 `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).`，最多每 10 秒一次 |
 
 按 `cause` 对 `result=indeterminate` 的速率、对 `explicit_deny`、对 `cosec.listener.dropped` 设置告警，并对 `cosec.revocation.unchecked` 的任何上升告警：它上升期间，被吊销的令牌会被接受。
-`indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到（[故障排查](./troubleshooting.md#unavailable)）。
+`indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到；伴随 `cause=document_invalid` 上升，说明某个已存储的文档在本实例上无法编译（[故障排查](./troubleshooting.md#unavailable)）。
 CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标（[CoCache 文档](https://cocache.ahoo.me)）。
+
+## 快照指标 {#snapshot-metrics}
+
+在与计时器相同的条件下（`cosec-micrometer`、一个 `MeterRegistry`、`cosec.metrics.enabled`），starter 为数据平面的快照源注册指标：
+即本实例读取、编译并持有的文档（[实例如何读取文档](./storage.md#how-instances-read-documents)）。控制平面自己的快照源不计量。
+应用自己构建的 `Pipeline` 不会得到这些指标。没有任何标签携带应用或租户 id，因此无论文档有多少，都是 80 个序列。
+`kind` 为 `platform`、`app` 或 `tenant`：
+
+| 指标 | 类型 | 标签 | 含义 |
+|---|---|---|---|
+| `cosec.snapshot.loads` | counter | `kind`、`result` | 必须加载文档的请求：`cold`（请求等待它的加载）、`failed`（加载失败，请求按失败关闭判定）、`timeout`（加载超过了 `cold-load-timeout`）。文档已安装的请求不计数：那是每个请求都走的路径 |
+| `cosec.snapshot.compile.duration` | timer | `kind`、`result` = `success`、`failure` | 编译一个文档；`failure` 是一个在本实例上无法编译的已存储文档 |
+| `cosec.snapshot.installs` | counter | `kind` | 安装的文档：首次加载或新修订 |
+| `cosec.snapshot.installed` | gauge | `kind`、`state` | 当前持有的条目，按状态：`present`、`invalid`（在此无法编译）、`pending`（其输入已变，等待重新编译）、`undecodable`、`absent`（没有文档，之前也没见过）、`lost`（之前见过的文档不见了）、`unreadable`。各状态之和等于实例持有的条目数 |
+| `cosec.snapshot.lag` | gauge，秒 | `kind` | 持有的条目中（失败的除外）最久未被存储确认的时长 |
+| `cosec.snapshot.lagging` | gauge | `kind`、`level` = `warn`、`escalate` | 超过 `lag-warn` 的条目（包括超过 `lag-escalate` 的）和超过 `lag-escalate` 的条目 |
+| `cosec.snapshot.summary.age` | gauge，秒 | 无 | 距 `installed`、`lag` 和 `lagging` 所读的那一轮的时间 |
+| `cosec.snapshot.lag.exceeded` | counter | `kind`、`level` | 实例每记录一次延迟日志 |
+| `cosec.snapshot.regressions` | counter | `kind` | 存储返回了比已安装修订更旧的修订 |
+| `cosec.snapshot.lost` | counter | `kind` | 之前见过的文档现在不存在；它的键失败关闭 |
+| `cosec.snapshot.evictions` | counter | `kind`、`state` = `document`、`absent` | 应用或租户族在达到上限（`max-apps`、`max-tenants`、`max-absent`）时丢弃的条目 |
+| `cosec.snapshot.handoffs.refused` | counter | `to` = `housekeeping`、`caller` | 编译池拒绝的工作：`caller` 表示由请求线程执行 |
+| `cosec.snapshot.housekeeping.refused` | counter | `task` = `load-log`、`compile-log`、`effect-log`、`crash-log`、`transition-log`、`prewarm-log`、`pass-log`、`reset-log`、`evict`、`drop`、`lag-report` | 快照源的维护线程因队列（4,096）已满而拒绝的任务。除 `drop`（移除一个空条目，在原线程执行）外，每个都被丢弃。`*-log` 是一条没有写出的日志；`evict` 是族在上限以下的一次驱逐，下一次加载会再次请求它 |
+
+`installed`、`lag` 和 `lagging` 反映快照源上一轮延迟检查（每个 `revalidate-interval` 一次）时的状态，不在抓取时读取：
+无论有多少文档，一次抓取只读一个字段。第一轮之前它们读数为零，此时 `summary.age` 为 `NaN`；`summary.age` 远大于
+`revalidate-interval` 说明检查已经停止。
+
+等待过文档的请求所占比例是 `loads{result=cold}` 除以决策数（`cosec.authorization` 的计数）；它上升的原因看 `evictions`。
+
+| 告警条件 | 原因 |
+|---|---|
+| `lost` 有任何上升 | 某个文档从存储中消失了，它的键失败关闭 |
+| `regressions` 有任何上升 | 存储丢失了它已确认的写入：检查最近一次故障转移 |
+| `lag.exceeded{level=escalate}` 有任何上升 | 实例依据一个存储已有 `lag-escalate` 之久未确认的文档做决策 |
+| `installed{state=invalid}` 大于零 | 某个已存储文档在本实例上无法编译（版本比控制平面旧？） |
+| `handoffs.refused{to=caller}` 持续有速率 | 编译池饱和，请求线程在编译 |
+| `housekeeping.refused` 有任何上升 | 实例在丢弃自己的日志：日志 appender 跟不上负载（[快照日志缺失](./troubleshooting.md#snapshot-log-lines-are-missing)） |
+| `evictions` 持续有速率，且 `loads{result=cold}` 上升 | 族对流量来说太小：调大 `max-apps` / `max-tenants` |
 
 ## 快照健康状况 {#snapshot-health}
 
-CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了文档：
+上面的指标负责计数；下面的健康指示器和日志回答实例是否跟上了文档：
 
 - **健康。** 有 Spring Boot Actuator 时，`cosecSnapshot` 健康指示器在平台文档和每个预热文档安装后为 `UP`，之前为
-  `DOWN`，细节为 `platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。就绪状态遵循同样的条件
+  `DOWN`，细节为 `platform`（`installed`；已存储但无法编译时为 `invalid`；`failed`、`absent` 或 `loading`）、`prewarmed`、`missing`，以及在有文档无法编译时的 `invalid`（无法编译的文档数）和 `invalidFirst`（其中的前十个及其存储的修订，平台文档在前，其余按键排序，如 `["tenant:acme@7"]`），从不包含编译器的消息。就绪状态遵循同样的条件
   （[就绪](./deployment.md#readiness)）。
 - **驱逐。** 在 Redis 上，Redis 可能驱逐快照时 `cosecSnapshotEviction` 健康指示器为 `DOWN`，并带说明原因的 `eviction`
   细节。它报告实例最近一次读到的结果：每个 `revalidate-interval` 在自己的线程上读取的每个节点的 `maxmemory-policy`，
@@ -171,11 +211,18 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
   不是就绪信号：不要把它放进就绪组，否则 Redis 的一次改动会让所有实例同时退出轮转，而请求仍在照常决策
   （[Redis 要求](./storage.md#redis-requirements)）。与每个指示器一样，它也会让聚合的 `/actuator/health` 变为 `DOWN`：让负载均衡器
   和平台的健康检查探测就绪组，或者把它排除在它们探测的组之外（`management.endpoint.health.group.<group>.exclude=cosecSnapshotEviction`）。
+- **登录路由。** starter 提供刷新或登出路由时，`cosecLoginRoutes` 健康指示器总是 `UP`，以每个路由的属性为详情：`not refused`，或在文档拒绝匿名 `POST` 它之后为 `denied since <time>` 及是哪种拒绝（没有语句允许它、某条 DENY 语句匹配它、或租户的平台边界不覆盖它），直到之后有请求被允许。同样的拒绝每个路由每分钟记录一条 `WARN`，点名属性和路径。两者都来自真实请求的决策，所以从不出错，也都不会让实例变为未就绪（[构建客户端](../integration/clients.md#what-your-application-serves)）。
 - **滞后日志。** 文档超过 `lag-warn` 未被 Redis 确认时，实例以 `WARN` 记录，超过 `lag-escalate` 时以 `ERROR` 记录
   （[实例如何读取文档](./storage.md#how-instances-read-documents)）。其他值得告警的日志：
   `Snapshot document [<doc>] disappeared from the store; failing closed.`、
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`，以及
   `Snapshot prewarm failed for [<docs>]; retrying in <backoff>.`
+- **维护摘要。** 快照源在一个维护线程上写日志、执行驱逐，所以慢的 appender 从不占住请求线程。该线程的队列满时，或快照源关闭、该线程已停止后，
+  任务被丢弃并计数，而不是在提交它的线程上执行；关闭期间，快照源自己的线程仍就地执行自己的任务。最多每 10 秒一次，且只在有任务被丢弃
+  或有指标抛出异常时，该线程记录一条 `WARN`；关闭中的快照源在关闭它的线程上把剩下的写出一次：
+  `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped (each dropped; drop runs in place):
+  load-log 3 (last: "<text>"), …; meter failures <n> (last: "<text>").` 每个 `last` 是该任务最后被丢弃的那条日志的文本，
+  带异常的类名和消息、不带堆栈，截断到 256 个字符。抛出异常的指标从不单独记录日志：它在这里计数，所以无论绑定了什么注册表，摘要都会写出。
 - **传播情况。** 控制面的 `GET /documents/<doc>/revisions/<n>/propagation` 回答最近一分钟内报告过的实例中，有多少已经
   装入修订 `<n>` 或更新的修订。实例只有在能够评估某个修订时才算装入了它：读到了该修订却编译失败的实例仍会报告，所以计入被统计的实例，
   但不算已装入。只有开启影子窗口的实例才会报告（[修订、历史与回滚](./storage.md#revisions-history-and-rollback)）。
@@ -187,10 +234,10 @@ CoSec 不为实例持有的文档注册指标。要查看实例是否跟上了�
 `PUBLISHING`、`PUBLISHED`、`FAILED`、`BREAK_GLASS_REQUESTED`、`BREAK_GLASS_APPROVED`、`REVOKED`、`HEADS_MOVED`、`REVIEW_NEEDED`、`ABANDONED`。事件指明变更、文档、
 操作者、基准修订和候选修订、需要审批的内容、确认、影子窗口摘要和备注；它从不携带文档内容。变更监听器接收这些事件。
 
-- **默认监听器**以 `INFO` 记录每个事件，格式为
+- **默认监听器**以 `INFO` 把每个事件记录到 logger `me.ahoo.cosec.changelog`，格式为
   `Change <changeId> <kind> on <doc> by <principal>@<tenant>: base=..., candidate=..., escalations=<n>, confirmations=<n>`。
   变更监听器是累加的：每个 `ChangeListener` bean 都会注册，只有应用自己声明了 `LoggingChangeListener` bean 时才不再
-  注册默认的日志监听器。
+  注册默认的日志监听器。变更日志以 `INFO` 写出：把 `me.ahoo.cosec` 设得高于 `INFO` 的配置，要按名字把 `me.ahoo.cosec.changelog` 设为 `INFO`，与任何你要保留的记录一样。
 - **`PUBLISHING`、`BREAK_GLASS_REQUESTED` 和 `BREAK_GLASS_APPROVED` 是受控的：** 每个 `REQUIRED` 变更监听器都必须在
   [`cosec.control.audit.required-timeout`](./configuration.md#control-plane)（5 秒，所有监听器合计）内记录该事件，这一步才会生效，否则这一步不会发生，控制 API 返回 `503`。其他事件，以及发给 `BEST_EFFORT` 监听器的
   所有事件，都在之后投递；失败记录为 `Change listener [<name>] could not record <event>.` 修订记录是已发布内容的持久
@@ -230,7 +277,8 @@ break-glass 等待 broker 的确认（把生产者配置为 `acks=all`）。设�
 | `me.ahoo.cosec.runtime` | 每个 `500` 都以 `ERROR` 记录 `Request [<requestId>] failed with an unmodelled exception.` 及堆栈；`REQUIRED` 监听器失败；被丢弃的事件；失败的属性提供者（以 `WARN` 记录 `<provider> failed to fetch [...]`，每个提供者最多每 10 秒一次：每个决策都带有原因）；无法计数的限流器 |
 | `me.ahoo.cosec.runtime.snapshot` | 加载、滞后、丢失和回退的文档（[快照健康状况](#snapshot-health)） |
 | `me.ahoo.cosec.spring.boot` | 启动检查，例如 `!!!` 驱逐警告；应用没有声明 `BlacklistSource` 时以 `INFO` 记录的 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).`（[黑名单](../guide/security-model.md#blacklist)）；以 `INFO` 记录的 `ip2region databases: [<versions>].`，并指出没有数据库的 IP 版本，其地址是取不到；gateway 模式服务的 `WARN`（[网关后面的服务](./deployment.md#services-behind-the-gateway)） |
-| `me.ahoo.cosec.control` | 变更日志，以及每个控制面 `500` 的 `Control API <method> <path> failed (request <requestId>).` |
+| `me.ahoo.cosec.changelog` | 变更日志：每个变更事件一行 `INFO`（[控制面变更日志](#control-plane-change-log)）；像路由 `me.ahoo.cosec.audit` 那样路由它 |
+| `me.ahoo.cosec.control` | 每个控制面 `500` 的 `Control API <method> <path> failed (request <requestId>).`；以及由写它的类的 logger 以 `WARN` 记录的 `Change listener [<name>] could not record <event>.` |
 
 通过响应头 `CoSec-Request-Id` 把一个响应与它的日志、审计事件和 span 关联起来；它也是每个 problem 响应体中的
 `requestId`。

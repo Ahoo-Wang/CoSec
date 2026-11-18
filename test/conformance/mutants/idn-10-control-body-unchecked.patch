@@ -2,11 +2,11 @@
 # Mutant: a control request body may hold an id with an unpaired surrogate, a document key or a binding's principal
 # Tests: :control:test --tests me.ahoo.cosec.control.api.ControlHttpTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-index 121a7968..39121478 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt
-@@ -398,7 +398,6 @@ class ControlHttp(private val plane: ControlPlane) {
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
+index 4af48886..27bd3096 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttpSupport.kt
+@@ -51,7 +51,6 @@ internal object ControlHttpSupport {
              }
          } ?: factory.objectNode()
          requireRequest(body.isObject) { "The request body is a JSON object." }

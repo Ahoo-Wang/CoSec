@@ -37,7 +37,7 @@ import tools.jackson.databind.node.ObjectNode
  * { "decision": "Indeterminate", "cause": { "type": "MissingPolicies", "policies": ["p"] } }
  * { "decision": "Rejected", "reason": "SPACE_NOT_MEMBER" }
  * { "decision": "NotCompiled", "error": "a part of the error message" }
- * { "decision": "InvalidRequest", "refused": "action" | "resource" }   // enforcement answers 400
+ * { "decision": "InvalidRequest", "refused": "action" | "resource" | "header" }   // enforcement answers 400
  * ```
  *
  * `via` is `{ "binding": id, "document": "platform" | "app" | "tenant" }`, `{ "attached": policy }` or `"builtin"`; a
@@ -139,7 +139,7 @@ object EngineExpectations {
             is Cause.MatcherFailed -> set("at", ref(cause.at)).put("guard", cause.guard)
             is Cause.MissingPolicies -> set("policies", policies(cause.policyIds))
             is Cause.AmbiguousPolicy -> set("policies", policies(cause.policyIds))
-            is Cause.SourceUnavailable, is Cause.NotLoaded -> put("document", documentOf(cause))
+            is Cause.SourceUnavailable, is Cause.NotLoaded, is Cause.DocumentInvalid -> document(this, cause)
             is Cause.MembershipUnavailable -> Unit
             is Cause.BoundaryUnavailable -> put("boundary", cause.boundary.value)
             is Cause.RateLimiterUnavailable -> put("rule", cause.ruleId)
@@ -152,9 +152,16 @@ object EngineExpectations {
         }
     }
 
+    /** The document a cause names, and for an invalid one its stored revision. */
+    private fun document(node: ObjectNode, cause: Cause) {
+        node.put("document", documentOf(cause))
+        if (cause is Cause.DocumentInvalid) node.put("revision", cause.revision)
+    }
+
     private fun documentOf(cause: Cause): String = when (cause) {
         is Cause.SourceUnavailable -> cause.document.name.lowercase()
         is Cause.NotLoaded -> cause.document.name.lowercase()
+        is Cause.DocumentInvalid -> cause.document.name.lowercase()
         else -> error("No document: $cause")
     }
 

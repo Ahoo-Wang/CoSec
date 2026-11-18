@@ -38,9 +38,9 @@ import java.util.concurrent.TimeUnit
  *
  * Every tag is a small fixed enumeration, never a policy, app or tenant id, so the number of series stays bounded:
  * - [RESULT_TAG]: `allow`, `too_many_requests`, `explicit_deny`, `implicit_deny`, `indeterminate`, `bad_request`, `cancelled`, `error`;
- * - [SOURCE_TAG]: how the deciding statement applied: `binding`, `attachment`, `builtin`, `scope` or `none`;
- * - [CAUSE_TAG], on `indeterminate` only: `source_unavailable`, `missing_policies`, `membership`, `attribute`,
- *   `matcher`, `authenticator`, `required_listener`, `rate_limiter` or `deadline`.
+ * - [SOURCE_TAG]: how the deciding statement applied: `binding`, `attachment`, `builtin`, `boundary`, `scope` or `none`;
+ * - [CAUSE_TAG], on `indeterminate` only: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`,
+ *   `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline` or `unknown`.
  */
 class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
     override val name: String get() = NAME
@@ -88,6 +88,7 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
         Reason.DEADLINE_EXCEEDED -> "deadline"
         else -> when (event.outcome.cause) {
             is Cause.SourceUnavailable, is Cause.NotLoaded -> "source_unavailable"
+            is Cause.DocumentInvalid -> "document_invalid"
             is Cause.MissingPolicies, is Cause.AmbiguousPolicy -> "missing_policies"
             is Cause.MembershipUnavailable -> "membership"
             is Cause.AttributeUnavailable -> "attribute"

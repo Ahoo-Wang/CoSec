@@ -1,0 +1,40 @@
+{
+  "rules": [
+    "SCP-13"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "#1403: the credential declares the app order/v2: an app id is one path segment, so it is rejected, and never read as the app order.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "allow-all",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "g:allow-all",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "allow-all"
+        }
+      ]
+    }
+  },
+  "request": {},
+  "expect": {
+    "decision": "Rejected",
+    "reason": "APP_MISMATCH"
+  },
+  "credential": {
+    "app": "order/v2"
+  }
+}

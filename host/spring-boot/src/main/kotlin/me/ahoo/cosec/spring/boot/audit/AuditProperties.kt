@@ -27,6 +27,7 @@ import org.springframework.boot.context.properties.bind.DefaultValue
 @ConfigurationProperties(AuditProperties.PREFIX)
 @InternalCoSecApi
 class AuditProperties(
+    /** Whether the audit log listener is on, and the Kafka audit listener with `cosec.audit.kafka.enabled`. */
     @DefaultValue("true") override var enabled: Boolean = true,
 ) : EnabledCapable {
 

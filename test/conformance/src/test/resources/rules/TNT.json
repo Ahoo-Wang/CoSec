@@ -6,7 +6,7 @@
       "statement": "Another tenant's document never changes a decision for this tenant's principals (P12).",
       "level": "engine",
       "properties": [
-        "engine:FlatEnginePropertyTest#P12 another tenant's document never changes a decision"
+        "engine:EnginePropertyTest#P12 another tenant's document never changes a decision"
       ],
       "pending": null
     },
@@ -39,7 +39,7 @@
         "document:PolicyDocumentCompilerTest#permission policies live in their app's document",
         "document:PolicyDocumentCompilerTest#a tenant document names the apps its bindings of their permissions need",
         "runtime:SuspendingSnapshotSourceTest#theViewOfATenantThatNeedsTheAppHasIt",
-        "engine:FlatEngineTest#a tenant binding an app's permission policy without roles needs the app's document"
+        "engine:EngineTest#a tenant binding an app's permission policy without roles needs the app's document"
       ],
       "pending": null
     }

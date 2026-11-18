@@ -17,7 +17,7 @@ package me.ahoo.cosec.runtime.http
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.condition.Attribute
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.condition.HttpNames

@@ -26,7 +26,7 @@ import me.ahoo.cosec.cocache.RevokedTokenCache
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
 import me.ahoo.cosec.spring.boot.jwt.JwtProperties
@@ -39,7 +39,7 @@ import org.junit.jupiter.api.assertThrows
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration
 import org.springframework.boot.test.context.runner.ApplicationContextRunner
-import java.time.Instant
+import java.time.Duration
 import java.util.concurrent.ExecutionException
 
 /**
@@ -78,7 +78,7 @@ class StrictCacheFailureTest {
                 val runtime = context.getBean(CacheRuntime::class.java)
                 val cache = context.getBean(PolicySnapshotCache::class.java)
                 val store = context.getBean(RedisSnapshotDocumentStore::class.java)
-                cache.put(SnapshotKey.Platform, SnapshotDocument(2, 1, Instant.EPOCH, PLATFORM.encodeToByteArray()))
+                cache.put(SnapshotKey.Platform, SnapshotDocuments.read(PLATFORM.encodeToByteArray()))
                 // never expires in Redis, whatever the global layers say
                 checkNotNull(runtime.admin(CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME))
                     .inspect(SnapshotKeyEncoder.PLATFORM).remote.ttl.assert().isNull()
@@ -93,6 +93,49 @@ class StrictCacheFailureTest {
                 // is the caller's (PIP-7, IDN-14)
                 assertThrows<CacheReadException> { context.getBean(RevokedTokenCache::class.java)["jti"] }
             }
+    }
+
+    private val revocationTables = ApplicationContextRunner()
+        .withPropertyValues(
+            "cocache.backend=memory",
+            "cosec.authorization.routes.location=",
+            "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+        )
+        .withBean(CoherenceBackend::class.java, { InMemoryBackend() })
+        .withConfiguration(
+            AutoConfigurations.of(
+                JacksonAutoConfiguration::class.java,
+                CoCacheAutoConfiguration::class.java,
+                CoSecTokenRevocationCacheAutoConfiguration::class.java,
+            )
+        )
+
+    /** #1629 finding 5: "not revoked" is kept locally for 30 seconds at most, whatever the CoCache properties say. */
+    @Test
+    fun revocationTablesKeepNotRevokedFor30SecondsWhateverTheGlobalLayersSay() {
+        revocationTables.withPropertyValues("cocache.defaults.store.absent-ttl=1h").run { context ->
+            assertThat(context).hasNotFailed()
+            val runtime = context.getBean(CacheRuntime::class.java)
+            listOf(
+                CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
+            ).forEach { name ->
+                checkNotNull(runtime.policy(name)).absentTtl.assert().describedAs(name)
+                    .isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
+            }
+        }
+    }
+
+    @Test
+    fun aRevocationTablesAbsentTtlPropertyFailsStartup() {
+        listOf(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME).forEach { name ->
+            revocationTables.withPropertyValues("cocache.caches.$name.absent-ttl=1h").run { context ->
+                assertThat(context).hasFailed()
+                generateSequence(context.startupFailure) { it.cause }.map { it.message.orEmpty() }
+                    .any { name in it && "locked by ${CoSecCacheSpecs.LOCKED_BY}" in it }
+                    .assert().describedAs(name).isTrue()
+            }
+        }
     }
 
     private companion object {

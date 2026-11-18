@@ -37,6 +37,7 @@ import me.ahoo.cosec.migrate.Fixtures7x.source
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -167,6 +168,31 @@ class MigrationRecoveryTest {
         conflict.legacy.size.assert().isEqualTo(2)
     }
 
+    /** #1629 finding 8: a key an 8.0 pre-release stored in format 2 is reported, never counted as converted. */
+    @Test
+    fun `a key of a pre-release format is reported as such, not counted converted`() {
+        val commands = mockk<RedisCommands<String, String>>()
+        every { commands.get("p:api-key:h1") } returns LEGACY
+        val formatTwo = """{"format":2,"id":"k2","principalId":"alice","tenantId":"acme","enabled":true}"""
+        every { commands.get("p:api-key:h2") } returns formatTwo
+        every { commands.get("p:api-key:h3") } returns ApiKeyCodec.encode(ApiKey("k3", "alice", "acme", null, setOf("reader")))
+        // A format no version wrote is no API key, never a pre-release's.
+        every { commands.get("p:api-key:h4") } returns """{"format":"3","id":"k4"}"""
+
+        val keys = sequenceOf("p:api-key:h1", "p:api-key:h2", "p:api-key:h3", "p:api-key:h4")
+        val stored = StoredApiKeys.read(commands, "p:api-key") { keys }
+
+        stored.legacy.map { it.hash }.assert().containsExactly("h1")
+        stored.converted.assert().containsExactly("h3")
+        stored.unreadable.assert().hasSize(2)
+        stored.unreadable[0].assert().contains(
+            "[p:api-key:h2]",
+            "8.0 pre-release in format 2",
+            "provision it again"
+        )
+        stored.unreadable[1].assert().contains("[p:api-key:h4] is not an API key", "is not an integer")
+    }
+
     // ---- #1225 ----
 
     @Test
@@ -204,13 +230,25 @@ class MigrationRecoveryTest {
     )
 
     @Test
-    fun `a tenant id with a slash is planned under an encoded file name`() {
-        val plan = plan("acme/eu")
-        plan.keys.assert().containsExactly(SnapshotKey.Tenant("acme/eu"))
+    fun `a tenant id the file name encodes is planned under an encoded file name`() {
+        val plan = plan("acme%eu")
+        plan.keys.assert().containsExactly(SnapshotKey.Tenant("acme%eu"))
         val files = PartitionPlan.write(plan, temp.resolve("plan"))
-        files.map { it.fileName.toString() }.assert().containsExactly("tenant-acme%2Feu.json")
-        val decoded = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme/eu", Files.readAllBytes(files.single()))
+        files.map { it.fileName.toString() }.assert().containsExactly("tenant-acme%25eu.json")
+        val decoded = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme%eu", Files.readAllBytes(files.single()))
         decoded.policies.single().id.value.assert().isEqualTo("c")
+    }
+
+    /** #1403: no tenant id holds `/`, so such a tenant is not planned: its conversion is refused, at the id. */
+    @Test
+    fun `a tenant id with a slash is refused, not planned`() {
+        plan("acme/eu").assert().isEmpty()
+        val report = Converter().convert(
+            source(listOf("c" to policy("c", tenantId = "acme/eu"))),
+            ConvertOptions(Partition.BY_OWNER, publishedAt = now)
+        ).report
+        report.accepted.assert().isFalse()
+        report.rejections.single().kind.assert().isEqualTo(RejectionKind.SLASH_IN_ID)
     }
 
     @Test
@@ -234,15 +272,29 @@ class MigrationRecoveryTest {
     @Test
     fun `partition plan on the command line names each tenant it planned`() {
         val export = Files.createDirectories(temp.resolve("export"))
-        Files.writeString(export.resolve(ExportDirectory.POLICIES_FILE), "[${policy("c", tenantId = "acme/eu")}]")
+        Files.writeString(export.resolve(ExportDirectory.POLICIES_FILE), "[${policy("c", tenantId = "acme%eu")}]")
         Files.writeString(export.resolve(ExportDirectory.GLOBAL_POLICIES_FILE), "[]")
         Files.writeString(export.resolve(ExportDirectory.APP_ROLE_PERMISSIONS_FILE), "[]")
         val out = temp.resolve("plan")
 
         val (code, output) = run("partition", "plan", "--from-files", export.toString(), "--out", out.toString())
         code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
-        output.assert().contains("acme/eu").contains("tenant-acme%2Feu.json")
-        Files.isRegularFile(out.resolve("tenant-acme%2Feu.json")).assert().isTrue()
+        output.assert().contains("acme%eu").contains("tenant-acme%25eu.json")
+        Files.isRegularFile(out.resolve("tenant-acme%25eu.json")).assert().isTrue()
+    }
+
+    @Test
+    fun `partition plan on the command line refuses a tenant id with a slash and writes nothing`() {
+        val export = Files.createDirectories(temp.resolve("export"))
+        Files.writeString(export.resolve(ExportDirectory.POLICIES_FILE), "[${policy("c", tenantId = "acme/eu")}]")
+        Files.writeString(export.resolve(ExportDirectory.GLOBAL_POLICIES_FILE), "[]")
+        Files.writeString(export.resolve(ExportDirectory.APP_ROLE_PERMISSIONS_FILE), "[]")
+        val out = temp.resolve("plan")
+
+        val (code, output) = run("partition", "plan", "--from-files", export.toString(), "--out", out.toString())
+        code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+        output.assert().contains("SLASH_IN_ID").contains("acme/eu").contains("holds no `/`")
+        Files.exists(out).assert().isFalse()
     }
 
     // ---- #1264 ----

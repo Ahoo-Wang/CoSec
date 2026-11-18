@@ -2,11 +2,11 @@
 # Mutant: a binding in an app no key can name is skipped when a document's references are built, as before R4, so a head an alpha stored publishes and repairs
 # Tests: :control:test --tests me.ahoo.cosec.control.change.UnnamedAppIdsTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-index 2bec1fe1..ecb5f921 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
-@@ -658,10 +658,7 @@ class Revisions(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+index 70f21b4f..b18b0e10 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/ReferrerIndex.kt
+@@ -180,10 +180,7 @@ internal class ReferrerIndex(
          for (binding in document.bindings) {
              val app = (binding.scope.app as? Match.Exactly)?.value?.value
              if (app != null && !SnapshotKey.App.isValidAppId(app)) {

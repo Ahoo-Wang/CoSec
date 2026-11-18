@@ -2,11 +2,11 @@
 # Mutant: a change and :apply keep the base's rate limit rules whatever they put or remove
 # Tests: :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
-index 05fa2991..77636e39 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/Candidates.kt
-@@ -237,7 +237,7 @@ internal object Operations {
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Operations.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Operations.kt
+index c8db0580..0dbb56ec 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Operations.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Operations.kt
+@@ -181,7 +181,7 @@ internal object Operations {
              limits = limits,
              attributes = attributes,
              boundary = boundary,

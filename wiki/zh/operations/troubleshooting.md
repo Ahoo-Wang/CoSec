@@ -75,6 +75,9 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
   `"beta\uD800"` 这样的转义（`IDN-10`）。Redis key 在它的位置写 `?`，这个令牌会读到 `beta?` 的文档、成员关系与吊销，所以在读取其中任何一项之前就被拒绝。
   CoSec 自己的签发方拒绝签出这样的令牌：登录失败，报 `Principal [alice\uD800] holds an unpaired UTF-16 surrogate ...`。
   修正签发方或它读取的用户存储：id 是 Unicode 文本。
+- **含 `/` 的租户或应用 id：** 令牌的 `tenantId` 或 `aud` 含 `/`，例如 `acme/west`，7.x 或预览版的签发方可能签出过这样的令牌（`SCP-13`）。
+  租户 id 和应用 id 都是一个路径段，所以这个令牌既不指租户 `acme/west`，也不指 `acme`。请在保存该 id 的地方给租户或应用改名，然后让主体重新登录
+  （[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -92,6 +95,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 [`cosec.jwt.token-validity.access`](./configuration.md#jwt)。在网关之后，转发来的身份也可能太旧（[网关之后的服务拒绝请求](#a-service-behind-the-gateway-refuses-requests)）。
 
 刷新以 `token-expired` 被拒绝：会话的有效期已过（[`cosec.jwt.session.lifetime`](./configuration.md#jwt)，从登录起 30 天）。请重新登录。
+
+**每次刷新都应答 `401 token-expired`（或 `unauthorized`），客户端在访问令牌过期时登出。** 没有语句允许匿名 `POST` 刷新路由：它的请求带着已过期的访问令牌，CoSec 把它读作匿名（`PIP-6`），所以路由还没运行就被拒绝。对于 starter 提供的路由，请查找 `WARN` `cosec.authentication.login.refresh.path=<path>: no statement permits an anonymous POST of it`（或 `a DENY statement matches`，或 `the tenant's platform boundary does not cover it`），以及 `cosecLoginRoutes` 健康指示器上的 `denied since`。请允许任何人对该路径 `http:POST`（[构建客户端](../integration/clients.md#what-your-application-serves)）；登出路由同理。
 
 ### `token-revoked` {#token-revoked}
 
@@ -121,7 +126,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 请求声明的作用域不能授予这个调用方：
 
 - 凭证声明的应用不是宿主的应用，或者没有声明：在网关上是路由元数据 `cosec-app-id`，否则是
-  [`cosec.authorization.scope.app-id`](./configuration.md#authorization)。请为这个应用签发令牌（它的 `aud`，[应用](../integration/authentication.md#apps)）。凭证声明的应用不能作为应用 id（空白、`*`、含 `:` 或控制字符、或超过 128 个字符）时同样被拒绝；
+  [`cosec.authorization.scope.app-id`](./configuration.md#authorization)。请为这个应用签发令牌（它的 `aud`，[应用](../integration/authentication.md#apps)）。凭证声明的应用不能作为应用 id（空白、`*`、含 `:`、`/` 或控制字符、或超过 128 个字符）时同样被拒绝；
 - `CoSec-Space-Id` 指定的空间中主体没有任何角色。
 
 发送宿主的应用或者不发送，并发送主体是其成员的空间（[信任边界](../guide/security-model.md#trust-boundaries)）。
@@ -150,7 +155,8 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 |---|---|---|
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`，所有请求都是 | 没有发布平台文档：新的部署，或者 Redis 丢失了它。`cosec-migrate bootstrap` 只写平台租户的文档。在平台文档存在之前，每个请求都是 `503`，控制 API 也一样。新部署时，就绪状态在第一个平台文档安装前拒绝流量（[实例未就绪](#instance-is-not-ready)）。就绪状态一旦接受流量就不再变化：之后丢失的文档不会让它再次拒绝流量，每个请求都按失败关闭返回 `503`，只有 `cosecSnapshot` 健康指示器变为 DOWN。只有把 `cosecSnapshot` 加入就绪组，它才会让就绪状态变为 DOWN；在 Redis 故障期间，这会把 503 变成连接失败。 | 用 `cosec-migrate publish` 发布一个（[最初的文档](./storage.md#the-first-documents)）。 |
 | `INDETERMINATE: SourceUnavailable` / `source_unavailable`，只有部分租户 | 该租户在 [`cosec.authorization.snapshot.fail-closed.tenants`](./configuration.md#snapshot) 中，而它的请求读取的最旧文档上次确认距今超过 `fail-closed.max-lag`（`Snapshot lag [<lag>] exceeds the fail-closed bound [<max>] of tenant [<tenant>].`）。 | 恢复 Redis；见[决策使用了旧的修订](#decisions-use-an-old-revision)。 |
-| `INDETERMINATE: SourceUnavailable` / `source_unavailable` | 请求需要的某个文档没能及时读到（冷加载时 Redis 宕机或缓慢）、无法解码或编译，或者见过之后又从 Redis 消失。加载失败和文档丢失会连同文档名一起记录：`Loading snapshot document [<doc>] failed.`、`Snapshot document [<doc>] disappeared from the store; failing closed.` | 恢复 Redis，或者发布该文档的一个可读修订（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
+| `INDETERMINATE: DocumentInvalid` / `document_invalid` | 请求需要的某个文档已存储，但在本实例上无法编译，修订号见决策事件。最常见的是滚动升级期间由比读取它的实例更新的 CoSec 写入的文档（含有本版本不认识的成员；`schema` 不同的文档在读取时即被拒绝，表现为 `SourceUnavailable`），或者绕过控制面直接写入存储的文档；新的平台修订改变了应用或租户文档编译所依据的 `limits` 或 `attributes` 时，它们也可能不再能编译。只有需要该文档的请求才失败即拒绝（`503`）；客户端得到的回答与其他 `503` 相同。每个修订和输入记录一次 `ERROR`：`Snapshot document [<doc>] revision <n> does not compile against the limits and attributes of platform revision <p>; every request that needs it fails closed (503) until a revision that compiles is published.`，附每个错误的 JSON 路径；恢复时记录一次 `INFO`：`... revision <n> compiles; it is decided with again.`。`cosecSnapshot` 健康指示器在 `invalid` 中计数，并在列出前十个的 `invalidFirst` 中给出它的名字。 | 完成滚动升级，让每个实例都运行写入它的版本；或者通过控制面发布一个能编译的修订，控制面在发布前会检查它。 |
+| `INDETERMINATE: SourceUnavailable` / `source_unavailable` | 请求需要的某个文档没能及时读到（冷加载时 Redis 宕机或缓慢）、无法解码，或者见过之后又从 Redis 消失。加载失败和文档丢失会连同文档名一起记录：`Loading snapshot document [<doc>] failed.`、`Snapshot document [<doc>] disappeared from the store; failing closed.` | 恢复 Redis，或者发布该文档的一个可读修订（[Redis 不可用时](./storage.md#when-redis-is-unavailable)）。 |
 | 从 8.0.0-alpha 升级之后的 `INDETERMINATE: SourceUnavailable` / `source_unavailable`，被吊销令牌的 `401` 变成 `503`，控制面 API 回答 `500` | 8.0.0-alpha 经 CoCache 6 写入、CoCache 8 读不了的数据：`Cache[<name>] - key[<key>] holds content this cache cannot read (format[1], this node writes format[2]: not written in this node's format)`。它失败即拒绝，没有任何读取会把它当作不存在。 | 停止所有实例，用 8.0.0-alpha.4 的 `cosec-migrate` 迁移这些数据；8.0.0 的 `cosec-migrate` 已不再有这条命令（[升级](./upgrading.md#data-written-through-cocache-6)）。不要像消息对可丢弃的值所建议的那样手工删除这些 key：删掉的吊销会让它的令牌重新被接受，删掉的文档会让它的租户失去其中的 DENY。 |
 | `cosec-migrate publish` 回答 `Refused: [<p>:meta:cocache8] marks a CoCache 6 to 8 upgrade of 8.0.0-alpha that stopped after it deleted the documents` | 8.0.0-alpha 对 CoCache 6 数据的升级中途停止：它删除的文档在它的导出目录里，不在 Redis 中。没有写入任何内容。 | 用 8.0.0-alpha.4 的 `cosec-migrate` 完成它：`publish --resume`，`--in` 指向消息给出的导出目录。或者确认标记列出的每份文档都已发布，再删除这个 key（[升级](./upgrading.md#from-8-0-0-alpha-4)）。 |
 | `INDETERMINATE: MissingPolicies`、`AmbiguousPolicy` / `missing_policies` | 绑定或附加策略指向文档中未定义的策略，或者租户和平台都定义了同一个策略 id。 | 通过控制面修正文档。 |
@@ -166,7 +172,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator` | 认证器失败，或耗时超过 [`cosec.pipeline.authentication-timeout`](./configuration.md#pipeline)：例如 Redis API key 存储无法访问。 | 恢复存储。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，某个认证器的每个请求 | 你自己的 `Authenticator` 把凭证的方式命名为 `jwt`，而它保留给 CoSec 的令牌（`The authentication method [jwt] is CoSec's own token's ...`）。 | 按你的凭证命名方式，例如 `Identity.Method("ldap")`（[扩展](../architecture/extending.md#authenticators)）。 |
 | `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，只有部分主体或 key | 认证器给出的主体，其 id、租户、凭证 id 或声明的角色中有落单的 UTF-16 代理项（`Principal [<id>] of tenant [<tenant>] holds an id with an unpaired UTF-16 surrogate ...`），或者 API key 存储的记录指名了这样的 id（`API key [<id>] holds an id with an unpaired UTF-16 surrogate.`，`IDN-10`）。这样的 id 会与另一个 id 共用一个 Redis key，所以请求改为失败即拒绝。 | 修正认证器或 key 的记录：id 是 Unicode 文本。 |
-| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以其他格式存储，读取时被拒绝（`API key format [null] is not 2.`；`null` 表示记录没有 `format`，例如 7.x 写入的 key）。 | 转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。 |
+| `AUTHENTICATOR_UNAVAILABLE` / `authenticator`，带某个 key 的每个请求都如此 | 该 key 以其他格式存储，读取时被拒绝（`API key format [null] is not 3.`；`null` 表示记录没有 `format`，例如 7.x 写入的 key；`2` 表示由 8.0 预览版写入）。 | 7.x 的 key：转换 key（[API key 只收窄，成员关系决定](./upgrading.md#api-keys-narrow-and-memberships-decide)）。预览版的 key：签发一个新 key 并删除旧 key；`cosec-migrate api-keys` 不会把它算作已转换。 |
 | `DEADLINE_EXCEEDED` / `deadline` | 整个求值耗时超过 [`cosec.pipeline.timeout`](./configuration.md#pipeline)。 | 在追踪中找到慢的阶段。 |
 
 DENY 仍然会做出决定：只要匹配到 DENY，即使某个文档不可用，请求也是 `401` 或 `403`。
@@ -181,7 +187,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - `The credential of [<subject>] never expires: a service could not bound the identity.`：没有 `expires-at` 的 API key（或没有
   `exp` 的令牌）。给 key 设置过期时间，或把该路由的元数据设为 `cosec-identity: false`。
 
-元数据 `cosec-app-id` 不能作为应用 id（为空、`*`、含 `:` 或控制字符、或超过 128 个字符）的路由，每个请求都回答 `500`，并随上面那条未建模异常的日志记下 `The cosec-app-id of route [<routeId>] cannot be an app id: ...`：修正该元数据（[网关](../integration/web.md#gateway)）。值不是字符串（数字、布尔值、列表或映射）时也是如此，日志为 `The cosec-app-id of route [<routeId>] is a <type>, not a string: ...`：给值加上引号，并只写一个应用。
+元数据 `cosec-app-id` 不能作为应用 id（为空、`*`、含 `:`、`/` 或控制字符、或超过 128 个字符）的路由，每个请求都回答 `500`，并随上面那条未建模异常的日志记下 `The cosec-app-id of route [<routeId>] cannot be an app id: ...`：修正该元数据（[网关](../integration/web.md#gateway)）。值不是字符串（数字、布尔值、列表或映射）时也是如此，日志为 `The cosec-app-id of route [<routeId>] is a <type>, not a string: ...`：给值加上引号，并只写一个应用。
 - `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`、`Claim [<name>] is <n> characters, over 1024.`
   或 `Claim [<name>] is a <type>, not a string, number or boolean.`：减少角色或
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity)，或在网关和服务上都调大 `max-size`。
@@ -208,8 +214,11 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
   [`cosec.key-prefix`](./configuration.md#key-prefix) 和同一个 Redis。
 - **Redis 丢了写入。** 故障切换后实例可能以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`：重新发布这个变更。
+  [`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) 会指出每一份修订链丢了记录的文档。
 
-控制面的传播视图显示有多少实例已装入某个修订（[快照健康状况](./observability.md#snapshot-health)）。
+控制面的传播视图显示有多少实例已装入某个修订（[快照健康状况](./observability.md#snapshot-health)）。在实例上，
+`cosec.snapshot.lag` 和 `cosec.snapshot.lagging` 显示它落后多少，`cosec.snapshot.regressions` 计数丢失的写入
+（[快照指标](./observability.md#snapshot-metrics)）。
 
 ## 网关之后的服务拒绝请求 {#a-service-behind-the-gateway-refuses-requests}
 
@@ -218,7 +227,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 
 | 状态 | 原因 | 修复 |
 |---|---|---|
-| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
+| `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
 
@@ -234,7 +243,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。
 - **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
 
-`cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`failed`、`absent` 或 `loading`）和 `prewarmed`。把它加入 readiness 组即可在
+`cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`invalid`、`failed`、`absent` 或 `loading`；`invalid` 是已存储但无法编译的文档）和 `prewarmed`。把它加入 readiness 组即可在
 探针中看到：`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`。
 
 ### `cosecSnapshotEviction` 为 DOWN {#cosecsnapshoteviction-is-down}
@@ -256,6 +265,15 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 `WARN` 记录一次（[Redis 要求](./storage.md#redis-requirements)）。
 
 这个指示器是告警：不要把它放进就绪组，就绪组只由 `cosecSnapshot` 承担。放进去的话，Redis 的一次改动会让所有实例同时退出轮转。
+
+## 探针回答 401 或 503，或 pod 在第一次发布之前反复重启 {#probes-answer-401-or-503}
+
+就绪或存活探针得到 CoSec 的 `application/problem+json`：第一份平台文档安装之前是 `503` `unavailable`，之后是 `401` `unauthorized`；或者在新部署上，第一份文档发布之前 pod 不停重启。
+
+对 CoSec 来说探针是普通请求（`STA-4`，[应用上的 actuator](../integration/web.md#actuator-on-an-application)）：在应用的应用端口上，以及 WebFlux 应用的管理端口上，它经过管道，平台文档未安装时回答 `503`，之后对匿名调用方回答 `401`，除非有一条语句允许这条路径。Spring 的存活状态不受影响，但 HTTP 存活探针是一个请求，所以它和其余请求一起失败，kubelet 就重启 pod。
+
+- **通过 HTTP 的就绪探针：** 用一条语句允许任何人对两个探针路径发 `GET`（[策略](../integration/web.md#actuator-on-an-application)）。第一次发布之前它仍回答 `503`，这正是“未就绪”该有的回答。Spring Boot 4 在任何平台上都提供探针（`management.endpoint.health.probes.enabled` 默认为 `true`）。
+- **存活与启动探针：** WebMvc 上把探针指向 `management.server.port`，它不经 CoSec。WebFlux 的管理端口同样经 CoSec：在应用端口上用 `tcpSocket` 探针。永远不要对应用的应用端口使用 HTTP 存活探针。
 
 ## 条件无法编译 {#a-condition-does-not-compile}
 
@@ -324,9 +342,19 @@ starter 只装配类路径上的 CoSec 模块，漏加一个模块会悄无声�
 | `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | 模块已在，但监听器没有创建：需要 `KafkaOperations` Bean（`spring-boot-starter-kafka` 及其 `spring.kafka.*` 配置）、`cosec.audit.enabled=true` 和 `cosec.audit.kafka.enabled=true` |
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`，以及 `cosid-spring-boot-starter` 5.x 和它的 `cosid.*` 生成器；或者删除这个键，继续使用 CoSec 自己的 id |
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | 一个 `CosIdRuntime`（`cosid-spring-boot-starter` 及其 `cosid.*` 配置），或者删除这个键：应用自己有 `IdGenerator` bean 时，CoSec 的 id 来自那个 bean |
+| `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`，或者删除这个键：不设置时指标是可选的 |
+| `cosec.control.enabled=true needs cosec-control`（或 `cosec-cocache`） | 消息中指出的制品，或者删除这个键：不设置时，没有这些模块的实例就是数据面实例 |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` 和 Redis 连接（`spring.data.redis.*`）：没有它就读不到快照，限流也会退化为按实例计数 |
 
 Web 相关的检查只在 CoSec 开启时运行（`cosec.enabled`，默认 `true`）；网关宿主不做 WebFlux 检查，它需要的是 `cosec-gateway`。设置 `spring.main.lazy-initialization=true` 时每项检查同样运行（`STA-3`）。
+
+### 刷新路由的认证导致启动失败 {#startup-fails-on-the-refresh-routes-authentication}
+
+```text
+cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <your credentials class>, not the pair the served route presents ... (IDN-25).
+```
+
+starter 用你的 `RefreshTokenAuthentication` Bean 提供刷新路由，但你的 Bean 接收的是你自己的凭证类（例如令牌对之外还带设备 id），提供的路由无法从请求中构造它。请从你自己的路由提供那个刷新并取消 `cosec.authentication.login.refresh.path`，或者基于 `RefreshTokenCredentials` 声明它（[刷新令牌](../integration/authentication.md#refreshing-tokens)）。
 
 ### 暴露了 actuator 端点导致启动失败 {#startup-fails-on-an-exposed-actuator-endpoint}
 
@@ -394,7 +422,7 @@ Cache[PolicySnapshotCache] - ... locked by cosec ...
 ```
 
 某个 `cocache.caches.[<CacheName>].*` 条目或 `CacheSpecCustomizer` 设置了 CoSec 在其缓存上锁定的字段，例如快照存储的
-`ttl`、`unknown-read` 或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
+`ttl`、`unknown-read`、吊销表的 `absent-ttl`，或 `key-prefix`。删掉该设置，或者让定制器排除 CoSec 的缓存（`supports(cacheName)`）。`unlock`
 能让该条目启动，但 CoSec 约束的字段保持原值（[优先级](./configuration.md#precedence)）。
 
 ```text
@@ -411,6 +439,40 @@ cocache.caches configures undeclared caches [ChangeRequestCach]; declared caches
 该条目指向没有谁会创建的缓存，通常是拼错的名字。CoSec 公布它可能创建的每个缓存名，所以为本实例不创建的 CoSec 缓存写的
 条目（没有运行控制面的服务上的控制面缓存）照常启动；请改正名字。
 
+```text
+CoSec reads PolicySnapshotCache read-only in this process, which does not run the control plane: a cocache.* property or customizer cannot make it read-write (SNP-18).
+```
+
+某个 `cocache.caches.PolicySnapshotCache.read-only` 或 `cocache.caches.CandidateCache.read-only` 条目，或某个定制器，改变了
+CoSec 的声明：在不运行控制面的实例上是只读，在运行控制面的地方是读写（`... cannot make it read-only`）。删掉它；
+由类路径和 `cosec.control.enabled` 决定（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）。
+
+### Redis 权限导致启动失败 {#startup-fails-on-a-redis-permission}
+
+CoCache 在创建 CoSec 的缓存时检查用户的权限，并指出缺少什么。在数据面实例（不运行控制面的实例）上，文档和候选是只读存储
+（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）：
+
+| 消息包含 | 给实例的 Redis 用户加上 |
+|---|---|
+| `Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]: allow [+evalsha_ro]` | `+evalsha_ro +eval_ro`：限制了命令的用户，例如 8.0.0-beta.1 的示例（[升级](./upgrading.md#from-8-0-0-beta-1)） |
+| `allow the key pattern [%R~<s>:snapshot:*]`（或 `<s>:candidate:*`） | 对文档或候选的读权限 |
+| `allow the channel pattern [&<s>:inv:*]` | 失效通道：`&<s>:*` |
+
+```text
+Redis denied publishing to the invalidation channel[cosec:inv:snapshot] of Keyspace(...): allow the channel pattern [&cosec:inv:*] ... (atomic broadcast also needs the key pattern [~cosec:snapshot:*]) ...
+```
+
+这个进程运行控制面（类路径上有 `cosec-control`），所以它要写入文档，但它的用户不能写：通常是把数据面用户给了一个带
+`cosec-control` 的进程。给控制面一个能写 `<s>:*` 的用户；在镜像带有控制面的数据面实例上，设置 `cosec.control.enabled=false`
+（`COSEC_CONTROL_ENABLED=false`），或者不要把 `cosec-control` 放进它的镜像。
+
+```text
+cosec.control.enabled must be true or false, not [flase].
+```
+
+无论类路径如何，这个键都被严格读取：既不是 `true` 也不是 `false` 的值，既不当作开启，也不当作关闭。请写 `true` 或 `false`
+（[配置](./configuration.md#control-plane)）。
+
 ### 缓存 key 重叠导致启动失败 {#startup-fails-on-overlapping-cache-keys}
 
 ```text
@@ -425,8 +487,13 @@ namespace：`cosec.key-prefix` 是每个实例、控制面和 `cosec-migrate` �
 
 ### 通道权限导致启动失败 {#startup-fails-on-a-channel-permission}
 
-拒绝某个缓存失效通道的 Redis ACL 会使该缓存创建失败，抛出的 `IllegalStateException` 指出需要允许的模式，例如
-`[&cosec:control:inv:*]`。允许 CoSec 前缀下的通道，`pubsub` 模式下再允许 CoCache 的探测
+```text
+Redis denied publishing to the invalidation channel[<channel>] of <cache>: allow the channel pattern [<pattern>] in the ACL of this connection's user (atomic broadcast also needs the key pattern [~<prefix>*]). Without it every write would fail at its broadcast after changing L1. Redis replied: <Redis 的错误>
+```
+
+拒绝某个缓存失效通道的 Redis ACL 会使该缓存创建失败，抛出带有这段文字（CoCache 的原文）的 `IllegalStateException`。缓存的通道是它的存储路径，在最后一段之前加上 `inv:`：要允许的模式是存储路径到最后一个 `:` 为止的部分，再加 `inv:*`。默认的
+`cosec.key-prefix` 下，CoSec 创建的缓存需要 `&cosec:inv:*`（快照、成员关系、候选）、`&cosec:token:inv:*`、
+`&cosec:token:subject:inv:*`、`&cosec:control:inv:*` 和 `&cosec:shadow:inv:*`。允许 CoSec 前缀下的通道，`pubsub` 模式下再允许 CoCache 的探测
 （[Redis 要求](./storage.md#redis-requirements)）。
 
 ### 从 Redis 副本读取导致启动失败 {#startup-fails-because-redis-is-read-from-replicas}
@@ -532,6 +599,8 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 | `cosec.control.revisions.reclaim-interval must be positive.`、`cosec.control.shadow.check-interval must be positive.` | 设置一个正的时长。 |
 | `cosec.control.audit.kafka.delivery=required, but no Kafka change listener was created: it needs cosec-kafka, a KafkaOperations bean and cosec.control.audit.kafka.enabled=true.` | 补上它列出的条件，或把 [`delivery`](./configuration.md#control-plane) 设为 `best-effort`。 |
 | `The control plane checks its approvers' revocations, but no revocation reader is available: ...` | 启用 CoSec 的令牌并加上 `cosec-cocache`，或声明一个 `RevocationReader` bean；只有在审批人的凭证从不吊销时才用 `RevocationReader.NONE`（[控制面](./configuration.md#control-plane)）。 |
+| `cosec.authentication.login.refresh.path is set on a Spring Cloud Gateway host. ...` | 网关不签发会话：在网关上取消设置，改在网关之后签发会话的服务上设置。 |
+| `... is set, but this application serves no HTTP ...`、`... is set, but login or JWT is off ...`、`... is not one plain absolute path ...`、`... name one path ...` | 取消设置[登录路由路径](./configuration.md#authentication)，或给宿主它所要求的：一个 Web 栈、`cosec.authentication.login.enabled` 和 `cosec.jwt.enabled`、每个路由一个普通路径。 |
 | `cosec.jwt.token-validity.refresh (<d>), how long a token revocation is kept, is shorter than cosec.control.approval.expire-after (<d>): ...` | 调大前者或调小后者：吊销记录必须比它的令牌给出的每一次审批活得更久。 |
 
 ## 控制面错误 {#control-plane-errors}
@@ -552,11 +621,13 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
-| 某一个变更回答 `503`，或每轮维护都记录 `Could not read the open changes; no revision is reclaimed this pass.` | 该变更的记录解码失败：它属于不能作为应用 id 的应用（空白、`*`、含控制字符或超过 128 个字符，`SCP-10`），或者是 alpha 写入的、这个版本不再读取的形状，例如不带 `principalBindings` 的批准。它既无法查看也无法放弃，在移除之前什么都不会回收。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-3)。 |
+| 某一个变更回答 `503`，或每轮维护都记录 `Could not read the open changes; no revision is reclaimed this pass.` | 该变更的记录解码失败：它属于不能作为应用 id 的应用（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符，`SCP-10`、`SCP-13`），或者是 alpha 写入的、这个版本不再读取的形状，例如不带 `principalBindings` 的批准。它既无法查看也无法放弃，在移除之前什么都不会回收。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading.md#from-8-0-0-alpha-3)。 |
+| 预览版发布的某个文档不在 `GET /documents` 里，日志记录 `The documents list names [tenant:<id>], which is no document key: left out.`，`/documents/tenant:<id>` 回答 `400` `That names no document` | 它的租户或应用 id 含 `/`（`acme/west`），任何 8.0 id 都不能含 `/`（`SCP-13`）：没有请求读取它，控制面也再无法指名它。 | 给租户或应用改名，以新 id 发布它的文档，然后删除旧 key（[从预览版升级](./upgrading.md#from-8-0-0-alpha-4)）。 |
+| 控制面回答 `503`（变更、发布、`simulate`、维护轮次或影子窗口），日志中的格式错误指名一条记录和一个含 `/` 的 id：`Change [<id>] does not read: … Tenant id [acme/west] must not …`、`The back-reference set of [<doc>] policy [<id>] does not read: … [tenant:acme/west] is not a document key`、`The status of instance [<id>] does not read: …` | 8.0 预览版在含 `/` 的租户或应用 id 下存储了记录，本版本拒绝这种 id（`SCP-13`）。该记录整体失败即拒绝（`SCP-10`），没有任何读取会跳过它。 | 按[从预览版升级](./upgrading.md#from-8-0-0-alpha-4)列出的那样删除该 id 的记录：预览版的控制面做不到。 |
 | 发布或 `cosec-migrate repair-references` 以 `The back-reference set is malformed` 失败 | 该集合是 8.0.0-alpha.3 写入的 key 的 JSON 数组，或者指向不能作为应用 id 的应用。`repair-references` 写之前要先读集合，所以也越不过它。 | 停掉控制面，删除该集合（`<p>:control:refs:<doc>:<policyId>`），运行 `cosec-migrate repair-references`，再启动控制面（[升级](./upgrading.md#from-8-0-0-alpha-3)）。 |
 | 发布或 `cosec-migrate repair-references` 以 `A document holds binding [<id>] in app [<app>], which no document key can name` 失败 | 该文档的 head 由之前的构建写入，含有不能作为应用 id 的应用中的绑定。任何变更都无法在它之上发布。 | 升级之前移除这个绑定（[升级](./upgrading.md#from-8-0-0-alpha-2)）。 |
 | `422` `REFERENCES`：`[<id>] is referred to by [<doc>]`，而 `<doc>` 并没有引用它 | `<doc>` 的某次发布登记了这条引用，随后没能写入头。 | 运行 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。`<doc>` 的头不低于登记该条目的修订时，条目才会被删除；否则先发布一次 `<doc>`。 |
-| `422` `REFERENCES`：`[<id>] changes between a policy and a boundary, and is referred to by [<doc>]` | 平台变更把 `<doc>` 引用的策略改成边界，或把边界改成策略（`CTL-30`）。 | 先让 `<doc>` 不再引用它，或新建一条所需类型的策略。 |
+| `422` `REFERENCES`：`[<id>] changes between a policy and a boundary, and is referred to by [<doc>]` | 平台或应用变更在 `<doc>` 仍引用某策略或边界时，把它改成另一种类型（`CTL-30`），或删除它（此时消息是 `[<id>] is referred to by [<doc>]`）；应用的简写形式派生出的策略也算。 | 先让 `<doc>` 不再引用它，或新建一条所需类型的策略。 |
 | `422` `REFERENCES`：`[<id>] is a boundary of the platform, and a boundary is not bound` | 绑定指向了平台边界。 | 绑定普通策略；租户通过文档的 `boundary` 受边界约束。 |
 | `422` `V2`：`[<id>]: an entry's id has no [/]` | 变更写入的策略、绑定、角色或限流规则的 id 含 `/`。 | 改名。只有权限策略的 `perm:<app>/<id>` 可以含 `/`。 |
 | `410` | 请求的修订没有保留。 | |
@@ -581,6 +652,17 @@ JWT is enabled, but no TokenFamilyStore keeps the refresh token families: add co
 - **`DELETE /break-glass/{bindingId}` 返回 `404`**：平台文档中没有该 id 的绑定，也没有提议任何变更。请核对 id（`GET /documents/platform` 列出所有绑定）。首次调用超时或失败之后重试得到的 `404`，说明该绑定已被删除，可能是那次调用删的，也可能是别的调用：平台文档的修订历史写明是哪个修订删除了它。和控制 API 的所有 `404` 一样，它不带 `detail`；控制面所在主机以 `INFO` 记录 `the platform document has no binding [<id>]`。
 - **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
 
+## 快照日志缺失 {#snapshot-log-lines-are-missing}
+
+实例以 `WARN` 记录 `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …`，并且
+`cosec.snapshot.housekeeping.refused` 上升。快照源在一个维护线程上写日志（包括加载失败的日志），该线程的队列容纳 4,096 个任务。
+队列满时，它丢弃这条日志并计数，而不是在引起它的请求的线程上写出（SNP-19）。摘要列出每种任务最后被丢弃的那条日志，不带堆栈。
+
+- **原因。** 日志 appender 写得比日志产生得慢：同步 appender 写入慢磁盘或远程收集器，通常发生在许多文档同时加载失败时。
+- **解决。** 使用异步 appender（Logback 的 `AsyncAppender`、Log4j 2 的异步 logger）。期间请求不会变慢，决策也不会改变：
+  只有日志和族在上限以下的驱逐会被丢弃。被丢弃的驱逐在下一次加载时会再次请求，族从不超过它的上限。
+- 摘要中的 **`meter failures`** 是所绑定注册表的某个指标抛出了异常。它只在摘要里计数，从不单独记录日志；`last` 指明事件和异常。
+
 ## 日志行中的 id 带 `\u` 转义 {#a-log-line-names-an-id-with-u-escapes}
 
 CoSec 在日志行与错误信息中把 id 里的控制字符或落单的 UTF-16 代理项写成 `\uXXXX` 转义：`Tenant id [beta\uD800] ...`，从不写成
@@ -595,11 +677,11 @@ CoSec 在日志行与错误信息中把 id 里的控制字符或落单的 UTF-16
 
 1. `cosec.audit.enabled` 必须为 `true`（默认）。
 2. 审计日志以 `DEBUG` 记录放行：把 `me.ahoo.cosec.audit` 设为 `DEBUG` 才能看到。
-3. 队列满时丢弃的事件：`Dropping decision events: the queue of listener [<name>] is full.` 以及 `cosec.listener.dropped`
+3. 队列满时丢弃的事件：`Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` 以及 `cosec.listener.dropped`
    计数器。抛异常的监听器：`Decision listener [<name>] failed.`
 4. Kafka：`Failed to publish audit event to Kafka topic [<topic>].`，或 `The Kafka audit queue of [<topic>] is full.`
    （[审计日志与 Kafka](./observability.md#audit-log-and-kafka)）。
 5. 关闭时，队列中的事件最多再发送 [`cosec.observability.listener.drain-timeout`](./configuration.md#decision-listeners)（5 秒），
-   之后剩下的被丢弃（`Decision listeners did not deliver every queued event within <timeout>; the rest is dropped.`）。
+   之后不再开始任何监听器调用，剩下的被丢弃并计数（`Decision listeners did not deliver every queued event within <timeout>; <n> were dropped, and no listener call starts any more.`）。
 
 **下一步：** 把已有部署升级到新版本，见[升级](./upgrading.md)。

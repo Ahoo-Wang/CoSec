@@ -18,7 +18,7 @@ package me.ahoo.cosec.migrate
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.change.CandidateDigest
+import me.ahoo.cosec.control.lifecycle.CandidateDigest
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
@@ -26,7 +26,7 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.BuiltinPolicies
+import me.ahoo.cosec.engine.BuiltinPolicies
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.BindingScope
@@ -71,15 +71,12 @@ class Bootstrap(
             BuiltinPolicies.PLATFORM_ADMIN,
         )
         val current = head?.document
-        val candidate = PolicyDocument(
-            DocumentKind.TENANT,
-            TenantId.PLATFORM.value,
-            (current?.revision ?: 0) + 1,
-            clock.instant(),
-            current?.policies.orEmpty(),
-            current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding,
-            rateLimits = current?.rateLimits.orEmpty(),
-        )
+        val revision = (current?.revision ?: 0) + 1
+        val bindings = current?.bindings.orEmpty().filterNot { it.id == binding.id } + binding
+        // The document with the binding added, and everything else it holds kept: its policies, rate limits and roles
+        // (MIG-3). Only a publish writes provenance.
+        val candidate = current?.copy(revision = revision, publishedAt = clock.instant(), bindings = bindings, provenance = null)
+            ?: PolicyDocument(DocumentKind.TENANT, TenantId.PLATFORM.value, revision, clock.instant(), emptyList(), bindings)
         // The document compiles as the data plane compiles it: against the platform's limits and the attributes it
         // declares, so a policy that was legal when it was published does not make the recovery fail (#1264). A
         // platform document that cannot be read fails the run. A break-glass binding is the platform document's alone

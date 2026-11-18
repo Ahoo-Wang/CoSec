@@ -16,8 +16,8 @@
 package me.ahoo.cosec.runtime.stage
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.Engine
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.FlatEngine
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -29,7 +29,7 @@ import me.ahoo.cosec.runtime.http.Outcome
  * proceed only when they all succeed.
  */
 internal class Evaluate(
-    private val engine: FlatEngine,
+    private val engine: Engine,
     private val traceLevel: TraceLevel,
     private val listeners: DecisionListeners,
 ) : Stage {

@@ -24,6 +24,8 @@ dependencies {
     testImplementation("io.lettuce:lettuce-core")
     // The adapter through the slice (RFC 0006 PR-7): the WebFlux filter, driven by WebTestClient.
     testImplementation(project(":webflux"))
+    // A registry, as an application with Actuator has one: the starter meters the snapshot source in it (OBS-5).
+    testImplementation(project(":micrometer"))
     testImplementation("org.springframework:spring-test")
     // No blocking on the event loop (AGENTS.md): the warm path is checked on a watched thread.
     testImplementation("io.projectreactor.tools:blockhound")

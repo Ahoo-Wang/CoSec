@@ -1,0 +1,16 @@
+# Rule: SNP-19
+# Mutant: housekeeping never writes the summary of what it refused: the dropped lines are lost without a trace in the log
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.HousekeepingRefusalTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/LagReports.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/LagReports.kt
+index 20290e61..32a6cc20 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/LagReports.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/LagReports.kt
+@@ -100,7 +100,6 @@ internal class LagReports(
+         }
+         summary = tally.summary(clock.instant())
+         // What housekeeping refused since it last could say so (`SNP-19`): written here, on housekeeping itself.
+-        threads.refusals.summary(System.nanoTime())?.let { line -> log.warn { line } }
+     }
+ 
+     private fun due(key: SnapshotKey, now: Instant): Boolean {

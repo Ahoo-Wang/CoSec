@@ -12,6 +12,9 @@
  */
 
 dependencies {
+    // TracingListener(OpenTelemetry) and its AttributeKey constants name these types in public signatures: the API
+    // variant carries them (the instrumentation API and the Kotlin extension stay implementation).
+    api("io.opentelemetry:opentelemetry-api")
     implementation("io.opentelemetry.instrumentation:opentelemetry-instrumentation-api")
     // TracingListener and OpenTelemetryContextContributor (RFC 0006 §7.5, §9.5.1) serve the coroutine pipeline;
     // opentelemetry-extension-kotlin carries the OTel context across its suspensions (approved in RFC 0006 Q7).

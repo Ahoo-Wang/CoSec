@@ -2,11 +2,11 @@
 # Mutant: the grant analysis reads only the app documents a change names, so a role-bound DENY of another app is not among the grantor's
 # Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesB1Test :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-index e2da47e8..f575626a 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt
-@@ -232,7 +232,7 @@ class ChangeAuthority(
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
+index e763e6d7..112886f8 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/EscalationAnalysis.kt
+@@ -85,7 +85,7 @@ internal class EscalationAnalysis(private val analyzer: GrantAnalyzer, private v
          var listed = listedApps(documents)
          val apps = LinkedHashMap<AppId, PolicyDocument?>()
          val unread = HashSet<AppId>()

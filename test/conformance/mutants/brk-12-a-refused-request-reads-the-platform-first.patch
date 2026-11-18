@@ -2,11 +2,11 @@
 # Mutant: a break-glass request reads the platform document before it is authorized, so a refusal tells whether a binding exists
 # Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassAuthorityTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-index 17e011a2..390031ec 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-@@ -69,12 +69,6 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
+index 3c3037ad..6ea27084 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
+@@ -75,12 +75,6 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
              expiresAt = expiresAt.toEpochMilli(),
              breakGlass = true,
          )

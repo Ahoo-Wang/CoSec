@@ -23,26 +23,25 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.Digest
 import me.ahoo.cocache.core.CacheRuntime
 import me.ahoo.cocache.core.KeyEncoder
-import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.memory.InMemoryBackend
 import me.ahoo.cocache.test.HookedBackend
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
-import me.ahoo.cosec.cocache.snapshot.RawCodec
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.RedisTarget
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
+import me.ahoo.cosec.cocache.snapshot.rawStore
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.change.Base
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
-import me.ahoo.cosec.control.change.Changes
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import me.ahoo.cosec.control.store.AppList
-import me.ahoo.cosec.control.store.ControlMaintenance
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
 import me.ahoo.cosec.control.store.Publication
@@ -52,6 +51,7 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -74,11 +74,8 @@ class CoCacheControlStoreTest {
 
     private val key = SnapshotKey.Tenant("acme")
 
-    private fun document(revision: Long) = SnapshotDocument(
-        2,
-        revision,
-        Instant.parse("2026-11-01T00:00:00Z"),
-        """{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray(),
+    private fun document(revision: Long) = SnapshotDocuments.read(
+        """{"schema":2,"revision":$revision,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()
     )
 
     private fun store(
@@ -307,7 +304,7 @@ class CoCacheControlStoreTest {
             val store = store(node)
             val body = """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}""".encodeToByteArray()
             fun candidate(window: String) =
-                StoredCandidate(window, 4, SnapshotDocument(2, 5, Instant.parse("2026-11-01T00:00:00Z"), body))
+                StoredCandidate(window, 4, SnapshotDocuments.read(body))
             store.stagedCandidate(key).assert().isNull()
             store.putCandidate(key, null, candidate("c1@1")).assert().isTrue()
             // Another stage that read nothing: its write finds the first one there.
@@ -644,17 +641,6 @@ class CoCacheControlStoreTest {
 
     private companion object {
         const val OPEN_CHANGES = 25
-
-        /** A store under [cacheName]'s layout that writes any bytes, as a buggy or earlier writer would. */
-        fun <K : Any> rawStore(name: String, keyPrefix: String, cacheName: String, keyEncoder: KeyEncoder<K>) =
-            CoSecCacheSpecs.layout(keyPrefix, cacheName).let { layout ->
-                StoreSpec.builder<K, ByteArray>(name)
-                    .keyPrefix(layout.keyPrefix)
-                    .namespace(layout.namespace)
-                    .keyEncoder(keyEncoder)
-                    .codec(RawCodec)
-                    .build()
-            }
 
         val BOOTSTRAP = Publication(
             "bootstrap",

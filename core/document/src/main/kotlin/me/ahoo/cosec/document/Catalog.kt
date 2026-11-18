@@ -16,7 +16,7 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.ResourceSource
+import me.ahoo.cosec.engine.ResourceSource
 
 /**
  * An app's permission catalog (RFC 0004 §4.9, RFC 0012 §4): for UIs, generators and validation. An entry that writes

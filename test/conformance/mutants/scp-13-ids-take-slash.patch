@@ -1,0 +1,30 @@
+# Rule: SCP-13
+# Mutant: a tenant or app id may hold '/' again, and a control resource takes it as it is, so a platform operator granted doc/tenant/acme/** reads tenant acme/west's document
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.OneSegmentTenantIdTest :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
+index f68efc07..f2eaf6e3 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/authz/ControlResources.kt
+@@ -73,7 +73,7 @@ object ControlResources {
+      * valid id never reaches; space ids, which may hold one, still meet it first.
+      */
+     private fun segment(value: String): String {
+-        requireRequest(value.isNotEmpty() && '/' !in value) { "[$value] is not one resource segment." }
++        requireRequest(value.isNotEmpty()) { "[$value] is not one resource segment." }
+         return value
+     }
+ }
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+index 18414cd1..6bce5ea1 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
+@@ -80,7 +80,7 @@ object ScopeResolver {
+         for (index in app.indices) {
+             val c = app[index]
+             val refused = when (c) {
+-                ':', '/' -> true
++                ':' -> true
+                 else -> c.isISOControl() || Identifiers.isUnpairedSurrogateAt(app, index)
+             }
+             if (refused) {

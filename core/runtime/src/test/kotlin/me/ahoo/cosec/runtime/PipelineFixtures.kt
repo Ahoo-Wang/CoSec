@@ -17,12 +17,12 @@ package me.ahoo.cosec.runtime
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -127,23 +127,23 @@ object PipelineFixtures {
     )
 
     /** Answers [decision] and records what it was asked, and on which thread. */
-    class StubEngine(private val decision: () -> Decision) : FlatEngine {
+    class StubEngine(private val decision: () -> Decision) : Engine {
         constructor(decision: Decision) : this({ decision })
 
-        val requests = CopyOnWriteArrayList<FlatRequest>()
+        val requests = CopyOnWriteArrayList<EngineRequest>()
         val threads = CopyOnWriteArrayList<Thread>()
 
-        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation {
+        override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation {
             requests += request
             threads += Thread.currentThread()
-            return FlatEvaluation(decision(), null)
+            return Evaluation(decision(), null)
         }
     }
 
     /** A pipeline of [authenticator], [engine] and [views] fixed ids; [configure] sets any other part. */
     fun pipeline(
         authenticator: Authenticator = ANONYMOUS,
-        engine: FlatEngine = StubEngine(PERMIT),
+        engine: Engine = StubEngine(PERMIT),
         views: SnapshotViews = InstalledViews(),
         configure: PipelineBuilder.() -> Unit = {},
     ): Pipeline = Pipeline.builder(authenticator, SuspendingSnapshotSource(views))

@@ -9,7 +9,7 @@ description: "用 CoSec 保护一个 Spring Boot 服务：从添加依赖到看�
 
 ## 前提条件 {#prerequisites}
 
-- JDK 21 或更高版本，以及一个用 Gradle 构建的 Spring Boot 4 项目。
+- JDK 21 或更高版本，以及一个用 Gradle 构建的 Spring Boot 4.1 项目。本快速入门使用的 `cosec-cocache` 需要 CoCache 8：把它加入基于 CoCache 4 的项目之前，请先看[CoSec 对构建的要求](./introduction.md#what-cosec-needs-from-your-build)。
 - 一个位于 `localhost:6379`、`maxmemory-policy` 为 `noeviction`（Redis 的默认值）的 Redis。CoSec 把策略文档保存在 Redis 中，Redis 可能淘汰它们时拒绝启动。例如：
 
   ```bash
@@ -17,7 +17,7 @@ description: "用 CoSec 保护一个 Spring Boot 服务：从添加依赖到看�
   docker exec redis redis-cli CONFIG GET maxmemory-policy   # noeviction
   ```
 
-- 一份与你所用版本一致的 [CoSec](https://github.com/Ahoo-Wang/CoSec) 源码，用来构建发布第一份策略文档的 `cosec-migrate` 工具。
+- 你所用 CoSec 版本的 `cosec-migrate` 工具，用来发布第一份策略文档：它的 [GitHub release](https://github.com/Ahoo-Wang/CoSec/releases) 里的 `cosec-migrate-<version>.zip`，解压即可，或从 [CoSec](https://github.com/Ahoo-Wang/CoSec) 源码构建。它需要 Java 21。
 
 ## 添加依赖 {#add-the-dependency}
 
@@ -32,6 +32,8 @@ dependencies {
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 }
 ```
+
+在 Kotlin 项目里，应用 `kotlin("plugin.spring")`（Spring Initializr 会加）：Spring 需要它的 `@Configuration` 类是 open 的。
 
 `cosec-spring-boot` 是自动配置，它会装配在类路径上找到的每个 CoSec 模块，所以在它旁边添加你需要的模块即可。各模块添加了什么、各自还需要什么，见[模块](./introduction.md#modules)。Web 适配器不是可选的：缺少 `cosec-webflux` 的 WebFlux 应用会在启动时失败，报错信息给出制品名（STA-1）。
 
@@ -80,17 +82,15 @@ CoSec 依据**文档**做决策：一份作用于所有租户的平台文档，�
 # 工具位于 migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
 ```
 
-`publish` 按 `convert` 写出的格式读取目录：它只发布 `report.json` 列出的文件，并逐个核对其中记录的 SHA-256，因此事后被修改过的内容不会被发布。对你自己编写的文档，需要写出这份报告：
+`publish --file` 发布一份你写的文档，作为 `--document` 指名的那个文档：
 
 ```bash
-SHA=$(sha256sum documents/platform.json | cut -d' ' -f1)   # macOS：shasum -a 256
-printf '{"accepted":true,"outputSha256":{"platform.json":"%s"}}\n' "$SHA" > documents/report.json
-cosec-migrate publish --to-redis redis://localhost:6379 --in documents
+cosec-migrate publish --to-redis redis://localhost:6379 --file documents/platform.json --document platform
 ```
 
 它会输出 `Published platform`，并把文档写为平台文档的第一个修订。`publish` 从不覆盖：平台文档一旦存在，之后的变更都通过控制面进行（[存储](../operations/storage.md)、[策略测试](../policies/testing.md)）。
 
-在平台文档发布之前，CoSec 失败即拒绝：它对每个请求都返回 `503`，控制面的路由也不例外，因此第一份平台文档总是通过 `cosec-migrate publish` 发布。缺失的平台文档绝不当作空文档读取，否则会悄悄丢掉所有平台 DENY（[失败即拒绝](./security-model.md#fail-closed)）。在此期间应用报告自己未就绪（有 Spring Boot Actuator 时为 `/actuator/health/readiness`），负载均衡器不会给它流量（[就绪](../operations/deployment.md#readiness)）。
+在平台文档发布之前，CoSec 失败即拒绝：它对每个请求都返回 `503`，控制面的路由也不例外，因此第一份平台文档总是通过 `cosec-migrate publish` 发布。缺失的平台文档绝不当作空文档读取，否则会悄悄丢掉所有平台 DENY（[失败即拒绝](./security-model.md#fail-closed)）。在此期间应用报告自己未就绪（有 Spring Boot Actuator 时为 `/actuator/health/readiness`），负载均衡器不会给它流量（[就绪](../operations/deployment.md#readiness)）。探针对 CoSec 来说也是请求，所以通过 HTTP 它需要一条允许它的语句（[应用上的 actuator](../integration/web.md#actuator-on-an-application)）。
 
 ## 签发令牌 {#issue-a-token}
 
@@ -180,7 +180,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
    cosec-migrate bootstrap --to-redis redis://localhost:6379 --platform-admin alice
    ```
 
-3. **给她签发控制面的令牌。**控制面令牌属于租户 `(platform)` 和应用 `cosec-control`（`cosec.control.app-id`）。本指南在启动时打印一个；真实部署只从用户无法影响的来源签发 `(platform)` 令牌：
+3. **给她签发控制面的令牌。**控制面令牌属于租户 `(platform)` 和应用 `cosec-control`（`cosec.control.app-id`）。本指南在启动时打印一个，由你的 `@SpringBootApplication` 类（或任何 `@Configuration` 类）里的一个 bean 打印；真实部署只从用户无法影响的来源签发 `(platform)` 令牌：
 
    ```kotlin
    @Bean
@@ -197,10 +197,11 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
    ```bash
    CONTROL=http://localhost:8080/cosec/control/v1
+   PLATFORM_TOKEN='…'   # 应用在 "platform token: " 之后打印的令牌
    AUTH="Authorization: Bearer $PLATFORM_TOKEN"
-   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | jq -r .id)
-   curl -s -X POST "$CONTROL/changes/$ID:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
-   curl -s -X POST "$CONTROL/changes/$ID:publish" -H "$AUTH"
+   ID=$(curl -s -X POST "$CONTROL/changes" -H "$AUTH" -H 'Content-Type: application/json' -d @add-reports.json | sed -E 's/^\{"id":"([^"]+)".*/\1/')
+   curl -s -X POST "$CONTROL/changes/${ID}:skip-shadow" -H "$AUTH" -H 'Content-Type: application/json' -d '{"reason":"first change"}'
+   curl -s -X POST "$CONTROL/changes/${ID}:publish" -H "$AUTH"
    ```
 
    影子窗口会先把变更和真实流量比较，没有流量的指南等不起；管理员是信任根，可以跳过它。`GET $CONTROL/documents/platform` 现在返回修订 `2`，带 Alice 普通令牌的 `GET /reports/1` 被放行（这里该路径没有处理器，所以返回 `404`，不是 `403`）。
@@ -212,7 +213,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 - 看看哪些可以省掉，再逐步扩展：[简单模式](../scenarios/simple-mode.md)，以及从[不使用空间的应用](../scenarios/app.md)到[网关拓扑](../scenarios/gateway.md)的各个场景。
 - 按角色、按应用和空间授权：[角色权限](../policies/role-permissions.md)。
 - 通过控制面安全地变更文档，使用模拟和影子窗口：[策略测试](../policies/testing.md)。
-- 用真正的登录、刷新和登出替换演示用的 `/token` 端点：[认证](../integration/authentication.md)。
+- 用真正的登录替换演示用的 `/token` 端点，登录会开始一个会话（[认证](../integration/authentication.md)）。然后让 starter 提供刷新和登出：设置 `cosec.authentication.login.refresh.path: /auth/refresh` 和 `logout.path: /auth/logout`，并允许任何人对这两个路径 `http:POST`，[`clients` 示例](../integration/clients.md#what-your-application-serves)就是这样做的。演示签发的令牌对不属于任何会话，因此永远不能刷新。
 - 在处理器中读取主体和作用域：[Web 集成](../integration/web.md)。
 - 弄清一个请求为什么被放行或拒绝：[解释一个决策](../integration/checks.md#explaining-a-decision)。
 - 上线之前，阅读[安全模型](./security-model.md)。

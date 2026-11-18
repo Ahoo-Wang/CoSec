@@ -3,13 +3,15 @@
 # Tests: :engine:test --tests me.ahoo.cosec.engine.pattern.HttpPathPatternTest
 
 diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
-index 4bd7f08c..76b2b478 100644
+index fcbdbed7..28d14bb0 100644
 --- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
 +++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPattern.kt
-@@ -171,7 +171,7 @@ class HttpPathPattern private constructor(
+@@ -174,9 +174,7 @@ class HttpPathPattern private constructor(
+         if (!leadingRest) {
+             return matchFrom(0, 0, path, captures, scratch)
          }
-         val rest = elements.size - 1
-         val first = path.size - rest
+-        val rest = elements.size - 1
+-        val first = path.size - rest
 -        for (start in maxOf(0, first) until minOf(path.size, first + 2)) {
 +        for (start in 0 until path.size) {
              if (matchFrom(1, start, path, captures, scratch)) {

@@ -59,15 +59,19 @@ class StoreTokenRevoker @JvmOverloads constructor(
             // Not known to be revoked yet: record it, which the write's own failure would report.
         }
         token.session?.let { families.end(it.id) }
-        tokenStore.revoke(token.id, revocationTtl)
+        sessionStore("revoke a token") { tokenStore.revoke(token.id, revocationTtl) }
         return token
     }
 
     /**
-     * The entry is kept for [revocationTtl] past [issuedBefore], so it outlives every refresh token it revokes.
+     * The entry is kept for [revocationTtl] past [issuedBefore], so it outlives every refresh token it revokes. A store
+     * that cannot record it throws [SessionStoreUnavailableException], as [revoke] does; one that cannot revoke a
+     * principal at all, [UnsupportedOperationException].
      */
     override suspend fun revokeSubject(tenant: TenantId, principal: PrincipalId, issuedBefore: Instant) {
         val untilIssuedBefore = Duration.between(clock.instant(), issuedBefore).coerceAtLeast(Duration.ZERO)
-        tokenStore.revokeSubject(tenant, principal, issuedBefore, revocationTtl + untilIssuedBefore)
+        sessionStore("revoke a subject") {
+            tokenStore.revokeSubject(tenant, principal, issuedBefore, revocationTtl + untilIssuedBefore)
+        }
     }
 }

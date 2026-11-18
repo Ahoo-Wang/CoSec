@@ -14,6 +14,7 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 ## Integration
 
 - [Web Integration](https://cosec.ahoo.me/integration/web): choosing an adapter (WebFlux, MVC, Gateway), outcomes and HTTP statuses, problem+json bodies, `CoSec-*` parameters, the security context, client IP behind proxies, CORS
+- [Building a client](https://cosec.ahoo.me/integration/clients): what a client of a CoSec application can rely on: the endpoints that are the application's, what to do on each problem type, refresh under rotation, readable claims, the CoSec-* headers and CORS
 - [Authentication](https://cosec.ahoo.me/integration/authentication): JWT tokens and their membership claims, membership providers, login, refresh, logout and always-on revocation, API keys, authenticators, social login
 - [Checks in Code](https://cosec.ahoo.me/integration/checks): checking permissions from code (AuthorizationChecker), explaining a decision through the control plane
 

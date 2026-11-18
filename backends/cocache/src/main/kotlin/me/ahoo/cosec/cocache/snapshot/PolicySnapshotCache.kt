@@ -19,7 +19,6 @@ import me.ahoo.cocache.api.Store
 import me.ahoo.cocache.api.spi.InvalidationChannel
 import me.ahoo.cocache.api.spi.Keyspace
 import me.ahoo.cocache.core.CoCacheFactory
-import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.policy.UnknownReadMode
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -59,37 +58,6 @@ class PolicySnapshotCache internal constructor(
 }
 
 /**
- * Explicit key encoding (RFC 0003 §10, RFC 0004 §7.1): `platform`, `app:<appId>` and `tenant:<tenantId>`.
- * `KeyEncoder.ofToString()` would need a reflection hint, and would tie the Redis layout to [SnapshotKey.toString].
- */
-@InternalCoSecApi
-object SnapshotKeyEncoder : KeyEncoder<SnapshotKey> {
-    const val PLATFORM = "platform"
-    const val APP_PREFIX = "app:"
-    const val TENANT_PREFIX = "tenant:"
-
-    override fun encode(key: SnapshotKey): String = when (key) {
-        SnapshotKey.Platform -> PLATFORM
-        is SnapshotKey.App -> APP_PREFIX + key.appId
-        is SnapshotKey.Tenant -> TENANT_PREFIX + key.tenantId
-    }
-
-    /** The key [encoded] names, or null when it names none, such as an invalid app or tenant id. */
-    fun decode(encoded: String): SnapshotKey? = when {
-        encoded == PLATFORM -> SnapshotKey.Platform
-        encoded.startsWith(APP_PREFIX) -> encoded.substring(APP_PREFIX.length)
-            .takeIf { SnapshotKey.App.isValidAppId(it) }
-            ?.let { SnapshotKey.App(it) }
-
-        encoded.startsWith(TENANT_PREFIX) -> encoded.substring(TENANT_PREFIX.length)
-            .takeIf { SnapshotKey.Tenant.isValidTenantId(it) }
-            ?.let { SnapshotKey.Tenant(it) }
-
-        else -> null
-    }
-}
-
-/**
  * Creates the store declared by [spec], which [CoSecCacheSpecs.policySnapshot] builds, with the pins of a store of record
  * whoever built [spec] (`SNP-3`, RC1-45): the snapshot's own key encoding and codec, no key filter, no per-entry TTL, no
  * expiry and a failed read that throws. Only the storage layout and the local copies' age are [spec]'s. CoSec's locks
@@ -107,7 +75,7 @@ fun CoCacheFactory.createPolicySnapshotCache(spec: StoreSpec<SnapshotKey, Snapsh
     pinned.keyFilter = null
     pinned.ttlOf = null
     val created = pinned.build()
-    val store = create(created, CoSecCacheSpecs.locks(created.name))
+    val store = create(created, CoSecCacheSpecs.locks(created.name, created.readOnly))
     val admin = checkNotNull(runtime.admin(created.name)) { "The snapshot store ${created.name} was not created." }
     val localMaxAge = checkNotNull(runtime.policy(created.name)).localMaxAge
     // The keyspace the store was created in, after every layer: the one its invalidations arrive on.

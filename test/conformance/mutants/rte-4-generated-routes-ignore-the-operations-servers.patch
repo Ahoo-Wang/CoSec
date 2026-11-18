@@ -1,0 +1,17 @@
+# Rule: RTE-4
+# Mutant: the generated routes take the path item's servers, never the operation's own
+# Tests: :openapi:test --tests me.ahoo.cosec.openapi.generator.ServerPrefixTest
+
+diff --git a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
+index 568d09ba..b5e15de4 100644
+--- a/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
++++ b/edge/openapi/src/main/kotlin/me/ahoo/cosec/openapi/generator/OpenAPIServiceGenerator.kt
+@@ -102,7 +102,7 @@ object OpenAPIServiceGenerator {
+             val resolved = resolve(openAPI, relative, item)
+             resolved.readOperationsMap().map { (method, operation) ->
+                 // The operation's servers override the Path Item's, which override the document's (OpenAPI 3.1 §4.8.10).
+-                val servers = operation.servers.orEmpty().ifEmpty { resolved.servers.orEmpty() }
++                val servers = resolved.servers.orEmpty().also { operation.servers }
+                     .ifEmpty { openAPI.servers.orEmpty() }
+                 val path = withoutContextPath(serverPath(servers, "${method.name} $relative"), context) + relative
+                 val where = "${method.name} $path"

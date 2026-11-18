@@ -17,6 +17,8 @@ package me.ahoo.cosec.testkit
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import tools.jackson.core.JacksonException
+import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 import java.nio.file.Path
@@ -30,19 +32,33 @@ import kotlin.io.path.readText
 
 /** A scenario that does not follow the format: a mistake in the scenario, never an outcome. */
 @ExperimentalCoSecApi
-class ScenarioFormatException(message: String) : IllegalStateException(message)
+class ScenarioFormatException(message: String, cause: Throwable? = null) : IllegalStateException(message, cause)
 
 /** A document that does not compile. The outcome of the scenario, not a mistake in it. */
 @ExperimentalCoSecApi
 class DocumentException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
 
+/**
+ * The first parse of everything the kit reads: documents, scenarios and the convert report. It refuses a field that
+ * appears twice in an object, at any depth, as `PolicyDocumentCodec` does, so a document the kit accepts is not one the
+ * codec would refuse once the kit has rewritten it without the earlier value (#1406).
+ */
 @InternalCoSecApi
 object ScenarioJson {
-    private val mapper = JsonMapper.builder().build()
+    private val mapper = JsonMapper.builder().enable(StreamReadFeature.STRICT_DUPLICATE_DETECTION).build()
 
-    fun read(path: Path): JsonNode = parse(path.readText())
+    fun read(path: Path): JsonNode = parse(path.readText(), path.toString())
 
-    fun parse(text: String): JsonNode = mapper.readTree(text)
+    fun parse(text: String): JsonNode = parse(text, null)
+
+    private fun parse(text: String, source: String?): JsonNode = try {
+        mapper.readTree(text)
+    } catch (error: JacksonException) {
+        throw ScenarioFormatException(
+            "${source?.let { "$it: " }.orEmpty()}not JSON the kit reads: ${error.originalMessage}",
+            error,
+        )
+    }
 }
 
 @InternalCoSecApi

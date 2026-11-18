@@ -27,27 +27,6 @@ import me.ahoo.cosec.model.condition.IpAddress
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.model.condition.Operand
 
-/** The value of an attribute that a [Specialization] substitutes; [value] is `null` when the attribute is absent. */
-internal sealed interface Constant {
-    data class Str(val value: String?) : Constant
-
-    data class Bool(val value: Boolean?) : Constant
-
-    data class Strings(val value: Set<String>?) : Constant
-}
-
-/** What a condition folds to once some of its attributes are constants. */
-internal sealed interface Folded {
-    object True : Folded
-
-    object False : Folded
-
-    class Residual(val condition: Condition) : Folded
-
-    /** The condition cannot be compared: it reads an attribute it cannot be specialized for. */
-    class Incomparable(val reason: String) : Folded
-}
-
 /**
  * Substitutes constants for attributes and folds the result (RFC 0007 §7.4.3 `specialize`): an atom that reads only
  * constants is evaluated, an `eq` between a constant and another attribute becomes an `eq` with a literal, `and`,

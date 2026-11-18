@@ -42,20 +42,19 @@ class TokenSubject(
     val membershipMarker: String? = null,
     /**
      * The session the pair belongs to (`sid`, `auth_time`, `cosec.generation`), null to start one: issuing through
-     * [TokenCompositeAuthentication] starts a family for a subject without one, signed in at [authTime].
+     * [TokenCompositeAuthentication] starts a family for a subject without one, signed in now. A refresh and a tenant
+     * switch answer theirs, from a session they checked is live (`IDN-22`).
      */
     val session: TokenSession? = null,
-    /** When the user signed in, for a subject without a [session]: null is now; a tenant switch keeps the earlier time. */
-    val authTime: Instant? = null,
     /** The latest the pair may be valid until: its session's end. Null is no bound but the converter's validities. */
     val notAfter: Instant? = null,
 ) {
     private fun fields(): List<Any?> =
-        listOf(id, app, tenant, roles, policies, attributes, membershipMarker, session, authTime, notAfter)
+        listOf(id, app, tenant, roles, policies, attributes, membershipMarker, session, notAfter)
 
     /** This subject in [issue]'s session, bounded by its end. */
     fun inSession(issue: TokenFamilies.Issue): TokenSubject = TokenSubject(
-        id, app, tenant, roles, policies, attributes, membershipMarker, issue.session, null, issue.notAfter
+        id, app, tenant, roles, policies, attributes, membershipMarker, issue.session, issue.notAfter
     )
 
     override fun equals(other: Any?): Boolean = other is TokenSubject && other.fields() == fields()

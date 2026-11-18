@@ -18,6 +18,7 @@ package me.ahoo.cosec.spring.boot.authorization.cache
 import me.ahoo.cocache.api.ReadableCache
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.core.Spec
+import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 
@@ -34,7 +35,7 @@ import me.ahoo.cosec.cocache.CoSecCacheSpecs
  * CoSec does not declare its caches as beans CoCache creates, so CoCache does not create them a second time.
  */
 internal fun <C : ReadableCache<*, *>> CoCacheFactory.createCoSecCache(type: Class<C>, spec: Spec<*, *>): C =
-    create(type, spec, CoSecCacheSpecs.locks(spec.name))
+    create(type, spec, CoSecCacheSpecs.locks(spec.name, (spec as? StoreSpec<*, *>)?.readOnly ?: false))
 
 /** Referenced by name: CoCache's starter is on the classpath only with `cosec-cocache`. */
 internal const val COCACHE_AUTO_CONFIGURATION = "me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration"

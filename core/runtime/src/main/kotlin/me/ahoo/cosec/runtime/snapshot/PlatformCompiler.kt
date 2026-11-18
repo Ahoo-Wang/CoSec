@@ -19,7 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -45,8 +45,12 @@ class PlatformCompiler(
     private val providers: AttributeCatalog = AttributeCatalog.NONE,
     private val principalBindingLimit: Int = PolicyDocumentCompiler.DEFAULT_PRINCIPAL_BINDING_LIMIT,
     private val credentialHeaders: Set<String> = emptySet(),
-) : SnapshotCompiler<CompiledDocument> {
+) : SnapshotCompiler<CompiledDocument>, CompileInputs {
     private class Inputs(val signature: List<Any>, val compiler: PolicyDocumentCompiler)
+
+    /** The revision of the platform document whose limits and attributes are the live inputs; null before one compiled. */
+    @Volatile
+    private var platformRevision: Long? = null
 
     @Volatile
     private var inputs: Inputs = inputsOf(null)
@@ -75,11 +79,19 @@ class PlatformCompiler(
         // The platform itself compiles against its own limits and attributes: a platform that breaks them fails here.
         val compiled = next.compiler.compile(platform)
         val previous = inputs
+        platformRevision = document.revision
         if (previous.signature != next.signature) {
             inputs = next
             recompileDependents()
         }
         return compiled
+    }
+
+    /** An app or tenant document compiles against the platform's limits and attributes; the platform against its own. */
+    override fun against(key: SnapshotKey): String? = when {
+        key == SnapshotKey.Platform -> null
+        else -> platformRevision?.let { "the limits and attributes of platform revision $it" }
+            ?: "the default limits, before a platform document compiled"
     }
 
     /**

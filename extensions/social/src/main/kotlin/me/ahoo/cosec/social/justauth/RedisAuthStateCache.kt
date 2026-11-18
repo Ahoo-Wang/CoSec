@@ -18,7 +18,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.zhyd.oauth.cache.AuthStateCache
 import org.springframework.data.redis.core.StringRedisTemplate
 import java.time.Duration
-import java.util.concurrent.TimeUnit
 
 /**
  * Redis Auth State Cache .
@@ -41,7 +40,7 @@ class RedisAuthStateCache(
     }
 
     override fun cache(key: String, value: String, timeout: Long) {
-        redisTemplate.opsForValue()[withPredix(key), value, timeout] = TimeUnit.MILLISECONDS
+        redisTemplate.opsForValue().set(withPredix(key), value, Duration.ofMillis(timeout))
     }
 
     /** The cached value; empty when there is none, never an exception (round-2 review M4). */

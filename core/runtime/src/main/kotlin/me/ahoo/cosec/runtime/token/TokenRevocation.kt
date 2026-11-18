@@ -23,6 +23,7 @@ import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.VerifiedToken
 import java.time.Duration
+import java.time.Instant
 
 /**
  * The one judgement of whether a verified token was revoked (RFC 0004 §4.5.3, `MEM-4`): its id, or every token of its
@@ -32,7 +33,7 @@ import java.time.Duration
  *
  * It never decides what a failed read means: whatever [revocations] throws reaches the caller, an unavailable store as
  * [me.ahoo.cosec.spi.token.RevocationUnavailableException]. The pipeline's verification may let a token through on it
- * (PIP-7); refresh, which issues one, never does (`IDN-14`).
+ * (PIP-7); whatever issues one from an earlier token, a refresh or a tenant switch, never does (`IDN-14`).
  *
  * @param skew `cosec.authentication.revocation.skew`: how far ahead of the revoking clock an issuer's clock may run
  */
@@ -50,15 +51,26 @@ class TokenRevocation(
      * @throws TokenRevokedException when its id, or its principal's tokens issued before it, were revoked
      * @throws me.ahoo.cosec.spi.token.RevocationUnavailableException when the revocations cannot be read
      */
-    suspend fun check(token: VerifiedToken) {
-        if (revocations.isRevoked(token.id)) {
-            throw TokenRevokedException("Token [${token.id}] has been revoked.")
+    suspend fun check(token: VerifiedToken) =
+        check(token.id, token.tenant?.let(::TenantId) ?: TenantId.DEFAULT, PrincipalId(token.principal), token.issuedAt)
+
+    /**
+     * Returns when the token [id] of [principal] in [tenant], issued at [issuedAt], is not revoked: [check] for a token
+     * the pipeline verified earlier in the request, as its principal holds it: `cosec-login`'s, before it issues from it.
+     * A null [issuedAt] is revoked by any revocation of the principal's tokens.
+     *
+     * @throws TokenRevokedException when its id, or its principal's tokens issued before it, were revoked
+     * @throws me.ahoo.cosec.spi.token.RevocationUnavailableException when the revocations cannot be read
+     */
+    @InternalCoSecApi
+    suspend fun check(id: String, tenant: TenantId, principal: PrincipalId, issuedAt: Instant?) {
+        if (revocations.isRevoked(id)) {
+            throw TokenRevokedException("Token [$id] has been revoked.")
         }
-        val tenant = token.tenant?.let(::TenantId) ?: TenantId.DEFAULT
-        val revokedBefore = revocations.subjectRevokedBefore(tenant, PrincipalId(token.principal))
-        if (SubjectRevocation.revokes(revokedBefore, token.issuedAt, skew)) {
+        val revokedBefore = revocations.subjectRevokedBefore(tenant, principal)
+        if (SubjectRevocation.revokes(revokedBefore, issuedAt, skew)) {
             throw TokenRevokedException(
-                "The tokens of principal [${token.principal}] issued before [$revokedBefore] have been revoked."
+                "The tokens of principal [${principal.value}] issued before [$revokedBefore] have been revoked."
             )
         }
     }

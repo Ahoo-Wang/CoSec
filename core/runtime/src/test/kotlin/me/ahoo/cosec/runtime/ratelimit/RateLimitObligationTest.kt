@@ -20,9 +20,10 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.runtime.PipelineFixtures
@@ -34,7 +35,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -52,10 +52,7 @@ import kotlin.time.Duration.Companion.milliseconds
 class RateLimitObligationTest {
     private fun platform(rules: String): CompiledDocument = PolicyDocumentCompiler().compile(
         SnapshotKey.Platform,
-        SnapshotDocument(
-            2,
-            1,
-            Instant.parse("2026-10-26T00:00:00Z"),
+        SnapshotDocuments.read(
             (
                 """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","policies":[""" +
                     """{"id":"read","statements":[{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]},""" +
@@ -63,7 +60,7 @@ class RateLimitObligationTest {
                     """"bindings":[{"id":"g:read","subject":"*","app":"*","space":"*","policy":"read"},""" +
                     """{"id":"g:no-delete","subject":"*","app":"*","space":"*","policy":"no-delete"}],""" +
                     """"rateLimits":[$rules]}"""
-                ).encodeToByteArray(),
+                ).encodeToByteArray()
         ),
     )
 
@@ -98,7 +95,7 @@ class RateLimitObligationTest {
     ): List<Outcome> {
         val pipeline = PipelineFixtures.pipeline(
             authenticator = PipelineFixtures.authenticator(PipelineFixtures.authenticated()),
-            engine = CoSecFlatEngine,
+            engine = CoSecEngine,
             views = Views(platform(rules)),
         ) {
             options(PipelineOptions(rateLimitTimeout = 50.milliseconds))
@@ -204,5 +201,48 @@ class RateLimitObligationTest {
         clock = 1_999
         limiter.tryAcquire("r", "b", limit).allowed.assert().isTrue()
         limiter.tryAcquire("r", "other", limit).resetAfter.assert().isEqualTo(Duration.ofMillis(1))
+    }
+
+    /** A positive remaining time is told in whole seconds rounded up, at least 1 (#1396). */
+    @Test
+    fun `retry after and reset round a positive remaining time up`() {
+        val cases = mapOf(
+            Duration.ofNanos(1) to "1",
+            Duration.ofMillis(250) to "1",
+            Duration.ofMillis(999) to "1",
+            Duration.ofMillis(1_000) to "1",
+            Duration.ofMillis(1_001) to "2",
+            Duration.ofMillis(1_750) to "2",
+            Duration.ofMillis(2_000) to "2",
+            Duration.ofMillis(59_999) to "60",
+            Duration.ZERO to "1",
+        )
+        cases.forEach { (remaining, header) ->
+            val limiter = object : RateLimiter {
+                override suspend fun tryAcquire(ruleId: String, bucket: String, limit: RateLimitSpec) =
+                    RateLimitResult(false, 2, 0, remaining)
+            }
+            val (refused) = evaluate(twoPerSecond, limiter)
+            refused.status.assert().isEqualTo(429)
+            refused.headers["Retry-After"].assert().describedAs("Retry-After of $remaining").isEqualTo(header)
+            refused.headers["RateLimit-Reset"].assert().describedAs("RateLimit-Reset of $remaining").isEqualTo(header)
+        }
+    }
+
+    /** The issue's case with the real limiter: waiting the told time leaves no refusal behind. */
+    @Test
+    fun `a client that waits as told is not refused again by the same window`() = runBlocking<Unit> {
+        var millis = Instant.parse("2026-10-26T00:00:00.250Z").toEpochMilli()
+        val limiter = LocalRateLimiter(clock = { millis })
+        val slow = """{"id":"slow","action":"*","permitsPerSecond":0.5,"windowSeconds":2}"""
+
+        evaluate(slow, limiter).single().status.assert().isEqualTo(200)
+        val refused = evaluate(slow, limiter).single()
+        refused.status.assert().isEqualTo(429)
+        refused.headers["Retry-After"].assert().isEqualTo("2")
+
+        millis += refused.headers.getValue("Retry-After").toLong() * 1_000
+
+        evaluate(slow, limiter).single().status.assert().isEqualTo(200)
     }
 }

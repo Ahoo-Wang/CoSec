@@ -18,8 +18,8 @@ package me.ahoo.cosec.runtime.event
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CoSecEngine
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
 import me.ahoo.cosec.runtime.PipelineFixtures
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.test.asserts.assert
@@ -42,7 +42,7 @@ class TraceLevelEventTest {
         val listeners = DecisionListeners(listOf(capture))
         try {
             runBlocking {
-                PipelineFixtures.pipeline(engine = CoSecFlatEngine) {
+                PipelineFixtures.pipeline(engine = CoSecEngine) {
                     listeners(listeners)
                     options(PipelineOptions(traceLevel = level))
                 }.evaluate(PipelineFixtures.facts())

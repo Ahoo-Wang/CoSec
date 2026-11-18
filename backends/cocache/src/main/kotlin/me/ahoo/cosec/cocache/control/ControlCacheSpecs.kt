@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.cocache.control
 
-import me.ahoo.cocache.api.Codec
 import me.ahoo.cocache.core.KeyEncoder
 import me.ahoo.cocache.core.StoreSpec
 import me.ahoo.cocache.core.codec.StringCodec
@@ -28,32 +27,13 @@ import me.ahoo.cosec.cocache.snapshot.SnapshotDocumentCodec
 import me.ahoo.cosec.cocache.snapshot.SnapshotKeyEncoder
 import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ChangeRequest
-import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.StageSlot
 import me.ahoo.cosec.control.store.AppList
-import me.ahoo.cosec.control.store.PendingRecord
-import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
-import me.ahoo.cosec.document.json.CoSecJson
-import me.ahoo.cosec.model.Identifiers
-import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
-import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
-import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
-import tools.jackson.core.JacksonException
-import tools.jackson.core.StreamReadFeature
-import tools.jackson.databind.JsonNode
-import tools.jackson.databind.node.JsonNodeFactory
 import java.time.Instant
-import java.time.format.DateTimeParseException
-
-/** A revision record: a document's digest under its document's key (RFC 0007 §5.2). */
-internal data class RevisionRecordKey(val document: SnapshotKey, val digest: SnapshotDigest)
-
-/** The referrers of one policy of one document (RFC 0007 §5.8). */
-internal data class ReferenceKey(val target: SnapshotKey, val policy: PolicyId)
 
 /**
  * The caches of `CoCacheControlStore` (RFC 0007 §5.2), next to the snapshot heads of [CoSecCacheSpecs.policySnapshot]:
@@ -137,216 +117,4 @@ internal object ControlCacheSpecs {
             KeyEncoder<String> { it },
             StringCodec
         ).build()
-}
-
-/**
- * `<docKey>:<digest>`, the digest as `SHA-256:<hex>`. A document key ends before the first `:` after its kind (ids hold
- * no `:`), so the encoding is injective.
- */
-internal object RevisionRecordKeyEncoder : KeyEncoder<RevisionRecordKey> {
-    override fun encode(key: RevisionRecordKey): String = "${SnapshotKeyEncoder.encode(key.document)}:${key.digest}"
-}
-
-/** `<docKey>:<policyId>`: the document key ends before the first `:` after its kind, so policy ids may contain `:`. */
-internal object ReferenceKeyEncoder : KeyEncoder<ReferenceKey> {
-    /** A policy id with an unpaired surrogate names no key: the Redis key would write it as `?` (RC1-52, `IDN-10`). */
-    override fun encode(key: ReferenceKey): String {
-        require(Identifiers.isWellFormed(key.policy.value)) {
-            "Policy [${Identifiers.printable(key.policy.value)}] names no reference key: an unpaired UTF-16 surrogate " +
-                "would share it with another policy."
-        }
-        return "${SnapshotKeyEncoder.encode(key.target)}:${key.policy.value}"
-    }
-}
-
-private val factory = JsonNodeFactory.instance
-private val reader = CoSecJson.mapper.reader().with(StreamReadFeature.STRICT_DUPLICATE_DETECTION)
-
-private fun read(bytes: ByteArray, what: String): JsonNode = try {
-    reader.readTree(bytes) ?: throw SnapshotFormatException("The $what is empty.")
-} catch (error: JacksonException) {
-    throw SnapshotFormatException(
-        "The $what is not JSON: ${SnapshotKeyText.printable(error.originalMessage.orEmpty())}",
-        error
-    )
-}
-
-/** Stored content quoted in [reason] has its control characters escaped: the message reaches log lines (RC1-15). */
-private fun malformed(what: String, reason: String): Nothing = throw SnapshotFormatException(
-    "The $what is malformed: ${SnapshotKeyText.printable(reason)}."
-)
-
-private fun JsonNode.field(name: String, what: String): JsonNode = get(name) ?: malformed(what, "[$name] is missing")
-
-private fun JsonNode.text(what: String): String = if (isString) asString() else malformed(what, "$this is not a string")
-
-private fun JsonNode.instant(what: String): Instant = try {
-    Instant.parse(text(what))
-} catch (_: DateTimeParseException) {
-    malformed(what, "$this is not an instant")
-}
-
-private fun JsonNode.digest(what: String): SnapshotDigest {
-    val text = text(what)
-    if (!SnapshotDigest.isDigest(text)) malformed(what, "[$text] is not a digest")
-    return SnapshotDigest.parse(text)
-}
-
-private fun JsonNode.long(what: String): Long =
-    if (isIntegralNumber && canConvertToLong()) asLong() else malformed(what, "$this is not an integer")
-
-private fun JsonNode.items(what: String): List<JsonNode> = if (isArray) {
-    values().toList()
-} else {
-    malformed(
-        what,
-        "$this is not an array"
-    )
-}
-
-private fun JsonNode.only(what: String, vararg names: String) {
-    if (!isObject) malformed(what, "$this is not an object")
-    val unknown = properties().map { it.key }.toSet() - names.toSet()
-    if (unknown.isNotEmpty()) malformed(what, "unknown fields $unknown")
-}
-
-/**
- * A [RevisionIndex] as JSON: `{"entries": [...], "pending": [...], "floor": 1}`, with `"reclaiming": [...]` only when
- * records are left to delete, so that an index with none carries no field a reader that does not know it would
- * refuse: the decoders of the stored formats reject unknown fields.
- */
-internal object RevisionIndexCodec : Codec<RevisionIndex> {
-    private const val WHAT = "revision index"
-
-    override fun encode(value: RevisionIndex): ByteArray {
-        val root = factory.objectNode()
-        val entries = root.putArray("entries")
-        value.entries.forEach {
-            entries.addObject().put("revision", it.revision).put("digest", it.digest.toString())
-                .put("publishedAt", it.publishedAt.toString())
-        }
-        val pending = root.putArray("pending")
-        value.pending.forEach {
-            pending.addObject().put(
-                "digest",
-                it.digest.toString()
-            ).put("since", it.since.toString())
-        }
-        root.put("floor", value.floor)
-        if (value.reclaiming.isNotEmpty()) {
-            root.putArray("reclaiming").apply { value.reclaiming.forEach { add(it.toString()) } }
-        }
-        return CoSecJson.mapper.writeValueAsBytes(root)
-    }
-
-    override fun decode(bytes: ByteArray): RevisionIndex {
-        val root = read(bytes, WHAT)
-        root.only(WHAT, "entries", "pending", "floor", "reclaiming")
-        return try {
-            RevisionIndex(
-                entries = root.field("entries", WHAT).items(WHAT).map { entry ->
-                    entry.only(WHAT, "revision", "digest", "publishedAt")
-                    RevisionEntry(
-                        entry.field("revision", WHAT).long(WHAT),
-                        entry.field("digest", WHAT).digest(WHAT),
-                        entry.field("publishedAt", WHAT).instant(WHAT),
-                    )
-                },
-                pending = root.field("pending", WHAT).items(WHAT).map { pending ->
-                    pending.only(WHAT, "digest", "since")
-                    PendingRecord(
-                        pending.field("digest", WHAT).digest(WHAT),
-                        pending.field("since", WHAT).instant(WHAT)
-                    )
-                },
-                floor = root.field("floor", WHAT).long(WHAT),
-                reclaiming = root.get("reclaiming")?.items(WHAT)?.map { it.digest(WHAT) }.orEmpty(),
-            )
-        } catch (error: IllegalArgumentException) {
-            throw SnapshotFormatException("The $WHAT is malformed: ${error.message}", error)
-        }
-    }
-}
-
-/** A change request as [ChangeRequestCodec] writes it. */
-internal object ChangeRequestCacheCodec : Codec<ChangeRequest> {
-    override fun encode(value: ChangeRequest): ByteArray = ChangeRequestCodec.encode(value)
-
-    override fun decode(bytes: ByteArray): ChangeRequest = ChangeRequestCodec.decode(bytes)
-}
-
-/** A staging slot as [ChangeRequestCodec] writes it. */
-internal object StageSlotCodec : Codec<StageSlot> {
-    override fun encode(value: StageSlot): ByteArray = ChangeRequestCodec.encode(value)
-
-    override fun decode(bytes: ByteArray): StageSlot = ChangeRequestCodec.decodeSlot(bytes)
-}
-
-/**
- * The referrers of one policy as a JSON object of their encodings, sorted, each with the revision of it that last
- * indexed the reference (#1207): `{"tenant:acme": 3}`. Equal referrers have equal bytes and digests.
- */
-internal object ReferrersCodec : Codec<Map<SnapshotKey, Long>> {
-    private const val WHAT = "back-reference set"
-
-    override fun encode(value: Map<SnapshotKey, Long>): ByteArray {
-        val node = factory.objectNode()
-        value.entries.map { (key, revision) -> SnapshotKeyEncoder.encode(key) to revision }.sortedBy { it.first }
-            .forEach { (key, revision) -> node.put(key, revision) }
-        return CoSecJson.mapper.writeValueAsBytes(node)
-    }
-
-    /** Anything but the object form, a member that is not a document key, or a negative revision, is malformed. */
-    override fun decode(bytes: ByteArray): Map<SnapshotKey, Long> {
-        val root = read(bytes, WHAT)
-        if (!root.isObject) malformed(WHAT, "$root is not an object")
-        return root.properties().associateTo(LinkedHashMap()) { (text, revision) ->
-            val value = revision.long(WHAT)
-            if (value < 0) malformed(WHAT, "revision $value of [$text] is negative")
-            (SnapshotKeyEncoder.decode(text) ?: malformed(WHAT, "[$text] is not a document key")) to value
-        }
-    }
-}
-
-/**
- * The app list as `{"apps": [...sorted], "complete": true}`, so equal lists have equal digests. Entries are kept as
- * written, whatever they are: the grant analysis refuses to trust a list with one that is not an app id, never drops it.
- */
-internal object AppListCodec : Codec<AppList> {
-    private const val WHAT = "app list"
-
-    override fun encode(value: AppList): ByteArray {
-        val root = factory.objectNode()
-        root.putArray("apps").apply { value.entries.sorted().forEach(::add) }
-        root.put("complete", value.complete)
-        return CoSecJson.mapper.writeValueAsBytes(root)
-    }
-
-    override fun decode(bytes: ByteArray): AppList {
-        val root = read(bytes, WHAT)
-        root.only(WHAT, "apps", "complete")
-        val complete = root.field("complete", WHAT)
-        if (!complete.isBoolean) malformed(WHAT, "$complete is not a boolean")
-        return AppList(
-            root.field("apps", WHAT).items(WHAT).mapTo(LinkedHashSet()) { it.text(WHAT) },
-            complete.booleanValue()
-        )
-    }
-}
-
-/** Listed entries and when each was listed, as a JSON object sorted by entry, so equal lists have equal digests. */
-internal object ListedCodec : Codec<Map<String, Instant>> {
-    private const val WHAT = "control list"
-
-    override fun encode(value: Map<String, Instant>): ByteArray {
-        val node = factory.objectNode()
-        value.entries.sortedBy { it.key }.forEach { (entry, listedAt) -> node.put(entry, listedAt.toString()) }
-        return CoSecJson.mapper.writeValueAsBytes(node)
-    }
-
-    override fun decode(bytes: ByteArray): Map<String, Instant> {
-        val node = read(bytes, WHAT)
-        if (!node.isObject) malformed(WHAT, "$node is not an object")
-        return node.properties().associateTo(LinkedHashMap()) { (entry, listedAt) -> entry to listedAt.instant(WHAT) }
-    }
 }

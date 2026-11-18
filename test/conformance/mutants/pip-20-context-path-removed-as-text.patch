@@ -2,11 +2,11 @@
 # Mutant: the servlet adapter removes the context path as text: on Jetty /%61pp/orders/1 is decided as /app/orders/1 and passes a DENY on /orders
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RealServerContextPathTest
 
-diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
-index 2e240faf..51b99a7e 100644
---- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
-+++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
-@@ -56,7 +56,7 @@ internal object ServletHttpFactsReader {
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletHttpFactsReader.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletHttpFactsReader.kt
+index a8e5dcc4..92e5a6e7 100644
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletHttpFactsReader.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/ServletHttpFactsReader.kt
+@@ -41,7 +41,7 @@ internal object ServletHttpFactsReader {
          return HttpFacts(
              method = request.method,
              // Encoded, and within the application: the context path is not the app's to authorize (PIP-20).

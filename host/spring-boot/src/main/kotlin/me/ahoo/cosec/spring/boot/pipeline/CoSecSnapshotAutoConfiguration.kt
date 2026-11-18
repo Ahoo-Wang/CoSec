@@ -24,7 +24,7 @@ import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
 import me.ahoo.cosec.runtime.shadow.CandidateSource
@@ -37,6 +37,7 @@ import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.DocumentState
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotEntry
+import me.ahoo.cosec.runtime.snapshot.SnapshotMetrics
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.spi.shadow.CandidateStore
@@ -48,6 +49,7 @@ import me.ahoo.cosec.spring.boot.CoSecProperties
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
+import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -62,6 +64,7 @@ import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
+import org.springframework.core.io.ResourceLoader
 import java.time.Clock
 import java.time.Instant
 import java.util.UUID
@@ -96,10 +99,14 @@ class CoSecSnapshotAutoConfiguration {
             factory: CoCacheFactory,
             properties: RuntimeAuthorizationProperties,
             cosec: CoSecProperties,
+            resources: ResourceLoader,
+            environment: Environment,
         ): PolicySnapshotCache {
             val snapshot = properties.snapshot
+            // Read-only unless this process runs the control plane, the only writer of documents (SNP-18).
+            val readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment)
             return factory.createPolicySnapshotCache(
-                CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge)
+                CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge, readOnly)
             )
         }
 
@@ -223,8 +230,14 @@ class CoSecSnapshotAutoConfiguration {
             stores: ObjectProvider<CandidateStore>,
             compiler: PlatformCompiler,
             cosec: CoSecProperties,
+            resources: ResourceLoader,
+            environment: Environment,
         ): CandidateSource {
-            val store = stores.ifUnique ?: CoCacheCandidateStore.create(factory, cosec.keyPrefix)
+            val store = stores.ifUnique ?: CoCacheCandidateStore.create(
+                factory,
+                cosec.keyPrefix,
+                readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment),
+            )
             return CachingCandidateSource(store, compiler::compileCandidate)
         }
 
@@ -270,9 +283,13 @@ class CoSecSnapshotAutoConfiguration {
         ): ShadowReporting {
             val clock = Clock.systemUTC()
             val installed = { installedDocuments(source.entries(), clock.instant()) }
+            val interval = properties.shadow.reportInterval
+            require(interval >= ShadowReporter.MIN_INTERVAL) {
+                "cosec.authorization.shadow.report-interval is at least one millisecond, not $interval."
+            }
             val store = (candidates as? CachingCandidateSource)?.store ?: stores.ifUnique
             return ShadowReporting(
-                ShadowReporter(recorder, sink, installed, clock, properties.shadow.reportInterval, candidates = store)
+                ShadowReporter(recorder, sink, installed, clock, interval, candidates = store)
             )
         }
 
@@ -316,9 +333,17 @@ class CoSecSnapshotAutoConfiguration {
         store: SnapshotDocumentStore,
         compiler: PlatformCompiler,
         properties: RuntimeAuthorizationProperties,
+        metrics: ObjectProvider<SnapshotMetrics>,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
-        val source = DocumentSnapshots.source(store, compiler, snapshot.toOptions())
+        // The data plane's source only: the control plane's own would count its reads under the same names.
+        val source = DocumentSnapshots.source(
+            store,
+            compiler,
+            snapshot.toOptions(),
+            Clock.systemUTC(),
+            metrics.getIfAvailable { SnapshotMetrics.NOOP },
+        )
         compiler.bind(source)
         // The loads start where the source is made, not in cosecDocumentReadiness: an application may replace that
         // bean, and a lazily initialized context makes it late. Both instances ask of the same keys (prewarmKeys).

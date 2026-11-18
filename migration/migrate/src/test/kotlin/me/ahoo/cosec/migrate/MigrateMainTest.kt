@@ -25,6 +25,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.control.CoCacheControlStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.Publication
@@ -35,7 +36,8 @@ import me.ahoo.cosec.document.PolicyDefinition
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.migrate.Fixtures7x.policy
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -47,7 +49,6 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -103,16 +104,64 @@ class MigrateMainTest {
             "repair-references",
             "repair-references --key-prefix cosec",
             "repair-references --cluster",
+            "verify-chain",
+            "verify-chain --document platform",
+            "verify-chain --to-redis redis://localhost:6379 --document nope",
+            "verify-chain --to-redis redis://localhost:6379 --document app:",
             "convert --from-files a --out x --cluster",
             "api-keys --redis redis://localhost:6379 --out x --cluster",
             "partition plan --out x",
             "api-keys --out x",
+            // A value left out is not the next option (#1399).
+            "convert --from-files --out x",
+            "convert --from-files a --out",
+            "api-keys --redis redis://localhost:6379 --out x --role-prefix --dry-run",
+            "convert --from-files a --out x --partition --partition",
+            // A flag takes no value.
+            "api-keys --redis redis://localhost:6379 --out x --dry-run=false",
         ],
     )
     fun `usage errors exit with 2`(args: String) {
         val (code, output) = run(args)
         code.assert().describedAs(output).isEqualTo(MigrateMain.USAGE)
         output.assert().contains("Usage:")
+    }
+
+    @Test
+    fun `a missing value says which option lacks it and how to give a value that starts with two dashes`() {
+        val (code, output) = run("convert --from-files a --out --partition platform")
+
+        code.assert().isEqualTo(MigrateMain.USAGE)
+        output.assert().contains("--out needs a value").contains("--out=value")
+    }
+
+    /** `--name=value` takes whatever follows the `=`, so a value may start with `--`; the command then judges it. */
+    @Test
+    fun `an attached value is a value, even one that starts with two dashes`() {
+        val (code, output) = run("convert --from-files a --out x --partition=--platform")
+
+        code.assert().isEqualTo(MigrateMain.USAGE)
+        output.assert().contains("--partition is platform or by-owner, not [--platform]")
+        run("convert --from-files=a --out x --partition=by-owner").second.assert().doesNotContain("needs a value")
+        run("convert --from-files a --out x --out=y").second.assert().contains("--out is given twice")
+    }
+
+    /** A flag is on or off: given twice and given a value are two different mistakes, and each is said as such. */
+    @Test
+    fun `a flag given twice and a flag given a value are told apart`() {
+        val twice = run("publish --to-redis redis://localhost:6379 --in x --resume --resume")
+        twice.first.assert().isEqualTo(MigrateMain.USAGE)
+        twice.second.assert().contains("--resume is given twice.").doesNotContain("takes no value")
+        val valued = run("publish --to-redis redis://localhost:6379 --in x --resume=yes")
+        valued.first.assert().isEqualTo(MigrateMain.USAGE)
+        valued.second.assert().contains("--resume takes no value.").doesNotContain("given twice")
+        // Both mistakes at once: the value is the first to say.
+        run("publish --to-redis redis://localhost:6379 --in x --resume --resume=yes").second.assert()
+            .contains("--resume takes no value.")
+        run("publish --to-redis redis://localhost:6379 --in x --resume=yes --resume").second.assert()
+            .contains("--resume takes no value.")
+        // A flag given once, without a value, is no usage error.
+        run("publish --to-redis redis://localhost:6379 --in x --resume").second.assert().doesNotContain("--resume ")
     }
 
     @Test
@@ -147,7 +196,7 @@ class MigrateMainTest {
             BindingId("root"),
             SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("cosec")),
             BindingScope(Match.Any, Match.Any),
-            me.ahoo.cosec.engine.flat.BuiltinPolicies.ROOT,
+            me.ahoo.cosec.engine.BuiltinPolicies.ROOT,
             expiresAt = Instant.now().plusSeconds(3600).toEpochMilli(),
             breakGlass = true,
         )
@@ -203,7 +252,7 @@ class MigrateMainTest {
         }
 
     private fun document(key: SnapshotKey, policies: List<String>, bindings: List<String> = emptyList()): PolicyDocument {
-        val (kind, owner) = Revisions.ownerOf(key)
+        val (kind, owner) = ownerOf(key)
         return PolicyDocument(
             kind,
             owner,
@@ -261,17 +310,44 @@ class MigrateMainTest {
         controlStore(keyPrefix) { store ->
             store.putIndex(broken, null, RevisionIndex()).assert().isTrue()
             val body = """{"schema":${PolicyDocumentCodec.SCHEMA},"revision":1,"publishedAt":"2026-11-01T00:00:00Z","unknown":1}"""
-            val garbage = SnapshotDocument(
-                PolicyDocumentCodec.SCHEMA,
-                1,
-                Instant.parse("2026-11-01T00:00:00Z"),
-                body.encodeToByteArray()
-            )
+            val garbage = SnapshotDocuments.read(body.encodeToByteArray())
             store.putHead(broken, null, garbage).assert().isInstanceOf(HeadWrite.Written::class.java)
         }
         val (failed, out) = run(args)
         failed.assert().describedAs(out).isEqualTo(MigrateMain.FAILED)
         out.assert().contains("FAILED tenant:broken").contains("Visited 3 document(s); added 0 reference(s).")
+    }
+
+    /** RFC 0007 §5.4: a revision record a failover lost is reported, and the run fails; nothing is written. */
+    @Test
+    fun `verify-chain names a document whose chain lost a record, and exits with 1`() {
+        val keyPrefix = "migrate-test:${UUID.randomUUID()}"
+        val acme = SnapshotKey.Tenant("acme")
+        val publication = Publication("c", ProvenanceKind.MIGRATE, Actor(TenantId.PLATFORM, PrincipalId("op")))
+        controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            revisions.publish(SnapshotKey.Platform, null, document(SnapshotKey.Platform, listOf("shared")), publication)
+            repeat(2) { revisions.publish(acme, revisions.head(acme), document(acme, emptyList()), publication) }
+        }
+        val args = "verify-chain --to-redis $REDIS --key-prefix $keyPrefix"
+        run(args).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("ok tenant:acme: intact down to revision 1")
+                .contains("Verified 2 document(s): 0 broken, 0 could not be read.")
+        }
+        val lost = controlStore(keyPrefix) { store ->
+            val revisions = Revisions(store)
+            revisions.history(acme).first { it.revision == 1L }.digest.also { store.removeRecord(acme, it) }
+        }
+        run(args).let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.FAILED)
+            output.assert().contains("BROKEN tenant:acme: no record holds revision 1 ($lost)")
+                .contains("ok platform: intact down to revision 1")
+        }
+        run("$args --document platform").let { (code, output) ->
+            code.assert().describedAs(output).isEqualTo(MigrateMain.OK)
+            output.assert().contains("Verified 1 document(s): 0 broken, 0 could not be read.")
+        }
     }
 
     /** RFC 0007 §5.8: a reference a lost publish indexed, which no head has, no longer blocks a removal once repaired. */

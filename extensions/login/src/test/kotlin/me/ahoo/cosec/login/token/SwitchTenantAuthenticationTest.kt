@@ -13,21 +13,22 @@
 
 package me.ahoo.cosec.login.token
 
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.api.context.ForwardedIdentity
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.context.SecurityScope
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.api.token.CompositeToken
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.runtime.token.TokenRevocation
 import me.ahoo.cosec.spi.membership.MembershipClaims
-import me.ahoo.cosec.spi.token.TokenSession
+import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerificationException
-import me.ahoo.cosec.spi.token.TokenVerifier
-import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.time.Instant
 
 /** The documented extension point for switching tenant and app (`wiki/integration/authentication.md`). */
 class SwitchTenantAuthenticationTest {
@@ -35,51 +36,34 @@ class SwitchTenantAuthenticationTest {
     private class Credentials(
         override val targetTenantId: String,
         override val context: SecurityContext,
-        override val accessToken: String = "alice-in-acme",
         override val targetAppId: String? = null,
         val deviceId: String = "phone",
     ) : SwitchTenantCredentials
 
+    private val families = TokenFamilies(InMemoryTokenFamilyStore())
+
+    /** Alice's session in acme, live: the one every switch here issues from. */
+    private val signedIn = runBlocking { families.start(TenantId("acme"), PrincipalId("alice")) }
+
     /** Lets a principal into the tenants it is a member of, with what it holds there, and nowhere else. */
     @Suppress("FunctionName")
-    private fun Switching(
-        members: Map<String, TenantMembership>,
-        verifier: TokenVerifier = Tokens,
-    ) = SwitchTenantAuthentication(verifier, Credentials::class.java) { credentials ->
-        requireNotNull(members[credentials.targetTenantId]) {
-            "[${credentials.context.principal.id}] may not enter [${credentials.targetTenantId}]."
-        }
-    }
-
-    /** The tokens the switch is presented with, by their text. */
-    private object Tokens : TokenVerifier {
-        val signedIn: Instant = Instant.parse("2026-11-01T08:00:00Z")
-
-        override fun verify(accessToken: String): VerifiedToken = when (accessToken) {
-            "alice-in-acme" -> VerifiedToken("t1", "alice", "acme", null, session = TokenSession("s1", signedIn, 3))
-            "bob-in-acme" -> VerifiedToken("t2", "bob", "acme", null, session = TokenSession("s2", signedIn, 1))
-            "alice-without-session" -> VerifiedToken("t3", "alice", "acme", null)
-            else -> throw TokenVerificationException("unknown token")
+    private fun Switching(members: Map<String, TenantMembership>) =
+        SwitchTenantAuthentication(
+            families,
+            TokenRevocation(RevocationReader.NONE),
+            Credentials::class.java
+        ) { credentials ->
+            requireNotNull(members[credentials.targetTenantId]) {
+                "[${credentials.context.principal.id}] may not enter [${credentials.targetTenantId}]."
+            }
         }
 
-        override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
-    }
-
-    /** An administrator of the tenant it switches from, with a policy and an attribute of that tenant. */
-    private fun context(app: String = "", authenticated: Boolean = true) = object : SecurityContext {
-        override val tenantId: String = "acme"
-        override val principal: CoSecPrincipal = object : CoSecPrincipal {
-            override val id: String = "alice"
-            override val authenticated: Boolean = authenticated
-            override val attributes: Map<String, Any> = mapOf("department" to "acme-finance")
-        }
-        override val scope: SecurityScope = object : SecurityScope {
-            override val appId: String = app
-            override val spaceId: String = ""
-            override val roles: List<String> = listOf("admin")
-        }
-        override val forwardedIdentity: ForwardedIdentity? = null
-    }
+    /** An administrator of the tenant it switches from, with an attribute of that tenant, as the pipeline let it in. */
+    private fun context(app: String? = null) = PermittedRequest.withToken(
+        signedIn.session,
+        attributes = mapOf("department" to "acme-finance"),
+        app = app,
+    )
 
     private val alice = context()
 
@@ -91,7 +75,11 @@ class SwitchTenantAuthenticationTest {
 
     @Test
     fun `the switch reads the application's own credentials without a cast`() = runTest {
-        val byDevice = SwitchTenantAuthentication(Tokens, Credentials::class.java) { credentials ->
+        val byDevice = SwitchTenantAuthentication(
+            families,
+            TokenRevocation(RevocationReader.NONE),
+            Credentials::class.java,
+        ) { credentials ->
             TenantMembership(attributes = mapOf("device" to credentials.deviceId))
         }
         byDevice.authenticate(Credentials("globex", alice, deviceId = "tablet")).attributes
@@ -160,27 +148,35 @@ class SwitchTenantAuthenticationTest {
     }
 
     /**
-     * RFC 0009: the user did not sign in again, so the new session keeps the login time of the one switched from, and
-     * ends when it would. The token presented is verified, and must be the request's principal's.
+     * RFC 0009, `IDN-17`: the user did not sign in again, so the new token is in a session of its own that keeps the
+     * login time of the one switched from, and ends when it would. That session is the request's, as CoSec's token
+     * proved it: nothing the credentials say.
      */
     @Test
-    fun `the new session keeps the login time of the token switched from`() = runTest {
+    fun `the new session keeps the login time of the session switched from`() = runTest {
+        val subject = Switching(mapOf("globex" to TenantMembership())).authenticate(Credentials("globex", alice))
+        val session = checkNotNull(subject.session)
+        session.authTime.assert().isEqualTo(signedIn.session.authTime)
+        session.id.assert().isNotEqualTo(signedIn.session.id)
+        session.generation.assert().isEqualTo(1L)
+        subject.notAfter.assert().isEqualTo(signedIn.notAfter)
+    }
+
+    /** Only a request the pipeline permitted with CoSec's own token has a session to switch from. */
+    @Test
+    fun `a request without a session of CoSec's token cannot switch`() = runTest {
         val member = Switching(mapOf("globex" to TenantMembership()))
-        val subject = member.authenticate(Credentials("globex", alice))
-        subject.authTime.assert().isEqualTo(Tokens.signedIn)
-        subject.session.assert().isNull()
-        assertThrows<TokenVerificationException> { member.authenticate(Credentials("globex", alice, "bob-in-acme")) }
         assertThrows<TokenVerificationException> {
-            member.authenticate(Credentials("globex", alice, "alice-without-session"))
+            member.authenticate(Credentials("globex", PermittedRequest.withToken(session = null)))
         }
-        assertThrows<TokenVerificationException> { member.authenticate(Credentials("globex", alice, "forged")) }
+        assertThrows<TokenVerificationException> { member.authenticate(Credentials("globex", unmade())) }
     }
 
     @Test
     fun `an anonymous request cannot switch tenant`() = runTest {
         assertThrows<IllegalStateException> {
             Switching(mapOf("globex" to TenantMembership()))
-                .authenticate(Credentials("globex", context(authenticated = false)))
+                .authenticate(Credentials("globex", unmade(authenticated = false)))
         }
     }
 
@@ -189,5 +185,21 @@ class SwitchTenantAuthenticationTest {
         assertThrows<IllegalArgumentException> {
             Switching(mapOf("acme" to TenantMembership())).authenticate(Credentials("globex", alice))
         }
+    }
+
+    /** A context the pipeline did not make, as an application could build one: it proves no session. */
+    private fun unmade(authenticated: Boolean = true) = object : SecurityContext {
+        override val tenantId: String = "acme"
+        override val principal: CoSecPrincipal = object : CoSecPrincipal {
+            override val id: String = "alice"
+            override val authenticated: Boolean = authenticated
+            override val attributes: Map<String, Any> = emptyMap()
+        }
+        override val scope: SecurityScope = object : SecurityScope {
+            override val appId: String = ""
+            override val spaceId: String = ""
+            override val roles: List<String> = listOf("admin")
+        }
+        override val forwardedIdentity: ForwardedIdentity? = null
     }
 }

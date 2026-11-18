@@ -76,6 +76,32 @@ class SnapshotRevalidationTest {
         }
     }
 
+    /**
+     * SNP-13: revalidating while a load is in flight does not answer with that load, which read before the call and
+     * before what was published just before it, but with a read that starts after the call.
+     */
+    @Test
+    fun revalidationAnswersWithAReadThatStartedAfterTheCall() {
+        testSource(store).use { source ->
+            source.load().join()
+            store.dropNotifications = true
+            store.hold = true
+            // A load in flight, its read made while the store still holds revision 1.
+            val earlier = source.revalidate()
+            store.put(SnapshotKey.Platform, document(2))
+            val revalidated = source.revalidate()
+            store.hold = false
+            store.pending.toList().forEach {
+                store.pending.remove(it)
+                it.release()
+            }
+            earlier.join()
+            revalidated.join()
+
+            source.peek()!!.policiesCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
     @Test
     fun f9NotificationDuringALoadStartsAnotherOnceItCompletes() {
         testSource(store).use { source ->

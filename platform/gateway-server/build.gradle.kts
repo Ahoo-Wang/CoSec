@@ -20,8 +20,9 @@ plugins {
 kotlin {
     jvmToolchain(21)
 }
+// What the image runs is src/dist/config/application.yaml, and only that: the start script reads ./config/
+// (-Dspring.config.location below), and the jar carries no application.yaml of its own.
 tasks.jar.configure {
-    exclude("application.yaml")
     manifest {
         attributes(
             "Implementation-Title" to application.applicationName,
@@ -50,6 +51,11 @@ application {
         "-Dcom.sun.management.jmxremote.port=5555",
         "-Dspring.config.location=file:./config/",
     )
+}
+
+// `run` reads what the image reads: from src/dist, as the distribution's home, its ./config/ and ./logs/ are the image's.
+tasks.named<JavaExec>("run") {
+    workingDir = file("src/dist")
 }
 
 dependencies {

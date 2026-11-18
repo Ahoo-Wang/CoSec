@@ -26,8 +26,8 @@ import me.ahoo.cosec.model.TenantId
 
 /**
  * Turns credentials into a token: the [Authentication] for their type answers the subject, and [tokenConverter] issues
- * its pair. A subject without a session (a login, a tenant switch) starts a family in [families], signed in at
- * [TokenSubject.authTime] or now; a refresh's subject is already in its session's next generation.
+ * its pair. A subject without a session, a login's, starts a family in [families], signed in now; a refresh's and a
+ * tenant switch's subjects are already in a session, which they issue from only once it is known to be live (`IDN-22`).
  *
  * Build one with [of], from the authentications of your logins; the starter makes one from its `Authentication` beans.
  */
@@ -62,11 +62,7 @@ class TokenCompositeAuthentication @InternalCoSecApi constructor(
         val subject = authenticate(credentialsType, credentials)
         currentCoroutineContext().ensureActive()
         val issued = subject.session?.let { subject } ?: subject.inSession(
-            families.start(
-                subject.tenant?.let(::TenantId) ?: TenantId.DEFAULT,
-                PrincipalId(subject.id),
-                subject.authTime,
-            )
+            families.start(subject.tenant?.let(::TenantId) ?: TenantId.DEFAULT, PrincipalId(subject.id))
         )
         return tokenConverter.toToken(issued)
     }

@@ -1,11 +1,11 @@
 # Rule: DOC-4
 # Mutant: a rate limit rule keyed by a captured variable counts once, though it is matched and then captured
-# Tests: :engine:test --tests me.ahoo.cosec.engine.flat.CompiledDocumentTest
+# Tests: :engine:test --tests me.ahoo.cosec.engine.CompiledDocumentTest
 
-diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+diff --git a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt
 index ca876a50..9839d8d3 100644
---- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
-+++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt
+--- a/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt
++++ b/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CompiledDocument.kt
 @@ -318,7 +318,7 @@ class CompiledDocument private constructor(
                  return
              }

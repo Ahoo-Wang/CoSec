@@ -64,33 +64,3 @@ data class RateLimit(
         const val MILLIS_PER_SECOND = 1_000L
     }
 }
-
-/**
- * The outcome of acquiring a permit. A plain class, not a `data class`: a new field is a new constructor
- * (RFC 0010 C4), such as the policy name the IETF RateLimit header fields may come to carry.
- *
- * @param limit the permits of one window
- * @param remaining how many more requests the current window would allow right now
- * @param resetAfter when the current window ends
- */
-class RateLimitResult(
-    val allowed: Boolean,
-    val limit: Long,
-    val remaining: Long,
-    val resetAfter: Duration
-) {
-    override fun equals(other: Any?): Boolean =
-        this === other || other is RateLimitResult && allowed == other.allowed && limit == other.limit &&
-            remaining == other.remaining && resetAfter == other.resetAfter
-
-    override fun hashCode(): Int {
-        var result = allowed.hashCode()
-        result = 31 * result + limit.hashCode()
-        result = 31 * result + remaining.hashCode()
-        result = 31 * result + resetAfter.hashCode()
-        return result
-    }
-
-    override fun toString(): String =
-        "RateLimitResult(allowed=$allowed, limit=$limit, remaining=$remaining, resetAfter=$resetAfter)"
-}

@@ -13,9 +13,9 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 
 ## 7.x 到 8.0 {#_7-x-to-8-0}
 
-8.0 只支持从 7.x 升级。从 6.x 升级时，先按
+8.0 从 7.x 升级。从 6.x 升级时，先按
 [`7.x` 分支上的升级指南](https://github.com/Ahoo-Wang/CoSec/blob/7.x/wiki/operations/upgrading.md)升到 7.x（包括其中的数据迁移），
-再回到这里。`cosec-migrate convert` 拒绝不是 7.0 布局的 Redis 数据。
+再回到这里。`cosec-migrate convert` 拒绝不是 7.0 布局的 Redis 数据。从 4.x 和 5.x 升级，以及从任何把策略存放在你自己数据库里的版本升级，只有一条路：[从 4.x、5.x 和 6.x 升级](#from-4-x-5-x-and-6-x)。
 
 简要地说，有这些不同：
 
@@ -34,7 +34,7 @@ description: "如何把 CoSec 7.x 部署升级到 8.0：有哪些变化，以及
 2. **找出没有 8.0 形式的内容。** 在策略和代码中搜索：`spel` 与 `ognl` 条件、自定义 `ActionMatcherFactory` 或
    `ConditionMatcherFactory` 类型、动作中的 `#{...}` 路径模板、`regular` 条件、DENY 条件中的 `ignoreCase`、`BlockingAware`、
    `Authorization`/`Statement`/`Policy` 的实现、`CoSecAuthorizationCustomizer`、root（`root-enabled`）、本地影子文件和 `cosecExplain`
-   端点。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
+   端点，以及[含 `/` 的租户和应用 id](#tenant-and-app-ids-hold-no-slash)。[转换](#migrating-the-data)会报告每一条无法翻译的策略。
 3. **用 `cosec-migrate convert` 转换数据**，修正每一个拒绝项，直到转换被接受。对照[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
    阅读 `report.json` 中的语义改动。
 4. **更新依赖和代码**：把构建和运行环境换到 JDK 21，用模块本身替换 starter 的 capability，把 import 改到新的包（[模块、制品与包](#modules-artifacts-and-packages)），删除对[已删除 API](#removed-and-replaced-apis) 的使用，改为注册 8.0 的扩展 bean。
@@ -62,7 +62,7 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 
 要从 CoSec 源码构建，运行 `./gradlew :migrate:installDist`；工具在 `migration/migrate/build/install/cosec-migrate/bin/cosec-migrate`。
 
-它的命令如下。退出码：`0` 完成，`1` 数据被拒绝或写入失败，`2` 用法错误。`publish`、`bootstrap` 与 `repair-references` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster，会拒绝这个选项。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
+它的命令如下。退出码：`0` 完成，`1` 数据被拒绝、写入失败或 `verify-chain` 发现断链，`2` 用法错误。`publish`、`bootstrap`、`repair-references` 与 `verify-chain` 接受 `--cluster`，用于 Redis Cluster：这时 `--to-redis` 写种子节点，以逗号分隔（`redis://node-1:6379,redis://node-2:6379`）。其他命令读 Redis 的客户端不支持 Cluster，会拒绝这个选项。每个命令只接受为它列出的选项：别的选项，例如 `publish --dry-run`，在读写任何东西之前就是用法错误，绝不会被忽略。
 
 | 命令 | 作用 |
 |---|---|
@@ -71,6 +71,7 @@ cosec-migrate-8.0.0/bin/cosec-migrate convert ...
 | `bootstrap` | 把平台租户的一个主体绑定到 `cosec:platform-admin`，让控制面有人可以写入。 |
 | `partition plan` | 分别用 `--partition platform` 和 `by-owner` 转换两次，为每个租户写出一份计划，由控制面提交。不向 Redis 写任何东西。 |
 | `repair-references` | 把每份文档的头所引用、而反向引用索引缺少的条目补进索引，删除没有任何头引用的条目，并补全 app 列表。 |
+| `verify-chain` | 沿每份文档的修订链检查，指出记录缺失的修订，即 Redis 故障切换丢失写入留下的痕迹，以及不跟随头的链的修订索引。不写入任何东西。 |
 
 #### 转换 {#convert}
 
@@ -115,6 +116,7 @@ cosec-migrate convert --from-files ./export --out ./converted
 | `UNDECODABLE` | 不是合法的 7.x JSON、7.x 自己的模型无法解码，或需要类路径上缺少的类（`ognl` 条件、自定义匹配器）。 | 修正存储的 JSON。自定义匹配器没有 8.0 形式，见 `CUSTOM_ACTION` 和 `CUSTOM_CONDITION`。 |
 | `RESERVED_POLICY_ID` | 策略 id 以 `perm:`、`g:`、`r:` 或 `cosec:` 开头，这些前缀留给生成的 id。 | 重命名这条策略，以及引用它的每个附加策略。 |
 | `INVALID_ID` | 8.0 无法容纳的 id：应用或空间 id 为 `*` 或空、应用 id 含 `:`、角色 id 含 `@`，或者转换出的文档中任何 id 含落单的 UTF-16 代理项（如 JSON 转义 `"\uD800"`，`IDN-10`），位置为文档及其 JSON 路径。 | 重命名。8.0 中 `*` 表示任意应用或空间。 |
+| `SLASH_IN_ID` | 含 `/` 的租户 id（`--partition by-owner` 时策略的 `tenantId`）或应用 id，任何 8.0 租户或应用 id 都不能含 `/`（[见下文](#tenant-and-app-ids-hold-no-slash)）。 | 在源系统中给该租户或应用改名，使其 id 不含 `/`，然后重新转换。 |
 | `DUPLICATE_ID` | 导出中同一条策略出现两次，导出中同一个应用出现两次（一项会替换另一项，它的授权就丢了），同一个应用中同一个权限出现两次，或两个应用 id 或租户 id 转换后的文件名只有大小写之差（`Order` 与 `order`：在 macOS 和 Windows 上是同一个文件）。文件名不同的 id，例如 `strasse` 与 `straße`，不算冲突。 | 只保留一个，或改名。 |
 | `OWNER_TENANT` | 使用 `--partition by-owner`，而策略的 `tenantId` 不指向任何租户。 | 设置它的 `tenantId`，或改用 `--partition platform` 转换。 |
 | `CONDITION_NOT_TRANSLATED` | 没有精确翻译的 7.x 内置条件，例如不是字面量、字面量前缀或字面量选择的 `regular`，或者动作不是 `all` 的语句中的 `path` 条件。还包括只有 7.x 填写的部件（除网关的 `cosec.audit.routeId` 之外的 `request.attributes.*`，由 `RequestAttributesAppender` 设置；以及 `resource.*`），它们在 8.0 中总是缺失，所以其上的条件在 8.0 中是常量：在缺失值上成立的条件，无论在 DENY 还是 ALLOW 中（它会对每个请求成立，而 7.x 只在该部件为空时成立）；以及在缺失值上不成立的条件，在 DENY 中或在 DENY 中被取反（这条 DENY 永不成立，或对每个请求成立）。只有不再可能成立的 ALLOW 会被翻译，并记录为 `NOT-IN-8.0`；与模板的比较（`eq resource.owner #{principal.id}`）就是一例，因为缺失值不等于任何值。7.x ip2region 的 `ipRegion`（`country|region|province|city|isp`）只有一种形状能翻译：国家前缀（`startsWith "中国|"`，或表达它的 `regular`），翻译为 `ext.ip2region.country`；其上的其他条件按只有 7.x 填写的部件处理。以及在 DENY 需要时区分方法 HEAD 与 GET 的条件，因为 8.0 把 HEAD 请求按 GET 判定（包括 DENY 中的 `not eq GET`）。 | 按消息给出的条件（`eq`、`in`、`startsWith` ……）重写；appender 设置的值改为 `AttributeProvider` 的 `ext.*` 属性（`ipRegion`：`ext.ip2region.*`）。 |
@@ -127,10 +129,25 @@ cosec-migrate convert --from-files ./export --out ./converted
 警告不会让转换停止。目前的警告有：全局策略索引中类型不是 `GLOBAL` 的策略（按可附加策略转换，因为 7.x 并不把它应用于所有人）；
 `by-owner` 时留在平台文档中、含 DENY 语句的租户策略；没有应用权限的应用上的角色授权（7.x 忽略它们，所以被丢弃）。
 
+#### 租户和应用 id 不含斜杠 {#tenant-and-app-ids-hold-no-slash}
+
+8.0 把租户 id 和应用 id 都当作一个路径段（`SCP-13`），所以两者都不能含 `/`；7.x 接受过这样的 id。控制面在 `doc/tenant/<tenantId>/…`
+这样的资源上授权，`acme/west` 在那里会读作租户 `acme` 再接一段路径。升级前，请在拥有该 id 的系统里（往令牌写 `tenantId` 的签发方、应用的注册处）
+给这样的租户或应用改名：
+
+- **查找方法：**在数据副本上运行 `cosec-migrate convert`：它对每个这样的 id 给出 `SLASH_IN_ID` 拒绝项，位置在应用
+  （`app-role-permissions.json[<i>]`），或在 `--partition by-owner` 时在 `tenantId` 含 `/` 的策略上。只出现在令牌里的租户不在 7.x 数据中：
+  请在签发方的租户里搜索 `/`。
+- **`partition plan`** 以同样方式拒绝这样的租户，什么也不写；**`api-keys`** 拒绝这类租户的密钥。
+- **令牌**的 `tenantId` 或 `aud` 含 `/` 时，每个适配器都回答 `401 token-invalid`，所以租户改名后，这样的主体需要重新登录。
+  在网关之后，这类租户的转发身份是 `400 invalid-request`。
+
+其他字符保持不变，文件名仍会编码它们：`acme%west` 转换为 `tenants/acme%25west.json`。
+
 #### 报告中的语义改动 {#semantic-changes-in-the-report}
 
 `semanticChanges` 按 7.x 数据中的位置，列出 8.0 有意做出不同决策的形态。`change` 是[8.0 在哪些地方决策不同](#what-8-0-decides-differently)
-中的规则 id（`C1a`–`C7`、`D1`–`D3`）之一，或者：
+中的规则 id（`C1a`–`C8`、`D1`–`D3`）之一，或者：
 
 - `ASCII-CASE`：带 `ignoreCase` 的 ALLOW 条件。8.0 只折叠 ASCII 字母，所以这条 ALLOW 匹配的写法更少。DENY 条件的值含 ASCII 以外的字母时，
   这个条件改为被拒绝。
@@ -148,7 +165,7 @@ cosec-migrate publish --to-redis redis://localhost:6379 [--cluster] [--key-prefi
 ```
 
 `publish` 只读取被接受的转换，而且只读取 `report.json` 列出的文件，并校验其中记录的 SHA-256：`convert` 之后被修改、缺失或新增的文件会让
-它停止。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
+它停止。你自己写的文档（而不是 `convert` 写出的）用 `--file <document.json> --document <platform|app:<id>|tenant:<id>>` 代替 `--in` 发布，检查相同。然后它编译每一份文档，按平台文档检查每份应用文档的引用，并拒绝含 break-glass 绑定的文档，什么也不写（`bootstrap` 同样拒绝）。它经过控制面的存储把每份文档写成修订 1，所以文档的修订历史从这里开始；并且只在文档尚不存在时写入：它从不覆盖 8.0 数据。
 
 每份文档写一次。如果某一次失败，消息会列出已经写入的文档；用 `--resume` 再运行一次，它跳过内容相同的已发布文档，拒绝内容不同的。
 `--key-prefix` 是部署的前缀，与 [`cosec.key-prefix`](./configuration.md#key-prefix) 相同。`publish` 没有 `--dry-run`；想知道它会做什么，读 `report.json`。
@@ -163,7 +180,7 @@ cosec-migrate bootstrap --to-redis redis://localhost:6379 [--cluster] [--key-pre
 
 控制面用快照中的策略授权自己的写操作，所以没有管理员时谁都不能写入。`bootstrap` 只写平台租户的文档 `Tenant((platform))`；平台文档本身来自 `publish`，所以先发布。`bootstrap` 在平台租户自己的文档中，把平台租户的主体 `alice`
 绑定到内置策略 `cosec:platform-admin`，并记为一个 `BOOTSTRAP` 种类的修订。当这份文档已经把某人绑定到 `cosec:platform-admin` 时它拒绝执行；
-`--force` 用于这些管理员全部丢失后的恢复。持有 Redis 凭证的人本来就能写入；`bootstrap` 只是留下一条记录。
+`--force` 用于这些管理员全部丢失后的恢复。两种情况下它都只添加自己的绑定，并保留这份文档中的其余内容：策略、其他绑定、限流规则和角色。持有 Redis 凭证的人本来就能写入；`bootstrap` 只是留下一条记录。
 
 文档按数据面的方式编译，用平台文档声明的限额和属性，所以恢复会保留使用 `ext.*` 属性的策略。读不到平台文档时，命令失败。
 
@@ -191,6 +208,25 @@ cosec-migrate repair-references --to-redis redis://localhost:6379 [--cluster] [-
 在写这个 Redis 的每个控制面实例和每个 `cosec-migrate` 二进制都运行这个版本之后再运行它，不要在滚动升级期间运行；降级之后要再运行一次。只要还有旧版本实例在运行，它就按旧的分析自行判断：它检查的变更不受 RC1-4 的保护，它发布的 app 文档也不会被列入。每个新实例在启动时对账一次，之后每次回收任务再对账：完整的列表缺了某份有头的 app 文档时，列表被标回不完整（[存储](./storage.md#publishing-through-the-control-plane)），新实例于是让覆盖所有 app 的授出退回审批。升级完成之后运行的那次 `repair-references`，才结束这个窗口。
 
 然后它把文档中的每份 app 文档列入 app 列表，并把列表标记为完整，输出 `The app list is complete: <n> app(s).`；在此之前，授出分析把覆盖所有 app 的每个授出都当作未知。如果列表在它执行期间一直在变，它输出 `FAILED the app list could not be completed` 并以 `1` 退出：再运行一次即可。它补全的列表只和 `<s>:control:list:documents` 一样可靠：只要那个列表没有丢失，它就列着控制面或 `cosec-migrate` 发布过的每一份文档；以其他方式写进 Redis 的文档两个列表里都没有。
+
+#### 检查修订链 {#verify-the-revision-chains}
+
+```bash
+cosec-migrate verify-chain --to-redis redis://localhost:6379 [--cluster] [--key-prefix cosec] [--document platform|app:<id>|tenant:<id>]
+```
+
+每个修订都记着它的父修订及其摘要，控制面把每个修订的记录按摘要保存（[存储](./storage.md#revisions-history-and-rollback)）。Redis 异步复制，故障切换可能丢失它已经确认过的记录。`verify-chain` 对存储列出的每份文档（或 `--document` 指定的那一份），从头开始沿父修订一路检查到修订索引仍列着的最早修订，每份文档输出一行：
+
+- `ok <doc>: intact down to revision <n>`；没有头的文档输出 `ok <doc>: no head`；
+- `BROKEN <doc>: no record holds revision <n> (<digest>): ...`：链需要的某个修订的记录不存在，或者存的是另一个修订；
+- `INDEX <doc>: the revision index does not follow the head's chain: ...`：这份文档的修订索引落后于头的幅度超过一次正在进行的发布，或在另一条分支上（故障切换或部分恢复所致，`CTL-35`）：它的最后一项不是头，或某一项指向的父修订不是它下面那一项。**这是一个发现，会使本次运行失败。**没有任何东西丢失：下一次读取这份文档的历史时，会从头的记录重建索引；`verify-chain` 自己不修复；
+- `note <doc>: the revision index is one revision behind the head ...`：索引恰好止于头的父修订：一次正在完成的发布（头已写入，索引项尚未写入），或索引写入失败的发布。**不算失败**；下一次读取会补上这一项；
+- `note <doc>: <n> revision index entries predate the parent field ...`：旧版本写下的条目，在第一次读取重写它们之前无法检查。**不算失败**；
+- `FAILED <doc>: <原因>`：这份文档读不到；其余文档照常检查。
+
+最后输出 `Verified <n> document(s): <b> broken, <f> could not be read.`，有索引不一致时在句号前加 `, <i> with a revision index that does not follow the head's chain`。只要有链断开、索引不一致或读不到，它就以 `1` 退出。被[保留策略](./storage.md#revisions-history-and-rollback)回收的修订不算断链：检查止于仍保留的最早修订。它只读，所以可以在控制面运行时执行，也可以随时重复执行。
+
+断链不改变实例执行的内容，实例执行的是头。它说明 Redis 丢了写入：这份文档的历史缺了那个修订，故障切换前后发布的变更也可能不在头里。把头与发布过的内容对照，把缺的部分重新发布，做法与修订回退之后相同（[排障](./troubleshooting.md#decisions-use-an-old-revision)）。
 
 #### 以 Kubernetes Job 运行 {#run-as-a-kubernetes-job}
 
@@ -275,6 +311,74 @@ spec:
 
 7.x 的策略历史（`<prefix>:policy:history:*`）既不转换也不删除。需要的话请自行导出。
 
+### 从 4.x、5.x 和 6.x 升级 {#from-4-x-5-x-and-6-x}
+
+7.x 之前的版本没有单独的迁移工具。受支持的路径是 `cosec-migrate convert --from-files`：你把策略导出为它读取的三个文件，它像转换 7.x 的数据一样转换它们。数据在 Redis 里的 6.x，先经过 7.x 更省事，如本节开头所说。本页其余关于数据的内容，从这里起都适用。
+
+**这三个文件是什么。**`convert --from-files <dir>` 读取 `policies.json`（策略数组，每个策略有 `id`）、`global-policies.json`（适用于所有人的策略的 id 数组）和 `app-role-permissions.json`（数组，每个应用一项：它的权限列表 `appPermission` 和角色授权 `grants`）。它按 7.x 自己的反序列化器读取策略 JSON，4.3 写出的就是这种（`{"all": {}}`、`{"path": {...}}` 和 `{"authenticated": {}}` 对象，路径的简写是一个模式字符串）。`--from-redis` 只读取 7.0 的布局，所以读不了更老的存储。存储的权威来源是自己数据库的应用，自己写导出程序：按你的版本序列化每个策略的方式写出，并写这三个文件。一个很小的导出：
+
+```json
+[
+  {
+    "id": "orders-reader", "name": "Orders reader", "category": "order", "description": "Reads orders, never deletes them",
+    "type": "custom", "tenantId": "(0)",
+    "statements": [
+      {
+        "name": "read-orders", "effect": "allow",
+        "action": { "path": { "pattern": "/orders/**", "method": "GET" } },
+        "condition": { "authenticated": {} }
+      },
+      { "name": "no-deletes", "effect": "deny", "action": { "path": { "pattern": "/orders/*", "method": "DELETE" } } }
+    ]
+  }
+]
+```
+
+保存为 `policies.json`，`global-policies.json` 为 `[]`，应用的权限及持有它们的角色是：
+
+```json
+[
+  {
+    "appPermission": {
+      "id": "orders",
+      "groups": [
+        { "name": "order", "description": "order management",
+          "permissions": [ { "id": "order.ship", "name": "Ship", "description": "Ship", "action": "/order/ship" } ] }
+      ]
+    },
+    "grants": { "clerk": ["order.ship"] }
+  }
+]
+```
+
+保存为 `app-role-permissions.json`。`cosec-migrate convert --from-files export --out converted` 接受这两份文件，语义变化为 `C1b` 和 `PIP-18`，并写出平台文档和应用文档 `orders`。
+
+**什么能转换。**下面每一行都用 `convert --from-files` 分别作为 ALLOW 和 DENY 语句转换过；以你自己的数据的报告为准，请阅读它（[拒绝](#rejections)、[报告中的语义变化](#semantic-changes-in-the-report)）。
+
+| 构造 | 结果 |
+|---|---|
+| 动作 `*` 或 `{"all": {}}` | ALLOW 变成 `http:*`，即每个 HTTP 请求，不含控制面动作和代码中检查的动作；DENY 保持 `*`（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
+| 动作 `{"all": {"method": "GET"}}`、路径模式（字符串、数组、`{"path": {"pattern", "method"}}`、`**`） | `http:<METHOD>` 或 `http:*`，作用在 `http:path:<pattern>` 上。 |
+| 条件 `all`、`authenticated`、`inTenant`、`in`、`startsWith`、对方法的 `eq`、带 `and` 和 `or` 的 `bool` | 8.0 语言中的同一个条件；`all` 则没有条件。 |
+| `inRole` | 对 `scope.roles`（ALLOW）或 `subject.roles`（DENY）的 `in`，记录为 `D1`。 |
+| 与 `#{principal.id}` 这类引用做 `eq` | 与属性的比较，记录为 `D2`。 |
+| 模式是字面量的 `regular` | 仅 ALLOW，转为带 `ignoreCase` 的 `eq`，记录为 `ASCII-CASE` 和 `D3`。 |
+| 每一个 DENY | 如上转换，各记录为 `C1b`。 |
+| 带路径动作的应用权限及其角色授权 | 一份应用文档：目录、每个权限一条 `perm:<app>/<id>` 策略、每个授权一条角色绑定（`role` 或 `role@space`）。 |
+| 部署的限流规则 | `--rate-limit-rules`，用 7.x 的文件格式（[转换](#convert)）。 |
+
+**什么需要你来判断。**每一项都以一条说明要改写什么的信息被拒绝；在导出的数据里修正，然后重新转换：带 `#{...}` 模板的路径（`ACTION_NOT_TRANSLATED`：[动作中的路径模板](#path-templates-in-actions)）；由不同方法组成的复合动作（`ACTION_NOT_TRANSLATED`：按方法拆开）；对客户端地址的 `eq`、`contains`、`endsWith`、模式不是字面量的 `regular`、对 `request.path` 之外的部分的 `path`，以及 DENY 里的 `regular`（`CONDITION_NOT_TRANSLATED`）。
+
+**什么不能转换。**`spel` 和 `ognl` 条件（`EXPRESSION_CONDITION`）、自定义的动作和条件类型（`CUSTOM_ACTION`、`CUSTOM_CONDITION`），以及 4.x 的 `rateLimiter` 和 `groupedRateLimiter` 条件：它们以 `UNDECODABLE` 加 `CUSTOM_CONDITION` 被拒绝，因为 7.x 没有这种条件，它们的 `UNDECODABLE` 信息说明输入不是 7.x 格式，并指向本节。请改写为[限流规则](../policies/rate-limiting.md)。策略历史不会被转换。
+
+**工具无法决定的事**，需要你在发布之前决定：
+
+1. **ALLOW `*` 应该是什么意思。**它变成 `http:*`：与它原来放行的请求相同，不含控制面的任何东西。如果你的 4.x 策略把它用在代码中检查的动作上，请把那些动作写出来。
+2. **角色授权放在哪里。**`convert` 把每个授权写成应用文档的绑定，应用文档属于平台，在每个租户中都适用；`--partition by-owner` 把策略移到它们的租户，不移动授权，因为授权不带租户。角色归租户所有的身份系统，应改为通过控制面把它们作为租户文档的 `roles` 投影进去（[外部事实源同步角色](../scenarios/external-source.md)）。
+3. **你的应用写入策略时做的检查由什么取代。**`convert` 是命令行，不是库。在 8.0 中，文档在提出变更时由控制面检查，无法编译的策略是带发现的 `DRAFT`（[策略测试](../policies/testing.md#validating-policies)）。
+
+然后像 7.x 的数据一样[发布](#publish)。应用自己的代码按本页其余部分迁移：它的 import 和已删除的 API（[已删除和被取代的 API](#removed-and-replaced-apis)）。
+
 ### 8.0 在哪些地方决策不同 {#what-8-0-decides-differently}
 
 在 8.0 中，下面这些就是规则；每条在一致性套件中都有 id。在没有错误、没有缺失数据、也没有下列形态时，8.0 对转换后的数据做出与 7.x 相同的
@@ -292,6 +396,7 @@ spec:
 | **C5**（`BND-2`） | 主体只能附加自己租户文档或平台层中可附加的策略。 | 任何主体都能附加任何策略。 | 主体策略，仅在 `--partition by-owner` 时。默认分区保持 7.x 的行为。 |
 | **C6** | 引用了所属应用未定义权限的角色授权，被 `convert` 拒绝。 | 到达它的请求为 `500`。 | 带有过时权限 id 的授权。 |
 | **C7**（`MIG-2`） | 针对所有动作（`*`）的 DENY，对它匹配的请求，也拒绝代码中的检查和控制面的动作（`cosec:*`）。 | 只决策 HTTP 请求。 | 针对所有动作的 DENY 语句（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
+| **C8**（`MIG-2`） | 针对所有动作的 ALLOW 是 `http:*`，即所有 HTTP 请求，而[路由映射](../policies/language.md#route-maps)会把它映射的每条路由从中拿走：被映射的路由是它的业务动作，转换后的策略并不授予它。 | 该路由就是一个 HTTP 请求。 | 针对所有动作的 ALLOW 语句，报告在它们的动作处记录。加入路由映射后，请用各自的策略授予被映射的动作（[所有动作即所有 HTTP 请求](#every-action-is-every-http-request)）。 |
 | **D1** | ALLOW 中的 `inRole: r` 只匹配在请求空间中生效的角色；ALLOW 中的 `inRole: r@s` 只在请求处于空间 `s` 时匹配；DENY 中的 `inRole: r` 匹配在任意空间持有的该角色。 | 按字面匹配角色，裸角色也匹配 `r@<请求的空间>`。 | `inRole` 条件。DENY 只会变宽，ALLOW 只会变窄。 |
 | **D2**（`CND-1`） | 不存在的属性不等于任何值，也不等于空串。 | 不存在的 part 读作 `""`。 | 与 `#{principal.id}`、`#{principal.attributes['k']}` 或 `#{tenant.tenantId}` 比较的 `eq`。ALLOW 中，不存在的 part 不再匹配空的属性（变窄）。DENY 中，`convert` 补上 7.x 的情形，保持 7.x 的读法。 |
 | **D3** | 没有正则表达式，所以也没有正则超时。 | `RegexTimeoutException` 按默认拒绝处理。 | `regular` 条件；只有字面量、字面量前缀和字面量选择的模式能翻译。 |
@@ -319,7 +424,7 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 针对所有动作的 DENY 仍是 `"action": "*"`：它继续拒绝它拒绝过的请求，现在也经由代码中的检查和控制面拒绝，报告把它记为 C7。如果这样的 DENY
 可能匹配管理员自己的请求，它也会拒绝管理员使用控制面。
 
-`http:*` 上的语句永远不匹配[路由映射](../policies/language.md#route-maps)映射过的请求。加入路由映射之后，用单独的策略授予它命名的动作。
+`http:*` 上的语句永远不匹配[路由映射](../policies/language.md#route-maps)映射过的请求。加入路由映射之后，用单独的策略授予它命名的动作。报告把每条针对所有动作的 ALLOW 记为 C8，位置在它的动作处，这样加入路由映射那天不再被允许的路由有一行可查。
 
 #### 动作中的路径模板 {#path-templates-in-actions}
 
@@ -394,8 +499,8 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 
 `cosec.jwt.token-revocation.enabled` 已删除。启用 JWT 时，每个令牌都要检查是否已吊销；没有任何东西能回答这个检查时，启动失败：加上
 `cosec-cocache`（它带来 Redis 吊销存储），或者注册自己的 `TokenStore` 和 `RevocationReader` bean。7.x 中没有 `cosec-cocache` 时，starter
-使用一个什么都不记录的存储，登出悄无声息地不起作用。只签发令牌、从不校验令牌的服务可以改为设置 `cosec.jwt.enabled=false`
-（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。7.x 写下的吊销继续有效：8.0 从相同的 key（`<prefix>:token:revoked:*`）
+使用一个什么都不记录的存储，登出悄无声息地不起作用。既不签发令牌也不读取令牌的服务可以改为设置 `cosec.jwt.enabled=false`
+（[登出与吊销](../integration/authentication.md#logout-and-revocation)）；只签发令牌的服务保持它开启，并配好存储（[只签发令牌的服务](../integration/authentication.md#a-service-that-only-issues-tokens)）。7.x 写下的吊销继续有效：8.0 从相同的 key（`<prefix>:token:revoked:*`）
 读取它们。吊销检查报告的错误返回 `503`，永远不会接受该令牌（`PIP-7`）。
 
 #### 令牌与 API key {#tokens-and-api-keys}
@@ -409,7 +514,7 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 - **`tenantId` 声明为空或不是字符串**，或 `attributes` 声明中有 `apiKeyId`（CoSec 只为 API key 设置），令牌为 `token-invalid`；7.x 把这样的租户读作没有租户。
   **`cosec.jwt.secret`** 对 `hmac256`、`hmac384`、`hmac512` 分别至少 32、48、64 个 UTF-8 字节，否则启动失败。
 - **break-glass（7.x 的 root）** 只作用于 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌，从不作用于自定义 `TokenVerifier` 的令牌，也不作用于其他认证器认可的主体（`BRK-8`）。
-- **租户切换与社交登录。** `AbstractSwitchTenantAuthentication.switchTenant` 回答用户在目标租户中的 `TenantMembership`，而不是一个主体，因此新令牌不会带上先前租户的角色。
+- **租户切换与社交登录。** 租户切换（7.x 的 `AbstractSwitchTenantAuthentication`，现为带 `TenantSwitch` 的 `SwitchTenantAuthentication`，见[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)）回答用户在目标租户和应用中的 `TenantMembership`，而不是一个主体，因此新令牌不会带上先前租户的角色。
   `DirectSocialUserPrincipalConverter` 只签名 `cosec_oauth_provider` 和 `cosec_oauth_user_id`，不签名提供方的用户信息（[认证](../integration/authentication.md#tenants)）。
 - `cosec.api-key.header` 改为 `cosec.pipeline.api-key-header`（默认 `X-API-Key`），任何文档都不能读取它指定的请求头（`CND-5`）。`cosec.api-key.store-blocking` 已删除：Redis 的 key
   读取器从不阻塞。携带 API key 的请求只按 key 判定，即使它同时携带令牌（`PIP-8`）。
@@ -447,13 +552,13 @@ cosec-migrate api-keys --redis redis://localhost:6379 --memberships ./membership
 
 没有 key 会获得更多权限；除非在 `--grant-to-principal` 中列出，也没有主体会获得更多权限。key 失去的东西按 key 列出：`lost` 是 key 不再能用到的其主体的主体绑定和 break-glass 绑定；对 `own-principal`，`changes` 是依赖主体 id 的东西（审计主体、`subject.id` 上的条件、按主体计数的限流桶、转发的 `CoSec-Identity` 的 `sub`）。
 
-以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
+以下情况 key 被拒绝，此时命令以 `1` 退出，不写入任何 key：带属性（条件可能读取它们）、角色格式错误、id 含 `@`、`*` 或空白、某个角色以角色前缀开头、某个文档已经绑定了按 key 生成的角色，或附加的策略不能精确解析：不存在、不可附加，或租户和平台都定义了它但内容不同。这样的附加在 8.0 中让该 key 的每个请求都不确定，丢掉它又可能丢掉一个 DENY：先修正文档或 key。7.x 不保证 key id 唯一，所以以下情况 key 也会被拒绝：同一租户中另一个 key 的 id 相同（两者会变成同一个主体，或共用一个按 key 生成的角色）；`own-principal` 的 key 要迁往的主体 `apikey:<key id>` 已经存在，即某个文档按名绑定了它，或 `--memberships` 列出了它，这时 key 会获得该主体拥有的权限。`--memberships` 文件中同一主体出现两次，或 `tenant`、`principal`、`roles` 的类型不对（`roles` 是字符串数组，只有 `[]` 表示没有角色）时被拒绝。没有租户的 key 归入默认租户（`defaultTenant`）。
 
 没有角色的 `own-principal` key 也会列在 `memberships` 中，`roles: []`。它的主体同样必须在你的 `MembershipProvider` 中存在，只是没有角色：提供者不认识的主体会被拒绝，带该 key 的每个请求都会得到 `401`。
 
 1. 带 `--dry-run` 运行并阅读报告。
 2. 在你的 `MembershipProvider` 的数据源中授予 `memberships`，并通过控制面（变更请求）添加 `principalBindings` 和 `roleBindings`。
-3. 不带 `--dry-run` 再运行一次。每个 key 只在仍然是读取时的内容时才被改写，因此期间被吊销或停用的 key 绝不会被恢复：报告在 `changedSinceRead` 中列出它，命令以 `1` 退出并要求再运行一次。已经转换的 key 保持不变，因此命令可以重复运行。
+3. 不带 `--dry-run` 再运行一次。每个 key 只在仍然是读取时的内容时才被改写，因此期间被吊销或停用的 key 绝不会被恢复：报告在 `changedSinceRead` 中列出它，命令以 `1` 退出并要求再运行一次。已经转换的 key 保持不变，因此命令可以重复运行。8.0 预览版以其他格式（`"format":2`）存储的 key 既不会被转换，也不会被 8.0 读取：命令会拒绝这次运行，并指出它是由预览版存储的；请为它签发一个新 key 并删除旧 key，然后再运行。
 
 转换后的 key 不再保存原来的角色和策略：它们只存在于报告里。报告在第一个 key 被改写之前就写好（`status: planned`），运行结束时换成最终的（`converted`）；`--out` 中已有的报告若不是试运行或被拒绝那次运行的，命令在碰任何 key 之前就停止：重复运行会发现这些 key 已转换，而把计划替换成空的。重复运行请用自己的 `--out`，报告里的 `memberships` 和绑定都落实之后才把它移走。两次运行只有在第一次是 `--dry-run` 时才可以共用一个 `--out`。`--out` 在写任何东西之前先创建，写不了的 `--out` 会让运行先停下。`SCAN` 可能把同一个 key 返回两次；它只被读一次。
 
@@ -540,7 +645,7 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | `cache-support` | `cosec-cocache`，同时添加 `spring-boot-data-redis` 和 `cocache-spring-boot-starter` |
 | `oauth-support` | `cosec-social` |
 | `opentelemetry-support`、`ip2region-support` | `cosec-opentelemetry`、`cosec-ip2region` |
-| `micrometer-support` | `cosec-micrometer`，同时添加 `micrometer-core` |
+| `micrometer-support` | `cosec-micrometer`，它自带 `micrometer-core` |
 | `openapi-support` | `cosec-openapi`，同时添加 `spring-boot-starter-actuator` 和 `springdoc-openapi-starter-common` |
 | `kafka-support` | `cosec-kafka`，同时添加 `spring-boot-starter-kafka` |
 | （8.0 新增） | `cosec-control`，即控制面，同时添加 `cosec-cocache` |
@@ -553,10 +658,12 @@ implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 | 7.x 包 | 8.0 包（模块） | 类型 |
 |---|---|---|
 | `me.ahoo.cosec.api.authentication`、`me.ahoo.cosec.authentication` | `me.ahoo.cosec.login`（`cosec-login`） | `Authentication`、`Credentials`（现为 `LoginCredentials`）、`CompositeAuthentication` |
-| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `AbstractSwitchTenantAuthentication` |
+| `me.ahoo.cosec.authentication.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `AbstractSwitchTenantAuthentication` 现为带 `TenantSwitch` 的 `SwitchTenantAuthentication`；`SimpleRefreshTokenAuthentication` 现为 `RefreshTokenAuthentication`（`AbstractRefreshTokenAuthentication` 已移除）（[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)） |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `TokenConverter`、`TokenCompositeAuthentication`、`RefreshTokenMismatchException` |
 | `me.ahoo.cosec.token` | `me.ahoo.cosec.spi.token`（`cosec-spi`） | `TokenVerifier`、`TokenStore`、`TokenRevoker`、`RevocationReader`、`TokenVerificationException`、`TokenExpiredException`、`TokenRevokedException` |
-| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `SimpleCompositeToken`（`RevocableTokenVerifier` 已移除：见[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)） |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.login.token`（`cosec-login`） | `DefaultTokenRevoker` 现为 `StoreTokenRevoker`（[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)） |
+| `me.ahoo.cosec.token` | `me.ahoo.cosec.api.token`（`cosec-api`） | `SimpleCompositeToken` 已移除：`CompositeToken` 是 final 类（`RevocableTokenVerifier` 也已移除：见[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)） |
+| `me.ahoo.cosec.api.CoSec` | 已删除 | 它的值在有含义的地方各有名字：`CoSecPrincipal.ANONYMOUS_ID`（`me.ahoo.cosec.api.principal`）、`TenantId.DEFAULT`（`me.ahoo.cosec.model`）；`cosec.` 属性前缀直接写出（[从 8.0.0-alpha.4 升级](#from-8-0-0-alpha-4)） |
 | `me.ahoo.cosec.context` | `me.ahoo.cosec.webmvc`（`cosec-webmvc`） | `SecurityContextHolder` |
 | `me.ahoo.cosec.context.request` | `me.ahoo.cosec.runtime.http`（`cosec-runtime`） | `RemoteIpResolver`、`XForwardedRemoteIpResolver` |
 | `me.ahoo.cosec.api.audit` | `me.ahoo.cosec.spi.audit`（`cosec-spi`） | `AuditEventSink` |
@@ -606,13 +713,13 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 | `RoleCapable`、`PolicyCapable`（主体的 `roles` 和 `policies`） | 主体的成员关系 `Memberships`（`me.ahoo.cosec.model`），来自令牌的声明或 `MembershipProvider`。对请求生效的角色是 `SecurityContext.scope.roles`。 |
 | `cosec-api` 的 `String` 别名 `RoleId`、`PolicyId` 和 `PermissionId` | `RoleId` 和 `PolicyId` 是 `me.ahoo.cosec.model` 的值类，名字相同、包不同：`RoleId("admin")`，用 `.value` 取得字符串。`PermissionId`：无。权限是一个动作，由策略或目录条目授予（[角色权限](../policies/role-permissions.md)）。 |
 | `KafkaAuditEventSink` | `KafkaAuditListener`，一个 `DecisionListener`，classpath 上有 `cosec-kafka` 时由 starter 注册（[可观测性](./observability.md)）。记录的 key 不变，value 是审计事件（[可观测性的变化](#observability-changes)）。 |
-| `PolicyRepository`、`AppRolePermissionRepository`、Redis 仓库与缓存、`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`、对 `AppPermissionCache`/`RolePermissionCache` 的写入 | 写入用控制面（库或 HTTP API）；第一次写入用 `cosec-migrate publish`。 |
+| `PolicyRepository`、`AppRolePermissionRepository`、Redis 仓库与缓存、`SnapshotPublisher`、`RedisSnapshotPublisher`、`PolicyHistory`、`RedisPolicyRevisionStore`、对 `AppPermissionCache`/`RolePermissionCache` 的写入 | 写入用控制面的 HTTP API，由你自己的客户端调用（[外部事实源同步角色](../scenarios/external-source.md)）；第一次写入用 `cosec-migrate publish`。 |
 | `LocalPolicyInitializer` 以及 `init-repository`/`force-refresh` | `cosec-migrate convert` 与 `publish`，或控制面的声明式 `apply`。 |
 | `CoSecExplainEndpoint`（`cosecExplain` actuator）、`AuthorizationExplainer`、`ExplainWarningCode` | 控制面的 `explain`（需要权限，可指定任一修订）；见[代码中的检查](../integration/checks.md)。 |
 | 影子模式（`ShadowAuthorization`、`ShadowPolicyProvider`、`cosec.shadow.*` 文件） | 控制面变更的影子窗口；见[测试策略](../policies/testing.md)。 |
 | `AccessAnalyzer` | 控制面的 `analyze`。 |
 | `PolicyTestKit`（`cosec-core`） | `cosec-testkit` 模块中的 `PolicyTestKit`（[策略测试套件](#policy-test-suites)）。 |
-| `cosec-api` 中 7.x 的请求模型：`Request`、`Attributes`、`AppIdCapable`、`DeviceIdCapable`、`RequestIdCapable`（及其别名 `AppId`、`DeviceId`、`RequestId`）、`COSEC_EXTEND_KEY_PREFIX`、`SpaceIdCapable.SPACE_ID_KEY`；`cosec-core` 的 `RequestSecurityContexts` 和 `InvalidRequestPathException` | 无：适配器读取 `HttpFacts`，安全上下文携带校验后的 `scope`。`SpaceIdCapable`、`SpacedRoleId` 和别名 `SpaceId` 也已删除：空间 id 是 `me.ahoo.cosec.model` 的值类 `SpaceId`，请求的空间是 `SecurityContext.scope.spaceId`，空间中的角色写作 `role@space`。 |
+| `cosec-api` 中 7.x 的请求模型：`Request`、`Attributes`、`AppIdCapable`、`DeviceIdCapable`、`RequestIdCapable`（及其别名 `AppId`、`DeviceId`、`RequestId`）、`COSEC_EXTEND_KEY_PREFIX`、`SpaceIdCapable.SPACE_ID_KEY`；`cosec-core` 的 `RequestSecurityContexts` 和 `InvalidRequestPathException` | `SecurityContext.deviceId` 和 `SecurityContext.requestId` 回答 `DeviceIdCapable` 和 `RequestIdCapable` 原来给出的东西（客户端的 `CoSec-Device-Id`，没有发送时为空；CoSec 在审计记录和问题响应中使用的 id）。适配器读取 `HttpFacts`，安全上下文携带校验后的 `scope`；应用没有 `Request` 可用。`SpaceIdCapable`、`SpacedRoleId` 和别名 `SpaceId` 也已删除：空间 id 是 `me.ahoo.cosec.model` 的值类 `SpaceId`，请求的空间是 `SecurityContext.scope.spaceId`，空间中的角色写作 `role@space`。 |
 | `InternalIds`（`cosec-api`） | 无。 |
 | `me.ahoo.cosec.limiter.RateLimiter` 及其 `LocalRateLimiter`、`RedisRateLimiter`（`cosec-cocache`） | 挂起的 SPI `me.ahoo.cosec.spi.ratelimit.RateLimiter`；starter 注册它的 `LocalRateLimiter` 或 `ReactiveRedisRateLimiter`（[限流](../policies/rate-limiting.md)）。`RateLimit` 和 `RateLimitResult` 保留。 |
 | `Jwts.toPrincipal(String)`、`Jwts.decode`、`Jwts.verifyTimeClaims` | 无：`Jwts` 是 `cosec-jwt` 的内部类。用会校验签名的 `TokenVerifier.verify` 把令牌变成主体。 |
@@ -630,7 +737,7 @@ fun cosecIdGenerator(ids: StringIdGenerator): IdGenerator = IdGenerator { ids.ge
 仍然可用：`SecurityContext`（新增 `scope`，即校验后的应用、空间和角色；应读取它，而不是客户端声明的 `CoSec-*` 请求头）、`ServerWebExchange`、
 Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`AuditEventSink`、`TokenStore`，以及 `cosec-api` 的审计类型，其中一些换了包（[模块、制品与包](#modules-artifacts-and-packages)）。
 
-8.0 预览版中，应用可以用自己的 bean 替换执行控制面授权与审批的部分：`ControlAuthorizer`、`ChangeAuthority`、`Changes`、`ControlPlane` 和 `ControlHttp`。现在不行了：这些类型中任何一个出现第二个 bean，启动都会失败（`ControlHttp` 是在提供控制面路由时）。`ControlAuthorizer`、`DocumentConfirmation`、`PipelineControlAuthorizer`、`ChangeAuthority`、`Changes`、`DefaultControlPlane`、`ControlHttp`、`ControlHttpRequest` 和 `ControlHttpResponse` 是 `@InternalCoSecApi`：通过 `ControlPlane` bean 或它的 HTTP API 调用控制面。`ControlStore`、`ChangeOptions`、变更监听器、`Revisions`、`ControlSnapshot` 和维护相关的 bean 仍可替换。
+8.0 预览版中，应用可以用自己的 bean 替换执行控制面授权与审批的部分：`ControlAuthorizer`、`ChangeAuthority`、`Changes`、`ControlPlane` 和 `ControlHttp`。现在不行了：这些类型中任何一个出现第二个 bean，启动都会失败（`ControlHttp` 是在提供控制面路由时）。`ControlAuthorizer`、`DocumentConfirmation`、`PipelineControlAuthorizer`、`ChangeAuthority`、`Changes`、`DefaultControlPlane`、`ControlHttp`、`ControlHttpRequest` 和 `ControlHttpResponse` 是 `@InternalCoSecApi`，`ControlPlane` 和它每个方法都要的 `Operator` 也是：控制面不是应用可以调用的库，应用通过它的 HTTP API 写入（[外部事实源同步角色](../scenarios/external-source.md)）。`ControlStore`、`ChangeOptions`、变更监听器、`Revisions`、`ControlSnapshot` 和维护相关的 bean 仍可替换。
 
 #### 策略测试套件 {#policy-test-suites}
 
@@ -662,7 +769,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 | `cosec.authentication.social.` | `cosec.authentication.login.social.` |
 | `cosec.authorization.allow-query-token` | `cosec.pipeline.allow-query-token` |
 | `cosec.api-key.header` | `cosec.pipeline.api-key-header` |
-| `cosec.authorization.enabled` | 已删除：`cosec.enabled=false` 关闭 CoSec。 |
+| `cosec.authorization.enabled` | 已删除。`cosec.enabled=false` 关闭每一个 CoSec bean，登录和签发令牌也在内，所以让用户登录而不执行任何授权的服务不用它（[只签发令牌的服务](../integration/authentication.md#a-service-that-only-issues-tokens)）。 |
 | `cosec.authorization.local-policy.` | 已删除：用 `cosec-migrate` 转换并发布这些文件（[迁移数据](#migrating-the-data)）。 |
 | `cosec.authorization.root-enabled` | 已删除：root 变为 break-glass（[root 变为 break-glass](#root-becomes-break-glass)）。 |
 | `cosec.authorization.cache.enabled` | 已删除：快照缓存是 `cosec.authorization.snapshot.*`。 |
@@ -772,13 +879,47 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 
 ## 已在运行 8.0 预览版的部署 {#between-8-0-previews}
 
-只适用于已在运行 8.0.0 alpha 的部署：每个预览版到下一个之间的变化，新的在前。7.x 部署不需要这一部分，上面一节就是完整的升级。8.0 正式发布时这些说明将删除。
+只适用于已在运行 8.0.0 预览版的部署：每个预览版到下一个之间的变化，新的在前。7.x 部署不需要这一部分，上面一节就是完整的升级。8.0 正式发布时这些说明将删除。
+
+### 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
+
+- **`cosec-gateway-server` 镜像关闭了 ip2region。** 它的 `config/application.yaml` 现在设置 `cosec.ip2region.enabled: false`，与 Kubernetes 的 base 一致；直到 beta.3，镜像一直开启它。读取 `ext.ip2region.*` 的文档在它上面不再能编译：升级镜像之前设置 `COSEC_IP2REGION_ENABLED=true`。它的 Docker `HEALTHCHECK` 现在探测 `/actuator/health/liveness`，因此等待平台文档的网关不再被报告为不健康。
+- **`@ahoo-wang/cosec-react`：`logout` 在服务端结束会话。** `useSecurity` 和 `SecurityProvider` 新增 `tokenManager` 选项（同一个 `TokenStorage` 的 `JwtTokenManager`，带 `tokenRevoker`）和 `logout()`：它调用服务端的登出，然后删除这里的令牌对（[构建客户端](../integration/clients.md#logout-and-switching)）。`signOut` 不变：它只删除这里的令牌对，会话在服务端仍可刷新，直到其刷新令牌过期。没有任何破坏性变化；把用户的"退出"改为调用 `logout`。
+
+### 从 8.0.0-beta.2 升级 {#from-8-0-0-beta-2}
+
+- **安全：吊销表最多把“未吊销”保留 30 秒。** 直到 8.0.0-beta.2，`RevokedTokenCache` 和 `RevokedSubjectCache` 的 `absent-ttl` 没有锁定，所以 `cocache.caches.RevokedTokenCache.absent-ttl`、`cocache.defaults.store.absent-ttl` 或定制器都能延长它，错过失效消息的实例会在那么长时间里接受已吊销的令牌。现在它由 CoSec 决定，为 30 秒：为任一吊销表设置 `cocache.caches.[name].absent-ttl` 会使启动失败（请删除它），全局默认值和定制器也不再影响它。
+- **安全：请求用应用的 `TokenVerifier` 校验。** 直到 8.0.0-beta.2，starter 的管道一直用 CoSec 自己的 `JwtTokenVerifier` 校验请求的令牌，即使应用声明了 `TokenVerifier` Bean（刷新和登出确实用了它）。现在请求、刷新和登出用同一个校验器（`IDN-25`）。变化取决于你的校验器：
+  - 校验其他签发者令牌的校验器，现在在请求上也像一直以来在刷新时一样生效。
+  - 包装 CoSec 自己校验器的校验器（`JwtTokenVerifier` 加上你自己的检查）让它的令牌在每个请求上都不再是 CoSec 的：主体的凭证是 `token` 而不是 `jwt`，没有会话，因此不能从该请求的会话[切换租户](../integration/authentication.md#switching-tenant-and-app)，网关也不转发会话，并且永远没有 break-glass。直到 beta.2，它的请求三者都有。除非这正是你想要的，否则不要声明这样的校验器。
+
+  没有自己 `TokenVerifier` 的应用不受影响。
+- **安全：提供的刷新路由使用你的 `RefreshTokenAuthentication`。** 直到 8.0.0-beta.2，该路由自己构建刷新认证，只使用 `MembershipRefresh<RefreshTokenCredentials>` Bean，所以声明在你的 `RefreshTokenAuthentication` Bean 中的钩子（例如拒绝已停用的用户）对它不起作用。现在由你的 Bean 提供这个路由。基于你自己凭证类的 Bean 在设置了 `cosec.authentication.login.refresh.path` 时会使启动失败：请从你自己的路由提供那个刷新并取消该路径，或者基于 `RefreshTokenCredentials` 声明它。
+- **会话存储失败或无法执行某个调用。** `TokenRevoker.revokeSubject` 中存储失败（例如 Redis 宕机）时，现在抛出 `SessionStoreUnavailableException`，与 `revoke` 一直以来的做法相同：返回 `503` 并再次吊销。原来在 `revokeSubject` 外捕获存储自身异常的代码，改为捕获 `SessionStoreUnavailableException`。会话存储因为根本无法执行某个调用而抛出 `UnsupportedOperationException` 时，现在在每次会话存储调用（登录、刷新、切换租户、登出和两种吊销）中都原样抛出，而以前会变成 `SessionStoreUnavailableException`：这是配置问题，不是故障。在 starter 提供的刷新和登出路由上，这意味着 `500`，以前是 `503`。
+
+### 从 8.0.0-beta.1 升级 {#from-8-0-0-beta-1}
+
+- **升级前：给每个限制了命令的数据面 Redis 用户加上 `+evalsha_ro +eval_ro`。** 不运行控制面的实例现在以只读方式读取文档和候选，即 `EVALSHA_RO`（Redis 7.0 或更高版本，CoCache 8 本已要求）。用一个列出命令的用户（例如 beta.1 的[谁可以写哪些 key](./storage.md#who-may-write-which-keys) 给出的那个：先 `-@all`，再在其他命令中给出 `+evalsha +eval`），升级后的实例会在启动时失败：`Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]: allow [+evalsha_ro] ...`。请先加上这两个命令；没有命令列表的用户（`+@all`）不需要任何改动。把文档和候选收窄为读权限（`%R~<s>:snapshot:* %R~<s>:candidate:*`）是可选的，页面上给出了写法。运行控制面的进程不变：它仍然写入它们。
+- **`cosec.control.enabled` 可以在实例上关闭控制面**（新增：无需迁移；默认值 `true` 不改变任何东西）。两种角色共用一个带 `cosec-control` 镜像的部署，在数据面角色上设置 `COSEC_CONTROL_ENABLED=false`：它不运行控制面，以只读方式读取文档和候选，可以使用[谁可以写哪些 key](./storage.md#who-may-write-which-keys) 中的只读用户。`true` 或 `false` 以外的值会使启动失败。
+- **starter 可以提供刷新和登出路由**（新增：在设置路径之前什么都不变）。`cosec.authentication.login.refresh.path` 和 `logout.path` 在 Spring MVC 和 WebFlux 上提供它们，状态码和响应体见[构建客户端](../integration/clients.md#what-your-application-serves)。你自己写的路由照常工作：不设置路径就不提供任何路由。要迁移到提供的路由，设置客户端调用的路径，删除你的处理器及其异常映射，并保留允许匿名 `POST` 它的语句。
+- **会话存储的故障以 `SessionStoreUnavailableException`（`cosec-login`）离开 `TokenFamilies` 和 `StoreTokenRevoker`**，存储自身的异常作为其 cause，从而把无法应答的存储（`503`）与错误（`500`）区分开。在刷新、切换或登出周围捕获存储自身异常类型的代码，改为捕获它。`StoreTokenRevoker.revokeSubject` 不变。
+- **`MembershipRefresh` 以 `TokenVerificationException` 拒绝**（成员关系已不存在时用 `TokenRevokedException`），这是 `401`；其他任何异常都是错误，在提供的路由上是 `500`，客户端保留令牌对。以其他异常（例如 `IllegalStateException`）拒绝的钩子，改为抛出 `TokenRevokedException`。
+- **快照源让每个文档的键经由各自的运行器处理**（无需迁移，API 与属性都不变；决策不变）。运维能看到的不同：
+  - 在文档加载期间发出、在该加载结束之后才被取出的请求，得到已安装的文档，算作命中；beta.1 把它并入那次加载，算作冷加载：文档相同，但 `cosec.snapshot.loads{result=cold}` 少计一次。
+  - `close` 结束了某次加载之后才答复"不存在"的存储读取不再上报：已关闭的实例不会因此记录 `Snapshot document [<doc>] disappeared from the store; failing closed.`，也不计入 `cosec.snapshot.lost`。在存储读取超时（30 秒）时被放弃、之后才答复"不存在"的读取，由该文档的下一次加载上报，而不是立即上报。
+  - 不存在文档的 id 的上限不再有空档（[实例如何读取文档](./storage.md#how-instances-read-documents)）：驱逐会跳过正在加载的条目，当这次加载发现文档仍不存在时，该条目现在自己请求回到上限。beta.1 中，族会一直高于这个上限，直到之后某次安装。
+  - 平台文档变化、所有文档重新编译时，有在途加载的文档可能多加载一次：每个文档至多多读一次存储。
+  - 每个持有的文档多占约 64 字节堆内存，每次冷加载多分配约 1.2 KB。
+- **快照源有了指标**（新增：无需迁移）。有 `cosec-micrometer` 和 `MeterRegistry` 时，数据面的快照源现在注册 `cosec.snapshot.*` 指标：新增 80 个序列，与文档数量无关，因为没有任何标签携带应用或租户 id。找到已安装文档的请求不计数：只计请求不得不等待的加载。[`cosec.metrics.enabled`](./configuration.md#feature-switches)`=false` 会连同 CoSec 的其他指标一起关闭它们。各指标及告警条件见[快照指标](./observability.md#snapshot-metrics)。
+- **快照源的维护线程拒绝的任务被丢弃并计数**（`SNP-19`；无需迁移）。该线程写快照源的日志、执行驱逐，队列容纳 4,096 个任务。队列满时，beta.1 在提交任务的线程（常常是请求线程）上执行被拒绝的任务，于是慢的日志 appender 会拖慢请求。现在任务被丢弃并计入 `cosec.snapshot.housekeeping.refused{task}`，该线程最多每 10 秒记录一条 `WARN`：`Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …`，列出每种任务最后被丢弃的那条日志，不带堆栈；关闭中的实例把剩下的写出一次。抛出异常的指标在同一行里计数，而不单独记录日志。无需任何操作，除非出现这条摘要：那时改用异步日志 appender（[快照日志缺失](./troubleshooting.md#snapshot-log-lines-are-missing)），并对该计数器的任何上升告警。
 
 ### 从 8.0.0-alpha.4 升级 {#from-8-0-0-alpha-4}
 
 **如果你发布过任一预览版的 `cosec-migrate convert` 写出的文档，请检查其中的 ALLOW 语句**（下面第一条）：转换得到的 7.x"所有动作"授予了控制面。
-8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。
+8.0.0-alpha.4 是预览版，没有兼容性承诺。**在此版本之前签发的令牌都没有声明应用，配置了应用的服务会拒绝它们**（见下）：请安排重新登录，或等待令牌过期。以 format 2 存储的 API key 会失败，需要重新发放。**升级前请关闭或撤回打开的影子窗口**：8.0.0-alpha.4 暂存的候选在文档旁另写了头部，会被当作无法读取而拒绝，于是它的窗口不被比较。
 
+- **修订索引的条目增加了 `parent`，每个文档第一次读取时会重写 alpha 写下的索引**（`CTL-35`）。`<s>:control:revisions:<doc>` 的每个条目带着其文档所声明的父修订的摘要；只有当最后一个条目是头、且每个条目都指向它下面那个条目时，才会返回文档的历史。此前写下的索引没有 `parent`：每个文档第一次读取（一次控制 API 调用，或维护任务）会沿头的链走一遍，解码每条保留的记录，并用它重写条目；不需要迁移，也不会丢失任何东西。`RevisionEntry` 的构造函数多了第四个参数 `parent`（默认 `null`），供自己构造它的代码使用。同一次读取还会修复头退回、修订号被重用的情形——此前这会读到旧分支的文档；见[修订、历史与回滚](./storage.md#revisions-history-and-rollback)。
+- **安全：租户切换不再从已吊销或已结束的会话签发。** 从 8.0.0-alpha.1 到 8.0.0-alpha.4，切换自己不读取吊销记录：吊销存储无法读取时（请求路径此时把它读作"未吊销"），已登出的令牌，或被吊销主体的令牌，可以被切换成一个没有任何吊销记录指名的新令牌。会话是在 8.0.0-alpha.4 之后才有的；在这次修改之前，切换还会从一个自身会话已被吊销的令牌开始一个有效的会话：会话被刷新之后再次出示的令牌对吊销（`IDN-16`，其访问令牌在 `cosec.jwt.token-validity.access`（10 分钟）之内仍然有效），或被登出吊销。复制了令牌对并抢先刷新的人因此可以持有一个会话，直到用户的会话本该结束时为止，最长 `cosec.jwt.session.lifetime`。这一点不在任何预览版中。现在切换只从有效的会话签发，并严格读取吊销记录，与刷新共用同一个检查（`IDN-22`、`IDN-14`）：从已失效的会话切换回答 `token-revoked` 或 `token-expired`，存储无法读取时回答 503。预览版的切换在吊销存储故障期间签发的令牌，不会被它躲过的那条吊销记录吊销；如果可能存在这样的令牌，请[吊销该主体](../integration/authentication.md#revoking-every-token-of-a-principal)。
 - **安全：转换得到的 7.x"所有动作"不再授予控制面。** 从 8.0.0-alpha.1 到 8.0.0-alpha.4，`convert` 把针对所有 7.x 动作的 ALLOW 写成
   `"action": "*"`，它还匹配每一个控制面动作（`cosec:*`）和代码中检查的每一个动作。像"登录用户可以做任何事"这样的全局策略经转换后，给了每个已认证主体
   对其所在租户文档的全部控制面动作，`(platform)` 的主体则得到对平台文档和应用文档的全部控制面动作。可附加的策略对列出它的每个令牌也是如此。这样的主体
@@ -796,10 +937,27 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
      你自己写的 `*` 上的语句由你决定是否保留。
   2. 通过控制面把每一条转换得到的语句改为 `http:*`：提交一个变更，以 `"action": "http:*"` 重新写入该策略。如果某个文档自 `publish` 以来没有变过，
      也可以对它 `apply` 新一次 `convert` 写出的文件，它提出的变更正好是这些语句。
+- **租户和应用 id 不含 `/`**（`SCP-13`）。8.0 预览版接受 `acme/west` 这样的租户 id 和 `a/b` 这样的应用 id；本版本在每个入口都拒绝它们，
+  所以存储过这种 id 的预览版部署必须在升级前删除它们的记录。在预览版上用 `GET /documents` 查找：`tenant:` 或 `app:` 之后含 `/` 的键。
+  预览版自己的控制面无法删除它们，因为它同样拒绝这种 id。先停止控制面，然后对每个这样的文档 `<doc>`（`tenant:acme/west`）删除 `<s>` 下的这些
+  Redis 键（[Redis 键](./storage.md#redis-keys)）：
+  - `<s>:snapshot:<doc>`（头）和 `<s>:candidate:<doc>`（暂存的候选）；
+  - `<s>:control:revisions:<doc>` 以及每个 `<s>:control:revision:<doc>:*`（修订索引与修订记录）；
+  - 每个 `<s>:control:refs:<doc>:*`（指向它的策略的反向引用）；
+  - `<s>:control:stage:<doc>` 和 `<s>:control:lease:reclaim:<doc>`；
+  - 每个 `"key"` 为 `<doc>` 的 `<s>:control:change:<id>`，以及 `<s>:control:list:open-changes` 中它的 id；
+  - `<s>:control:list:documents` 中的条目 `<doc>`；应用还要删除 `<s>:control:apps:all` 中它的条目；
+  - 每个 `"tenantId"` 或 `"app"` 含 `/` 的 `<s>:api-key:<sha256>`。
+
+  然后删除每个在引用方中列出 `<doc>` 的 `<s>:control:refs:*` 集合，再运行 [`repair-references`](#repair-the-back-reference-index)，它会写回其余的头所引用的内容。
+  完成之前，本版本在每条这样的记录上整体失败并指名它（`SCP-10`）：反向引用集合让发布其策略失败，变更回答 `503`，未完成的变更让每轮维护停止，
+  API key 查找失败（`503`）。安装过这种文档的预览版实例，其实例状态会让影子窗口的状态读取失败，直到它过期，即该实例停止两分钟之后（状态 key 的存活时间，`ShadowCacheSpecs.STATUS_TTL`）。
+  给租户或应用改名，并以新 id 发布它的文档；旧 id 的令牌是 `401 token-invalid`（[租户和应用 id 不含斜杠](#tenant-and-app-ids-hold-no-slash)）。
+- **没有任何 CoSec 模块导入 platform，`cosec-dependencies` 不再发布**（R11）。此前每个库模块的 POM 和 Gradle 模块元数据都导入 `cosec-dependencies`，后者导入 Spring Boot、Spring Cloud、CoCache、OpenTelemetry、springdoc 和 fluent-assert 的 BOM，并管理 jmh、mockk、archunit、blockhound、json-schema-validator 和 detekt-formatting 的版本，所以加入一个模块就会提升应用整个构建中的这些版本，包括 `cosec-cocache` 的 CoCache 8 盖过应用自己的 CoCache 4。现在模块的元数据只写明它需要的库及其构建时的版本（作为最低版本），别无其他；Maven 也不再需要那个导入来解析它们。导入过 `me.ahoo.cosec:cosec-dependencies` 的应用请去掉这个导入，自己管理想要的版本（[CoSec 对构建的要求](../guide/introduction.md#what-cosec-needs-from-your-build)）。`cosec-bom` 列出应用可以依赖的 CoSec 模块（不含 `cosec-migrate`），不导入任何东西。`cosec-cocache` 和 `cosec-kafka` 的 POM 把 `cosec-control` 标为 `provided`：使用控制面的 Maven 应用自己添加 `cosec-control`，此前它们会把它（连同 `cosec-runtime`）带到运行时。
 - **三个包名与其模块名对齐。** `me.ahoo.cosec.cache`（`cosec-cocache`）现在是 `me.ahoo.cosec.cocache`，`me.ahoo.cosec.servlet`（`cosec-webmvc`）是 `me.ahoo.cosec.webmvc`，`me.ahoo.cosec.spring.boot.starter`（`cosec-spring-boot`）是 `me.ahoo.cosec.spring.boot`。子包在新根之下保持原名；没有类名、artifact id、`cosec.*` 属性、bean 名或 Redis key 改变。在应用中需要修改：import；`spring.autoconfigure.exclude` 与 `@ConditionalOnClass(name = ...)` 字符串中的自动配置类名（`me.ahoo.cosec.spring.boot.starter.CoSecAutoConfiguration` 现在是 `me.ahoo.cosec.spring.boot.CoSecAutoConfiguration`）；以及日志配置中的 logger 名（`logging.level.me.ahoo.cosec.cache` 现在是 `logging.level.me.ahoo.cosec.cocache`）。
 - **策略文档、路由映射和 JSON 格式成为独立模块 `cosec-document`。** `me.ahoo.cosec.runtime.document` 现在是 `me.ahoo.cosec.document`，`me.ahoo.cosec.runtime.document.format` 是 `me.ahoo.cosec.document.format`，`me.ahoo.cosec.runtime.route` 是 `me.ahoo.cosec.document.route`；类（`PolicyDocument`、`PolicyDocumentCodec`、`PolicyDocumentCompiler`、`DocumentCompileException`、`Actor`、`RouteMap`、`RouteMapCodec` 等）保持原名。没有文档、schema、`cosec.*` 属性、bean 或 Redis key 改变。在应用中修改 import 即可。`cosec-runtime` 和 starter 会带上 `cosec-document`，所以依赖不变；只读写文档的代码（生成器、[CI 检查](../policies/testing.md#policies-in-ci)）可以只依赖 `me.ahoo.cosec:cosec-document`，不必依赖 `cosec-runtime`。`cosec-openapi` 现在依赖 `cosec-document` 而不是 `cosec-runtime`：经由它编译依赖管道的应用需要自己添加 `cosec-runtime` 或 starter。
 - **影子窗口端口及其值移到 `cosec-spi`。** `CandidateStore`、`StoredCandidate`、`ShadowReportSink`、`ShadowReportReader`、`ShadowReport`、`ShadowSample`、`ShadowOutcome`、`InstanceStatus` 和 `InstalledDocument` 从 `me.ahoo.cosec.runtime.shadow` 移到 `me.ahoo.cosec.spi.shadow`，仍是实验性 API，名称不变。你自己的存储修改 import 即可，并且可以只依赖 `cosec-spi`。`cosec-cocache` 不再依赖 `cosec-runtime`：只经由 `cosec-cocache` 编译依赖管道的应用需要自己添加 `cosec-runtime` 或 starter。存储格式和 Redis key 都不变。
-- **签发令牌归 `cosec-login`。** `TokenFamilies`、`DefaultTokenRevoker` 和 `SimpleCompositeToken` 从 `me.ahoo.cosec.runtime.token` 移到 `me.ahoo.cosec.login.token`，名称不变；`me.ahoo.cosec.runtime.token` 保留校验请求令牌所需的部分（`TokenRevocation`、`CoSecTokenVerifier`）。在应用中修改 import 即可；starter 和 `cosec-jwt` 会带上 `cosec-login`，所以依赖不变。
+- **签发令牌归 `cosec-login`。** `TokenFamilies`、`DefaultTokenRevoker` 和 `SimpleCompositeToken` 从 `me.ahoo.cosec.runtime.token` 移到 `me.ahoo.cosec.login.token`，名称不变，其中两个后来又变了：`DefaultTokenRevoker` 是同一个包里的 `StoreTokenRevoker`，`SimpleCompositeToken` 已不存在，由 `cosec-api` 中的 `CompositeToken` 取代（均见下）；`me.ahoo.cosec.runtime.token` 保留校验请求令牌所需的部分（`TokenRevocation`、`CoSecTokenVerifier`）。在应用中修改 import 即可；starter 和 `cosec-jwt` 会带上 `cosec-login`，所以依赖不变。
 - **适配器契约集中到一个包 `me.ahoo.cosec.runtime.http`。** `RequestGate`、`Outcome`、`Problem`、`ProblemType`、`ProblemEncoder` 和 `RequestSecurity` 从 `me.ahoo.cosec.runtime` 移入，`TraceContext` 从 `me.ahoo.cosec.runtime.event` 移入，与 `HttpFacts`、`Headers`、`Cookies` 放在一起；类名不变。在应用中修改 import 即可：你自己的适配器、读取 `RequestSecurity` 的处理器、读取 `Outcome` 的测试。状态码、响应头、响应体和属性都不变。有五个 logger 改为以现在独立记录日志的类命名，按 logger 名设置级别的日志配置改用新名字：
 
   | 之前 | 之后 |
@@ -809,6 +967,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
   | `me.ahoo.cosec.runtime.event.ShadowListener` | `me.ahoo.cosec.runtime.shadow.ShadowListener` |
   | `me.ahoo.cosec.runtime.shadow.Candidates` | `me.ahoo.cosec.runtime.shadow.CachingCandidateSource` |
   | `me.ahoo.cosec.runtime.shadow.ShadowRecorder` | `me.ahoo.cosec.runtime.shadow.ShadowReporter` |
+- **变更日志有一个有意取定的 logger 名。** `LoggingChangeListener` 原来把变更日志写到 logger `me.ahoo.cosec.control.audit.ChangeAudit`，这个名字来自它所在的文件；现在写到 `me.ahoo.cosec.changelog`（`LoggingChangeListener.LOGGER_NAME`），与决策审计写到 `me.ahoo.cosec.audit` 一样：这个名字在所有包之外，任何类的 logger 都不是它的子 logger。按旧名路由或过滤的日志配置或日志采集器改用新名（[控制面变更日志](./observability.md#control-plane-change-log)）。日志行本身不变。分发器自己的警告 `Change listener [<name>] could not record <event>.` 现在由它自己那个类的 logger `me.ahoo.cosec.control.audit.ChangeListeners` 记录。
 - **不使用 Spring 时用 `Pipeline.builder` 构建管道。** `Pipeline.builder(authenticator, store)` 像 starter 一样编译并装载 `SnapshotDocumentStore` 中的文档。`memberships`、`attributes`、`listener`、`rateLimiter`、`routes`、`ids`、`clock` 和 `forwardIdentity { … }` 设置其余部分；`options { … }`、`snapshots { … }` 和 `listeners { … }` 设置原来由 `PipelineOptions`、`SnapshotOptions` 和 `DecisionListeners` 的参数设置的内容，名称和默认值不变。`snapshots { prewarmApps = …; prewarmTenants = … }` 指定构建时装载的文档，与 starter 的 `cosec.authorization.snapshot.prewarm-apps` 和 `prewarm-tenants` 相同；`awaitDocuments()` 等到它们都已读取，返回尚未装载的那些，就绪时为空集合。`close()` 先投递监听器队列中的事件，再关闭文档。位于 CoSec 网关之后的服务用 `Pipeline.behindGateway { … }` 获得它的 gate。`Pipeline` 的构造器、`PipelineComponents` 和 `SuspendingSnapshotSource.of` 已删除；`PipelineOptions`、`SnapshotOptions`、`SuspendingSnapshotSource`、`AttributeProviders`、`DecisionListeners`、`IdentityIssuer`、`IdentityGate` 和 `CoSecParameters.read` 现在是 `@InternalCoSecApi`，应用从不选择使用它们。状态码、响应头、响应体和 `cosec.*` 属性都不变。对手工组装的管道有一处朝安全方向的变化：它的文档现在像 starter 的一样编译，所以读取它所读 API key 请求头（`options { apiKeyHeader = … }`）的条件或限流规则 key 不能编译（`CND-5`）。这样的文档被装载为失败，其请求是 503；此前 `SuspendingSnapshotSource.of(store)` 会装载它。给同一项输入两种形式的构建器（例如 `listener` 与 `DecisionListeners`）拒绝构建，而不是丢掉其中一个。
 
   ```kotlin
@@ -830,10 +989,12 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 - **`SimpleRefreshTokenAuthentication` 更名为 `RefreshTokenAuthentication`**，包和构造参数不变：唯一的实现不需要前缀。在声明它的 bean 的地方改类名。
 - **`DefaultTokenRevoker` 更名为 `StoreTokenRevoker`**：它经由 `TokenStore` 吊销，名字现在说出了这一点。包（`me.ahoo.cosec.login.token`）和构造参数不变；starter 的 bean 仍是 `cosecTokenRevoker`，`TokenRevoker` 仍是 SPI。在构造它的地方改类名。
 - **`api.CoSec` 已删除。** 它的值拼写不变，在有含义的地方各有名字：匿名主体是 `CoSecPrincipal.ANONYMOUS_ID`，默认租户是 `TenantId.DEFAULT`，两个都拼作 `(0)` 的不同 id；`cosec.*` 属性和 Redis key 的默认前缀（`cosec.key-prefix`，`cosec`）不变，span 属性（`cosec.tenant_id` 等）和 OpenAPI 方案 `cosec.BearerAuth` 也不变。读取 `CoSec.COSEC`、`CoSec.COSEC_PREFIX` 或 `CoSec.DEFAULT` 的代码，改为写出它所指的值。key、属性和 span 属性都不变。
-- **租户切换是带 `TenantSwitch` 的 `SwitchTenantAuthentication`，它可以设定应用。** `AbstractSwitchTenantAuthentication` 已删除。原来继承它并实现 `switchTenant(targetTenantId, previous)` 的地方，改为把 `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java) { credentials -> … }` 声明为 bean：切换拿到的是你自己的凭证类（`credentials.targetTenantId`、`credentials.context`，以及它携带的其他内容），像以前一样回答 `TenantMembership`。`SwitchTenantCredentials` 新增 `targetAppId`（用户请求的应用，默认为 null）；`TenantMembership` 新增 `app`。新令牌属于你的切换回答的应用，否则属于先前令牌的应用（`SCP-12`）：不回答应用的切换行为不变，用户也永远不能靠指名得到一个应用。见[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)。
-- **刷新可以重新读取用户。** `RefreshTokenAuthentication` 接受一个可选的 `MembershipRefresh`，回答用户现在拥有什么；校验、吊销检查、轮换和会话仍由这个类完成。原来为在刷新时重新读取用户而编写自己的 `Authentication` 的地方，改为传入 `MembershipRefresh`。不传时，刷新照旧保留令牌的声明。
+- **租户切换是带 `TenantSwitch` 的 `SwitchTenantAuthentication`，它可以设定应用。** `AbstractSwitchTenantAuthentication` 已删除。原来继承它并实现 `switchTenant(targetTenantId, previous)` 的地方，改为用 starter 的 `TokenFamilies` 和 `TokenRevocation` bean，把 `SwitchTenantAuthentication(families, revocation, YourCredentials::class.java) { credentials -> … }` 声明为 bean：切换拿到的是你自己的凭证类（`credentials.targetTenantId`、`credentials.context`，以及它携带的其他内容），像以前一样回答 `TenantMembership`。`SwitchTenantCredentials` 新增 `targetAppId`（用户请求的应用，默认为 null），并删除了 `accessToken`：切换从请求的会话签发，管道构造的 `context` 携带这个会话（`IDN-22`），所以不要再传令牌文本（也不要为此解析 `Authorization`）。`TenantMembership` 新增 `app`。新令牌属于你的切换回答的应用，否则属于先前令牌的应用（`SCP-12`）：不回答应用的切换行为不变，用户也永远不能靠指名得到一个应用。`TokenSubject.authTime` 已删除，`TokenFamilies.rotate` 和 `TokenFamilies.startAt`（原来的 `start(…, authTime)`）归 CoSec 自己使用（`@InternalCoSecApi`）：从先前的登录签发，必须经过有效会话的检查。见[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)。
+- **转发的身份携带 CoSec 令牌的会话和签发时间**（`auth.session`：`sid`、`auth_time`、`generation`；`auth.iat`），使网关之后的服务知道用户何时登录，并让那里的租户切换从这个会话签发（`IDN-22`）。格式仍是版本 1，服务严格读取它：比网关旧的服务会以 `400` 拒绝这些新成员。**请先升级网关之后的服务，再升级网关。** 没有这些成员的身份（API key 的，或更早的网关发送的）照旧读取，但不能从它切换。`Identity.Credential` 新增可选的 `issuedAt` 和 `session`。
+- **`SecurityContext` 新增 `requestId` 和 `deviceId`。** `requestId` 是 CoSec 为该请求使用的 id（客户端的 `CoSec-Request-Id`，或 CoSec 生成的、任何请求头都没有的 id）；`deviceId` 是客户端的 `CoSec-Device-Id`，未声明时为空，CoSec 只检查其形式，它不能证明是哪台设备。请从上下文读取它们，而不是读请求头。你自己的 `SecurityContext` 实现照样能编译：两者默认都是 `""`。在网关之后，服务现在按网关读取 `CoSec-Device-Id` 的同一规则读取它（只能有一个值，否则 `400`），因此代码中检查的 `environment.device` 在那里也能看到它；以前在网关之后看不到设备。
+- **刷新可以重新读取用户。** `RefreshTokenAuthentication` 接受一个可选的 `MembershipRefresh`，回答用户现在拥有什么；校验、吊销检查、轮换和会话仍由这个类完成。原来为在刷新时重新读取用户而编写自己的 `Authentication` 的地方，改为传入 `MembershipRefresh`。不传时，刷新照旧保留令牌的声明。钩子会拿到令牌和刷新的凭证（`{ token, credentials -> … }`）；要在那里读取你自己的内容（例如设备），把你的凭证类也传进去：`RefreshTokenAuthentication(verifier, revocation, families, YourCredentials::class.java) { token, yours -> … }`，与租户切换接受自己的凭证类一样。`RefreshTokenAuthentication(verifier, revocation, families)` 的写法不变。
 - **`TokenCompositeAuthentication` 用 `TokenCompositeAuthentication.of(authentications, tokenConverter, families)` 构建。** 它的构造器需要两个应用无法构建的类型（`CompositeAuthentication`、`DefaultAuthenticationProvider`），现在是 `@InternalCoSecApi`。starter 的 bean 不变；手工组装的登录（例如在测试中）把它的 `Authentication` 传给 `of`。
-- **任何请求都不可能有的 `http` 动作不能编译**（`DOC-8`）。`http:HEAD`（自 `PIP-18` 起按 `http:GET` 判定）或动词含小写字母（`http:get`）的语句或限流规则不匹配任何请求，这样的 DENY 什么也拒绝不了。现在这样的文档被拒绝：已存储的会被装载为失败，其请求失败即拒绝（`503`），控制面也拒绝会产生这种文档的变更。升级之前，请在控制面列出的文档中查找它们（`"http:HEAD"`，或冒号后含小写字母的 `"http:` 动作），改为 `http:GET` 或大写的方法后重新发布。
+- **任何请求都不可能有的 `http` 动作不能编译**（`DOC-8`）。`http:HEAD`（自 `PIP-18` 起按 `http:GET` 判定）或动词含小写字母（`http:get`）的语句或限流规则不匹配任何请求，这样的 DENY 什么也拒绝不了。现在这样的文档被拒绝：已存储的会被装载为失败，其请求失败即拒绝（`503`），控制面也拒绝会产生这种文档的变更。升级之前，请在控制面列出的文档中查找它们（`"http:HEAD"`，或冒号后含小写字母的 `"http:` 动作），改为 `http:GET` 或大写的方法后重新发布。对 7.x 的转换，`cosec-migrate convert` 不论语句如何都会报告一次：HEAD 请求现在按 GET 决策（`PIP-18`：GET 被放行处放行，GET 被拒绝处拒绝）；它把 7.x 的 `ipRegion` 的国家前缀读作 `ext.ip2region.country`，平台文档随后声明它（执行这类语句的每个宿主都需要 `cosec-ip2region`）；只有 7.x 的请求附加器填充过的部分（`ipRegion`、应用自己的属性）在 8.0 中始终缺失，所以对它的条件只在收窄 ALLOW 时才翻译（记为 `NOT-IN-8.0`），其余情况都被拒绝（`MIG-1`），因为它会放宽 ALLOW、拒绝范围内的每个请求，或使 DENY 不再匹配 7.x 拒绝过的内容。
 - **`cosec-migrate cocache8` 已删除。** 它把 8.0.0-alpha.2 的数据从 CoCache 6 迁移到 CoCache 8（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）：仍保存这种数据的部署，请在升级之前用 8.0.0-alpha.4 的 `cosec-migrate` 迁移。`<p>:meta:cocache8` 存在时，`publish` 拒绝执行，不写入任何内容：这个标记由一次在删除文档之后中断的升级留下，那些文档在它的导出目录里，不在 Redis 中。请用 8.0.0-alpha.4 的 `cosec-migrate` 完成那次升级（`publish --resume`，`--in` 指向消息给出的导出目录），或者确认标记列出的每份文档都已发布，再删除这个 key。
 - **`cosec-migrate api-keys --app` 可用了**（第 2 轮 M3）。自 #1302 起这一步无法运行：#1302 把 `--app` 加进了代码和本页，却没有加进该命令接受的选项，命令因此把 `--app` 当作它不接受的选项而拒绝。对配置了应用的服务必须接受的 key，请带上 `--app <id>` 重新运行。
 - **starter 的启动检查在延迟初始化下也会运行**（`STA-3`）。设置 `spring.main.lazy-initialization=true` 时，此前没有任何检查运行：缺少 `cosec-webmvc` 的 Spring MVC 宿主在完全没有授权的情况下启动，`gateway` 模式的 Spring Cloud Gateway 宿主不经检查地转发每个请求，Redis 的逐出策略、从副本读取、暴露的 actuator 端点、没有 `MembershipProvider` 的 API key 和未知的 `cosec.*` 属性都不受检查。现在它们与不使用延迟初始化时一样使启动失败。只因检查被跳过才能启动的配置不再能启动：按消息修正。
@@ -846,14 +1007,14 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 - **生成的路由映射位于 `servers` 路径之下，资源包含路径的每个变量**（第 2 轮 L4）。`cosecServiceGenerator` 端点丢掉了服务器路径（`/api/v1`），生成的路由匹配不到任何请求，所有请求都落在 `http` 命名空间；`/users/{id}/avatar/{size}` 的资源是 `user/{size}`，所有用户共用一个资源。现在路由以服务器路径开头（不含上下文路径），资源是 `user/{id}/{size}`：重新生成路由映射，并改写策略中按生成结果写的资源。多个服务器路径不同，或路径含服务器变量时，生成失败。
 - **ip2region：无法定位的是取不到**（第 2 轮 M5）。只有随附的 IPv4 数据库时，IPv6 客户端没有国家，写成 `country in [...]` 的地域封锁 DENY 会放行它；现在它是取不到，这条 DENY 使请求返回 `503`（或者用 `onMissing: nomatch` 放行）。用 `cosec.ip2region.ipv6-location` 加载 IPv6 数据库。`Ip2RegionAttributeProvider` 改为接收数据库列表，每个数据库的版本取自其文件头，不再接收单个数据库和版本。
 - **失败的 `IdGenerator` 只损失它自己的 id**（`PIP-23`）。此前抛出异常的生成器（时钟回拨后 CosId 的 `ClockBackwardsException`）会在得出任何结果之前离开管道：没有问题体，没有 `CoSec-Request-Id`，没有决策事件，各适配器各自应答。现在以随机 id 代替，并至多每十秒记录一次 WARN；`CosIdIdGenerator` 对 CosId 的失败也是如此。请把 CosId 的时钟回拨策略配置为失败而不是等待。
-- **处理器从 `SecurityContext` 参数读取安全上下文**（第 2 轮 M4）。starter 注册了 `SecurityContextArgumentResolver`。`SecurityContextHolder` 只用于请求线程上的阻塞代码：在另一个请求的线程上恢复的 `suspend` 处理器，此前会从它读到那个请求的上下文。有 `io.micrometer:context-propagation` 并设置 `spring.reactor.context-propagation=auto` 时，Spring 现在也会恢复持有者；否则在 `suspend` 处理器中持有者是未绑定的，在那里读取会抛出异常（`PIP-22`）。
+- **处理器从 `SecurityContext` 参数读取安全上下文**（第 2 轮 M4）。starter 注册了 `SecurityContextArgumentResolver`。`SecurityContextHolder` 只用于请求线程上的阻塞代码：在另一个请求的线程上恢复的 `suspend` 处理器，此前会从它读到那个请求的上下文。有 `io.micrometer:context-propagation` 并设置 `spring.reactor.context-propagation=auto` 时，Spring 现在也会恢复持有者；否则在 `suspend` 处理器中持有者是未绑定的：在那里 `SecurityContextHolder.context` 为 `null`，`requiredContext` 会抛出异常（`PIP-22`）。
 - **应用只读取安全上下文**（第 2 轮 L5）。`SecurityContextHolder.setContext` 和 `remove`、`ServletRequests.setSecurityContext`、`ServerWebExchanges.setSecurityContext`，以及 `ReactiveSecurityContexts.setSecurityContext` 和 `writeSecurityContext` 都是内部 API：只有适配器绑定上下文。自行绑定上下文的代码（`AuthorizationChecker` 本来就拒绝这样的上下文）不再能编译。
 - **context path 按段去掉**（`PIP-20`）。Jetty 以规范形式给出 context path，而 URI 保留客户端的写法：context path 为 `/app` 时，`/%61pp/orders/1` 此前按 `/app/orders/1` 判定，绕过了 `/orders` 上的所有语句；现在是 `/orders/1`。不以 context path 开头的 URI 是 `400`。
 - **Spring MVC 过滤器的顺序改为 `-9999`**，紧跟在 Spring Boot 的隐藏方法过滤器（`-10000`）之后，而不再是 `HIGHEST_PRECEDENCE + 100`。打开 `spring.mvc.hiddenmethod.filter.enabled` 时，带 `_method=DELETE` 的 `POST` 此前按 POST 授权、按 DELETE 执行；WebFlux 一直授权的是 DELETE。必须排在 CoSec 之前的过滤器（例如 CORS 过滤器）需要低于 `-9999` 的顺序。
-- **HEAD 按 GET 判定，含小写字母的方法是 `400`**（`PIP-18`）。服务器用 GET 的处理器处理 HEAD，所以 `http:GET` 上的 DENY 拦不住它：现在 HEAD 使用路由映射的 HEAD 路由，没有时使用 GET 的路由，未映射时是 `http:GET`；`http:HEAD` 上的语句只有在路由映射映射了 HEAD 时才会匹配。`delete` 这样的方法此前按 `http:delete` 判定，`http:DELETE` 上的 DENY 不会命中，而会折叠大小写的后端把它当作 DELETE 处理：它现在是 `400 invalid-request`。`AuthorizationChecker` 以及控制面的 simulate、explain、analyze 按同样的方式读取 `http` 动作：`http:HEAD` 按 `http:GET`，小写动词为拒绝或 `400`。
+- **HEAD 按 GET 判定，含小写字母的方法是 `400`**（`PIP-18`）。服务器用 GET 的处理器处理 HEAD，所以 `http:GET` 上的 DENY 拦不住它：现在 HEAD 使用路由映射的 HEAD 路由，没有时使用 GET 的路由，未映射时是 `http:GET`；`http:HEAD` 上的语句会被拒绝（`DOC-8`，见上），因为 HEAD 按 `http:GET` 或路由映射的 HEAD 路由的动作判定。`delete` 这样的方法此前按 `http:delete` 判定，`http:DELETE` 上的 DENY 不会命中，而会折叠大小写的后端把它当作 DELETE 处理：它现在是 `400 invalid-request`。`AuthorizationChecker` 以及控制面的 simulate、explain、analyze 按同样的方式读取 `http` 动作：`http:HEAD` 按 `http:GET`，小写动词为拒绝或 `400`。
 - **客户端地址只读取一次**（`PIP-16`）。服务器自己解析转发头时（`server.forward-headers-strategy=native`，Spring Boot 在 Kubernetes 以及它识别出的其他云平台上也会自行开启），CoSec 不再第二次读取 `X-Forwarded-For`：在 Tomcat 上采用 `RemoteIpValve` 解析出的地址，在 Reactor Netty 和 Jetty 上读取该请求头而绝不使用服务器转发来的地址。此前在 Tomcat 上，两次读取叠加会取到客户端写的条目。现在以下情形启动失败：`framework`；`native` 下的 Tomcat 显式设置了 `cosec.authorization.remote-ip.max-trusted-index`；`native` 下的 Reactor Netty 或 Jetty 设置了 `max-trusted-index: 0`；CoSec 无法判断的服务器上的 `native`。迁移方法：按消息修改（[故障排查](./troubleshooting.md#startup-fails-on-the-client-address)）。`XForwardedRemoteIpResolver` 现在是内部 API。
 - **多行 `X-Forwarded-For` 视为一个列表，读不出的客户端地址是“取不到”**（`PIP-17`）。此前带两行该请求头的请求使用连接的对端，客户端可借此绕开针对它自己地址的封禁；现在按顺序读取这些行。带端口、方括号或 zone 的可信条目按其中的地址读取。不是地址的条目（`unknown`）此前使 `environment.ip` 缺失，DENY 视为不匹配；现在它是取不到：这样的 DENY 返回 `503`，黑名单也回答取不到。
-- **凭证的租户必须是租户 id**（`IDN-11`）。`tenantId` 为空白、`*`、含 `:` 或控制字符、或超过 128 个字符的令牌现在是 `401 token-invalid`（此前为 `503`，空白时为 `500`），`JwtTokenConverter` 也不签发；租户如此的 `ApiKey` 无法构造，所以已存储的会查找失败（`503`），配置的会启动失败。
+- **凭证的租户必须是租户 id**（`IDN-11`）。`tenantId` 为空白、`*`、含 `:` 或控制字符、含 `/`、或超过 128 个字符的令牌现在是 `401 token-invalid`（此前为 `503`，空白时为 `500`），`JwtTokenConverter` 也不签发；租户如此的 `ApiKey` 无法构造，所以已存储的会查找失败（`503`），配置的会启动失败。
 - **`cosec-spi` 的 `SnapshotVersion` 已删除**：它表示 7.x 的两份文档。决策事件的 `snapshotVersion` 仍是 `ViewVersion`（`platform`、`app`、`tenant`）。
 - **限流窗口至多一天**（`windowSeconds` 至多 `86400`），`permitsPerSecond × windowSeconds` 至多 2⁶³：更大的配额会使限流器的算术溢出，更长的窗口会在一个不得逐出的 Redis 中为每个桶值保留一个 key 两个窗口（第二轮复审 M3）。这样的文档不再能解码；`RateLimit` 拒绝同样的取值。迁移方式：把按天或更长的配额写成一天窗口内的每秒速率。
 - **Redis 限流器每个桶一个 key，并按 Redis 的时钟计数**（第二轮复审 L1）。一个桶现在是 hash `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`，而不是每个窗口一个 key（`...:{<rule>:<bucket>}:<window>`）；脚本从 Redis 取时间，时钟不一致的实例不再各自计数。旧版本写下的计数器不会被读取，会自行过期：升级时每个桶从零重新计数一次。`ReactiveRedisRateLimiter` 不再接收 `clock`。
@@ -871,35 +1032,43 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 - **社交登录的 state 只能用一次，并绑定到发起登录的浏览器**（第二轮复审 M4）。JustAuth 只检查 state 是否存在：一个 state 能让任何打开带它的回调的浏览器登录，在 3 分钟内打开几次就登录几次，这使登录 CSRF 成为可能。`SocialAuthentication.authorizeUrl(provider)` 改为 `authorize(provider)`，返回 `SocialAuthorization`（`url`、`binding`）；`SocialAuthenticationProvider` 同样如此。重定向浏览器之前，先在浏览器上设置 `authorization.setCookie(path)`，并把 Cookie 的值传给 `JustAuthCredentials(provider, binding)` 的第二个参数；`SocialCredentials` 增加了 `binding`。回调时 state 从 Redis 中被取走（`<s>:oauth:binding:<state>`，`GETDEL` 需要 Redis 6.2 或更高版本）。`JustAuthProvider` 接收一个 `SocialStateStore`。注册上设置 `ignore-check-state: true` 会让启动失败。
 - **令牌和 API key 声明它们的应用**（批次 R7b、RFC 0012 §3.5、`SCP-11`）。令牌的 `aud` 和 API key 的 `app` 指明凭证属于哪个应用，`ScopeResolver` 把它们与宿主的应用比较：配置了应用的宿主（`cosec.authorization.scope.app-id` 或路由的 `cosec-app-id`）拒绝声明其他应用或未声明应用的凭证，返回 `403 scope-rejected`。没有宿主应用时取凭证的应用，两者都没有时不读取应用文档。迁移方法：签发令牌时设置 `TokenSubject.app`，每个应用一个令牌；为 API key 设置 `app`（`ApiKey`、`cosec.api-key.keys[].app`）。存储的 key 升级为带必填 `app` 字段的 format 3：format 2 会失败（`API key format [2] is not 3.`），请重新发放（`cosec-migrate api-keys --app <id>` 会为它从 7.x 转换的 key 设置应用）。操作控制面的令牌发给 `cosec.control.app-id`（默认 `cosec-control`）；宿主应用与之不同的宿主上的控制面路由返回 `403`，请把它们放在没有应用或就是该应用的宿主上。
 - **`CoSec-App-Id` 已删除。** 客户端不再声明应用；该请求头不被读取，发送它的请求取凭证的应用。网关转发的身份仍然携带它的应用：配置了应用的服务拒绝声明其他应用或未声明应用的身份，返回 `400 invalid-request`。请读取 `SecurityContext.scope.appId` 获取请求的应用。
-- **`SecurityContext` 是只读的**：`tenantId`、`principal`、非空的 `scope` 和 `forwardedIdentity`（`gatewayRequestId`、`credentialId`，取代属性 `cosec.identity.rid` 和 `cosec.identity.jti`）。属性表及其访问方法已删除；`tenant.tenantId` 变为 `tenantId`。
+- **`SecurityContext` 是只读的**：`tenantId`、`principal`、非空的 `scope` 和 `forwardedIdentity`（`gatewayRequestId`、`credentialId`，取代属性 `cosec.identity.rid` 和 `cosec.identity.jti`）以及 `requestId` 和 `deviceId`（见上）。属性表及其访问方法已删除；`tenant.tenantId` 变为 `tenantId`。
 - **`CoSecPrincipal` 是应用读取到的请求信息**：`id`、显式的 `authenticated`、`attributes`。请求生效的角色在 `SecurityContext.scope.roles` 中；`principal.roles` 和 `principal.policies` 已删除。
-- **令牌契约都是值。** `TokenVerifier.verify(accessToken: String)` 和 `refresh` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），没有类型参数；`TokenRevoker.revoke` 接收令牌字符串。`TokenConverter` 接收 `TokenSubject`（`me.ahoo.cosec.login.token`），`Authentication<C>` 返回它。已删除：包装类 `SimplePrincipal`、`SimpleTenantPrincipal`、`TenantPrincipal`、`TokenPrincipal`、`TokenTenantPrincipal`、`SimpleTokenPrincipal`、`SimpleTokenTenantPrincipal`、`MembershipMarkedPrincipal`、`Delegated`、`findInDelegationChain`、`IssuedAtCapable`、`ExpiresAtCapable`、`MembershipMarkerCapable`、`AccessToken`、`RefreshToken`、`Token` 和 `TokenIdCapable`。自定义的 `TokenVerifier` 改为构造 `VerifiedToken`；它的构造函数拒绝无效声明，抛出的正是 `verify` 本来就会抛出的 `TokenVerificationException`。
+- **令牌契约都是值。** `TokenVerifier.verify(accessToken: String)` 和 `refresh` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），没有类型参数；`TokenRevoker.revoke` 接收令牌字符串，或一个 `CompositeToken`（见下）。`TokenConverter` 接收 `TokenSubject`（`me.ahoo.cosec.login.token`），`Authentication<C>` 返回它。已删除：包装类 `SimplePrincipal`、`SimpleTenantPrincipal`、`TenantPrincipal`、`TokenPrincipal`、`TokenTenantPrincipal`、`SimpleTokenPrincipal`、`SimpleTokenTenantPrincipal`、`MembershipMarkedPrincipal`、`Delegated`、`findInDelegationChain`、`IssuedAtCapable`、`ExpiresAtCapable`、`MembershipMarkerCapable`、`AccessToken`、`RefreshToken`、`Token` 和 `TokenIdCapable`。自定义的 `TokenVerifier` 改为构造 `VerifiedToken`；它的构造函数拒绝无效声明，抛出的正是 `verify` 本来就会抛出的 `TokenVerificationException`。
 - **`RoleCapable`、`PolicyCapable`、`SpacedRoleId`、`RoleIdCapable`、`SpaceIdCapable`、`Tenant`、`TenantCapable`、`SimpleTenant` 和 `Named` 已删除。** 声明名是 `MembershipClaims` 的常量，租户 id 是 `TenantId.DEFAULT` 和 `TenantId.PLATFORM`；`role@space` 语法不变。`SocialAuthenticationProvider` 保留 `name`。
 - **`sub` 以 `(` 开头的令牌无效**（`IDN-12`），没有 `sub` 或 `jti` 的令牌也无效：令牌不能使用 CoSec 自己的 id，尤其是匿名主体 `(0)`。
 - **`AttributeRequest` 携带 `tenant`**，`Subject.tenantId` 已删除：A 阶段提供者读取 `request.tenant`。
-- **`SwitchTenantCredentials` 携带请求的 `context`（`SecurityContext`）**，不再是 `principal`，`switchTenant` 接收它。新令牌保留原令牌的应用。
-- **登录改为挂起函数，`cosec-login` 不再引入 Reactor**（批次 R7c）。`Authentication.authenticate`、`TokenCompositeAuthentication.authenticateAsToken`、`AbstractSwitchTenantAuthentication.switchTenant`、`SocialAuthenticationProvider.authorizeUrl` 和 `authenticate`、`SocialAuthentication.authorizeUrl` 以及 `SocialUserPrincipalConverter.convert` 都是 `suspend` 函数，直接返回值而不是 `Mono`。迁移方法：把重写改成 `suspend` 并返回值；用 `awaitSingle()` 等待 Reactor 客户端；把控制器函数改成 `suspend`。用 `Mono.empty()` 拒绝登录的代码要改为抛出异常，因为不再有“空”的回答。通过 `cosec-login` 编译 Reactor 的模块需要自行声明它。`cosec-social` 不再引入 Guava。
+- **`SwitchTenantCredentials` 携带请求的 `context`（`SecurityContext`）**，不再是 `principal`，`switchTenant` 接收它（`AbstractSwitchTenantAuthentication.switchTenant` 现在是 `SwitchTenantAuthentication` 的 `TenantSwitch` 钩子，见上）。新令牌保留原令牌的应用。
+- **登录改为挂起函数，`cosec-login` 不再引入 Reactor**（批次 R7c）。`Authentication.authenticate`、`TokenCompositeAuthentication.authenticateAsToken`、`AbstractSwitchTenantAuthentication.switchTenant`（现在是 `SwitchTenantAuthentication` 的 `TenantSwitch` 钩子，见上）、`SocialAuthenticationProvider.authorizeUrl` 和 `authenticate`、`SocialAuthentication.authorizeUrl` 以及 `SocialUserPrincipalConverter.convert` 都是 `suspend` 函数，直接返回值而不是 `Mono`。迁移方法：把重写改成 `suspend` 并返回值；用 `awaitSingle()` 等待 Reactor 客户端；把控制器函数改成 `suspend`。用 `Mono.empty()` 拒绝登录的代码要改为抛出异常，因为不再有“空”的回答。通过 `cosec-login` 编译 Reactor 的模块需要自行声明它。`cosec-social` 不再引入 Guava。
 - **`DefaultAuthenticationProvider` 和 `SocialProviderManager` 改为类**，starter 为每个应用上下文各装配一个（#1222）。对旧单例的调用请换成 `AuthenticationProvider` 或 `SocialProviderManager` Bean；`SocialAuthentication` 通过构造函数接收管理器。
 - **`JustAuthProvider` 运行在自己的调度器上**，每个提供方最多 16 个线程，社交登录不再需要 `Schedulers.boundedElastic()`。
 - **库模块导出其公共类实现的类型**（`cocache`、`kafka`、`ip2region`、`micrometer`、`opentelemetry`）：只为编译它们而添加的依赖可以去掉。
 
-- **公共 API 已归类**（RFC 0010 C4）。应用需要的保持公开；其余的是 `@InternalCoSecApi`（应用永不选择加入）或 `internal`。`cosec-engine` 的大部分、`cosec-model` 的条件 AST、`cosec-runtime` 的快照视图、影子记录与文档模型、控制面的 `ControlPlane`、授权与访问分析，以及 starter 的自动配置类现在都是内部的。如果你编译时依赖其中之一，请改用文档页面描述的方式：检查和监听器都还在。测试工具里只有 `PolicyTestKit`、`PipelineFixture`、`EngineOutcome` 及其异常是公共的。
-- **`PipelineComponents` 成为普通类**，`SnapshotOptions` 也是；两者都失去了 `copy` 和 `componentN` 函数。`PipelineComponents` 不再接受 `engine`。不使用 Spring Boot 的宿主从 `SuspendingSnapshotSource.of(store)` 获得快照。
+- **公共 API 已归类**（RFC 0010 C4）。应用需要的保持公开；其余的是 `@InternalCoSecApi`（应用永不选择加入）或 `internal`。`cosec-engine` 的大部分、`cosec-model` 的条件 AST、`cosec-runtime` 的快照视图、影子记录与文档模型、控制面的 `ControlPlane`、授权与访问分析，以及 starter 的自动配置类现在都是内部的。如果你编译时依赖其中之一，请改用文档页面描述的方式：检查和监听器都还在。测试工具里只有 `PolicyTestKit`、`PipelineFixture`、`PermittedRequest`、`AttributeRequests`、`EngineOutcome` 及其异常是公共的。
+- **`PipelineComponents` 成为普通类**，`SnapshotOptions` 也是；两者都失去了 `copy` 和 `componentN` 函数。`PipelineComponents` 不再接受 `engine`。不使用 Spring Boot 的宿主用 `Pipeline.builder(authenticator, store)` 构建（本条最初写的 `SuspendingSnapshotSource.of(store)` 后来已删除，见上）。
 - **`PolicyDocumentCompiler.compile` 成为内部 API。** CI 检查调用 `validate`；`forPlatform(platform)` 是对应的重载。
 - **公共 `data class` 现在只是不会增长的值**（RFC 0010 C4）：`Identity`、`Identity.Credential`、`TokenSubject`、`SocialUser`、`ForwardedIdentity`、`Audit*Data`、`ShadowReport`、`ShadowSample`、`InstalledDocument`、`InstanceStatus` 以及 starter 的 `*Properties` 失去了 `copy` 和 `componentN`。`Identity`、`Identity.Credential`、`TokenSubject` 和影子记录仍按值比较；其余的不再定义 `equals`。
 - **需要访问令牌的地方拒绝刷新令牌，需要刷新令牌的地方也拒绝访问令牌**（`IDN-13`）。`JwtTokenConverter` 在每个刷新令牌上写 `cosec.token: "refresh"`，带该声明的令牌不会完成认证；刷新只读取带该声明、且 `iat` 与访问令牌相同的令牌。此前签发的访问令牌在过期前继续有效；它们的刷新令牌没有该声明，不能再刷新，其用户需要重新登录。
 - **刷新令牌属于会话**（RFC 0009，第二轮复审 M2）。登录会开始一个会话，即一族令牌对，两个令牌都带有它的 id、登录时间和代数（`sid`、`auth_time`、`cosec.generation`），保存在 Redis 的 `<cosec.key-prefix>:token:family:<sid>` 下（[会话](../integration/authentication.md#sessions)）。只有当前一对能刷新；更早的一对再次出现会结束会话；会话从登录起持续 `cosec.jwt.session.lifetime`（30 天）；登出会结束整个会话。对应用的影响：
   - **每个用户需要重新登录一次：** 本版本之前签发的令牌对不带会话，刷新时被拒绝（`token-invalid`）；它的访问令牌在过期前仍可用。
-  - **通过 `TokenCompositeAuthentication` 签发令牌**，它会开始会话；或者用 `TokenFamilies.start` 和 `TokenSubject.inSession` 自己开始会话：单独由 `TokenConverter.toToken` 签发的令牌对永远不能刷新。`TokenCompositeAuthentication` 和 `SimpleRefreshTokenAuthentication` 接收一个 `TokenFamilies`（starter 提供的 Bean）。
+  - **通过 `TokenCompositeAuthentication` 签发令牌**，它会开始会话；或者用 `TokenFamilies.start` 和 `TokenSubject.inSession` 自己开始会话：单独由 `TokenConverter.toToken` 签发的令牌对永远不能刷新。`TokenCompositeAuthentication` 和 `SimpleRefreshTokenAuthentication`（现在是 `RefreshTokenAuthentication`，见上）接收一个 `TokenFamilies`（starter 提供的 Bean）。
   - **客户端只保留最新的一对：** 在更新的一对签发之后出示旧的一对会结束会话，除非发生在那次刷新之后的 `cosec.jwt.session.rotation-leeway`（30 秒）之内：此时它会得到最新一代的一对令牌，因此响应丢失的刷新可以重试。
   - **`TokenRevoker.revoke(compositeToken)`** 用于访问令牌已过期时登出；`revoke(accessToken)` 现在也会结束会话。自定义的 `TokenRevoker` 要实现两者。
-  - **切换租户需要访问令牌：** `SwitchTenantCredentials.accessToken`，`AbstractSwitchTenantAuthentication` 接收 `TokenVerifier`；新令牌保留登录时间。
+  - **切换租户需要会话：** 此前是 `SwitchTenantCredentials.accessToken` 和接收 `TokenVerifier` 的 `AbstractSwitchTenantAuthentication`；现在它从请求的会话签发（`SwitchTenantAuthentication`，见上），新令牌保留登录时间。
   - **不使用 `cosec-cocache` 时，请注册 `TokenFamilyStore`**，否则启动失败（单实例可用 `InMemoryTokenFamilyStore`）。Redis 中每个存活的会话一个 key。
 - **无法读取的吊销存储会被如实报告，绝不读成“未吊销”**（第二轮复审 H1，`IDN-14`）。存储无法读取时，`RevocationReader` 抛出 `RevocationUnavailableException`；吊销表的 `unknown-read` 锁定为 `throw`，设置 `cocache.caches.[RevokedTokenCache].unknown-read` 会让启动失败。此时流水线仍像以前一样接受请求的令牌；刷新改为失败而不签发令牌，审批人的吊销无法读取时，控制面不发布任何东西。读取失败时回答“未吊销”的自定义 `RevocationReader` 改为抛出 `RevocationUnavailableException`。若请求也要拒绝，请设置 `cosec.authentication.revocation.fail-closed: true`，它取代了吊销表上的 `unknown-read: throw`。
-- **吊销只有一个判断，令牌契约不做阻塞 I/O。** 按契约，`TokenVerifier` 是纯计算。`RevocableTokenVerifier` 已移除：流水线、刷新和登出都通过 `TokenRevocation`（`cosec-runtime`）读取 `RevocationReader` 中的吊销。`TokenStore` 只保留写入 `revoke` 和 `revokeSubject`，二者改为 `suspend`；同步的 `isRevoked`、`subjectRevokedBefore` 已移除（请通过 `RevocationReader` 读取），`TokenStore.NoOp` 也已移除。`TokenRevoker.revoke` 和 `revokeSubject` 改为 `suspend`：从 `suspend` 处理函数中调用即可，无需再移出事件循环。`DefaultTokenRevoker` 移到 `me.ahoo.cosec.runtime.token`，并接收 `TokenRevocation`。`SimpleRefreshTokenAuthentication(tokenVerifier)` 改为 `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)`，不再使用自己的调度器。starter 的 `TokenVerifier` Bean 是普通的 `JwtTokenVerifier`，另外提供一个 `TokenRevocation` Bean。自定义的 `TokenStore` 以 `suspend` 函数实现两个写入，读取则作为 `RevocationReader` Bean 提供。
-- **实例状态携带文档格式级别**（RFC 0010 C5）：没有 `formatLevel` 的实例状态会被本版本的控制面拒绝，读取到它的影子窗口会失败，直到所有实例升级完毕（状态一分钟后过期）。
+- **吊销只有一个判断，令牌契约不做阻塞 I/O。** 按契约，`TokenVerifier` 是纯计算。`RevocableTokenVerifier` 已移除：流水线、刷新和登出都通过 `TokenRevocation`（`cosec-runtime`）读取 `RevocationReader` 中的吊销。`TokenStore` 只保留写入 `revoke` 和 `revokeSubject`，二者改为 `suspend`；同步的 `isRevoked`、`subjectRevokedBefore` 已移除（请通过 `RevocationReader` 读取），`TokenStore.NoOp` 也已移除。`TokenRevoker.revoke` 和 `revokeSubject` 改为 `suspend`：从 `suspend` 处理函数中调用即可，无需再移出事件循环。`DefaultTokenRevoker` 接收 `TokenRevocation`（现在是 `me.ahoo.cosec.login.token` 中的 `StoreTokenRevoker`，见上）。`SimpleRefreshTokenAuthentication(tokenVerifier)` 改为 `SimpleRefreshTokenAuthentication(tokenVerifier, tokenRevocation)`（现在是 `RefreshTokenAuthentication`，见上），不再使用自己的调度器。starter 的 `TokenVerifier` Bean 是普通的 `JwtTokenVerifier`，另外提供一个 `TokenRevocation` Bean。自定义的 `TokenStore` 以 `suspend` 函数实现两个写入，读取则作为 `RevocationReader` Bean 提供。
+- **实例状态携带文档格式级别**（RFC 0010 C5）：没有 `formatLevel` 的实例状态会被本版本的控制面拒绝，读取到它的影子窗口会失败，直到所有实例升级完毕（控制面只计入最近一分钟内写入的状态，`ShadowReportReader.STATUS_TTL`；key 本身存活两分钟）。
 
-- **控制面拒绝原本到运行时才失败的内容。** 平台变更把被其他文档引用的策略改成边界、或把被引用的边界改成策略，是 `REFERENCES`（`422`、`CTL-30`）。绑定指向平台边界同样是 `REFERENCES`：这样的绑定从未授予任何东西，它适用的每个请求都是 `503`，含有它的文档要先移除它才能再次发布。变更写入的 id 不能含 `/`（`V2`、`422`）：以 `*` 结尾的规则匹配不到这样的条目。权限策略的 `perm:<app>/<id>` 可以含；文档中已有这种 id 的条目可以保留或删除。
+- **控制面拒绝原本到运行时才失败的内容。** 平台变更把被其他文档引用的策略改成边界、或把被引用的边界改成策略，是 `REFERENCES`（`422`、`CTL-30`）。绑定指向平台边界同样是 `REFERENCES`：这样的绑定从未授予任何东西，它适用的每个请求都是 `503`，含有它的文档要先移除它才能再次发布。变更写入的 id 不能含 `/`（`V2`、`422`）：以 `*` 结尾的规则匹配不到这样的条目。权限策略的 `perm:<app>/<id>` 可以含；文档中已有这种 id 的条目可以保留或删除。移除租户所绑定的策略、或移除应用简写形式所派生的策略的应用变更，在检查时就是 `REFERENCES`：以前它能到达 `CHECKED`，直到发布时才失败（`CTL-30`）。
+- **`ChangeEvent.Kind` 去掉了 `BOOTSTRAP` 和 `MIGRATE`。** 这两种变更事件从未被发出过：bootstrap 和迁移通过存储写入修订，记录在修订的
+  `provenance.kind`（`BOOTSTRAP`、`MIGRATE`）里。对 `ChangeEvent.Kind` 做 `when` 且列出了它们的代码不再能编译；删掉这些分支即可，
+  它们从未收到过任何东西。
+- **应用声明了 `CorsConfigurationSource` bean 时，预检请求不再被策略、限流或审计看到**（`STA-5`，[CORS](../integration/web.md#cors)）。应用声明了所在栈的
+  `CorsConfigurationSource`、且没有自己的 `CorsFilter` 或 `CorsWebFilter` 时，启动器现在会在 Spring MVC 和 WebFlux 上于 CoSec 之前注册一个 CORS 过滤器：
+  预检请求仅凭 source 由它回答，所以针对 `http:OPTIONS` 的语句、限流、黑名单、审计、判定事件和指标都看不到预检请求；source 不允许的 origin 在管道之前得到一个普通的
+  `403`，没有 problem 体和 `CoSec-Request-Id`；拒绝响应现在带 CORS 头。`@CrossOrigin` 和 `addCorsMappings` 不再回答预检请求：把每个 origin、方法和请求头
+  都写进这个 bean。只为让预检请求通过而写的语句（`http:OPTIONS`）不再需要，留着也无妨。没有这个 bean、或有自己的过滤器的应用不受影响。
 - **从平台或应用文档删除 DENY 需要第二个人**（RFC 0007 §7.4.4、`CTL-31`）。此前，没有 `cosec:approve` 的平台主体可以独自发布只删除条目的变更。现在，拿掉 DENY 的删除（含 DENY 的策略，或所绑策略含 DENY 的绑定，也包括经删除角色或以更少权限 `putRole` 去掉的）会停在 `AWAITING_APPROVAL`，每项带一个 `NOT_ANALYZED` 升级；开启 `four-eyes` 时信任根的这类变更也是如此（[审批](../policies/testing.md#approval)）。删除 ALLOW、租户删除自己的 DENY 以及撤销 break-glass 不变。请为紧急删除平台 DENY 安排好审批人。
 - **`cosec:grant` 看角色实际派生了什么**（RFC 0012 §7.2）：让 `"*"` 角色派生出新绑定的 `putCatalog` 或 `putPolicy`，与 `putRole` 一样需要该角色作用域上的 `cosec:grant`。
 - **break-glass 只需要 `cosec:breakglass`**（RFC 0007 §8）：申请、批准后发布以及撤销都不再额外需要 `cosec:publish`。其他变更不能用 `cosec:breakglass` 代替。
@@ -912,10 +1081,11 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
   - `RevocationUnavailableException` 继承 `CoSecException`，与 `MembershipUnavailableException` 一样。把所有 `CoSecException`（一种 `SecurityException`）都答成 `401` 的处理器现在也会捕获它：请先处理它，它表示吊销存储不可用。
   - `RateLimitResult` 不再是 `data class`：没有了 `copy` 和 `componentN`，相等性不变。
   - `SnapshotDocument.DOCUMENT_SCHEMA` 不再是 `const`，已编译的代码读取的是运行时 CoSec 的 schema。用它初始化的 `const val` 不再能编译：改为 `val`。
+  - **`SnapshotDocument` 由它的字节构造**（`SNP-12`）：构造函数现在是内部的。把 `SnapshotDocument(schema, revision, publishedAt, bytes)` 换成 `SnapshotDocuments.read(bytes)`（`cosec-document`），它从字节中读取头部，并拒绝不是文档的字节。存储的字节不变。
   - 以下现在是内部 API（`@InternalCoSecApi`）：`Environment`、条件字面量（`Literal`）、`Attribute` 及其 `Kind`、`ScopeResolver`、`ScopeSubject`、`SubjectRevocation`、`IdentityFormatException`、`IdentityOverflowException` 和 `Identifiers.isUnpairedSurrogateAt`。`ScopeResolution.Resolved` 和 `ScopeResolution.Rejected` 的构造器是内部的；`ScopeResolution.Rejected.Reason` 保留。
 
 - **`cosec-runtime` 和 Web 适配器的公开 API 已按 8.0 归类**（R9）。使用 starter 时运行时没有变化；在代码中：
-  - 不使用 Spring 组装管道是实验性的。`Pipeline` 的构造器和 `evaluate`、`RequestGate`、`PipelineComponents`、`PipelineOptions`、`SnapshotOptions`、`SuspendingSnapshotSource`、`AttributeProviders`、`DecisionListeners`、`IdentityIssuer`、`IdentityGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder`、`RequestSecurity` 和 `CoSecParameters.read` 是 `@ExperimentalCoSecApi`：用 `@OptIn(ExperimentalCoSecApi::class)` 选择使用。用这种方式构建管道的测试改从 `PipelineFixture`（`cosec-testkit`）获得管道。`Pipeline` 本身、`AuthorizationChecker(pipeline)`、`ProblemType` 和 `CoSecParameters` 的请求头名保持稳定。
+  - 不使用 Spring 组装管道是实验性的：`Pipeline.builder` 和 `PipelineBuilder`、`Pipeline.evaluate`、`RequestGate`、`HttpFacts`、`Headers`、`Cookies`、`Outcome`、`Problem`、`ProblemEncoder` 和 `RequestSecurity` 是 `@ExperimentalCoSecApi`：用 `@OptIn(ExperimentalCoSecApi::class)` 选择使用。`PipelineOptions`、`SnapshotOptions`、`SuspendingSnapshotSource`、`AttributeProviders`、`DecisionListeners`、`IdentityIssuer`、`IdentityGate` 和 `CoSecParameters.read` 是 `@InternalCoSecApi`（不能选择使用），`Pipeline` 的构造器和 `PipelineComponents` 是 `internal`；它们起初是实验性的，后来由 `Pipeline.builder` 取代。用这种方式构建管道的测试改从 `PipelineFixture`（`cosec-testkit`）获得管道。`Pipeline` 本身、`AuthorizationChecker(pipeline)`、`ProblemType` 和 `CoSecParameters` 的请求头名保持稳定。
   - 以下现在是内部 API（`@InternalCoSecApi`）：`IdentityCodec`（契约是 [Web 集成](../integration/web.md)中的 `CoSec-Identity` 格式）、`RemoteIpResolver`、`PathNormalizer`、`HttpAttributes`、`PolicyDocument.attributes`、`PolicyDocumentCodec.encode`、`ATTRIBUTE_TYPES`、`WILDCARD` 和 `SCHEMA`、`PolicyDocumentCompiler` 的上限、`PERMISSION_PREFIX` 和 `permissionPrefix`，以及接收 `RequestSecurity` 的 `AuthorizationChecker.check` 和 `decide`（接收 `SecurityContext` 与字符串的保留）。`PipelineWebFilter`、`PipelineServletFilter` 和 `PipelineGatewayFilter` 的构造器（使用 starter 的 Bean，不要自己声明）、`LoggingAuditEventSink(KLogger)`（无参构造器保留）和 `MetricsListener.bind(registry, listeners)` 也是。`RouteResolution.Mapped` 和 `Invalid` 的构造器是内部的：由 `RouteMap.resolve` 给出。
   - `InstanceStatus.FORMAT_LEVEL` 不再是 `const`。
 
@@ -942,11 +1112,25 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
     }
     ```
 
-  - `AbstractRefreshTokenAuthentication` 已删除：`SimpleRefreshTokenAuthentication` 自己实现 `Authentication<RefreshTokenCredentials>`。`AuthenticationProvider`、`DefaultAuthenticationProvider` 和 `CompositeAuthentication` 的构造器是 `@InternalCoSecApi`：starter 注册每个 `Authentication` Bean。
+  - `AbstractRefreshTokenAuthentication` 已删除：`SimpleRefreshTokenAuthentication`（现在是 `RefreshTokenAuthentication`，见上）自己实现 `Authentication<RefreshTokenCredentials>`。`AuthenticationProvider`、`DefaultAuthenticationProvider` 和 `CompositeAuthentication` 的构造器是 `@InternalCoSecApi`：starter 注册每个 `Authentication` Bean。
   - `cosec-social`：`SocialProviderManager` 和 `SocialAuthenticationProvider` 是 `@InternalCoSecApi`，`SocialAuthentication` 和 `JustAuthProvider` 的构造器（后者用到 JustAuth 的 `AuthRequest`）也是。`JustAuthProvider.name()` 已删除：读取 `name`。
   - starter 的 `*Properties` 类和 `EnabledCapable` 是 `@InternalCoSecApi`，`@ConditionalOn*` 注解是 `internal`。契约是 `cosec.*` 配置键，它们不变。读取配置值请用 `@Value("\${cosec.jwt.enabled}")` 或 `Environment`，不要注入 CoSec 的 `*Properties` Bean；给你自己的 Bean 加条件请用 `@ConditionalOnProperty("cosec.jwt.enabled")`，不要用 `@ConditionalOnJwtEnabled`。
   - `checkMono`（`cosec-webflux`）和 `checkBlocking`（`cosec-webmvc`）位于名为 `AuthorizationCheckers` 的 Java 类中，不再是 `PipelineWebFilterKt` 和 `PipelineServletFilterKt`；Kotlin 调用方不受影响。`SuspendingHandlerHolderInterceptor` 是 `@InternalCoSecApi`：starter 会注册它。
 - **`cosec-dependencies` 不再管理 Guava 的版本**，CoSec 的模块也都不再引入 Guava。从 CoSec 的 BOM 取 Guava 版本的应用需要自己声明。
+
+- **`ChangeState.SHADOWED` 已删除。** 没有任何变更处于过这个状态：影子窗口关闭不是一个状态，而是变更的 `shadow`（`ShadowState.closed`）。点名 `ChangeState.SHADOWED` 的代码（`when`、按状态的过滤、测试）不再编译：删掉该分支。存储的变更请求不可能带它，`"state":"SHADOWED"` 也无法解码；没有任何版本写过。现有状态为 `DRAFT`、`CHECKED`、`SHADOWING`、`AWAITING_APPROVAL`、`READY`、`CONFLICTED`、`PUBLISHED`、`REJECTED`、`ABANDONED` 和 `EXPIRED`。变更事件的 `SHADOWED`（"窗口已关闭"）保留，其日志行也保留。
+- **一个文档族最多持有其上限加上明确的余量**（`SNP-14`）。冷加载突发时，一个族可能持有约 `cosec.authorization.snapshot.max-apps` 或 `max-tenants` 再加上后台线程排队的 4,096 个驱逐。现在它最多持有上限的两倍，且绝不超出上限 4,096 个以上，另加此刻正在加载的文档；安装时发现族超出这个数的，在安装线程上先驱逐再应答。无需配置，没有默认值改变；按旧的最坏情况做的内存预算依然安全。[这个属性](./configuration.md#snapshot)写明了这个数。
+- **`Retry-After` 与 `RateLimit-Reset` 向上取整，低于一毫秒的上报间隔使启动失败。** 窗口还剩 1.75 秒时，`429` 曾答 `1`，按此等待的客户端会撞上同一个窗口；两个头现在都是剩余时间的整秒数，向上取整，至少为 `1`（`1 ms` 与 `1000 ms` 为 `1`，`1001 ms` 为 `2`）。无需处理：客户端最多多等一秒，`RateLimit-Remaining` 和 `-Limit` 不变。starter 现在拒绝低于 `1ms` 的 `cosec.authorization.shadow.report-interval`（`cosec.authorization.shadow.report-interval is at least one millisecond, not …`），此前它会启动一个永不挂起的上报循环：请设为 `1ms` 或更大（默认 `10s`）。
+- **此前的 `cosec-migrate bootstrap` 丢弃平台租户的角色。** 它只用策略、绑定和限流规则重建平台租户的文档（`tenant:(platform)`），所以它发布的 `BOOTSTRAP` 修订没有 `roles`。把 7.x 角色转换进该文档、再运行 `bootstrap`（带或不带 `--force`）的迁移丢掉了它们，这些角色的成员随后被拒绝：失败即拒绝，绝不放开。现在它保留文档的其余全部内容。如果你在转换角色之后运行过更早的 `bootstrap`，请以管理员身份用控制面 API 检查该文档：找到 `provenance.kind` 为 `BOOTSTRAP` 的修订（`GET /documents/tenant:(platform)/revisions`，再 `GET …/revisions/<n>`），然后读 `GET /documents/tenant:(platform)/diff?from=<n-1>&to=<n>`：`roles.removed` 非空，就是 bootstrap 丢掉的角色。用一次变更把它们放回去（`putRole` 操作，定义取自修订 `<n-1>`）。先 bootstrap 后转换角色、或平台租户没有角色的部署，无需处理。
+- **`ControlStore` 新增 `stagedCandidate`，`putCandidate` 按摘要写入。** 候选只会覆盖写入者读到的那一份，所以被抢占的变更迟到的写入不会替换占了槽位的那个变更的候选（#1235）。`suspend fun stagedCandidate(key: SnapshotKey): Versioned<StoredCandidate>?` 是新增的；`putCandidate(key, expected: SnapshotDigest?, candidate: StoredCandidate): Boolean` 接收它期望的摘要（`null`：仅当还没有候选时写入），期间候选变了就答 `false`。自己的 `ControlStore` 要实现这两个（`CoCacheControlStore` 与 `InMemoryControlStore` 都实现了）；写入结果未知时回读，而不是再写一次。使用 starter 的 Redis 存储无需处理。
+- **`cosec-migrate` 命令行更严格，并接受 `--name=value`。** `--name value` 与 `--name=value` 都可以；以 `--` 开头的值是用法错误（此前下一个选项会被当作值，它自己的值被丢掉）：这样的值请写 `--name=--value`。重复给出的开关是 `--flag is given twice.`，给开关加值是 `--flag takes no value.`，重复或未知的选项是用法错误。依赖某个选项吞掉下一个参数的脚本现在会失败：请修正它的参数。
+- **控制面 API 的路径参数只做一次百分号解码。** `GET /documents/tenant:acme%20west` 曾读取键 `tenant:acme%20west`，它不是存储和请求体使用的 `tenant:acme west` 那份文档；现在先把路径拆成段，再对每个参数解码一次（`+` 仍是 `+`，编码的 `/` 是值的一部分、不会成为第二段，`tenant%3Aacme` 即 `tenant:acme`，路由自己的词按原样匹配）。对 id 编码了两次、或发送编码后的 id 并指望它原样到达控制面的客户端，现在指向另一份文档：只编码一次。
+- **访问审查列出破窗绑定。** `POST /analyze` 曾把破窗绑定（它的策略 `cosec:root` 不由任何文档定义）算作 `opaque`。现在它是 `allows` 中的一项，来自引擎自己的语句的 `cosec:root` 的 allow，带 `breakGlass: true`、`expiresAt` 和 `conditional: true`（审查不求值窗口）；`conditional` 现在也标记任何带窗口的绑定。解析审查结果的客户端会看到 `opaque` 减少，平台租户的审查里多出 `cosec:root` 的 `allows`；把每个 allow 都当作永久的工具应读取 `conditional` 与 `expiresAt`。
+- **生成的路由映射按操作取服务器前缀，并拒绝它放不下的内容。** 前缀取自操作自己的 `servers`，没有则取其路径项的，再没有则取文档的；服务器 URL 按组成部分读取：`//example.test/v1`、`https://example.test:8443/v1` 和 `/v1` 都给出 `/v1`。此前能生成路由映射的文档，现在可能被拒绝，并点名操作（`GET /orders: …`）：一个操作的服务器路径不同、路径中有服务器变量、服务器路径不以 `/` 开头（`v1`、`example.test:8080/v1`、`{baseUrl}/v1`：它相对于文档被获取的位置，生成器不知道）或含点段。请重新生成路由映射；给被拒绝的文档写绝对的服务器 URL，或以 `/` 开头的路径。
+- **存储的、无法编译的文档会被点名、记录和计数。** `cosec-model` 中的 `Cause` 新增 `DocumentInvalid(document, revision, error)`，所以对 `Cause` 做穷尽 `when` 的应用不再编译：补上分支。决策仍是 `503`（实例无法决策）；`SourceUnavailable` 现在表示存储无法读取。实例对每个修订、摘要和输入记录一行 `ERROR`，重新可编译时记录一行 `INFO`；`cosecSnapshot` 健康指示器给出 `invalid`（无法编译的文档数）和 `invalidFirst`（前十个及其存储的修订）（[快照健康状况](./observability.md#snapshot-health)）。除 `when` 外无需处理；原先靠"没有日志"发现这种情况的，请改为对这行日志告警。
+- **请求不再记录被丢弃的决策事件。** BEST_EFFORT 监听器的队列已满或已关闭时，请求只计数；一个上报协程在请求线程之外，对每个监听器每个间隔记录一行 `WARN`（`Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`，或 `is closed`）。原先每个被丢弃的事件一行的日志告警，现在每个间隔只看到一个计数。
+- **`TraceContext` 新增 `traceState`。** 父 span 的 W3C `tracestate`，不透明，没有则为 `""`；三个参数的构造器保留。`cosec.authorize` span 继承它，此前从默认状态开始。它随事件到达每个 `DecisionListener`，是厂商数据：不要记录它。审计记录、Kafka 记录和指标标签都不带它。
+- **`cosec-testkit` 的签名增加。** `PermittedRequest.withToken(token, verifier, revocations, headers)` 接收请求头（默认空）；携带凭证的头（`Authorization`、`X-API-Key`、`CoSec-Identity`）被拒绝，两个不同的 `CoSec-Device-Id` 值会像管道那样使请求失败。`PipelineFixture.of` 与 `load` 接收 `routes` 和 `listeners`（默认没有），`AttributeRequests` 为提供者的测试构造 `AttributeRequest`。测试工具的异常带原因，并拒绝它读取内容中重复的字段，以及两个存放同一份文档的文件。源码兼容（有默认值），二进制不兼容：请针对这个版本重新编译测试。
 
 ### 从 8.0.0-alpha.3 升级 {#from-8-0-0-alpha-3}
 
@@ -1082,7 +1266,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
   `eviction-check: fail` 下为 `DOWN`，`warn` 下为 `UP`，详情 `eviction: unknown`。它是告警：`cosecSnapshot` 不变，
   只有它属于就绪组。
 - **滚动升级期间**，旧实例新建的 app 文档不在 app 列表中；新实例在启动时和每次回收任务（`cosec.control.revisions.reclaim-interval`，默认 1 小时）时发现它，在此之前分析授出时可能读不到这个 app 的 DENY。滚动期间不要经旧实例新建 app，或者在此期间调低 `reclaim-interval`。旧实例还会把持有 `cosec:approve` 的租户主体当作信任根，并接受 API key 的审批：滚动完成之前，只经已升级的实例审批和发布。旧实例接受的审批没有记下凭证，已升级的实例不会凭它发布。
-- **没有使用者的公共 API 已移除。** `KafkaAuditEventSink`：starter 注册的是 `KafkaAuditListener`，它写入相同的 key 和 value。`SimpleSecurityContext` 及其扩展属性 `CoSecPrincipal.tenant`：请求的 `SecurityContext` 由管道创建，测试中请 mock 或自行实现该接口。引擎请求中的 `AuthzRequest.scope`、类 `me.ahoo.cosec.model.Scope`，以及 `Subject.roles`、`policies` 和 `root`，引擎都不读取：构造 `AuthzRequest` 或 `Subject` 的代码去掉这些参数即可。引擎使用的租户、角色和附加策略在 `FlatRequest.scope` 与 `FlatRequest.memberships` 中。`Subject.tenantId` 保留，供 stage A 的 `AttributeProvider` 使用，它在作用域解析之前运行。
+- **没有使用者的公共 API 已移除。** `KafkaAuditEventSink`：starter 注册的是 `KafkaAuditListener`，它写入相同的 key 和 value。`SimpleSecurityContext` 及其扩展属性 `CoSecPrincipal.tenant`：请求的 `SecurityContext` 由管道创建，测试中请 mock 或自行实现该接口。引擎请求中的 `AuthzRequest.scope`、类 `me.ahoo.cosec.model.Scope`，以及 `Subject.roles`、`policies` 和 `root`，引擎都不读取：构造 `AuthzRequest` 或 `Subject` 的代码去掉这些参数即可。引擎使用的租户、角色和附加策略在 `EngineRequest.scope` 与 `EngineRequest.memberships` 中。`Subject.tenantId` 保留，供 stage A 的 `AttributeProvider` 使用，它在作用域解析之前运行。
 
 #### 经 CoCache 6 写入的数据 {#data-written-through-cocache-6}
 

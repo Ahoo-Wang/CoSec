@@ -10,8 +10,8 @@ index d9e29b82..ee3b2c7e 100644
              )
          }
          val authz = with(security.request) { AuthzRequest(subject, action, resource, environment) }
--        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
-+        val request = FlatRequest(authz, security.scope, security.memberships, clock.millis())
+-        val request = EngineRequest(authz, security.scope, security.memberships, clock.millis(), security.attributes)
++        val request = EngineRequest(authz, security.scope, security.memberships, clock.millis())
          // A new action and resource: what the request fetched was for its own. Every attribute this one needs is
          // fetched now, from stage A as from stage B (#1209).
          val evaluated = fetching.withPlanned(request, view, fetching.fetched(), everyStage = true)

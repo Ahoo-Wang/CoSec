@@ -20,7 +20,6 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
-import me.ahoo.cosec.document.route.RouteMapCodec
 import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
@@ -49,6 +48,7 @@ import me.ahoo.cosec.spi.membership.MembershipProvider
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
+import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.apikey.apiKeysEnabled
 import me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties
@@ -144,13 +144,16 @@ class CoSecPipelineAutoConfiguration {
     fun cosecUncheckedRevocations(): UncheckedRevocations = UncheckedRevocations()
 
     /**
-     * Token and API-key authentication. A token is verified by the JWT algorithm and checked against the revocation
-     * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store.
+     * Token and API-key authentication. A token is verified by the application's [TokenVerifier] bean, the one refresh
+     * and logout verify with (`IDN-25`), else by CoSec's own over the JWT algorithm, and checked against the revocation
+     * reader [revocationReader] resolves; an API key, when `cosec.api-key.enabled`, by the configured key store. The
+     * algorithm decides only whether tokens are on.
      */
     @Bean
     @ConditionalOnMissingBean
     fun cosecAuthenticator(
         algorithm: ObjectProvider<Algorithm>,
+        verifier: ObjectProvider<TokenVerifier>,
         revocationReader: ObjectProvider<RevocationReader>,
         tokenStore: ObjectProvider<TokenStore>,
         apiKeyReader: ObjectProvider<ApiKeyReader>,
@@ -161,7 +164,7 @@ class CoSecPipelineAutoConfiguration {
     ): Authenticator {
         val token = algorithm.ifAvailable?.let {
             TokenAuthenticator(
-                JwtTokenVerifier(it),
+                verifier.getIfAvailable { JwtTokenVerifier(it) },
                 revocationReader(revocationReader, tokenStore),
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,
@@ -295,51 +298,5 @@ class CoSecPipelineAutoConfiguration {
             }
             return keys.reader
         }
-    }
-}
-
-/** `CoCacheTokenStore.reader`, when `cosec-cocache` is on the classpath. */
-internal object CoCacheRevocation {
-    private val available = ClassUtils.isPresent("me.ahoo.cosec.cocache.CoCacheTokenStore", null)
-
-    fun readerOf(store: TokenStore?): RevocationReader? =
-        if (available && store is me.ahoo.cosec.cocache.CoCacheTokenStore) store.reader else null
-}
-
-/**
- * Loads the route maps of a comma-separated list of resource locations, all or nothing, and says what it loaded: which
- * action a request has decides which statements apply to it, so a host's log must show where its routes came from.
- */
-internal object RouteMaps {
-    private const val LOCATION_KEY = "${RuntimeAuthorizationProperties.PREFIX}.routes.location"
-    private const val DEFAULT_LOCATION = RuntimeAuthorizationProperties.Routes.DEFAULT_LOCATION
-
-    /** [locations] null is the property unset; empty is the host running without a route map on purpose. */
-    fun load(locations: String?, resourceLoader: ResourceLoader): RouteMap {
-        val defaultExists = resourceLoader.getResource(DEFAULT_LOCATION).exists()
-        check(locations != null || !defaultExists) {
-            "$DEFAULT_LOCATION exists but $LOCATION_KEY is not set, so it is not loaded: set it to $DEFAULT_LOCATION, " +
-                "or to empty to run without a route map."
-        }
-        val sources = locations.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.map { location ->
-            val resource = resourceLoader.getResource(location)
-            check(resource.exists()) {
-                "The route map [$location] ($LOCATION_KEY) does not exist; set the property empty to run without one."
-            }
-            location to resource.inputStream.use { it.readBytes() }
-        }
-        if (sources.isEmpty()) {
-            if (defaultExists) {
-                log.warn { "$LOCATION_KEY is empty, so $DEFAULT_LOCATION, which exists, is not loaded." }
-            }
-            log.info { "No route map: requests are authorized as http:<METHOD> on http:path:<path>." }
-            return RouteMap.EMPTY
-        }
-        val documents = sources.map { (location, bytes) -> location to RouteMapCodec.decode(bytes, location) }
-        val routes = RouteMap.of(RouteMapCodec.located(documents))
-        documents.forEach { (location, document) ->
-            log.info { "Route map [$location]: service [${document.service}], ${document.routes.size} routes." }
-        }
-        return routes
     }
 }

@@ -50,6 +50,7 @@ class RetainedHistoryTest {
         store.putHead(
             ACME,
             head.digest,
+            // A head whose bytes are not a document at all, which SnapshotDocuments never makes: the constructor.
             SnapshotDocument(
                 document.schema,
                 document.revision,
@@ -57,6 +58,18 @@ class RetainedHistoryTest {
                 "not a document".encodeToByteArray()
             ),
         )
+        // The index lists the head it has now, as it would for a head that reads: only the digest is compared (#1536).
+        val unreadable = store.head(ACME)!!
+        store.index(ACME)?.let { index ->
+            store.putIndex(
+                ACME,
+                index.digest,
+                index.value.copy(
+                    entries = index.value.entries.dropLast(1) +
+                        index.value.entries.last().copy(digest = unreadable.digest)
+                ),
+            )
+        }
     }
 
     @Test
@@ -66,9 +79,11 @@ class RetainedHistoryTest {
             val entries = revisions.history(ACME)
             unreadableHead()
 
-            revisions.history(ACME).assert().isEqualTo(entries)
+            val unreadable = revisions.history(ACME)
+            unreadable.dropLast(1).assert().isEqualTo(entries.dropLast(1))
+            unreadable.last().digest.assert().isEqualTo(store.head(ACME)!!.digest)
             revisions.retainedDigest(ACME, 2).assert().isEqualTo(entries[1].digest)
-            revisions.retainedDigest(ACME, 3).assert().isEqualTo(entries[2].digest)
+            revisions.retainedDigest(ACME, 3).assert().isEqualTo(unreadable.last().digest)
             revisions.retainedDigest(ACME, 4).assert().isNull()
         }
 

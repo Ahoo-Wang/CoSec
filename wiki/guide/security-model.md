@@ -26,7 +26,7 @@ Every request goes through one pipeline, whatever the adapter. Before the engine
    policies to `Anyone` or to a principal. A blocked request reads the platform document only;
 6. fetches the external attributes the candidate statements need.
 
-The engine (`FlatEvaluator`) then decides in two passes over the **candidates**, the policies that apply to the
+The engine (`Evaluator`) then decides in two passes over the **candidates**, the policies that apply to the
 request:
 
 1. **The DENY pass.** It visits every candidate's DENY statements. The first one that matches is the decision:
@@ -318,7 +318,7 @@ How `ScopeResolver` checks the scope:
 - **App.** A host with an app serves only credentials declaring that app; another one, or none, is rejected
   (`APP_MISMATCH`). The host app is, on a gateway, the route's metadata `cosec-app-id`, ahead of
   `cosec.authorization.scope.app-id`; on any other host, that property. Without one, the credential's app applies, and
-  a credential declaring none reads no app document. A client never declares an app. A credential's app that cannot be an app id (blank, `*`, containing `:` or a control character, or longer than 128
+  a credential declaring none reads no app document. A client never declares an app. A credential's app that cannot be an app id (blank, `*`, containing `:`, `/` or a control character, or longer than 128
   characters: the rule of a tenant id) is rejected either way. The app is checked before the space.
 - Matching is exact: no trimming, no case folding.
 
@@ -486,8 +486,15 @@ Before production:
 - Treat write access to Redis as access to every decision: whoever can write CoSec's keys can rewrite the documents
   every request is decided with, and revoke or restore tokens. Connect to Redis over TLS (`rediss://`, or
   `spring.data.redis.ssl.enabled`), so that no one on the network between can read or change what instances read, and
-  give the control plane and the data-plane instances the users of
-  [Who may write which keys](../operations/storage.md#who-may-write-which-keys): the instances only read the documents.
+  give the control plane and the data-plane instances their own users
+  ([Who may write which keys](../operations/storage.md#who-may-write-which-keys)). A data-plane instance, one that does
+  not run the control plane (no `cosec-control`, or `cosec.control.enabled=false` on an image that carries both roles),
+  reads the documents and the candidates read-only, so its user needs only read permission
+  on them, and Redis refuses that user a write of either. Its credential still writes the shadow reports and statuses,
+  and, with JWT, revocations and refresh token families. A process that runs the control plane needs write access to
+  the documents. A data-plane credential can still publish invalidations on the documents' channel: that makes
+  instances read the documents they hold again from Redis, a cost in load, never a different decision, since an
+  invalidation carries no document.
 - Run Redis with `maxmemory-policy noeviction`, and read it from the primary
   ([Redis requirements](../operations/storage.md#redis-requirements)).
 - Limit the control API per tenant with a platform rate limit rule

@@ -26,6 +26,18 @@
       "type": "me.ahoo.cosec.spring.boot.authentication.LoginProperties"
     },
     {
+      "name": "cosec.authentication.login.logout",
+      "sourceMethod": "getLogout()",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties",
+      "type": "me.ahoo.cosec.spring.boot.authentication.LoginProperties$ServedRoute"
+    },
+    {
+      "name": "cosec.authentication.login.refresh",
+      "sourceMethod": "getRefresh()",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties",
+      "type": "me.ahoo.cosec.spring.boot.authentication.LoginProperties$ServedRoute"
+    },
+    {
       "name": "cosec.authentication.login.social",
       "sourceType": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties",
       "type": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties"
@@ -225,6 +237,7 @@
   "hints": [],
   "properties": [
     {
+      "description": "Whether API keys for machine clients are on; `true` or `false` only, any other value fails startup.",
       "name": "cosec.api-key.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties",
       "type": "java.lang.Boolean"
@@ -242,6 +255,7 @@
       "type": "me.ahoo.cosec.spring.boot.apikey.ApiKeyProperties$Store"
     },
     {
+      "description": "Whether the audit log listener is on, and the Kafka audit listener with `cosec.audit.kafka.enabled`.",
       "name": "cosec.audit.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.audit.AuditProperties",
       "type": "java.lang.Boolean"
@@ -253,26 +267,43 @@
       "type": "me.ahoo.cosec.runtime.event.Delivery"
     },
     {
+      "description": "Whether the Kafka audit listener is on; it needs `cosec-kafka` and a `KafkaOperations` bean.",
       "name": "cosec.audit.kafka.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties",
       "type": "java.lang.Boolean"
     },
     {
+      "description": "The Kafka topic of the audit events.",
       "name": "cosec.audit.kafka.topic",
       "sourceType": "me.ahoo.cosec.spring.boot.audit.kafka.KafkaAuditProperties",
       "type": "java.lang.String"
     },
     {
+      "description": "Whether the login beans are on, which turn credentials into a token; authenticating requests does not depend on it.",
       "name": "cosec.authentication.login.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties",
       "type": "java.lang.Boolean"
     },
     {
+      "description": "Where the starter serves `POST` of this route, such as `/auth/refresh`. Unset (the default), it is not served and the application serves its own.",
+      "name": "cosec.authentication.login.logout.path",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties$ServedRoute",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "Where the starter serves `POST` of this route, such as `/auth/refresh`. Unset (the default), it is not served and the application serves its own.",
+      "name": "cosec.authentication.login.refresh.path",
+      "sourceType": "me.ahoo.cosec.spring.boot.authentication.LoginProperties$ServedRoute",
+      "type": "java.lang.String"
+    },
+    {
+      "description": "Whether social login is on (`cosec-social`); it needs `cosec.authentication.login.enabled`.",
       "name": "cosec.authentication.login.social.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties",
       "type": "java.lang.Boolean"
     },
     {
+      "description": "The OAuth providers, one per name, each a JustAuth `AuthConfig` with its `type` and `client-id` required.",
       "name": "cosec.authentication.login.social.registration",
       "sourceType": "me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties",
       "type": "java.util.Map<java.lang.String,me.ahoo.cosec.spring.boot.authentication.social.SocialAuthenticationProperties$Provider>"
@@ -284,6 +315,7 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "The initial capacity of the local copy; unset, CoCache's.",
       "name": "cosec.authentication.revocation.cache.initial-capacity",
       "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
       "type": "java.lang.Integer"
@@ -295,6 +327,7 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "The most entries the local copy holds.",
       "name": "cosec.authentication.revocation.cache.maximum-size",
       "sourceType": "me.ahoo.cosec.spring.boot.authorization.cache.CacheConfiguration",
       "type": "java.lang.Long"
@@ -306,22 +339,25 @@
       "type": "java.lang.Boolean"
     },
     {
-      "description": "How much earlier than a subject revocation a token may have been issued and still be revoked by it.",
+      "description": "How much later than a subject revocation a token may have been issued and still be revoked by it: room for an issuer whose clock runs ahead of the revoking one.",
       "name": "cosec.authentication.revocation.skew",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RevocationProperties",
       "type": "java.time.Duration"
     },
     {
+      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `membership` (the `MembershipProvider`; past it, or when it fails, the request is 503), `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
       "name": "cosec.authorization.attributes.timeout",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
       "type": "java.time.Duration"
     },
     {
+      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `membership` (the `MembershipProvider`; past it, or when it fails, the request is 503), `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
       "name": "cosec.authorization.membership.timeout",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
       "type": "java.time.Duration"
     },
     {
+      "description": "How long one call of the stage's collaborator may take, the stage being the group this property is under: `membership` (the `MembershipProvider`; past it, or when it fails, the request is 503), `attributes` (an `AttributeProvider` that sets no timeout of its own; past it its attributes are unavailable) and `rate-limit` (the `RateLimiter`; past it the rule's `strictFailure` decides).",
       "name": "cosec.authorization.rate-limit.timeout",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Timed",
       "type": "java.time.Duration"
@@ -369,11 +405,13 @@
       "type": "java.lang.Double"
     },
     {
+      "description": "How long a request waits for a document that is not installed; past it the document counts as failed. Positive.",
       "name": "cosec.authorization.snapshot.cold-load-timeout",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.time.Duration"
     },
     {
+      "description": "Threads that compile documents; positive.",
       "name": "cosec.authorization.snapshot.compile-threads",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.lang.Integer"
@@ -385,21 +423,25 @@
       "type": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$EvictionCheck"
     },
     {
+      "description": "The lag beyond which the tenants above fail closed; not negative.",
       "name": "cosec.authorization.snapshot.fail-closed.max-lag",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot$FailClosed",
       "type": "java.time.Duration"
     },
     {
+      "description": "Tenants that must not be decided on old documents: a request of one is 503 unless a DENY matches, when the oldest document it reads was confirmed longer ago than `max-lag`.",
       "name": "cosec.authorization.snapshot.fail-closed.tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot$FailClosed",
       "type": "java.util.Set<java.lang.String>"
     },
     {
+      "description": "How long a document may go unconfirmed before it is logged at ERROR as stale.",
       "name": "cosec.authorization.snapshot.lag-escalate",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.time.Duration"
     },
     {
+      "description": "How long a document may go unconfirmed before it is logged at WARN; not more than `lag-escalate`.",
       "name": "cosec.authorization.snapshot.lag-warn",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.time.Duration"
@@ -411,21 +453,25 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "The most app documents held in memory (positive); the least recently used one is dropped beyond it.",
       "name": "cosec.authorization.snapshot.max-apps",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.lang.Integer"
     },
     {
+      "description": "The most tenant documents held in memory (positive); the platform document is never dropped.",
       "name": "cosec.authorization.snapshot.max-tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.lang.Integer"
     },
     {
+      "description": "App documents loaded at startup, after the platform document; readiness waits for them.",
       "name": "cosec.authorization.snapshot.prewarm-apps",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.util.List<java.lang.String>"
     },
     {
+      "description": "Tenant documents loaded at startup, after the platform document; readiness waits for them.",
       "name": "cosec.authorization.snapshot.prewarm-tenants",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.util.List<java.lang.String>"
@@ -443,6 +489,7 @@
       "type": "java.lang.String"
     },
     {
+      "description": "How long an approval stays valid; startup fails when it is longer than `cosec.jwt.token-validity.refresh`, how long a token revocation is kept.",
       "name": "cosec.control.approval.expire-after",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Approval",
       "type": "java.time.Duration"
@@ -460,11 +507,13 @@
       "type": "me.ahoo.cosec.runtime.event.Delivery"
     },
     {
+      "description": "Whether the Kafka change listener is on; it needs `cosec-kafka` and a `KafkaOperations` bean.",
       "name": "cosec.control.audit.kafka.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit$Kafka",
       "type": "java.lang.Boolean"
     },
     {
+      "description": "The Kafka topic of the change events.",
       "name": "cosec.control.audit.kafka.topic",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Audit$Kafka",
       "type": "java.lang.String"
@@ -488,6 +537,12 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "Whether this instance runs the control plane, when `cosec-control` and `cosec-cocache` are on its classpath. `false` leaves it out, and the instance reads the policy documents and candidates read-only (SNP-18): a fleet that ships one image for both roles sets it on the data-plane role. `true` or `false` only.",
+      "name": "cosec.control.enabled",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "type": "java.lang.Boolean"
+    },
+    {
       "description": "Where the control API is served (RFC 0007 \u00a710.2): its routes are under `{base-path}/v1`.",
       "name": "cosec.control.http.base-path",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Http",
@@ -500,16 +555,19 @@
       "type": "org.springframework.util.unit.DataSize"
     },
     {
+      "description": "The revisions always kept per document; older ones are reclaimed once also older than `min-age`.",
       "name": "cosec.control.revisions.max-count",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
       "type": "java.lang.Integer"
     },
     {
+      "description": "Revisions younger than this are always kept.",
       "name": "cosec.control.revisions.min-age",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
       "type": "java.time.Duration"
     },
     {
+      "description": "The records of conflicted publishes are removed once this old.",
       "name": "cosec.control.revisions.orphan-age",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Revisions",
       "type": "java.time.Duration"
@@ -527,16 +585,19 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "A window closes at this age with fewer samples, as insufficient evidence; not less than `min-duration`.",
       "name": "cosec.control.shadow.max-duration",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow",
       "type": "java.time.Duration"
     },
     {
+      "description": "A shadow window closes no earlier than this, once it also has `min-samples`.",
       "name": "cosec.control.shadow.min-duration",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow",
       "type": "java.time.Duration"
     },
     {
+      "description": "The compared samples a window needs to close before `max-duration`.",
       "name": "cosec.control.shadow.min-samples",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Shadow",
       "type": "java.lang.Long"
@@ -548,6 +609,7 @@
       "type": "java.lang.String"
     },
     {
+      "description": "Whether CoSec's auto-configurations are on at all; the unknown-key check and a gateway's identity strip hold anyway.",
       "name": "cosec.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.CoSecProperties",
       "type": "java.lang.Boolean"
@@ -583,6 +645,7 @@
       "type": "java.util.Set<java.lang.String>"
     },
     {
+      "description": "Whether the `ext.ip2region.*` attribute provider is on (`cosec-ip2region`).",
       "name": "cosec.ip2region.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.ip2region.Ip2RegionProperties",
       "type": "java.lang.Boolean"
@@ -594,16 +657,19 @@
       "type": "java.lang.String"
     },
     {
+      "description": "The signing algorithm; issuers and verifiers must agree.",
       "name": "cosec.jwt.algorithm",
       "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
       "type": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$Algorithm"
     },
     {
+      "description": "Whether JWTs are issued, verified and revoked; unset, on where the host verifies tokens itself and off behind a gateway.",
       "name": "cosec.jwt.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
       "type": "java.lang.Boolean"
     },
     {
+      "description": "The signing secret, required while JWT is enabled: startup fails when it is blank or shorter than the algorithm needs in UTF-8 bytes (32 for hmac256, 48 for hmac384, 64 for hmac512).",
       "name": "cosec.jwt.secret",
       "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties",
       "type": "java.lang.String"
@@ -621,11 +687,13 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "The lifetime of an access token.",
       "name": "cosec.jwt.token-validity.access",
       "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$TokenValidity",
       "type": "java.time.Duration"
     },
     {
+      "description": "The lifetime of a refresh token; a revocation is kept this long, plus one second.",
       "name": "cosec.jwt.token-validity.refresh",
       "sourceType": "me.ahoo.cosec.spring.boot.jwt.JwtProperties$TokenValidity",
       "type": "java.time.Duration"
@@ -637,6 +705,7 @@
       "type": "java.lang.String"
     },
     {
+      "description": "Whether the metrics listener is on; it needs `cosec-micrometer` and a `MeterRegistry` bean.",
       "name": "cosec.metrics.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.micrometer.MetricsProperties",
       "type": "java.lang.Boolean"
@@ -660,6 +729,7 @@
       "type": "java.time.Duration"
     },
     {
+      "description": "Whether the bearer-auth customizer of the OpenAPI document is on (`cosec-openapi`).",
       "name": "cosec.openapi.enabled",
       "sourceType": "me.ahoo.cosec.spring.boot.openapi.OpenAPIProperties",
       "type": "java.lang.Boolean"

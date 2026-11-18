@@ -14,6 +14,7 @@
 package me.ahoo.cosec.spi.identity
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.spi.token.TokenSession
 import java.time.Instant
 
 /**
@@ -97,8 +98,29 @@ class Identity(
          * do not apply to it, here or in a service behind the gateway.
          */
         val capped: Boolean = false,
+        /**
+         * When the credential was issued, a token's `iat`; null when it does not say. A revocation of the principal's
+         * tokens is told apart by it, behind the gateway as in front of it, and a credential without it is taken as
+         * revoked by any.
+         */
+        val issuedAt: Instant? = null,
+        /**
+         * The session of CoSec's own token ([Method.JWT]: `sid`, `auth_time`, `cosec.generation`, RFC 0009), which a
+         * gateway forwards so that a service behind it knows when the user signed in, and so that a tenant switch there
+         * can issue from it (`IDN-22`). Null for any other credential.
+         */
+        val session: TokenSession? = null,
     ) {
-        private fun fields(): List<Any?> = listOf(method, id, expiresAt, capped)
+        init {
+            require(session == null || method == Method.JWT) { "Only CoSec's own token has a session (RFC 0009)." }
+            require(issuedAt == null || expiresAt == null || !issuedAt.isAfter(expiresAt)) {
+                "A credential cannot be issued after it expires: issued $issuedAt, expires $expiresAt."
+            }
+            // Not compared with the session's login time: two clocks wrote them (the family's, the issuer's).
+            require(session == null || issuedAt != null) { "A session's token says when it was issued." }
+        }
+
+        private fun fields(): List<Any?> = listOf(method, id, expiresAt, capped, issuedAt, session)
 
         override fun equals(other: Any?): Boolean = other is Credential && other.fields() == fields()
 
@@ -113,11 +135,15 @@ class Identity(
             id: String = this.id,
             expiresAt: Instant? = this.expiresAt,
             capped: Boolean = this.capped,
+            issuedAt: Instant? = this.issuedAt,
+            session: TokenSession? = this.session,
         ): Credential = Credential(
             method = method,
             id = id,
             expiresAt = expiresAt,
             capped = capped,
+            issuedAt = issuedAt,
+            session = session,
         )
     }
 

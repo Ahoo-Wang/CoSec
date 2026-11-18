@@ -20,7 +20,8 @@
       "level": "timing",
       "properties": [
         "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
-        "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge"
+        "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConverge",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
       ],
       "pending": null
     },
@@ -47,7 +48,8 @@
       "statement": "Once the platform's limits or attributes change, every app and tenant document installed afterwards was compiled with them or is compiled again, including one whose load was in flight; one that cannot be compiled again fails closed.",
       "level": "timing",
       "properties": [
-        "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily"
+        "runtime:SnapshotInstallOrderPropertyTest#installsFollowLoadOrderAndConvergeInEveryFamily",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
       ],
       "pending": null,
       "guards": [
@@ -105,11 +107,13 @@
       "statement": "A revision whose compilation fails, with an exception or a VirtualMachineError such as a StackOverflowError, is installed as failed: the source never keeps serving the revision before it in its place.",
       "level": "timing",
       "properties": [
-        "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision"
+        "runtime:SnapshotFailClosedPropertyTest#aFailedCompilationNeverKeepsAnOlderRevision",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder"
       ],
       "guards": [
         "runtime:SnapshotSourceFailureTest#f5NewRevisionWhoseCompilationOverflowsTheStackReplacesTheInstalledOne",
-        "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey"
+        "runtime:SnapshotReviewFixesTest#virtualMachineErrorInACompilationFailsTheLoadWithoutWedgingTheKey",
+        "runtime:KeyDrainLaneTest#a failed compilation offered while a caller with a spent budget holds the flag is installed before it returns"
       ],
       "pending": null
     },
@@ -135,6 +139,174 @@
         "runtime:PlatformCompilerCandidateTest#a staged platform candidate leaves the enforced documents as they were",
         "runtime:PlatformCompilerCandidateTest#publishing the same change does reach them",
         "spring-boot:ShadowReportingWiringTest#a staged platform candidate leaves what the instance compiles with as it was"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-11",
+      "source": "RFC 0003 §4.3 (8.0 drill, entry 26)",
+      "statement": "A stored document that does not compile on an instance is reported as such: a request that needs it is Indeterminate with Cause.DocumentInvalid at the stored revision, never SourceUnavailable, which says the store could not be read; the client's 503 is the same as for any unavailability, with nothing of the compiler's message; the instance logs it once per revision, digest and inputs it compiled against, and once more when a revision compiles; and its health names the document and revision as invalid.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:DocumentInvalidTest#a document that does not compile is logged once per revision, and its recovery once",
+        "runtime:DocumentInvalidTest#a decision event says the document is invalid, at the revision its view carries",
+        "runtime:DocumentInvalidTest#the client's answer is the same as for an unavailable source",
+        "runtime:DocumentSnapshotViewsTest#missing documents are empty, failed ones are unresolved",
+        "spring-boot:SnapshotHealthIndicatorTest#health names a document that does not compile, by its revision"
+      ]
+    },
+    {
+      "id": "SNP-12",
+      "source": "RFC 0003 §3.3 (8.0 drill, entry 3)",
+      "statement": "A snapshot document's header is read from its body: the stored bytes are the whole document, and the only way to make a SnapshotDocument is SnapshotDocuments, which reads schema, revision and publishedAt from them (read) or from the document it encodes (of). No main code of any module calls the constructor, so no store, candidate or test kit can state a revision its bytes contradict, and the revision an instance reports installed is the revision of the content it enforces. A shadow candidate's record holds its window, its base revision and its document only; a record that states the header beside the document is refused as an unreadable candidate.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "architecture:SnapshotDocumentMakersTest#only SnapshotDocuments makes a snapshot document",
+        "document:SnapshotDocumentsTest#theHeaderIsTheBodys",
+        "document:SnapshotDocumentsTest#aPolicyDocumentStatesItsOwnHeader",
+        "document:PolicyDocumentAtTest#at changes the revision and the time it is published, and nothing else",
+        "document:PolicyDocumentAtTest#copy passes on every field it is not told to change",
+        "document:ShadowCodecTest#a candidate record that states its header beside its document is refused",
+        "runtime:CandidateRecordShapeTest#a candidate record in the shape of 8_0_0-alpha_4 is not compared, and the request is answered as without it"
+      ]
+    },
+    {
+      "id": "SNP-13",
+      "source": "RFC 0003 §4.4 (the future of a maintenance call)",
+      "statement": "The future of `revalidate` or `recompile` completes only after, for every document it covers, a load that started after the call: `revalidate` covers every document installed at the call, `recompile` every app and tenant document idle or loading at the call. A load already in flight at the call, which may have read or compiled before it, is followed by another, and the future waits for that one.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:SnapshotRevalidationTest#revalidationAnswersWithAReadThatStartedAfterTheCall",
+        "runtime:SnapshotRecompileTest#recompiling waits for a document that was loading, until it is compiled with the new inputs",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff",
+        "runtime:KeyDrainLaneTest#a load of an absent key that ends before its recompile mark is taken is followed by a read after the call"
+      ]
+    },
+    {
+      "id": "SNP-14",
+      "source": "RFC 0013 B2b (the family bound under a burst)",
+      "statement": "A family holds at most its bound plus the smaller of its bound and 4,096 entries of each kind (documents; entries for documents the store does not hold), plus the entries being installed or loaded at that moment; an install that finds its kind over that evicts on the installing thread before it answers its waiters. Evictions never take a kind below its bound, and passes running at once leave a kind at its bound when every victim was idle: they never stop above it.",
+      "level": "timing",
+      "properties": [
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelInEveryScriptedOrder",
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff"
+      ],
+      "guards": [
+        "runtime:SnapshotFamilyBoundTest#a burst with housekeeping held never holds more than the cap, and the installer evicted it in place",
+        "runtime:SnapshotFamilyBoundTest#installs within the cap leave eviction to housekeeping, which takes the family back to its bound",
+        "runtime:SnapshotFamilyBoundTest#passes at once take a kind exactly to its bound, never below it and never stopping above it",
+        "runtime:SnapshotFamilyBoundTest#a victim whose kind changed between the choice and the removal is not removed, and no count moves",
+        "runtime:AbsentBoundWindowTest#members loading when the last pass scans are evicted once their loads end absent again",
+        "runtime:AbsentBoundWindowTest#a victim the pass chose that starts a load before its eviction is taken is evicted once that load ends",
+        "runtime:AbsentBoundWindowTest#an eviction whose transition throws is taken back to the bound by the next revalidation"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-15",
+      "source": "RFC 0013 §5.4 (the load lane)",
+      "statement": "What a spent drain budget leaves is not left waiting on the compile queue. An event the source's own work produces (a read's answer, failure or timeout, a compilation's result, an effect's failure, a retry coming due) is taken by the thread that holds the key's flag or the next one to take it, before any budget check and uncounted. A caller event left by a spent budget is handed to the source's own threads, where it waits for at most the compilation a pool thread is running; when the pool refuses it housekeeping runs it, and when that refuses too, its offerer does.",
+      "level": "timing",
+      "properties": [
+        "runtime:SnapshotSourceModelPropertyTest#theKeyRunnerKeepsToTheModelWhenEveryDrainHandsOff"
+      ],
+      "guards": [
+        "runtime:KeyDrainLaneTest#a lane event offered between the empty queue and the release is taken before the drainer returns",
+        "runtime:KeyDrainLaneTest#a lane event offered between the release and the check is taken before the drainer returns",
+        "runtime:KeyDrainLaneTest#a failed compilation offered while a caller with a spent budget holds the flag is installed before it returns",
+        "runtime:KeyDrainLaneTest#the compile pool serves a hand-off when the compilation it runs ends, before the ones queued behind it",
+        "runtime:KeyRunnerFailureTest#a hand-off the compile pool refuses goes to housekeeping, counted, and runs there",
+        "runtime:KeyRunnerFailureTest#a hand-off both pools refuse is counted, and the caller runs the source's hand-offs"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-16",
+      "source": "RFC 0013 §5.4",
+      "statement": "An effect that throws ends its key's load in flight as a transient failure and the key goes on: a step offers at most one `EffectFailed`, and an `EffectFailed`'s own step offers none, so no thread loops on a key whose effects keep failing.",
+      "level": "build",
+      "guards": [
+        "runtime:KeyEffectFailureTest#every effect of a step that throws gives one EffectFailed, and its own failed log gives none",
+        "runtime:KeyEffectFailureTest#an EffectFailed whose log throws gives no other on the compile pool, which drains unbounded",
+        "runtime:KeyEffectFailureTest#what an EffectFailed's own step fails is logged in place, and no other EffectFailed comes",
+        "runtime:KeyEffectFailureTest#a VirtualMachineError in a step with other failures is still logged on a caller's thread",
+        "runtime:KeyEffectFailureTest#a VirtualMachineError in a step with other failures is still rethrown on the compile pool",
+        "runtime:KeyEffectFailureTest#a VirtualMachineError from logging what an EffectFailed's step failed is kept and logged, not dropped"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-17",
+      "source": "RFC 0013 §5.4 (the request timer)",
+      "statement": "A request's cold load timeout runs from the call: its load or its timer answers it within `coldLoadTimeout` of `request()`. The request is registered before its offer, so `close` answers it whatever the drain does; its timer is armed when the offer returns, with what is left of the bound, and only if it is not yet answered; an offer that throws leaves it answered and untimed.",
+      "level": "build",
+      "guards": [
+        "runtime:KeyRunnerRequestTimerTest#a request answered inside its offer, by a load that completes in the drain, schedules no timer",
+        "runtime:KeyRunnerRequestTimerTest#a hit schedules no timer",
+        "runtime:KeyRunnerRequestTimerTest#a request whose offer returns late is timed by what is left of its bound, not the whole of it",
+        "runtime:KeyRunnerRequestTimerTest#a request whose bound is spent when its offer returns is answered TIMEOUT at once, on the caller's thread",
+        "runtime:KeyRunnerRequestTimerTest#an offer that throws leaves its request answered, not registered and waiting",
+        "runtime:KeyRunnerRequestTimerTest#an offer that throws arms no timer",
+        "runtime:KeyRunnerRequestTimerTest#a request still loading when the source closes is answered by close",
+        "runtime:KeyRunnerRequestTimerTest#a timer that fires after the answer, before its cancel, finds the request answered and does nothing",
+        "runtime:KeyRunnerRequestTimerTest#a request whose timer the scheduler refuses is answered FAILED once, unregistered, and its load's end changes nothing"
+      ],
+      "pending": null
+    },
+    {
+      "id": "SNP-18",
+      "source": "roadmap §9 (the data plane's Redis credential read-only); CoCache 8.1.0 read-only stores",
+      "statement": "A process that does not run the control plane reads the snapshot documents and the candidates read-only, so a Redis user with read permission on them is enough and Redis refuses it a write; a process that runs the control plane writes them. Which one a process is follows the condition the control plane is wired on and nothing else (its classes on the classpath, and cosec.control.enabled not false, read the same from a property or the environment): a cocache.* property or customizer that changes it, either way, fails the creation of the store.",
+      "level": "startup",
+      "pending": null,
+      "guards": [
+        "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's snapshot store read-write",
+        "cocache:ReadOnlyDeclarationTest#a layer cannot make the control plane's snapshot store read-only",
+        "cocache:ReadOnlyDeclarationTest#a layer cannot make a data-plane instance's candidate store read-write",
+        "cocache:ReadOnlyDeclarationTest#a layer cannot make the control plane's candidate store read-only",
+        "cocache:ReadOnlyDeclarationTest#a read-only snapshot store reads and refuses every write before it is sent",
+        "spring-boot:ReadOnlyDataPlaneTest#a data-plane process reads the documents and the candidates read-only",
+        "spring-boot:ReadOnlyDataPlaneTest#a process that runs the control plane writes them",
+        "spring-boot:ReadOnlyDataPlaneTest#a property cannot make a data-plane process write the documents",
+        "spring-boot:ReadOnlyDataPlaneTest#a property cannot make the control plane's process read the documents read-only",
+        "spring-boot:DataPlaneAclTest#the page's data-plane user reads, hears a publish, writes its report, and may write no document",
+        "spring-boot:DataPlaneAclTest#the lines of 8_0_0-beta_1's page fail startup, naming what is missing",
+        "spring-boot:DataPlaneAclTest#a process that runs the control plane with the read-only user fails at startup",
+        "spring-boot:DataPlaneAclTest#the operations page shows the lines this test runs, and upgrading says what to add",
+        "spring-boot:ControlPlaneSwitchTest#switched on by default, the control plane and its routes are wired, and the stores written",
+        "spring-boot:ControlPlaneSwitchTest#cosec control enabled false wires nothing of the control plane, and the stores are read read-only",
+        "spring-boot:ControlPlaneSwitchTest#the environment variable a one-image fleet sets per role does the same, through the condition and both stores",
+        "spring-boot:ControlPlaneSwitchTest#a value that is neither true nor false fails startup, read neither as on nor as off",
+        "spring-boot:CoSecModuleCheckAutoConfigurationTest#an instance that switches the control plane off says so once at startup, one without it says nothing",
+        "spring-boot:DataPlaneAclTest#an image with the control plane, switched off, starts with the page's user and may write no document"
+      ]
+    },
+    {
+      "id": "SNP-19",
+      "source": "#1534 (what housekeeping refuses); RFC 0013 B2b (the runner's paths)",
+      "statement": "No thread that calls the snapshot source writes a log line, or runs housekeeping's work, because housekeeping's queue is full: a refused log line, eviction pass under the cap or lag report is dropped and counted by its task (`HousekeepingTask`), and housekeeping itself writes one summary at most every 10 seconds, only when something moved, naming the last text dropped per task without its stack. Only the over-cap pass (SNP-14), an empty key's drop and the source's hand-offs (SNP-15) run in place. A meter that throws is counted in the summary's own state, never logged on the caller's thread nor offered to housekeeping, and the summary is written whatever the metrics are. Housekeeping stopped by close is refusal too, except on the source's own threads, where the task runs in place uncounted; close ends by writing what was refused and not yet summarized, once, on the closing thread, whatever the interval.",
+      "level": "build",
+      "guards": [
+        "runtime:HousekeepingRefusalTest#a failed load's line is dropped, not written on the caller's thread, and the summary names it",
+        "runtime:HousekeepingRefusalTest#a compile failure's line is dropped and counted",
+        "runtime:HousekeepingRefusalTest#a crash's report and its failed effect's line, on a caller's thread, are dropped and counted",
+        "runtime:HousekeepingRefusalTest#an aborted transition's line is dropped and counted",
+        "runtime:HousekeepingRefusalTest#a prewarm warning is dropped and counted",
+        "runtime:HousekeepingRefusalTest#a reset's line is dropped and counted",
+        "runtime:HousekeepingRefusalTest#a stalled pass's warning is dropped and counted",
+        "runtime:HousekeepingRefusalTest#housekeeping full across ticks keeps the family under its cap, and the late pass takes it to its bound",
+        "runtime:HousekeepingRefusalTest#a throwing refusal meter never reaches the caller, and the summary counts it",
+        "runtime:HousekeepingRefusalTest#nothing refused, nothing summarized",
+        "runtime:HousekeepingRefusalsTest#a summary resets the counts, and the next waits for the interval and for something to move",
+        "runtime:HousekeepingRefusalsTest#a line keeps its exception's class and message, no stack, and at most its bound",
+        "runtime:HousekeepingRefusalsTest#meter failures alone are summarized",
+        "runtime:HousekeepingRefusalTest#close while housekeeping is full writes what it refused, once, on the closing thread",
+        "runtime:HousekeepingRefusalTest#after close, a caller's line is dropped and counted, and the source's own thread runs its task in place",
+        "runtime:HousekeepingRefusalTest#a compilation that ends after housekeeping stopped finds its load ended, and nothing is refused"
       ],
       "pending": null
     }

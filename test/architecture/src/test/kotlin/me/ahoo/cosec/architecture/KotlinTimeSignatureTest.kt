@@ -47,13 +47,17 @@ class KotlinTimeSignatureTest {
         api.unread.filterNot { it.startsWith(KotlinApi.CLASS_NOT_FOUND) }.assert()
             .describedAs("declarations reflection could not read; read them, or name why they may go unread")
             .isEmpty()
-        read.assert().isGreaterThan(classes.size / 2)
+        // Every visible class and file facade it set out to read was read; what may go unread is `api.unread`'s, above.
+        read.assert().describedAs("classes and file facades read, of the $considered considered").isEqualTo(considered)
     }
 
     private val api = KotlinApi()
 
     /** The classes and file facades whose declarations were read. */
     private var read = 0
+
+    /** The visible classes and file facades whose declarations it set out to read. */
+    private var considered = 0
 
     private inline fun <T> reading(default: T, read: () -> T): T = api.reading(default, read)
 
@@ -67,6 +71,7 @@ class KotlinTimeSignatureTest {
                 if (!api.visible(type)) {
                     return emptyList()
                 }
+                considered += 1
                 val kClass = reading(null) { type.kotlin.also { it.members } } ?: return emptyList()
                 read += 1
                 val supertypes = reading(emptyList()) {
@@ -77,6 +82,7 @@ class KotlinTimeSignatureTest {
             }
             // A file of top-level declarations.
             FILE, MULTIFILE_PART -> {
+                considered += 1
                 read += 1
                 topLevel(type)
             }

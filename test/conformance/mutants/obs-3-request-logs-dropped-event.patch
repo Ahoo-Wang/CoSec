@@ -1,0 +1,16 @@
+# Rule: OBS-3
+# Mutant: a full queue logs its drop on the request's thread
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.DecisionListenersShutdownTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+index aa53d295..1dc57911 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+@@ -233,6 +233,7 @@ class DecisionListeners(
+             val size = queued.size.incrementAndGet()
+             if (closed || size > queued.capacity) {
+                 queued.size.decrementAndGet()
++                log.warn { "Dropping decision events: the queue of listener [${queued.listener.name}] is full." }
+                 dropped(queued, closed)
+                 continue
+             }

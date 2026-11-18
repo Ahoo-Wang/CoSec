@@ -28,6 +28,8 @@ import me.ahoo.cosec.control.audit.ChangeEvent
 import me.ahoo.cosec.control.audit.ChangeListener
 import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
@@ -38,7 +40,7 @@ import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.control.store.StoredDocument
 import me.ahoo.cosec.control.store.Versioned
 import me.ahoo.cosec.document.PolicyDefinition
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId
@@ -459,7 +461,7 @@ class ChangesB1Test {
     fun `what moved is recorded even when a written change cannot be settled - RC1-33`() = runBlocking<Unit> {
         publish(SnapshotKey.Platform, Operation.PutPolicy(allow("platform-read")))
         var written = false
-        val readAfter = java.util.Collections.synchronizedList(ArrayList<SnapshotKey>())
+        val readAfter = java.util.concurrent.CopyOnWriteArrayList<SnapshotKey>()
         val store = object : ControlStore by harness.memory {
             override suspend fun putHead(
                 key: SnapshotKey,
@@ -525,7 +527,7 @@ class ChangesB1Test {
                 return harness.memory.putChange(expected, change)
             }
         }
-        val events = java.util.Collections.synchronizedList(ArrayList<ChangeEvent.Kind>())
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent.Kind>()
         val listener = object : ChangeListener {
             override val name = "events"
 
@@ -651,7 +653,7 @@ class ChangesB1Test {
                 return harness.memory.putHead(key, expected, document)
             }
         }
-        val events = java.util.Collections.synchronizedList(ArrayList<ChangeEvent>())
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
         val listener = object : ChangeListener {
             override val name = "events"
 
@@ -777,7 +779,7 @@ class ChangesB1Test {
                 return harness.memory.head(key)
             }
         }
-        val events = java.util.Collections.synchronizedList(ArrayList<ChangeEvent>())
+        val events = java.util.concurrent.CopyOnWriteArrayList<ChangeEvent>()
         val listener = object : ChangeListener {
             override val name = "events"
 
@@ -815,7 +817,7 @@ class ChangesB1Test {
                 StoreFixtures.candidate(platform, listOf(allow("edge"))),
                 StoreFixtures.publication()
             )
-            val (kind, owner) = Revisions.ownerOf(ACME)
+            val (kind, owner) = ownerOf(ACME)
             val tenant = me.ahoo.cosec.document.PolicyDocument(
                 kind,
                 owner,

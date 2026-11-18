@@ -17,13 +17,13 @@ package me.ahoo.cosec.document.shadow
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.shadow.InstalledDocument
 import me.ahoo.cosec.spi.shadow.InstanceStatus
 import me.ahoo.cosec.spi.shadow.ShadowOutcome
 import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowSample
 import me.ahoo.cosec.spi.shadow.StoredCandidate
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
@@ -36,11 +36,8 @@ import java.time.Instant
 class ShadowCodecTest {
     private val now: Instant = Instant.parse("2026-11-01T00:00:00Z")
     private val acme: SnapshotKey = SnapshotKey.Tenant("acme")
-    private val document = SnapshotDocument(
-        2,
-        5,
-        Instant.parse("2026-11-01T00:00:00Z"),
-        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray(),
+    private val document = SnapshotDocuments.read(
+        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray()
     )
 
     @Test
@@ -122,5 +119,13 @@ class ShadowCodecTest {
         assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(missing.encodeToByteArray()) }
         val zero = """{"a":{"at":"2026-11-08T00:00:00Z","documents":{},"formatLevel":0}}"""
         assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeStatuses(zero.encodeToByteArray()) }
+    }
+
+    /** SNP-12: one shape. A record that states the header beside the document, as 8.0.0-alpha.4 wrote it, is refused. */
+    @Test
+    fun `a candidate record that states its header beside its document is refused`() {
+        val record = """{"window":"w","baseRevision":4,"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z",""" +
+            """"document":{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z"}}"""
+        assertThrownBy<SnapshotFormatException> { ShadowCodec.decodeCandidate(record.encodeToByteArray()) }
     }
 }

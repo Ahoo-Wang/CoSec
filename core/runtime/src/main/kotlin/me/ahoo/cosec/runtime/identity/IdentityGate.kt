@@ -50,6 +50,7 @@ import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import java.time.Duration
 import kotlin.coroutines.cancellation.CancellationException
@@ -62,7 +63,8 @@ private val log = KotlinLogging.logger {}
  * with no keys, policies, snapshot or Redis of its own. The gateway strips any such header a client sends.
  *
  * - no header: the request proceeds as anonymous, and the service's own code decides;
- * - a header that cannot be read, is larger than [maxBytes] or arrives more than once: 400 `invalid-request`;
+ * - a header that cannot be read, is larger than [maxBytes] or arrives more than once, or an identity whose tenant can
+ *   be no tenant id, such as one with `/` (#1403), which no gateway forwards: 400 `invalid-request`;
  * - a version this service does not read, or an identity from the future: 401 `token-invalid`;
  * - a credential past its expiry, or an identity older than [maxAge] (with [skew]), which limits replaying a captured
  *   header inside the network: 401 `token-expired`;
@@ -107,9 +109,12 @@ class IdentityGate(
     }
 
     private fun decide(facts: HttpFacts, requestId: String, traceId: String?): Outcome {
+        // The CoSec parameters under the pipeline's rule (SCP-4): the device a client declares reads the same here.
+        val parameters = CoSecParameters.read(facts)
+            ?: return reject(requestId, ProblemType.INVALID_REQUEST, "a CoSec-* parameter is ambiguous", traceId)
         val headers = facts.headers.values(IdentityCodec.HEADER)
         if (headers.isEmpty()) {
-            return StatusMapping.asserted(requestId, anonymous(requestId, facts), null)
+            return StatusMapping.asserted(requestId, anonymous(requestId, facts, parameters), null)
         }
         if (headers.size > 1) {
             return reject(requestId, ProblemType.INVALID_REQUEST, "the identity header arrived more than once", traceId)
@@ -140,7 +145,16 @@ class IdentityGate(
         if (identity.issuedAt.isAfter(now.plus(skew))) {
             return reject(requestId, ProblemType.TOKEN_INVALID, "the identity is from ${identity.issuedAt}", traceId)
         }
-        val security = security(identity, requestId, facts)
+        if (!SnapshotKey.Tenant.isValidTenantId(identity.tenant)) {
+            // The gateway refuses a token of such a tenant (`SCP-13`), so this one was not forwarded by it.
+            return reject(
+                requestId,
+                ProblemType.INVALID_REQUEST,
+                "the identity's tenant cannot be a tenant id",
+                traceId
+            )
+        }
+        val security = security(identity, requestId, facts, parameters)
             ?: return reject(requestId, ProblemType.INVALID_REQUEST, "the identity's scope does not resolve here", traceId)
         return StatusMapping.asserted(requestId, security, identity)
     }
@@ -150,16 +164,21 @@ class IdentityGate(
         return StatusMapping.identityRejected(requestId, type, reason, traceId)
     }
 
-    private fun anonymous(requestId: String, facts: HttpFacts): RequestSecurity {
+    private fun anonymous(requestId: String, facts: HttpFacts, parameters: CoSecParameters): RequestSecurity {
         val memberships = Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())
         val subject = ScopeSubject(TenantId.DEFAULT, false, memberships)
         val resolution = ScopeResolver.resolve(subject, "", facts.host)
         val scope = (resolution as ScopeResolution.Resolved).scope
-        return RequestSecurity(requestId, null, scope, memberships, request(ANONYMOUS, requestId, facts))
+        return RequestSecurity(requestId, null, scope, memberships, request(ANONYMOUS, requestId, facts, parameters))
     }
 
     /** The principal the gateway verified, in the scope it decided in; null when that scope does not resolve here. */
-    private fun security(identity: Identity, requestId: String, facts: HttpFacts): RequestSecurity? {
+    private fun security(
+        identity: Identity,
+        requestId: String,
+        facts: HttpFacts,
+        parameters: CoSecParameters,
+    ): RequestSecurity? {
         val tenant = TenantId(identity.tenant)
         val roles = identity.roles.mapTo(LinkedHashSet(), ::RoleId)
         val memberships = Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId(identity.space) to roles), emptyList())
@@ -171,9 +190,11 @@ class IdentityGate(
             identity.claims,
             identity.credential,
             breakGlass = identity.credential.method == Identity.Method.JWT,
-            issuedAt = null,
+            issuedAt = identity.credential.issuedAt,
             apiKeyCredential = false,
             app = identity.app.takeIf(ScopeResolver::isValidAppId)?.let(::AppId),
+            // CoSec's own token's session, as the gateway verified it: what a switch here issues from (IDN-22).
+            session = identity.credential.session,
         )
         val resolution = ScopeResolver.resolve(
             // The forwarded identity is the credential here, and its app the one the credential declared (`SCP-11`).
@@ -190,16 +211,16 @@ class IdentityGate(
             principal.principalBindings,
             principal.breakGlass,
         )
-        val request = request(subject, requestId, facts)
+        val request = request(subject, requestId, facts, parameters)
         return RequestSecurity(requestId, principal, scope, memberships, request, identity = identity)
     }
 
-    private fun request(subject: Subject, requestId: String, facts: HttpFacts) =
+    private fun request(subject: Subject, requestId: String, facts: HttpFacts, parameters: CoSecParameters) =
         AuthzRequest(
             subject = subject,
             action = Action("http", facts.method),
             resource = Resource("http", facts.rawPath, emptyMap()),
-            environment = Environment(facts.remoteAddress, requestId, "", false),
+            environment = Environment(facts.remoteAddress, requestId, parameters.deviceId, false),
         )
 
     @InternalCoSecApi

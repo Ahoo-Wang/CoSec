@@ -52,4 +52,29 @@ class CatalogTest {
             """version.ref = "$it"""" in catalog || "libs.versions.${accessorOf(it)}" in accessors
         }.assert().isEmpty()
     }
+
+    private fun versionOf(alias: String): String =
+        Regex("""(?m)^${Regex.escape(alias)}\s*=\s*"([^"]+)"""").find(catalog)!!.groupValues[1]
+
+    /**
+     * The page that says what CoSec needs from an application's build names what does not move with every patch: the
+     * Spring Boot minor line, CoCache's major version and the JDK. A patch version is in the published metadata and
+     * would be stale after the next dependency update; a minor line or a JDK that moves is a change the page must follow.
+     */
+    @Test
+    fun `the build requirements page names the catalog's Spring Boot line, CoCache major and JDK`() {
+        val boot = versionOf("spring-boot").split('.').take(2).joinToString(".")
+        val cocache = versionOf("cocache").substringBefore('.')
+        val jdk = Regex(
+            """jvmToolchain\((\d+)\)"""
+        ).find(Projects.root.resolve("build.gradle.kts").readText())!!.groupValues[1]
+        mapOf(
+            "wiki/guide/introduction.md" to "## What CoSec needs from your build",
+            "wiki/zh/guide/introduction.md" to "## CoSec 对构建的要求",
+        ).forEach { (page, heading) ->
+            val section = Projects.root.resolve(page).readText().substringAfter(heading).substringBefore("\n## ")
+            listOf("Spring Boot $boot", "CoCache $cocache", "JDK $jdk").filterNot { it in section }
+                .map { "$page: does not say \"$it\"" }.assert().isEmpty()
+        }
+    }
 }

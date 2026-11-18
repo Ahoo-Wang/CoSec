@@ -18,6 +18,14 @@
 > **2026-11-08 修订（#1295）**：`cosec.unknown-properties` 已删除，未知的 `cosec.*` 键一律启动失败，旧前缀也不例外。
 
 > **2026-11-09 修订（#1304，`SNP-6`）**：周期轮询不等待超过 `storeReadTimeout` 的在途加载，加载结束时再确认文档。
+>
+> **2026-11-15 修订（#1421、#1432，`SNP-11`、`SNP-12`；真实项目演练的发现）**：
+> - **文档以正文为准（§3.3）。** `SnapshotDocument` 的正文就是整份 JSON，文档头（`schema`、`revision`、`publishedAt`）在里面，Redis 存的也是它；此前公开构造器把这三个值当参数再收一遍，没有任何东西让两者一致，
+>   内存存储、应用自己的存储、测试以及控制面的影子候选都能造出“头说修订 8、正文是修订 7”的文档，实例于是上报一个它并未执行的修订号（判定不受影响，内容只来自正文）。
+>   现在构造器是内部的，唯一的入口是 `cosec-document` 的 `SnapshotDocuments.read(bytes)`，从字节里读出文档头；主代码里只有这个工厂构造 `SnapshotDocument`，有跨模块的字节码规则守着。存储布局不变。
+>   否决的方案是把文档头移出正文单独存放：那要迁移每一份已存文档，只为省掉一次 `cosec-cocache` 本来就做的流式读取。影子候选的记录随之只留一种形状（文档头不再在文档旁边另写一份）。
+> - **存储里的文档编译不过，有自己的原因（§4.3）。** 判定事件里是 `Cause.DocumentInvalid(document, revision, error)`，不再与“存储读不到”共用 `SourceUnavailable`；状态码仍是 503，给客户端的响应逐字节相同。
+>   实例按“修订、摘要、据以编译的输入”各记一次 ERROR，恢复时记一次 INFO，健康检查给出无效文档的个数与前十个。“输入变了、尚未重新编译”的过渡状态不算无效，仍是读不到；另一种 `schema` 的文档在读取时就被拒绝，也是读不到。
 
 ## 0. 结论先行
 
@@ -461,6 +469,13 @@ sequenceDiagram
 **有序安装**：每个 key 同一时间至多一个在途加载；加载期间收到通知就标记脏，这次加载完成后立即再加载一次。所以同一个 key 的安装严格按开始顺序
 发生，晚开始的读取不会被早开始的读取覆盖。
 
+**按请求的重新校验与重新编译，它们的 future 说明什么（`SNP-13`，2026-11-16）**：`SnapshotSource.revalidate()` 与 `recompile()` 返回的 future，
+对它所覆盖的每份文档，只在一次**调用之后才开始**的加载完成之后才完成。`revalidate()` 覆盖调用时已安装的每份文档；`recompile()` 覆盖调用时空闲或正在加载的
+每份 app 与租户文档。调用时已经在途的那次加载可能读在调用之前（也可能读在调用前刚发生的一次发布之前），所以 future 不以它为准，而以紧随其后的那一次为准，
+与 `onReset` 的处理相同。调用时没有安装的文档（失败且没有任何已安装的版本，或还在第一次加载）不在 `revalidate()` 的范围内。
+周期性重新校验不变：它遇到在途加载就加入，下一轮自会再来。此前这两个方法遇到在途加载是加入它（或不等它），返回的 future 因此可能建立在调用之前的读取上；
+这不影响安装什么、拒绝什么，只影响调用者能从“完成”里知道什么。
+
 **修订号只是元数据，不做门卫**：Redis 是权威存储。读到的修订号比已安装的小（Redis 主从异步复制：主节点确认写入后、副本收到之前发生切换，
 被提升的副本就丢了这次已确认的写），照样安装并告警（`SnapshotMetrics.onRegression`，即 `cosec.snapshot.regressions` 计数），否则这个实例会永远与 Redis、
 与刚冷加载的其他实例不一致。"未变"由摘要判定而不是修订号：摘要相同只刷新 `confirmedAt`，不重新编译；修订号相同而摘要不同（丢写之后修订号被重用）
@@ -499,6 +514,7 @@ F5 与 F6 的区别是有意的：F6 是"不知道有没有新版本"，旧快�
 >   - **已知限制（独立审查 L4，后续项）。** 一轮的 lane 会等待槽位上进行中的加载；卡在永不结束的编译上的槽位不少于 `reloadConcurrency` 时，排在后面的文档仍轮不到。与 #1231 之前相同，是病态场景，留作后续。
 > - **条件读的成本。** CoCache 6 的条件读在 Lua 里对整份存储值算摘要，Redis 线程时间与文档大小成正比。按文档大小的测量见 [`docs/perf/conditional-read/`](../perf/conditional-read/README.md)，公式与缓解办法（在 `SNP-6` 的范围内调大间隔）写在 `storage.md`。不另存修订号：修订号与文档分开写，写失败会让实例跳过重新校验，陈旧无界。
 > - **不存在的文档单独计数（`SNP-7`，RC1-7）。** 读到 `Absent` 的条目在每个族里另有上限（`SnapshotOptions.maxAbsent`，默认 256），只互相淘汰。客户端随意给出的 app id 再多，也淘汰不掉存在的文档。在途的加载不计入任何一个上限，由存储读取超时约束。
+> - **族的上限在突发之下的封顶（`SNP-14`，2026-11-16 定，随实现的 PR 生效）。** 驱逐在后勤线程上异步进行，所以 `maxApps`、`maxTenants` 与 `maxAbsent` 在突发时是软的：此前封顶来自后勤线程队列的容量，一个族最多可以多持有约 4,096 个条目，文档没有写。定为：每一类条目至多两倍上限、且至多比上限多 4,096，再加上那一刻正在安装或加载中的条目；超过时由安装的线程在回答之前就地驱逐，驱逐不会把一类淘汰到上限以下。背景、计数与两遍扫描并行时的规则见 [RFC 0013](0013-target-architecture.md) §5.4。
 > - **F5 包括 `VirtualMachineError`（`SNP-8`，RC1-43）。** 编译以 `StackOverflowError` 一类错误结束时，`compileAndInstall` 先把这次修订装为失败（`UNCOMPILABLE`，下一轮重新编译），再重新抛出；此前保留的是上一个修订。
 > - **失效通知测试的竞态与 `SharedLock`。** 两者在 #1200 中查清，不是失效通知丢失，也不是 CoSec 阻塞了事件循环，见 [RC 审查记录](../security/8.0-rc-review.md) 的 Observations for batch D。
 
@@ -531,8 +547,11 @@ Lua 脚本里比较当前值的摘要，未变时只返回"未变"（不传正�
 
 "按租户"在本阶段的含义：快照没有租户分区，所以判断依据是**请求的租户**（`context.tenant.tenantId`）和**这次评估用到的文档**的落后时长。
 
-**可观测性**：Micrometer 指标 `cosec.snapshot.lag`（按 key 类型，不按 `appId`：`appId` 基数高）、`cosec.snapshot.loads`（结果：hit/cold/failed/timeout）、
-`cosec.snapshot.compile.duration`、`cosec.snapshot.installed`、`cosec.snapshot.regressions`；starter 的 actuator 端点 `cosecsnapshot` 列出已安装的 key、修订号、
+**可观测性**：Micrometer 指标（名称、标签与告警以 `wiki/operations/observability.md#snapshot-metrics` 为准；标签只取封闭的取值集合，从不带 `appId` 或 `tenantId`）：
+`cosec.snapshot.loads`（`kind`；`result`：cold/failed/timeout；命中不计数：它不是加载，而 `peek` 是每个请求都走的路径，等过文档的请求占比用冷加载数除以决策数得到）、
+`cosec.snapshot.compile.duration`、`cosec.snapshot.installs`、`cosec.snapshot.installed`（按 `state`，各状态之和等于实例持有的条目）、`cosec.snapshot.lag`（按 key 类型的最大值）、
+`cosec.snapshot.lagging`、`cosec.snapshot.summary.age`、`cosec.snapshot.lag.exceeded`、`cosec.snapshot.regressions`、`cosec.snapshot.lost`、
+`cosec.snapshot.evictions`（只计已安装条目的离开）、`cosec.snapshot.handoffs.refused`（2026-11-18 按实现改写，#1614；原文列的是 lag、loads（含 hit）、compile.duration、installed、regressions 五个）；starter 的 actuator 端点 `cosecsnapshot` 列出已安装的 key、修订号、
 落后时长和状态，并可以强制重新加载某个 key（只读本节点，不写 Redis）。CoCache 自己的 per-key actuator 继续可用。
 
 ### 4.6 写入：`SnapshotPublisher` 与条件写入

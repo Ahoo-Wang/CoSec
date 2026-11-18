@@ -2,16 +2,16 @@
 # Mutant: entries for absent documents count toward the documents' bound, so a flood of random ids evicts real documents
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.*
 
-diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-index 8ab96d44..dc53d97d 100644
---- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-+++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt
-@@ -581,7 +581,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
-             var victim: Slot<A>? = null
-             for (slot in slots.values) {
-                 val entry = slot.installed ?: continue
--                if ((entry.origin == EntryOrigin.ABSENT) != absent) {
-+                if (absent) {
-                     continue
-                 }
-                 held++
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+index f7a40c00..fc47935e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+@@ -204,7 +204,7 @@ internal class SnapshotFamilies<A : Any>(
+         const val MAX_SLACK = 4096
+ 
+         /** Whether [entry] is for a document the store does not hold: the other kind ([Family.count]). */
+-        fun isAbsent(entry: SnapshotEntry<*>): Boolean = entry.origin == EntryOrigin.ABSENT
++        fun isAbsent(entry: SnapshotEntry<*>): Boolean = false
+ 
+         /**
+          * The [wanted] least recently used of the [slots] that are [listed] and [eligible], least recent first, in one pass,

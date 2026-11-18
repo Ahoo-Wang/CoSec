@@ -50,7 +50,7 @@ import kotlin.random.Random
 
 /**
  * The same request seen by 7.x (a `Request` and a `SecurityContext`) and by 8.0 (the attributes of RFC 0005 §3.2,
- * filled the way `FlatEvaluator` fills them: no subject id for an anonymous subject, no app or device when empty, the
+ * filled the way `Evaluator` fills them: no subject id for an anonymous subject, no app or device when empty, the
  * roles of the requested space as `scope.roles`). Headers, origin and referer are the host's attributes (RFC 0006
  * PR-4): a header absent from the request is absent, a host is `URI.getHost`.
  */

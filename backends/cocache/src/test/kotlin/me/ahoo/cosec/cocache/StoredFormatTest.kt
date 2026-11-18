@@ -36,6 +36,7 @@ import me.ahoo.cosec.control.store.RevisionEntry
 import me.ahoo.cosec.control.store.RevisionIndex
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.ProvenanceKind
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.document.json.CoSecJson
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -49,7 +50,6 @@ import me.ahoo.cosec.spi.shadow.ShadowReport
 import me.ahoo.cosec.spi.shadow.ShadowSample
 import me.ahoo.cosec.spi.shadow.StoredCandidate
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -65,11 +65,8 @@ import java.time.Instant
 class StoredFormatTest {
     private val at = Instant.parse("2026-11-01T00:00:00Z")
     private val digest = SnapshotDigest(ByteArray(32) { it.toByte() })
-    private val document = SnapshotDocument(
-        2,
-        5,
-        at,
-        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray(),
+    private val document = SnapshotDocuments.read(
+        """{"schema":2,"revision":5,"publishedAt":"2026-11-01T00:00:00Z","policies":[],"bindings":[]}""".encodeToByteArray()
     )
 
     /**
@@ -220,6 +217,19 @@ class StoredFormatTest {
             SnapshotDocumentCodec::encode,
             SnapshotDocumentCodec::decode,
             fixture("snapshot")
+        )
+    }
+
+    @Test
+    fun `revision index entries carry their parent`() {
+        // An entry carries the digest its document names as its parent (#1536); one an older version wrote has none.
+        val child = SnapshotDigest.parse("SHA-256:0f0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f")
+        pinned(
+            "revisionIndexParent",
+            RevisionIndex(listOf(RevisionEntry(2, digest, at), RevisionEntry(3, child, at, digest)), floor = 2),
+            RevisionIndexCodec::encode,
+            RevisionIndexCodec::decode,
+            fixture("revisionIndexParent")
         )
     }
 

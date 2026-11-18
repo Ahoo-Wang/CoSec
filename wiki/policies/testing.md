@@ -57,6 +57,12 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 | `POST /break-glass`, `POST /break-glass/{change}:approve`, `DELETE /break-glass/{bindingId}?reason=` | Request break-glass, approve a request, revoke a binding ([Security model](../guide/security-model.md#break-glass)). A revoke answers `200` only once the binding no longer grants, `404` when the platform document has no binding of that id, and `409` otherwise, an ordinary binding of that id included ([Taking a busy slot](#taking-a-busy-slot)). |
 | `POST /simulate`, `POST /explain`, `POST /analyze` | Decide or analyze without changing anything. |
 
+A path parameter (`{key}`, `{id}`, `{revision}`, `{bindingId}`) is percent-decoded once, after the path is split into
+segments: `tenant:acme%20west` is the tenant `acme west`, `tenant%3Aacme` is `tenant:acme`, an encoded `/` (`%2F`) is part
+of a value and never a second segment, `+` stays `+`, and a `%25` that was encoded twice (`%2520`) decodes to `%20`, not to
+a space. A malformed escape (`%zz`, a lone `%`, bytes that are not UTF-8) is a `400`. The route's own words (`documents`,
+`revisions`, `:apply`) are matched as written.
+
 Errors are `application/problem+json`. A `400`, `409`, `410`, `412`, `422` or `428` explains your own request in
 `detail`; a `401`, `403`, `404`, `500` or `503` carries no detail, so a refusal never tells whether a document or change
 exists. A `400`'s `detail` is one of the control plane's own checks, or names the field that does not parse (`[mode] is
@@ -79,9 +85,9 @@ the HTTP `status` it stands for and a `severity`:
 | Check | Status | Finds |
 |---|---|---|
 | `V1` | 400 | The candidate does not read back as a document. |
-| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); an id a change puts holds a `/` (`422`; a permission policy's `perm:<app>/<id>` may, and an entry that already holds one can stay or be removed); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
+| `V2` | 400, 422, 503 | The document is over 8 MB; an id uses a reserved prefix (`cosec:`, `g:`, `r:`); an id a change puts holds a `/` (`422`; a permission policy's `perm:<app>/<id>` may, and an entry that already holds one can stay or be removed); a tenant policy reuses a platform policy's id without being an exact copy of it (an exact copy is the first step of the [partition flow](../operations/upgrading.md#partition-plan)); a platform policy takes an id a tenant document already defines or binds, or changes while a tenant document holds a copy of it, which the finding names (`503` when such a tenant's document cannot be read); a binding is in an app that cannot be an app id (blank, `*`, `:`, `/`, a control character or an unpaired surrogate, over 128 characters), anywhere in the candidate (`400` at `$.bindings[i].app`: a document that still holds one must remove it, and a change that only removes it is valid). |
 | `COMPILE` | 422 | A policy, condition, pattern, binding or rule does not compile, with the platform's limits, the platform's declared attributes and those of the control host's attribute providers. |
-| `REFERENCES` | 422 | A binding names a policy that resolves nowhere, or a platform boundary, which is not bound; a platform change removes a policy another document refers to, or turns one into a boundary or a boundary into a policy (`CTL-30`; a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
+| `REFERENCES` | 422 | A binding names a policy that resolves nowhere, or a platform boundary, which is not bound; a platform or app change removes a policy another document refers to (one an app's short form derives included), or turns one into a boundary or a boundary into a policy (`CTL-30`; a tenant that defines a policy of that id itself does not count); a tenant's `boundary` is not a platform boundary. |
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
 | `IF_MATCH` | 412 | An entry is no longer what the operation's `ifMatch` says. |
 | `V3` (warning) | | The platform's `limits` or `attributes` change: other documents are compiled again on every instance, and one that no longer compiles fails closed. |
@@ -164,7 +170,7 @@ tenant to bound what such a document costs. To bound what one caller's calls cos
 records them (`{"platform": 12, "app": 3, "tenant": 4}`). It evaluates on those revisions, as long as they are still
 kept, and returns the decision with its trace, so you can see why a past request was decided as it was. Whether the app
 document was read is decided as enforcement decided it, with the tenant document at its recorded revision, and the
-revisions it answers with are those it read: no `app` when it read no app document. Its fields and how to find the
+revisions it answers with are those it read: no `app` member when it read no app document, never a `null`. The `version` an `explain` answers with can be sent back as `at`. Its fields and how to find the
 request are in [Checks in code](../integration/checks.md).
 
 ## Changes
@@ -254,6 +260,11 @@ out; the candidate never affects a real decision. A candidate is compared only o
 only by an instance that has installed the candidate's base revision. A tenant candidate is compared on the documents a
 request would read once it is published: one that binds an app's permission policy to `Anyone` or a principal brings in
 that app's installed document where the request read none, and one that removes the last such binding leaves it out.
+So does the failure of a document: one the candidate stops reading takes its failure with it, so a candidate that drops
+an app document that cannot be read or does not compile is `WIDENED` where the request is now 503, and one it starts
+reading brings its failure in. A candidate of a document that does not compile replaces it, failure and all; one of a
+document an instance cannot read is not compared there (`BASE_MISMATCH`: the instance does not know the revision it
+would replace), so read the window again once the store answers.
 
 | Outcome | Means |
 |---|---|
@@ -475,7 +486,8 @@ documents, it is `DRAFT` with the findings. A publish whose revision was written
 `PUBLISHED` when it is retried: the control plane finds the change's own revision on the chain, under later ones too,
 finishes what followed the write, and records the events as the publisher the revision names. A publish that wrote
 the head and could not finish after it (a store failing or timing out) answers `503`: the revision is in effect, and
-publishing the change again settles it without adding a revision.
+publishing the change again settles it without adding a revision. That holds once the change is `PUBLISHED` too: when
+only releasing its staging slot failed, publishing it again releases the slot and records the publish, once.
 
 Only the document's own head is compared when it is written. Another document the checks read, a platform change
 landing at the same moment for example, can move between the publish's last check and its write; the control plane
@@ -499,10 +511,15 @@ proposal does: the old revision's confirmation was given for another change. Whi
 The answer lists `allows` and `denies`: every binding (in the platform, tenant and, when `app` is given, app document)
 that can apply in the tenant asked about, whose scope fits the query and whose policy has a statement matching the
 action and resource, with its document,
-subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, which is
-not evaluated. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
+subject, app, space, policy and statement index. `conditional` marks a statement or policy with a condition, or a
+binding with a window (`expiresAt`), which is not evaluated. `breakGlass` marks a break-glass binding, the strongest
+grant there is, listed with its `expiresAt` as an allow of `cosec:root`: it is a platform principal's, so it is in the
+platform tenant's review. `app` and `space` left out match bindings of any app or space. Documents you may not read are counted in
 `hidden`, and bindings to policies in them in `opaque`. A tenant binding scoped to the app asked about finds that
-app's permission policies, as enforcement does, when you may read the app's document. Attachments are not listed: they depend on each principal's
+app's permission policies, as enforcement does, when you may read the app's document. A binding of a built-in
+control-plane policy (`cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer`) is listed from the
+statements CoSec defines for it, never as `opaque`; the tenant ones are `conditional`, since they grant only on the
+caller's own tenant. Attachments are not listed: they depend on each principal's
 memberships. A binding applies in the tenant as the engine looks it up: a principal binding only to a principal of
 that tenant, a role binding that names a tenant only in that tenant, a role binding without one and `Anyone` in every
 tenant. So a platform binding of `principal:globex/bob` is not listed for `acme`.
@@ -610,7 +627,7 @@ documents as JSON text.
 | `credential` | The principal: `tenant` (default `acme`), `id` (default `alice`), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; `"anonymous": true` for an anonymous caller. |
 | `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
 | `request` | `action` (default `order:read`), `resource` (`type`, `id`, `attributes`; default `order/1`), `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
-| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate`, `Rejected` or `InvalidRequest`, with `by` (the deciding statement; `null` for the implicit deny), `cause`, `reason` or `refused` (`action`: an `http` method with a lower-case letter; `resource`: a path the pipeline refuses, or a typed id beyond a request path's bounds). Required: an `expect` without a `decision` is an error, since it would pass whatever is decided. |
+| `expect` | `decision`: `Permit`, `Deny`, `Indeterminate`, `Rejected` or `InvalidRequest`, with `by` (the deciding statement; `null` for the implicit deny), `cause`, `reason` or `refused` (`action`: an `http` method with a lower-case letter; `resource`: a path the pipeline refuses, or a typed id beyond a request path's bounds; `header`: a header the documents read, sent with different values). Required: an `expect` without a `decision` is an error, since it would pass whatever is decided. |
 
 `http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or
 `Referer` URL, folded to ASCII lower case, so `https://EXAMPLE.com` is `example.com`. `cosec-testkit` brings what its API
@@ -626,7 +643,8 @@ not compile in the kit, and no provider runs, so a statement that reads `ext.*` 
 `onMissing`. Rate limit rules do not run, and a request names its action and resource: no route map is applied. The
 kit reads them as enforcement reads a request (`PIP-15`, `PIP-18`): `http:HEAD` is decided as `http:GET`, so a statement
 on `http:HEAD` matches nothing, an `http` path is normalized, and what the pipeline answers `400` (a lower-case method, a
-path with a dot segment) is `{"decision": "InvalidRequest"}`.
+path with a dot segment, a header the documents read sent with different values: `PIP-12`; header names that differ only in
+case are one header) is `{"decision": "InvalidRequest"}`.
 Decisions that depend on external values can be tried with [`simulate`](#simulating-a-request), which compiles
 against the control host's providers.
 

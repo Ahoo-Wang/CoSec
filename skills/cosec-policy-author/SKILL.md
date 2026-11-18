@@ -24,6 +24,9 @@ Policies live in three kinds of document, each one JSON object stored as one Red
 | App | `app:<appId>` | The app's permission `catalog`, its permission policies `perm:<appId>/<permission>`, and role bindings. |
 | Tenant | `tenant:<tenantId>` | The tenant's own policies and bindings, and optionally which platform `boundary` holds it. |
 
+A tenant or app id is one path segment: no `/`, `:`, `*` alone, control character or unpaired surrogate, at most 128
+characters.
+
 Every document starts with the same header:
 
 ```json

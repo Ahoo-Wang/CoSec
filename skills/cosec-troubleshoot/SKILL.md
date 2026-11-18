@@ -124,6 +124,14 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   caches [...] keep their only copy in Redis, but maxmemory-policy {...} can evict them`**: CoCache 8's own check of
   its `Store`s, which `eviction-check=warn` does not reach. Allow `INFO`, or, once `noeviction` is set, set
   `cocache.redis.assume-maxmemory-policy=noeviction`; `allkeys-*` is never accepted.
+- **`cosec.authentication.login.refresh.path is set, but the RefreshTokenAuthentication bean refreshes <class> ... (IDN-25)`**:
+  the application's `RefreshTokenAuthentication` takes credentials of its own class, which the served refresh route
+  cannot present; serve that refresh from the application's own route and unset the path, or declare it over
+  `RefreshTokenCredentials`.
+- **`API key format [<n>] is not 3.`** (a request with that key is `503`): `null` is a 7.x key, convert it with
+  `cosec-migrate api-keys`; `2` is a key an 8.0 pre-release stored, which nothing converts: issue a new key, delete
+  the old one. **`[<key>] was stored by an 8.0 pre-release in format <n>`** from `cosec-migrate api-keys`: the same key;
+  the run is refused until it is gone.
 - **`Cache[<CoSec cache>] - ... locked by cosec`**: a `cocache.caches.[name].*` entry or a `CacheSpecCustomizer` sets a
   field CoSec locks on its caches (a store of record's `ttl` or `unknown-read`, the snapshot store's `local-max-age`,
   any `key-prefix`). Remove the setting or exclude CoSec's caches; never suggest `unlock` for these, whose constrained
@@ -133,6 +141,17 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   CoSec publishes every name it may create, so an entry for a CoSec cache this instance does not create starts. **`Cache[<name>] - its
   storage keys (...) overlap those of Cache[<other>]`**: an application cache and a CoSec cache would share Redis
   keys; give the application's cache another prefix or namespace (`cosec.key-prefix` moves every instance's data).
+- **`Read-only store of Keyspace(...): Redis denied the command [evalsha_ro]`**, **`allow the key pattern [%R~...]`** or
+  **`allow the channel pattern [&...]`**: an instance without the control plane (no `cosec-control`, or `cosec.control.enabled=false`) reads the
+  documents and the candidates read-only (SNP-18), and its Redis user lacks `+evalsha_ro +eval_ro`, read permission on `<s>:snapshot:*` or
+  `<s>:candidate:*`, or the channels `&<s>:*`; add what the message names (8.0.0-beta.1's example user lacks the two
+  commands). **`Redis denied publishing to the invalidation channel[<s>:inv:snapshot]`**: a process with `cosec-control`
+  writes the documents but was given a read-only data-plane user; give it a user that writes `<s>:*`, or, on a
+  data-plane instance whose image carries the control plane, set `cosec.control.enabled=false`.
+  **`cosec.control.enabled must be true or false, not [...]`**: the key is read strictly; write `true` or `false`.
+  **`cosec.control.enabled=true needs cosec-control`** (or `cosec-cocache`): add the artifact, or remove the key. **`CoSec reads
+  <cache> read-only in this process ... (SNP-18)`**: a `cocache.caches.*.read-only` entry or a customizer tries to change
+  what the classpath decides; remove it.
   **An `IllegalStateException` naming a channel pattern** such as
   `[&cosec:control:inv:*]`: the Redis ACL denies the cache's invalidation channel; allow `&<prefix>:*`.
 - **`CoSec's Redis template [<bean>] reads from replicas (ReadFrom...)`**: the Lettuce client behind the template CoSec
@@ -179,8 +198,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - No platform document is published yet (the first one comes from `cosec-migrate publish`; `cosec-migrate bootstrap`
   writes only the `(platform)` tenant's document), or it was lost (evicted): an absent platform fails every request
   closed. Readiness refuses traffic until the platform document and every `prewarm-apps`/`prewarm-tenants` document is
-  installed; the `cosecSnapshot` health indicator shows `platform` (`installed`, `failed`, `absent`, `loading`) and
-  `prewarmed`, and only it belongs in the readiness group. Beside it, `cosecSnapshotEviction` is `DOWN` with an
+  installed; the `cosecSnapshot` health indicator shows `platform` (`installed`, `invalid`, `failed`, `absent`,
+  `loading`), `prewarmed` and `invalid`, and only it belongs in the readiness group. Beside it, `cosecSnapshotEviction` is `DOWN` with an
   `eviction` detail while Redis may evict the snapshot (each instance reads `maxmemory-policy` every
   `revalidate-interval` on its own thread, and logs `ERROR` from `EvictionPolicyMonitor` when that starts): an alert,
   never a readiness signal (it also turns the aggregate `/actuator/health` DOWN, so load balancers poll the readiness
@@ -188,9 +207,11 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   evicted. `Cannot tell whether Redis may evict` there is `eviction-check=fail` on a Redis that denies or times out
   `INFO`: allow `+info`, or set `warn` when the operator has set `noeviction`, under which it is `UP` with
   `eviction: unknown`. https://cosec.ahoo.me/operations/troubleshooting#cosecsnapshoteviction-is-down
-- A document the request needs does not decode or compile: its new revision is installed as failed
-  (`SnapshotUnavailableException: ... revision <n> cannot be compiled`, caused by a `DocumentCompileException` listing
-  JSON paths), and every request that needs it fails closed; the previous revision is not kept. Compile the stored
+- A document the request needs does not compile: its new revision is installed as failed, the decision's cause is
+  `DocumentInvalid` at that revision (metric `cause=document_invalid`, health `invalid` (the count) and
+  `invalidFirst: ["<doc>@<n>", …]` (the first ten)), and every request that needs it fails closed; the previous revision is not kept. The log says it once per revision at `ERROR`:
+  `Snapshot document [<doc>] revision <n> does not compile against ...`, caused by a `DocumentCompileException` listing
+  JSON paths. Usually a document a newer CoSec wrote during a rolling upgrade, or a direct write to the store. Compile the stored
   document yourself (see "Reproduce narrowly") to see the errors. Documents compile against the platform's `limits` and
   `attributes`, so a platform change can make an app or tenant document stop compiling.
 - Redis is unreachable for a document not yet held locally (`cold-load-timeout`, default 2s), or the snapshot lags
@@ -248,6 +269,10 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `cosec.pipeline.allow-query-token=true`, the `authorization` cookie only with
   `cosec.pipeline.allow-cookie-token=true`. API keys from `X-API-Key`
   (`cosec.pipeline.api-key-header`).
+- Every refresh `401 token-expired` (or `unauthorized`) and clients signed out at expiry: no statement permits an
+  anonymous `POST` of the refresh route (the expired token reads as anonymous, PIP-6). The starter's served route logs
+  `WARN ... refresh.path=<path>: no statement permits an anonymous POST of it` and shows `denied since` on the
+  `cosecLoginRoutes` health indicator; permit `http:POST` on the path to `*`.
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
   delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4;
@@ -270,6 +295,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   which JSON writes as an escape (`"beta\uD800"`), IDN-10: a Redis key would write it as `?` and read another id's
   documents, memberships and revocations. CoSec's own `JwtTokenConverter` refuses to sign one (login fails with
   `holds an unpaired UTF-16 surrogate`). Fix the issuer or the user store; surrogate pairs (emoji) are fine.
+- `token-invalid` for a token whose `tenantId` or `aud` holds `/` (`acme/west`, SCP-13): a tenant or app id is one path
+  segment, so it names neither `acme/west` nor `acme`. Behind a gateway, such a forwarded identity is `400
+  invalid-request`; a preview's document of such a tenant is left out of `GET /documents` with a warning. Rename the
+  tenant or app; `cosec-migrate convert` lists 7.x ones as `SLASH_IN_ID`.
+- Control-plane `503` logged `... does not read: ...` naming an id with `/`: a record an 8.0 preview stored under
+  such an id fails whole (SCP-10); remove that id's Redis keys as `upgrading.md` (from 8.0.0-alpha.4) lists them.
 - Anonymous callers belong to tenant `(0)` and have no roles: a `subject: "*"` ALLOW must not require
   `subject.authenticated`.
 
@@ -341,8 +372,26 @@ header: anonymous. Otherwise never anonymous:
   `lag-warn`, 60s) and `... is stale` (ERROR, over `lag-escalate`, 5m). `Reloading snapshot document [<key>] failed;
   keeping revision <n>` means Redis could not be read: the installed revision stays until a read succeeds.
   `Snapshot document [<key>] regressed from revision <a> to <b>` means the store lost a write (for example a
-  failover).
+  failover); `cosec-migrate verify-chain` names every document whose revision chain lost a record.
 - The control plane's `GET /documents/{key}/revisions/{rev}/propagation` reports how many of the recently reporting instances (those with `cosec.authorization.shadow.enabled`) have installed it.
+
+### Snapshot log lines missing / housekeeping summary
+
+- `Snapshot housekeeping since its last summary: refused <n> tasks, full or stopped …` (WARN, at most every 10s) with
+  `cosec.snapshot.housekeeping.refused{task}` rising: the source's one housekeeping thread (queue 4,096) is behind, so
+  log lines (`*-log`), eviction passes under the cap (`evict`) and lag reports are dropped and counted instead of run
+  on a request's thread (SNP-19); `drop` runs in place. Decisions are unaffected. Usual cause: a synchronous log
+  appender that is slow; use an async appender. `meter failures` in the same line is a registry meter that threw.
+
+### Probes answer 401 or 503, or pods restart before the first publish
+
+A readiness or liveness probe that answers CoSec's problem+json (`503` before the first platform document, `401` after it)
+or pods that restart in a loop on a new deployment: to CoSec a probe is a request like any other (`STA-4`), on the
+application port of an application and on a WebFlux application's management port. Readiness over HTTP needs one
+statement permitting `GET` on `/actuator/health/readiness` and `/actuator/health/liveness` for anyone (Spring Boot 4 serves the probes on every platform); a
+liveness or startup probe must not depend on the platform
+document: on WebMvc point it at `management.server.port` (outside CoSec), on WebFlux use a `tcpSocket` probe on the
+application port. https://cosec.ahoo.me/operations/troubleshooting#probes-answer-401-or-503
 
 ### Rate limiting
 

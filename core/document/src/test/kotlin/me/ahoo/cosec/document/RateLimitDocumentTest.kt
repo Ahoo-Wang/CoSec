@@ -18,13 +18,11 @@ package me.ahoo.cosec.document
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.RateLimitSpec
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
-import java.time.Instant
 
 /** RFC 0006 §8.1: rate limit rules are a section of every document, read, written and compiled with it. */
 class RateLimitDocumentTest {
@@ -33,7 +31,7 @@ class RateLimitDocumentTest {
     private fun body(rules: String) =
         """{"schema":2,"revision":1,"publishedAt":"2026-10-26T00:00:00Z","rateLimits":[$rules]}""".encodeToByteArray()
 
-    private fun stored(rules: String) = SnapshotDocument(2, 1, Instant.parse("2026-10-26T00:00:00Z"), body(rules))
+    private fun stored(rules: String) = SnapshotDocuments.read(body(rules))
 
     private val rule = """{"id":"login","action":"http:POST","resource":"http:path:/login","key":"environment.ip",""" +
         """"permitsPerSecond":0.5,"windowSeconds":60,"strictFailure":true}"""

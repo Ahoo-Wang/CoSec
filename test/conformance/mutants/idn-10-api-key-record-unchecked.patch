@@ -2,11 +2,11 @@
 # Mutant: an API key record may name a principal, tenant or role with an unpaired surrogate
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.authn.ApiKeyAuthenticatorTest
 
-diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
-index 6b4f7ddc..8fe7bdc8 100644
---- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
-+++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKeys.kt
-@@ -53,7 +53,7 @@ class ApiKey(
+diff --git a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKey.kt b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKey.kt
+index 6c6048f6..532fff5f 100644
+--- a/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKey.kt
++++ b/core/spi/src/main/kotlin/me/ahoo/cosec/spi/apikey/ApiKey.kt
+@@ -52,7 +52,7 @@ class ApiKey(
          // which the pipeline answers 503, never as another principal's or tenant's key.
          val wellFormed = Identifiers.isWellFormed(id) && Identifiers.isWellFormed(principalId) &&
              Identifiers.isWellFormed(tenantId) && (roles == null || Identifiers.areWellFormed(roles))

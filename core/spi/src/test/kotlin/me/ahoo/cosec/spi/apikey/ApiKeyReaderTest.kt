@@ -51,6 +51,15 @@ class ApiKeyReaderTest {
         }
     }
 
+    /** `SCP-13` (#1403): a stored key of a tenant or app with `/` does not read, and says which key and which id. */
+    @Test
+    fun aKeyOfASlashIdNamesTheKeyAndTheId() {
+        assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "acme/west", null, null) }.message.assert()
+            .isEqualTo("API key [k] belongs to a tenant that cannot be a tenant id: [acme/west].")
+        assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "acme", "order/v2", null) }.message.assert()
+            .isEqualTo("API key [k] declares an app that cannot be an app id: [order/v2].")
+    }
+
     @Test
     fun aKeyBelongsToATenantAndAPrincipal() {
         assertThrows<IllegalArgumentException> { ApiKey("k", "svc", "", null, null) }

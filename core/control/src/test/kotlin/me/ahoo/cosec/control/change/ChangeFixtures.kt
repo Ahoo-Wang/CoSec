@@ -20,6 +20,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
@@ -27,8 +30,8 @@ import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.control.store.StoreFixtures
 import me.ahoo.cosec.document.Actor
 import me.ahoo.cosec.document.PolicyDefinition
-import me.ahoo.cosec.engine.flat.ResourceSource
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.ResourceSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Binding
 import me.ahoo.cosec.model.BindingId

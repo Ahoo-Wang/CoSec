@@ -109,7 +109,8 @@ The rules behind the picture:
   Spring, the Servlet API or a coroutine bridge (`kotlinx.coroutines.reactor`, `runBlocking`), `GlobalScope` or
   `Dispatchers.IO`, or when it calls `runCatching`, which swallows cancellation.
 - **`cosec-control`** (directory `core/control/`) is the control plane: revisions, change requests, shadow windows,
-  approvals, break-glass, simulation and analysis. It is a library that a host wires in. `ControlBoundaryTest`
+  approvals, break-glass, simulation and analysis. The starter wires it into a host; an application does not call it, it
+  writes through the control API. `ControlBoundaryTest`
   (ArchUnit) imports the module's own compiled classes and fails when one of them is outside `me.ahoo.cosec.control`,
   references Spring, `reactor.*`, the coroutine or Reactive Streams bridges or a Redis client, or calls `runBlocking`,
   `Dispatchers.IO` or `GlobalScope`.
@@ -130,7 +131,9 @@ The rules behind the picture:
   format, which `conformance` runs too, so the suite and the applications' tests evaluate scenarios one way.
 - **`cosec-migrate`** converts 7.x data into 8.0 documents and publishes them; no application depends on it.
   **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**,
-  **`architecture`** and **`e2e`** are test-only modules and are never published either.
+  **`architecture`**, **`e2e`** and **`client-host`** are test-only modules and are never published either.
+  **`client-host`** (directory `test/client-host/`) is a real CoSec 8 application, the starter over WebFlux with CoCache
+  in memory, that the TypeScript client's tests run against (`pnpm test:host` in `typescript/` starts it).
 
 `architecture` (directory `test/architecture/`) holds the structural rules that scan several modules (RFC 0011 §5):
 
@@ -269,7 +272,7 @@ permit there.
 ## The flat engine
 
 The engine
-([`FlatEngine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEngine.kt))
+([`Engine.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/Engine.kt))
 evaluates one request against one `SnapshotView`: the compiled platform document, plus the tenant's document and, when
 the scope has roles in an app or the tenant's document binds one of the app's permission policies to `Anyone` or a
 principal (a set the compiled tenant document holds, so deciding it is one lookup), that app's document. It reads no
@@ -279,7 +282,7 @@ to the request's tenant and app; the engine refuses any other.
 ### Candidate order
 
 The engine first enumerates the policies that apply to the request, the *candidates*
-([`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CandidateOrder.kt)):
+([`CandidateOrder.kt`](https://github.com/Ahoo-Wang/CoSec/blob/main/core/engine/src/main/kotlin/me/ahoo/cosec/engine/CandidateOrder.kt)):
 
 | # | Candidates |
 |---|---|
@@ -429,31 +432,32 @@ each with its scenarios or guard tests, and `:conformance:mutationCheck` breaks 
 
 | Invariant | Why | Guard |
 |---|---|---|
-| **Deny first.** No ALLOW wins over a matched DENY, whatever document, binding or order it comes from. | Otherwise adding a policy can widen access. | `FlatEnginePropertyTest` (`P1' adding a matching deny always denies`, `the decision is that of the pseudocode`), `ALG-1` scenarios |
-| **Fail closed.** Missing or unreadable data never permits; an error is a `503` or `500`, never a `200`. The documented exceptions are in the [security model](../guide/security-model.md). | An outage must not open the gate. | `FlatEnginePropertyTest` (`P9 missing and unavailable data never permit`), `PipelineTest` (`indeterminateDecisionIs503`, `unmodelledExceptionIs500`, `failingLateOrWrongMembershipsAre503`, `snapshotSourceFailureIs503`) |
+| **Deny first.** No ALLOW wins over a matched DENY, whatever document, binding or order it comes from. | Otherwise adding a policy can widen access. | `EnginePropertyTest` (`P1' adding a matching deny always denies`, `the decision is that of the pseudocode`), `ALG-1` scenarios |
+| **Fail closed.** Missing or unreadable data never permits; an error is a `503` or `500`, never a `200`. The documented exceptions are in the [security model](../guide/security-model.md). | An outage must not open the gate. | `EnginePropertyTest` (`P9 missing and unavailable data never permit`), `PipelineTest` (`indeterminateDecisionIs503`, `unmodelledExceptionIs500`, `failingLateOrWrongMembershipsAre503`, `snapshotSourceFailureIs503`) |
 | **One decision path.** Status codes and problem bodies are made only in `StatusMapping`; adapters never see a decision. | Three adapters must answer identically. | `OneDecisionPathTest`, `WebAdapterParityTest` |
 | **No blocking on the event loop.** SPIs suspend instead of blocking; store reads and digests run off the caller's thread. | Blocking a Netty thread stalls every request on it. | `SnapshotStoreBlockHoundTest`, `RedisSnapshotDocumentStoreTest` (`computesTheDigestOfALocalCopyOffTheCallersThread`), `PipelineBlockHoundTest`, `SuspendingRedisRateLimitingTest`, `RuntimeBoundaryTest` |
 | **Authorization is a pure decision.** The engine does no I/O and keeps no state; rate limits are obligations of a permit, so a denied request never spends a permit. | Keeps evaluation fast, predictable and explainable; denied requests never use up quotas. | `EnginePurityTest`, `RateLimitObligationTest` (engine and runtime) |
 | **Snapshot caches never expire and throw on failed reads**, whatever a CoCache customizer or property says. | Redis is the store of record; expiry or a swallowed error would silently drop policies. | `CacheTtlPolicyTest`, `StrictCacheFailureTest` |
 | **One revision per document per evaluation**, installed in load order. | A decision must never mix two revisions of one document. | `SnapshotConsistencyPropertyTest`, `SnapshotInstallOrderPropertyTest` |
-| **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `FlatAuthorizationBenchmark`, `PipelineBenchmark` (review) |
+| **Hot-path changes come with a JMH before/after.** | Authorization runs on every request. | `EngineAuthorizationBenchmark`, `PipelineBenchmark` (review) |
 | **Public signatures change only on purpose.** Each published module's ABI is in its dump; a change that is not in the dump fails the build. | Applications compile against CoSec and implement its SPIs; a signature change nobody noticed breaks them. | `checkKotlinAbi` (part of `check`), `SpiMarkerTest` |
 
 ## Performance
 
 Two benchmarks measure the hot path:
 
-- **`FlatAuthorizationBenchmark`** (`core/engine/src/jmh`) measures the engine alone: three global policies, two attached
+- **`EngineAuthorizationBenchmark`** (`core/engine/src/jmh`) measures the engine alone: three global policies, two attached
   principal policies and an app with 50 permissions granted to roles, in the scenarios `global` (a global ALLOW
   matches), `role` (a permission near the end of the app's list), `none` (nothing matches) and `role-heavy`, each with
   no platform boundary or a boundary of 1 or 8 statements.
 - **`PipelineBenchmark`** (`test/e2e/src/jmh`) measures `Pipeline.evaluate` end to end, with the same data published to
   Redis and read through CoCache, a warm snapshot, and the scenarios `global`, `role`, `none`, `anonymous`,
-  `blacklist`, `blocked` and `listener`.
+  `blacklist`, `blocked`, `listener` and `routed` (a route map maps the request to a business action, so the
+  route lookup is in the measurement: the only scenario that has one).
 
 8.0 must be at least as fast as 7.x in every comparable scenario. That gate is the manual CI workflow
 [`jmh-v7-v8.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/jmh-v7-v8.yml): on one runner it
-alternates 7.x's `SimpleAuthorizationBenchmark` and `SecurityPipelineBenchmark` with 8.0's `FlatAuthorizationBenchmark`
+alternates 7.x's `SimpleAuthorizationBenchmark` and `SecurityPipelineBenchmark` with 8.0's `EngineAuthorizationBenchmark`
 (no boundary) and `PipelineBenchmark`, and fails when any scenario's median 8.0/7.x speed ratio is below 100 %. The run
 that admitted the 8.0 path ([40640046212](https://github.com/Ahoo-Wang/CoSec/actions/runs/40640046212)) passed every
 scenario: the engine at 364 to 601 % of 7.x, the pipeline at 126 to 219 %.
@@ -470,7 +474,7 @@ The rounds, conditions and per-scenario numbers are in
 Run a benchmark through Gradle:
 
 ```bash
-./gradlew :engine:jmh -PjmhIncludes=FlatAuthorizationBenchmark
+./gradlew :engine:jmh -PjmhIncludes=EngineAuthorizationBenchmark
 ./gradlew :e2e:jmh -PjmhIncludes=PipelineBenchmark      # needs Redis on localhost:6379
 ```
 

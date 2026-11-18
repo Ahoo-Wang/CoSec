@@ -2,11 +2,11 @@
 # Mutant: a revoke that ended CONFLICTED is made again even when its binding no longer grants
 # Tests: :control:test --tests me.ahoo.cosec.control.change.PreemptionRaceTest :conformance:test
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-index f4dd2006..66896808 100644
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/change/BreakGlass.kt
-@@ -111,7 +111,7 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
+index 3c3037ad..713e0de6 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/BreakGlass.kt
+@@ -128,7 +128,7 @@ class BreakGlass(private val changes: Changes, private val revisions: Revisions)
              revokeOnce(operator, operations, reason)
          }
          repeat(RETRIES) {

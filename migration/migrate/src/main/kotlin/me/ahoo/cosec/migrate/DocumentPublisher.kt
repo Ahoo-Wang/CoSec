@@ -20,7 +20,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.change.CandidateDigest
+import me.ahoo.cosec.control.lifecycle.CandidateDigest
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
@@ -35,32 +35,6 @@ import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 import kotlin.coroutines.cancellation.CancellationException
-
-/** `publish` stopped: [written] are the keys it wrote before, exactly; nothing else was written. */
-open class PublishException(message: String, val written: List<SnapshotKey>, cause: Throwable? = null) :
-    IllegalStateException(
-        message + if (written.isEmpty()) {
-            " Nothing was written."
-        } else {
-            " Written before it stopped: $written; " +
-                "run publish again with --resume to finish."
-        },
-        cause,
-    )
-
-/** 8.0 documents already exist for [keys] (and, with resume, differ from the converted ones): never overwritten. */
-class DocumentsExistException(val keys: List<SnapshotKey>, written: List<SnapshotKey>, differ: Boolean = false) :
-    PublishException(
-        if (differ) {
-            "8.0 documents for $keys exist and differ from the converted ones; publish never overwrites."
-        } else {
-            "8.0 documents already exist for $keys; publish never overwrites (--resume skips identical ones)."
-        },
-        written,
-    )
-
-/** What [DocumentPublisher.publish] did: the keys it wrote, and those it found already published identically. */
-class PublishResult(val written: List<SnapshotKey>, val skipped: List<SnapshotKey>)
 
 /**
  * Writes converted documents as their first revisions (RFC 0004 §8.2 `publish`, RFC 0007 §5.9) through the control
@@ -78,18 +52,41 @@ class PublishResult(val written: List<SnapshotKey>, val skipped: List<SnapshotKe
  */
 class DocumentPublisher(
     private val store: ControlStore,
-    private val compiler: PolicyDocumentCompiler = PolicyDocumentCompiler(),
     private val clock: Clock = Clock.systemUTC(),
 ) {
     private val revisions = Revisions(store, clock)
 
     /** Publishes [documents], the platform document first. */
     fun publish(documents: Map<SnapshotKey, PolicyDocument>, resume: Boolean = false): PublishResult = runBlocking {
-        check(documents, compiler)
+        check(documents)
         val ordered = documents.keys.sortedBy { ORDER.getValue(kindOf(it)) }
         val existing = ordered.mapNotNull { key -> revisions.head(key)?.let { key to it.document } }.toMap()
         checkExisting(existing, documents, resume)
         PublishResult(write(ordered.filterNot { it in existing }, documents), existing.keys.toList())
+    }
+
+    /**
+     * Publishes [document], written by hand, as [key] alone and only if [key] has no document yet: the checks of
+     * [publish] for one document. An app or tenant document compiles, and its references resolve, against the platform
+     * document already published, which must be there: a document this accepts is one every instance compiles.
+     */
+    fun publishOne(key: SnapshotKey, document: PolicyDocument): PublishResult = runBlocking {
+        val platform = if (key == SnapshotKey.Platform) {
+            document
+        } else {
+            requireNotNull(revisions.head(SnapshotKey.Platform)?.document) {
+                "No platform document is published yet: publish it first (--document platform)."
+            }
+        }
+        // As every instance compiles it (PlatformCompiler): against the platform's limits and declared attributes.
+        val compiler = PolicyDocumentCompiler.forPlatform(platform)
+        compiler.compile(document)
+        compiler.checkReferences(document, platform)
+        refusedBreakGlass(listOf(document))?.let { throw PublishException(it, emptyList()) }
+        if (revisions.head(key) != null) {
+            throw DocumentsExistException(listOf(key), emptyList())
+        }
+        PublishResult(write(listOf(key), mapOf(key to document)), emptyList())
     }
 
     private fun checkExisting(existing: Map<SnapshotKey, PolicyDocument>, converted: Map<SnapshotKey, PolicyDocument>, resume: Boolean) {
@@ -142,14 +139,14 @@ class DocumentPublisher(
     companion object {
         /**
          * What [publish] checks before it writes anything, throwing what it would refuse: a platform document, every
-         * document compiling, every app document's references resolving against it, and no break-glass binding.
+         * document compiling as every instance compiles it (against the platform's condition limits and declared
+         * attributes, `PolicyDocumentCompiler.forPlatform`), every app document's references resolving against it, and
+         * no break-glass binding.
          */
-        fun check(
-            documents: Map<SnapshotKey, PolicyDocument>,
-            compiler: PolicyDocumentCompiler = PolicyDocumentCompiler()
-        ) {
+        fun check(documents: Map<SnapshotKey, PolicyDocument>) {
             val platform =
                 requireNotNull(documents[SnapshotKey.Platform]) { "There is no platform document to publish." }
+            val compiler = PolicyDocumentCompiler.forPlatform(platform)
             documents.values.forEach { document ->
                 compiler.compile(document)
                 compiler.checkReferences(document, platform)

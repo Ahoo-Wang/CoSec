@@ -13,7 +13,7 @@
 
 # Tests, detekt and coverage: one job per project group, derived from settings.gradle.kts by scripts/ci/plan.py, so a
 # new project needs no change here. Each job uploads its own coverage to Codecov. The docs are checked and built in
-# the `docs` job, the Kubernetes overlays in the `k8s` job. The `CI` job is the one required check: it passes only
+# the `docs` job, the Kubernetes overlays in the `k8s` job, the TypeScript packages in the `typescript` job and against a real host in `typescript-host`. The `CI` job is the one required check: it passes only
 # when every other job here passed.
 name: CI
 on:
@@ -43,8 +43,11 @@ jobs:
         id: plan
         run: python3 -I scripts/ci/plan.py --github-output "$GITHUB_OUTPUT"
 
-      - name: Test the JMH A/B comparison
-        run: python3 -I -m unittest discover -s scripts/jmh-ab
+      - name: Test the CI scripts
+        run: |
+          python3 -I -m unittest discover -s scripts/jmh-ab
+          python3 -I -m unittest discover -s scripts/jmh-v7-v8
+          python3 -I -m unittest discover -s scripts/ci
 
   test:
     name: Test ${{ matrix.name }}
@@ -145,7 +148,7 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v7
         with:
-          node-version: 24.22.2
+          node-version: 24.22.3
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
@@ -155,6 +158,187 @@ jobs:
 
       - name: Build with VitePress
         run: pnpm build
+
+  # The TypeScript workspace (typescript/): lint, types, tests and the format. Like `docs` it runs on every pull request,
+  # whatever changed: a skipped job fails the gate, and with no package yet it takes seconds. Actions are pinned by
+  # commit SHA (the version is in the comment, Renovate keeps both current); the job has no secrets and no write access.
+  typescript:
+    name: TypeScript / Node ${{ matrix.node-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        # 24.22.2 is the one the docs job runs on. pnpm 11 itself needs Node 22.13 or later, so the Node 22 leg is the
+        # newest 22 and not the 22.12.0 that `engines.node` promises consumers: that floor is checked by importing the
+        # built packages under 22.12.0 (the package check, which arrives with the first package).
+        node-version: [ '22.23.4', '24.22.2' ]
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.28.11
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Check types
+        run: pnpm typecheck
+
+      - name: Test
+        run: pnpm test
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      # The packages as a consumer gets them: publint on the tarballs, and a clean project that installs, imports,
+      # requires and type-checks them under node16, nodenext and bundler resolution.
+      - name: Check the packed packages
+        run: pnpm check:package
+
+      # engines.node promises Node 22.12.0, which pnpm 11 cannot run on: pack here, check the tarballs under 22.12.0.
+      - name: Pack the packages for the Node 22.12.0 check
+        if: matrix.node-version == '22.23.4'
+        run: mkdir -p "$RUNNER_TEMP/tarballs" && for package in cosec-*/; do (cd "$package" && pnpm pack --pack-destination "$RUNNER_TEMP/tarballs"); done
+
+      - name: Setup Node 22.12.0
+        if: matrix.node-version == '22.23.4'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22.12.0
+
+      - name: Check the packed packages under Node 22.12.0
+        if: matrix.node-version == '22.23.4'
+        run: node scripts/package-check.mjs --tarballs "$RUNNER_TEMP/tarballs"
+
+      # What the release does, short of publishing (package-deploy.yml, job npm-publish): the Node and npm it needs, and
+      # `npm publish --dry-run` of the packed tarballs, in the order and with the dist-tag a release would use.
+      - name: Rehearse the publish
+        if: matrix.node-version == '24.22.2'
+        run: |
+          set -euo pipefail
+          node scripts/release.mjs env
+          mkdir -p "$RUNNER_TEMP/dry-run"
+          for package in cosec-fetcher cosec-react; do
+            (cd "$package" && pnpm pack --pack-destination "$RUNNER_TEMP/dry-run")
+          done
+          node scripts/package-check.mjs --tarballs "$RUNNER_TEMP/dry-run"
+          node scripts/release.mjs publish --tarballs "$RUNNER_TEMP/dry-run" --dry-run
+
+      - name: Stage the coverage
+        if: matrix.node-version == '24.22.2'
+        run: mkdir -p ../coverage-artifact && cp cosec-fetcher/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-fetcher.json && cp cosec-react/coverage/coverage-final.json ../coverage-artifact/typescript-cosec-react.json
+
+      - name: Keep the coverage
+        if: matrix.node-version == '24.22.2'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: coverage-typescript
+          path: coverage-artifact/
+          retention-days: 1
+          if-no-files-found: error
+
+  # The TypeScript client against a real CoSec host (test/client-host: the starter over WebFlux, CoCache in memory), which
+  # `pnpm test:host` starts. A job of its own: it needs the JVM and Gradle beside Node, and runs beside `typescript`
+  # instead of lengthening it. Like it: every pull request, pinned actions, no secrets, read-only Gradle cache off main.
+  typescript-host:
+    name: TypeScript against a real host
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: typescript
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      # Pull requests read main's Gradle cache and never write their own, as the Gradle jobs do.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: ${{ github.ref != 'refs/heads/main' }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.28.11
+
+      - name: Setup Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.3
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The packages import each other through dist.
+      - name: Build
+        run: pnpm build
+
+      # Builds the host with Gradle, starts it, runs both packages' host tests with COSEC_HOST_URL set, and stops it.
+      - name: Test against the host
+        run: pnpm test:host
+
+  # The one upload of the TypeScript coverage, with the token the `typescript` job does not have. Its own flag keeps it
+  # apart from the Gradle uploads; codecov.yml waits for it and plan.py counts it.
+  typescript-coverage:
+    name: TypeScript coverage
+    needs: typescript
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch the coverage
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: coverage-typescript
+          path: coverage-artifact
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: coverage-artifact
+          flags: typescript
+          name: typescript
+          disable_search: true
+          files: coverage-artifact/typescript-cosec-fetcher.json,coverage-artifact/typescript-cosec-react.json
+          fail_ci_if_error: true
 
   # Every overlay in k8s/overlays builds, and what it builds is valid for the oldest Kubernetes minor still supported
   # upstream and for the newest; -strict refuses fields the schema does not have. No path filter, like `docs`.
@@ -183,7 +367,7 @@ jobs:
   ci:
     name: CI
     if: always()
-    needs: [ plan, test, actionlint, docs, k8s ]
+    needs: [ plan, test, actionlint, docs, k8s, typescript, typescript-host, typescript-coverage ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

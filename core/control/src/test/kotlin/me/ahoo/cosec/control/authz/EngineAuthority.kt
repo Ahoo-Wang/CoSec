@@ -20,12 +20,12 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocumentCompiler
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
@@ -161,9 +161,9 @@ class EngineAuthority(
         )
 
         /** The host's coarse rule, "the control API is open to authenticated principals", stands in as a permit. */
-        val PERMITTING = object : FlatEngine {
-            override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
-                FlatEvaluation(
+        val PERMITTING = object : Engine {
+            override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
+                Evaluation(
                     Decision.Permit(
                         StatementRef.Policy(
                             PolicyId("control-api"),

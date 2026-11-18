@@ -29,8 +29,9 @@ the question does not arise: the gateway turns the reactive hidden-method filter
 (`spring.webflux.hiddenmethod.filter.enabled=false`, ahead of every other property source), so it never rewrites the
 method it forwards.
 
-Every adapter needs its module, `cosec-cocache` (the snapshot documents and token revocation live in Redis), a
-JWT secret and a route map; a service that only reads the identity its gateway forwards needs none of them
+Every adapter needs its module, `cosec-cocache` (the snapshot documents and token revocation live in Redis) and a
+JWT secret; a WebFlux or WebMvc host also takes a route map, without which its requests are decided on their HTTP method
+and path ([Route maps](#route-maps)). A service that only reads the identity its gateway forwards needs none of them
 ([Services behind the gateway](#services-behind-the-gateway)). The
 [Quick start](../guide/quick-start.md#add-the-dependency) shows the dependencies; the snippets below show only what
 differs.
@@ -56,8 +57,9 @@ each module needs with it.
 
 ## How a request is handled
 
-Every adapter reads the request once into `HttpFacts` and hands it to `Pipeline.evaluate`, which always ends in an
-`Outcome`, errors included. The adapter only writes that outcome; it never decides anything itself.
+Every adapter reads the request once into `HttpFacts` and hands it to `Pipeline.evaluate`, which ends in an
+`Outcome`, errors included. Only a request whose client goes away has none: it is cancelled, and nothing is written. The
+adapter only writes that outcome; it never decides anything itself.
 
 ```mermaid
 sequenceDiagram
@@ -144,9 +146,11 @@ A route map gives each route of a service an action and a typed resource, so pol
 }
 ```
 
-- A route matches a request with exactly its `method` whose path matches its `path` pattern. The resource template's
-  `{variables}` are captures of the path.
-- A request no route matches keeps the action `http:<METHOD>` on the resource `http:path:<path>`. A statement on a
+- A route matches a request with exactly its `method` whose path matches its `path` pattern; a `HEAD` request takes a
+  `HEAD` route, and without one the `GET` route, since servers serve `HEAD` with the `GET` handler (`PIP-18`). The
+  resource template's `{variables}` are captures of the path.
+- A request no route matches keeps the action `http:<METHOD>` (`http:GET` for a `HEAD` request) on the resource
+  `http:path:<path>`. A statement on a
   `service:verb` action never covers it: no route falls back to a wildcard. The reverse holds too: a statement or a
   rate limit rule on `http:` never covers a mapped request, the platform's included
   ([Authorizing business actions](../scenarios/route-maps.md)).
@@ -179,7 +183,7 @@ proceeds to your handler only on a Permit.
 | `401` | `token-expired` | Deny, and the token had expired. Behind a gateway: a `CoSec-Identity`, or its credential, that is too old. |
 | `401` | `token-revoked` | Deny, and the token, or every token of its principal, was revoked. |
 | `403` | `forbidden` | Deny, and the caller is authenticated: an explicit DENY, the implicit deny, or the platform boundary. |
-| `403` | `scope-rejected` | The caller is authenticated, and the scope was rejected: a declared app other than the host's, a space the principal has no role in, or a space id beginning with `(`, which is CoSec's. |
+| `403` | `scope-rejected` | The caller is authenticated, and the scope was rejected: a credential that declares an app other than the host's, or none on a host with one, or an app that cannot be an app id; a space the principal has no role in; or the space `*`, or a space id beginning with `(`, which are CoSec's. |
 | `429` | `too-many-requests` | Permit, but a matching [rate limit rule](../policies/rate-limiting.md) has no permit left. |
 | `503` | `unavailable` | No decision could be made: Indeterminate, the authenticator or a membership provider failed or timed out, the snapshot source failed, a strict rate limit rule could not be counted, a REQUIRED decision listener failed on a Permit, a Permit only break-glass gives without a REQUIRED listener, or `cosec.pipeline.timeout` passed. |
 | `500` | `internal-error` | An exception nothing modelled: a defect of CoSec. At a gateway, also a Permit whose identity cannot be forwarded ([Forwarding the identity](#forwarding-the-identity)). |
@@ -272,6 +276,8 @@ pipeline's outcome. A refused request never reaches your handler. Its `principal
 | `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). Behind a gateway: the forwarded `claims`. |
 | `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the principal's roles there. |
 | `forwardedIdentity` | Behind a gateway, the gateway's request id and the id of the caller's credential; otherwise null. |
+| `requestId` | The request's id as CoSec used it in audit records, spans and problem responses: the client's `CoSec-Request-Id` when it sent an acceptable one, else the one CoSec generated, which no request header holds. |
+| `deviceId` | The device the client declared in `CoSec-Device-Id`, empty when none. Declared by the client: CoSec checks its form only (one value, else `400`), so it is not proof of a device. |
 
 The context is read-only: nothing an application could set reaches a decision.
 
@@ -288,6 +294,10 @@ fun currentUser(): Mono<String> =
 // with an exchange at hand; null if CoSec did not handle the request
 val securityContext = exchange.getSecurityContext()
 ```
+
+Where CoSec did not handle the request, the three accessors answer differently: `ContextView.getSecurityContext()` throws an
+`IllegalStateException`, while `ContextView.getSecurityContextOrEmpty()` and `exchange.getSecurityContext()` return `null`,
+which a caller must treat as "no context", never as "no restriction".
 
 **Spring MVC**: in a handler, declare a `SecurityContext` parameter. The starter registers its resolver
 (`SecurityContextArgumentResolver`), which reads the context from the request, so the parameter is the context of the
@@ -318,8 +328,9 @@ single-flight cache load). So the holder is:
 
 - **restored**, with Micrometer's `io.micrometer:context-propagation` on the classpath and
   `spring.reactor.context-propagation=auto`: Spring restores it with its other thread-locals on every resumption;
-- **unbound** otherwise, before the handler runs (`PIP-22`): reading it fails at once, before or after any suspension,
-  and the message names the parameter. It stays unbound for whatever runs after the handler on that request's threads:
+- **unbound** otherwise, before the handler runs (`PIP-22`): `requiredContext` fails at once, before or after any
+  suspension, and its message names the parameter; `context` is `null`, which a caller must treat as "no context", never
+  as "no restriction". It stays unbound for whatever runs after the handler on that request's threads:
   other interceptors' `postHandle` and `afterCompletion`, and filters once the chain returns. One case is left: a `suspend` handler resumed on the thread of a request whose
   handler is blocking finds **that request's** context there, so code that reads the holder only after such a
   resumption, and never before a suspension, reads another request's principal.
@@ -393,25 +404,78 @@ To add your own, declare an `AttributeProvider` bean ([Extending CoSec](../archi
 
 ## CORS
 
-Browsers send CORS preflight requests without credentials, so authorization would answer them `401`. With
-WebFlux, register `OrderedCorsWebFilter`; it runs at order `999`, just before `PipelineWebFilter`, and answers
-preflights itself:
+CoSec sets no `Access-Control-*` header itself. A browser client needs the application to configure CORS, and where that
+happens decides what the browser sees. A preflight is an `OPTIONS` request with no credentials, so without more the
+pipeline decides it as the action `http:OPTIONS` for an anonymous caller: `401` unless a statement lets one do that. On
+Spring MVC and WebFlux the application's own CORS configuration (`@CrossOrigin`, `addCorsMappings`) runs in the handler
+mapping, after CoSec's filter, so by default it never gets to answer a preflight. **An application that declares a
+`CorsConfigurationSource` bean gets a CORS filter before CoSec's from the starter** (`STA-5`, below), and then the
+preflight is answered and not decided.
+
+| Stack | CORS without a `CorsConfigurationSource` bean | A preflight | A refused request's CORS headers |
+|---|---|---|---|
+| Spring MVC | In `DispatcherServlet`, after CoSec | Decided by CoSec: `http:OPTIONS`, `401` for an anonymous one | None: the browser cannot read the problem |
+| WebFlux | In the handler mapping, after `PipelineWebFilter` | Decided by CoSec, as on MVC | None |
+| Gateway | `spring.cloud.gateway.server.webflux.globalcors`, when the route is matched, before the gateway filter | Answered by the gateway, never decided | Added before CoSec answers |
+
+What a browser accepts, tried on Tomcat (MVC) and Reactor Netty (WebFlux) with a preflight and a cross-origin `GET`:
+
+| Configuration | A preflight | A refused request (`401`) |
+|---|---|---|
+| Nothing | `401`, no CORS headers: the browser blocks the request | No CORS headers |
+| A statement that lets anyone do `http:OPTIONS`, and **no** CORS configuration | `200` **without** `Access-Control-*` headers: the browser blocks it as well | No CORS headers |
+| That statement, and Spring's own CORS configuration | `200` with the headers, answered by Spring once it is past CoSec | Still none: only permitted requests carry them |
+| **A `CorsConfigurationSource` bean** (the starter's filter), or any CORS filter before CoSec | `200` with the headers, on any path, never decided and never reaching CoSec or a handler | The CORS headers too, so a script can read the `401` and its problem |
+
+A statement that permits `http:OPTIONS` only lets the preflight through CoSec: it is not a CORS configuration, and
+something else must still set the headers. The filter before CoSec is the way that serves both a preflight and a
+refusal; on every stack it is the same arrangement:
+
+- **Spring MVC and WebFlux, with the starter:** declare the source of the stack, the bean is the switch (there is no
+  property). On WebFlux it is `org.springframework.web.cors.reactive.CorsConfigurationSource`, on Spring MVC
+  `org.springframework.web.cors.CorsConfigurationSource`; Spring MVC's own `HandlerMappingIntrospector` is one too and
+  does not count. The starter registers an `OrderedCorsWebFilter` at order `999`, just before `PipelineWebFilter`
+  (`1000`), or a `CorsFilter` one place before CoSec's servlet filter (order `-10000`, beside Boot's hidden-method
+  filter, which only acts on `POST`). It registers none when the application declares a `CorsFilter` or a
+  `CorsWebFilter` of its own: that one is then the application's to order.
 
 ```kotlin
 @Bean
-fun corsWebFilter(source: CorsConfigurationSource) = OrderedCorsWebFilter(source)
+fun corsConfigurationSource(): CorsConfigurationSource = UrlBasedCorsConfigurationSource().apply {
+    registerCorsConfiguration("/**", CorsConfiguration().apply {
+        allowedOrigins = listOf("https://app.example")
+        allowedMethods = listOf("GET", "POST", "PUT", "DELETE")
+        allowedHeaders = listOf("Authorization", "Content-Type", "CoSec-Device-Id", "CoSec-Space-Id", "CoSec-Request-Id")
+        exposedHeaders = listOf("CoSec-Request-Id", "RateLimit-Limit", "RateLimit-Remaining", "RateLimit-Reset", "Retry-After")
+    })
+}
 ```
 
-With Spring MVC, register a CORS filter with an order before `-9999`.
+- **Gateway:** `globalcors`, which the gateway applies before its filters.
 
-Where CORS is handled decides what a browser sees of a refusal, so the three stacks differ unless you configure them
-alike:
+What the filter changes for the pipeline (`STA-5`):
 
-| Stack | CORS by default | A preflight | A refused request's CORS headers |
-|---|---|---|---|
-| Spring MVC | In `DispatcherServlet`, after CoSec | Decided by CoSec: `http:OPTIONS`, `401` for an anonymous one | None: the browser cannot read the problem. A CORS filter before `-9999` answers preflights and adds them |
-| WebFlux | Where you put it; `OrderedCorsWebFilter` runs before CoSec | Answered by the CORS filter, never decided | Added by the CORS filter |
-| Gateway | `spring.cloud.gateway.server.webflux.globalcors`, when the route is matched, before the gateway filter | Answered by the gateway, never decided | Added before CoSec answers |
+- **A preflight** (`OPTIONS` with `Origin` and `Access-Control-Request-Method`) is answered by the filter from the
+  source alone and is not decided: no policy, rate limit, blacklist, audit, decision event or metric sees it. An
+  `OPTIONS` without `Access-Control-Request-Method` is no preflight and is decided as before.
+- **A request that is not a preflight** is decided as before, and every response, a refusal included, carries the CORS
+  headers. An origin the source does not allow is refused by the filter with a plain `403` before the pipeline: no
+  problem body, no `CoSec-Request-Id`, no decision event.
+- **`@CrossOrigin` and `addCorsMappings`** apply to the request that follows a preflight, not to the preflight: put every
+  origin, method and header a browser may use in the bean.
+- **Without the bean** nothing changes: the filter is not registered and the first table is the description.
+
+The configuration behind the filter has to allow the request headers a client sends (`Authorization`, `Content-Type`,
+`CoSec-Device-Id`, `CoSec-Space-Id`, `CoSec-Request-Id`) and expose the response headers it reads (`CoSec-Request-Id`,
+`RateLimit-Limit`, `RateLimit-Remaining`, `RateLimit-Reset`, `Retry-After`): a browser shows a script only the
+safelisted response headers and the exposed ones. A client's side of this is in
+[Building a client](./clients.md#cors).
+
+The scenarios decide the statement in the table's second row, and a document without it:
+
+<<< @/examples/clients/scenarios/a-preflight-is-permitted-where-a-statement-says-so.json [scenarios/a-preflight-is-permitted-where-a-statement-says-so.json]
+
+<<< @/examples/clients/scenarios-closed/a-preflight-is-denied-without-a-statement.json [scenarios-closed/a-preflight-is-denied-without-a-statement.json]
 
 ## Gateway
 
@@ -421,7 +485,7 @@ from the WebFlux filter in three ways:
 - it runs on gateway routes only: a request no route matches, and the gateway's own actuator endpoints, are not
   authorized by CoSec, so a gateway that exposes an actuator endpoint other than `health` on its application port does
   not start ([Actuator on a gateway](#actuator-on-a-gateway));
-- it loads no route map, so every request is `http:<METHOD>` on `http:path:<path>`;
+- it loads no route map, so every request is `http:<METHOD>` (`http:GET` for `HEAD`) on `http:path:<path>`;
 - it forwards the outcome's `CoSec-Request-Id` to the downstream service, replacing any value the client sent, so
   the backend's logs share the gateway's request id. On a Permit it also forwards the verified identity to a route
   that receives it ([Forwarding the identity](#forwarding-the-identity)), and it removes the client's credentials,
@@ -470,6 +534,34 @@ Kustomize manifests for Kubernetes are in [`k8s/`](https://github.com/Ahoo-Wang/
 to try CoSec out and a `production` one to start from ([Kubernetes](../operations/deployment.md#kubernetes)). The
 image exposes only the `health` actuator endpoint.
 
+### Actuator on an application {#actuator-on-an-application}
+
+On an application, WebFlux or WebMvc, an actuator endpoint is a request like any other: where CoSec's filter stands,
+nothing is let through without a policy, and until the first platform document is installed every request is `503`. What
+the filter fronts depends on the server (`STA-4`; the cells are asserted against real servers in `ManagementPortTest`):
+
+| Server | The application port | A separate `management.server.port` |
+|---|---|---|
+| WebFlux | CoSec's: the probes are `503` before the first platform document, `401` for an anonymous caller after it | CoSec's too: Spring Boot's management server collects the application's `WebFilter`s and `RouterFunction`s, so the pipeline fronts it, the application's functional routes and the control API included (an application controller is a `404` there) |
+| WebMvc | CoSec's, as on WebFlux | Outside CoSec: actuator's endpoints are Spring's own (liveness `200`; readiness `503` until the documents are installed, then `200`), and a controller, a functional route and the control API are a `404` |
+| Gateway ([its own section](#actuator-on-a-gateway)) | the gateway's routes only | Outside CoSec: actuator's endpoints are Spring's own and the gateway's routes are not served; the control API, when the control plane is on, is served under its own pipeline |
+
+With one port, or `management.server.port` equal to the application's, every row is the application port.
+
+- **Readiness over HTTP needs one statement.** An anonymous probe is `401` once the platform document is installed, unless
+  a statement permits its path. This one permits `GET` on the two probe paths for anyone, and nothing else of actuator:
+
+  <<< @/examples/probes/documents/platform.json [probes policy and binding]
+
+  Before the first document is published the probe still answers `503`, which is the right answer for "not ready". Spring
+  Boot 4 serves the probes on every platform: `management.endpoint.health.probes.enabled` is `true` by default.
+- **Liveness and startup must not depend on the platform document.** An HTTP liveness probe on the application port of an
+  application answers `503` until the first document is published, so the kubelet restarts the pod before it can ever be
+  ready. On WebMvc, point it at the management port, which is outside CoSec. On WebFlux the management port is under CoSec
+  too, so use a `tcpSocket` probe on the application port.
+- **What is served on a management port outside CoSec is protected by the network**, as on a gateway: expose there only
+  what you would expose to whoever can reach that port.
+
 ### Actuator on a gateway
 
 The gateway filter authorizes the gateway's routes, so the gateway's own actuator endpoints are not under CoSec. Served
@@ -480,7 +572,8 @@ HTTP on its application port: `management.server.port` unset, or the same as `se
 [troubleshooting](../operations/troubleshooting.md#startup-fails-on-an-exposed-actuator-endpoint)).
 
 - Serve actuator on its own port, behind a network policy, with `management.server.port`; there any endpoint may be
-  exposed.
+  exposed. Give the port a number: with a random one (`0`) Spring Cloud Gateway cannot tell the management port apart and
+  serves its routes there too, authorized by CoSec as on the application port.
 - Or expose only `health` (`management.endpoints.web.exposure.include`, Spring Boot's default).
 - Or list in `cosec.gateway.unprotected-endpoints` the endpoints something else protects on the application port.
   It never accepts `gateway`.
@@ -525,7 +618,8 @@ policies (`cosec.pipeline.mode=enforce`) removes it too, before your handler see
 calls on to services behind a gateway cannot relay one a client wrote. A condition on `http.header.cosec-identity`
 does not compile.
 
-**No identity is forwarded** for an anonymous Permit, a refused request, a route that does not receive it, or with
+**No identity is forwarded** for an anonymous Permit, a refused request, a route that does not receive it, a principal
+whose authenticator names no credential (CoSec's token and API key authenticators always name one), or with
 `cosec.gateway.identity.enabled=false`.
 
 **What it carries.** The value is base64url (no padding) of compact JSON, format version 1; the JSON Schema is
@@ -537,7 +631,7 @@ does not compile.
 | `tenant`, `sub` | The tenant and principal the gateway verified. |
 | `scope` | `{app, space}`, as the gateway resolved them. |
 | `roles` | The principal's roles in that space: those the decision used. |
-| `auth` | `{method, jti, exp, capped}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, and the credential's expiry; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
+| `auth` | `{method, jti, exp, iat, capped, session}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, the credential's expiry, and when it was issued (`iat`, absent when the credential does not say, never after `exp`); `session` only for CoSec's own token (`jwt`): its `sid`, `auth_time` (when the user signed in) and `generation`, so that a service behind the gateway knows the login time and a [tenant switch](./authentication.md#switching-tenant-and-app) there can issue from it; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |
 | `claims` | Only the principal attributes named in `cosec.gateway.identity.claims` (the token's `attributes` claim; an API key gives only `apiKeyId`): strings, booleans and numbers. A `Byte`, `Short`, `Int`, `Long`, or `BigInteger` within a `Long` travels as an integer; a finite `Float` or `Double`, or a `BigDecimal` a `Double` holds exactly, as a number. |
@@ -607,6 +701,14 @@ The [security context](#accessing-the-security-context) of a request that procee
 | `principal.attributes` | `claims`. |
 | `scope.appId`, `scope.spaceId` | `scope.app` and `scope.space`. |
 | `forwardedIdentity.gatewayRequestId`, `forwardedIdentity.credentialId` | The gateway's request id and the credential's id (`auth.jti`). |
+| `requestId` | This service's request id: the gateway's, which it sends as `CoSec-Request-Id`. |
+| `deviceId` | The request's `CoSec-Device-Id`, read under the same rule as in front of the gateway (one value, else `400`). |
+
+The session and the issue time of CoSec's token (`auth.session`, `auth.iat`) are the principal's here, as at the
+gateway: a tenant switch issues from that session, only while it is live (`IDN-22`). An identity without them, an API
+key's or one from a gateway of an earlier version, reads as before and cannot be switched from. A service reads the
+identity strictly, so one older than its gateway refuses these members (`400`): upgrade the services behind a gateway
+before the gateway.
 
 The forwarded identity is the credential here, and its app is what it declares: on a service with an app, an identity
 that names another app, or none, is refused (`400` `invalid-request`).

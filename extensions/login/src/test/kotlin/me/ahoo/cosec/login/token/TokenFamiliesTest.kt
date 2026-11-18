@@ -11,12 +11,15 @@
  * limitations under the License.
  */
 
+@file:OptIn(InternalCoSecApi::class)
+
 package me.ahoo.cosec.login.token
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.token.InMemoryTokenFamilyStore
@@ -180,7 +183,7 @@ class TokenFamiliesTest {
         assertThrows<TokenExpiredException> { runBlocking { families.rotate(token(session)) } }
         // A tenant switch keeps the login time: a switch after the end starts nothing.
         assertThrows<TokenExpiredException> {
-            runBlocking { families.start(acme, alice, clock.now.minus(Duration.ofDays(30))) }
+            runBlocking { families.startAt(acme, alice, clock.now.minus(Duration.ofDays(30))) }
         }
     }
 
@@ -221,7 +224,7 @@ class TokenFamiliesTest {
             },
             clock = clock,
         )
-        assertThrows<IllegalStateException> { runBlocking { unreadable.rotate(token(session)) } }
+        assertThrows<SessionStoreUnavailableException> { runBlocking { unreadable.rotate(token(session)) } }
         val unconfirmed = TokenFamilies(
             object : TokenFamilyStore by store {
                 override suspend fun replace(version: String, next: TokenFamily): Boolean =
@@ -229,7 +232,7 @@ class TokenFamiliesTest {
             },
             clock = clock,
         )
-        assertThrows<IllegalStateException> { runBlocking { unconfirmed.rotate(token(session)) } }
+        assertThrows<SessionStoreUnavailableException> { runBlocking { unconfirmed.rotate(token(session)) } }
         family(session).generation.assert().isEqualTo(1L)
     }
 

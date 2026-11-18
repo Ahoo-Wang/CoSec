@@ -15,20 +15,21 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotKind
 import java.time.Duration
 
 /**
- * Events of a [SnapshotSource], for meters such as RFC 0003 §4.5's `cosec.snapshot.*`. Gauges (installed documents,
- * lag per key) are read from [SnapshotSource.entries] instead.
+ * Events of a [SnapshotSource], for the `cosec.snapshot.*` meters (`cosec-micrometer`). Gauges (documents held, lag)
+ * read the [SnapshotSummary] of the last lag pass ([summary]) instead, never [SnapshotSource.entries] on a scrape.
  *
- * [onLoad] runs on the request path, on whatever thread calls [SnapshotSource.peek], so implementations must be cheap
- * and must not block. Tag by [SnapshotKind], never by app id: app ids are unbounded.
+ * [onLoad] runs on the request path, on whatever thread calls [SnapshotSource.peek], so implementations must be cheap,
+ * allocate nothing and never block. Tag by [SnapshotKind], never by app or tenant id: those are unbounded. The source
+ * wraps an implementation in [GuardedSnapshotMetrics]: what it throws never reaches a load.
  */
-internal interface SnapshotMetrics {
+@InternalCoSecApi
+interface SnapshotMetrics {
     /** One document a request needed: already installed ([LoadOutcome.HIT]) or loaded for it. */
     fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) = Unit
 
@@ -50,12 +51,33 @@ internal interface SnapshotMetrics {
     /** A document's lag passed [SnapshotOptions.lagWarn], or [SnapshotOptions.lagEscalate] when [escalated]. */
     fun onLagExceeded(key: SnapshotKey, lag: Duration, escalated: Boolean) = Unit
 
+    /**
+     * The compile pool refused a key's drain hand-off (RFC 0013 B2b §3): it went to housekeeping, or, [ranInPlace], a
+     * caller's thread ran the source's hand-offs, for as long as they came: the back-pressure that keeps answering.
+     */
+    fun onHandOffRefused(ranInPlace: Boolean) = Unit
+
+    /**
+     * A key of [kind] left its family by eviction (`SNP-7`): [absent] when what it held said the store has no document,
+     * otherwise a document. Sustained, with cold loads rising, the family's bound is too small.
+     */
+    fun onEvicted(kind: SnapshotKind, absent: Boolean) = Unit
+
+    /**
+     * Housekeeping's queue was full and refused a [task] (`SNP-19`): dropped and counted, or, for
+     * [HousekeepingTask.DROP], run in place. Never written on the refusing thread; the source's own summary names what
+     * was dropped. Sustained, housekeeping falls behind: a slow log appender, or passes over large families.
+     */
+    fun onHousekeepingRefused(task: HousekeepingTask) = Unit
+
+    @InternalCoSecApi
     companion object {
         val NOOP: SnapshotMetrics = object : SnapshotMetrics {}
     }
 }
 
-internal enum class LoadOutcome {
+@InternalCoSecApi
+enum class LoadOutcome {
     /** Already installed. */
     HIT,
 
@@ -67,42 +89,4 @@ internal enum class LoadOutcome {
 
     /** Not installed; the load did not finish within [SnapshotOptions.coldLoadTimeout]. */
     TIMEOUT,
-}
-
-/**
- * Calls [delegate] and swallows what it throws, errors included: a failing meter must never fail a load, lose a reload
- * or break single-flight. Only a [VirtualMachineError] passes through; [SnapshotSource] lets it out only after the load
- * it interrupted has finished.
- */
-@Suppress("TooGenericExceptionCaught")
-internal class GuardedSnapshotMetrics(private val delegate: SnapshotMetrics) : SnapshotMetrics {
-    private inline fun guard(event: String, call: () -> Unit) {
-        try {
-            call()
-        } catch (error: VirtualMachineError) {
-            throw error
-        } catch (error: Throwable) {
-            log.warn { "SnapshotMetrics.$event failed: $error" }
-        }
-    }
-
-    override fun onLoad(kind: SnapshotKind, outcome: LoadOutcome) = guard("onLoad") { delegate.onLoad(kind, outcome) }
-
-    override fun onCompile(kind: SnapshotKind, duration: Duration, succeeded: Boolean) =
-        guard("onCompile") { delegate.onCompile(kind, duration, succeeded) }
-
-    override fun onInstall(entry: SnapshotEntry<*>) = guard("onInstall") { delegate.onInstall(entry) }
-
-    override fun onRegression(key: SnapshotKey, installedRevision: Long, loadedRevision: Long) =
-        guard("onRegression") { delegate.onRegression(key, installedRevision, loadedRevision) }
-
-    override fun onDocumentLost(key: SnapshotKey, lastRevision: Long) =
-        guard("onDocumentLost") { delegate.onDocumentLost(key, lastRevision) }
-
-    override fun onLagExceeded(key: SnapshotKey, lag: Duration, escalated: Boolean) =
-        guard("onLagExceeded") { delegate.onLagExceeded(key, lag, escalated) }
-
-    private companion object {
-        private val log = KotlinLogging.logger {}
-    }
 }

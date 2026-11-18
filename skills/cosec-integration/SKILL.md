@@ -34,7 +34,7 @@ other CoSec module it finds on the classpath. Add each integration as a dependen
 | IP region attributes (`ext.ip2region.*`) | `cosec-ip2region` | |
 | Ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 | OpenTelemetry spans | `cosec-opentelemetry` | |
-| Micrometer metrics | `cosec-micrometer` | `io.micrometer:micrometer-core` |
+| Micrometer metrics | `cosec-micrometer` | |
 | OpenAPI route map and app document generation | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-common` |
 | Kafka audit | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 
@@ -47,8 +47,8 @@ implementation("org.springframework.boot:spring-boot-data-redis")
 implementation("me.ahoo.cocache:cocache-spring-boot-starter")
 ```
 
-Maven takes the same artifacts. The "Also add" column mirrors the `compileOnly` lines of
-`host/spring-boot/build.gradle.kts`; with Maven, import `me.ahoo.cosec:cosec-dependencies` or pin their versions.
+Maven takes the same artifacts. The "Also add" column is what each module needs next to it; give each its version yourself, with Gradle or Maven: no CoSec module imports a platform
+([what CoSec needs from your build](https://cosec.ahoo.me/guide/introduction#what-cosec-needs-from-your-build): Spring Boot 4.1, CoCache 8 for `cosec-cocache`, JDK 21).
 There are no starter capabilities (`requireCapability(...-support)`) in 8.0: replace each with its module.
 Startup fails with `... needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath ... (STA-1)` when the web stack's
 adapter is missing (MVC, WebFlux, or Gateway even with `cosec.enabled=false`), when `cosec.api-key.store=redis` lacks
@@ -125,10 +125,11 @@ behind a gateway (which loads no route map), leaves the property unset and write
 The service decides on a snapshot of documents (platform, app, tenant), read from Redis with `cosec-cocache` or from an
 in-memory store without it. **Until a platform document exists, every request is 503.**
 
-- With Redis: write the documents into a directory (`platform.json`, `apps/<appId>.json`, `tenants/<tenantId>.json`)
-  and run `cosec-migrate publish --to-redis redis://... [--key-prefix cosec] --in <dir>`. It publishes first
-  revisions only, never overwrites, and reads a `report.json` with each file's SHA-256 (`convert` writes it; for
-  hand-written files write `{"accepted": true, "outputSha256": {"platform.json": "<sha256>"}}`). Migrating 7.x data:
+- With Redis: write the platform document and run
+  `cosec-migrate publish --to-redis redis://... [--key-prefix cosec] --file platform.json --document platform`
+  (`--document app:<id>` or `tenant:<id>` for others, after the platform's). It publishes first revisions only, never
+  overwrites, and makes the checks a converted directory gets (`--in <dir>`, which reads `convert`'s `report.json`
+  with each file's SHA-256). Migrating 7.x data:
   `cosec-migrate convert`, then `publish`; see https://cosec.ahoo.me/operations/upgrading.
   The tool is `cosec-migrate-<version>.zip` on each GitHub release (Java 21+; as a Kubernetes Job in the same page). Seed
   hand-written app and tenant documents after the platform document with `bootstrap` and the control plane's
@@ -143,7 +144,7 @@ in-memory store without it. **Until a platform document exists, every request is
   (`management.endpoint.health.group.readiness.include=readinessState,cosecSnapshot`); it is `DOWN` until the platform
   document and every `prewarm-apps`/`prewarm-tenants` document are installed, so `/actuator/health` is `DOWN` too.
 - Without Redis: the `SnapshotDocumentStore` bean is an `InMemorySnapshotDocumentStore`; put documents into it
-  (`put(SnapshotKey.Platform, SnapshotDocument(2, revision, publishedAt, bytes))`), for example from files at startup.
+  (`put(SnapshotKey.Platform, SnapshotDocuments.read(bytes))`, which reads the header from the bytes), for example from files at startup.
   Each instance holds its own copy.
 
 Use `$cosec-policy-author` to write the documents. Storage details: https://cosec.ahoo.me/operations/storage.
@@ -228,6 +229,11 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
 - Sessions: issue tokens through `TokenCompositeAuthentication`, which starts a session (a token family); refresh with
   `RefreshTokenAuthentication(verifier, tokenRevocation, tokenFamilies)`. Only the newest pair refreshes, an older
   one presented again ends the session, and a session lasts `cosec.jwt.session.lifetime` (30 days).
+- Refresh and logout routes: set `cosec.authentication.login.refresh.path` and `logout.path` and the starter serves them
+  (`POST`, the pair as JSON; `200` pair, `401` token-*, `503` unavailable, `500` error; logout `204`), on Spring MVC and
+  WebFlux, never on a gateway. A document must permit an anonymous `POST` of each path, or every refresh is
+  `401 token-expired`. A `MembershipRefresh<RefreshTokenCredentials>` bean is used; it refuses by throwing
+  `TokenRevokedException`. Unset, write the routes yourself as below.
 - Logout: `TokenRevoker.revoke(accessToken)` ends the session, or `revoke(compositeToken)` once the access token has
   expired. Emergency: `TokenRevoker.revokeSubject(tenant, principal)` revokes every token of a principal issued until now
   (needs the Redis token store).

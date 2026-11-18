@@ -2,12 +2,13 @@
 # Mutant: the access review lists the stored bindings
 # Tests: :control:test --tests me.ahoo.cosec.control.change.RolesTest
 
-diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
---- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-+++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt
-@@ -315,7 +315,7 @@
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
+index 2c6fc8ac..17eaf26d 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/AccessAnalysis.kt
+@@ -56,7 +56,7 @@ internal class AccessAnalysis(
                  app -> application
-                 else -> entry(key)
+                 else -> retained.entry(key)
              } ?: continue
 -            for (binding in entry.effective.bindings) {
 +            for (binding in entry.document.bindings) {

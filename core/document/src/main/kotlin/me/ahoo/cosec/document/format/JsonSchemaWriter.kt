@@ -54,7 +54,11 @@ object JsonSchemaWriter {
         val schema = TreeMap<String, Any>()
         when (type) {
             is StringType -> stringSchema(type, schema)
-            is BooleanType -> schema["type"] = "boolean"
+            is BooleanType -> {
+                schema["type"] = "boolean"
+                type.const?.let { schema["const"] = it }
+            }
+
             is IntegerType -> integerSchema(type, schema)
 
             is NumberType -> {

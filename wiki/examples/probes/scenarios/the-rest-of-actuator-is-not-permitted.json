@@ -1,0 +1,16 @@
+{
+  "description": "The statement names the two probe paths: any other actuator path is denied.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/actuator/env"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

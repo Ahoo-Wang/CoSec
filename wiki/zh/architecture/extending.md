@@ -27,7 +27,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `IdGenerator` | `cosec-spi`，`spi.id` | 让请求 id、令牌 id 和变更 id 使用你自己的格式。`cosec-cosid` 基于 CosId 5 实现了它。 | 一个 bean，替换 `RandomIdGenerator` |
 | `Authentication` | `cosec-login`，`login` | 校验另一种登录凭证，并说明其令牌的内容。通过抛出异常拒绝。 | 所有 bean，按其支持的凭证类型注册 |
 | `TenantSwitch` | `cosec-login`，`login.token` | 说明用户在要切换到的租户和应用中拥有什么，以及新令牌属于哪个应用（[切换租户和应用](../integration/authentication.md#switching-tenant-and-app)）。通过抛出异常拒绝。 | 无：把 `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java, yourSwitch)` 声明为 `Authentication` bean |
-| `MembershipRefresh` | `cosec-login`，`login.token` | 在令牌刷新时说明用户现在拥有什么，让变更后的角色生效（[刷新令牌](../integration/authentication.md#refreshing-tokens)）。抛出异常以拒绝；null 保留声明。 | 无：把它传给 `RefreshTokenAuthentication` |
+| `MembershipRefresh` | `cosec-login`，`login.token` | 在令牌刷新时说明用户现在拥有什么，让变更后的角色生效（[刷新令牌](../integration/authentication.md#refreshing-tokens)）。抛出 `TokenVerificationException` 以拒绝（`401`）；其他任何异常都是错误（`500`）；null 保留声明。 | 无：把它传给 `RefreshTokenAuthentication`；starter 的刷新路由使用 `MembershipRefresh<RefreshTokenCredentials>` Bean |
 | `TokenConverter` | `cosec-login`，`login.token` | 以其他格式签发令牌。 | 一个 bean，替换 `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`，`social` | 把提供方的用户转换成你的主体。 | 一个 bean，替换 `DirectSocialUserPrincipalConverter` |
 | `SocialStateStore` | `cosec-social`，`social` | 把社交登录签发的 OAuth state 存在 Redis 以外的地方：`put` 记下一个 state 及其绑定值的哈希，`take` 原子地取走它，因此一个 state 只能用一次。两者都是挂起函数：基于阻塞客户端实现时，在你自己的调度器上调用它。存储失败时抛出异常。 | 一个 bean，替换 `RedisSocialStateStore` |
@@ -35,7 +35,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 | `DecisionListener` | `cosec-runtime`，`runtime.event` | 观察每一个决策：审计、告警、分析。 | 所有 bean |
 | `BridgeContextContributor` | `cosec-runtime`，`runtime.event` | 把线程本地上下文（日志、追踪）带进 Pipeline。 | 所有 bean |
 | `ChangeListener` | `cosec-control`，`control.audit` | 观察或把关控制面变更。 | 所有 bean，使用 `cosec-control` 时 |
-| `ControlStore` | `cosec-control`，`control.store` | 把控制面的记录保存在 Redis 以外的地方。实验性的，连同它的记录和影子窗口端口。 | 一个 bean，使用 `cosec-control` 时 |
+| `ControlStore` | `cosec-control`，`control.store` | 把控制面的记录（修订、变更请求、暂存槽）保存在 `CoCacheControlStore` 以外的地方。控制面本身只在有 `cosec-cocache` 时启动，已发布的文档保存在它的 Redis 存储里：这个端口不改变这一点。实验性的，连同它的记录和影子窗口端口。 | 一个 bean，使用 `cosec-control` 和 `cosec-cocache` 时 |
 | 路由映射 | `cosec-document`，`document.route` | 让请求得到作用于类型化资源的 `service:verb` 动作。 | `cosec.authorization.routes.location` |
 
 包名都在 `me.ahoo.cosec` 之下。签名只需要模型和契约的端口放在 `cosec-spi`，连同它们的值类型和内存实现（`InMemorySnapshotDocumentStore`、`InMemoryMembershipProvider`、`InMemoryApiKeyStore`）；它只依赖 `cosec-model`、`cosec-api`、`cosec-annotations` 和 kotlinx-coroutines，所以实现其中一个端口不需要 CoSec 的其他东西。影子窗口端口（`CandidateStore`、`ShadowReportSink`、`ShadowReportReader`，在 `spi.shadow` 中）也在其中：它们的候选与报告都是普通的值。签名带有某一层自身类型的端口留在那一层：`DecisionListener` 接收 runtime 的 `DecisionEvent`，`ControlStore` 和 `ChangeListener` 接收控制面的记录与事件。
@@ -277,9 +277,16 @@ fun interface RateLimiter {
 - `read(key)` 可以从本地副本应答（把副本的最大年龄报告为 `localCopyMaxAge`）；`readIfChanged(key, known)` 必须读取权威存储，摘要一致时应答 `Unchanged`；`subscribe(listener)` 在变更可读之后报告变更。
 - 每个方法都不阻塞地返回，且从不抛出异常：失败以异常方式完成 future。存储的值无法解码时，异常的 cause 链中要带有 `SnapshotFormatException`。
 - 永远不要删除文档。一个曾经有文档的键读到“不存在”时，会按失败即拒绝处理。
+- 文档就是它的字节：完整的 JSON 文档，包括头部。返回 `SnapshotDocuments.read(bytes)`（`cosec-document`）由这些字节构造的 `SnapshotDocument`，它从字节中读取头部；别的途径都构造不出它，因此存储不可能报告一个与其字节矛盾的修订（`SNP-12`）。保存字节的存储：
+
+  ```kotlin
+  override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> = fetch(key).thenApply { bytes ->
+      bytes?.let { SnapshotRead.Present(SnapshotDocuments.read(it), SnapshotDigest(sha256(it))) } ?: SnapshotRead.Absent
+  }
+  ```
 - 摘要是 `SnapshotDigest`：32 字节的 SHA-256，并标明其算法，不接受别的（SHA-1、版本号或 ETag 在构造时就被拒绝，于是每次读取都失败即拒绝）。对存储的字节，或对随文档变化的任何东西做哈希；只有你的存储解读它。它在控制 API 与事件中的文本形式是 `SHA-256:<64 位十六进制>`。
 
-使用 `cosec-cocache` 时，starter 使用 `RedisSnapshotDocumentStore`，控制面也写入同一个 Redis。不使用时，starter 注册 `InMemorySnapshotDocumentStore`；用 `put(key, document)` 放入文档，或者改为声明自己的 `SnapshotDocumentStore` bean。在平台文档就位之前，请求都按失败即拒绝处理。
+使用 `cosec-cocache` 时，starter 使用 `RedisSnapshotDocumentStore`，控制面也写入同一个 Redis。不使用时，starter 注册 `InMemorySnapshotDocumentStore`；用 `put(key, SnapshotDocuments.read(bytes))` 放入文档，或者改为声明自己的 `SnapshotDocumentStore` bean。在平台文档就位之前，请求都按失败即拒绝处理。
 
 ## Id {#ids}
 

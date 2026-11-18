@@ -1,0 +1,17 @@
+# Rule: SNP-19
+# Mutant: once housekeeping is stopped, a task on one of the source's own threads is dropped and counted like a caller's, so what close's last steps log is lost
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.HousekeepingRefusalTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
+index fe495e66..0d90d5e9 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotThreads.kt
+@@ -167,7 +167,7 @@ internal class SnapshotThreads(
+     }
+ 
+     private fun notOffered(kind: HousekeepingTask, line: () -> String, task: () -> Unit) {
+-        if (housekeeping.isShutdown && onOwnThread.get() == true) {
++        if (false) {
+             task()
+             return
+         }

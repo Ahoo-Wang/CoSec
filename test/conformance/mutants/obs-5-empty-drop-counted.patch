@@ -1,0 +1,19 @@
+# Rule: OBS-5
+# Mutant: a key dropped empty after a failed cold load is counted as an evicted absence
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.SnapshotSummaryTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+index 1ac40130..b5660e83 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotFamilies.kt
+@@ -96,9 +96,7 @@ internal class SnapshotFamilies<A : Any>(
+         lagReports.forget(key)
+         // Only an installed entry that leaves is an eviction. A key dropped empty, after a cold load that failed or
+         // timed out, held nothing: counting it would put noise in the meter that says the bound is too small.
+-        if (entry != null) {
+-            metrics.onEvicted(key.kind, isAbsent(entry))
+-        }
++        metrics.onEvicted(key.kind, entry == null || isAbsent(entry))
+         log.debug { "Removed snapshot document [$key]." }
+     }
+ 

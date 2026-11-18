@@ -80,14 +80,17 @@ class SourceRulesTest {
         )
 
         /**
-         * What a backend may use of `cosec-document`: the one mapper (RFC 0011 D3), which writes its stored formats, and
-         * the codec of a format it stores (`ShadowCodec`, the shadow window's candidates and reports). A backend stores
-         * bytes (`SnapshotDocument`) and never reads what a document grants, so the document codec, the compiler and
-         * `RoleExpansion` stay out of its reach, as they were while they were in `cosec-runtime` (RFC 0013 §3).
+         * What a backend may use of `cosec-document`: the one mapper (RFC 0011 D3), which writes its stored formats, the
+         * codec of a format it stores (`ShadowCodec`, the shadow window's candidates and reports), and
+         * `SnapshotDocuments`, the one way to make the `SnapshotDocument` it returns (SNP-12): reading a document's
+         * header is not reading what it grants. A backend stores bytes and never reads what a document grants, so the
+         * document codec, the compiler and `RoleExpansion` stay out of its reach, as they were while they were in
+         * `cosec-runtime` (RFC 0013 §3).
          */
         val BACKEND_DOCUMENT_REACH: List<String> = listOf(
             "me.ahoo.cosec.document.json.CoSecJson",
             "me.ahoo.cosec.document.shadow.ShadowCodec",
+            "me.ahoo.cosec.document.SnapshotDocuments",
         )
 
         /** The main source files of [project], by extension. */

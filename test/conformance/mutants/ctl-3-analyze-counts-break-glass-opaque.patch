@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: an access review counts a break-glass binding of cosec:root as opaque
+# Tests: :control:test --tests me.ahoo.cosec.control.api.BreakGlassAccessReviewTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentCache.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentCache.kt
+index bd6072d2..b4af58dd 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentCache.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/DocumentCache.kt
+@@ -237,7 +237,7 @@ internal class DocumentCache(
+          * can define them.
+          */
+         internal val BUILTIN: Map<String, AnalyzedPolicy> = (
+-            BuiltinPolicies.CONTROL + (BuiltinPolicies.ROOT to BuiltinPolicies.ROOT_STATEMENTS)
++            BuiltinPolicies.CONTROL
+             ).entries.associate { (id, statements) ->
+             val definition = PolicyDefinition(id, attachable = false, condition = null, statements = statements)
+             id.value to AnalyzedPolicy(definition) {

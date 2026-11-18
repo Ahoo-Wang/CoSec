@@ -1,0 +1,17 @@
+# Rule: SNP-11
+# Mutant: a stored document that does not compile is reported as SourceUnavailable again, so nothing tells it apart from a store that cannot be read (drill entry 26)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.DocumentInvalidTest --tests me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViewsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews.kt
+index ff93e7ab..db8bca3f 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/DocumentSnapshotViews.kt
+@@ -126,7 +126,7 @@ class DocumentSnapshotViews(
+             DocumentState.Absent -> absent()
+             is DocumentState.Failed -> {
+                 unresolved += if (entry.invalid) {
+-                    Cause.DocumentInvalid(kind, entry.revision, state.error)
++                    Cause.SourceUnavailable(kind, state.error)
+                 } else {
+                     Cause.SourceUnavailable(kind, state.error)
+                 }

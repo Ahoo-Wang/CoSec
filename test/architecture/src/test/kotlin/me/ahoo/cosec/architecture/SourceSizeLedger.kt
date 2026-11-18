@@ -31,18 +31,15 @@ object SourceSizeLedger {
     val ENTRIES: List<Entry> = listOf(
         Entry(
             "core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/SnapshotSource.kt",
-            1675,
-            Disposition.Debt(Batch.B2a),
-        ),
-        Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/FlatEvaluator.kt",
-            971,
-            Disposition.Debt(Batch.B3),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/Changes.kt",
-            938,
-            Disposition.Debt(Batch.B4),
+            // +3 (SNP-13): what the futures of revalidate and recompile promise, in their KDoc.
+            // +3 (B2b gate 1): the test seam for housekeeping, a parameter with its KDoc and its import.
+            // +2 (B2b step 2b): the runner seam (`KeyRunner.Settings` since step 4), a parameter with its KDoc, and the
+            // context's construction wrapped.
+            // -2 (B2b step 3): close runs the pending hand-offs, and it enters by a CAS on one line, not three.
+            450,
+            Disposition.Stays(
+                "the read interface with its contract, and the construction and close order in one place"
+            ),
         ),
         Entry(
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/Converter.kt",
@@ -50,104 +47,14 @@ object SourceSizeLedger {
             Disposition.Stays("migrate's one-off conversion of 7.x data, run once per deployment"),
         ),
         Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlHttp.kt",
-            778,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeAuthority.kt",
-            772,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt",
-            756,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCodec.kt",
-            676,
-            Disposition.Debt(Batch.B5),
-        ),
-        Entry(
-            "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/MigrateMain.kt",
-            646,
-            Disposition.Debt(Batch.B6),
-        ),
-        Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/format/PolicyDocumentFormats.kt",
-            585,
-            Disposition.Debt(Batch.B5),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/grant/GrantAnalyzer.kt",
-            583,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/ApiKeyMigration.kt",
-            560,
-            Disposition.Debt(Batch.B6),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeChecks.kt",
-            552,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/change/ChangeRequestCodec.kt",
-            528,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
             "migration/migrate/src/main/kotlin/me/ahoo/cosec/migrate/PartTranslation.kt",
             500,
             Disposition.Stays("migrate's one-off translation of 7.x condition parts"),
         ),
         Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/flat/CompiledDocument.kt",
-            488,
-            Disposition.Debt(Batch.B3),
-        ),
-        Entry(
-            "core/engine/src/main/kotlin/me/ahoo/cosec/engine/pattern/HttpPathPatternParser.kt",
-            486,
-            Disposition.Stays("a grammar, one function per production"),
-        ),
-        Entry(
-            "core/document/src/main/kotlin/me/ahoo/cosec/document/PolicyDocumentCompiler.kt",
-            466,
-            Disposition.Debt(Batch.B5),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/api/DefaultControlPlane.kt",
-            464,
-            Disposition.Debt(Batch.B4),
-        ),
-        Entry(
-            "host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/control/CoSecControlAutoConfiguration.kt",
-            454,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
             "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
-            444,
+            403,
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
-        ),
-        Entry(
-            "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/CoSecCacheSpecs.kt",
-            438,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
-            "backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt",
-            430,
-            Disposition.Debt(Batch.B7),
-        ),
-        Entry(
-            "core/control/src/main/kotlin/me/ahoo/cosec/control/api/Simulator.kt",
-            415,
-            Disposition.Debt(Batch.B4),
         ),
     )
 }

@@ -28,7 +28,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.control.store.ControlMaintenance
+import me.ahoo.cosec.control.lifecycle.ControlMaintenance
 import org.springframework.context.SmartLifecycle
 import java.time.Duration
 import kotlin.time.Duration.Companion.minutes

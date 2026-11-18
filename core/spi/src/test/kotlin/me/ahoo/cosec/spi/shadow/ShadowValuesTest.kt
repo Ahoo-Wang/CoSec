@@ -11,11 +11,13 @@
  * limitations under the License.
  */
 
-@file:OptIn(ExperimentalCoSecApi::class)
+// cosec-spi's tests cannot see cosec-document's SnapshotDocuments: they make a document as it does.
+@file:OptIn(ExperimentalCoSecApi::class, InternalCoSecApi::class)
 
 package me.ahoo.cosec.spi.shadow
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert

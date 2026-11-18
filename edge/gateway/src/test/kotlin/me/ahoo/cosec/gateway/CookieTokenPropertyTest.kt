@@ -20,12 +20,12 @@ import io.netty.handler.codec.http.HttpHeaderNames
 import io.netty.handler.codec.http.cookie.ServerCookieDecoder
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.engine.CompiledDocument
+import me.ahoo.cosec.engine.Engine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.Evaluation
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.engine.flat.CompiledDocument
-import me.ahoo.cosec.engine.flat.FlatEngine
-import me.ahoo.cosec.engine.flat.FlatEvaluation
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
 import me.ahoo.cosec.model.BindingId
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.decision.BindingRef
@@ -72,9 +72,9 @@ class CookieTokenPropertyTest {
         override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(peek(key))
     }
 
-    private val permit = object : FlatEngine {
-        override fun evaluate(request: FlatRequest, snapshot: SnapshotView, trace: TraceLevel): FlatEvaluation =
-            FlatEvaluation(
+    private val permit = object : Engine {
+        override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
+            Evaluation(
                 Decision.Permit(
                     StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("g"), DocumentKind.PLATFORM))
                 ),

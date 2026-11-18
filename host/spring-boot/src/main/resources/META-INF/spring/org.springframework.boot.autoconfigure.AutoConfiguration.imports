@@ -8,6 +8,7 @@ me.ahoo.cosec.spring.boot.authentication.social.CoSecSocialAuthenticationAutoCon
 me.ahoo.cosec.spring.boot.apikey.CoSecApiKeyAutoConfiguration
 me.ahoo.cosec.spring.boot.jwt.CoSecTokenRevocationCacheAutoConfiguration
 me.ahoo.cosec.spring.boot.jwt.CoSecJwtAutoConfiguration
+me.ahoo.cosec.spring.boot.authentication.route.CoSecLoginRoutesAutoConfiguration
 me.ahoo.cosec.spring.boot.cosid.CoSecCosIdAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineIntegrationAutoConfiguration
 me.ahoo.cosec.spring.boot.pipeline.CoSecMembershipAutoConfiguration

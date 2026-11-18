@@ -17,6 +17,7 @@ package me.ahoo.cosec.runtime.snapshot
 
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotCompiler
@@ -90,7 +91,7 @@ class FakeCompiler : SnapshotCompiler<Compiled> {
         gate?.await(10, TimeUnit.SECONDS)
         compiled.add(key to document.revision)
         failure?.let { throw it }
-        val body = document.bodyBytes().decodeToString()
+        val body = document.fakeBody()
         require(body != "THROW") { "unknown matcher type" }
         val entries = if (body.isEmpty()) emptyList() else body.split(',')
         return Compiled(
@@ -102,13 +103,21 @@ class FakeCompiler : SnapshotCompiler<Compiled> {
     }
 }
 
-fun document(revision: Long, body: String = "p$revision"): SnapshotDocument =
-    SnapshotDocument(
-        SnapshotDocument.DOCUMENT_SCHEMA,
-        revision,
-        Instant.parse("2026-10-21T08:00:00Z"),
-        body.encodeToByteArray()
-    )
+/**
+ * A document at [revision] whose [body] [FakeCompiler] reads: a real document, its header in its bytes (SNP-12), with the
+ * fake body as its `fake` member.
+ */
+fun document(revision: Long, body: String = "p$revision"): SnapshotDocument {
+    val fake = body.replace("\\", "\\\\").replace("\"", "\\\"")
+    val text = """{"schema":2,"revision":$revision,"publishedAt":"2026-10-21T08:00:00Z","fake":"$fake"}"""
+    return SnapshotDocuments.read(text.encodeToByteArray())
+}
+
+/** The body [document] was made with. */
+fun SnapshotDocument.fakeBody(): String =
+    FAKE.find(bodyBytes().decodeToString())!!.groupValues[1].replace("\\\"", "\"").replace("\\\\", "\\")
+
+private val FAKE = Regex(""""fake":"(.*)"}$""")
 
 /**
  * A [SnapshotDocumentStore] the test drives: it can fail reads, fail them as undecodable, hold them until released,

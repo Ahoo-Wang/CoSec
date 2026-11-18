@@ -16,7 +16,7 @@
 package me.ahoo.cosec.document
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.cosec.engine.flat.StatementSource
+import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.condition.Condition
 

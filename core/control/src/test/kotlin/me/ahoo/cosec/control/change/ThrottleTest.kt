@@ -13,6 +13,7 @@
 
 package me.ahoo.cosec.control.change
 
+import me.ahoo.cosec.control.lifecycle.Throttle
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import kotlin.time.Duration.Companion.minutes

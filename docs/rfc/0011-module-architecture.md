@@ -18,6 +18,10 @@
 
 > **2026-11-09 修订（#1307）**：`cosec-model` 依赖 `cosec-annotations`，否则带标记的类型可以不声明 opt-in 就被使用。
 
+> **2026-11-15 修订（#1408，真实项目演练的发现）**：`cosec-dependencies` 不再发布。此前每个库模块发布的元数据都导入这个平台，而它导入 Spring Boot、CoCache 等的 BOM 并管着测试与构建工具：
+> 一个应用加入一个 CoSec 模块，整个构建的版本就被抬高。现在库模块用一个不进入任何发布变体的配置取得平台，发布时写出它实际解析到的版本（“至少这个版本”）；
+> POM 把仅编译期的 API 依赖（`compileOnlyApi`）写成 `provided`，否则 Maven 使用方加入 `cosec-cocache` 就把 `cosec-control` 与 `cosec-runtime` 带到运行时。`PublishedMetadataTest` 读生成的 POM 与 Gradle 元数据守着这些。
+>
 > **2026-11-14 修订（[RFC 0013](0013-target-architecture.md) §3，#1369、#1370、#1372）**：`runtime` 只留请求路径。
 > 新增模块 `cosec-document`（`core/document/`）：策略文档、路由映射、`CoSec-Identity` 与影子窗口的编解码、格式描述符、唯一的 Jackson mapper；
 > 它只依赖 `engine`、`spi` 与 Jackson。这推翻了 10 月 28 日“文档留在 `runtime`，用包划分”的做法（理由见 RFC 0013 §3.2）。
@@ -109,10 +113,13 @@ flowchart BT
 | `migration/migrate/` | `:migrate` | `cosec-migrate` | 7.x 数据迁移 |
 | `test/testkit/` | `:testkit` | `cosec-testkit` | 用户的策略测试工具 |
 | `test/conformance/`、`test/architecture/`、`test/e2e/`、`test/code-coverage-report/` | | 不发布 | 规范一致性、架构规则、端到端、覆盖率 |
-| `bom/bom/`、`bom/dependencies/` | `:bom`、`:dependencies` | `cosec-bom`、`cosec-dependencies` | 版本平台 |
+| `bom/bom/` | `:bom` | `cosec-bom` | 只对齐 CoSec 自己的、作为依赖使用的模块（不含 `cosec-migrate`），不导入任何第三方平台 |
+| `bom/dependencies/` | `:dependencies` | 不发布（2026-11-15 起，#1408） | CoSec 自己构建与测试所用版本的内部平台；任何发布的模块都不提它 |
 | `platform/gateway-server/` | `:gateway-server` | Docker 镜像（不发布到 Maven） | 给用户直接部署的网关服务；也是端到端、AOT 与压测的对象（D5） |
 
 根目录保留 `config/`、`docs/`、`gradle/`、`k8s/`、`schema/`、`scripts/`、`skills/`、`wiki/`。
+
+> **2026-11-17 增补：`typescript/`，一个不属于 Gradle 的工作区。** CoSec 的 TypeScript 客户端从 fetcher 仓库搬进本仓库（维护者决定，[路线图](../roadmap.md) §9）：`typescript/cosec-fetcher`（`@ahoo-wang/cosec-fetcher`，CoSec 应用的客户端）与 `typescript/cosec-react`（`@ahoo-wang/cosec-react`，它的 React 钩子）。它是一个独立的 pnpm 工作区，有自己的锁文件，与 `wiki/` 的互不相见；不是 Gradle 项目，所以不在 §5 的项目清单里，由 `test/architecture` 的 `TypeScriptWorkspaceTest` 单独约束：包名与目录、版本等于 `gradle.properties` 的版本（Maven 与 npm 由同一个标签发布）、只有一个锁文件、依赖方向单向指向 fetcher 的包且不依赖被它取代的 `@ahoo-wang/fetcher-cosec`、CI 的任务不带条件与密钥并在必需检查之内。Kotlin 的结构规则（每文件 400 行、一个类型）不适用于它；与 `api/<project>.api` 对应的是每个包的公共 API 报告。客户端可以依赖什么，以 `wiki/integration/clients.md` 为准；它的测试对着本仓库的一个真实的 CoSec 应用运行，所以改了线上契约而没有改客户端的 PR 不会通过。
 
 包名与模块对齐：`me.ahoo.cosec.spi.*`、`me.ahoo.cosec.document.*`、`me.ahoo.cosec.runtime.*` 等；同一个包不跨模块。
 
@@ -153,6 +160,8 @@ flowchart BT
 | `platform/*` | 是 CoSec 模块的应用：只依赖发布的模块，像用户一样使用它们；上面各组的规则不适用于它 |
 
 再加一条：`core/*` 的公共签名中不得出现 `tools.jackson.*`（D3）。
+
+发布出去的东西也有守卫（2026-11-15，#1408）：`PublishedMetadataTest` 读每个发布模块与 BOM 生成的 POM 和 Gradle 模块元数据，不得有平台导入、没有版本的依赖、测试或构建工具；POM 带进运行时的不得多于 Gradle 的运行时变体；后端的 POM 不带 `cosec-runtime`；BOM 恰好是作为依赖的那些模块。
 
 PR-2 落地的例外（都以数据形式登记在 `test/architecture`，新增一条就是一次评审过的改动）：
 
@@ -201,6 +210,44 @@ RFC 0006 Q5（不改模块名）由 D1 修订。RFC 0008 L11（`cosec-api` 保�
 > - **检查条件：** 执法模式，且 CoSec 打开。
 > - **失败条件：** 应用端口上通过 HTTP 暴露了 `health` 以外的 Actuator 端点，除非 `cosec.gateway.unprotected-endpoints` 列出了它。`gateway` 端点在任何端口上都不能列入。
 > - **按真实端点检查：** 包括 Spring Cloud Gateway 自己的 `@RestControllerEndpoint`。
+
+> **决定（2026-11-17；规则 `STA-4`）：应用提供的任何东西，在宿主打开的每个端口上都要先经过 CoSec。** 核对快速启动时发现，应用（WebFlux 或 WebMvc，不是网关）上的 Actuator 探针也经过 CoSec，而讲探针的文档描述的都是网关。实测（Spring Boot 4.1.2，Netty 与 Tomcat，匿名请求，每格是存活 / 就绪）：
+>
+> | | 应用端口，平台文档发布前 | 应用端口，发布后 | 管理端口，发布前 | 管理端口，发布后 |
+> |---|---|---|---|---|
+> | WebFlux | 503 / 503（CoSec） | 401 / 401（CoSec） | 503 / 503（CoSec） | 401 / 401（CoSec） |
+> | WebMvc | 503 / 503（CoSec） | 401 / 401（CoSec） | 200 / 503（Spring） | 200 / 200（Spring） |
+>
+> - **事实。** WebFlux 的管理子上下文收集到了父上下文的 `PipelineWebFilter`；WebMvc 的 `FilterRegistrationBean` 到不了管理服务器。平台文档里加一条对任何人放行两个探针路径的语句，发布后应用端口上两个栈都是 200 / 200；发布之前没有文档可以放行。
+> - **WebFlux 的管理服务器提供应用的函数式路由。** 应用的 `@Controller` 在那里是 404，但子上下文的 `RouterFunctionMapping` 读到父上下文的 `RouterFunction` bean：应用用函数式写的路由在管理端口上有应答，starter 自己的控制面路由也是 `RouterFunction`，带平台令牌在管理端口上能读到文档。今天挡在它们前面的正是这个过滤器。
+> - **撤回的一版（同日，写代码之前）。** 协调者先定的是“闸门只立在应用的服务器上，独立的管理端口在三种宿主上都不经过 CoSec，WebFlux 在 starter 里修正”，依据是“WebFlux 的管理端口不路由应用的控制器”这一格实测。实现方按要求先核对那个服务器还提供什么，查出上一条：照那一版做，匿名请求就能在管理端口上得到应用的函数式路由。那一版的前提是错的，没有任何代码合入。
+> - **定下的。** 被 CoSec 把守的范围不变。在宿主打开的每一个端口上，应用提供的东西都不会不经 CoSec 就应答：WebFlux 应用的管理服务器在管道之下；WebMvc 应用的管理服务器只提供 Actuator 的端点；网关的管理服务器提供 Actuator 的端点，控制面打开时还提供控制面接口，后者在它自己的管道之下。这些由带真实服务器的测试逐格钉住（下面两张表的每一格是一条断言）：Spring Boot 升级改变子上下文继承的东西时，是这些测试先知道。
+> - **否决的做法。** 按路径豁免探针：适配器里的第二条判定路径，路径匹配与路由之间的任何差异都是绕过。在 WebFlux 的管理服务器上跳过过滤器、同时由 starter 清空子上下文的函数式路由映射：应用的路由在那个端口上是否受保护，从此取决于 CoSec 是否跟得上 Spring 的子上下文继承了什么，漏掉一项时的失败方向是放行。
+> - **应用怎样配探针（写进文档）。** 经过 CoSec 的服务器上，探针就是一个请求：就绪探针需要平台文档里一条放行它的语句，文档发布之前回答 `503`，而“还没就绪”正是这时该有的回答。存活与启动探针不能依赖平台文档：WebMvc 用管理端口；WebFlux 不用经过 CoSec 的 HTTP 探针，用应用端口上的 `tcpSocket`。“存活探针不受影响”改为写明它在哪里成立。
+> - **WebMvc 与网关的管理端口：没有缺口（同日实测，`management.server.port=8081`）。** WebMvc 的管理端口不经过 CoSec，所以逐项测了应用在那里还能拿到什么：
+>
+>   | WebMvc（Tomcat），管理端口上的请求 | 回答 |
+>   |---|---|
+>   | 应用的 servlet 函数式路由，匿名或带平台令牌 | 404（Spring） |
+>   | 应用的控制器，匿名 | 404（Spring） |
+>   | 控制面接口，匿名或带平台令牌 | 404（Spring） |
+>   | `/actuator/health`，匿名 | 200（Spring） |
+>
+>   | 网关（Netty），管理端口上的请求 | 回答 |
+>   |---|---|
+>   | 网关的一条路由（应用端口上对任何人放行），匿名 | 404（Spring）：网关的路由不在管理端口上 |
+>   | 控制面接口，带平台令牌 | 200：在 `cosecControlPipelineWebFilter` 之下 |
+>   | 控制面接口，匿名 | 401（CoSec） |
+>   | `/actuator/health`、`/actuator/health/liveness`，匿名 | 200（Spring） |
+>
+>   没有测的：Jetty 与 Undertow，真实的 kubelet（重启循环是由存活探针的 `503` 推断的）。
+> - **随测试一起改的文档：** `web.md` 增加“应用上的 Actuator”，`deployment.md` 的就绪一节，`troubleshooting.md` 的新症状，快速启动里讲就绪的那一句。没有破坏性变化，升级文档不动。
+
+> **决定（2026-11-17，尚未实现；规则 `STA-5`）：应用声明了 CORS 的来源时，starter 把 CORS 过滤器接在管道之前。** 写客户端契约文档时在真实的 Tomcat 与 Netty 上跑出的事实（`wiki/integration/web.md` 的 CORS 一节）：CoSec 不设置任何 `Access-Control-*` 响应头，starter 也不注册 CORS 过滤器；在 Spring MVC 与 WebFlux 上，浏览器的预检请求（不带凭据的 `OPTIONS`）先到 CoSec，被当作匿名调用方的 `http:OPTIONS` 判定，应用自己的 `@CrossOrigin` 与 `addCorsMappings` 轮不到应答；只用策略放行 `OPTIONS` 得到的是不带 CORS 头的 `200`，浏览器照样拦截。唯一能让预检请求与被拒绝的响应都被脚本读到的安排，是在 CoSec 之前有一个 CORS 过滤器；网关的 `globalcors` 本来就是这样。
+>
+> - **定下的。** 应用声明了 `CorsConfigurationSource`（两个栈各自的那个接口），且没有自己注册 `CorsFilter` 或 `CorsWebFilter` 时，starter 在管道的过滤器之前紧挨着注册一个 CORS 过滤器。预检请求由它应答，不被判定；不是预检的请求照旧判定。没有这个 bean 时与今天完全相同：预检请求被当作匿名调用方的 `http:OPTIONS` 判定。不新增 `cosec.*` 属性，bean 就是开关。**实现时更正（#1576）：** “没有 starter 默认声明它”对 Spring MVC 不成立：MVC 总有一个 `CorsConfigurationSource`，即它自己的 `HandlerMappingIntrospector`（读各处理器的 `@CrossOrigin` 与 `addCorsMappings`），它不是应用的声明；条件与工厂都把它排除在外，应用自己声明的不是恰好一个时启动失败并说明要自己注册 `CorsFilter`。WebFlux 上没有这样的默认 bean。网关宿主不从 starter 得到这个过滤器（`globalcors` 不是 bean），有测试。
+> - **代价，写进文档。** 启用之后预检请求不经过 CoSec：策略对 `http:OPTIONS` 的 DENY、限流、黑名单、审计与判定事件都看不到它。不带 `Access-Control-Request-Method` 的 `OPTIONS` 不是预检请求，照旧判定。来源不被允许的跨域请求由 Spring 在管道之前以普通的 `403` 拒绝，不是 problem+json，也没有 `CoSec-Request-Id`。预检请求只从这个 bean 应答，`@CrossOrigin` 与 `addCorsMappings` 只作用于随后的请求。
+> - **由带真实服务器的测试钉住**（两个栈），连同一个把装配改成无条件的变异体；它改变了管道能看到什么，所以进升级文档。
 
 > **实现说明（2026-11-04，#1200，RC 修复批次 D1，`DOC-5`，RC1-44）**：D3 的"一个 mapper"同时是一个严格的 mapper：`CoSecJson.mapper` 打开 `STRICT_DUPLICATE_DETECTION`，所以 CoSec 读的每种存储格式（文档、API Key、成员关系、影子报告、吊销、`cosec-migrate` 读的 7.x 输入）与每个控制面请求体都拒绝重复的 key，不再按后出现的值读。吊销缓存改用它，不再用应用的 `ObjectMapper`。唯一的例外是 starter 读 Spring 的配置元数据（`UnknownProperties`）：那不是 CoSec 的格式，用 `without(STRICT_DUPLICATE_DETECTION)` 读，后出现的值生效。
 

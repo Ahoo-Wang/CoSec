@@ -18,9 +18,10 @@ package me.ahoo.cosec.runtime.snapshot
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
-import me.ahoo.cosec.engine.flat.CoSecFlatEngine
-import me.ahoo.cosec.engine.flat.FlatRequest
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CoSecEngine
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Environment
@@ -39,7 +40,6 @@ import me.ahoo.cosec.model.scope.ScopeResolution
 import me.ahoo.cosec.model.scope.ScopeResolver
 import me.ahoo.cosec.model.scope.ScopeSubject
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.snapshot.SnapshotStaleException
 import me.ahoo.test.asserts.assert
@@ -59,7 +59,7 @@ class DocumentSnapshotViewsTest {
         val revision = (revisions[key] ?: 0) + 1
         revisions[key] = revision
         val text = """{"schema":2,"revision":$revision,"publishedAt":"2026-10-26T00:00:00Z"$body}"""
-        store.put(key, SnapshotDocument(2, revision, Instant.parse("2026-10-26T00:00:00Z"), text.encodeToByteArray()))
+        store.put(key, SnapshotDocuments.read(text.encodeToByteArray()))
     }
 
     private fun source() = DocumentSnapshots.source(
@@ -93,7 +93,7 @@ class DocumentSnapshotViewsTest {
         )
         val memberships =
             Memberships(Memberships.Source.CLAIMS, mapOf(SpaceId.DEFAULT to scope.roles.toSet()), emptyList())
-        return CoSecFlatEngine.evaluate(FlatRequest(authz, scope, memberships, 0), view).decision
+        return CoSecEngine.evaluate(EngineRequest(authz, scope, memberships, 0), view).decision
     }
 
     private val allowRead = ""","policies":[{"id":"read","statements":[{"name":"read","effect":"allow","action":"order:read"}]}]"""
@@ -155,8 +155,12 @@ class DocumentSnapshotViewsTest {
             val broken = scope("broken")
             val view = views.load(ViewKey.of(broken, blocked = false)).join()
             view.tenant.assert().isNull()
-            (view.unresolved.single() as Cause.SourceUnavailable).document.assert().isEqualTo(DocumentKind.TENANT)
-            decide(view, broken).assert().isInstanceOf(Decision.Indeterminate::class.java)
+            // Stored and not compiling: invalid at its revision, which a decision event names (drill entry 26).
+            val invalid = view.unresolved.single() as Cause.DocumentInvalid
+            invalid.document.assert().isEqualTo(DocumentKind.TENANT)
+            invalid.revision.assert().isEqualTo(revisions.getValue(SnapshotKey.Tenant("broken")))
+            view.version!!.tenant.assert().isEqualTo(invalid.revision)
+            decide(view, broken).assert().isEqualTo(Decision.Indeterminate(invalid))
         }
     }
 
@@ -196,22 +200,28 @@ class DocumentSnapshotViewsTest {
             val views = DocumentSnapshotViews(source)
             val view = views.load(ViewKey.BLOCKED).join()
             view.platform.kind.assert().isEqualTo(DocumentKind.PLATFORM)
-            (view.unresolved.single() as Cause.SourceUnavailable).document.assert().isEqualTo(DocumentKind.PLATFORM)
+            val invalid = view.unresolved.single() as Cause.DocumentInvalid
+            invalid.document.assert().isEqualTo(DocumentKind.PLATFORM)
+            invalid.revision.assert().isEqualTo(revisions.getValue(SnapshotKey.Platform))
         }
     }
 
     @Test
     fun `a tenant id that cannot name a document is unresolved`() {
         publish(SnapshotKey.Platform, allowRead)
+        publish(SnapshotKey.Tenant("acme"), allowRead)
         source().use { source ->
             val views = DocumentSnapshotViews(source)
-            val scope = scope("a:b")
-            val view = views.load(ViewKey.of(scope, blocked = false)).join()
-            view.tenant.assert().isNull()
-            (view.unresolved.single() as Cause.SourceUnavailable).error.assert().isInstanceOf(
-                IllegalArgumentException::class.java
-            )
-            views.peek(ViewKey.of(scope, blocked = false))!!.unresolved.assert().hasSize(1)
+            // `acme/west` (#1403, `SCP-13`): an authenticator that answers such a tenant fails closed, never read as acme.
+            for (tenant in listOf("a:b", "acme/west")) {
+                val scope = scope(tenant)
+                val view = views.load(ViewKey.of(scope, blocked = false)).join()
+                view.tenant.assert().isNull()
+                val cause = view.unresolved.single() as Cause.SourceUnavailable
+                cause.document.assert().isEqualTo(DocumentKind.TENANT)
+                cause.error.assert().isInstanceOf(IllegalArgumentException::class.java)
+                views.peek(ViewKey.of(scope, blocked = false))!!.unresolved.assert().hasSize(1)
+            }
         }
     }
 

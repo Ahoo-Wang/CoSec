@@ -43,11 +43,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
-import org.springframework.core.Ordered
 import org.springframework.http.MediaType
-import org.springframework.web.server.ServerWebExchange
-import org.springframework.web.server.WebFilter
-import org.springframework.web.server.WebFilterChain
 import reactor.core.publisher.Mono
 import java.io.InputStream
 import java.net.URLDecoder
@@ -235,24 +231,4 @@ internal class CoSecControlRoutesAutoConfiguration {
 
         fun relative(path: String, base: String): String = path.removePrefix(base).ifEmpty { "/" }
     }
-}
-
-/** [delegate] for the requests under [basePath] only; every other request goes on untouched. */
-internal class ControlRoutesWebFilter(
-    private val delegate: PipelineWebFilter,
-    private val basePath: String
-) : WebFilter, Ordered {
-    override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> {
-        val path = exchange.request.path.pathWithinApplication().value()
-        return if (path == basePath || path.startsWith("$basePath/")) {
-            delegate.filter(
-                exchange,
-                chain
-            )
-        } else {
-            chain.filter(exchange)
-        }
-    }
-
-    override fun getOrder(): Int = delegate.order
 }

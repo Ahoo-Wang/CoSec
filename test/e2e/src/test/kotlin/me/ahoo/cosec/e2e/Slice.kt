@@ -15,13 +15,18 @@
 
 package me.ahoo.cosec.e2e
 
+import io.micrometer.core.instrument.MeterRegistry
+import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cocache.spring.boot.CoCacheAutoConfiguration
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.cocache.CoSecCacheSpecs
 import me.ahoo.cosec.cocache.MembershipLoader
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
-import me.ahoo.cosec.engine.flat.CompiledDocument
+import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.document.SnapshotDocuments
+import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -44,7 +49,6 @@ import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spring.boot.pipeline.CoSecMembershipAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
@@ -80,6 +84,10 @@ class Slice(
     authenticator: Authenticator = TokenAuthenticator,
     /** Where memberships come from: the starter wires `CoCacheMembershipProvider` over it, as it would an application's. */
     membershipLoader: MembershipLoader? = null,
+    /** The location of a route map (`cosec.authorization.routes.location`, RFC 0008 §4.4.3); empty runs without one. */
+    routeMap: String = "",
+    /** The application's registry, as Actuator would give it; none runs without metrics. */
+    meterRegistry: MeterRegistry? = null,
 ) : AutoCloseable {
     private val context: ConfigurableApplicationContext = SpringApplicationBuilder(SliceConfiguration::class.java)
         .web(WebApplicationType.NONE)
@@ -89,6 +97,7 @@ class Slice(
             ApplicationContextInitializer<ConfigurableApplicationContext> {
                 it.beanFactory.registerSingleton("cosecAuthenticator", authenticator)
                 membershipLoader?.let { loader -> it.beanFactory.registerSingleton("membershipLoader", loader) }
+                meterRegistry?.let { registry -> it.beanFactory.registerSingleton("meterRegistry", registry) }
                 it.beanFactory.registerSingleton("cosecAttributeProviders", attributes)
                 it.beanFactory.registerSingleton("cosecDecisionListeners", listeners)
             },
@@ -98,11 +107,24 @@ class Slice(
             "cosec.key-prefix=$keyPrefix",
             "cosec.authorization.snapshot.revalidate-interval=${options.revalidateInterval.toMillis()}ms",
             "cosec.authorization.snapshot.cold-load-timeout=${options.coldLoadTimeout.toMillis()}ms",
-            "cosec.authorization.routes.location=",
+            "cosec.authorization.routes.location=$routeMap",
             "cosec.jwt.enabled=false",
         )
         .run()
     val cache: PolicySnapshotCache = context.getBean(PolicySnapshotCache::class.java)
+
+    /**
+     * The control plane's side: a process of its own on the same Redis that writes the documents. The slice is a
+     * data-plane instance, which reads them read-only (SNP-18), so its own [cache] refuses a write.
+     */
+    private val writer: ConfigurableApplicationContext = SpringApplicationBuilder(WriterConfiguration::class.java)
+        .web(WebApplicationType.NONE)
+        .bannerMode(Banner.Mode.OFF)
+        .logStartupInfo(false)
+        .properties("spring.data.redis.url=$redisUri")
+        .run()
+    private val documents: PolicySnapshotCache = writer.getBean(CoCacheFactory::class.java)
+        .createPolicySnapshotCache(CoSecCacheSpecs.policySnapshot(keyPrefix))
     val store: RedisSnapshotDocumentStore = context.getBean(RedisSnapshotDocumentStore::class.java)
 
     @Suppress("UNCHECKED_CAST")
@@ -120,7 +142,7 @@ class Slice(
         val revision = revisions.merge(key, 1, Long::plus)!!
         val publishedAt = Instant.now()
         val text = """{"schema":2,"revision":$revision,"publishedAt":"$publishedAt"$body}"""
-        cache.put(key, SnapshotDocument(2, revision, publishedAt, text.encodeToByteArray()))
+        documents.put(key, SnapshotDocuments.read(text.encodeToByteArray()))
         source.reload(key).join()
     }
 
@@ -129,6 +151,7 @@ class Slice(
     override fun close() {
         listeners.cancel()
         context.close()
+        writer.close()
     }
 
     /** The starter's auto-configurations the slice assembles, and no others. */
@@ -143,6 +166,15 @@ class Slice(
         CoSecPipelineAutoConfiguration::class,
     )
     class SliceConfiguration
+
+    /** What the writer needs: CoCache on Redis, and no CoSec auto-configuration. */
+    @Configuration(proxyBeanMethods = false)
+    @ImportAutoConfiguration(
+        JacksonAutoConfiguration::class,
+        DataRedisAutoConfiguration::class,
+        CoCacheAutoConfiguration::class,
+    )
+    class WriterConfiguration
 
     companion object {
         const val REDIS = "redis://localhost:6379"

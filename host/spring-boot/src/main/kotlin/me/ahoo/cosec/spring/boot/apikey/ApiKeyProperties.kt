@@ -34,6 +34,7 @@ import java.time.Instant
 @ConfigurationProperties(ApiKeyProperties.PREFIX, ignoreUnknownFields = false)
 @InternalCoSecApi
 class ApiKeyProperties(
+    /** Whether API keys for machine clients are on; `true` or `false` only, any other value fails startup. */
     @DefaultValue("false") override var enabled: Boolean = false,
     /**
      * Where keys live: `memory` (the [keys] below) or `redis` (shared by every instance, needs `cosec-cocache`), under

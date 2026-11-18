@@ -1,0 +1,16 @@
+{
+  "description": "A CORS preflight is OPTIONS without credentials: the pipeline decides it as http:OPTIONS, and the statement lets it reach /orders.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:OPTIONS",
+    "resource": {
+      "type": "http",
+      "id": "/orders/1"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

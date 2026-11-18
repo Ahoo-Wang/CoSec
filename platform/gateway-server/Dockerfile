@@ -36,8 +36,11 @@ RUN aot-train.sh ${WORK_HOME} ${WORK_HOME}/aot/${APP_NAME}.aot
 ENV JDK_JAVA_OPTIONS="-XX:AOTCache=${WORK_HOME}/aot/${APP_NAME}.aot"
 
 EXPOSE 8080
+# The liveness group: up once the application runs, whatever Redis holds. /actuator/health is DOWN until the platform
+# document is installed, and while Redis may evict it (cosecSnapshotEviction): a probe of it would call a gateway that
+# only waits for its documents unhealthy.
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD curl -f http://localhost:8080/actuator/health || exit 1
+  CMD curl -f http://localhost:8080/actuator/health/liveness || exit 1
 
 STOPSIGNAL SIGTERM
 

@@ -59,8 +59,47 @@ that do not convert, get no ratio: the row says `not comparable`, a "Not compara
 mismatch, and `compare.py` exits with status 1. The raw JMH JSON (`base-N.json`, `head-N.json`) is uploaded as the
 `jmh-ab-<run id>` artifact.
 
+The summary also names the job's host (CPU model, vCPU count, kernel), and the artifact's `host.txt` holds that and the
+whole `lscpu`. Compare ratios only within a job, and absolute times only between jobs on the same host class: hosted
+runners differ, and a ratio can move with the host when the two sides wait on threads differently.
+
+## The cold-load timeline (removed)
+
+`ColdLoadTimelineBenchmark` stamped 10,000 uncontended cold loads, `Slot` against the runner. It gave RFC 0013 §5.4's
+cold-path criterion its number: the runner's extra on the critical path, at most 3 µs on every host class. It found
+the wake-up cliff that #1608 removed. It went with `Slot` in RFC 0013 B2b step 4, since its number was a difference
+from `Slot`. To run it again, check out `2331da36` (8.0.0-beta.2), where it is
+`core/runtime/src/jmh/kotlin/me/ahoo/cosec/runtime/snapshot/ColdLoadTimeline.kt`, and run:
+
+```bash
+gh workflow run jmh-ab.yml -f base=<ref> -f head=<ref> -f module=runtime -f include=ColdLoadTimelineBenchmark -f rounds=1 -f forks=1 -f warmup=0 -f iterations=1
+```
+
+## Bytes per held key
+
+RFC 0013 §5.4 also gates what a held key retains. That is a test, not a benchmark, since it is deterministic:
+`HeldKeyBytesTest` in `:runtime:check`. It loads 20,000 app documents and takes a class histogram of the live heap
+before the loads and after (`GC.class_histogram`, which collects first). The difference per class, divided by the keys,
+is what one held key retains. The key's own objects (`KeyRunner`, `KeyDrain`, `KeyEffects`, `KeyState`) must be one
+instance each, and the total at most 656 bytes: `Slot`'s 556 plus 100, on the host where #1597 measured both. It prints
+the table, class by class:
+
+```bash
+./gradlew :runtime:test --tests 'me.ahoo.cosec.runtime.snapshot.HeldKeyBytesTest' --rerun
+```
+
+The table is in the test's standard output (`build/test-results`). Count by class, not by "heap used" before and after:
+a used-heap figure includes whatever else allocates meanwhile. A probe that read it once subtracted two windows that did
+not measure the same objects, and reported a pass the histogram does not show.
+
 ## Script
 
 `compare.py <dir>` reads `<dir>/base-N.json` and `<dir>/head-N.json` and prints the table; run it locally on the
 artifact with `python3 -I scripts/jmh-ab/compare.py <dir>`. `python3 -I -m unittest discover -s scripts/jmh-ab` runs its
-tests, and CI runs them in the `Plan` job.
+tests, and CI runs them in the `Plan` job, with those of `scripts/jmh-v7-v8`.
+
+A run that measured nothing fails. The jobs run JMH with `-foe true`, so a benchmark that throws fails the run (without
+it JMH exits 0 and writes `[]`), and `compare.py` also refuses a file without results, a file without its partner, a
+run where no row could be compared, and, with `--rounds N` and `--expected FILE` (which the workflow passes), a round or a
+benchmark the run selected that is missing. The selection is what JMH lists for the include and params
+(`estimate.py --expected=FILE`), not what came back, so something both sides lost is still missing.

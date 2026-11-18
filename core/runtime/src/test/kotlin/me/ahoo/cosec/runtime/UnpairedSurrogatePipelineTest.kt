@@ -19,7 +19,7 @@ import kotlinx.coroutines.test.runTest
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.token.CompositeToken
-import me.ahoo.cosec.engine.flat.SnapshotView
+import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.RoleId

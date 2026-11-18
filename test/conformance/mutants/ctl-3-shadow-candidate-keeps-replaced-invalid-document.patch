@@ -1,0 +1,17 @@
+# Rule: CTL-3
+# Mutant: a candidate of a document that does not compile keeps the stored document's failure, and reports SAME
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ShadowDocumentFailureTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
+index 94642039..ea90b3fa 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/shadow/ShadowListener.kt
+@@ -231,7 +231,7 @@ class ShadowListener(
+         }
+         // The candidate is that document, compiled: that the stored one does not compile was a property of the bytes it
+         // replaces. One that could not be read stays: the shadow cannot know the store will answer.
+-        val unresolved = view.unresolved.filterNot { it is Cause.DocumentInvalid && it.document == expected }
++        val unresolved = view.unresolved
+         return when (expected) {
+             DocumentKind.PLATFORM -> SnapshotView(document, view.app, view.tenant, unresolved, view.version)
+             DocumentKind.APP -> SnapshotView(view.platform, document, view.tenant, unresolved, view.version)

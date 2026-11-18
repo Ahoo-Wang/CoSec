@@ -1,0 +1,17 @@
+# Rule: CTL-33
+# Mutant: the PUBLISH row lets its step write PUBLISHED, which only a written head may
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangeTransitionTableTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeStep.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeStep.kt
+index 1c8070d5..73db8622 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeStep.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeStep.kt
+@@ -45,7 +45,7 @@ internal enum class ChangeStep(val from: Set<ChangeState>, val to: Set<ChangeSta
+     APPROVE(setOf(AWAITING_APPROVAL), setOf(READY)),
+     REJECT(setOf(AWAITING_APPROVAL), setOf(REJECTED)),
+     ABANDON(open(), setOf(ABANDONED)),
+-    PUBLISH(setOf(READY), setOf(DRAFT, AWAITING_APPROVAL, CONFLICTED)),
++    PUBLISH(setOf(READY), setOf(PUBLISHED, DRAFT, AWAITING_APPROVAL, CONFLICTED)),
+ 
+     /** A stage or skip that did not get its slot: the change is `CHECKED` again. */
+     UNRESERVE(setOf(SHADOWING, READY, AWAITING_APPROVAL), setOf(CHECKED)),

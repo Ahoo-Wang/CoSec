@@ -39,7 +39,7 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `IdGenerator` | `cosec-spi`, `spi.id` | Give request, token and change ids your own format. `cosec-cosid` implements it over CosId 5. | one bean, replacing `RandomIdGenerator` |
 | `Authentication` | `cosec-login`, `login` | Check another kind of login credential and say what its token holds. Throw to refuse. | every bean, by the credential type it supports |
 | `TenantSwitch` | `cosec-login`, `login.token` | Say what a user holds in the tenant, and the app, it switches to, and which app the new token is for ([Switching tenant and app](../integration/authentication.md#switching-tenant-and-app)). Throw to refuse. | none: declare `SwitchTenantAuthentication(tokenVerifier, YourCredentials::class.java, yourSwitch)` as an `Authentication` bean |
-| `MembershipRefresh` | `cosec-login`, `login.token` | Say what a user holds now when its token is refreshed, so changed roles apply ([Refreshing tokens](../integration/authentication.md#refreshing-tokens)). Throw to refuse; null keeps the claims. | none: pass it to `RefreshTokenAuthentication` |
+| `MembershipRefresh` | `cosec-login`, `login.token` | Say what a user holds now when its token is refreshed, so changed roles apply ([Refreshing tokens](../integration/authentication.md#refreshing-tokens)). Throw a `TokenVerificationException` to refuse (`401`); any other exception is an error (`500`); null keeps the claims. | none: pass it to `RefreshTokenAuthentication`; the starter's refresh route takes a `MembershipRefresh<RefreshTokenCredentials>` bean |
 | `TokenConverter` | `cosec-login`, `login.token` | Issue tokens in another format. | one bean, replacing `JwtTokenConverter` |
 | `SocialUserPrincipalConverter` | `cosec-social`, `social` | Turn a provider's user into your principal. | one bean, replacing `DirectSocialUserPrincipalConverter` |
 | `SocialStateStore` | `cosec-social`, `social` | Keep the OAuth states social login issues somewhere other than Redis: `put` a state with its binding's hash, and `take` removes it atomically, so a state is used once. Both suspend: over a blocking client, make the calls on a dispatcher of your own. Throw when the store fails. | one bean, replacing `RedisSocialStateStore` |
@@ -47,7 +47,7 @@ writes its implementations of CoSec's ports in Kotlin. Durations, instants and c
 | `DecisionListener` | `cosec-runtime`, `runtime.event` | Observe every decision: audit, alerting, analytics. | every bean |
 | `BridgeContextContributor` | `cosec-runtime`, `runtime.event` | Carry a thread-local context (logging, tracing) into the pipeline. | every bean |
 | `ChangeListener` | `cosec-control`, `control.audit` | Observe or gate control-plane changes. | every bean, with `cosec-control` |
-| `ControlStore` | `cosec-control`, `control.store` | Keep the control plane's records somewhere other than Redis. Experimental, with its records and the shadow window ports. | one bean, with `cosec-control` |
+| `ControlStore` | `cosec-control`, `control.store` | Keep the control plane's records (revisions, change requests, staging slots) somewhere other than in `CoCacheControlStore`. The control plane itself starts only with `cosec-cocache`, whose Redis stores keep the published documents: this port does not change that. Experimental, with its records and the shadow window ports. | one bean, with `cosec-control` and `cosec-cocache` |
 | Route maps | `cosec-document`, `document.route` | Give requests `service:verb` actions on typed resources. | `cosec.authorization.routes.location` |
 
 Packages are under `me.ahoo.cosec`. The ports whose signatures need only the model and the contracts live in
@@ -423,13 +423,23 @@ the per-instance `LocalRateLimiter`. Your bean replaces both. Rules, buckets and
 - Every method returns without blocking and never throws: a failure completes the future exceptionally. A stored value
   that cannot be decoded carries a `SnapshotFormatException` in its cause chain.
 - Never delete a document. A key that once had a document and then reads as absent fails closed.
+- A document is its bytes: the whole JSON document, header included. Return the `SnapshotDocument`
+  `SnapshotDocuments.read(bytes)` (`cosec-document`) makes of them, which reads the header from the bytes; nothing else
+  makes one, so a store cannot report a revision its bytes contradict (`SNP-12`). A store that keeps the bytes:
+
+  ```kotlin
+  override fun read(key: SnapshotKey): CompletableFuture<SnapshotRead> = fetch(key).thenApply { bytes ->
+      bytes?.let { SnapshotRead.Present(SnapshotDocuments.read(it), SnapshotDigest(sha256(it))) } ?: SnapshotRead.Absent
+  }
+  ```
 - A digest is a `SnapshotDigest`: 32 bytes of SHA-256, named by its algorithm, and nothing else (a SHA-1, a version
   number or an ETag is refused when made, so every read fails closed). Hash the stored bytes, or whatever changes when
   the document does; only your store interprets it. Its text form, in the control API and in events, is
   `SHA-256:<64 hex>`.
 
 With `cosec-cocache`, the starter uses `RedisSnapshotDocumentStore`, and the control plane writes through the same Redis.
-Without it, the starter registers an `InMemorySnapshotDocumentStore`; put documents into it with `put(key, document)`, or
+Without it, the starter registers an `InMemorySnapshotDocumentStore`; put documents into it with
+`put(key, SnapshotDocuments.read(bytes))`, or
 declare your own `SnapshotDocumentStore` bean instead. Requests fail closed until a platform document is there.
 
 ## Ids

@@ -44,12 +44,12 @@ description: "平台文档、应用文档和租户文档存在哪里，实例如
 
 `<s>` 是 [`cosec.key-prefix`](./configuration.md#key-prefix)（默认 `cosec`），去掉末尾的 `:`：一个部署写入的每个
 key 都在它之下（`SNP-9`）。
-`<doc>` 指一个文档：`platform`、`app:<appId>` 或 `tenant:<tenantId>`。应用 id 和租户 id 不含 `:`，所以一个 key
+`<doc>` 指一个文档：`platform`、`app:<appId>` 或 `tenant:<tenantId>`。应用 id 和租户 id 不含 `:` 和 `/`，所以一个 key
 只对应一个文档。
 
 | Key | 写入者 | 内容 |
 |---|---|---|
-| `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订 |
+| `<s>:snapshot:<doc>` | 控制面、`cosec-migrate` | 头部：每个实例执行的那个文档修订，存储为完整的 JSON 文档，包含其 `schema`、`revision` 和 `publishedAt` |
 | `<s>:control:revision:<doc>:<digest>` | 控制面、`cosec-migrate` | 一条修订记录，即完整的文档，按摘要寻址（`SHA-256:` 加 64 位十六进制，与 CoCache 的计算相同） |
 | `<s>:control:revisions:<doc>` | 控制面、`cosec-migrate` | 一个文档的修订索引，以及回收已从中移出、尚未确认删除的记录 |
 | `<s>:control:refs:<doc>:<policyId>` | 控制面、`cosec-migrate` | 引用 `<doc>` 中某个策略的文档，每个带上它最后一次登记该引用的修订：一个修订只删除它自己或更早的修订登记的引用（`CTL-25`）；对平台的策略 id，还包括自己定义了该 id 策略的租户文档，使平台不能新增这个 id；[`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) 补上各个头引用而索引缺少的条目，并删除未能写入头的发布登记下的条目 |
@@ -58,7 +58,7 @@ key 都在它之下（`SNP-9`）。
 | `<s>:control:apps:all` | 控制面、`cosec-migrate` | app 列表：现有的 app 文档，以及列表是否完整；授出分析在每次租户变更时读取它（[见下文](#publishing-through-the-control-plane)） |
 | `<s>:control:change:<changeId>` | 控制面 | 一个变更请求 |
 | `<s>:control:stage:<doc>` | 控制面 | 一个文档的暂存槽：哪个变更占用它 |
-| `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选；由它所属的变更删除，且只在它仍是该变更的候选时删除（`CTL-26`） |
+| `<s>:candidate:<doc>` | 控制面 | 影子窗口打开期间一个文档暂存的候选（它的窗口、基准修订和候选文档，文档的头部是它自己的）；由它所属的变更删除，且只在它仍是该变更的候选时删除（`CTL-26`） |
 | `<s>:shadow:report:<window>:<instance>` | 仅数据面实例 `<instance>` | 该实例对一个影子窗口的累计报告；每次写入替换上一次的；窗口的候选撤回后实例不再写它；最后一次写入 8 天后过期 |
 | `<s>:shadow:reporters:<window>` | 每个数据面实例 | 对 `<window>` 报告过的实例 id；过期时间同上 |
 | `<s>:shadow:status:<instance>` | 仅数据面实例 `<instance>` | 该实例已装入的修订及其滞后；一次心跳只写这一个值，与集群规模无关；最后一次写入 2 分钟后过期，超过一分钟的状态被忽略 |
@@ -67,7 +67,7 @@ key 都在它之下（`SNP-9`）。
 | `<s>:token:family:<sid>` | 登录、刷新和登出 | 一个会话的令牌族：主体、登录时间、结束时间、当前代数，以及是否已被吊销。每个存活的会话一个 key，在登录和每次刷新时写入，几百字节；它在会话结束时过期（登录后 `cosec.jwt.session.lifetime`），被吊销的会话带着标记保留到那时。只在刷新和登出时读取，从不在请求时读取 |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | 以 epoch 毫秒表示的 `issuedBefore`；`<n>` 是 `<tenantId>` 的长度；在 `issuedBefore` 之后再过刷新令牌有效期加一秒过期 |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`，在应用注册了它时 | 一个主体的成员关系；会过期（默认一分钟） |
-| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":2`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝 |
+| `<s>:api-key:<sha256>` | `RedisApiKeyStore` | 一个 API key 的 JSON（`"format":3`），按 key 的 SHA-256 存放；8.0 之前格式的 key 在 `cosec-migrate api-keys` 转换之前都会被拒绝，8.0 预发布版以其他格式存储的 key 在重新签发之前都会被拒绝 |
 | `<s>:rate-limiter:<ruleId>:<bucket>` | Redis 限流器 | 一条规则一个桶的 hash：它所计数的窗口，以及该窗口与上一个窗口的计数；最后一次计数两个窗口后过期。每个桶值一个 key：`key` 取客户端可以选择的内容且窗口很长的规则，就是客户端可以控制的内存（[限流](../policies/rate-limiting.md#counting-and-backends)） |
 | `<s>:oauth:state:<state>` | 社交登录 | 进行中的登录的 OAuth `state`，由 JustAuth 保存；3 分钟后过期 |
 | `<s>:oauth:binding:<state>` | 社交登录 | 签发该 state 的浏览器的绑定值的 SHA-256；回调以 `GETDEL` 取走，因此一个 state 只能用一次；3 分钟后过期 |
@@ -125,7 +125,21 @@ key 都在它之下（`SNP-9`）。
 只有控制面（以及 `cosec-migrate`）写入文档和控制面记录。数据面实例读取文档和候选，只写影子报告和状态。Redis ACL 可以
 让两边各守其位：
 
-- 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 只读，对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
+- 数据面凭证：对 `<s>:snapshot:*` 和 `<s>:candidate:*` 只读（`%R~`），对 `<s>:shadow:*` 可写，对 `<s>:control:*` 无权访问。
+  不运行控制面的实例（类路径上没有 `cosec-control`，或 `cosec.control.enabled=false`）以只读方式读取文档和候选：CoCache 以 `EVALSHA_RO` 发送这些读取
+  （Redis 7.0 或更高版本），所以它的用户只需要读权限，Redis 本身会拒绝这个用户写入文档或候选。运行控制面的进程要写入它们，
+  所以它的用户需要写权限；用只读用户启动时，它在启动时于 CoCache 的发布检查处失败
+  （`Redis denied publishing to the invalidation channel[<s>:inv:snapshot]`）。
+- 一个进程属于哪一种由控制面的装配条件决定：类路径上有 `cosec-control`，并且
+  [`cosec.control.enabled`](./configuration.md#control-plane) 不是 `false`。两种角色共用一个镜像的部署在数据面角色上设置
+  `COSEC_CONTROL_ENABLED=false`，这个角色就不运行控制面，并以只读方式读取。试图改变它的
+  `cocache.caches.PolicySnapshotCache.read-only` 或 `cocache.caches.CandidateCache.read-only` 会使启动失败。
+- 只要启用 JWT，吊销和刷新令牌族（`<s>:token:*`）就保持读写：应用可以在自己的任何端点吊销令牌（`TokenRevoker`），
+  所以进程中没有任何东西表明它只读取它们。
+- 数据面用户仍能在 `&<s>:*` 上发布：它的影子存储在那里广播失效消息，而通道模式无法只允许订阅、不允许发布。所以凭证泄露的
+  实例可以在文档的通道上发布失效消息。这只增加读取，从不改变决策：失效消息只携带 key，不携带文档，所以持有被点名文档的
+  每个实例从 Redis（这个用户无法写入的权威存储）重新读取它，其间仍用已安装的副本做决策。实例未持有的 key 会被忽略，同一
+  文档的重新加载会合并，每个实例最多一个在进行、一个在排队。
 - 控制面凭证：`<s>:` 下的所有 key。
 - 要防止一个实例写另一个实例的报告，给每个实例一个独立的用户，只允许它写自己的报告 key
   （`<s>:shadow:report:*:<instance>`），并设置它的
@@ -139,13 +153,23 @@ key 都在它之下（`SNP-9`）。
 key 上。对 `<s>:shadow:reporters:*` 有写权限的实例可以删掉另一个实例的 id：控制面一旦见过那个实例报告，窗口就会保持
 打开直到它的报告回来；但在那之前被删掉的 id 不会被发现，直到那个实例再次写入。
 
-以默认前缀下的实例 `pod-a` 为例（Redis 7 ACL 语法；`%R~` 表示只读）。第一行设置 key 并收回所有命令；第二行授予它
-需要的命令和通道：
+以默认前缀下的实例 `pod-a` 为例（Redis 7 ACL 语法，`channel-mode: pubsub`）。第一行设置 key 并收回所有命令；第二行授予它
+需要的命令和通道，即 [CoCache 为它写入的存储和只读存储列出的那些](https://cocache.ahoo.me/operations/#acl)
+（`sharded` 模式再加 `+spublish +ssubscribe +sunsubscribe`）：
 
 ```text
-ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status:pod-a ~cosec:shadow:instances:*
-ACL SETUSER cosec-pod-a <CoCache 列出的命令和通道> +info
+ACL SETUSER cosec-pod-a on >change-me resetkeys resetchannels -@all %R~cosec:snapshot:* %R~cosec:candidate:* ~cosec:shadow:report: ~cosec:shadow:report:*:pod-a ~cosec:shadow:reporters:* ~cosec:shadow:status: ~cosec:shadow:status:pod-a ~cosec:shadow:instances:* ~cocache:!probe:*
+ACL SETUSER cosec-pod-a +@connection +evalsha +eval +evalsha_ro +eval_ro +publish +subscribe +unsubscribe +info +get +getrange +strlen +set +del +pttl +type +hgetall +hkeys +hmget +hset +hdel +hlen +pexpire +persist +setrange +time &cosec:* &cocache:!probe:*
 ```
+
+这个示例仍然给运营者的：不能访问 `<s>:control:*` 下的任何 key，报告和状态只能写在实例自己的名下。数据面实例需要
+`snapshot`、`candidate` 和 `shadow` 几组 key，这几组是这里测试过的；令牌、成员关系、API key、限流和 OAuth 这几组只有用到
+对应功能时才需要，它们没有用 ACL 试过。
+
+`~cosec:shadow:report:` 和 `~cosec:shadow:status:`（不带 `*`）是 CoCache 创建这两个缓存时用到的 key：没有它们，即使
+实例自己的 key 都允许，启动也会因 `NOPERM` 失败。一个测试在真实 Redis 上原样运行这两行（`DataPlaneAclTest`，每次 CI 都运行）：
+不运行控制面的实例创建缓存、读取文档、收到控制面用户的发布、写入自己的报告，`ACL LOG` 为空；以这个用户 `SET` 文档或候选
+会被拒绝（`NOPERM`）。
 
 再加上该实例其他功能用到的 key（吊销、API key、限流；见 [Redis key](#redis-keys)）。上生产前用 `ACL DRYRUN` 检查这个
 用户：CoCache 通过 Lua 脚本写入，Redis 会逐个 key 检查。
@@ -182,7 +206,7 @@ sequenceDiagram
   四个读。一轮 30 秒没有确认任何文档、也没有在途的读时，拖住它的只有编译：下一个 tick 放弃它并开始新的一轮。仍在
   确认文档的慢轮次，或有读在途的轮次，从不被放弃。一轮不会等待编译已超过这 30 秒的文档，无论编译由谁开始：编译结束时
   自会确认该文档，这一轮继续处理它后面的文档。
-- **没有文档的 id** 与文档分开记住，每个文档族最多 256 个：声明随机应用 id 的客户端会让实例为每个 id 读一次 Redis，但
+- **没有文档的 id** 与文档分开记住，每个文档族最多 256 个：为许多没有文档的应用 id 签发的凭证会让实例为每个 id 读一次 Redis（客户端从不声明自己的应用），但
   绝不会把已装入的文档挤出去（`SNP-7`）。
 - **滞后**是 Redis 上一次确认某个文档以来的时间。只要 Redis 有应答，每一轮都会确认每个文档，所以滞后低于重新确认间隔
   加上一轮的耗时；一轮超过间隔之后，低于两轮的耗时。超过 `lag-warn`（60 秒）
@@ -195,6 +219,11 @@ sequenceDiagram
   [`local-max-age`](./configuration.md#snapshot)（30 秒）旧；实例按这个最旧的时间计算它，并立即向 Redis 确认。本地的
   "没有这个文档"从不被信任：只有 Redis 能回答某个文档不存在。
 - **冷加载最多等待** [`cold-load-timeout`](./configuration.md#snapshot)（2 秒）；之后对该请求而言文档算作失败。
+- **持有的文档有上限。** 每个族最多持有 [`max-apps`/`max-tenants`](./configuration.md#snapshot) 个文档和
+  `max-absent` 个"不存在"条目，在一个后台整理线程上丢弃最久未用的。冷加载突发时，它可能短暂地持有最多上限的两倍，且绝不超出上限
+  4,096 个以上，另加正在加载的文档；超过这个数时，加载该文档的线程先驱逐、再回答请求（`SNP-14`）。这次驱逐只扫描族中所驱逐那一类的条目：
+  默认的 1,024 个文档不到一毫秒，而一个有 100,000 个文档的族要几毫秒，都发生在加载该文档的线程上。"不存在"条目与文档分开扫描，
+  所以驱逐它们的开销只取决于 `max-absent`，与族中有多少文档无关。
 - **修订只按 Redis 的说法变化。** Redis 故障切换后，由于复制是异步的，Redis 可能返回比已装入的更旧的修订。实例装入
   Redis 中的内容，因为其他实例读到的也一样，并以 `ERROR` 记录
   `Snapshot document [<doc>] regressed from revision <a> to <b>; ...`。请重新发布丢失的变更。
@@ -224,15 +253,16 @@ sequenceDiagram
 | 基于 Redis 的 `MembershipProvider` 提供的成员关系 | **`503`**。令牌中携带的成员关系不受影响。 |
 | Redis 中的 API key（`cosec.api-key.store=redis`） | **`503`**。 |
 | 限流计数器 | `strictFailure: true` 的规则得到 **`503`**；其他规则被跳过，请求继续（[限流](../policies/rate-limiting.md)）。 |
-| 控制面 | 存储读取失败就是失败，绝不当作"不存在"：控制 API 返回 `503`，不发布任何内容。 |
+| 控制面 | 存储读取失败就是失败，绝不当作"不存在"，不发布任何内容。故障让调用的授权失败时（授权先在 Redis 上确认文档），控制 API 返回 `503`；在那之后失败的存储调用返回 `500`。 |
 | 影子报告 | 实例记录写入失败，并在下一个周期重写；在此期间窗口保持打开。 |
 
 **重新连接之后。** 连接断开期间，Lettuce 缓冲交给它的命令，重新连接时在一把每次写命令都要获取的锁下把它们全部写出。
 这时发送命令的请求（包括在事件循环上的）要等到缓冲写完，而缓冲默认没有上限。要限制这段等待，用
 `LettuceClientConfigurationBuilderCustomizer` 给应用的 Lettuce 客户端设置 `requestQueueSize`，或在断开期间拒绝命令。
-CoSec 不改动这个客户端：它由应用共享。
+CoSec 不改动这个客户端：它由应用共享。这个 customizer 只作用于这个客户端，即 Redis template 背后的那个（API key、限流器、OAuth state）；
+CoCache 为文档、控制面记录和吊销记录自建客户端（[Redis 客户端](#redis-requirements)），由它自己配置。
 
-**正在进行的加载按时间而不是按数量受限。** 正在加载的文档在加载结束之前，既不计入 `max-apps`、`max-tenants`，也不计入没有文档的 id：Redis 挂起时，它在存储读取超时（30 秒）之后失败，而等待它的请求在 `cold-load-timeout` 之后回答 `503`。因此在这样的故障期间，一个以很高速率声明新应用 id 的客户端最多能让该速率 × 30 秒的加载及其待发的 Lettuce 命令留在内存中；`requestQueueSize` 限制这些命令。它们都不会挤出已安装的文档。
+**正在进行的加载按时间而不是按数量受限。** 正在加载的文档在加载结束之前，既不计入 `max-apps`、`max-tenants`，也不计入没有文档的 id：Redis 挂起时，它在存储读取超时（30 秒）之后失败，而等待它的请求在 `cold-load-timeout` 之后回答 `503`。因此在这样的故障期间，以很高速率使用新应用 id 的凭证最多能让该速率 × 30 秒的加载及其待发的 Lettuce 命令留在内存中；`requestQueueSize` 限制这些命令。它们都不会挤出已安装的文档。
 
 **没有文档的应用共用 256 个位置。** 实例记住的没有文档的 id 每个族最多 256 个（`SNP-7`），由所有租户共用。为大量没有应用文档的应用签发的凭证会挤出那些确实没有应用文档的真实应用，于是这些应用中的请求会再次读取 Redis（不需要编译），直到它们重新被记住。这仍然失败即拒绝，但对 `fail-closed.tenants` 中的租户，这种应用从本地副本加载的条目按 `local-max-age` 的年龄计：当 `fail-closed.max-lag` 小于 `local-max-age` 时，它的请求回答 `503`，直到 Redis 随即确认它。租户 id 来自凭证，因此租户族不能被这样淹没。
 
@@ -249,6 +279,8 @@ CoSec 不改动这个客户端：它由应用共享。
 两者都写入实例读取的那个 Redis，并使用同一个 `cosec.key-prefix`。一次发布先写修订记录，再以
 基准修订的摘要做比较并设置来替换头部，所以读者看到的要么是旧头部、要么是新头部，绝不会是混合；两个发布者也绝不会互相
 覆盖：后一个会被告知基准已经变了。
+
+存储的文档就是它的正文：完整的 JSON 文档，包括头部。实例从正文读取头部（`SnapshotDocuments.read`，`SNP-12`），因此无论哪个存储保存这些字节，实例报告已安装的修订总是它所执行的内容的修订。
 
 ### 最初的文档 {#the-first-documents}
 
@@ -269,7 +301,7 @@ CoSec 不改动这个客户端：它由应用共享。
    类型为 `BOOTSTRAP` 的修订。若该文档已经把某人绑定到 `cosec:platform-admin`，它会拒绝执行；`--force` 用于所有管理员
    都已丢失时的恢复。
 
-`cosec-migrate` 连接一台 Redis 服务器（`--to-redis`），完成时以 `0` 退出，数据被拒绝或发布失败时以 `1` 退出，用法
+`cosec-migrate` 连接 `--to-redis` 指定的 Redis：一台服务器，加 `--cluster` 时是逗号分隔的 Redis Cluster 种子节点。完成时以 `0` 退出，数据被拒绝或发布失败时以 `1` 退出，用法
 错误时以 `2` 退出。把 7.x 数据转换为文档见[升级](./upgrading.md)。
 
 `cosec-migrate bootstrap` 让管理员可以操作控制面，但访问控制 API 的 HTTP 请求本身必须先像其他请求一样被文档放行
@@ -277,9 +309,9 @@ CoSec 不改动这个客户端：它由应用共享。
 
 #### 播种手写的文档 {#seeding-documents-you-wrote-by-hand}
 
-`cosec-migrate publish` 只接受 `report.json` 列出的、SHA-256 与之一致的文件：报告证明这些字节就是被检查过的那些，所以 `publish` 没有跳过报告的选项。只把它用于唯一无法由别处创建的文档，即平台文档；你写的其余文档通过控制面发布，控制面会检查并编译它写入的每个文档：
+`cosec-migrate publish --file <document.json> --document <platform|app:<id>|tenant:<id>>` 发布一份你写的文档，检查与转换目录相同：严格解码、编译（应用或租户文档针对已发布的平台文档编译，平台文档必须已经存在）、拒绝 break-glass 绑定，并且只写入尚无文档的位置。只把它用于唯一无法由别处创建的文档，即平台文档；你写的其余文档通过控制面发布，控制面会检查并编译它写入的每个文档：
 
-1. **发布平台文档**，用你为它写的报告（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。它必须放行管理员访问控制 API 的路径，除此之外只放平台范围的策略。
+1. **发布平台文档**，用 `publish --file … --document platform`（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。它必须放行管理员访问控制 API 的路径，除此之外只放平台范围的策略。
 2. **指定第一位管理员**：运行 `cosec-migrate bootstrap`，并给该主体签发租户为 `(platform)`、应用为 `cosec-control` 的令牌（[之后修改文档](../guide/quick-start.md#change-a-document-later)）。
 3. **把其他每个文档**（`app:<id>`、`tenant:<id>`）作为一个变更 `apply`。`apply` 接收整份文档，把当前修订（或空文档）变成它；`MERGE` 只新增与修改。控制 API 在 [`cosec.control.http.base-path`](./configuration.md#control-plane) 之下：
 
@@ -316,7 +348,7 @@ CoSec 不改动这个客户端：它由应用共享。
 分析只信任完整的列表。列表不存在、不完整、读不到、含有不指向任何 app 文档的条目（不是合法的 app id，或 `*`），或者变更点名的某个 app
 有头而列表没有列出它时，授出者在每个 app 中的权利都未知：覆盖所有 app 的授出（app 为 `*` 的绑定，或附加，包括经条件收窄到变更没有
 点名的 app 的授出）以及在读不到的 app 中的授出进入审批（`UNREADABLE`），控制面记一条点名 `repair-references` 的 WARN，每个实例每分钟
-至多一次。列表丢失（`FLUSHDB` 或驱逐）后，下一份发布的 app 文档会以不完整的状态重新建立它，所以在再次运行 `repair-references` 之前，
+至多一次（读不到的列表在每次分析时记自己的 WARN）。列表丢失（`FLUSHDB` 或驱逐）后，下一份发布的 app 文档会以不完整的状态重新建立它，所以在再次运行 `repair-references` 之前，
 分析一律退回到审批。
 
 有两种情形依赖 Redis 保住已经确认的写入，上面的机制都发现不了：异步复制下的故障切换把列表回滚到一个仍然标着完整、却缺少此后发布的
@@ -357,6 +389,13 @@ app 的状态；以及 `repair-references` 读到的 `<s>:control:list:documents
 
 回滚和其他变更一样：按内容需要经过检查、影子窗口和审批，发布后产生一个新修订，所以历史只增不减，并记录了谁做的回滚。
 会把 break-glass 绑定带回来的回滚永远无法通过检查。
+
+每个修订都记着它的父修订及其摘要，它的记录按自己的摘要保存，所以历史是一条从头向下的链。Redis 故障切换丢失的写入会留下一个没有记录的父修订：
+[`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains) 沿链检查，只读不写，并指出每一份断链的文档。
+
+头是历史的权威（`CTL-35`）。修订索引为每个修订列出它的摘要和父修订的摘要，只有当最后一个条目是头、且每个条目都指向它下面那个条目时，才返回历史。否则（索引落后，或部分恢复后头退回并重用了某个修订号），读取会从头沿链向下走，让索引跟上头，所以一个修订号不会读到另一条分支的文档。修复替换掉的内容留给下一次回收，回收不会删除历史所列的摘要；修复会记录一条警告（只一次），写明文档、每个修订以及丢弃和保留的摘要：如果有人需要被丢弃分支的内容，现在就该从备份中取。
+
+如果链所需的某条记录缺失，而且走到那里也遇不到可信的条目，则不返回该修订以下的历史：这些修订的 `GET /documents/<doc>/revisions/<n>` 回答 `410`，控制面记录一条警告，写明该修订及其摘要。它们的条目留在索引里，什么也不删除；从备份恢复那条记录，下一次读取就会再次列出它们。
 
 每个控制面实例在运行期间执行两个维护任务，每个都在一个间隔之后第一次运行：
 
