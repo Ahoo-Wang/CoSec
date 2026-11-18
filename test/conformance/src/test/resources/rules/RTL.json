@@ -6,7 +6,8 @@
       "statement": "A permit whose rate limit rule is exhausted is 429 too-many-requests, with Retry-After and the RateLimit headers; the later rules spend nothing.",
       "level": "pipeline",
       "guards": [
-        "runtime:RateLimitObligationTest"
+        "runtime:RateLimitObligationTest",
+        "runtime:ClientContractTest#every problem type answers its contract file"
       ],
       "pending": null
     },

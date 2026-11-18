@@ -11,6 +11,10 @@
  * limitations under the License.
  */
 
+plugins {
+    `java-test-fixtures`
+}
+
 // The coroutine request pipeline (RFC 0006 §5.1) and the snapshot source, over the policy documents of cosec-document
 // (RFC 0013 §3). Jackson is an implementation detail here (RFC 0011 D3); Reactor and Spring never are (§5).
 dependencies {
@@ -31,4 +35,21 @@ dependencies {
     testImplementation("org.springframework:spring-web")
     // ProblemSchemaTest validates encoded problems against the generated schema.
     testImplementation("com.networknt:json-schema-validator")
+}
+
+// PIP-25: ContractFiles, the one helper of every project's ClientContractTest (the root build registers their
+// updateClientContract tasks). Test fixtures, so that one copy serves :runtime's tests and :jwt's; never published, so
+// the module's POM and Gradle metadata stay what they are (PublishedMetadataTest).
+dependencies {
+    testFixturesImplementation("tools.jackson.core:jackson-databind")
+    testFixturesImplementation("me.ahoo.test:fluent-assert-core")
+}
+configurations.matching { it.name == "testFixturesCompileClasspath" || it.name == "testFixturesRuntimeClasspath" }
+    .configureEach { extendsFrom(configurations["buildPlatform"]) }
+(components["java"] as AdhocComponentWithVariants).apply {
+    withVariantsFromConfiguration(configurations["testFixturesApiElements"]) { skip() }
+    withVariantsFromConfiguration(configurations["testFixturesRuntimeElements"]) { skip() }
+}
+detekt {
+    source.from("src/testFixtures/kotlin")
 }

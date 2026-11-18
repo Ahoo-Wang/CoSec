@@ -10,6 +10,15 @@ CoSec. It says what the server does and what the client must do about it; what t
 ([Authentication](./authentication.md)), and every status and body is defined once, in
 [Web integration](./web.md#responses-and-status-codes). Nothing here is specific to one client library.
 
+The facts a client parses are also files, in
+[`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract) (`PIP-25`): every problem type's status, headers
+and body, the `CoSec-*` headers and the request id's grammar, the token pair's body, the claims of CoSec's tokens, and
+what the served refresh and logout routes answer. The server's tests check its answers against them as parsed JSON, so a
+client's own tests can use them as the answers to expect. A claim the file marks `optional` may be missing from a
+token, and a client that reads it handles that: the table of [the claims a client may read](#the-claims-a-client-may-read)
+says what its absence means. `@ahoo-wang/cosec-fetcher`'s tests run against the same files, and a check of the docs holds that table to
+`token/claims.json`.
+
 ## What your application serves
 
 CoSec serves no login and no tenant switch: those are the application's, written over CoSec's classes

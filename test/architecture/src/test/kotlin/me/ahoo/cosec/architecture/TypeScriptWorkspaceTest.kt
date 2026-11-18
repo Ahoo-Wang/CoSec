@@ -163,4 +163,49 @@ class TypeScriptWorkspaceTest {
         host.contains("run: pnpm test:host").assert().isTrue()
         typescript.contains("test:host").assert().describedAs("the job without a JVM runs no host test").isFalse()
     }
+
+    /**
+     * The client is held to what the server is tested against (`PIP-25`, `contract/`): its contract test reads the
+     * repository's files, its fake server answers from them, and both run with the other unit tests in the `typescript`
+     * job, so a change of a file fails there until the client follows.
+     */
+    @Test
+    fun `the client's contract test reads contract, its fake server answers from it, and the typescript job runs them`() {
+        val fetcher = workspace.resolve("cosec-fetcher")
+        val support = fetcher.resolve("test/support/contract.ts").readText()
+        support.contains("../../../../contract/").assert()
+            .describedAs("test/support/contract.ts reads the repository's contract/").isTrue()
+        val contractTest = fetcher.resolve("test/clientContract.test.ts").readText()
+        contractTest.contains("./support/contract").assert().describedAs("the contract test uses the files").isTrue()
+        contractTest.contains("it.each(PROBLEM_SLUGS)").assert()
+            .describedAs("one case for each problem file").isTrue()
+        for (route in listOf("refresh", "logout")) {
+            contractTest.contains(
+                "contract.route('$route')"
+            ).assert().describedAs("the cases of routes/$route.json").isTrue()
+        }
+        fetcher.resolve("test/support/fakeCoSec.ts").readText().contains("./contract").assert()
+            .describedAs("the fake server answers from the files, not from literals").isTrue()
+        for (file in listOf(
+            "problems",
+            "headers.json",
+            "token/claims.json",
+            "token/composite-token.json",
+            "routes/refresh.json"
+        )) {
+            Projects.root.resolve("contract/$file").exists().assert().describedAs("contract/$file").isTrue()
+        }
+        // `pnpm test` of the workspace runs every package's `vitest run`, with no test file left out of it.
+        json(fetcher.resolve("package.json"))["scripts"]["test"].asString().assert().startsWith("vitest run")
+        json(workspace.resolve("package.json"))["scripts"]["test"].asString().assert().endsWith("pnpm -r test")
+        // The `test` block of the config names no include or exclude (the coverage block's exclude is one level in).
+        Regex("(?m)^ {6}(include|exclude):").containsMatchIn(fetcher.resolve("vitest.config.ts").readText()).assert()
+            .describedAs("vitest.config.ts limits no test file, so the contract test cannot be left out").isFalse()
+        val ci = Projects.root.resolve(".github/workflows/ci.yml").readText()
+        ci.substringAfter("\n  typescript:\n").substringBefore("\n  # ").contains("run: pnpm test\n").assert()
+            .describedAs("the typescript job runs pnpm test").isTrue()
+        // The claims table of the page is held to contract/token/claims.json by `pnpm check:docs`, in the `docs` job.
+        json(Projects.root.resolve("wiki/package.json"))["scripts"]["check:docs"].asString().assert()
+            .contains("scripts/check-contract.mjs")
+    }
 }

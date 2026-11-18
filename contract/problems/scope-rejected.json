@@ -1,0 +1,17 @@
+{
+  "status" : 403,
+  "headers" : {
+    "CoSec-Request-Id" : "golden-request-id",
+    "Content-Type" : "application/problem+json"
+  },
+  "body" : {
+    "type" : "https://cosec.ahoo.me/problems/scope-rejected",
+    "title" : "Scope Rejected",
+    "status" : 403,
+    "code" : "SCOPE_REJECTED",
+    "requestId" : "golden-request-id"
+  },
+  "optionalMembers" : {
+    "traceId" : "string"
+  }
+}
