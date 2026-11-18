@@ -116,7 +116,10 @@ class StrictCacheFailureTest {
         revocationTables.withPropertyValues("cocache.defaults.store.absent-ttl=1h").run { context ->
             assertThat(context).hasNotFailed()
             val runtime = context.getBean(CacheRuntime::class.java)
-            listOf(CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME, CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME).forEach { name ->
+            listOf(
+                CoSecCacheSpecs.REVOKED_TOKEN_CACHE_NAME,
+                CoSecCacheSpecs.REVOKED_SUBJECT_CACHE_NAME
+            ).forEach { name ->
                 checkNotNull(runtime.policy(name)).absentTtl.assert().describedAs(name)
                     .isEqualTo(Duration.ofSeconds(RevokedTokenCache.MISSING_TTL_SECONDS))
             }
