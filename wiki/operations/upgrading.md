@@ -1183,6 +1183,12 @@ deployment needs none of it; the section above is the whole upgrade. These notes
   that reads `ext.ip2region.*` no longer compiles on it: set `COSEC_IP2REGION_ENABLED=true` before you upgrade the
   image. Its Docker `HEALTHCHECK` now probes `/actuator/health/liveness`, so a gateway that waits for its platform
   document is no longer reported unhealthy.
+- **`@ahoo-wang/cosec-react`: `logout` ends the session at the server.** `useSecurity` and `SecurityProvider` gain the
+  `tokenManager` option (the `JwtTokenManager` of the same `TokenStorage`, with a `tokenRevoker`) and `logout()`, which
+  calls the server's logout and then removes the pair here
+  ([Building a client](../integration/clients.md#logout-and-switching)). `signOut` is unchanged: it removes the pair
+  here only, and the session stays refreshable at the server until its refresh token expires. Nothing breaks; point
+  the user's "Log out" at `logout`.
 
 ### From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 
