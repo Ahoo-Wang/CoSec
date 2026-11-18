@@ -273,7 +273,9 @@ plane published.
   chain lost a record.
 
 The control plane's propagation view shows how many instances have a revision installed
-([Snapshot health](./observability.md#snapshot-health)).
+([Snapshot health](./observability.md#snapshot-health)). On an instance, `cosec.snapshot.lag` and
+`cosec.snapshot.lagging` show how far behind it is, and `cosec.snapshot.regressions` counts lost writes
+([Snapshot metrics](./observability.md#snapshot-metrics)).
 
 ## A service behind the gateway refuses requests
 
@@ -433,6 +435,7 @@ It refuses to start instead, naming the artifact, when a feature that is on need
 | `cosec.audit.kafka.delivery=required, but no Kafka audit listener was created` | The module is there but the listener is not: a `KafkaOperations` bean (`spring-boot-starter-kafka` and its `spring.kafka.*` settings), `cosec.audit.enabled=true` and `cosec.audit.kafka.enabled=true` |
 | `cosec.cosid.generator needs cosec-cosid` | `cosec-cosid`, with `cosid-spring-boot-starter` 5.x and its `cosid.*` generators, or remove the key to keep CoSec's own ids |
 | `cosec.cosid.generator is set, but CoSec's ids do not come from CosId` | A `CosIdRuntime` (`cosid-spring-boot-starter` and its `cosid.*` settings), or remove the key: with an `IdGenerator` bean of your own, that bean gives CoSec its ids |
+| `cosec.metrics.enabled=true needs cosec-micrometer` | `cosec-micrometer`, or remove the key: unset, metrics are optional |
 | `cosec-cocache needs a ReactiveStringRedisTemplate bean` | `spring-boot-data-redis` and a Redis connection (`spring.data.redis.*`): without it no snapshot is read and rate limits would count per instance |
 
 The web checks run only while CoSec is on (`cosec.enabled`, default `true`); a gateway host is exempt from the WebFlux

@@ -1,0 +1,18 @@
+# Rule: OBS-5
+# Mutant: a lost document is counted under its own id, one series per app or tenant
+# Tests: :micrometer:test --tests me.ahoo.cosec.micrometer.MicrometerSnapshotMetricsTest
+
+diff --git a/extensions/micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MicrometerSnapshotMetrics.kt b/extensions/micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MicrometerSnapshotMetrics.kt
+index f8433636..a8f7afbc 100644
+--- a/extensions/micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MicrometerSnapshotMetrics.kt
++++ b/extensions/micrometer/src/main/kotlin/me/ahoo/cosec/micrometer/MicrometerSnapshotMetrics.kt
+@@ -77,7 +77,8 @@ class MicrometerSnapshotMetrics(
+     override fun onRegression(key: SnapshotKey, installedRevision: Long, loadedRevision: Long) =
+         regressions[key.kind.ordinal].increment()
+ 
+-    override fun onDocumentLost(key: SnapshotKey, lastRevision: Long) = lost[key.kind.ordinal].increment()
++    override fun onDocumentLost(key: SnapshotKey, lastRevision: Long) =
++        registry.counter(LOST, "kind", key.kind.name.lowercase(), "id", key.toString()).increment()
+ 
+     override fun onLagExceeded(key: SnapshotKey, lag: Duration, escalated: Boolean) =
+         lagExceeded[key.kind.ordinal * 2 + if (escalated) 1 else 0].increment()

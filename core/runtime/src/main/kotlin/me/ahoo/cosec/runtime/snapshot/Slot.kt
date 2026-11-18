@@ -186,7 +186,7 @@ internal class Slot<T : Any>(
             }
         }
         // What a removal does besides leaving the map is its own, not a caller's reading of a reply (§4b).
-        context.families.removed(key)
+        context.families.removed(key, installed)
         return true
     }
 

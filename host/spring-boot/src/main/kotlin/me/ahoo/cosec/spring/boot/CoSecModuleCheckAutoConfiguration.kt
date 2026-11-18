@@ -23,6 +23,7 @@ import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.authentication.route.LoginRoutesCheck
 import me.ahoo.cosec.spring.boot.cosid.CosIdGeneratorProperties
 import me.ahoo.cosec.spring.boot.jwt.ConditionalOnJwtEnabled
+import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
 import me.ahoo.cosec.spring.boot.pipeline.ConditionalOnEnforceMode
 import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import org.springframework.boot.autoconfigure.AutoConfiguration
@@ -125,6 +126,24 @@ internal class CoSecModuleCheckAutoConfiguration {
                 ).afterPropertiesSet()
             }
         }
+    }
+
+    /**
+     * Metrics asked for in so many words: `cosec.metrics.enabled=true` written, and `cosec-micrometer` missing. The
+     * default (unset) stays silent: metrics are optional, and a host without the module simply records none.
+     */
+    @Configuration(proxyBeanMethods = false)
+    @ConditionalOnCoSecEnabled
+    @ConditionalOnProperty(value = [MetricsProperties.ENABLED_KEY], havingValue = "true")
+    class Metrics {
+        @Bean
+        fun cosecMetricsModuleCheck(context: ApplicationContext): StartupTask =
+            requireModule(
+                context,
+                "me.ahoo.cosec.micrometer.MicrometerSnapshotMetrics",
+                "cosec-micrometer",
+                "${MetricsProperties.ENABLED_KEY}=true",
+            )
     }
 
     /** The served login routes: a path that is set never does nothing (`IDN-23`, `IDN-24`). */
