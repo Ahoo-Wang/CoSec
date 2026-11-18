@@ -29,12 +29,13 @@ import {
   SecurityProvider,
   useSecurityContext,
 } from '@ahoo-wang/cosec-react';
-import { tokenStorage } from './tokenStorage';
+import { tokenManager, tokenStorage } from './tokenStorage';
 
 function App() {
   return (
     <SecurityProvider
       tokenStorage={tokenStorage}
+      tokenManager={tokenManager}
       onSignOut={() => window.location.assign('/login')}
     >
       <RouteGuard
@@ -48,8 +49,11 @@ function App() {
 }
 
 function Profile() {
-  const { currentUser, signOut } = useSecurityContext();
-  return <button onClick={signOut}>退出 {currentUser.sub}</button>;
+  const { currentUser, logout } = useSecurityContext();
+  // 无论如何令牌对在这里都已删除；拒绝说明服务端没有确认。
+  const onLogout = () =>
+    logout().catch(() => alert('已在本设备退出；服务端没有确认。'));
+  return <button onClick={onLogout}>退出 {currentUser.sub}</button>;
 }
 ```
 
@@ -57,6 +61,7 @@ function Profile() {
 
 - `SecurityProvider`、`useSecurityContext`、`SecurityContext`：页面的安全状态，来自一个 `TokenStorage`。
 - `useSecurity`：不经过 context 的同一个 hook。
+- `logout` 和 `signOut`：`logout` 是用户的"退出"：通过 `tokenManager` 选项（`JwtTokenManager.logout()`，需要 `tokenRevoker`）在服务端结束会话，然后删除这里的令牌对。服务端回答之前，会话不变。`204` 或 `401` 时 resolve，其他情况（以及没有 `tokenManager` 时）以 `LogoutUnconfirmedError` reject；无论哪种情况，令牌对在这里都已删除，`onSignOut` 会触发，除非更新的登录替换了会话。`signOut` 只在这里立即删除令牌对：用于已知已经结束的会话。`tokenManager` 必须是该 hook 的 `tokenStorage` 的管理器，否则 hook 会抛出。
 - `RouteGuard`：用户已登录时渲染子节点，否则渲染 `fallback`。`onUnauthorized` 在渲染提交之后运行，用户每次变为（或一开始就是）未登录时调用一次。
 - `RefreshableRouteGuard`：用于 `JwtTokenManager` 能刷新的会话：它自己发起刷新，刷新期间渲染 `refreshing`，刷新失败时渲染 `fallback`。
 - `ANONYMOUS_USER`：未登录访客的 `currentUser`。

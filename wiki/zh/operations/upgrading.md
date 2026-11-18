@@ -884,6 +884,7 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 ### 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
 - **`cosec-gateway-server` 镜像关闭了 ip2region。** 它的 `config/application.yaml` 现在设置 `cosec.ip2region.enabled: false`，与 Kubernetes 的 base 一致；直到 beta.3，镜像一直开启它。读取 `ext.ip2region.*` 的文档在它上面不再能编译：升级镜像之前设置 `COSEC_IP2REGION_ENABLED=true`。它的 Docker `HEALTHCHECK` 现在探测 `/actuator/health/liveness`，因此等待平台文档的网关不再被报告为不健康。
+- **`@ahoo-wang/cosec-react`：`logout` 在服务端结束会话。** `useSecurity` 和 `SecurityProvider` 新增 `tokenManager` 选项（同一个 `TokenStorage` 的 `JwtTokenManager`，带 `tokenRevoker`）和 `logout()`：它调用服务端的登出，然后删除这里的令牌对（[构建客户端](../integration/clients.md#logout-and-switching)）。`signOut` 不变：它只删除这里的令牌对，会话在服务端仍可刷新，直到其刷新令牌过期。没有任何破坏性变化；把用户的"退出"改为调用 `logout`。
 
 ### 从 8.0.0-beta.2 升级 {#from-8-0-0-beta-2}
 
