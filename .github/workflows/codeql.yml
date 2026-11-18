@@ -11,9 +11,9 @@
 # limitations under the License.
 #
 
-# Security-focused static analysis (GitHub code scanning). Complements detekt, which covers style and
+# Security-focused static analysis (GitHub code scanning). Complements detekt and ESLint, which cover style and
 # code smells. Kotlin requires CodeQL to observe a real compilation, hence the manual build without
-# daemon or build cache.
+# daemon or build cache; JavaScript and TypeScript need none (build-mode none), in a job of their own.
 name: CodeQL
 on:
   push:
@@ -85,3 +85,28 @@ jobs:
         uses: github/codeql-action/analyze@v4
         with:
           category: /language:java-kotlin
+
+  # The npm packages of typescript/ (.github/codeql/codeql-javascript.yml): no build, the sources as they are.
+  analyze-javascript:
+    name: Analyze (javascript-typescript)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          build-mode: none
+          queries: security-and-quality
+          config-file: ./.github/codeql/codeql-javascript.yml
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
+        with:
+          category: /language:javascript-typescript

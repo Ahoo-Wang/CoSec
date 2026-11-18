@@ -55,6 +55,47 @@ export class RefreshUnavailableError extends FetcherError {
   }
 }
 
+/**
+ * The server did not confirm a logout: a `5xx`, a network failure, a timeout,
+ * or no {@link TokenRevoker} to ask. The pair was removed here all the same
+ * ({@link JwtTokenManager.logout}); the session may live on at the server until
+ * it ends there, at the latest when its refresh token expires.
+ *
+ * It carries no token: the request of a logout has the pair as its body, so
+ * the error of that request is not kept. Its `cause` is a plain `Error` with
+ * the name and message of that error, and {@link problem} and {@link status}
+ * say what the server answered.
+ */
+export class LogoutUnconfirmedError extends FetcherError {
+  /** What CoSec answered (`unavailable`, `internal-error`, ...), when it said. */
+  readonly problem?: CoSecProblem;
+  /** The status the server answered, when it answered. */
+  readonly status?: number;
+
+  constructor(cause?: unknown) {
+    super(
+      'The server did not confirm the logout; the session was ended here.',
+      withoutExchange(cause),
+    );
+    this.problem = getCoSecProblem(cause);
+    const status = (
+      cause as { exchange?: { response?: { status?: unknown } } } | undefined
+    )?.exchange?.response?.status;
+    this.status = typeof status === 'number' ? status : undefined;
+    this.name = 'LogoutUnconfirmedError';
+  }
+}
+
+/** The name and message of `error`, and nothing else of it: not its exchange, not its causes. */
+function withoutExchange(error: unknown): Error | undefined {
+  if (error === undefined) return undefined;
+  const plain = new Error(
+    error instanceof Error ? error.message : String(error),
+  );
+  plain.name = error instanceof Error ? error.name : 'Error';
+  return plain;
+}
+
 /** The refresh endpoint answered, but not with a composite token. */
 export class InvalidRefreshResponseError extends Error {
   constructor() {
