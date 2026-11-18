@@ -11,7 +11,7 @@
  * limitations under the License.
  */
 
-package me.ahoo.cosec.runtime.http
+package me.ahoo.cosec.runtime.contract
 
 import me.ahoo.test.asserts.assert
 import tools.jackson.databind.JsonNode
@@ -27,14 +27,17 @@ import kotlin.io.path.readText
 import kotlin.io.path.writeText
 
 /**
- * The files of `contract/` (`PIP-25`): what a client relies on, as parsed JSON. A test checks that the code answers what
- * a file says, comparing parsed values, so member order and whitespace are not part of the contract; with
- * `-Dcosec.contract.update=true` (`./gradlew :runtime:updateClientContract`) it writes the file instead.
+ * The files of `contract/` (`PIP-25`): what a client relies on, as parsed JSON. A project's `ClientContractTest` checks
+ * that the code answers what a file says, comparing parsed values, so member order and whitespace are not part of the
+ * contract. Its `updateClientContract` task, which the root build registers for each such project, sets
+ * `cosec.contract.update` and so writes the files instead; both name that task in `cosec.contract.task`.
+ *
+ * In `:runtime`'s test fixtures, the one copy every contract test uses; the fixtures are never published.
  */
-internal object ContractFiles {
+object ContractFiles {
     private val mapper = JsonMapper.builder().build()
     private val update = System.getProperty("cosec.contract.update") == "true"
-    private const val TASK = "./gradlew :runtime:updateClientContract"
+    private val task = "./gradlew " + (System.getProperty("cosec.contract.task") ?: "updateClientContract")
 
     private val root: Path = generateSequence(Path.of("").toAbsolutePath()) { it.parent }
         .first { Files.exists(it.resolve("settings.gradle.kts")) }
@@ -46,6 +49,9 @@ internal object ContractFiles {
 
     fun parse(bytes: ByteArray): JsonNode = mapper.readTree(bytes)
 
+    /** `contract/[path]` as committed: what another project's test wrote. */
+    fun committed(path: String): JsonNode = mapper.readTree(root.resolve(path).readText())
+
     /** Checks `contract/[path]` against [actual], or writes it. */
     fun check(path: String, actual: JsonNode) {
         val file = root.resolve(path)
@@ -54,9 +60,9 @@ internal object ContractFiles {
             file.writeText(mapper.writerWithDefaultPrettyPrinter().writeValueAsString(actual) + "\n")
             return
         }
-        file.isRegularFile().assert().describedAs("contract/$path is missing: run $TASK").isTrue()
+        file.isRegularFile().assert().describedAs("contract/$path is missing: run $task").isTrue()
         mapper.readTree(file.readText()).assert()
-            .describedAs("contract/$path is not what the code answers; if the change is intended, run $TASK")
+            .describedAs("contract/$path is not what the code answers; if the change is intended, run $task")
             .isEqualTo(actual)
     }
 
@@ -68,6 +74,6 @@ internal object ContractFiles {
             return
         }
         files.map { it.name }.toSet().assert()
-            .describedAs("contract/$directory holds a file the code does not answer; run $TASK").isEqualTo(names)
+            .describedAs("contract/$directory holds a file the code does not answer; run $task").isEqualTo(names)
     }
 }

@@ -19,6 +19,7 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
+import me.ahoo.cosec.runtime.contract.ContractFiles
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test

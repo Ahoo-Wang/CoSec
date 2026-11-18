@@ -11,6 +11,10 @@
  * limitations under the License.
  */
 
+plugins {
+    `java-test-fixtures`
+}
+
 // The coroutine request pipeline (RFC 0006 §5.1) and the snapshot source, over the policy documents of cosec-document
 // (RFC 0013 §3). Jackson is an implementation detail here (RFC 0011 D3); Reactor and Spring never are (§5).
 dependencies {
@@ -33,17 +37,19 @@ dependencies {
     testImplementation("com.networknt:json-schema-validator")
 }
 
-// PIP-25: ClientContractTest checks contract/ in `test`, so in `check`; a changed file reruns it. After an intended
-// change of what a client receives, this task rewrites the files, as updateKotlinAbi rewrites a dump.
-tasks.test {
-    inputs.files(rootProject.fileTree("contract")).withPropertyName("contract").withPathSensitivity(PathSensitivity.RELATIVE)
+// PIP-25: ContractFiles, the one helper of every project's ClientContractTest (the root build registers their
+// updateClientContract tasks). Test fixtures, so that one copy serves :runtime's tests and :jwt's; never published, so
+// the module's POM and Gradle metadata stay what they are (PublishedMetadataTest).
+dependencies {
+    testFixturesImplementation("tools.jackson.core:jackson-databind")
+    testFixturesImplementation("me.ahoo.test:fluent-assert-core")
 }
-tasks.register<Test>("updateClientContract") {
-    description = "Rewrites contract/'s problem and header files from what the code answers."
-    group = "verification"
-    testClassesDirs = sourceSets.test.get().output.classesDirs
-    classpath = sourceSets.test.get().runtimeClasspath
-    filter { includeTestsMatching("me.ahoo.cosec.runtime.http.ClientContractTest") }
-    systemProperty("cosec.contract.update", "true")
-    outputs.upToDateWhen { false }
+configurations.matching { it.name == "testFixturesCompileClasspath" || it.name == "testFixturesRuntimeClasspath" }
+    .configureEach { extendsFrom(configurations["buildPlatform"]) }
+(components["java"] as AdhocComponentWithVariants).apply {
+    withVariantsFromConfiguration(configurations["testFixturesApiElements"]) { skip() }
+    withVariantsFromConfiguration(configurations["testFixturesRuntimeElements"]) { skip() }
+}
+detekt {
+    source.from("src/testFixtures/kotlin")
 }
