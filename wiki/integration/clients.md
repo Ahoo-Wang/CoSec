@@ -16,7 +16,8 @@ and body, the `CoSec-*` headers and the request id's grammar, the token pair's b
 what the served refresh and logout routes answer. The server's tests check its answers against them as parsed JSON, so a
 client's own tests can use them as the answers to expect. A claim the file marks `optional` may be missing from a
 token, and a client that reads it handles that: the table of [the claims a client may read](#the-claims-a-client-may-read)
-says what its absence means.
+says what its absence means. `@ahoo-wang/cosec-fetcher`'s tests run against the same files, and a check of the docs holds that table to
+`token/claims.json`.
 
 ## What your application serves
 
