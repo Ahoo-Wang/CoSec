@@ -81,7 +81,11 @@ internal class SourceModelLag(
         val written = model.installedKeys()
         val target = script.lagTarget.takeIf { script.lag != Lag.NONE && it in written }
         this.target = target
-        if (target != null && script.lag == Lag.IN_FLIGHT) return inFlight(target, written)
+        if (target != null && script.lag == Lag.IN_FLIGHT) inFlight(target, written) else lagged(target, written)
+    }
+
+    /** `NONE`, `HANG_READ` and `STUCK_COMPILE`: see the class comment. */
+    private fun lagged(target: SnapshotKey?, written: Set<SnapshotKey>) {
         if (target != null) {
             // The first pass after the write reaches the target, as with nothing wrong.
             bound = boundFor(Lag.NONE, written.size)
@@ -133,7 +137,10 @@ internal class SourceModelLag(
     }
 
     /** When the periodic pass next runs: settling leaves it due, and then it runs at the next move of time. */
-    private fun nextTick(): Long = maxOf(threads.nanos, threads.scheduler.timers.filter { it.period != 0L }.minOf { it.at })
+    private fun nextTick(): Long = maxOf(
+        threads.nanos,
+        threads.scheduler.timers.filter { it.period != 0L }.minOf { it.at }
+    )
 
     private fun write(key: SnapshotKey) {
         store.dropNotifications = true

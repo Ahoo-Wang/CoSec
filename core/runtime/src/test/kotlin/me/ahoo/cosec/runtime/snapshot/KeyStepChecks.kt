@@ -130,14 +130,26 @@ internal class KeyStepChecks(
     /** `SNP-6`: a pass joins only a load that started after it; otherwise it waits for the load after it. */
     private fun passHangs(hang: KeyEffect.Hang<String>, pass: Pass, inFlight: LoadState<String>) {
         if (inFlight.startedNanos - pass.startedNanos > 0) {
-            if (hang.handle !== inFlight.handle) fail("a pass hangs on ${hang.handle}, not the load in flight, younger than it")
+            if (hang.handle !== inFlight.handle) {
+                fail(
+                    "a pass hangs on ${hang.handle}, not the load in flight, younger than it"
+                )
+            }
             return
         }
         if (hang.handle === inFlight.handle || hang.handle in inFlight.alsoAnswers) {
             fail("a pass joined a load that started before it")
         }
-        if (hang.handle !== after.next || !after.again) fail("a pass hangs on ${hang.handle}, not on the load that starts next")
-        if (after.againPass !== pass) fail("the load after the one in flight is not the read of the pass that waits for it")
+        if (hang.handle !== after.next || !after.again) {
+            fail(
+                "a pass hangs on ${hang.handle}, not on the load that starts next"
+            )
+        }
+        if (after.againPass !== pass) {
+            fail(
+                "the load after the one in flight is not the read of the pass that waits for it"
+            )
+        }
     }
 
     /** `SNP-6`: a pass that skips a stuck load which started at or before it still leaves the load after it owed. */

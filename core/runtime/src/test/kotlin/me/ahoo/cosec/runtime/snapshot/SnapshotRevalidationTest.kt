@@ -131,6 +131,36 @@ class SnapshotRevalidationTest {
         }
     }
 
+    /**
+     * `SNP-6`: a pass does not wait for a load stuck compiling past `storeReadTimeout`. That load read revision 1 before
+     * the pass started, so it confirms nothing for the pass: one more load still follows it, and revision 2, written
+     * before the pass with its invalidation lost, is installed once the compilation ends, with no later pass.
+     */
+    @Test
+    fun aPassThatSkipsALoadStuckCompilingStillOwesTheReadAfterIt() {
+        val parked = CopyOnWriteArrayList<Runnable>()
+        val stuck = AtomicBoolean()
+        val compile = Executor { if (stuck.get()) parked += it else it.run() }
+        val elapsed = ManualNanoTime()
+        testSource(store, compileExecutor = compile).use { source ->
+            source.nanoTime = elapsed
+            source.load("app-a").join()
+            stuck.set(true)
+            source.reload(APP_A)
+            parked.assert().hasSize(1)
+            store.dropNotifications = true
+            store.put(APP_A, document(2, "a2"))
+            elapsed.advance(SnapshotOptions().storeReadTimeout.plusSeconds(1))
+            stuck.set(false)
+
+            source.tick().join()
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(1)
+
+            parked.removeAt(0).run()
+            source.peek("app-a")!!.appCompiled.revision.assert().isEqualTo(2)
+        }
+    }
+
     @Test
     fun f9NotificationDuringALoadStartsAnotherOnceItCompletes() {
         testSource(store).use { source ->

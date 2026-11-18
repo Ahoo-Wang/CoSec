@@ -215,7 +215,9 @@ class KeyTransitionsOrderTest {
                 it.loading && it.name == "early pass" && it.after.direct.size > it.before.direct.size
             },
             "pass waits for the load after an older one" to { it.loading && it.name == "pass" && it.after.state.againPass != null },
-            "pass joins a younger load" to { it.loading && it.name == "early pass" && it.after.direct.size == it.before.direct.size },
+            "pass joins a younger load" to {
+                it.loading && it.name == "early pass" && it.after.direct.size == it.before.direct.size
+            },
             "eviction at bound" to { it.name == "evict at bound" },
             "eviction claimed" to { it.name == "evict claimed" },
             "request redispatched" to { it.after.state.removed && it.after.direct.values.any { e -> e is KeyEffect.Redispatch } },
