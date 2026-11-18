@@ -3,14 +3,14 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.ReadOnlyDataPlaneTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
-index f70f937e..b0effff3 100644
+index ba42d352..676873d9 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecSnapshotAutoConfiguration.kt
 @@ -104,7 +104,7 @@ class CoSecSnapshotAutoConfiguration {
          ): PolicySnapshotCache {
              val snapshot = properties.snapshot
              // Read-only unless this process runs the control plane, the only writer of documents (SNP-18).
--            val readOnly = ControlPlaneCondition.readOnly(resources.classLoader, environment, announce = true)
+-            val readOnly = !ControlPlaneCondition.wired(resources.classLoader, environment)
 +            val readOnly = false
              return factory.createPolicySnapshotCache(
                  CoSecCacheSpecs.policySnapshot(cosec.keyPrefix, snapshot.localMaxAge, readOnly)
