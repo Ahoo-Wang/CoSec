@@ -43,9 +43,15 @@ internal class KeyContext(
     val families: SnapshotFamilies<*>,
     /** How each key's runner is made (RFC 0013 B2b): [KeyRunner.Settings]' defaults in production. */
     val runners: KeyRunner.Settings,
-    /** Who is told of each installed document (UC-1, [InstallReview]); none but the starter's. */
-    val reviews: List<InstallReview<Any>> = emptyList(),
+    reviews: List<InstallReview<*>> = emptyList(),
 ) {
+    /**
+     * Who is told of each installed document (UC-1, [InstallReview]); none but the starter's. Each takes what this
+     * source's compilers make, as [DocumentSnapshots.source]'s types hold; the cast only drops that type here.
+     */
+    @Suppress("UNCHECKED_CAST")
+    val reviews: List<InstallReview<Any>> = reviews as List<InstallReview<Any>>
+
     /**
      * Monotonic nanoseconds, the time the scheduler's timeouts keep: whether a periodic pass stalled is measured in it,
      * so a step of the wall clock does not look like time passing. Replaced only in tests, through

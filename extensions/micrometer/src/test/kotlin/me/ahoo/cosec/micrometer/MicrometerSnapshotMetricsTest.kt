@@ -123,8 +123,8 @@ class MicrometerSnapshotMetricsTest {
         registry.find(MicrometerSnapshotMetrics.HOUSEKEEPING_REFUSED).counters().map { it.id.getTag("task") }.toSet()
             .assert().isEqualTo(
                 setOf(
-                    "load-log", "compile-log", "effect-log", "crash-log", "transition-log", "prewarm-log",
-                    "pass-log", "reset-log", "evict", "drop", "lag-report",
+                    "load-log", "compile-log", "install-review", "effect-log", "crash-log", "transition-log",
+                    "prewarm-log", "pass-log", "reset-log", "evict", "drop", "lag-report",
                 ),
             )
     }

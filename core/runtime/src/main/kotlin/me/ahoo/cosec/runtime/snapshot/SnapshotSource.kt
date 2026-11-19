@@ -81,8 +81,8 @@ import java.util.function.LongSupplier
  * [SnapshotOptions.coldLoadTimeout].
  *
  * Threads: compilation runs on the compile pool; the scheduler thread only keeps time (timeouts, periodic passes,
- * retries); eviction, lag reports and log lines with stack traces run on a separate housekeeping thread, so a slow log
- * appender cannot delay a timeout (#1252).
+ * retries); eviction, lag reports, log lines with stack traces and the [InstallReview]s of installs run on a separate
+ * housekeeping thread, so a slow log appender or review delays no timeout (#1252) and no install (UC-1).
  */
 // stays: the read interface with its contract and its test hooks, and the construction and close order in one place
 @Suppress("TooManyFunctions")
@@ -103,7 +103,6 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     housekeeping: ExecutorService? = null,
     /** Tests only (RFC 0013 B2b): the K and the hooks of each key's runner; the defaults in production. */
     runners: KeyRunner.Settings = KeyRunner.Settings(),
-    /** Told of each installed document, off housekeeping (UC-1, [InstallReview]). */
     reviews: List<InstallReview<*>> = emptyList(),
 ) : AutoCloseable {
     private val refusals = HousekeepingRefusals()
@@ -123,12 +122,9 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal val threads = SnapshotThreads(options, compileExecutor, scheduler, housekeeping, this.metrics, refusals)
     internal val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics)
-    internal val context =
-        @Suppress("UNCHECKED_CAST")
-        KeyContext(
-            store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, runners,
-            reviews as List<InstallReview<Any>>,
-        )
+    internal val context = KeyContext(
+        store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, runners, reviews,
+    )
     internal val shared = runners.create(sharedKey, sharedCompiler, context)
 
     /** Tests only: runs between finding a family's slot and using it, to force an eviction into that gap. */
@@ -434,9 +430,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
         if (key == sharedKey) shared.usable() else withSlot(key) { it.usable() }
 
     /** The family [key] belongs to; [IllegalArgumentException] when it is no document of this source. */
-    private fun familyOf(key: SnapshotKey): Family<A> =
-        families.firstOrNull { it.spec.kind == key.kind }
-            ?: throw IllegalArgumentException("[$key] is not one of this source's documents.")
+    private fun familyOf(key: SnapshotKey): Family<A> = family(key.kind)
 
     private fun family(kind: SnapshotKind): Family<A> =
         families.firstOrNull { it.spec.kind == kind }
