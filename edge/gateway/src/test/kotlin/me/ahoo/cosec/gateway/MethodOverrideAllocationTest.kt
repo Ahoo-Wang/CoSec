@@ -28,13 +28,13 @@ class MethodOverrideAllocationTest {
 
     private fun allocated(headers: HttpHeaders, rounds: Int): Long {
         val threads = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
-        val before = threads.getThreadAllocatedBytes(Thread.currentThread().id)
+        val before = threads.currentThreadAllocatedBytes
         repeat(rounds) {
             for (name in names) {
                 headers.remove(name)
             }
         }
-        return threads.getThreadAllocatedBytes(Thread.currentThread().id) - before
+        return threads.currentThreadAllocatedBytes - before
     }
 
     @Test
