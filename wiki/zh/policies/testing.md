@@ -56,6 +56,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `OPERATION` | 422 | 操作删除了不存在的内容，或设置了该文档没有的字段。 |
 | `IF_MATCH` | 412 | 条目已不再是操作的 `ifMatch` 所说的样子。 |
 | `V3`（警告） | | 平台的 `limits` 或 `attributes` 有变化：其他文档会在每个实例上重新编译，不再能编译的文档失败即拒绝。 |
+| `ROUTES`（警告） | | 候选中含有被各服务已映射路由绕开的 `http:` DENY 语句或限流规则：这些路由的请求按其 `service:verb` 判定，不会遇到它们（[路由映射](../scenarios/route-maps.md)）。一个检查结果，给出数量和前五条。只有设置了 [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane) 才会比较；未设置时，含有这类语句的候选会说明没有给出路由映射。 |
 
 有任何错误的变更停留在 `DRAFT`，不能暂存或发布；请提议一个新变更来修正。干净的变更为 `CHECKED`。变更在发布之前不会影响执行，而发布时会针对当时的文档重新编译候选。
 
@@ -384,14 +385,15 @@ class PolicyTest {
 }
 ```
 
-文档无法编译时 `load` 失败；没有 `platform.json` 时平台文档为空。`tests` 为目录下每个 `.json` 文件生成一个以其路径命名的测试，一个都没有时失败。`convert` 缩短过文件名的文件（id 长于文件名的上限：截断、`~`、id 的 SHA-256）所装的 id，以其旁边 `report.json` 记录的为准；缺少该报告时 `load` 失败。`check(file)` 和 `check(name, json)` 检查单个场景，`evaluate(json)` 只返回决策而不检查，其 `describe()` 按 `expect` 的写法给出结果；`PolicyTestKit.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。
+一次运行不会因为错误的原因通过。文档无法编译时 `load` 失败；目录里没有 `platform.json` 时也失败（每个请求都读它；要在没有它的情况下测试，就在那里写一份空文档）；目录里有测试工具不会读取的内容时同样失败：`platform.json`、`apps/`、`tenants/` 与 `report.json` 之外的 `.json` 文件或目录，或者 `apps/`、`tenants/` 中不是 `.json` 的文件。目录里有租户文档时，在没有文档的租户中判定的场景（例如租户 `acme` 的文件写成了 `Acme.json`）会失败；有应用文档时，在没有文档的应用中判定的场景也会失败；有意如此的场景要写明 `"withoutDocument": ["tenant"]` 或 `["app"]`。默认租户 `(0)`（匿名请求的租户）可以没有文档；不含任何租户文档的目录，像只有平台文档的部署那样，在没有租户文档的情况下判定每个请求。`tests` 为目录下每个 `.json` 文件生成一个以其路径命名的测试，一个都没有时失败。`convert` 缩短过文件名的文件（id 长于文件名的上限：截断、`~`、id 的 SHA-256）所装的 id，以其旁边 `report.json` 记录的为准；缺少该报告时 `load` 失败。`check(file)` 和 `check(name, json)` 检查单个场景，`evaluate(json)` 只返回决策而不检查，其 `describe()` 按 `expect` 的写法给出结果；`PolicyTestKit.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。
 
 | 场景字段 | 含义 |
 |---|---|
 | `description` | 自由文本。 |
-| `credential` | 主体：`tenant`（默认 `acme`）、`id`（默认 `alice`）、`roles`（`role` 或 `role@space`）、`policies`（附加策略）、`attributes`；匿名调用方用 `"anonymous": true`。 |
+| `credential` | 必填。主体：`tenant` 与 `id`（都必填）、`roles`（`role` 或 `role@space`）、`policies`（附加策略）、`attributes`；匿名调用方用 `"anonymous": true`。 |
 | `membershipProvider` | `MembershipProvider` 返回的成员关系，按管道的方式与凭证中的合并：按空间分组的 `roles`（`{"": ["reader"]}`）和 `attachments`；或 `{"fails": "message"}`。 |
-| `request` | `action`（默认 `order:read`）、`resource`（`type`、`id`；默认 `order/1`；`attributes` 会被拒绝，因为没有宿主给资源设置属性：`DOC-10`）、`space`、`hostApp`、`time`（ISO 时刻）、`ip`、`device`、`blocked`、`headers`、`attributes`（`request.attributes.*`）。 |
+| `request` | 必填：`action` 与 `resource`（`type`、`id`；`attributes` 会被拒绝，因为没有宿主给资源设置属性：`DOC-10`）、`space`、`hostApp`、`time`（ISO 时刻）、`ip`、`device`、`blocked`、`headers`、`attributes`（`request.attributes.*`）。 |
+| `withoutDocument` | `["tenant"]`、`["app"]` 或两者：场景有意在没有文档的租户或应用中判定，而目录中有其他该类文档。 |
 | `expect` | `decision`：`Permit`、`Deny`、`Indeterminate`、`Rejected` 或 `InvalidRequest`，以及 `by`（作出决策的语句；隐式拒绝为 `null`）、`cause`、`reason` 或 `refused`（`action`：含小写字母的 `http` 方法；`resource`：管道拒绝的路径，或超出请求路径上限的类型化 id；`header`：文档读取的请求头以不同的值发送）。必填：没有 `decision` 的 `expect` 是错误，因为它无论决策如何都会通过。 |
 
 `http.origin.host` 和 `http.referer.host` 读取 `headers` 的方式与实例一致：取 `Origin` 或 `Referer` URL 的主机并折叠为 ASCII 小写，`https://EXAMPLE.com` 即 `example.com`。`cosec-testkit` 会带上其 API 用到的依赖（引擎和 JUnit 的 `DynamicTest`）：应用只需声明上面那一条依赖。场景和文档以文本或文件传入，测试工具的 API 不含任何 Jackson 类型。

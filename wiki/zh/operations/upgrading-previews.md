@@ -21,6 +21,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
+- **策略测试工具拒绝可能因错误原因通过的运行**（`PolicyTestKit`，实验性 API；UC-7）。没有 `platform.json` 时 `load` 失败（要在没有它的情况下测试，就在那里写一份空文档），目录里有工具不会读取的文件或目录时也失败。场景要写明 `credential`（`tenant` 与 `id`，或 `"anonymous": true`）以及请求的 `action` 与 `resource`：示例默认值（`acme`、`alice`、`order:read`、`order/1`）不再存在。目录里有租户文档时，在没有文档的租户中判定的场景会失败；有应用文档时，在没有文档的应用中判定的场景也会失败，除非写明 `"withoutDocument": ["tenant"]` 或 `["app"]`（[测试决策](../policies/testing.md#testing-decisions)）。受影响的是依赖默认值或放错位置的文档的场景；`PipelineFixture.load` 按同样的规则读取目录。写明这些字段，把文件移到正确的位置。
 - **`cosec-gateway-server` 镜像：没有 JMX agent，actuator 在管理端口，镜像默认值在挂载文件之下依然保留**（`UB-2`、`UB-21`）。受影响的是运行该镜像的人。
   - 直到 beta.3，启动脚本会在 5555 端口、所有网卡上启动一个不需要认证的 JMX agent。现在不再启动。要附加，在 `JAVA_OPTS` 里设置并绑定到回环地址（[镜像](./deployment.md#the-image)）；Kubernetes base 设置的 `-Dcom.sun.management.jmxremote.host=127.0.0.1` 随之取消。
   - actuator 现在由管理端口 `8081`（`management.server.port`）提供，不再在 `8080` 上：8080 上的 `/actuator/health/*` 是 `404`。探针现在是 8080 上的 `/livez` 和 `/readyz`（同样的分组，由网关自己的端口提供，不经 CoSec 决策）；`/actuator/health` 和 `/actuator/prometheus` 在 8081 上。把你自己的探针或健康检查改为 `/livez` 和 `/readyz`（镜像的 `HEALTHCHECK` 和 `k8s/` 清单已经改了），如果要抓取 8081，只把它发布给监控网络。

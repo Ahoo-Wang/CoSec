@@ -31,7 +31,6 @@ import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -71,10 +70,8 @@ class Changes(
     authorizer: ControlAuthorizer,
     private val clock: Clock = Clock.systemUTC(),
     private val options: ChangeOptions = ChangeOptions(),
-    /** The host's `AttributeProvider` catalog, which candidates compile against with the platform's own declarations. */
-    attributes: AttributeCatalog = AttributeCatalog.NONE,
-    /** The headers the host reads credentials from besides the fixed ones (`CND-5`), as enforcement compiles with them. */
-    credentialHeaders: Set<String> = emptySet(),
+    /** What candidates compile and are analyzed against: the host's providers, credential headers, route maps. */
+    compile: CandidateCompile = CandidateCompile(),
     /** The host's token revocations, for the default [authority]: no default, as [ChangeAuthority] has none. */
     revocations: RevocationReader,
     /**
@@ -88,7 +85,7 @@ class Changes(
     /** Who hears of every step (RFC 0007 §10.5); publishing and break-glass wait for the REQUIRED ones. */
     private val listeners: ChangeListeners = ChangeListeners.NONE,
 ) {
-    private val checks = ChangeChecks(options, attributes, credentialHeaders)
+    private val checks = ChangeChecks(options, compile)
 
     private val windows = ShadowWindows(reports, options.shadow)
 

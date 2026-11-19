@@ -5,7 +5,11 @@
     "id": "bob"
   },
   "request": {
-    "action": "order:read"
+    "action": "order:read",
+    "resource": {
+      "type": "order",
+      "id": "1"
+    }
   },
   "expect": {
     "decision": "Deny",

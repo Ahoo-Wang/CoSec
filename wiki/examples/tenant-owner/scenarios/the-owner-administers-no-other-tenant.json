@@ -1,5 +1,9 @@
 {
   "description": "The same role in globex is nobody: acme's document binds it.",
+  "withoutDocument": [
+    "tenant",
+    "app"
+  ],
   "credential": {
     "tenant": "globex",
     "id": "bob",
