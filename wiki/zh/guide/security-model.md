@@ -282,6 +282,20 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 拦住被策略误放行的请求：发布前请先试验变更（[策略测试](../policies/testing.md)）；
 - 取代传输层安全：请在 TLS 之后运行，并妥善保管 `cosec.jwt.secret`。
 
+## 输出中的名称 {#names-in-output}
+
+同一个决策在不同输出里有不同的名字，因为每个输出（代码里的检查、控制面、审计事件、span、指标）都是为各自的读者写的。下面每一行是同一个概念在不同输出里的写法；没有任何一个被改名。
+
+| 概念 | 在哪里、怎么写 |
+|---|---|
+| 语句的效果 | 文档里是 `allow` 或 `deny`。正文把这些语句叫作 ALLOW 和 DENY。 |
+| 做出了什么决定 | 代码和场景的 `expect` 里是 `Permit`、`Deny`、`Indeterminate`、`Rejected`、`InvalidRequest`；审计的 `decision` 和 span 的 `cosec.authorize.result` 里是 `PERMIT`、`EXPLICIT_DENY`、`IMPLICIT_DENY` 等；指标的 `result` 用同样的词，小写（[每个输出里是什么做出了决定](../operations/observability.md#what-decided-in-every-output)）。决定说“放行”（permit），语句说“允许”（allow） |
+| 做出决定的语句 | 代码、场景以及控制面的 `simulate` 和 `explain` 里是 `by`：`policy`（策略 id）、`statement`（从零开始的序号）和 `name`。审计有 `authorization.source.policy` 和 `.statement`（`index`、`name`）；span 有 `cosec.authorize.policy.id`、`.statement.index` 和 `.statement.name`。**在场景里固定 `name`**：增加或调整语句顺序时序号会变 |
+| 语句是怎么生效的 | `by` 里的 `via`：代码和场景里是 `{"binding": id, "document": …}`、`{"attached": policyId}`、`"builtin"` 或 `{"boundaryOf": tenant}`；控制面的回答里是一个字符串，即绑定 id，旁边有 `document`，或者 `attached:<policyId>`。审计有 `binding`（同样的字符串）和 `authorization.source.via`；span 有 `cosec.binding.id`。策略自己的条件管着它的所有语句，是 `MatcherFailed` 原因里的 `guard` |
+| CoSec 派生的名称 | 简写权限是策略 `perm:<appId>/<id>`；角色条目为每个权限派生一条绑定 `role:<roleId>@<app>:<permission>`（[角色](../policies/role-permissions.md#roles)）；黑名单是 `builtin`。你没有写过这样名字的策略或绑定，它们也会出现在 `by` 和审计的 `binding` 里 |
+| 文档的修订 | 文档里是 `revision`；`explain` 的回答里是 `version`（`platform`、`app`、`tenant`）；审计里是 `snapshotVersion`；span 的 `cosec.snapshot.version` 里是 `<platform>/<app>/<tenant>`；`at` 是 `explain` 的请求成员，用来把 `version` 传回去（[解释决策](../integration/checks.md)） |
+| 动作属于哪里 | `service:verb` 里的 `service`；未映射的路由属于 `http` 命名空间，写作 `http:<METHOD>`（[路由映射](../policies/language.md#route-maps)） |
+
 ## 加固清单 {#hardening-checklist}
 
 上线之前：
