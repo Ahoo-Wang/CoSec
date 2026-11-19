@@ -17,8 +17,10 @@ package me.ahoo.cosec.testkit.webflux
 
 import io.mockk.mockk
 import kotlinx.coroutines.reactive.awaitSingle
+import kotlinx.coroutines.reactor.asCoroutineContext
 import kotlinx.coroutines.reactor.mono
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.runtime.Pipeline
@@ -37,6 +39,7 @@ import org.springframework.web.reactive.function.server.RouterFunctions
 import org.springframework.web.reactive.function.server.ServerResponse
 import reactor.core.publisher.Mono
 import reactor.test.StepVerifier
+import reactor.util.context.Context
 
 /**
  * The samples of "Testing your application" (`wiki/policies/testing.md`), WebFlux side, and `PIP-29`: the kit's
@@ -98,6 +101,16 @@ class TestingYourWebFluxApplicationTest {
         assertThrownBy<IllegalArgumentException> {
             runBlocking { CoSecTestBindings.withSecurityContext(mockk<SecurityContext>()) { "never" } }
         }.hasMessageContaining("PIP-27")
+        // A Reactor context the coroutine already has is kept: the context is added to it, not put in its place.
+        withContext(Context.of("tenant-hint", "acme").asCoroutineContext()) {
+            CoSecTestBindings.withSecurityContext(alice) {
+                val both = Mono.deferContextual { context ->
+                    val hint = context.get<String>("tenant-hint")
+                    Mono.just(hint + ":" + context.requireSecurityContext().principal.id)
+                }
+                both.awaitSingle()
+            }
+        }.assert().isEqualTo("acme:alice")
     }
 
     @Test
