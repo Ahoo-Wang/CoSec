@@ -3,15 +3,15 @@
 # Tests: :webmvc:test --tests me.ahoo.cosec.webmvc.SecurityContextArgumentResolverTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.SuspendingHandlerContextTest
 
 diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/SecurityContextArgumentResolver.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/SecurityContextArgumentResolver.kt
-index d8f3f60b..ba2c852c 100644
+index e2967be5b..6f284c120 100644
 --- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/SecurityContextArgumentResolver.kt
 +++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/SecurityContextArgumentResolver.kt
-@@ -38,7 +38,7 @@ class SecurityContextArgumentResolver : HandlerMethodArgumentResolver {
-         webRequest: NativeWebRequest,
+@@ -42,7 +42,7 @@ class SecurityContextArgumentResolver : HandlerMethodArgumentResolver {
          binderFactory: WebDataBinderFactory?,
      ): SecurityContext? {
--        val context = webRequest.getNativeRequest(HttpServletRequest::class.java)?.getSecurityContext()
-+        val context = SecurityContextHolder.context ?: webRequest.getNativeRequest(HttpServletRequest::class.java)?.getSecurityContext()
+         val bound = webRequest.getNativeRequest(HttpServletRequest::class.java)?.getAttribute(SecurityContext.KEY)
+-        val context = Unbound.orNull(bound, Unbound.Receiver.REQUEST)
++        val context = SecurityContextHolder.securityContextOrNull() ?: Unbound.orNull(bound, Unbound.Receiver.REQUEST)
          check(context != null || parameter.isOptional) {
-             "No SecurityContext for parameter [${parameter.parameterName}] of ${parameter.method}: CoSec did not " +
-                 "permit this request (it is outside the filter's dispatch, or the filter is not registered)."
+             val why = Unbound.why(bound, Unbound.Receiver.REQUEST)
+             "Parameter [${parameter.parameterName}] of ${parameter.method}: $why"

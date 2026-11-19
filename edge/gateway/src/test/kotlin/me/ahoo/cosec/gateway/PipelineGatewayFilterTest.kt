@@ -50,7 +50,7 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.cosec.webflux.checkMono
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -441,7 +441,7 @@ class PipelineGatewayFilterTest {
         var during: Boolean? = null
         var onCompletion: Boolean? = null
         PipelineGatewayFilter(pipeline).filter(exchange) { next ->
-            kept = next.getSecurityContext()
+            kept = next.securityContextOrNull()
             // The backend answers later; the request is still in progress meanwhile.
             Mono.delay(Duration.ofMillis(50))
                 .then(checker.checkMono(kept!!, "order:read", "order/1"))

@@ -22,8 +22,8 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.testkit.IdentityHeader
 import me.ahoo.cosec.testkit.PermittedRequest
 import me.ahoo.cosec.testkit.PipelineFixture
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.requireSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -46,7 +46,7 @@ class TestingYourApplicationTest {
 
     /** The handler under test: it answers who is calling. */
     private val routes = RouterFunctions.route().GET("/orders/{id}") { request ->
-        ServerResponse.ok().bodyValue(request.exchange().getSecurityContext()?.principal?.id ?: "none")
+        ServerResponse.ok().bodyValue(request.exchange().securityContextOrNull()?.principal?.id ?: "none")
     }.build()
 
     @Test
@@ -72,7 +72,8 @@ class TestingYourApplicationTest {
     }
 
     /** A function under test that reads the caller from the Reactor context. */
-    private fun currentUser(): Mono<String> = Mono.deferContextual { Mono.just(it.getSecurityContext().principal.id) }
+    private fun currentUser(): Mono<String> =
+        Mono.deferContextual { Mono.just(it.requireSecurityContext().principal.id) }
 
     @Test
     fun `a function that reads the Reactor context, with a context the kit made`() {
@@ -81,7 +82,7 @@ class TestingYourApplicationTest {
             .expectNext("alice").verifyComplete()
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders/1"))
         CoSecTestBindings.bind(exchange, alice)
-        exchange.getSecurityContext().assert().isSameAs(alice)
+        exchange.securityContextOrNull().assert().isSameAs(alice)
     }
 
     @Test

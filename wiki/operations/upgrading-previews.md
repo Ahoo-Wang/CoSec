@@ -22,6 +22,9 @@ section above it:
 | `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the four above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
+Which preview of the library may run behind which preview of the gateway image: see
+[Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
 - **A refused forwarded identity is counted and says why, and the gateway no longer writes one a service would refuse**
@@ -47,6 +50,44 @@ section above it:
   `2001:db8::1` for any spelling of that address and `192.0.2.1` for `::ffff:192.0.2.1`: keep blocked addresses in
   that form ([Extending](../architecture/extending.md)). `InMemoryBlacklistSource` keeps them so and refuses a value
   that is no address with `IllegalArgumentException`.
+- **The security context's readers are named for what they do** (UA-7). Affected: code that reads the
+  `SecurityContext` from a Reactor context, an exchange, a servlet request or `SecurityContextHolder`. Every reader now
+  comes as `requireSecurityContext()`, which throws an `IllegalStateException` saying what to do where CoSec did not
+  handle the request, and `securityContextOrNull()`, which answers `null`. All are `@JvmStatic`. The old names are gone,
+  with no aliases:
+
+  | Through beta.4 | From beta.5 |
+  |---|---|
+  | `ContextView.getSecurityContext()` (threw `IllegalStateException("SecurityContext is null.")`) | `ContextView.requireSecurityContext()` |
+  | `ContextView.getSecurityContextOrEmpty()` (answered `null`) | `ContextView.securityContextOrNull()` |
+  | `ServerWebExchange.getSecurityContext()` (answered `null`) | `ServerWebExchange.securityContextOrNull()`, or `requireSecurityContext()` |
+  | `HttpServletRequest.getSecurityContext()` (answered `null`) | `HttpServletRequest.securityContextOrNull()`, or `requireSecurityContext()` |
+  | `SecurityContextHolder.context` (Java: `getContext()`) | `SecurityContextHolder.securityContextOrNull()` |
+  | `SecurityContextHolder.requiredContext` (Java: `getRequiredContext()`), which threw `IllegalArgumentException` | `SecurityContextHolder.requireSecurityContext()`, which throws `IllegalStateException`: code that caught the other type no longer catches it |
+
+  A handler's `SecurityContext` parameter is unchanged, and its message is now the request reader's
+  ([Web](../integration/web.md)).
+
+  A context bound that CoSec's pipeline did not make (one built by hand, or a mock) is still ignored (`PIP-27`), but
+  no longer silently: `requireSecurityContext()` says so ("A SecurityContext is bound … that CoSec's pipeline did not
+  make, and it is ignored"), and `securityContextOrNull()` logs that sentence at `WARN`, at most once a minute for each
+  reader. A test that binds such a context sees a missing or anonymous caller, or a permit where its code lets an absent
+  context through. Grep the tests for `SecurityContext.KEY`, `mockk<SecurityContext>` and your own implementations of
+  `SecurityContext`, and bind a context the pipeline made instead ([Testing your application](../policies/testing.md#testing-your-application)).
+- **A check that throws reports its own cause** (UA-16). Affected: code that reads the cause of a check's
+  `Indeterminate` decision (`AuthorizationChecker.decide`). It is `Cause.CheckFailed(error)`, where through beta.4 it
+  was `Cause.SourceUnavailable(PLATFORM, error)` whatever failed. A document the check could not read is still
+  `SourceUnavailable`. A check reaches no decision listener, so no event, audit, metric or span changes
+  ([Checks in code](../integration/checks.md)).
+- **A pipeline that answers API keys needs a membership provider when it is built** (UA-12). Affected: applications
+  that build a pipeline with `ApiKeyAuthenticator`, alone or in a `CompositeAuthenticator`, and no `memberships(...)`.
+  `build()` fails with an `IllegalStateException` that says to add one. Through beta.4 it built, then answered `503` to
+  every key. The starter already refused such a host at startup (`IDN-6`).
+- **The test kit's entries are static for Java** (UA-13). Affected: code compiled against beta.4 that calls
+  `PermittedRequest` or `IdentityHeader`. Their functions are now `@JvmStatic`, so the methods on `INSTANCE` are gone:
+  recompile. Kotlin sources stay the same; Java drops `INSTANCE` (`PermittedRequest.withToken(...)`). `@JvmOverloads`
+  and `@JvmStatic` are added to `PipelineFixture`'s companion (`load`, `of`, `unreadable`), `PipelineFixture.request`,
+  the constructors of `PipelineFixture.Principal` and `TokenSubject`, and `TokenSubject.of`, which only adds.
 - **The skill `cosec-custom-matcher` is `cosec-extending`** (UE-21). 8.0 has no matchers, and the skill is about
   extending CoSec with beans (`AttributeProvider`, `MembershipProvider`, `DecisionListener`, `RateLimiter`,
   `Authenticator`). The directory is `skills/cosec-extending`, its `name` is `cosec-extending`, and an agent invokes it as
@@ -64,7 +105,8 @@ section above it:
   ([Testing decisions](../policies/testing.md#testing-decisions)). Affected: scenarios that relied on the defaults or
   on a misplaced document; `PipelineFixture.load` reads a directory by the same rules. Name the fields, move the files.
 - **The `cosec-gateway-server` image: no JMX agent, the actuator on a management port, and the image's defaults kept
-  under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image.
+  under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image. A service on one preview of the library
+  behind a gateway image of another: [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
   - Through beta.3 the start script started a JMX agent on port 5555 with no authentication, on every interface. It no
     longer starts one. To attach, set it in `JAVA_OPTS`, bound to loopback ([the image](./deployment.md#the-image)); the
     `-Dcom.sun.management.jmxremote.host=127.0.0.1` the Kubernetes base set is gone with it.
@@ -158,6 +200,12 @@ section above it:
   principal's `Authorization`; a unit test binds `PermittedRequest.forSubject(...)` (or `withIdentity`, `withToken`)
   with `CoSecTestBindings.withSecurityContext` or `bind`. A filter of your own that runs the pipeline binds
   `outcome.security!!.securityContext`.
+
+  Such a test does not always fail loudly. The context it bound reads as no context, so the code under test sees a
+  missing or anonymous caller (a `401`, a refused handler); and where your code lets an absent context through, for
+  example as "a command with no request of its own", it gives a permit the test did not expect: a test that expects a
+  denial sees an allow. Search your tests for `SecurityContext.KEY`, `mockk<SecurityContext>` and every class that
+  implements `SecurityContext`.
 - **Breaking: three shapes of a document that never did what they read no longer compile** (`DOC-9`, `DOC-10`,
   `DOC-11`). Each refuses a document whose statement already did not apply as written:
   - `ignoreCase` on `eq` or `prefix` with a literal holding a letter beyond ASCII (`Ärzte`), where missing a spelling

@@ -30,6 +30,8 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
+import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
+import me.ahoo.cosec.runtime.authn.CompositeAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -42,14 +44,17 @@ import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
 import me.ahoo.cosec.runtime.snapshot.PlatformCompiler
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
+import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.attribute.AttributeDeclaration
 import me.ahoo.cosec.spi.attribute.AttributeProvider
 import me.ahoo.cosec.spi.attribute.AttributeRequest
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.spi.membership.InMemoryMembershipProvider
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -227,6 +232,22 @@ class PipelineBuilderTest {
             assertThrows<IllegalStateException> { contradicting.build() }
         }
         builder().listener(listener).listeners { queueCapacity = 1 }.build().close()
+    }
+
+    /** UA-12: a pipeline that answers API keys without a membership provider would answer every key 503: refused. */
+    @Test
+    fun `a pipeline that answers API keys needs a membership provider`() {
+        val keys = ApiKeyAuthenticator(InMemoryApiKeyStore(emptyMap()).reader)
+        fun builder(authenticator: Authenticator) =
+            Pipeline.builder(authenticator, SuspendingSnapshotSource(InstalledViews()))
+        listOf(keys, CompositeAuthenticator(authenticator(authenticated()), keys)).forEach { answersKeys ->
+            val refused = assertThrows<IllegalStateException> { builder(answersKeys).build() }.message
+            refused.assert().contains("answers API keys").contains("every key would be answered 503")
+            refused.assert().contains("memberships(provider)")
+            builder(answersKeys).memberships(InMemoryMembershipProvider()).build().close()
+        }
+        // A token-only composite asks no provider.
+        builder(CompositeAuthenticator(authenticator(authenticated()))).build().close()
     }
 
     /** RFC 0009 §5 through the builder: what `forwardIdentity { }` forwards, `Pipeline.behindGateway { }` accepts. */

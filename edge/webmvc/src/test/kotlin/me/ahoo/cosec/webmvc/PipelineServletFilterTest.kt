@@ -41,7 +41,7 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -86,8 +86,8 @@ class PipelineServletFilterTest {
         var fromRequest: SecurityContext? = null
         var answers: List<Boolean>? = null
         PipelineServletFilter(pipeline, host = HostScope(AppId("order"))).doFilter(request, response) { req, _ ->
-            bound = SecurityContextHolder.requiredContext
-            fromRequest = (req as MockHttpServletRequest).getSecurityContext()
+            bound = SecurityContextHolder.requireSecurityContext()
+            fromRequest = (req as MockHttpServletRequest).securityContextOrNull()
             val checker = AuthorizationChecker(pipeline)
             answers = listOf(
                 checker.checkBlocking(bound!!, "http:GET", "/orders/1"),
@@ -96,7 +96,7 @@ class PipelineServletFilterTest {
         }
         bound!!.scope.appId.assert().isEqualTo("order")
         fromRequest.assert().isSameAs(bound)
-        SecurityContextHolder.context.assert().isNull()
+        SecurityContextHolder.securityContextOrNull().assert().isNull()
         response.getHeader("CoSec-Request-Id").assert().isNotNull()
         answers.assert().isEqualTo(listOf(true, false))
         // PIP-26: the request has completed, and a check of its context is denied.
@@ -129,7 +129,7 @@ class PipelineServletFilterTest {
             val request = MockHttpServletRequest("GET", "/orders").apply { isAsyncSupported = true }
             var bound: SecurityContext? = null
             PipelineServletFilter(pipeline).doFilter(request, MockHttpServletResponse()) { req, _ ->
-                bound = (req as HttpServletRequest).getSecurityContext()
+                bound = (req as HttpServletRequest).securityContextOrNull()
                 req.startAsync()
             }
             checker.checkBlocking(bound!!, "http:GET", "/orders/1").assert().isTrue()
@@ -169,7 +169,7 @@ class PipelineServletFilterTest {
         seen.getHeader("X-Other").assert().isEqualTo("kept")
         seen.getIntHeader("CoSec-Identity").assert().isEqualTo(-1)
         seen.getDateHeader("CoSec-Identity").assert().isEqualTo(-1)
-        seen.getSecurityContext().assert().isNotNull()
+        seen.securityContextOrNull().assert().isNotNull()
         // Without one, the request is handed on as it came: nothing to wrap.
         val plain = MockHttpServletRequest("GET", "/orders")
         PipelineServletFilter(pipeline(permit)).doFilter(plain, MockHttpServletResponse()) { req, _ ->

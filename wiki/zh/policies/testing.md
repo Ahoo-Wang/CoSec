@@ -452,7 +452,13 @@ class OrderPermissionsTest {
 
 `PipelineFixture.unreadable(routes, listeners)` 是一个无法读取文档的宿主：对存储的每次读取都失败，因此每个请求都是 `503 unavailable`，没有请求被允许。让你的路由在它上面运行，证明存储不可用时它们失败关闭。
 
-`IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。一个头生成一分钟后就会被拒绝，所以每个请求生成一个（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。
+`IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。
+
+**每个请求生成一个头。**头在某一时刻生成，只在很短的时间内有效：当它比 `cosec.pipeline.identity.max-age`（默认 `60s`）加 `cosec.authentication.revocation.skew`（`5s`）更旧时，服务会以 `401` `token-expired` 拒绝它，不论里面的凭证还能有效多久（`forSubject` 的 `validFor` 默认是一小时；它是凭证的有效期，不是头的）。保存在字段或常量里的头，对几秒内结束的测试能用，对要等待的测试就会失败，而这个 `401` 看起来像是服务的缺陷。生成头很便宜：每个请求生成一个。`forSubject` 接受 `clock`，用来测试头的年龄本身（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。
+
+`PipelineFixture.Principal(id, tenant, roles, policies, app, attributes)` 说明请求是以谁的身份认证的：令牌会携带的那些事实。`tenant` 是主体的租户（省略时为默认租户 `(0)`）；`roles` 对默认空间写 `role`，对某个空间写 `role@space`；`policies` 是附加给它的策略；`app` 是它的凭证声明的应用（省略时没有）；`attributes` 是签名的主体属性，在条件里读作 `subject.attributes.<name>`。它等价于令牌，不是 API key，所以 key 的角色上限和 break-glass 都不适用。
+
+`PermittedRequest.withToken(token, verifier, revocations)` 的 `revocations` 没有默认值：在没有任何东西被吊销的测试里传 `RevocationReader.NONE`。要测试被吊销的令牌，传一个报告它已被吊销的读取器：`withToken` 会抛出 `IllegalArgumentException`，和对无效或已过期的令牌一样，所以测试不会带着一个它没有要求的匿名上下文继续下去。
 
 **下一步：** 把测试过的策略发布到存储中，见[存储](../operations/storage.md)。
 

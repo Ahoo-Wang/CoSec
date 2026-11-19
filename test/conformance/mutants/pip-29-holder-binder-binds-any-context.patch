@@ -3,7 +3,7 @@
 # Tests: :webmvc:test --tests me.ahoo.cosec.webmvc.testing.TestingYourApplicationTest
 
 diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/testing/CoSecTestBindings.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/testing/CoSecTestBindings.kt
-index 02361b5d..e15ef5bc 100644
+index cd4dbec8f..f4c3b6ec4 100644
 --- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/testing/CoSecTestBindings.kt
 +++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/testing/CoSecTestBindings.kt
 @@ -55,7 +55,7 @@ object CoSecTestBindings {
@@ -12,6 +12,6 @@ index 02361b5d..e15ef5bc 100644
      fun <T> withSecurityContext(context: SecurityContext, block: () -> T): T {
 -        val bound = pipelineMade(context)
 +        val bound = context
-         val previous = SecurityContextHolder.context
+         val previous = SecurityContextHolder.securityContextOrNull()
          SecurityContextHolder.setContext(bound)
          try {

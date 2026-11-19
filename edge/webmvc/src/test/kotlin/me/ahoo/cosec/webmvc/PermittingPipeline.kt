@@ -37,7 +37,7 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import java.util.concurrent.CompletableFuture
@@ -70,7 +70,7 @@ internal object PermittingPipeline {
         var context: SecurityContext? = null
         PipelineServletFilter(pipeline).doFilter(MockHttpServletRequest("GET", "/orders"), MockHttpServletResponse()) {
                 request, _ ->
-            context = (request as HttpServletRequest).getSecurityContext()
+            context = (request as HttpServletRequest).securityContextOrNull()
         }
         return checkNotNull(context)
     }

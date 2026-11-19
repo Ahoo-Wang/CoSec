@@ -195,12 +195,13 @@ class AuthorizationCheckerTest {
         val (checker, security) = failingChecker()
         val failed = checker.decide(security.securityContext, "fail:throw", "fail/1")
         failed.assert().isInstanceOf(Decision.Indeterminate::class.java)
-        ((failed as Decision.Indeterminate).cause as Cause.SourceUnavailable).error
+        // UA-16: the check's own failure, never a platform document that could not be read.
+        ((failed as Decision.Indeterminate).cause as Cause.CheckFailed).error
             .assert().isInstanceOf(IllegalStateException::class.java)
         checker.check(security.securityContext, "fail:throw", "fail/1").assert().isFalse()
         // A cancellation from inside the check, while the caller still runs, is a failure of the check.
-        checker.decide(security.securityContext, "fail:cancel", "fail/1")
-            .assert().isInstanceOf(Decision.Indeterminate::class.java)
+        val cancelled = checker.decide(security.securityContext, "fail:cancel", "fail/1")
+        (cancelled as Decision.Indeterminate).cause.assert().isInstanceOf(Cause.CheckFailed::class.java)
         checker.check(security.securityContext, "fail:cancel", "fail/1").assert().isFalse()
     }
 

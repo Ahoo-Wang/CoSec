@@ -18,28 +18,29 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.runtime.http.RequestSecurity
 import reactor.core.publisher.Mono
 import reactor.util.context.Context
 import reactor.util.context.ContextView
 
 object ReactiveSecurityContexts {
 
-    /** The security context the adapter wrote into this Reactor context; fails where there is none (`PIP-27`). */
-    fun ContextView.getSecurityContext(): SecurityContext {
-        return getSecurityContextOrEmpty()
-            ?: throw IllegalStateException("SecurityContext is null.")
-    }
+    /**
+     * The security context the adapter wrote into this Reactor context; [IllegalStateException] where there is none,
+     * saying what to do (`PIP-27`, UA-7). [securityContextOrNull] answers null instead.
+     */
+    @JvmStatic
+    fun ContextView.requireSecurityContext(): SecurityContext =
+        Unbound.required(getOrEmpty<Any>(SecurityContext.KEY).orElse(null), Unbound.Receiver.REACTOR_CONTEXT)
 
     /**
      * The security context the adapter wrote into this Reactor context; null when there is none, and for anything else
      * under [SecurityContext.KEY]: only a context CoSec's pipeline made is an authenticated caller's (`PIP-27`).
      */
-    fun ContextView.getSecurityContextOrEmpty(): SecurityContext? =
-        (getOrEmpty<Any>(SecurityContext.KEY).orElse(null) as? SecurityContext)
-            ?.takeIf { RequestSecurity.of(it) != null }
+    @JvmStatic
+    fun ContextView.securityContextOrNull(): SecurityContext? =
+        Unbound.orNull(getOrEmpty<Any>(SecurityContext.KEY).orElse(null), Unbound.Receiver.REACTOR_CONTEXT)
 
-    /** Only the adapter binds it (round 2 L5): applications read it with [getSecurityContext]. */
+    /** Only the adapter binds it (round 2 L5): applications read it with [requireSecurityContext] or [securityContextOrNull]. */
     @InternalCoSecApi
     fun Context.setSecurityContext(securityContext: SecurityContext): Context {
         return this.put(SecurityContext.KEY, securityContext)

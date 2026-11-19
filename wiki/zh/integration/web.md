@@ -208,17 +208,17 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 在把 CoSec 与 Spring Security 或容器登录一起使用的主机上，CoSec 视为匿名的请求上的 principal 是另一层的用户，不是 CoSec 的：CoSec 对调用方所知道的是 `SecurityContext`，应读取的就是它（`principal.authenticated`、`principal.id`）。在 Spring MVC 上，对 CoSec 认证了的请求，`isUserInRole` 返回 `false`，`getAuthType()` 返回 `null`：CoSec 的角色按空间划分，不是容器的角色，而容器的角色会是另一个用户的。通过 `SecurityContext` 和检查向 CoSec 询问角色（[代码中的权限检查](./checks.md)），而不是通过 `isUserInRole`。异步请求的 ASYNC 分派上同样有这个主体；容器在请求结束之后渲染的错误页不携带 CoSec 的主体。
 
 ```kotlin
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.requireSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 
 fun currentUser(): Mono<String> =
-    Mono.deferContextual { context -> Mono.just(context.getSecurityContext().principal.id) }
+    Mono.deferContextual { context -> Mono.just(context.requireSecurityContext().principal.id) }
 
 // 手头有 exchange 时；CoSec 没有处理该请求时为 null
-val securityContext = exchange.getSecurityContext()
+val securityContext = exchange.securityContextOrNull()
 ```
 
-CoSec 没有处理该请求时，三个访问器的回答不同：`ContextView.getSecurityContext()` 抛出 `IllegalStateException`，`ContextView.getSecurityContextOrEmpty()` 和 `exchange.getSecurityContext()` 返回 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。
+两个栈上的每个读取入口都有两种形式，名字说明是哪一种（UA-7）：`requireSecurityContext()` 在 CoSec 没有处理该请求时抛出 `IllegalStateException`，说明该怎么做（注册过滤器）以及还能从哪里读取上下文；`securityContextOrNull()` 返回 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。读取入口是 `ReactiveSecurityContexts`（Reactor `ContextView`）、`ServerWebExchanges`（exchange）、`ServletRequests`（Servlet 请求）和 `SecurityContextHolder`（请求线程），都带 `@JvmStatic`，供 Java 调用：`ServletRequests.requireSecurityContext(request)`。
 
 **Spring MVC**：在处理器中声明一个 `SecurityContext` 参数。starter 注册了它的解析器（`SecurityContextArgumentResolver`），它从请求中读取上下文，所以在各种处理器中（阻塞的、`suspend` 的、异步的），这个参数都是处理器自己那个请求的上下文。CoSec 没有处理该请求时，可空的参数为 null。参数的类型就是 `SecurityContext` 本身：你自己的子类型的参数交给你自己的解析器。
 
@@ -231,17 +231,17 @@ suspend fun order(@PathVariable id: String, security: SecurityContext): Order = 
 
 ```kotlin
 import me.ahoo.cosec.webmvc.SecurityContextHolder
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 
-val securityContext = httpServletRequest.getSecurityContext()
+val securityContext = httpServletRequest.securityContextOrNull()
 // 仅限请求线程上的阻塞代码
-val securityContext = SecurityContextHolder.requiredContext
+val securityContext = SecurityContextHolder.requireSecurityContext()
 ```
 
 持有者是一个 thread-local，过滤器为请求所在的线程绑定它，并在请求完成时清除。`suspend` 处理器不是阻塞代码：Spring 在 `Dispatchers.Unconfined` 上运行它，所以挂起之后，由哪个线程恢复它，它就在哪个线程上继续，而那个线程可能正在服务另一个请求（共享的 `Mutex`、`Channel` 或延迟值，单飞的缓存加载）。因此持有者是：
 
 - **被恢复的**：classpath 上有 Micrometer 的 `io.micrometer:context-propagation` 并设置了 `spring.reactor.context-propagation=auto` 时，Spring 每次恢复都会连同它的其他 thread-local 一起恢复持有者；
-- **未绑定的**：其他情况下，处理器运行之前就解绑（`PIP-22`）：`requiredContext` 会立即失败，不论在挂起之前还是之后，消息会指出应使用参数；`context` 为 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。处理器之后在该请求的线程上运行的代码同样看不到它：其他拦截器的 `postHandle` 和 `afterCompletion`，以及过滤器链返回之后的过滤器。还剩一种情况：在一个处理器是阻塞的请求的线程上恢复的 `suspend` 处理器，会在那里看到**那个请求的**上下文，所以只在这样的恢复之后、从不在挂起之前读取持有者的代码，会读到另一个请求的主体。
+- **未绑定的**：其他情况下，处理器运行之前就解绑（`PIP-22`）：`requireSecurityContext()` 会立即失败，不论在挂起之前还是之后，消息会指出应使用参数；`securityContextOrNull()` 为 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。处理器之后在该请求的线程上运行的代码同样看不到它：其他拦截器的 `postHandle` 和 `afterCompletion`，以及过滤器链返回之后的过滤器。还剩一种情况：在一个处理器是阻塞的请求的线程上恢复的 `suspend` 处理器，会在那里看到**那个请求的**上下文，所以只在这样的恢复之后、从不在挂起之前读取持有者的代码，会读到另一个请求的主体。
 
 启动日志中以 `SecurityContextHolder in suspend handlers` 开头的一行说明宿主属于哪一种。异步处理器（`Callable`、`DeferredResult`）和你自己启动的线程看不到持有者，消息相同。在这些情况下，都请使用参数或请求。
 

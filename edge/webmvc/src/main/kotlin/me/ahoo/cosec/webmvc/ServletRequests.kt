@@ -19,7 +19,6 @@ import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.runtime.http.RequestSecurity
 
 /**
  * ServletRequests .
@@ -27,7 +26,7 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
  * @author ahoo wang
  */
 object ServletRequests {
-    /** Only the adapter binds it (round 2 L5): applications read it with [getSecurityContext]. */
+    /** Only the adapter binds it (round 2 L5): applications read it with [requireSecurityContext] or [securityContextOrNull]. */
     @InternalCoSecApi
     fun HttpServletRequest.setSecurityContext(securityContext: SecurityContext) {
         setAttribute(SecurityContext.KEY, securityContext)
@@ -38,6 +37,15 @@ object ServletRequests {
      * [SecurityContext.KEY], which an application filter or a library may have put there: only a context CoSec's
      * pipeline made is an authenticated caller's (`PIP-27`).
      */
-    fun HttpServletRequest.getSecurityContext(): SecurityContext? =
-        (getAttribute(SecurityContext.KEY) as? SecurityContext)?.takeIf { RequestSecurity.of(it) != null }
+    @JvmStatic
+    fun HttpServletRequest.securityContextOrNull(): SecurityContext? =
+        Unbound.orNull(getAttribute(SecurityContext.KEY), Unbound.Receiver.REQUEST)
+
+    /**
+     * The security context the adapter bound to this request; [IllegalStateException] where there is none, saying what
+     * to do (UA-7). [securityContextOrNull] answers null instead.
+     */
+    @JvmStatic
+    fun HttpServletRequest.requireSecurityContext(): SecurityContext =
+        Unbound.required(getAttribute(SecurityContext.KEY), Unbound.Receiver.REQUEST)
 }
