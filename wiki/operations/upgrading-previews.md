@@ -37,6 +37,16 @@ section above it:
     a time past year 9999, an empty claim name): the request fails with `500` and no header is forwarded, where through
     beta.4 the service behind answered `400`. CoSec's own gateway builds no such identity; a custom `Authenticator`
     could. `IdentityHeader.of` throws `IllegalArgumentException` for such an identity, as it did for one too large.
+- **A gateway forwards the caller's credentials only when it accepted them** (R1A-7, `IDN-8`). Affected: gateways with
+  `cosec.gateway.identity.forward-authorization=true`. Through beta.4 a request whose token was expired, revoked or
+  invalid, which goes on as anonymous, still took its `Authorization` header, API key, query token and cookie to a
+  route that receives the identity when a public route let it through. They now stay at the gateway: the backend sees
+  an anonymous request. A backend that answered such a request by verifying the token itself now gets none.
+- **The IP blacklist compares an address in its canonical form** (R1A-4). Affected: implementations of
+  `BlacklistSource`, and callers of `InMemoryBlacklistSource.block`. `contains(BlacklistKind.IP, value)` is asked with
+  `2001:db8::1` for any spelling of that address and `192.0.2.1` for `::ffff:192.0.2.1`: keep blocked addresses in
+  that form ([Extending](../architecture/extending.md)). `InMemoryBlacklistSource` keeps them so and refuses a value
+  that is no address with `IllegalArgumentException`.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
