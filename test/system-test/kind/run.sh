@@ -23,7 +23,7 @@
 #      runs, is live, and stays out of the Service (not ready) while no platform document is published;
 #   2. after `cosec-migrate publish` through a port-forward, the pod turns ready and the Service has an endpoint;
 #   3. a decision: anonymous 401, a signed-in caller on a denied path 403, both problem+json; a permitted request is decided
-#      by CoSec and fails only at the missing backend, and is counted;
+#      by CoSec and fails only at the missing backend (the gateway's 500 for a host it cannot resolve), and is counted;
 #   4. the scrape endpoint on the management port, read from another pod through the pod's address, and that the Service
 #      does not publish that port;
 #   5. k8s/examples/gateway-mode-service-networkpolicy.yaml is valid for the API server, and selects what it says: the
@@ -144,13 +144,15 @@ case "$(type_of)" in application/problem+json*) ;; *) fail "the 401 is not probl
 grep -q 'problems/unauthorized' "$WORK/body" || fail "the 401 is not the problem type unauthorized: $(cat "$WORK/body")"
 [ "$(status_of -H "Authorization: Bearer $TOKEN" "$GATEWAY/cosec-auth/denied/1")" = 403 ] || fail "a denied path is not 403: $(cat "$WORK/body")"
 grep -q 'problems/forbidden' "$WORK/body" || fail "the 403 is not the problem type forbidden: $(cat "$WORK/body")"
+# The backend does not exist: Spring Cloud Gateway answers 500 for the host it cannot resolve (UnknownHostException), which
+# only happens once CoSec has permitted the request. A refusal of CoSec's is a problem+json of cosec.ahoo.me/problems.
 PERMITTED=$(status_of -H "Authorization: Bearer $TOKEN" "$GATEWAY/cosec-auth/orders/1" || true)
 case "$PERMITTED" in
   401 | 403) fail "a permitted request was refused by CoSec ($PERMITTED): $(cat "$WORK/body")" ;;
-  502 | 503 | 504) ;;
+  5??) grep -q 'cosec.ahoo.me/problems' "$WORK/body" && fail "the request failed with a CoSec problem, not at the missing backend: $(cat "$WORK/body")" ;;
   *) fail "a request to the missing backend answered $PERMITTED, not a gateway error" ;;
 esac
-ok "decisions: anonymous 401 unauthorized, a denied path 403 forbidden, a permitted request passes CoSec and fails at the missing backend ($PERMITTED)"
+ok "decisions: anonymous 401 unauthorized, a denied path 403 forbidden, a permitted request passes CoSec and fails at the missing backend ($PERMITTED, not a CoSec problem)"
 
 # --- 4. the scrape endpoint, from inside the cluster -----------------------------------------------------------------
 POD_IP=$(kc get pod "$GATEWAY_POD" -o jsonpath='{.status.podIP}')
