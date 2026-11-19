@@ -157,14 +157,19 @@ internal class SnapshotThreads(
         }
     }
 
-    /** As above, for a task whose line names only [key]: nothing is built for it unless it is refused. */
-    fun offHousekeeping(kind: HousekeepingTask, key: SnapshotKey, task: () -> Unit) {
+    /**
+     * As above, for a task whose line names only [key]: nothing is built for it unless it is refused. False when it was
+     * not taken, for a caller that offers it again later (UC-1's reviews); a task that then ran in place, at close or as
+     * [HousekeepingTask.runsInPlace], answers false too.
+     */
+    fun offHousekeeping(kind: HousekeepingTask, key: SnapshotKey, task: () -> Unit): Boolean =
         try {
             housekeeping.execute(task)
+            true
         } catch (_: RejectedExecutionException) {
             notOffered(kind, { kind.about(key) }, task)
+            false
         }
-    }
 
     private fun notOffered(kind: HousekeepingTask, line: () -> String, task: () -> Unit) {
         if (housekeeping.isShutdown && onOwnThread.get() == true) {

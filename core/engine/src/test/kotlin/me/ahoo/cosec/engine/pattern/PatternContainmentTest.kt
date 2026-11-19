@@ -163,7 +163,12 @@ class PatternContainmentTest {
     fun `resource disjointness`(a: String, b: String, expected: Boolean) {
         PatternContainment.disjoint(resource(a), resource(b)).assert().isEqualTo(expected)
         PatternContainment.disjoint(resource(b), resource(a)).assert().isEqualTo(expected)
+        prepared(a, b).assert().isEqualTo(expected)
+        prepared(b, a).assert().isEqualTo(expected)
     }
+
+    private fun prepared(a: String, b: String): Boolean =
+        PatternContainment.disjoint(PatternContainment.prepare(resource(a)), PatternContainment.prepare(resource(b)))
 
     @Test
     fun `case-insensitive or differently decoded paths are never disjoint by their literals`() {
@@ -174,6 +179,14 @@ class PatternContainmentTest {
         PatternContainment.disjoint(
             resource("http:path:/a"),
             resource("http:path:/b", decode = false)
+        ).assert().isFalse()
+        PatternContainment.disjoint(
+            PatternContainment.prepare(resource("http:path:/a", caseSensitive = false)),
+            PatternContainment.prepare(resource("http:path:/b", caseSensitive = false)),
+        ).assert().isFalse()
+        PatternContainment.disjoint(
+            PatternContainment.prepare(resource("http:path:/a")),
+            PatternContainment.prepare(resource("http:path:/b", decode = false)),
         ).assert().isFalse()
     }
 }
