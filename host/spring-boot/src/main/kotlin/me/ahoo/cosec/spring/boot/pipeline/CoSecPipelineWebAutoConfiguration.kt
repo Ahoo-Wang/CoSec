@@ -33,6 +33,7 @@ import me.ahoo.cosec.webmvc.PipelineServletFilter
 import me.ahoo.cosec.webmvc.SecurityContextArgumentResolver
 import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.cosec.webmvc.SuspendingHandlerHolderInterceptor
+import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -209,6 +210,11 @@ internal class CoSecPipelineWebAutoConfiguration {
                 hostOf(properties),
                 identity.forwardAuthorization,
             )
+
+        /** UB-10: the application's own controllers and functional routes are outside the gateway's filter. */
+        @Bean
+        fun cosecGatewayOwnHandlersCheck(beans: ListableBeanFactory): StartupTask =
+            StartupTask.AfterSingletons { GatewayOwnHandlers.warn(beans) }
     }
 
     companion object {
