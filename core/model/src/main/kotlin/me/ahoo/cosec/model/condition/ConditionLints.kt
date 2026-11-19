@@ -37,6 +37,7 @@ import me.ahoo.cosec.model.Identifiers
 @InternalCoSecApi
 object ConditionLints {
     /** What is wrong at [path] (relative to the condition, `$` being the condition), and whether it [refuses] compiling. */
+    @InternalCoSecApi
     class Finding(val path: String, val message: String, val refuses: Boolean)
 
     /** The findings of [condition], in document order. */
