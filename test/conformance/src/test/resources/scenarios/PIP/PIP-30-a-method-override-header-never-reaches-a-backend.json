@@ -54,6 +54,7 @@
   "gateway": {
     "route": {
       "uri": "lb://backend"
-    }
+    },
+    "reportHeaders": true
   }
 }
