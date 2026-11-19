@@ -19,11 +19,14 @@ dependencies {
     // Scenarios are read with Jackson, which no public signature names (JacksonSignatureTest): an implementation detail.
     implementation("tools.jackson.core:jackson-databind")
     api("org.junit.jupiter:junit-jupiter-api")
-    // The test bindings of the two web stacks (PIP-29), in their own packages. compileOnlyApi: their signatures name the
-    // stacks' types, so a consumer compiles against them (ApiVariantTest), but nothing of a web stack is brought at run
-    // time: an application that tests a WebFlux or Spring MVC handler has that adapter already.
-    compileOnlyApi(project(":webflux"))
-    compileOnlyApi(project(":webmvc"))
+    // The test bindings of the two web stacks (PIP-29), in their own packages: compileOnly, so neither stack reaches the
+    // classpath of a build that uses the kit. Whoever calls them tests a handler of that stack and has it already
+    // (ApiVariantTest's reviewed exception; SourceRulesTest keeps the rest of the kit off a web stack).
+    compileOnly(project(":webflux"))
+    compileOnly(project(":webmvc"))
+    compileOnly("org.springframework:spring-web")
+    compileOnly("io.projectreactor:reactor-core")
+    compileOnly("jakarta.servlet:jakarta.servlet-api")
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     // PermittedRequestTest issues real tokens with CoSec's own login and verifier, and switches with them.
     testImplementation(project(":jwt"))

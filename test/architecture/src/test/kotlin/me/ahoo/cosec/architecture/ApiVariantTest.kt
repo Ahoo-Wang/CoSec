@@ -26,6 +26,17 @@ import org.junit.jupiter.api.Test
 class ApiVariantTest {
     private companion object {
         const val JACKSON_DATABIND = "tools.jackson.core:jackson-databind"
+
+        /**
+         * Reviewed exceptions: a package whose public signatures may name these libraries though its module's API
+         * variant does not carry them. Only the test kit's web bindings (`PIP-29`): whoever calls them tests a handler of
+         * that stack and has it on the test classpath through its own main dependencies, while `compileOnlyApi` would put
+         * both stacks on every build that uses the kit. `SourceRulesTest` keeps the rest of the kit off a web stack.
+         */
+        val NOT_EXPORTED: Map<String, Set<String>> = mapOf(
+            "me.ahoo.cosec.testkit.webflux" to setOf("org.springframework:spring-web", "io.projectreactor:reactor-core"),
+            "me.ahoo.cosec.testkit.webmvc" to setOf("jakarta.servlet:jakarta.servlet-api"),
+        )
         val JACKSON = Regex("""tools\.jackson\.""")
 
         /**
@@ -96,13 +107,25 @@ class ApiVariantTest {
         seen.getValue("micrometer").map { it.library }.assert().contains("io.micrometer:micrometer-core")
         seen.getValue("testkit").map { it.library }.assert().contains("org.junit.jupiter:junit-jupiter-api")
 
+        val excused = HashSet<Pair<String, String>>()
         val missing = seen.flatMap { (project, types) ->
             val exported = facts(project, "module").map(::jar).toSet()
             types.filter { jar(it.library!!) !in exported }
+                .filterNot { type ->
+                    val entry = NOT_EXPORTED.entries.firstOrNull { (pkg, libraries) ->
+                        declaredIn(type.where) == pkg && type.library in libraries
+                    }
+                    entry?.let { excused += it.key to type.library!! } != null
+                }
                 .map { "$project: ${it.where} names ${it.type}, in ${it.library}, which its API variant does not carry" }
         }
         missing.assert().isEmpty()
+        // An exception that excuses nothing is stale: it must go, so the list cannot outlive what it was written for.
+        NOT_EXPORTED.flatMap { (pkg, libraries) -> libraries.map { pkg to it } }.filter { it !in excused }.assert().isEmpty()
     }
+
+    /** The package of the class that declares [where] (`pkg.Class.member(...)`). */
+    private fun declaredIn(where: String): String = where.substringBefore('(').substringBeforeLast('.').substringBeforeLast('.')
 
     /** `kotlinx-coroutines-core` is `-jvm` in the jar the class path holds and the variant names the other. */
     private fun jar(module: String) = module.removeSuffix("-jvm")
