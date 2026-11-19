@@ -63,6 +63,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
   {
     text: '运维',
     items: [
+      { text: '选择部署方式', link: '/zh/operations/topologies' },
       { text: '配置', link: '/zh/operations/configuration' },
       { text: '部署', link: '/zh/operations/deployment' },
       { text: '存储与缓存', link: '/zh/operations/storage' },

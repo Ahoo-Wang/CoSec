@@ -890,3 +890,5 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
 | RFC 0007 X6（生成的 JSON schema） | `schema/` 文件描述 8.0 的格式（[策略语言](../policies/language.md)）。 |
 | RFC 0007 X7（控制面审计、`BOUNDARY`） | [可观测性的变化](#observability-changes)。 |
 | RFC 0007 X8（Redis 命名空间） | [Redis key](#redis-keys)。 |
+
+**下一步：**部署承载流量之前，逐项完成[加固清单](../guide/security-model.md#hardening-checklist)。

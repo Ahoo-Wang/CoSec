@@ -1217,3 +1217,5 @@ The RFCs behind 8.0 list known differences. Each item is covered above, or descr
 | RFC 0007 X6 (generated JSON schema) | The `schema/` files describe the 8.0 formats ([policy language](../policies/language.md)). |
 | RFC 0007 X7 (control-plane audit, `BOUNDARY`) | [Observability changes](#observability-changes). |
 | RFC 0007 X8 (Redis namespaces) | [Redis keys](#redis-keys). |
+
+**Next:** before the deployment carries traffic, work through the [hardening checklist](../guide/security-model.md#hardening-checklist).

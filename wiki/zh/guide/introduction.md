@@ -127,7 +127,7 @@ CoSec 自己的构建所依据的 platform `cosec-dependencies` 从 8.0 起不�
 | 接入 CoSec 的开发者 | [快速开始](./quick-start.md) → [Web 集成](../integration/web.md) → [认证](../integration/authentication.md) → [代码中的权限检查](../integration/checks.md) → [配置](../operations/configuration.md) |
 | 策略作者 | [核心概念](./concepts.md) → [模型](./model.md) → [策略语言](../policies/language.md) → [角色权限](../policies/role-permissions.md) → [限流](../policies/rate-limiting.md) → [测试策略](../policies/testing.md) |
 | 跟着完整示例走 | [模型](./model.md) → [简单模式](../scenarios/simple-mode.md) → [不使用空间的应用](../scenarios/app.md) → [系统角色与自定义角色](../scenarios/roles.md) → [使用空间的应用](../scenarios/spaces.md) → [限定在一个空间的服务账号](../scenarios/service-account.md) → [租户所有者](../scenarios/tenant-owner.md) → [外部事实源同步角色](../scenarios/external-source.md) → [按业务动作授权](../scenarios/route-maps.md) → [网关拓扑](../scenarios/gateway.md) |
-| 在生产环境运行 CoSec 的人 | [配置](../operations/configuration.md) → [存储与缓存](../operations/storage.md) → [可观测性](../operations/observability.md) → [故障排查](../operations/troubleshooting.md) → [升级](../operations/upgrading.md) |
+| 在生产环境运行 CoSec 的人 | [选择部署方式](../operations/topologies.md) → [部署](../operations/deployment.md) → [配置](../operations/configuration.md) → [存储与缓存](../operations/storage.md) → [可观测性](../operations/observability.md) → [故障排查](../operations/troubleshooting.md) → [升级](../operations/upgrading.md) → [加固清单](./security-model.md#hardening-checklist) |
 | CoSec 的贡献者 | [架构概览](../architecture/overview.md) → [扩展 CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
 
-上线之前，每个人都应该读一遍[安全模型](./security-model.md)。
+上线之前，每个人都应该读一遍[安全模型](./security-model.md)，并逐项完成它的[加固清单](./security-model.md#hardening-checklist)。

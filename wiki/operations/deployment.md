@@ -428,3 +428,5 @@ Both setups start about a quarter faster with the cache: 27 % on the container m
 and 24 % natively. With the cache, 83 % of the classes the gateway loads come from it (13,127 of 15,884). Raw
 results, the commands and the machine are in
 [`docs/perf/gateway-aot-cache`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/gateway-aot-cache).
+
+**Next:** every setting and its default, in [Configuration](./configuration.md).

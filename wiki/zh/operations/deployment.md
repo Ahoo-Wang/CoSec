@@ -342,3 +342,5 @@ java -XX:AOTCache=app.aot -cp "$CLASSPATH" com.example.App
 两种环境下，有缓存时启动都快了约四分之一：容器中位数快 27 %，最快一次快 26 %，原生快 24 %。有缓存时，网关加载的类中有 83 % 来自缓存
 （15,884 个中的 13,127 个）。原始结果、命令和机器信息见
 [`docs/perf/gateway-aot-cache`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/gateway-aot-cache)。
+
+**下一步：**每个设置项及其默认值，见[配置](./configuration.md)。
