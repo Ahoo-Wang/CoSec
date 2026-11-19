@@ -138,7 +138,6 @@ class PathNormalizerTest {
             "/public/%252e%252e/admin|/public/%252e%252e/admin",
             "/admin;jsessionid=1|/admin",
             "/a;x/b;y=1,2|/a/b",
-            "/a%3Bb|/a%3Bb",
             "/a/.b/c..|/a/.b/c..",
             "/caf%C3%A9|/caf%C3%A9",
             "/a..b/...|/a..b/...",
@@ -146,6 +145,70 @@ class PathNormalizerTest {
     )
     fun safePathsLoseOnlyPathParameters(path: String, normalized: String) {
         PathNormalizer.normalize(path).assert().isEqualTo(normalized)
+    }
+
+    /**
+     * PIP-30: every encoded `;` and control character, in either case of the hex digits, wherever it is in the path,
+     * path parameters included: a backend that decodes before it strips path parameters, stops at NUL or drops what
+     * follows a control character serves another path than the one decided.
+     */
+    @Test
+    fun encodedSemicolonsAndControlCharactersAreRejected() {
+        val refused = (0x00..0x1F) + 0x3B + 0x7F
+        refused.size.assert().isEqualTo(34)
+        for (value in refused) {
+            for (escape in setOf("%%%02X".format(value), "%%%02x".format(value))) {
+                for (path in listOf("/admin${escape}x/users", "/$escape", "/a/b$escape", "$escape/a", "/a;x=$escape/b")) {
+                    PathNormalizer.normalize(path).assert().describedAs(path).isNull()
+                }
+            }
+        }
+    }
+
+    /**
+     * PIP-30: what stays as before. A double-encoded `;` or control character decodes to text, a printable character
+     * encoded is a character of its segment, and a trailing dot or space is read as written; a raw `;` is a path
+     * parameter.
+     */
+    @ParameterizedTest
+    @CsvSource(
+        delimiter = '|',
+        value = [
+            "/a%253Bb|/a%253Bb",
+            "/a%2500b|/a%2500b",
+            "/a%251Fb|/a%251Fb",
+            "/a%257Fb|/a%257Fb",
+            "/a%25b|/a%25b",
+            "/a%20b|/a%20b",
+            "/a%3Ab%3cc%3D|/a%3Ab%3cc%3D",
+            "/a%7Eb|/a%7Eb",
+            "/page.|/page.",
+            "/page%2e|/page%2e",
+            "/page%20|/page%20",
+            "/admin;x/users|/admin/users",
+        ]
+    )
+    fun doubleEncodedAndPrintableEscapesAreKept(path: String, normalized: String) {
+        PathNormalizer.normalize(path).assert().isEqualTo(normalized)
+    }
+
+    /** PIP-30: the reason names the kind of sequence and its segment, never the path. */
+    @ParameterizedTest
+    @CsvSource(
+        delimiter = '|',
+        value = [
+            "/admin%3Bx/users|path: an encoded ';' in segment 1",
+            "/a/b%3b|path: an encoded ';' in segment 2",
+            "/a/b/c%00|path: an encoded control character in segment 3",
+            "a%7f/b|path: an encoded control character in segment 1",
+            "/a;x=%0A/b|path: an encoded control character in segment 1",
+            "/public/%2e%2e/admin|path",
+            "/admin%2Fx|path",
+        ]
+    )
+    fun theRejectionNamesTheKindAndTheSegment(path: String, reason: String) {
+        PathNormalizer.normalize(path).assert().isNull()
+        PathNormalizer.rejection(path).assert().isEqualTo(reason)
     }
 
     @Test

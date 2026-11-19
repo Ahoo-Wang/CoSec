@@ -34,7 +34,7 @@ import me.ahoo.cosec.runtime.http.PathNormalizer
 import me.ahoo.cosec.runtime.http.StatusMapping
 
 /**
- * Stage 1: what the request asks for. Its normalized path (400 when ambiguous, PIP-5, PIP-14), its `CoSec-*`
+ * Stage 1: what the request asks for. Its normalized path (400 when ambiguous, PIP-5, PIP-14, PIP-30), its `CoSec-*`
  * parameters (400 when ambiguous), its method (400 with a lower-case letter, PIP-18), and the action and resource of
  * its route (400 for a capture that would change the resource id's segments). It writes nothing until all of them
  * are read, so a request refused here names none of them in its event.
@@ -42,7 +42,8 @@ import me.ahoo.cosec.runtime.http.StatusMapping
 internal class ReadRequest(private val routes: RouteMap) : Stage {
     override suspend fun run(state: RequestState): Outcome? {
         val facts = routed(state.input)
-        val path = PathNormalizer.normalize(facts.rawPath) ?: return invalid(state, "path")
+        val path = PathNormalizer.normalize(facts.rawPath)
+            ?: return invalid(state, PathNormalizer.rejection(facts.rawPath))
         val parameters = CoSecParameters.read(facts) ?: return invalid(state, "CoSec-* parameter")
         // PIP-18: a method holding a lower-case letter is no method any client sends on purpose, and backends that fold
         // case (Django, Werkzeug) would serve `delete` as DELETE past a DENY on `http:DELETE`: refused, as an ambiguous
