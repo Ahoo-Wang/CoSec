@@ -95,7 +95,8 @@ object IdentityCodec {
         val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(tree(identity)))
         if (header.length > maxBytes) {
             throw IdentityOverflowException(
-                "The identity of [${identity.subject}] is ${header.length} bytes encoded, over the limit of $maxBytes: " +
+                "The identity of [${QuotedText.of(identity.subject)}] is ${header.length} bytes encoded, " +
+                    "over the limit of $maxBytes: " +
                     "${identity.roles.size} roles, ${identity.claims.size} claims."
             )
         }
@@ -128,14 +129,16 @@ object IdentityCodec {
         val root = try {
             reader.readTree(bytes) ?: throw malformed("empty")
         } catch (error: JacksonException) {
-            throw malformed("not JSON: ${error.originalMessage}", error)
+            // Where, never what: Jackson's message and the exception quote the input, which a forged header chooses.
+            val at = error.location?.let { " at line ${it.lineNr}, column ${it.columnNr}" }.orEmpty()
+            throw malformed("not JSON$at")
         }
         root.only("$", *FIELDS)
         val version = root.need("v")
         if (!version.isIntegralNumber || version.asLong() != VERSION.toLong()) {
             throw IdentityFormatException(
                 Reason.UNSUPPORTED_VERSION,
-                "The identity header is version $version, not $VERSION."
+                "The identity header is version ${QuotedText.of(version.toString())}, not $VERSION."
             )
         }
         val scope = root.need("scope").also { it.only("$.scope", *SCOPE_FIELDS) }
@@ -197,7 +200,8 @@ object IdentityCodec {
             put("method", identity.credential.method.value)
             put("jti", identity.credential.id)
             val expiresAt = identity.credential.expiresAt ?: throw IdentityOverflowException(
-                "The credential of [${identity.subject}] never expires: a service could not bound the identity."
+                "The credential of [${QuotedText.of(identity.subject)}] never expires: " +
+                    "a service could not bound the identity."
             )
             put("exp", expiresAt.epochSecond)
             identity.credential.issuedAt?.let { put("iat", it.epochSecond) }
@@ -222,7 +226,7 @@ object IdentityCodec {
             is String -> {
                 if (value.length > MAX_CLAIM_LENGTH) {
                     throw IdentityOverflowException(
-                        "Claim [$name] is ${value.length} characters, over $MAX_CLAIM_LENGTH."
+                        "Claim [${QuotedText.of(name)}] is ${value.length} characters, over $MAX_CLAIM_LENGTH."
                     )
                 }
                 claims.put(name, value)
@@ -230,7 +234,7 @@ object IdentityCodec {
             is Boolean -> claims.put(name, value)
             is Number -> number(claims, name, value)
             else -> throw IdentityOverflowException(
-                "Claim [$name] is a ${value::class.simpleName}, not a string, number or boolean."
+                "Claim [${QuotedText.of(name)}] is a ${value::class.simpleName}, not a string, number or boolean."
             )
         }
     }
@@ -246,7 +250,8 @@ object IdentityCodec {
             is Long -> claims.put(name, exact)
             is Double -> claims.put(name, exact)
             else -> throw IdentityOverflowException(
-                "Claim [$name] is ${value::class.simpleName} $value, which the identity header cannot hold exactly."
+                "Claim [${QuotedText.of(name)}] is ${value::class.simpleName} ${QuotedText.of(value.toString())}, " +
+                    "which the identity header cannot hold exactly."
             )
         }
     }
@@ -277,12 +282,14 @@ object IdentityCodec {
             if (name.isEmpty()) throw malformed("$.claims has an empty name")
             name to when {
                 value.isString -> value.asString().also {
-                    if (it.length > MAX_CLAIM_LENGTH) throw malformed("$.claims.$name is over $MAX_CLAIM_LENGTH characters")
+                    if (it.length > MAX_CLAIM_LENGTH) {
+                        throw malformed("$.claims.${QuotedText.of(name)} is over $MAX_CLAIM_LENGTH characters")
+                    }
                 }
                 value.isBoolean -> value.booleanValue()
                 value.isIntegralNumber -> value.longValue()
                 value.isNumber -> value.doubleValue()
-                else -> throw malformed("$.claims.$name is not a string, number or boolean")
+                else -> throw malformed("$.claims.${QuotedText.of(name)} is not a string, number or boolean")
             }
         }
     }
@@ -290,7 +297,7 @@ object IdentityCodec {
     private fun JsonNode.only(path: String, vararg names: String) {
         if (!isObject) throw malformed("$path is not an object")
         val unknown = properties().map { it.key }.filter { it !in names }
-        if (unknown.isNotEmpty()) throw malformed("$path has unknown members $unknown")
+        if (unknown.isNotEmpty()) throw malformed("$path has unknown members ${QuotedText.names(unknown)}")
     }
 
     private fun JsonNode.need(name: String): JsonNode = get(name) ?: throw malformed("[$name] is missing")

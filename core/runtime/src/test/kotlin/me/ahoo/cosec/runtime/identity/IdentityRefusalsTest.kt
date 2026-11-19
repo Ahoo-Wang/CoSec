@@ -35,6 +35,8 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.slf4j.LoggerFactory
 import java.time.Duration
+import java.time.Instant
+import java.util.Base64
 
 /**
  * #1690, `OBS-7`: a refused forwarded identity is counted by problem type, every time, and says why in the log without
@@ -100,6 +102,32 @@ class IdentityRefusalsTest {
         now += Duration.ofSeconds(1).toNanos()
         refusals.record("r4", ProblemType.TOKEN_EXPIRED, "again")
         warnings().map { it.substringBefore(']') }.assert().containsExactly("Request [r1", "Request [r2", "Request [r4")
+    }
+
+    /**
+     * `OBS-7`: the logged reason carries nothing of the header unescaped. A caller around the gateway forges a claim name,
+     * a member name or a token that is not JSON with a line break and control characters, 5,000 characters long: each
+     * refusal is one WARN line of bounded length with no control character, the forged text escaped, never written raw.
+     */
+    @Test
+    fun `a forged header writes one bounded warning line, with nothing of the header unescaped`() {
+        val now = Instant.now().epochSecond
+        val forged = "x\\n2026-11-19 00:00:00 ERROR forged\\u0007\\r" + "y".repeat(5_000)
+        val prefix = """{"v":1,"tenant":"acme","sub":"alice","scope":{"app":"order","space":""},"roles":["clerk"],""" +
+            """"auth":{"method":"jwt","jti":"t1","exp":${now + 3600}},"iat":$now,"rid":"r1""""
+        val headers = listOf(
+            "$prefix,\"claims\":{\"$forged\":{}}}",
+            "$prefix,\"$forged\":1}",
+            "{\"v\":${"a".repeat(5_000)}\nERROR forged}",
+        ).map { Base64.getUrlEncoder().withoutPadding().encodeToString(it.encodeToByteArray()) }
+        headers.forEach { header ->
+            lines.list.clear()
+            refused(IdentityGate(maxBytes = 64 * 1024), header).status.assert().isEqualTo(400)
+            val warning = warnings().single()
+            warning.any { it.isISOControl() }.assert().isFalse()
+            (warning.length < 1_000).assert().isTrue()
+            warning.assert().doesNotContain("y".repeat(100)).doesNotContain("a".repeat(100))
+        }
     }
 
     @Test

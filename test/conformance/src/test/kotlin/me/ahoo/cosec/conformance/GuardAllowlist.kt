@@ -39,6 +39,10 @@ object GuardAllowlist {
             "micrometer:IdentityRefusedMetricTest#each refusal counts in the series of its problem, and the series are the gate's problems only",
             "spring-boot:GatewayModeMetricsTest#the gate's refusals are counted in the registry by problem",
             "spring-boot:GatewayModeMetricsTest#without cosec-micrometer or a registry the gate still counts, and nothing fails",
+            "runtime:IdentityRefusalsTest#a forged header writes one bounded warning line, with nothing of the header unescaped",
+            "document:IdentityCodecMessageTest#a claim name is escaped and bounded",
+            "document:IdentityCodecMessageTest#unknown members are escaped, bounded, and at most three are named",
+            "document:IdentityCodecMessageTest#text that is not JSON is named by where it fails, never by what it holds",
             // OBS-6: one vocabulary for what decided.
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
