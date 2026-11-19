@@ -27,8 +27,9 @@
 #   4. the scrape endpoint on the management port, read from another pod through the pod's address, and that the Service
 #      does not publish that port;
 #   5. k8s/examples/gateway-mode-service-networkpolicy.yaml is valid for the API server, and selects what it says: the
-#      service's pods in its namespace, admitted from the gateway's pods of the namespace the gateway runs in.
-#   6. last, because its label values are the runtime's: the decisions of step 3 are counted, by result.
+#      service's pods in its namespace, admitted from the gateway's pods of the namespace the gateway runs in (every selector
+#      read from the applied policy itself). Enforcement is not tested: kind's network plugin does not enforce it.
+#   6. the decisions of step 3 are counted, by result (the scrape of step 4, read last).
 # Every wait is a bounded poll against the property it comes from; nothing is retried.
 set -euo pipefail
 
@@ -155,36 +156,52 @@ esac
 ok "decisions: anonymous 401 unauthorized, a denied path 403 forbidden, a permitted request passes CoSec and fails at the missing backend ($PERMITTED, not a CoSec problem)"
 
 # --- 4. the scrape endpoint, from inside the cluster -----------------------------------------------------------------
+# The pods of this leg run the image under test (already loaded into the cluster, never pulled): it has curl and a shell, and
+# nothing else is fetched from a registry that the leg chooses.
+probe() { # <name> <command...>: runs the command in a pod of the image, in the gateway's namespace; prints its output
+  local name=$1
+  shift
+  kc run "$name" --image="$IMAGE" --image-pull-policy=Never --restart=Never --rm -i --quiet --command -- "$@"
+}
 POD_IP=$(kc get pod "$GATEWAY_POD" -o jsonpath='{.status.podIP}')
-SCRAPE=$(kc run scrape --image=curlimages/curl:8.11.1 --restart=Never --rm -i --quiet --command -- \
-  curl -fs "http://$POD_IP:8081/actuator/prometheus") || fail "the scrape endpoint is not reachable from another pod on $POD_IP:8081"
+SCRAPE=$(probe scrape curl -fs "http://$POD_IP:8081/actuator/prometheus") || fail "the scrape endpoint is not reachable from another pod on $POD_IP:8081"
 echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{' || fail "the scrape has no cosec.authorization timer"
 # 000: curl got no answer at all (the Service has no port 8081), whatever kubectl does with the pod's exit code.
-PUBLISHED=$(kc run published --image=curlimages/curl:8.11.1 --restart=Never --rm -i --quiet --command -- \
-  curl -s -m 5 -o /dev/null -w '%{http_code}' http://cosec-gateway:8081/actuator/prometheus || true)
+PUBLISHED=$(probe published curl -s -m 5 -o /dev/null -w '%{http_code}' http://cosec-gateway:8081/actuator/prometheus || true)
 case "$PUBLISHED" in *000*) ;; *) fail "the Service cosec-gateway publishes the management port 8081 (answered: $PUBLISHED)" ;; esac
 ok "the scrape endpoint answers on the pod's management port, with the decision timer; the Service does not publish it"
 
 # --- 5. the example NetworkPolicy ---------------------------------------------------------------------------------------
 EXAMPLE="$ROOT/k8s/examples/gateway-mode-service-networkpolicy.yaml"
+POLICY=only-the-gateway-reaches-the-service
 kubectl create namespace "$SERVICE_NS"
 kubectl -n "$SERVICE_NS" apply --dry-run=server -f "$EXAMPLE" >/dev/null || fail "the example NetworkPolicy is not valid for the API server"
 kubectl -n "$SERVICE_NS" apply -f "$EXAMPLE"
-SELECTOR_KEY=$(kubectl -n "$SERVICE_NS" get networkpolicy only-the-gateway-reaches-the-service -o json | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin)["spec"]["podSelector"]["matchLabels"].items()))[0])')
-SELECTOR_VALUE=$(kubectl -n "$SERVICE_NS" get networkpolicy only-the-gateway-reaches-the-service -o json | python3 -c 'import json,sys; print(next(iter(json.load(sys.stdin)["spec"]["podSelector"]["matchLabels"].items()))[1])')
-kubectl -n "$SERVICE_NS" run service --image=busybox:1.37 --restart=Never --labels="$SELECTOR_KEY=$SELECTOR_VALUE" --port=8080 \
-  --command -- sh -c 'while true; do echo ok | nc -l -p 8080; done'
-[ "$(kubectl -n "$SERVICE_NS" get pods -l "$SELECTOR_KEY=$SELECTOR_VALUE" -o name | wc -l | tr -d ' ')" = 1 ] || fail "the example's podSelector selects no pod of the service"
-FROM_NAMESPACE=$(kubectl -n "$SERVICE_NS" get networkpolicy only-the-gateway-reaches-the-service -o jsonpath='{.spec.ingress[0].from[0].namespaceSelector.matchLabels}')
-FROM_POD=$(kubectl -n "$SERVICE_NS" get networkpolicy only-the-gateway-reaches-the-service -o jsonpath='{.spec.ingress[0].from[0].podSelector.matchLabels}')
-[ "$FROM_NAMESPACE" = "{\"kubernetes.io/metadata.name\":\"$NS\"}" ] || fail "the example admits from another namespace than $NS: $FROM_NAMESPACE"
-kubectl get namespace -l "kubernetes.io/metadata.name=$NS" -o name | grep -q . || fail "no namespace carries the label the example selects"
-[ -n "$(kc get pods -l app.kubernetes.io/name=cosec-gateway -o name)" ] || fail "the example's gateway label ($FROM_POD) selects no gateway pod of $NS"
-ok "the example NetworkPolicy is valid, selects the service's pod ($SELECTOR_KEY=$SELECTOR_VALUE) and admits the gateway's pods of $NS"
+# Three label selectors, read from the applied policy itself: the pods it protects, and the namespace and the pods it admits.
+SELECTORS=$(kubectl -n "$SERVICE_NS" get networkpolicy "$POLICY" -o json | python3 -c '
+import json, sys
+spec = json.load(sys.stdin)["spec"]
+def selector(match):
+    return ",".join(f"{key}={value}" for key, value in sorted(match["matchLabels"].items()))
+admitted = spec["ingress"][0]["from"][0]
+print(selector(spec["podSelector"]))
+print(selector(admitted["namespaceSelector"]))
+print(selector(admitted["podSelector"]))
+')
+SERVICE_SELECTOR=$(sed -n 1p <<<"$SELECTORS")
+FROM_NAMESPACE_SELECTOR=$(sed -n 2p <<<"$SELECTORS")
+FROM_POD_SELECTOR=$(sed -n 3p <<<"$SELECTORS")
+# The service's pod only has to exist with the label: enforcement is not tested (kindnet does not enforce), nothing connects.
+kubectl -n "$SERVICE_NS" run service --image="$IMAGE" --image-pull-policy=Never --restart=Never --labels="$SERVICE_SELECTOR" \
+  --command -- sleep 3600
+[ "$(kubectl -n "$SERVICE_NS" get pods -l "$SERVICE_SELECTOR" -o name | wc -l | tr -d ' ')" = 1 ] || fail "the example's podSelector ($SERVICE_SELECTOR) selects no pod of the service"
+kubectl get namespace -l "$FROM_NAMESPACE_SELECTOR" -o name | grep -qx "namespace/$NS" || fail "the example's namespaceSelector ($FROM_NAMESPACE_SELECTOR) does not select $NS"
+kc get pods -l "$FROM_POD_SELECTOR" -o name | grep -qx "pod/$GATEWAY_POD" || fail "the example's podSelector for the gateway ($FROM_POD_SELECTOR) does not select the gateway pod of $NS"
+ok "the example NetworkPolicy is valid, selects the service's pod ($SERVICE_SELECTOR) and admits the gateway's pod of the namespace $FROM_NAMESPACE_SELECTOR ($FROM_POD_SELECTOR)"
 
-# --- 6. the decisions are counted, by result (last: the label values are the runtime's, which #1682 renames) ----------------
-# The scrape of step 4 was taken after the three decisions of step 3; the label values are `permit` and `explicit_deny`.
-echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{.*result="permit"' || fail "the scrape has no cosec.authorization count for result=permit (this line waits for #1682, which renames allow to permit)"
+# --- 6. the decisions are counted, by result ----------------------------------------------------------------------------
+# The scrape of step 4 was taken after the three decisions of step 3.
+echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{.*result="permit"' || fail "the scrape has no cosec.authorization count for result=permit"
 echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{.*result="explicit_deny"' || fail "the scrape has no cosec.authorization count for result=explicit_deny"
 ok "the decisions of step 3 are counted: a permit and an explicit deny"
 
