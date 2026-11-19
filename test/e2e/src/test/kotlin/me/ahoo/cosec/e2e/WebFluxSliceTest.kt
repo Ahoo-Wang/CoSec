@@ -21,7 +21,7 @@ import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.webflux.PipelineWebFilter
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
@@ -43,7 +43,7 @@ class WebFluxSliceTest {
 
     private val client: WebTestClient by lazy {
         val handler = WebHandler { exchange ->
-            val scope = exchange.getSecurityContext()?.scope
+            val scope = exchange.securityContextOrNull()?.scope
             val body = "${scope?.appId}/${scope?.spaceId}/${scope?.roles}".toByteArray()
             exchange.response.writeWith(reactor.core.publisher.Mono.just(exchange.response.bufferFactory().wrap(body)))
         }

@@ -43,14 +43,14 @@ suspend fun check(security: SecurityContext, action: String, resource: String): 
 ```kotlin
 // WebFlux，返回 Mono
 import me.ahoo.cosec.runtime.AuthorizationChecker
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.requireSecurityContext
 import me.ahoo.cosec.webflux.checkMono
 
 @RestController
 class OrderActionsController(private val checker: AuthorizationChecker) {
     @GetMapping("/orders/{id}/actions")
     fun actions(@PathVariable id: String, exchange: ServerWebExchange): Mono<Map<String, Boolean>> {
-        val security = exchange.getSecurityContext()!!
+        val security = exchange.requireSecurityContext()
         return Mono.zip(
             checker.checkMono(security, "order:cancel", "order/$id"),
             checker.checkMono(security, "order:delete", "order/$id"),
@@ -62,13 +62,13 @@ class OrderActionsController(private val checker: AuthorizationChecker) {
 ```kotlin
 // WebFlux，suspend 处理器：exchange 参数给出上下文，check 是挂起函数
 import me.ahoo.cosec.runtime.AuthorizationChecker
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.requireSecurityContext
 
 @RestController
 class OrderActionsController(private val checker: AuthorizationChecker) {
     @GetMapping("/orders/{id}/actions")
     suspend fun actions(@PathVariable id: String, exchange: ServerWebExchange): Map<String, Boolean> {
-        val security = exchange.getSecurityContext()!!
+        val security = exchange.requireSecurityContext()
         return mapOf(
             "cancel" to checker.check(security, "order:cancel", "order/$id"),
             "delete" to checker.check(security, "order:delete", "order/$id"),
@@ -107,7 +107,7 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 |---|---|---|
 | `Permit(by)` | 有 ALLOW 匹配，且没有 DENY 匹配。`by` 是放行的语句：`policy`、`index`、`name`，以及 `via`，即策略生效的途径。`BindingRef.Bound(id, document)` 是一个绑定，位于 `PLATFORM`、`APP` 或 `TENANT` 文档中；`BindingRef.Attached(policy)` 是主体的成员关系附加的策略。 | `true` |
 | `Deny(by)` | 有 DENY 匹配（`by` 为该语句），租户的平台边界拒绝了放行（`StatementRef.Boundary`），或者没有任何匹配（`null`）。管道没有构建的 `SecurityContext`、不含 `:` 的动作，或者管道会拒绝的资源，也是 `Deny(null)`。 | `false` |
-| `Indeterminate(cause)` | 无法作出决策：某个文档读不到，某个 DENY 求值出错，检查本身出错，或者只有 break-glass 会放行。检查本身出错时日志中会有一条警告，并且无论出错的是什么，都报告为 `SourceUnavailable(PLATFORM, error)`：请看 `error`，而不是文档种类。 | `false` |
+| `Indeterminate(cause)` | 无法作出决策：某个文档读不到，某个 DENY 求值出错，检查本身出错，或者只有 break-glass 会放行。检查本身出错时日志中会有一条警告，并报告为 `CheckFailed(error)`：看 `error` 就知道出错的是什么。检查读不到某个文档时是 `SourceUnavailable`，与请求时一样。 | `false` |
 
 用它记录是什么允许了你的代码执行某个操作，例如“由应用文档中的角色绑定 `order-admins` 放行”。`Decision` 只留在你的进程中：永远不要把它或它的原因写进响应。Web 适配器也从不接触它，所有状态码正是因此出自同一处（[响应与状态码](./web.md#responses-and-status-codes)）。出于同样的原因，适配器模块不提供 `decide` 的 `Mono` 或阻塞形式：请在协程中调用它。`Permit` 携带的义务（即限流）并没有执行。
 

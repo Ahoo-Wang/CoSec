@@ -33,8 +33,8 @@ import me.ahoo.cosec.spring.boot.pipeline.GATEWAY_GLOBAL_FILTER
 import me.ahoo.cosec.spring.boot.pipeline.ReactiveClientIp
 import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
 import me.ahoo.cosec.webflux.PipelineWebFilter
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -77,7 +77,7 @@ internal class CoSecControlRoutesAutoConfiguration {
         ): ReactiveRouterFunction<ReactiveServerResponse> {
             val base = apiRootOf(properties)
             return ReactiveRouterFunctions.route(ReactivePredicates.path("$base/**")) { request ->
-                val security = RequestSecurity.of(request.exchange().getSecurityContext())
+                val security = RequestSecurity.of(request.exchange().securityContextOrNull())
                 // Nothing is read for a request no permitted principal stands behind, an anonymous permit included:
                 // ControlHttp answers it 401 (RC1-41, review L1 of #1240).
                 val body = if (security?.principal == null) {
@@ -119,7 +119,7 @@ internal class CoSecControlRoutesAutoConfiguration {
             val maxBodySize = properties.http.maxBodySize.toBytes()
             return ServletRouterFunctions.route(ServletPredicates.path("$base/**")) { request ->
                 val servlet = request.servletRequest()
-                val security = RequestSecurity.of(servlet.getSecurityContext())
+                val security = RequestSecurity.of(servlet.securityContextOrNull())
                 // Nothing is read for a request no permitted principal stands behind, an anonymous permit included
                 // (ControlHttp answers 401), and never more than max-body-size: the body is read before ControlHttp
                 // authorizes the action. The query comes from the query string alone: the request's parameters would

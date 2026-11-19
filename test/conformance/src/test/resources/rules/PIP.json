@@ -350,7 +350,7 @@
     {
       "id": "PIP-27",
       "source": "RFC 0006 §7.3; drill 2 (Wow), finding 4 (2026-11-18)",
-      "statement": "The adapters' readers of the security context answer only a context CoSec's pipeline made: `ServerWebExchanges.getSecurityContext`, `ContextView.getSecurityContextOrEmpty` and `getSecurityContext` (WebFlux and the gateway), `ServletRequests.getSecurityContext`, the `SecurityContext` handler parameter and `SecurityContextHolder` (Spring MVC). Anything else under `SecurityContext.KEY`, which an application filter or a library may have put there, reads as no context: null, or the failure an unbound context is.",
+      "statement": "The adapters' readers of the security context answer only a context CoSec's pipeline made: `requireSecurityContext` and `securityContextOrNull` on an exchange and a Reactor `ContextView` (WebFlux and the gateway), on a servlet request and `SecurityContextHolder`, and the `SecurityContext` handler parameter (Spring MVC). Anything else under `SecurityContext.KEY`, which an application filter or a library may have put there, reads as no context: null, or the failure an unbound context is.",
       "level": "build",
       "guards": [
         "webflux:RequestEndTest#a context the pipeline did not make reads as none",

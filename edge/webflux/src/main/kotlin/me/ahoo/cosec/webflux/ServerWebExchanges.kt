@@ -18,7 +18,6 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.runtime.http.RequestSecurity
 import org.springframework.web.server.ServerWebExchange
 
 /**
@@ -27,7 +26,7 @@ import org.springframework.web.server.ServerWebExchange
  * @author ahoo wang
  */
 object ServerWebExchanges {
-    /** Only the adapter binds it (round 2 L5): applications read it with [getSecurityContext]. */
+    /** Only the adapter binds it (round 2 L5): applications read it with [requireSecurityContext] or [securityContextOrNull]. */
     @InternalCoSecApi
     @JvmStatic
     fun ServerWebExchange.setSecurityContext(securityContext: SecurityContext) {
@@ -40,6 +39,14 @@ object ServerWebExchanges {
      * pipeline made is an authenticated caller's (`PIP-27`).
      */
     @JvmStatic
-    fun ServerWebExchange.getSecurityContext(): SecurityContext? =
-        (attributes[SecurityContext.KEY] as? SecurityContext)?.takeIf { RequestSecurity.of(it) != null }
+    fun ServerWebExchange.securityContextOrNull(): SecurityContext? =
+        Unbound.orNull(attributes[SecurityContext.KEY], Unbound.Receiver.EXCHANGE)
+
+    /**
+     * The security context the adapter bound to this exchange; [IllegalStateException] where there is none, saying what
+     * to do (UA-7). [securityContextOrNull] answers null instead.
+     */
+    @JvmStatic
+    fun ServerWebExchange.requireSecurityContext(): SecurityContext =
+        Unbound.required(attributes[SecurityContext.KEY], Unbound.Receiver.EXCHANGE)
 }

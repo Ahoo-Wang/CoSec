@@ -26,7 +26,7 @@ import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineWebAutoConfiguration
 import me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import me.ahoo.cosec.webmvc.checkBlocking
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.params.ParameterizedTest
@@ -120,7 +120,7 @@ class ServletRequestEndTest {
             if (body !is String || servlet.dispatcherType != DispatcherType.ASYNC) {
                 return body
             }
-            val context = checkNotNull(servlet.getSecurityContext())
+            val context = checkNotNull(servlet.securityContextOrNull())
             return "$body advice=${checker.checkBlocking(context, ACTION, RESOURCE)} on=${servlet.dispatcherType}" +
                 " principal=${servlet.userPrincipal?.name}"
         }
@@ -131,7 +131,7 @@ class ServletRequestEndTest {
     class Errors(private val checker: AuthorizationChecker) : ErrorController {
         @RequestMapping("/error")
         fun error(request: HttpServletRequest): String {
-            val context = request.getSecurityContext()
+            val context = request.securityContextOrNull()
             val check = context?.let { checker.checkBlocking(it, ACTION, RESOURCE) }
             return "error context=${context?.principal?.id} check=$check on=${request.dispatcherType}" +
                 " principal=${request.userPrincipal?.name}"

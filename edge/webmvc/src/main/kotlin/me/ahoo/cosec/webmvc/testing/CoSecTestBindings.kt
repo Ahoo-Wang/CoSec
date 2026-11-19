@@ -56,7 +56,7 @@ object CoSecTestBindings {
     @JvmStatic
     fun <T> withSecurityContext(context: SecurityContext, block: () -> T): T {
         val bound = pipelineMade(context)
-        val previous = SecurityContextHolder.context
+        val previous = SecurityContextHolder.securityContextOrNull()
         SecurityContextHolder.setContext(bound)
         try {
             return block()

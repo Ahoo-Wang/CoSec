@@ -28,10 +28,24 @@ class CompositeAuthenticator(
     private val token: Authenticator,
     private val apiKey: Authenticator? = null,
 ) : Authenticator {
+    /** Whether it answers API keys, whose memberships a `MembershipProvider` gives (`IDN-6`): the builder's question. */
+    internal val answersApiKeys: Boolean
+        get() = apiKey.answersApiKeys() || token.answersApiKeys()
+
     override suspend fun authenticate(credentials: Credentials): AuthnResult {
         if (apiKey != null && credentials.apiKey != null) {
             return apiKey.authenticate(credentials)
         }
         return token.authenticate(credentials)
     }
+}
+
+/**
+ * Whether this authenticator answers API keys, as far as CoSec can tell: its own [ApiKeyAuthenticator], alone or in a
+ * [CompositeAuthenticator]. A custom one that answers a principal whose memberships a provider gives is not seen.
+ */
+internal fun Authenticator?.answersApiKeys(): Boolean = when (this) {
+    is ApiKeyAuthenticator -> true
+    is CompositeAuthenticator -> answersApiKeys
+    else -> false
 }
