@@ -419,6 +419,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             null,
             true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode),
             forwardedCredentials(headers, sentQuery, apiKeyHeader),
+            forwardedHeaders = headers.headerNames().map { it.lowercase() }.filter { it.startsWith("x-") }.sorted(),
         )
     }
 

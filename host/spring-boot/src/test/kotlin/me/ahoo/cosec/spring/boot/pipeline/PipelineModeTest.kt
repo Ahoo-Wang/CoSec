@@ -59,7 +59,7 @@ class PipelineModeTest {
         WebApplicationContextRunner()
             .withConfiguration(configurations)
             .withPropertyValues(
-                "cosec.pipeline.mode=gateway",
+                "cosec.pipeline.mode=gateway", "cosec.pipeline.identity.only-gateway-can-reach=true",
                 "cosec.pipeline.identity.max-age=30s",
             )
             .run { context ->
@@ -79,7 +79,7 @@ class PipelineModeTest {
     @Test
     fun `behind a gateway JWT is off unless turned on`() {
         val gateway = WebApplicationContextRunner().withConfiguration(configurations)
-            .withPropertyValues("cosec.pipeline.mode=gateway")
+            .withPropertyValues("cosec.pipeline.mode=gateway", "cosec.pipeline.identity.only-gateway-can-reach=true")
         gateway.run { context ->
             context.startupFailure.assert().isNull()
             context.getBeansOfType(TokenConverter::class.java).assert().isEmpty()

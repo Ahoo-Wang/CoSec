@@ -39,6 +39,7 @@ import tools.jackson.databind.node.JsonNodeFactory
  * { "status": 200, "proceed": true }                                   // pipeline
  * { "status": 200, "proceed": true, "identity": { "sub": "alice", ... } } // pipeline of a gateway: what it forwards
  * { "status": 200, "proceed": true, "credentials": ["authorization"] }  // through a gateway: credentials forwarded
+ * { "status": 200, "proceed": true, "forwardedHeaders": ["x-trace"] }   // through a gateway: the X- headers forwarded
  * { "status": 200, "proceed": true, "check": "Deny" }                  // pipeline: a check of the permitted request
  * { "status": 400, "type": "invalid-request" }                         // pipeline, the problem's slug
  * { "outcome": "none" }                                                // pipeline, the caller cancelled
@@ -176,6 +177,9 @@ object Expectations {
             set("issued", json.objectNode().apply { issued.forEach { (name, value) -> put(name, value) } })
         }
         if (outcome.identity.first) set("identity", outcome.identity.second ?: json.nullNode())
+        if (outcome.forwardedHeaders.isNotEmpty()) {
+            set("forwardedHeaders", json.arrayNode().apply { outcome.forwardedHeaders.forEach(::add) })
+        }
         if (outcome.credentials.isNotEmpty()) {
             set(
                 "credentials",

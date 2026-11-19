@@ -39,12 +39,12 @@ class IdentityGuardAutoConfigurationTest {
 
     @Test
     fun `gateway mode on a gateway host fails startup`() {
-        runner.withPropertyValues("cosec.pipeline.mode=gateway").run { context ->
+        runner.withPropertyValues("cosec.pipeline.mode=gateway", "cosec.pipeline.identity.only-gateway-can-reach=true").run { context ->
             context.startupFailure!!.messages().assert().contains("Spring Cloud Gateway host")
         }
         // Behind a gateway, the same mode is what it is for.
         runner.withClassLoader(FilteredClassLoader(GATEWAY_GLOBAL_FILTER))
-            .withPropertyValues("cosec.pipeline.mode=gateway")
+            .withPropertyValues("cosec.pipeline.mode=gateway", "cosec.pipeline.identity.only-gateway-can-reach=true")
             .run { context -> context.startupFailure.assert().isNull() }
     }
 
@@ -63,7 +63,7 @@ class IdentityGuardAutoConfigurationTest {
     /** `STA-3`: under lazy initialization the mode is checked all the same; the gateway would otherwise check nothing. */
     @Test
     fun `gateway mode on a gateway host, or an unknown mode, fails startup lazily too`() {
-        runner.withPropertyValues("cosec.pipeline.mode=gateway").lazily().run { context ->
+        runner.withPropertyValues("cosec.pipeline.mode=gateway", "cosec.pipeline.identity.only-gateway-can-reach=true").lazily().run { context ->
             context.startupFailure!!.messages().assert().contains("Spring Cloud Gateway host")
         }
         runner.withPropertyValues("cosec.pipeline.mode=gatway").lazily().run { context ->

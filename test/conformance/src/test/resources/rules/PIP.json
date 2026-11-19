@@ -388,6 +388,17 @@
         "testkit:TokenlessContextTest#withIdentity is what a service behind a gateway reads, the forwarded identity included",
         "spring-boot:WebAdapterParityTest#the test entries answer as the adapters do"
       ]
+    },
+    {
+      "id": "PIP-30",
+      "source": "R1A-6 (2026-11-19); RFC 0006 §7.3",
+      "statement": "A gateway forwards the request it decided: `PipelineGatewayFilter` removes the method-override headers `X-HTTP-Method-Override`, `X-HTTP-Method` and `X-Method-Override`, in any letter case, from every request it forwards, on every route, whether or not the route receives the identity, so a backend never runs a request as another method than the one the gateway decided (a DENY on `http:DELETE` is not stepped around by a `POST` that carries one of them). Not configurable. Every other header is forwarded as before. In-process hosts decide after Spring's hidden-method filter (`PIP-19`), and a service behind the gateway runs none (`STA-6`).",
+      "level": "pipeline",
+      "pending": null,
+      "guards": [
+        "gateway:PipelineGatewayFilterTest",
+        "gateway:MethodOverrideAllocationTest"
+      ]
     }
   ]
 }
