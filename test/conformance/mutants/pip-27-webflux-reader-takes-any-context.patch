@@ -3,14 +3,14 @@
 # Tests: :webflux:test --tests me.ahoo.cosec.webflux.RequestEndTest
 
 diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ServerWebExchanges.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ServerWebExchanges.kt
-index e2a2199c7..b5bb8652e 100644
+index b84f21668..0b0d03ce1 100644
 --- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ServerWebExchanges.kt
 +++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ServerWebExchanges.kt
-@@ -41,7 +41,7 @@ object ServerWebExchanges {
+@@ -40,7 +40,7 @@ object ServerWebExchanges {
       */
      @JvmStatic
      fun ServerWebExchange.securityContextOrNull(): SecurityContext? =
--        (attributes[SecurityContext.KEY] as? SecurityContext)?.takeIf { RequestSecurity.of(it) != null }
+-        Unbound.orNull(attributes[SecurityContext.KEY], Unbound.Receiver.EXCHANGE)
 +        attributes[SecurityContext.KEY] as? SecurityContext
  
      /**
