@@ -45,8 +45,14 @@ export const api = new Fetcher({ baseURL });
 const bare = new Fetcher({ baseURL });
 
 export const cosec = new CoSecConfigurer({
-  tokenRefresher: new CoSecTokenRefresher({ fetcher: bare, endpoint: '/auth/refresh' }),
-  tokenRevoker: new CoSecTokenRevoker({ fetcher: bare, endpoint: '/auth/logout' }),
+  tokenRefresher: new CoSecTokenRefresher({
+    fetcher: bare,
+    endpoint: '/auth/refresh',
+  }),
+  tokenRevoker: new CoSecTokenRevoker({
+    fetcher: bare,
+    endpoint: '/auth/logout',
+  }),
   onUnauthorized: () => window.location.assign('/login'),
   onForbidden: async () => console.error('Access denied'),
 });
