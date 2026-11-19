@@ -125,7 +125,8 @@ class ApiVariantTest {
     }
 
     /** The package of the class that declares [where] (`pkg.Class.member(...)`). */
-    private fun declaredIn(where: String): String = where.substringBefore('(').substringBeforeLast('.').substringBeforeLast('.')
+    private fun declaredIn(where: String): String =
+        where.substringBefore('(').substringBeforeLast('.').substringBeforeLast('.')
 
     /** `kotlinx-coroutines-core` is `-jvm` in the jar the class path holds and the variant names the other. */
     private fun jar(module: String) = module.removeSuffix("-jvm")
