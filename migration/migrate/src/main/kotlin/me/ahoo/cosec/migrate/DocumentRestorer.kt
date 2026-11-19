@@ -37,12 +37,14 @@ import java.time.Clock
  * written is the kept revision's content, or the file's.
  *
  * Provenance: kind `ROLLBACK` for a kept revision, `MIGRATE` for a file, by `cosec-migrate`, and the change field says
- * `restored from revision <n>` or `restored from a file`: the stored format has no kind of its own for it.
+ * `restored from revision <n> by cosec-migrate restore` or `restored from a file by cosec-migrate restore`: the stored
+ * format has no kind of its own for it. Nothing reads a document's provenance kind to decide (the lifecycle reads a
+ * change's own kind; the chain reads `parent`), and the change text, holding spaces, is never a change id.
  *
  * It writes only when the caller confirms the head revision it replaces ([Plan.head]), which the plan prints: a head
  * that moved since, or moves while it writes, is refused and nothing is written. The control plane's change listeners
- * run in its host and do not hear of it; the revision record and its provenance are its audit, and every instance
- * installs the new head as it installs any.
+ * run in its host and do not hear of it, as of `publish` and `bootstrap`: the revision record is the only audit of a
+ * restore, and the Kafka change audit does not carry it. Every instance installs the new head as it installs any.
  */
 class DocumentRestorer(
     store: ControlStore,
@@ -97,7 +99,12 @@ class DocumentRestorer(
             )
         }
         val kind = if (plan.source == "a file") ProvenanceKind.MIGRATE else ProvenanceKind.ROLLBACK
-        val publication = Publication("restored from ${plan.source}", kind, DocumentPublisher.MIGRATE_ACTOR)
+        // By what, too: read alone, the record tells a restore from a rollback the control plane published.
+        val publication = Publication(
+            "restored from ${plan.source} by cosec-migrate restore",
+            kind,
+            DocumentPublisher.MIGRATE_ACTOR
+        )
         when (val outcome = revisions.publish(plan.key, plan.head, plan.document, publication)) {
             is PublishOutcome.Published -> outcome.revision
             is PublishOutcome.Conflicted -> throw RestoreException(

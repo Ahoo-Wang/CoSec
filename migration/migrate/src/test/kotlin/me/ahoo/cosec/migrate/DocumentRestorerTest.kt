@@ -97,7 +97,7 @@ class DocumentRestorerTest {
         val head = runBlocking { revisions.head(SnapshotKey.Platform)!! }
         head.document.policies.map { it.id.value }.assert().containsExactly("control-api")
         head.document.provenance!!.kind.assert().isEqualTo(ProvenanceKind.ROLLBACK)
-        head.document.provenance!!.change.assert().isEqualTo("restored from revision 1")
+        head.document.provenance!!.change.assert().isEqualTo("restored from revision 1 by cosec-migrate restore")
         head.document.provenance!!.publishedBy.assert().isEqualTo(DocumentPublisher.MIGRATE_ACTOR)
         // The chain is kept: revision 2, the lock-out, is still there to read.
         runBlocking { revisions.revision(SnapshotKey.Platform, 2) }!!.policies.assert().isEmpty()

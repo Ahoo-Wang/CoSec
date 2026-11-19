@@ -427,5 +427,5 @@ cosec-migrate restore --to-redis redis://host:6379 [--cluster] [--key-prefix cos
 
 不带 `--confirm` 时，它打印将要替换的内容（头修订、来源、将写入的修订），不写入任何内容。再以 `--confirm <头修订>`（即它打印的修订）运行一次：它把保留的修订的内容（或用 `--file <document.json>` 代替 `--revision` 时文件的内容）作为该文档的下一个修订，经由控制面自己的写入器写入。它像每个实例那样编译文档，先写修订记录，再按被替换的头做比较并设置（compare-and-set）来写头，所以计划之后头已变化，或写入期间头变化，都会被拒绝，不写入任何内容。来源中含有 break-glass 绑定时拒绝。不删除任何内容：被锁在外面的修订仍留在历史里。
 
-新修订的来源信息（provenance）署名 `cosec-migrate`，保留的修订的种类为 `ROLLBACK`，文件为 `MIGRATE`，并写明 `restored from revision <n>` 或 `restored from a file`。控制面的变更监听器运行在它的宿主里，听不到这件事：修订记录就是它的审计。每个实例像安装任何新头一样安装它。
+新修订的来源信息（provenance）署名 `cosec-migrate`，保留的修订的种类为 `ROLLBACK`，文件为 `MIGRATE`，变更写明 `restored from revision <n> by cosec-migrate restore` 或 `restored from a file by cosec-migrate restore`，所以仅凭这条记录就能把它和经由控制面发布的回滚区分开。控制面的变更监听器运行在它的宿主里，听不到恢复，就像听不到 `publish` 或 `bootstrap` 一样：修订记录是恢复唯一的审计，Kafka 变更审计不包含它。每个实例像安装任何新头一样安装它。
 

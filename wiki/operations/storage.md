@@ -574,6 +574,9 @@ is refused and nothing is written. It refuses a source that holds a break-glass 
 locked-out revision stays in the history.
 
 The new revision's provenance names `cosec-migrate`, kind `ROLLBACK` for a kept revision or `MIGRATE` for a file, and
-`restored from revision <n>` or `restored from a file`. The control plane's change listeners run in its host and do
-not hear of it: the revision record is its audit. Every instance installs it as it installs any new head.
+the change `restored from revision <n> by cosec-migrate restore` or `restored from a file by cosec-migrate restore`, so
+the record alone tells it from a rollback published through the control plane. The control plane's change listeners
+run in its host and do not hear of a restore, as they do not hear of `publish` or `bootstrap`: the revision record is
+the only audit of a restore, and the Kafka change audit does not carry it. Every instance installs it as it installs
+any new head.
 
