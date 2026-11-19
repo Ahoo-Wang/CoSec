@@ -105,6 +105,7 @@ object GuardAllowlist {
             "runtime:HousekeepingRefusalTest#a throwing refusal meter never reaches the caller, and the summary counts it",
             "runtime:HousekeepingRefusalTest#nothing refused, nothing summarized",
             "runtime:InstallReviewTest#a review housekeeping refused is offered again when the key is next read",
+            "runtime:InstallReviewTest#a refused review of a revision no longer installed is dropped",
             "runtime:InstallReviewTest#a slow review delays no install",
             "runtime:InstallReviewTest#an installed revision is reviewed once, on housekeeping, after its load is answered",
             "runtime:HousekeepingRefusalTest#close while housekeeping is full writes what it refused, once, on the closing thread",
