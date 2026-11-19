@@ -269,6 +269,8 @@ internal class CoSecControlAutoConfiguration {
         attributes: AttributeProviders,
         cosec: CoSecProperties,
         environment: Environment,
+        revocationReader: ObjectProvider<RevocationReader>,
+        tokenStore: ObjectProvider<TokenStore>,
     ): Changes {
         val ids = idGenerator.getIfAvailable { RandomIdGenerator }
         return Changes(
@@ -280,6 +282,8 @@ internal class CoSecControlAutoConfiguration {
             // Candidates compile against the host's providers and credential headers, as enforcement compiles them.
             attributes = attributes.catalog,
             credentialHeaders = credentialHeaders(environment),
+            // The same reader as [authority]'s: no change flow is built without one (IDN-27's pattern).
+            revocations = revocations(revocationReader, tokenStore),
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),

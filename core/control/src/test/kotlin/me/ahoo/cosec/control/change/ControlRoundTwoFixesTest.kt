@@ -74,6 +74,7 @@ import org.junit.jupiter.api.Test
 import tools.jackson.databind.node.ObjectNode
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * The round-2 review of the control plane (RFC 0007): a window sums one report per instance (R1), an approval keeps
@@ -119,6 +120,7 @@ class ControlRoundTwoFixesTest {
             ChangeOptions(shadow = shadow),
             reports = reports,
             listeners = registered,
+            revocations = RevocationReader.NONE,
         )
     }
 
@@ -365,10 +367,10 @@ class ControlRoundTwoFixesTest {
                 credentialId = "token-pia",
             )
         )
-        ChangeAuthority(engine.authorizer).approverProblem(approved, needed, walt).assert().isNull()
+        ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE).approverProblem(approved, needed, walt).assert().isNull()
         val noLonger = "the approver no longer holds cosec:approve on the document"
         // An authorizer that cannot check a recorded principal, or fails to, does not count it.
-        ChangeAuthority(PERMIT_ALL).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         val failing = object : me.ahoo.cosec.control.authz.ControlAuthorizer {
             override suspend fun decide(
                 operator: Operator,
@@ -385,12 +387,12 @@ class ControlRoundTwoFixesTest {
                 resource: me.ahoo.cosec.model.Resource,
             ): me.ahoo.cosec.control.authz.ControlDecision = error("down")
         }
-        ChangeAuthority(failing).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
+        ChangeAuthority(failing, revocations = RevocationReader.NONE).approverProblem(approved, needed, walt).assert().isEqualTo(noLonger)
         // An approver the hard rule keeps from the document never counts, whatever its policies say.
         val elsewhere = approved.copy(
             approval = approved.approval!!.copy(approver = alice.actor, memberships = alice.memberships)
         )
-        ChangeAuthority(PERMIT_ALL).approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
+        ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE).approverProblem(elsewhere, needed, walt).assert().isEqualTo(noLonger)
         // The pipeline's authorizer: no request, no decision; documents it cannot confirm, no decision either.
         val principal = me.ahoo.cosec.spi.authn.AuthenticatedPrincipal(
             pia.actor.principal,
@@ -420,7 +422,7 @@ class ControlRoundTwoFixesTest {
     @Test
     fun `a deactivated or unknown approver does not count`() = runBlocking<Unit> {
         val directory = InMemoryMembershipProvider()
-        val authority = ChangeAuthority(EngineAuthority(revisions, directory).authorizer)
+        val authority = ChangeAuthority(EngineAuthority(revisions, directory).authorizer, revocations = RevocationReader.NONE)
         val change = changes.propose(
             walt,
             SnapshotKey.Platform,
@@ -486,7 +488,7 @@ class ControlRoundTwoFixesTest {
             pia.memberships,
             credentialId = "token-pia",
         )
-        val authority = ChangeAuthority(engine.authorizer)
+        val authority = ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
         authority.approverProblem(change.copy(approval = approval), needed, walt).assert().isNull()
         val capped = approval.copy(principalBindings = false)
         authority.approverProblem(change.copy(approval = capped), needed, walt)
@@ -574,7 +576,7 @@ class ControlRoundTwoFixesTest {
         changes.visible(walt, change.id).id.assert().isEqualTo(change.id)
 
         // Over HTTP, the problem is `unavailable`, with no detail.
-        val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer)))
+        val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)))
         val security = engine.security(TenantId.PLATFORM, "walt")
         engine.confirmation = DocumentConfirmation { error("the snapshot source is down") }
         http.handle(ControlHttpRequest("GET", "/changes/${change.id.value}"), security).status.assert().isEqualTo(503)

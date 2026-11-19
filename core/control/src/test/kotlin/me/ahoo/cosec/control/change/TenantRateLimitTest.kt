@@ -31,6 +31,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * A tenant's own rate limits (RFC 0006 §8.1, OBL-2): they count in its own buckets, so a tenant administrator tightens or
@@ -50,6 +51,7 @@ class TenantRateLimitTest {
         PERMIT_ALL,
         clock,
         ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),
+        revocations = RevocationReader.NONE,
     )
 
     private fun rule(id: String, permits: Double) =

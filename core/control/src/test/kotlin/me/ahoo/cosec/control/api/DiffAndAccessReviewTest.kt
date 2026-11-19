@@ -59,6 +59,7 @@ import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * #1205: a revision diff reports a change of the sections (catalog, limits, attributes, boundary, rate limits) by their
@@ -72,7 +73,7 @@ class DiffAndAccessReviewTest {
     private val plane = DefaultControlPlane(
         harness.changes,
         revisions,
-        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW)),
+        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW), revocations = RevocationReader.NONE),
         Simulator(),
     )
     private val acme = SnapshotKey.Tenant("acme")
@@ -328,7 +329,7 @@ class DiffAndAccessReviewTest {
             }
         }
         val options = ChangeOptions(shadow = IMMEDIATE_WINDOW)
-        val blind = DefaultControlPlane(harness.changes, revisions, ChangeAuthority(noOrder, options), Simulator())
+        val blind = DefaultControlPlane(harness.changes, revisions, ChangeAuthority(noOrder, options, revocations = RevocationReader.NONE), Simulator())
 
         val report = runBlocking { blind.analyze(PLATO, orderRead) }
 

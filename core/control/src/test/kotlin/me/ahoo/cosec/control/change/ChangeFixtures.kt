@@ -48,6 +48,7 @@ import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /** A control plane over an in-memory store and a clock the test moves. */
 class ChangeHarness(
@@ -58,7 +59,7 @@ class ChangeHarness(
 ) {
     private val counter = AtomicInteger()
     val revisions = Revisions(store, clock)
-    val changes = Changes(store, revisions, { ChangeId("c${counter.incrementAndGet()}") }, PERMIT_ALL, clock, options)
+    val changes = Changes(store, revisions, { ChangeId("c${counter.incrementAndGet()}") }, PERMIT_ALL, clock, options, revocations = RevocationReader.NONE)
 }
 
 val ACME: SnapshotKey = StoreFixtures.ACME

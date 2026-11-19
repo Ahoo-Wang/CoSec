@@ -53,6 +53,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.time.Clock
 import java.time.Instant
 import java.time.ZoneOffset
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * MIG-2, drill entry 7: what a 7.x "every action" reaches once converted. 7.x decided HTTP requests only, so `all` was
@@ -151,7 +152,7 @@ class AllActionReachTest {
         val clock = Clock.fixed(at, ZoneOffset.UTC)
         val store = InMemoryControlStore(clock)
         val revisions = Revisions(store, clock)
-        val changes = Changes(store, revisions, { ChangeId("grant-bob") }, reach.authorizer, clock)
+        val changes = Changes(store, revisions, { ChangeId("grant-bob") }, reach.authorizer, clock, revocations = RevocationReader.NONE)
         val alice = checkNotNull(Operator.of(security(acme, "alice")))
         val carol = checkNotNull(Operator.of(security(acme, "carol")))
         val key = SnapshotKey.Tenant(acme.value)

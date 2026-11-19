@@ -58,6 +58,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * #1218 (`CTL-8`): the decisions of one change rest on one confirmation of the control documents, confirmed again at
@@ -122,6 +123,7 @@ class ChangeBatchAuthorizationTest {
         Tap(engine.authorizer),
         clock,
         ChangeOptions(shadow = IMMEDIATE_WINDOW),
+        revocations = RevocationReader.NONE,
     )
 
     private fun policy(id: String, actions: List<String>) = PolicyDefinition(

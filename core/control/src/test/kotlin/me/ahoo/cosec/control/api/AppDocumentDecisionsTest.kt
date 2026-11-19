@@ -57,6 +57,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * CTL-3, R1-1 of #1194's review: `simulate` and `explain` read the documents enforcement reads, by its one rule
@@ -72,8 +73,8 @@ class AppDocumentDecisionsTest {
     private val ids = AtomicInteger()
     private val options = ChangeOptions(shadow = IMMEDIATE_WINDOW)
     private val changes =
-        Changes(store, revisions, { ChangeId("c${ids.incrementAndGet()}") }, engine.authorizer, clock, options)
-    private val plane = DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, options))
+        Changes(store, revisions, { ChangeId("c${ids.incrementAndGet()}") }, engine.authorizer, clock, options, revocations = RevocationReader.NONE)
+    private val plane = DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, options, revocations = RevocationReader.NONE))
     private val plato = engine.operator(TenantId.PLATFORM, "plato")
 
     private val read = PolicyDefinition(

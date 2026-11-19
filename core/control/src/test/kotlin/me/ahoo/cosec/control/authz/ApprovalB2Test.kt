@@ -116,6 +116,7 @@ class ApprovalB2Test {
             revocations = revocations,
             revocationSkew = Duration.ZERO
         ),
+        revocations = RevocationReader.NONE,
     )
 
     private val changes = changes()

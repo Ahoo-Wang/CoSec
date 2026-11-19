@@ -79,6 +79,7 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.seconds
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RFC 0007 §6.4, §6.5 end to end: two data-plane instances over one in-memory control store sample their requests
@@ -114,6 +115,7 @@ class ShadowWindowTest {
                 },
             ),
         ),
+        revocations = RevocationReader.NONE,
     )
 
     @AfterEach
@@ -307,6 +309,7 @@ class ShadowWindowTest {
             ChangeOptions(shadow = options),
             attributes = AttributeCatalog.of(listOf(country)),
             reports = reports,
+            revocations = RevocationReader.NONE,
         )
         val geo = PolicyDefinition(
             PolicyId("geo"),

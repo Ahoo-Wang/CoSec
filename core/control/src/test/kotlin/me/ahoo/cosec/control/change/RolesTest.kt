@@ -53,6 +53,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Instant
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /** Roles on the control plane (RFC 0012 §7): operations, authorization, checks and what they read. */
 class RolesTest {
@@ -179,7 +180,7 @@ class RolesTest {
             asked += "${action.verb} ${resource.type}/${resource.id}"
             ControlDecision.PERMIT
         }
-        return ChangeAuthority(authorizer) to asked
+        return ChangeAuthority(authorizer, revocations = RevocationReader.NONE) to asked
     }
 
     private fun authorized(base: PolicyDocument?, operator: Operator, key: SnapshotKey, vararg operations: Operation): List<String> {
@@ -274,7 +275,7 @@ class RolesTest {
         val notTrustRoot = ControlAuthorizer { _, action, _ ->
             if (action.verb == "approve") ControlDecision.DENY else ControlDecision.PERMIT
         }
-        val authority = ChangeAuthority(notTrustRoot)
+        val authority = ChangeAuthority(notTrustRoot, revocations = RevocationReader.NONE)
         val documents = object : CurrentDocuments {
             override suspend fun head(key: SnapshotKey) = null
             override suspend fun referrers(target: SnapshotKey, policy: PolicyId) = emptySet<SnapshotKey>()
@@ -375,7 +376,7 @@ class RolesTest {
             document.policies.map { it.id.value }.assert().containsExactly("perm:wms/read", "perm:wms/ship")
             document.bindings.map { it.id.value }.assert().containsExactly("role:clerk@wms:read")
         }
-        val plane = DefaultControlPlane(changes, harness.revisions, ChangeAuthority(PERMIT_ALL))
+        val plane = DefaultControlPlane(changes, harness.revisions, ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE))
         val report = plane.analyze(
             PLATO,
             AccessQuery(TenantId("acme"), "wms", "wh-01", Action("wms", "ship"), Resource("wms", "x", emptyMap())),

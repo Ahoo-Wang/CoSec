@@ -39,6 +39,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /** RFC 0007 §5.7 and §6.4: the periodic passes the host runs over what the store lists. */
 class ControlMaintenanceTest {
@@ -53,6 +54,7 @@ class ControlMaintenanceTest {
         PERMIT_ALL,
         clock,
         ChangeOptions(shadow = IMMEDIATE_WINDOW),
+        revocations = RevocationReader.NONE,
     )
     private val maintenance = ControlMaintenance(store, revisions, changes, Duration.ofMinutes(1))
 
@@ -97,6 +99,7 @@ class ControlMaintenanceTest {
             PERMIT_ALL,
             clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
         )
         val maintenance = ControlMaintenance(failing, revisions, failingChanges, Duration.ofMinutes(1))
         val first = published().digest
@@ -151,7 +154,7 @@ class ControlMaintenanceTest {
             override suspend fun documents(): Set<SnapshotKey> = error("Redis is down")
         }
         val blindRevisions = Revisions(failing, clock, revisions.retention)
-        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
+        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock, revocations = RevocationReader.NONE)
         ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1)).reclaim().assert().isEmpty()
     }
 
@@ -165,7 +168,7 @@ class ControlMaintenanceTest {
             override suspend fun change(id: ChangeId) = error("Redis is down")
         }
         val blindRevisions = Revisions(failing, clock, revisions.retention)
-        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
+        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock, revocations = RevocationReader.NONE)
         val blind = ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1))
         blind.reclaim().assert().isEmpty()
         store.apps()!!.value.assert().isEqualTo(AppList(emptySet(), complete = false))
@@ -232,7 +235,7 @@ class ControlMaintenanceTest {
             override suspend fun openChanges(): List<ChangeRequest> = error("Redis is down")
         }
         val blindRevisions = Revisions(failing, clock, revisions.retention)
-        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
+        val blindChanges = Changes(failing, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock, revocations = RevocationReader.NONE)
         val blind = ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1))
         val first = published().digest
         published()
@@ -257,7 +260,7 @@ class ControlMaintenanceTest {
             )
         }
         val blindRevisions = Revisions(unreadable, clock, revisions.retention)
-        val blindChanges = Changes(unreadable, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock)
+        val blindChanges = Changes(unreadable, blindRevisions, { ChangeId("unused") }, PERMIT_ALL, clock, revocations = RevocationReader.NONE)
         val blind = ControlMaintenance(unreadable, blindRevisions, blindChanges, Duration.ofMinutes(1))
         val first = published().digest
         published()
@@ -313,6 +316,7 @@ class ControlMaintenanceTest {
             PERMIT_ALL,
             clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
         )
         return counting to ControlMaintenance(counting, countingRevisions, countingChanges, Duration.ofMinutes(1))
     }

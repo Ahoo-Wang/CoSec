@@ -57,6 +57,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * Review M3: a change that takes a busy slot (RC1-12) makes its holder `CONFLICTED` before the slot moves, from
@@ -91,6 +92,7 @@ class PreemptionRaceTest {
         PERMIT_ALL,
         clock,
         ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true),
+        revocations = RevocationReader.NONE,
     )
 
     private val ids = java.util.concurrent.atomic.AtomicInteger()
@@ -217,6 +219,7 @@ class PreemptionRaceTest {
                 }
             )
         ).also { opened += it },
+        revocations = RevocationReader.NONE,
     )
 
     private val opened = ArrayList<ChangeListeners>()
@@ -510,7 +513,7 @@ class PreemptionRaceTest {
 
     /** The control API over [harness], and a request of plato's the host pipeline permitted. */
     private fun http(harness: ChangeHarness) =
-        ControlHttp(DefaultControlPlane(harness.changes, harness.revisions, ChangeAuthority(PERMIT_ALL)))
+        ControlHttp(DefaultControlPlane(harness.changes, harness.revisions, ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE)))
 
     private val plato = EngineAuthority(Revisions(memory, clock)).security(TenantId.PLATFORM, "plato")
 

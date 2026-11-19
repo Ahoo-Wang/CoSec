@@ -64,6 +64,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.random.Random
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RFC 0007 §9.2 (TNT-3) and the control-plane form of P12: a tenant's principal changes only its own tenant's
@@ -77,7 +78,7 @@ class ControlTenantIsolationTest {
     private val ids = AtomicInteger()
     private val changes = Changes(store, revisions, {
         ChangeId("c${ids.incrementAndGet()}")
-    }, PERMIT_ALL, clock, ChangeOptions(shadow = IMMEDIATE_WINDOW))
+    }, PERMIT_ALL, clock, ChangeOptions(shadow = IMMEDIATE_WINDOW), revocations = RevocationReader.NONE)
 
     private val acme = SnapshotKey.Tenant("acme")
     private val globex = SnapshotKey.Tenant("globex")

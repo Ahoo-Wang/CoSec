@@ -68,6 +68,7 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /** [CoCacheControlStore]'s conditional writes on real CoCache engines; Redis for what must reach Redis. */
 class CoCacheControlStoreTest {
@@ -285,7 +286,8 @@ class CoCacheControlStoreTest {
                 revisions,
                 { ChangeId("unused") },
                 { _, _, _ -> ControlDecision.PERMIT },
-                clock
+                clock,
+                revocations = RevocationReader.NONE,
             )
             val maintenance = ControlMaintenance(store, revisions, changes, Duration.ofMinutes(1))
             reads.clear()

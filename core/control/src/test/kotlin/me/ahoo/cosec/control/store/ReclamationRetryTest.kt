@@ -33,6 +33,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * #1226: a record reclamation takes out of the index and then fails to delete is deleted by a later pass. The index
@@ -63,6 +64,7 @@ class ReclamationRetryTest {
         PERMIT_ALL,
         clock,
         ChangeOptions(shadow = IMMEDIATE_WINDOW),
+        revocations = RevocationReader.NONE,
     )
     private val maintenance = ControlMaintenance(store, revisions, changes, Duration.ofMinutes(1))
 

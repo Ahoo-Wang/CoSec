@@ -180,6 +180,7 @@ class RevisionChainTest {
                     java.time.Duration.ZERO
                 ),
             ),
+            revocations = me.ahoo.cosec.spi.token.RevocationReader.NONE,
         )
         val one = changes(firstNode, first)
         val two = changes(secondNode, second)

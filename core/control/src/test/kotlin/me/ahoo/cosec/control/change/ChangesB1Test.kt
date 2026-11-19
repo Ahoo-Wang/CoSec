@@ -60,6 +60,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /** The change flow of RFC 0007 §6.1, §6.2 and §6.7 case by case. */
 /**
@@ -110,6 +111,7 @@ class ChangesB1Test {
             PERMIT_ALL,
             harness.clock,
             ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
         )
         val widened = fourEyes.propose(
             PLATO,
@@ -155,6 +157,7 @@ class ChangesB1Test {
             harness.clock,
             ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),
             listeners = listeners,
+            revocations = RevocationReader.NONE,
         )
     }
 
@@ -484,6 +487,7 @@ class ChangesB1Test {
             PERMIT_ALL,
             harness.clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
         )
         val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("read"))), "c")
         changes.skipShadow(ALICE_OP, change.id, "test")
@@ -543,6 +547,7 @@ class ChangesB1Test {
             harness.clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
             listeners = ChangeListeners(listOf(listener)),
+            revocations = RevocationReader.NONE,
         )
         val change = changes.propose(PLATO, SnapshotKey.Platform, 0, listOf(Operation.PutPolicy(allow("read"))), "c")
         changes.skipShadow(PLATO, change.id, "test")

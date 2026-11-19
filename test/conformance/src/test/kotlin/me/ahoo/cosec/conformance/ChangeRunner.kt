@@ -274,6 +274,7 @@ object ChangeRunner : ScenarioRunner {
             attributes = providers(),
             reports = reader,
             listeners = listeners,
+            revocations = revocations,
             authority = ChangeAuthority(authorizer, options, revocations = revocations, revocationSkew = Duration.ZERO),
         )
 
@@ -284,7 +285,8 @@ object ChangeRunner : ScenarioRunner {
             changes,
             revisions,
             ChangeAuthority(
-                if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
+                if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT },
+                revocations = revocations,
             ),
         )
 
@@ -390,7 +392,7 @@ object ChangeRunner : ScenarioRunner {
             val plane = DefaultControlPlane(
                 changes,
                 revisions,
-                ChangeAuthority(ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }),
+                ChangeAuthority(ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }, revocations = RevocationReader.NONE),
             )
             val found = plane.diff(
                 PLATFORM,
@@ -453,7 +455,7 @@ object ChangeRunner : ScenarioRunner {
             val security = securities[by] ?: throw ScenarioFormatException("No operator $by")
             next = ChangeId(argument.required("change").text())
             documents += SnapshotKey.Platform
-            val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(authorizer)))
+            val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(authorizer, revocations = RevocationReader.NONE)))
             val path = "/break-glass/${argument.required("binding").text()}"
             val response = http.handle(ControlHttpRequest("DELETE", path, mapOf("reason" to "scenario")), security)
             val body = CoSecJson.mapper.readTree(response.body).takeIf { response.status / 100 == 2 }

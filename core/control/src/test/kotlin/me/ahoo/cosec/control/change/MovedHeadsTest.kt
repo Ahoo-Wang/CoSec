@@ -38,6 +38,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /** RC1-33: what [MovedHeads] records after a publish, and that recording never undoes it. */
 class MovedHeadsTest {
@@ -51,7 +52,7 @@ class MovedHeadsTest {
 
         override suspend fun apps(): Versioned<AppList>? = store.apps()
     }
-    private val moved = MovedHeads(store, ChangeAuthority(PERMIT_ALL), context, Clock.systemUTC())
+    private val moved = MovedHeads(store, ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE), context, Clock.systemUTC())
     private val candidate = StoreFixtures.candidate(ACME)
 
     private fun checked(checkedWith: Map<SnapshotKey, SnapshotDigest?>) = ChangeRequest(
@@ -106,7 +107,7 @@ class MovedHeadsTest {
                 return store.head(key)
             }
         }
-        val impatient = MovedHeads(slow, ChangeAuthority(PERMIT_ALL), context, Clock.systemUTC(), 50.milliseconds)
+        val impatient = MovedHeads(slow, ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE), context, Clock.systemUTC(), 50.milliseconds)
         val change = checked(mapOf(SnapshotKey.Platform to null))
         var found: HeadsMoved? = null
         impatient.record(change, change, null, candidate, ALICE_OP) { found = it }

@@ -36,6 +36,7 @@ import me.ahoo.cosec.spi.shadow.InMemoryShadowReports
 import me.ahoo.cosec.spi.shadow.ShadowReportReader
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * Change requests and their state machine (RFC 0007 §6.1): propose, check, stage, rebase, publish, abandon, `apply`
@@ -75,7 +76,9 @@ class Changes(
     /** The headers the host reads credentials from besides the fixed ones (`CND-5`), as enforcement compiles with them. */
     credentialHeaders: Set<String> = emptySet(),
     private val checks: ChangeChecks = ChangeChecks(options, attributes, credentialHeaders),
-    internal val authority: ChangeAuthority = ChangeAuthority(authorizer, options),
+    /** The host's token revocations, for the default [authority]: no default, as [ChangeAuthority] has none. */
+    revocations: RevocationReader,
+    internal val authority: ChangeAuthority = ChangeAuthority(authorizer, options, revocations = revocations),
     /** What the instances report of the shadow windows (RFC 0007 §6.4); none by default. */
     reports: ShadowReportReader = InMemoryShadowReports(clock),
     /** Who hears of every step (RFC 0007 §10.5); publishing and break-glass wait for the REQUIRED ones. */

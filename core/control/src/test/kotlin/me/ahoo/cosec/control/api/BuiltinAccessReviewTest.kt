@@ -43,6 +43,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * #1401: an access review resolves the built-in control-plane policies (RFC 0007 §7.3) from the engine's own
@@ -55,7 +56,7 @@ class BuiltinAccessReviewTest {
     private val plane = DefaultControlPlane(
         harness.changes,
         revisions,
-        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW)),
+        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW), revocations = RevocationReader.NONE),
         Simulator(),
     )
     private val acme = SnapshotKey.Tenant("acme")

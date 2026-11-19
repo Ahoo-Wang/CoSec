@@ -47,6 +47,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * Removing a DENY of the platform or of an app needs a second person (RFC 0007 §7.4.4 as amended on 2026-11-09,
@@ -69,6 +70,7 @@ class DenyRemovalTest {
         authorizer,
         harness.clock,
         ChangeOptions(fourEyes = fourEyes, shadow = IMMEDIATE_WINDOW),
+        revocations = RevocationReader.NONE,
     )
 
     private fun deny(id: String, action: String = "order:export") = PolicyDefinition(

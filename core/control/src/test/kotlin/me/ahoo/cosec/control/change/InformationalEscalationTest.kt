@@ -26,6 +26,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * RC1-34 review: the tenant bindings an app change widens are shown to the approver, but what is approved is widening
@@ -33,7 +34,7 @@ import org.junit.jupiter.api.Test
  * alone needs anyone.
  */
 class InformationalEscalationTest {
-    private val authority = ChangeAuthority(PERMIT_ALL)
+    private val authority = ChangeAuthority(PERMIT_ALL, revocations = RevocationReader.NONE)
     private val pia = Actor(TenantId.PLATFORM, PrincipalId("pia"))
     private val widen = Escalation("document app:order", "NOT_ANALYZED", "only the trust root publishes it alone")
 

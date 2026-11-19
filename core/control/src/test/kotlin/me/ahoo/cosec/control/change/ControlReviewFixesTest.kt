@@ -54,6 +54,7 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * The round-1 review of the control plane (RFC 0007): a change's kind is its entry point's (K1), a change another
@@ -87,6 +88,7 @@ class ControlReviewFixesTest {
             clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
             listeners = registered,
+            revocations = RevocationReader.NONE,
         )
     }
 
@@ -266,7 +268,7 @@ class ControlReviewFixesTest {
 
     @Test
     fun `an approval that cannot be checked again does not count`() = runBlocking<Unit> {
-        val authority = ChangeAuthority(engine.authorizer)
+        val authority = ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
         val change = changes.propose(
             walt,
             SnapshotKey.Platform,

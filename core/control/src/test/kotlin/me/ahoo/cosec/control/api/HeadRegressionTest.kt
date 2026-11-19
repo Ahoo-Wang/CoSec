@@ -36,6 +36,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import me.ahoo.cosec.spi.token.RevocationReader
 
 /**
  * A head that moved back (a partial loss of data: a shard's failover in a Redis Cluster, a partial restore) leaves
@@ -49,7 +50,7 @@ class HeadRegressionTest {
     private val plane = DefaultControlPlane(
         harness.changes,
         revisions,
-        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW)),
+        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW), revocations = RevocationReader.NONE),
         Simulator(),
     )
 
