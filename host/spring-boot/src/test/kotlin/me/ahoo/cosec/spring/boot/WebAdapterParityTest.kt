@@ -127,6 +127,12 @@ class WebAdapterParityTest {
         /** The `CoSec-Identity` values the handler, or the gateway's route, was handed. */
         val identity: List<String> = emptyList(),
     ) {
+        /**
+         * The request's `java.security.Principal` the handler saw (UA-8). Not compared: the servlet containers own
+         * theirs and set none for CoSec, so only "none for an anonymous request" is the same on every adapter.
+         */
+        var requestPrincipal: String? = null
+
         val contentType: String? get() = headers["content-type"]?.single()
         val requestId: String? get() = headers["cosec-request-id"]?.single()
         val body: String get() = String(bytes.toByteArray(), Charsets.UTF_8)
@@ -337,11 +343,12 @@ class WebAdapterParityTest {
         var proceeded: SecurityContext? = null
         var called = false
         var identity: List<String> = emptyList()
+        var requestPrincipal: String? = null
         filter(exchange) { handed ->
             called = true
             proceeded = handed.getSecurityContext()
             identity = handed.request.headers[IdentityCodec.HEADER].orEmpty()
-            Mono.empty()
+            handed.getPrincipal<java.security.Principal>().doOnNext { requestPrincipal = it.name }.then()
         }.block(Duration.ofSeconds(5))
         val response = exchange.response
         if (called) {
@@ -361,7 +368,7 @@ class WebAdapterParityTest {
             principal = proceeded?.let { "${it.principal.id}@${it.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
             identity = identity,
-        )
+        ).also { it.requestPrincipal = requestPrincipal }
     }
 
     private fun servlet(scenario: Scenario): Written {
@@ -373,10 +380,12 @@ class WebAdapterParityTest {
         val chain = MockFilterChain()
         var proceeded: SecurityContext? = null
         var identity: List<String> = emptyList()
+        var requestPrincipal: String? = null
         val filter = PipelineServletFilter(gates.getValue(scenario.pipeline), contributors)
         filter.doFilter(request, response) { req, _ ->
             val handed = req as HttpServletRequest
             proceeded = handed.getSecurityContext()
+            requestPrincipal = handed.userPrincipal?.name
             identity = Collections.list(handed.getHeaders(IdentityCodec.HEADER))
             chain.doFilter(req, response)
         }
@@ -390,7 +399,7 @@ class WebAdapterParityTest {
             principal = proceeded?.let { "${it.principal.id}@${it.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
             identity = identity,
-        )
+        ).also { it.requestPrincipal = requestPrincipal }
     }
 
     // --- the scenarios -------------------------------------------------------------------------------------------
@@ -575,6 +584,15 @@ class WebAdapterParityTest {
         if (scenario.status == 429) {
             webflux.headers["retry-after"].assert().isEqualTo(listOf("3"))
             webflux.headers["ratelimit-remaining"].assert().isEqualTo(listOf("0"))
+        }
+        // UA-8: no adapter hands an anonymous request a Principal; an authenticated one's is its principal, where set.
+        servlet.requestPrincipal.assert().isNull()
+        if (webflux.proceeded && webflux.principal!!.startsWith("(0)@")) {
+            webflux.requestPrincipal.assert().isNull()
+            gateway.requestPrincipal.assert().isNull()
+        } else if (webflux.proceeded) {
+            webflux.requestPrincipal.assert().isEqualTo(webflux.principal!!.substringBefore('@'))
+            gateway.requestPrincipal.assert().isEqualTo(webflux.requestPrincipal)
         }
     }
 

@@ -358,6 +358,17 @@
         "webmvc:SecurityContextHolderTest#a context the pipeline did not make reads as none"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-28",
+      "source": "RFC 0006 §7.6; usability review UA-8 (maintainer's decision, 2026-11-19)",
+      "statement": "An adapter sets the request's `java.security.Principal` only for an authenticated caller: an anonymous request has none, on every web stack (WebFlux and the gateway set none, as the servlet containers set none), so a handler that reads \"a principal is present\" as \"signed in\" never counts anonymous callers as one user. The anonymous principal is read from the `SecurityContext`.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
+        "spring-boot:RealServerParityTest#an anonymous request has no request principal, on every server"
+      ]
     }
   ]
 }

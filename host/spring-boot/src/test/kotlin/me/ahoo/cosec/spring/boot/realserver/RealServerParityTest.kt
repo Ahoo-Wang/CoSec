@@ -21,6 +21,7 @@ import me.ahoo.cosec.webflux.ReactiveXForwardedRemoteIpResolver
 import me.ahoo.cosec.webmvc.ServletXForwardedRemoteIpResolver
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.TestInstance
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -90,6 +91,22 @@ class RealServerParityTest {
         Scenario("an empty segment is 400", get("/public//page"), 400, refusedFirst = JETTY_STACKS),
         Scenario("a path parameter is removed", get("/public;x=1/page"), 200, "GET /public/page"),
     )
+
+    /**
+     * UA-8: a handler that reads the request's `java.security.Principal` sees none for an anonymous request, on every
+     * stack, so "a principal is present" means signed in. An authenticated request's is the principal on the reactive
+     * stacks; the servlet stacks set none (`getUserPrincipal()` is the container's), which no reader takes for a caller.
+     */
+    @Test
+    fun `an anonymous request has no request principal, on every server`() {
+        for ((stack, server) in servers) {
+            val anonymous = server.send(get("/public/page"))
+            anonymous.body.assert().describedAs("$stack: $anonymous").endsWith("principal=null")
+            val alice = server.send(get("/orders/1", "Authorization: Bearer alice@acme:clerk"))
+            val expected = if (stack.servlet) "principal=null" else "principal=alice"
+            alice.body.assert().describedAs("$stack: $alice").endsWith(expected)
+        }
+    }
 
     @ParameterizedTest
     @MethodSource("scenarios")

@@ -24,6 +24,9 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // PIP-28: no request Principal for an anonymous request.
+            "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
+            "spring-boot:RealServerParityTest#an anonymous request has no request principal, on every server",
             // IDN-27: no public default reads revocations or memberships.
             "architecture:SafeDefaultsTest#no public parameter that reads revocations or memberships has a default",
             "architecture:SafeDefaultsTest#the scan reads the token API",
