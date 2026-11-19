@@ -1,0 +1,13 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-19T00:00:00Z",
+  "policies": [
+    { "id": "members", "statements": [ { "name": "signed-in", "effect": "allow", "action": "http:*", "condition": { "eq": [ "subject.authenticated", true ] } } ] },
+    { "id": "no-denied", "statements": [ { "name": "denied", "effect": "deny", "action": "http:*", "resource": "http:path:/cosec-auth/denied/**" } ] }
+  ],
+  "bindings": [
+    { "id": "members", "subject": "*", "app": "*", "space": "*", "policy": "members" },
+    { "id": "no-denied", "subject": "*", "app": "*", "space": "*", "policy": "no-denied" }
+  ]
+}
