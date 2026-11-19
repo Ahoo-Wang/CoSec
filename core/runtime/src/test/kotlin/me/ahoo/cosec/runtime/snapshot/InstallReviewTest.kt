@@ -100,7 +100,7 @@ class InstallReviewTest {
         }
         source(review).use { source ->
             // The load is answered while its review waits: nothing a request waits on runs it.
-            source.loadAll(listOf(APP_A)).get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS).entry(APP_A)!!.revision.assert().isEqualTo(1)
+            loadedRevision(source).assert().isEqualTo(1)
             of(APP_A).assert().isEmpty()
             held.countDown()
             awaitCondition { of(APP_A).isNotEmpty() }
@@ -145,11 +145,14 @@ class InstallReviewTest {
     fun `a review that throws leaves the install as it is`() {
         val failing = InstallReview<Compiled> { _, _, _ -> throw IllegalStateException("broken review") }
         source(failing).use { source ->
-            source.loadAll(listOf(APP_A)).get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS).entry(APP_A)!!.revision.assert().isEqualTo(1)
+            loadedRevision(source).assert().isEqualTo(1)
             awaitCondition { housekeeping.queue.isEmpty() && housekeeping.activeCount == 0 }
             source.peekAll(listOf(APP_A))!!.entry(APP_A)!!.revision.assert().isEqualTo(1)
         }
     }
+
+    private fun loadedRevision(source: SnapshotSource<Compiled, Compiled>): Long =
+        source.loadAll(listOf(APP_A)).get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS).entry(APP_A)!!.revision
 
     private fun awaitCondition(condition: () -> Boolean) {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(TEST_LIMIT_SECONDS)
