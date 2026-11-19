@@ -27,6 +27,9 @@ object SystemTopology {
     /** The second replica of the same image, on the same Redis. */
     val gateway2: URI get() = url("COSEC_SYSTEM_GATEWAY2_URL")
 
+    /** The gateway that refuses a token while revocations cannot be read (`revocation.fail-closed`). */
+    val gatewayStrict: URI get() = url("COSEC_SYSTEM_GATEWAY_STRICT_URL")
+
     /** Both replicas. */
     val gateways: List<URI> get() = listOf(gateway, gateway2)
 

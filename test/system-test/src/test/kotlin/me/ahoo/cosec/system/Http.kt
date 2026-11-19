@@ -68,6 +68,19 @@ object Http {
             Json.mapper.writeValueAsString(body)
         )
 
+    /** A GET that goes into the transcript only when [keep] says its answer is evidence: for loops of thousands. */
+    fun getQuietly(uri: URI, headers: List<Pair<String, String>>, keep: (Exchange) -> Boolean): Exchange {
+        val request = HttpRequest.newBuilder(uri).timeout(Duration.ofSeconds(10)).GET()
+        headers.forEach { (name, value) -> request.header(name, value) }
+        val response = client.send(request.build(), HttpResponse.BodyHandlers.ofString())
+        val exchange = Exchange("GET", uri, response.statusCode(), response.headers().map(), response.body())
+        if (keep(exchange)) {
+            Transcript.note("> GET $uri ${headers.joinToString { "${it.first}: ${it.second}" }}")
+            Transcript.note("< ${exchange.status} ${exchange.headers} ${exchange.body}")
+        }
+        return exchange
+    }
+
     fun send(method: String, uri: URI, headers: List<Pair<String, String>>, body: String?): Exchange {
         val builder = HttpRequest.newBuilder(uri)
             .timeout(Duration.ofSeconds(10))
