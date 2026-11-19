@@ -18,8 +18,7 @@ pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
 
 Until CoSec 8.0 is released, the `latest` tag of this package points at a `0.0.0`
 placeholder that is marked deprecated, so an install without a tag gets the
-placeholder and a deprecation notice, not the client. Install `@beta`, as above,
-or an exact version. After the release, drop `@beta`. It is published with each
+placeholder and a deprecation notice, not the client. Install the tag of the CoSec release you run: `@beta` for `8.0.0-beta.n` (as above), `@rc` for a release candidate, no tag once 8.0 is released; or an exact version, which stays right through all of them. A tag does not move past its line: once release candidates are out, `@beta` is still the last beta, which does not match an RC server. It is published with each
 CoSec release, at the version of CoSec.
 
 Peer dependencies: `fetcher`, `fetcher-eventbus`, and `fetcher-storage`.
