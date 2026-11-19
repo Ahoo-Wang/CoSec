@@ -115,11 +115,8 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
                 .headers { headers ->
                     // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
                     headers.set(CoSecParameters.REQUEST_ID, outcome.requestId)
-                    // The method decided is the one the backend runs (`PIP-30`): no override header goes on. A loop over
-                    // an array of lower-case names: removing an absent header allocates nothing (MethodOverrideAllocationTest).
-                    for (name in METHOD_OVERRIDE_HEADERS) {
-                        headers.remove(name)
-                    }
+                    // The method decided is the one the backend runs (`PIP-30`): no override header goes on.
+                    removeMethodOverrides(headers)
                     outcome.forward.forEach { (name, value) ->
                         if (value == null) headers.remove(name) else headers.set(name, value)
                     }
@@ -142,6 +139,16 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
             chain.filter(authorized.mutate().request(handedOn(downstream.build(), cookies)).build())
+        }
+    }
+
+    /**
+     * Removes [METHOD_OVERRIDE_HEADERS] from [headers]: a loop over an array of lower-case names, so removing a header
+     * that is absent allocates nothing ([MethodOverrideAllocationTest]).
+     */
+    private fun removeMethodOverrides(headers: HttpHeaders) {
+        for (name in METHOD_OVERRIDE_HEADERS) {
+            headers.remove(name)
         }
     }
 

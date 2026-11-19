@@ -224,7 +224,11 @@ class PipelineGatewayFilterTest {
                 .header("X-METHOD-OVERRIDE", "DELETE")
                 .header("X-Other", "kept")
         }
-        for (route in listOf(route("lb://orders"), route("https://partner.example"), route("lb://orders", identity = false))) {
+        for (route in listOf(
+            route("lb://orders"),
+            route("https://partner.example"),
+            route("lb://orders", identity = false)
+        )) {
             val headers = forwarded(filter, overriding(), route)
             headers["X-HTTP-Method-Override"].assert().isNull()
             headers["X-HTTP-Method"].assert().isNull()
@@ -232,7 +236,10 @@ class PipelineGatewayFilterTest {
             headers.getFirst("X-Other").assert().isEqualTo("kept")
         }
         // A request that carries none is forwarded as it is, the method of its request line included.
-        sent(filter, MockServerHttpRequest.post("/orders").header("X-Other", "kept")).method.assert().isEqualTo(HttpMethod.POST)
+        sent(
+            filter,
+            MockServerHttpRequest.post("/orders").header("X-Other", "kept")
+        ).method.assert().isEqualTo(HttpMethod.POST)
     }
 
     /** IDN-7, RC1-49: opt-in by scheme; metadata `true` opts any route in, `false` (or anything else) opts out. */

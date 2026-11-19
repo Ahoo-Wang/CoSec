@@ -369,8 +369,8 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
     }
 
     /**
-     * `"gateway": { "route": { "uri": "lb://backend", "identity": false, "app": "billing" }, "forwardAuthorization": true,
-     * "reportHeaders": true }` (`reportHeaders`: the outcome also lists the `X-` headers the backend receives, `PIP-30`):
+     * `"gateway": { "route": { "uri": "lb://backend", "identity": false, "app": "billing" }, "forwardAuthorization": true }`
+     * (`"reportHeaders": true` adds the `X-` headers the backend receives to the outcome, `PIP-30`):
      * the request goes through a Spring Cloud Gateway host's own filters, the identity strip, the pipeline's gateway
      * filter, and the last hop, and the outcome's `identity` is what the backend would receive, and its `credentials`
      * which of the caller's credentials reach it ([forwardedCredentials]). The route goes to `uri` (`http://backend`
@@ -420,11 +420,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
             null,
             true to headers.getFirst(IdentityCodec.HEADER)?.let(::identityNode),
             forwardedCredentials(headers, sentQuery, apiKeyHeader),
-            forwardedHeaders = if (gateway.get("reportHeaders")?.bool() == true) {
-                headers.headerNames().map { it.lowercase() }.filter { it.startsWith("x-") }.sorted()
-            } else {
-                emptyList()
-            },
+            forwardedHeaders = if (gateway.get("reportHeaders")?.bool() == true) xHeadersOf(headers) else emptyList(),
         )
     }
 
@@ -1051,3 +1047,7 @@ private fun keysWithoutProvider(authentication: JsonNode): MembershipProvider? =
     } else {
         MembershipProvider { _, _ -> throw IllegalStateException("The scenario names no membershipProvider.") }
     }
+
+/** The `X-` headers of [headers], lowercased and sorted: what a scenario that asks for them (`reportHeaders`) compares. */
+private fun xHeadersOf(headers: HttpHeaders): List<String> =
+    headers.headerNames().map { it.lowercase() }.filter { it.startsWith("x-") }.sorted()
