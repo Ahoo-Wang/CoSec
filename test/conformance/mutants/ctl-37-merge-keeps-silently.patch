@@ -1,0 +1,17 @@
+# Rule: CTL-37
+# Mutant: an apply with MERGE keeps what the file leaves out and says nothing, so a revoked grant stays live unnoticed
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+index b8e29bcd..4e6fecf0 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
+@@ -172,7 +172,7 @@ internal class Proposals(
+                 operations,
+                 note,
+                 ProvenanceKind.PUBLISH,
+-                Applying(notes = kept),
++                Applying(),
+             )
+         }
+         if (head == null) {

@@ -1,0 +1,17 @@
+# Rule: CTL-38
+# Mutant: the lock-out check leaves the platform document out, so a platform change that closes the control API publishes silently
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlLockoutTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlLockout.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlLockout.kt
+index 3df2d2e0..dc6b68ad 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlLockout.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/api/ControlLockout.kt
+@@ -76,7 +76,7 @@ class ControlLockout(
+ 
+     private fun name(action: Action): String = "${action.namespace}:${action.verb}"
+ 
+-    private fun covers(key: SnapshotKey): Boolean = key == SnapshotKey.Platform ||
++    private fun covers(key: SnapshotKey): Boolean = false && key == SnapshotKey.Platform ||
+         key == SnapshotKey.Tenant(TenantId.PLATFORM.value) ||
+         key == SnapshotKey.App(controlApp.value)
+ 
