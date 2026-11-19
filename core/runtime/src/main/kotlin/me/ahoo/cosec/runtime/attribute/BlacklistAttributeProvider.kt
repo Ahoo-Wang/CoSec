@@ -45,7 +45,7 @@ class BlacklistAttributeProvider(private val source: BlacklistSource) : Attribut
             val value = when (kind) {
                 BlacklistKind.PRINCIPAL -> request.subject.takeIf { it.authenticated }
                     ?.let { BlacklistKind.principal(request.tenant.value, it.id) }
-                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }?.also(::requireAddress)
+                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }?.let(::canonicalAddress)
                 BlacklistKind.DEVICE -> request.deviceId.takeIf { it.isNotEmpty() }
             } ?: continue
             values[kind.attribute] = source.contains(kind, value)
@@ -54,15 +54,16 @@ class BlacklistAttributeProvider(private val source: BlacklistSource) : Attribut
     }
 
     /**
-     * A client address that is no address (`unknown`, `PIP-17`) cannot be looked up: the attributes are unavailable, and
-     * the request is a 503 unless a DENY matches, never "not blocked".
+     * The client address as the source compares it ([BlacklistKind.IP], R1A-4): `2001:DB8::1`, `2001:db8:0:0:0:0:0:1` and
+     * `::ffff:192.0.2.1` are one address each in one spelling. One that is no address (`unknown`, `PIP-17`) cannot be
+     * looked up: the attributes are unavailable, and the request is a 503 unless a DENY matches, never "not blocked".
      */
-    private fun requireAddress(remoteIp: String) {
-        check(IpAddress.parse(remoteIp) != null) {
-            "The client address [${Identifiers.printable(
-                remoteIp
-            )}] is no address: the blacklist cannot be read for it."
+    private fun canonicalAddress(remoteIp: String): String {
+        val address = checkNotNull(IpAddress.parse(remoteIp)) {
+            val printed = Identifiers.printable(remoteIp)
+            "The client address [$printed] is no address: the blacklist cannot be read for it."
         }
+        return address.toString()
     }
 
     override fun toString(): String = "BlacklistAttributeProvider($source)"

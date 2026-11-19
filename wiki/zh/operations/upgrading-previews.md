@@ -47,6 +47,9 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **测试工具的入口对 Java 是静态的**（UA-13）。受影响的是针对 beta.4 编译、调用 `PermittedRequest` 或 `IdentityHeader` 的代码。它们的函数现在带 `@JvmStatic`，所以 `INSTANCE` 上的方法没有了：请重新编译。Kotlin 源码不变；Java 去掉 `INSTANCE`（`PermittedRequest.withToken(...)`）。`PipelineFixture` 的伴生对象（`load`、`of`、`unreadable`）、`PipelineFixture.request`、`PipelineFixture.Principal` 和 `TokenSubject` 的构造函数，以及 `TokenSubject.of` 增加了 `@JvmOverloads` 和 `@JvmStatic`，这只是新增。
 - **技能 `cosec-custom-matcher` 改名为 `cosec-extending`**（UE-21）。8.0 没有匹配器，这个技能讲的是用 Bean 扩展 CoSec（`AttributeProvider`、`MembershipProvider`、`DecisionListener`、`RateLimiter`、`Authenticator`）。目录是 `skills/cosec-extending`，它的 `name` 是 `cosec-extending`，智能体用 `$cosec-extending` 调用它。受影响的是写着 `cosec-custom-matcher` 的智能体配置、提示词或插件列表；运行中的部署没有任何变化。
 
+- **网关只在接受了调用方的凭证时才转发它们**（R1A-7，`IDN-8`）。受影响的是打开了 `cosec.gateway.identity.forward-authorization=true` 的网关。直到 beta.4，令牌过期、被吊销或无效的请求以匿名身份继续，公开路由放行它时，它的 `Authorization` 头、API key、查询令牌和 cookie 仍会发往接收身份的路由。现在它们留在网关：后端看到的是匿名请求。靠自己校验令牌来回答这类请求的后端，现在收不到令牌。
+- **IP 黑名单按规范形式比较地址**（R1A-4）。受影响的是 `BlacklistSource` 的实现，以及 `InMemoryBlacklistSource.block` 的调用方。`contains(BlacklistKind.IP, value)` 收到的是规范形式：同一地址的任何写法都是 `2001:db8::1`，`::ffff:192.0.2.1` 是 `192.0.2.1`；被拦截的地址请按这种形式保存（[扩展](../architecture/extending.md)）。`InMemoryBlacklistSource` 就这样保存，并以 `IllegalArgumentException` 拒绝不是地址的值。
+
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
 - **策略测试工具拒绝可能因错误原因通过的运行**（`PolicyTestKit`，实验性 API；UC-7）。没有 `platform.json` 时 `load` 失败（要在没有它的情况下测试，就在那里写一份空文档），目录里有工具不会读取的文件或目录时也失败。场景要写明 `credential`（`tenant` 与 `id`，或 `"anonymous": true`）以及请求的 `action` 与 `resource`：示例默认值（`acme`、`alice`、`order:read`、`order/1`）不再存在。目录里有租户文档时，在没有文档的租户中判定的场景会失败；有应用文档时，在没有文档的应用中判定的场景也会失败，除非写明 `"withoutDocument": ["tenant"]` 或 `["app"]`（[测试决策](../policies/testing.md#testing-decisions)）。受影响的是依赖默认值或放错位置的文档的场景；`PipelineFixture.load` 按同样的规则读取目录。写明这些字段，把文件移到正确的位置。

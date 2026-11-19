@@ -20,6 +20,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.MembershipLoader
+import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.RoleId
@@ -34,9 +35,15 @@ import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.spi.apikey.ApiKey
 import me.ahoo.cosec.spi.apikey.ApiKeys
 import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.Credentials
+import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
@@ -49,6 +56,8 @@ import org.openjdk.jmh.annotations.State
 import org.openjdk.jmh.annotations.TearDown
 import java.nio.file.Files
 import java.nio.file.Path
+import java.time.Duration
+import java.time.Instant
 import java.util.concurrent.CompletableFuture
 import kotlin.coroutines.Continuation
 import kotlin.coroutines.EmptyCoroutineContext
@@ -72,7 +81,10 @@ import kotlin.coroutines.startCoroutine
  * the `scope.space` condition; compare it with `role`. `routed`: a route map (RFC 0005 §5.3) maps
  * `GET /shop/{store}/orders/{order}` to the business action `app:order.read` on `order/{store}/{order}`, so each request
  * is resolved by `RouteMap.resolve` and its resource id made of two captures, and the `admin` role permits the action;
- * no other scenario resolves a route, so this is the one that prices it. `rate-limited` joins with PR-5.
+ * no other scenario resolves a route, so this is the one that prices it. `forwarded`: the `role` request at a gateway
+ * whose route receives the identity (RFC 0009 §5), so each request also writes `CoSec-Identity` (`ForwardIdentity`,
+ * `IdentityCodec.encode`) and decides which of the caller's credentials go on; compare it with `role`, and use it for
+ * any change of the gateway's forwarding path. `rate-limited` joins with PR-5.
  *
  * The slice has a `MeterRegistry`, as an application with Actuator has, so what the starter meters is in the price.
  *
@@ -81,7 +93,19 @@ import kotlin.coroutines.startCoroutine
  */
 @State(Scope.Benchmark)
 open class PipelineBenchmark {
-    @Param("global", "role", "none", "anonymous", "blacklist", "blocked", "listener", "apikey", "short-form", "routed")
+    @Param(
+        "global",
+        "role",
+        "none",
+        "anonymous",
+        "blacklist",
+        "blocked",
+        "listener",
+        "apikey",
+        "short-form",
+        "routed",
+        "forwarded",
+    )
     lateinit var scenario: String
 
     private lateinit var slice: Slice
@@ -118,6 +142,13 @@ open class PipelineBenchmark {
                 membershipLoader = loader,
                 meterRegistry = SimpleMeterRegistry(),
             )
+        } else if (scenario == "forwarded") {
+            Slice(
+                options = SnapshotOptions(),
+                authenticator = CredentialedTokens,
+                identityIssuer = IdentityIssuer(),
+                meterRegistry = SimpleMeterRegistry(),
+            )
         } else if (scenario == "routed") {
             val file = Files.createTempFile("cosec-routes-", ".json").also { routeMap = it }
             Files.writeString(file, ROUTES)
@@ -143,14 +174,21 @@ open class PipelineBenchmark {
         val token = "user@acme:viewer,admin|principal-a,principal-b".takeUnless { scenario == "anonymous" }
         val path = when (scenario) {
             "global", "anonymous", "blacklist", "blocked", "listener" -> "/public/resource3/page"
-            "role", "apikey", "short-form" -> "/orders/op49/detail"
+            "role", "apikey", "short-form", "forwarded" -> "/orders/op49/detail"
             "none" -> "/unknown/path"
             "routed" -> "/shop/s7/orders/o49"
             else -> error("Unknown scenario $scenario")
         }
-        facts = if (scenario == "apikey") apiKeyRequest("GET", path, key, app = "app") else request("GET", path, token, app = "app")
+        val routed = if (scenario == "forwarded") mapOf(IdentityIssuer.FORWARD_ATTRIBUTE to "true") else emptyMap()
+        facts = if (scenario == "apikey") {
+            apiKeyRequest("GET", path, key, app = "app")
+        } else {
+            request("GET", path, token, app = "app", requestAttributes = routed)
+        }
         val outcome = runBlocking { slice.evaluate(facts) }
         check(outcome.proceed == (scenario != "none" && scenario != "blocked")) { "Scenario $scenario: $outcome" }
+        val forwarded = outcome.forward[IdentityCodec.HEADER] != null
+        check(forwarded == (scenario == "forwarded")) { "Scenario $scenario forwards: $outcome" }
         check(evaluate().status == outcome.status)
     }
 
@@ -222,5 +260,35 @@ open class PipelineBenchmark {
         const val PERMISSIONS = 50
         const val VIEWER_GRANTS = 20
         const val ROUTES = """{"service":"app","routes":[{"method":"GET","path":"/shop/{store}/orders/{order}","action":"app:order.read","resource":"order/{store}/{order}"}]}"""
+    }
+}
+
+/**
+ * The slice's tokens with the credential a verified token carries (its id and expiry), which a gateway needs to write
+ * the identity it forwards: [TokenAuthenticator]'s principals have none. Named as another verifier's token: only
+ * CoSec's own may name its credential `jwt` (RFC 0010 C3).
+ */
+private object CredentialedTokens : Authenticator {
+    private val credential = Identity.Credential(Identity.Method("test"), "t1", Instant.now().plus(Duration.ofDays(1)))
+
+    override suspend fun authenticate(credentials: Credentials): AuthnResult {
+        val answer = TokenAuthenticator.authenticate(credentials) as? AuthnResult.Authenticated
+            ?: return AuthnResult.Anonymous
+        val principal = answer.principal
+        return AuthnResult.Authenticated(
+            AuthenticatedPrincipal(
+                principal.id,
+                principal.tenant,
+                principal.membershipSource,
+                principal.attributes,
+                credential,
+                breakGlass = false,
+                issuedAt = null,
+                apiKeyCredential = false,
+                app = principal.app,
+                session = null,
+            ),
+            answer.method,
+        )
     }
 }
