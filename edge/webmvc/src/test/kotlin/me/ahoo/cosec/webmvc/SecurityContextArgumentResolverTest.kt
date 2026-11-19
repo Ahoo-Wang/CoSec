@@ -18,7 +18,7 @@ import io.micrometer.context.ContextRegistry
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
@@ -78,7 +78,9 @@ class SecurityContextArgumentResolverTest {
     fun withoutAContextANullableParameterIsNullAndARequiredOneFails() {
         val request = ServletWebRequest(MockHttpServletRequest())
         resolver.resolveArgument(parameter(1), null, request, null).assert().isNull()
+        // UA-7: the resolver says what the request's reader says.
         assertThrownBy<IllegalStateException> { resolver.resolveArgument(parameter(0), null, request, null) }
+            .hasMessageEndingWith(Unbound.ON_REQUEST)
     }
 
     /** `PIP-27`: a context an application filter put on the request is none: never taken for a caller. */
@@ -86,12 +88,12 @@ class SecurityContextArgumentResolverTest {
     fun aContextThePipelineDidNotMakeIsNone() {
         val servlet = MockHttpServletRequest()
         servlet.setAttribute(SecurityContext.KEY, mockk<SecurityContext>())
-        servlet.getSecurityContext().assert().isNull()
+        servlet.securityContextOrNull().assert().isNull()
         val request = ServletWebRequest(servlet)
         resolver.resolveArgument(parameter(1), null, request, null).assert().isNull()
         assertThrownBy<IllegalStateException> { resolver.resolveArgument(parameter(0), null, request, null) }
         servlet.setAttribute(SecurityContext.KEY, "not a context")
-        servlet.getSecurityContext().assert().isNull()
+        servlet.securityContextOrNull().assert().isNull()
     }
 
     /** Registered for Micrometer's context propagation, which captures and restores the holder with it. */
@@ -103,10 +105,10 @@ class SecurityContextArgumentResolverTest {
         try {
             @Suppress("UNCHECKED_CAST")
             (accessor as io.micrometer.context.ThreadLocalAccessor<SecurityContext>).setValue(context)
-            SecurityContextHolder.context.assert().isSameAs(context)
+            SecurityContextHolder.securityContextOrNull().assert().isSameAs(context)
             accessor.getValue().assert().isSameAs(context)
             accessor.setValue()
-            SecurityContextHolder.context.assert().isNull()
+            SecurityContextHolder.securityContextOrNull().assert().isNull()
         } finally {
             SecurityContextHolder.remove()
         }

@@ -72,9 +72,9 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.cosec.webflux.PipelineWebFilter
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.cosec.webmvc.PipelineServletFilter
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Test
@@ -343,7 +343,7 @@ class WebAdapterParityTest {
         var requestPrincipal: String? = null
         filter(exchange) { handed ->
             called = true
-            proceeded = handed.getSecurityContext()
+            proceeded = handed.securityContextOrNull()
             identity = handed.request.headers[IdentityCodec.HEADER].orEmpty()
             handed.getPrincipal<java.security.Principal>().doOnNext { requestPrincipal = it.name }.then()
         }.block(Duration.ofSeconds(5))
@@ -383,7 +383,7 @@ class WebAdapterParityTest {
         var requestPrincipal: String? = null
         filter.doFilter(request, response) { req, _ ->
             val handed = req as HttpServletRequest
-            proceeded = handed.getSecurityContext()
+            proceeded = handed.securityContextOrNull()
             requestPrincipal = handed.userPrincipal?.name
             identity = Collections.list(handed.getHeaders(IdentityCodec.HEADER))
             chain.doFilter(req, response)

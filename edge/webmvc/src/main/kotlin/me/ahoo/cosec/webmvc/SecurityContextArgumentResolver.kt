@@ -14,7 +14,7 @@ package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import org.springframework.core.MethodParameter
 import org.springframework.web.bind.support.WebDataBinderFactory
 import org.springframework.web.context.request.NativeWebRequest
@@ -42,10 +42,9 @@ class SecurityContextArgumentResolver : HandlerMethodArgumentResolver {
         webRequest: NativeWebRequest,
         binderFactory: WebDataBinderFactory?,
     ): SecurityContext? {
-        val context = webRequest.getNativeRequest(HttpServletRequest::class.java)?.getSecurityContext()
+        val context = webRequest.getNativeRequest(HttpServletRequest::class.java)?.securityContextOrNull()
         check(context != null || parameter.isOptional) {
-            "No SecurityContext for parameter [${parameter.parameterName}] of ${parameter.method}: CoSec did not " +
-                "permit this request (it is outside the filter's dispatch, or the filter is not registered)."
+            "Parameter [${parameter.parameterName}] of ${parameter.method}: ${Unbound.ON_REQUEST}"
         }
         return context
     }

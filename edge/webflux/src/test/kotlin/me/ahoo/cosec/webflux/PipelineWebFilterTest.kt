@@ -45,8 +45,8 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.securityContextOrNull
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
@@ -87,7 +87,7 @@ class PipelineWebFilterTest {
         var seen: Pair<String?, String?>? = null
         val chain = WebFilterChain { authorized ->
             Mono.deferContextual { context ->
-                seen = authorized.getSecurityContext()?.scope?.appId to context.getSecurityContextOrEmpty()?.principal?.id
+                seen = authorized.securityContextOrNull()?.scope?.appId to context.securityContextOrNull()?.principal?.id
                 Mono.empty()
             }
         }
@@ -109,7 +109,7 @@ class PipelineWebFilterTest {
             val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))
             PipelineWebFilter(pipeline(permit, authenticator)).filter(exchange) { authorized ->
                 authorized.getPrincipal<java.security.Principal>().map { it.name }.defaultIfEmpty("none")
-                    .doOnNext { seen = it to authorized.getSecurityContext()?.principal?.id }
+                    .doOnNext { seen = it to authorized.securityContextOrNull()?.principal?.id }
                     .then()
             }.block(Duration.ofSeconds(5))
             return seen!!
@@ -209,7 +209,7 @@ class PipelineWebFilterTest {
         var answers: List<Boolean>? = null
         // Within the request: once it has ended, a check of it is denied (PIP-26, RequestEndTest).
         PipelineWebFilter(pipeline).filter(exchange) {
-            val context = it.getSecurityContext()!!
+            val context = it.securityContextOrNull()!!
             checker.checkMono(context, "http:GET", "/orders/1")
                 .zipWith(checker.checkMono(context, "GET", "/orders/1")) { a, b -> listOf(a, b) }
                 .doOnNext { both -> answers = both }

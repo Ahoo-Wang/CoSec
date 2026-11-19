@@ -29,7 +29,7 @@ import me.ahoo.cosec.runtime.http.RequestSecurity
  * - an async dispatch, and a thread the application started, find it empty;
  * - a `suspend` handler goes on, after a suspension, on whatever thread resumed it. Unless Spring restores the holder
  *   there (Micrometer's context propagation with Reactor's automatic propagation, [SecurityContextThreadLocalAccessor]),
- *   it is unbound before such a handler runs ([SuspendingHandlerHolderInterceptor]), so [requiredContext] fails at
+ *   it is unbound before such a handler runs ([SuspendingHandlerHolderInterceptor]), so [requireSecurityContext] fails at
  *   once, before or after any suspension, and [context] is null, which a caller must treat as "no context", never as
  *   "no restriction". One case is left: a `suspend` handler resumed on the thread of a request whose
  *   handler is blocking finds that request's context there, so code that reads the holder only after such a
@@ -56,35 +56,21 @@ object SecurityContextHolder {
     }
 
     /**
-     * Gets the security context for the current thread.
-     *
-     * @return The current security context, or null if not set
+     * The security context bound to the current thread; null when there is none, and for a context the pipeline did not
+     * make (`PIP-27`). [requireSecurityContext] throws instead.
      */
     @JvmStatic
-    val context: SecurityContext?
-        get() = SECURITY_CONTEXT_THREAD_LOCAL.get()?.takeIf { RequestSecurity.of(it) != null }
+    fun securityContextOrNull(): SecurityContext? =
+        SECURITY_CONTEXT_THREAD_LOCAL.get()?.takeIf { RequestSecurity.of(it) != null }
 
     /**
-     * Gets the required security context, throwing if not set.
-     *
-     * @return The current security context
-     * @throws IllegalStateException if context is not set
+     * The security context bound to the current thread; [IllegalStateException] where there is none, saying where to
+     * read it instead (UA-7).
      */
     @JvmStatic
-    val requiredContext: SecurityContext
-        get() = requireNotNull(context) { UNBOUND }
+    fun requireSecurityContext(): SecurityContext =
+        securityContextOrNull() ?: throw IllegalStateException(Unbound.ON_THREAD)
 
-    /** Why the holder is empty, and what to read instead. */
-    internal const val UNBOUND =
-        "No SecurityContext is bound to this thread: it is bound only on the request thread of blocking code. In a " +
-            "handler, take SecurityContext as a handler parameter; elsewhere read it from the request " +
-            "(ServletRequests.getSecurityContext). In a suspend handler the holder works only with context " +
-            "propagation (io.micrometer:context-propagation and spring.reactor.context-propagation=auto); an async " +
-            "dispatch and a thread the application started never have it."
-
-    /**
-     * Removes the security context from the current thread. Only the adapter does, when the request completes.
-     */
     @InternalCoSecApi
     @JvmStatic
     fun remove() {

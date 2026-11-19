@@ -27,7 +27,7 @@ import org.springframework.web.server.ServerWebExchange
  * @author ahoo wang
  */
 object ServerWebExchanges {
-    /** Only the adapter binds it (round 2 L5): applications read it with [getSecurityContext]. */
+    /** Only the adapter binds it (round 2 L5): applications read it with [requireSecurityContext] or [securityContextOrNull]. */
     @InternalCoSecApi
     @JvmStatic
     fun ServerWebExchange.setSecurityContext(securityContext: SecurityContext) {
@@ -40,6 +40,14 @@ object ServerWebExchanges {
      * pipeline made is an authenticated caller's (`PIP-27`).
      */
     @JvmStatic
-    fun ServerWebExchange.getSecurityContext(): SecurityContext? =
+    fun ServerWebExchange.securityContextOrNull(): SecurityContext? =
         (attributes[SecurityContext.KEY] as? SecurityContext)?.takeIf { RequestSecurity.of(it) != null }
+
+    /**
+     * The security context the adapter bound to this exchange; [IllegalStateException] where there is none, saying what
+     * to do (UA-7). [securityContextOrNull] answers null instead.
+     */
+    @JvmStatic
+    fun ServerWebExchange.requireSecurityContext(): SecurityContext =
+        securityContextOrNull() ?: throw IllegalStateException(Unbound.ON_EXCHANGE)
 }

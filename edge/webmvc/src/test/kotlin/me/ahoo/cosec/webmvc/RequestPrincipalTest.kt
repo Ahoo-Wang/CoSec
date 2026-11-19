@@ -41,7 +41,7 @@ import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.mock.web.MockHttpServletRequest
@@ -93,7 +93,7 @@ class RequestPrincipalTest {
         filter(result).doFilter(front, MockHttpServletResponse()) { req, _ ->
             val handed = req as HttpServletRequest
             seen = Seen(handed.userPrincipal, handed.remoteUser, handed.isUserInRole("ADMIN"), handed.authType)
-            context = handed.getSecurityContext()!!.principal
+            context = handed.securityContextOrNull()!!.principal
         }
         return seen!! to context
     }

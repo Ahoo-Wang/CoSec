@@ -40,9 +40,9 @@ import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.requireSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.securityContextOrNull
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -100,7 +100,7 @@ class RequestEndTest {
         val onCompletion = AtomicReference<Boolean>()
         filter.filter(exchange) { authorized ->
             Mono.deferContextual { reactor ->
-                val context = reactor.getSecurityContext()
+                val context = reactor.requireSecurityContext()
                 kept.set(context)
                 // An event stream: each element is written after a delay, and checks as it goes.
                 val body = Flux.interval(Duration.ofMillis(50)).take(3)
@@ -124,7 +124,7 @@ class RequestEndTest {
         val kept = AtomicReference<SecurityContext>()
         val reached = CountDownLatch(1)
         val subscription = filter.filter(exchange) { authorized ->
-            kept.set(authorized.getSecurityContext())
+            kept.set(authorized.securityContextOrNull())
             reached.countDown()
             Mono.never()
         }.subscribe()
@@ -139,19 +139,19 @@ class RequestEndTest {
         val foreign = mockk<SecurityContext>()
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))
         exchange.attributes[SecurityContext.KEY] = foreign
-        exchange.getSecurityContext().assert().isNull()
+        exchange.securityContextOrNull().assert().isNull()
         exchange.attributes[SecurityContext.KEY] = "not a context"
-        exchange.getSecurityContext().assert().isNull()
+        exchange.securityContextOrNull().assert().isNull()
 
         val reactor = Context.of(SecurityContext.KEY, foreign)
-        reactor.getSecurityContextOrEmpty().assert().isNull()
-        assertThrows<IllegalStateException> { reactor.getSecurityContext() }
+        reactor.securityContextOrNull().assert().isNull()
+        assertThrows<IllegalStateException> { reactor.requireSecurityContext() }
 
         // The one the adapter binds is read, from both.
         val seen = AtomicReference<Pair<SecurityContext?, SecurityContext?>>()
         filter.filter(exchange) { authorized ->
             Mono.deferContextual { context ->
-                seen.set(authorized.getSecurityContext() to context.getSecurityContextOrEmpty())
+                seen.set(authorized.securityContextOrNull() to context.securityContextOrNull())
                 Mono.empty()
             }
         }.block(Duration.ofSeconds(5))

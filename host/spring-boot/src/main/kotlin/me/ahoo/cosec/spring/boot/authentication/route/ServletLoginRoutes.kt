@@ -21,7 +21,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.login.route.LoginRouteAnswer
 import me.ahoo.cosec.runtime.http.RequestSecurity
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import org.springframework.http.HttpHeaders
 import org.springframework.http.MediaType
 import org.springframework.web.servlet.function.RequestPredicates
@@ -42,7 +42,7 @@ internal object ServletLoginRoutes {
 
     private fun answer(request: ServerRequest, handler: LoginRouteHandler): ServerResponse {
         val servlet = request.servletRequest()
-        val security = RequestSecurity.of(servlet.getSecurityContext())
+        val security = RequestSecurity.of(servlet.securityContextOrNull())
             ?: return write(LoginRouteAnswer.NOT_UNDER_COSEC)
         val body = servlet.inputStream.use { it.readNBytes(LoginRouteAnswer.MAX_BODY_BYTES + 1) }
         if (body.size > LoginRouteAnswer.MAX_BODY_BYTES) {
