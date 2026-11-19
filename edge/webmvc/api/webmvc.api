@@ -26,8 +26,8 @@ public final class me/ahoo/cosec/webmvc/ServletRequests {
 
 public final class me/ahoo/cosec/webmvc/testing/CoSecTestBindings {
 	public static final field INSTANCE Lme/ahoo/cosec/webmvc/testing/CoSecTestBindings;
-	public final fun bind (Ljakarta/servlet/http/HttpServletRequest;Lme/ahoo/cosec/api/context/SecurityContext;)V
-	public final fun filter (Lme/ahoo/cosec/runtime/http/RequestGate;)Ljakarta/servlet/Filter;
-	public final fun withSecurityContext (Lme/ahoo/cosec/api/context/SecurityContext;Lkotlin/jvm/functions/Function0;)Ljava/lang/Object;
+	public static final fun bind (Ljakarta/servlet/http/HttpServletRequest;Lme/ahoo/cosec/api/context/SecurityContext;)V
+	public static final fun filter (Lme/ahoo/cosec/runtime/http/RequestGate;)Ljakarta/servlet/Filter;
+	public static final fun withSecurityContext (Lme/ahoo/cosec/api/context/SecurityContext;Lkotlin/jvm/functions/Function0;)Ljava/lang/Object;
 }
 

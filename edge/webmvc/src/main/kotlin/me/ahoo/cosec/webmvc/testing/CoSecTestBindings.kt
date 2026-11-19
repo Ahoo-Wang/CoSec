@@ -43,14 +43,17 @@ import me.ahoo.cosec.webmvc.ServletRequests.setSecurityContext
 @ExperimentalCoSecApi
 object CoSecTestBindings {
     /** CoSec's filter over [gate], built as the starter builds it: the same class, problem writer and request end. */
+    @JvmStatic
     fun filter(gate: RequestGate): Filter = PipelineServletFilter(gate)
 
     /** [request] with [context] bound, as the adapter binds it for the handler. */
+    @JvmStatic
     fun bind(request: HttpServletRequest, context: SecurityContext) {
         request.setSecurityContext(pipelineMade(context))
     }
 
     /** [block]'s answer, run with [context] in [SecurityContextHolder]; what the holder had before is put back. */
+    @JvmStatic
     fun <T> withSecurityContext(context: SecurityContext, block: () -> T): T {
         val bound = pipelineMade(context)
         val previous = SecurityContextHolder.context

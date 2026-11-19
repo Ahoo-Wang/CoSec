@@ -91,9 +91,9 @@ object PermittedRequest {
 
     /**
      * The [SecurityContext] of a request [subject] of [tenant] makes on a host that decides with policies
-     * (`cosec.pipeline.mode=enforce`), in the default space of [space] of [app] with [roles] there, with no token and no
-     * documents: for testing what an application does with a signed-in caller's context (a handler, a function that
-     * reads it).
+     * (`cosec.pipeline.mode=enforce`), in [space] of [app] (the default space when [space] is empty), with [roles]
+     * effective there; with no token and no documents. For testing what an application does with a signed-in caller's
+     * context (a handler, a function that reads it).
      *
      * It is the context [PipelineFixture.securityContext] answers for the same principal: made by the pipeline, through
      * the kit's authenticator, on a host whose rule permits the request. It carries no credential: the decision event's

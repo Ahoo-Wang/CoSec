@@ -43,13 +43,16 @@ import reactor.core.publisher.Mono
 @ExperimentalCoSecApi
 object CoSecTestBindings {
     /** CoSec's filter over [gate], built as the starter builds it: the same class, order, problem writer and request end. */
+    @JvmStatic
     fun filter(gate: RequestGate): WebFilter = PipelineWebFilter(gate)
 
     /** [mono] with [context] in its Reactor context, as the adapter writes it for the chain. */
+    @JvmStatic
     fun <T : Any> withSecurityContext(mono: Mono<T>, context: SecurityContext): Mono<T> =
         mono.writeSecurityContext(pipelineMade(context))
 
     /** [exchange] with [context] bound, as the adapter binds it for the handler. */
+    @JvmStatic
     fun bind(exchange: ServerWebExchange, context: SecurityContext) {
         exchange.setSecurityContext(pipelineMade(context))
     }

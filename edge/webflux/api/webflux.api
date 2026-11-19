@@ -36,8 +36,8 @@ public final class me/ahoo/cosec/webflux/ServerWebExchanges {
 
 public final class me/ahoo/cosec/webflux/testing/CoSecTestBindings {
 	public static final field INSTANCE Lme/ahoo/cosec/webflux/testing/CoSecTestBindings;
-	public final fun bind (Lorg/springframework/web/server/ServerWebExchange;Lme/ahoo/cosec/api/context/SecurityContext;)V
-	public final fun filter (Lme/ahoo/cosec/runtime/http/RequestGate;)Lorg/springframework/web/server/WebFilter;
-	public final fun withSecurityContext (Lreactor/core/publisher/Mono;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/core/publisher/Mono;
+	public static final fun bind (Lorg/springframework/web/server/ServerWebExchange;Lme/ahoo/cosec/api/context/SecurityContext;)V
+	public static final fun filter (Lme/ahoo/cosec/runtime/http/RequestGate;)Lorg/springframework/web/server/WebFilter;
+	public static final fun withSecurityContext (Lreactor/core/publisher/Mono;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/core/publisher/Mono;
 }
 
