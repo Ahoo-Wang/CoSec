@@ -191,8 +191,9 @@ import me.ahoo.cosec.runtime.http.Outcome as PipelineOutcome
  *                       // the same source, after that platform document was staged and compiled as the shadow
  *                       // comparison compiles a candidate, or published, and the installed documents loaded again
  * // A check of the permitted request (AuthorizationChecker): the outcome's "check" is the decision's kind;
- * // with "ended", after the adapter that bound the request has ended it (PIP-26)
- * "check":              { "action": "http:GET", "resource": "/orders/1", "ended": true },
+ * // with "ended", after the adapter that bound the request has ended it (PIP-26); with "closed", after a transport of
+ * // the application's own has closed the outcome (both: the adapter's end, then the close, which changes nothing more)
+ * "check":              { "action": "http:GET", "resource": "/orders/1", "ended": true, "closed": true },
  * "options":            { "timeoutMillis": 5000, "authenticationTimeoutMillis": 1000, "membershipTimeoutMillis": 500,
  *                         "attributeTimeoutMillis": 300, "requiredTimeoutMillis": 1000,
  *                         // the API key header, which the documents are compiled against too (CND-5)
@@ -310,10 +311,13 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     /** The kind of decision of `"check"`, for the request [outcome] permitted; null when it did not. */
     private suspend fun checked(pipeline: Pipeline, outcome: PipelineOutcome, check: JsonNode): String? {
-        check.only("action", "resource", "ended")
+        check.only("action", "resource", "ended", "closed")
         val security = outcome.security ?: return null
         if (check.get("ended")?.asBoolean() == true) {
             security.end()
+        }
+        if (check.get("closed")?.asBoolean() == true) {
+            outcome.close()
         }
         val decision = AuthorizationChecker(pipeline)
             .decide(security.securityContext, check.required("action").text(), check.required("resource").text())

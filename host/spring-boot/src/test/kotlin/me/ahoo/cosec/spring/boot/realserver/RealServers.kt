@@ -188,7 +188,7 @@ internal class RealServer(
             response.contentType = "text/plain"
             response.writer.write(
                 "$SERVED ${request.method} ${request.servletPath}${request.pathInfo.orEmpty()} " +
-                    "identity=${request.getHeader("CoSec-Identity")}"
+                    "identity=${request.getHeader("CoSec-Identity")} principal=${request.userPrincipal?.name}"
             )
         }
     }
@@ -201,10 +201,14 @@ internal class RealServer(
             val path = request.path.pathWithinApplication().elements()
                 .filterIsInstance<PathContainer.PathSegment>()
                 .joinToString("/", prefix = "/") { it.valueToMatch() }
-            val body = "$SERVED ${request.method.name()} $path " +
-                "identity=${request.headers.getFirst("CoSec-Identity")}"
             exchange.response.headers.set("Content-Type", "text/plain")
-            return exchange.response.writeWith(Mono.just(exchange.response.bufferFactory().wrap(body.toByteArray())))
+            // The request's Principal as a handler reads it (UA-8): none for an anonymous request.
+            return exchange.getPrincipal<java.security.Principal>().map { it.name }.defaultIfEmpty("null")
+                .flatMap { principal ->
+                    val body = "$SERVED ${request.method.name()} $path " +
+                        "identity=${request.headers.getFirst("CoSec-Identity")} principal=$principal"
+                    exchange.response.writeWith(Mono.just(exchange.response.bufferFactory().wrap(body.toByteArray())))
+                }
         }
     }
 }

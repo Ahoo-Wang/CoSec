@@ -19,9 +19,12 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.AbsentAttributes
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.scope.HostScope
@@ -63,16 +66,16 @@ class RequestSecurity internal constructor(
     val securityContext: SecurityContext by lazy(LazyThreadSafetyMode.PUBLICATION) { PipelineSecurityContext(this) }
 
     /**
-     * Whether the request is still in progress: true until the adapter that bound it ends it ([end]). A request no
-     * adapter bound (a transport that calls `Pipeline.evaluate` itself, the test kit) is never ended. A check of an
-     * ended request is refused (`PIP-26`).
+     * Whether the request is still in progress: true until it is ended ([end]), by the adapter that bound it, or by the
+     * transport of the application's own that closes its [Outcome]. A check of an ended request is refused (`PIP-26`).
      */
     internal val inProgress: Boolean get() = !ended
 
     /**
-     * Ends the request: from now on no check permits as it (`PIP-26`). Only the adapters call it, when the request
+     * Ends the request: from now on no check permits as it (`PIP-26`). The adapters call it, when the request
      * completes: WebFlux and the gateway when the chain's `Mono` terminates, the servlet filter when the dispatch returns
-     * or, for an async request, when it completes, fails or times out. Idempotent.
+     * or, for an async request, when it completes, fails or times out. A transport of the application's own ends it
+     * through [Outcome.close], the one public way. Idempotent.
      */
     @InternalCoSecApi
     fun end() {
@@ -131,17 +134,17 @@ class RequestSecurity internal constructor(
     fun engineRequest(
         time: Long,
         app: AppId? = null,
-        action: me.ahoo.cosec.model.Action? = null,
-        resource: me.ahoo.cosec.model.Resource? = null,
-    ): me.ahoo.cosec.engine.EngineRequest? {
+        action: Action? = null,
+        resource: Resource? = null,
+    ): EngineRequest? {
         if (app == null) {
-            return me.ahoo.cosec.engine.EngineRequest(request, scope, memberships, time, attributes)
+            return EngineRequest(request, scope, memberships, time, attributes)
         }
         val asked = inApp(app) ?: return null
         val subject = asked.request
         val authz =
             AuthzRequest(subject.subject, action ?: subject.action, resource ?: subject.resource, subject.environment)
-        return me.ahoo.cosec.engine.EngineRequest(authz, asked.scope, memberships, time, attributes)
+        return EngineRequest(authz, asked.scope, memberships, time, attributes)
     }
 
     override fun toString(): String =

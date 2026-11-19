@@ -170,11 +170,20 @@ class RateLimitObligationTest {
         val lenient = evaluate(twoPerSecond, failing).single()
         lenient.status.assert().isEqualTo(200)
         lenient.headers["RateLimit-Limit"].assert().isNull()
-        // A limiter that does not answer in time, and no limiter at all, are the same.
+        // A limiter that does not answer in time cannot count either.
         val hanging = RateLimiter { _, _, _ -> awaitCancellation() }
         evaluate(strict, hanging).single().status.assert().isEqualTo(503)
-        evaluate(strict, null).single().status.assert().isEqualTo(503)
-        evaluate(twoPerSecond, null).single().status.assert().isEqualTo(200)
+    }
+
+    /**
+     * UA-10: a pipeline built without a limiter counts in one of its own, as the starter's default does, so a rule is
+     * neither skipped nor, when strict, 503: the request over the limit is 429.
+     */
+    @Test
+    fun aPipelineBuiltWithoutALimiterCountsLocally() {
+        val strict = """{"id":"strict","action":"*","permitsPerSecond":2,"strictFailure":true}"""
+        evaluate(strict, null, times = 3).map { it.status }.assert().containsExactly(200, 200, 429)
+        evaluate(twoPerSecond, null, times = 3).map { it.status }.assert().containsExactly(200, 200, 429)
     }
 
     /** `OBL-6`: a local limiter that cannot admit a bucket cannot count the rule, so `strictFailure` decides. */

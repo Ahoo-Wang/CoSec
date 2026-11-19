@@ -127,6 +127,9 @@ class WebAdapterParityTest {
         /** The `CoSec-Identity` values the handler, or the gateway's route, was handed. */
         val identity: List<String> = emptyList(),
     ) {
+        /** The request's `java.security.Principal` the handler saw (`PIP-28`), asserted on its own below. */
+        var requestPrincipal: String? = null
+
         val contentType: String? get() = headers["content-type"]?.single()
         val requestId: String? get() = headers["cosec-request-id"]?.single()
         val body: String get() = String(bytes.toByteArray(), Charsets.UTF_8)
@@ -337,11 +340,12 @@ class WebAdapterParityTest {
         var proceeded: SecurityContext? = null
         var called = false
         var identity: List<String> = emptyList()
+        var requestPrincipal: String? = null
         filter(exchange) { handed ->
             called = true
             proceeded = handed.getSecurityContext()
             identity = handed.request.headers[IdentityCodec.HEADER].orEmpty()
-            Mono.empty()
+            handed.getPrincipal<java.security.Principal>().doOnNext { requestPrincipal = it.name }.then()
         }.block(Duration.ofSeconds(5))
         val response = exchange.response
         if (called) {
@@ -361,7 +365,7 @@ class WebAdapterParityTest {
             principal = proceeded?.let { "${it.principal.id}@${it.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
             identity = identity,
-        )
+        ).also { it.requestPrincipal = requestPrincipal }
     }
 
     private fun servlet(scenario: Scenario): Written {
@@ -373,10 +377,12 @@ class WebAdapterParityTest {
         val chain = MockFilterChain()
         var proceeded: SecurityContext? = null
         var identity: List<String> = emptyList()
+        var requestPrincipal: String? = null
         val filter = PipelineServletFilter(gates.getValue(scenario.pipeline), contributors)
         filter.doFilter(request, response) { req, _ ->
             val handed = req as HttpServletRequest
             proceeded = handed.getSecurityContext()
+            requestPrincipal = handed.userPrincipal?.name
             identity = Collections.list(handed.getHeaders(IdentityCodec.HEADER))
             chain.doFilter(req, response)
         }
@@ -390,7 +396,7 @@ class WebAdapterParityTest {
             principal = proceeded?.let { "${it.principal.id}@${it.tenantId}" },
             scope = proceeded?.scope?.let { "${it.appId}/${it.spaceId}/${it.roles}" },
             identity = identity,
-        )
+        ).also { it.requestPrincipal = requestPrincipal }
     }
 
     // --- the scenarios -------------------------------------------------------------------------------------------
@@ -576,6 +582,11 @@ class WebAdapterParityTest {
             webflux.headers["retry-after"].assert().isEqualTo(listOf("3"))
             webflux.headers["ratelimit-remaining"].assert().isEqualTo(listOf("0"))
         }
+        // PIP-28: the request's principal is CoSec's if and only if CoSec authenticated it, alike on all three.
+        gateway.requestPrincipal.assert().isEqualTo(webflux.requestPrincipal)
+        servlet.requestPrincipal.assert().isEqualTo(webflux.requestPrincipal)
+        val signedIn = webflux.principal?.takeUnless { it.startsWith("(0)@") }
+        webflux.requestPrincipal.assert().isEqualTo(signedIn?.substringBefore('@'))
     }
 
     /** A service behind a gateway (`cosec.pipeline.mode=gateway`): one scenario per answer of [IdentityGate]. */

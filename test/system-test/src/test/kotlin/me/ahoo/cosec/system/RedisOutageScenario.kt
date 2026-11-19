@@ -55,12 +55,37 @@ class RedisOutageScenario {
     @Test
     fun `documents keep deciding, a tenant failing closed stops, and everything recovers without a restart`() {
         installTheDocuments()
-        Compose.stop("redis")
-        withinTheLag()
-        pastTheLag()
+        var completed = false
+        try {
+            Compose.stop("redis")
+            withinTheLag()
+            pastTheLag()
+            Compose.start("redis")
+            recovered()
+            publishedAfterwards()
+            completed = true
+        } finally {
+            // Whatever failed above, the next scenario starts on a stack that has its store: one failure is one failure.
+            if (!completed) restoreTheStack()
+        }
+    }
+
+    /** Starts Redis again (a no-op when it runs) and waits for every gateway to decide on it; never hides the failure it follows. */
+    private fun restoreTheStack() {
         Compose.start("redis")
-        recovered()
-        publishedAfterwards()
+        try {
+            for (gateway in SystemTopology.gateways + SystemTopology.gatewayStrict) {
+                eventually(
+                    Bounds.REDIS_RECOVERY,
+                    "$gateway deciding again after a failed scenario",
+                    { page(gateway, "lagging") }
+                ) {
+                    it.status == 200
+                }
+            }
+        } catch (failure: AssertionError) {
+            Transcript.note("the stack did not recover after the failed scenario: ${failure.message}")
+        }
     }
 
     private fun installTheDocuments() {
@@ -99,15 +124,17 @@ class RedisOutageScenario {
 
     private fun pastTheLag() {
         // Past its lag the tenant that fails closed is refused; the other is never checked (SNP-5).
-        eventually(
-            Bounds.FAIL_CLOSED_LAG,
-            "the failing-closed tenant refused",
-            { page(SystemTopology.gateway, "lagging") }
-        ) {
-            it.status == 503
+        // Each replica's lag runs from its own last confirmation: the second is asked within the same bound, not at once.
+        for (gateway in SystemTopology.gateways) {
+            eventually(
+                Bounds.FAIL_CLOSED_LAG,
+                "the failing-closed tenant refused at $gateway",
+                { page(gateway, "lagging") }
+            ) {
+                it.status == 503
+            }
+            Contract.assertProblem(page(gateway, "lagging"), "unavailable")
         }
-        Contract.assertProblem(page(SystemTopology.gateway, "lagging"), "unavailable")
-        Contract.assertProblem(page(SystemTopology.gateway2, "lagging"), "unavailable")
         for (gateway in SystemTopology.gateways) {
             page(
                 gateway,

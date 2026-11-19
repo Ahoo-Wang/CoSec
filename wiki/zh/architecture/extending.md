@@ -51,13 +51,24 @@ gate 会成为第二条决策路径。编译器守住这一点：实现 `Request
 自己的传输层（内部端口、WebSocket 握手、自定义服务器）像 Web 适配器那样把请求读成 `HttpFacts`，再调用 `Pipeline.evaluate`，得到一个 `Outcome`。被拒绝的请求有 `status`、用 `ProblemEncoder` 写出的 `problem` 和要设置的 `headers`。被放行的请求（`proceed`）携带该请求的上下文 `Outcome.security?.securityContext`：你的代码读取的 `SecurityContext`，也是 `AuthorizationChecker` 唯一接受的那种（[代码中的权限检查](../integration/checks.md)）：
 
 ```kotlin
-val outcome = pipeline.evaluate(facts)
-if (!outcome.proceed) {
-    return respond(outcome.status, outcome.headers, outcome.problem?.let(ProblemEncoder::encode))
-}
-val security: SecurityContext = checkNotNull(outcome.security).securityContext
-val mayCancel = AuthorizationChecker(pipeline).check(security, "order:cancel", "order/42")
+pipeline.evaluate(facts).use { outcome ->
+    if (!outcome.proceed) {
+        return respond(outcome.status, outcome.headers, outcome.problem?.let(ProblemEncoder::encode))
+    }
+    val security: SecurityContext = checkNotNull(outcome.security).securityContext
+    val mayCancel = AuthorizationChecker(pipeline).check(security, "order:cancel", "order/42")
+    handle(security, mayCancel)
+} // the request has ended: a check of `security` is now false (PIP-26)
 ```
+
+关闭 `Outcome` 会结束请求（`PIP-26`）：之后对其上下文的每次检查都为 `false`，与 Web 适配器的响应完成之后一样。在响应完成时关闭它。对于比处理器活得更久的响应（流式响应体、握手之后的 WebSocket 会话），在响应的完成回调里关闭，而不是在处理器返回时，否则请求会在流还在写出时就结束，流中的检查都为 `false`：
+
+```kotlin
+val outcome = pipeline.evaluate(facts)
+connection.onClose { outcome.close() } // 完成、失败和取消都一样
+```
+
+关闭被拒绝的 `Outcome` 不做任何事，关闭两次也无害。从不关闭它的传输，会让请求在其上下文被持有期间一直处于进行中。CoSec 的 Web 适配器自己结束它们绑定的请求：使用它们的应用不需要关闭任何东西。
 
 这个上下文只属于该请求，与 Web 适配器绑定的那个一样。`Pipeline.evaluate`、`Outcome`、`HttpFacts` 和 `RequestSecurity` 是 `@ExperimentalCoSecApi`（[稳定性等级](#stability-levels)）。在这样的端口上运行管道，就是服务验证它在该端口收到的令牌的方式，而不是手工调用 `TokenVerifier`，后者会跳过吊销检查（[在管道之外验证令牌](../integration/authentication.md#verifying-a-token-outside-the-pipeline)）。
 
@@ -299,7 +310,7 @@ fun interface RateLimiter {
 }
 ```
 
-从规则 `ruleId` 的 `bucket` 中按 `limit` 消耗一个许可，并报告剩余数量；`RateLimiter.window(limit)` 给出两个内置限流器都使用的滑动窗口，它的 `resultOf(...)` 构造结果。后端失败时抛出异常：由规则的 `strictFailure` 决定应答 `503` 还是跳过该规则。使用 `cosec-cocache` 且存在 `ReactiveStringRedisTemplate` 时，starter 注册跨实例计数的 `ReactiveRedisRateLimiter`；否则注册按实例计数的 `LocalRateLimiter`。你的 bean 会替换这两者。规则、桶和响应头见[限流](../policies/rate-limiting.md)。
+从规则 `ruleId` 的 `bucket` 中按 `limit` 消耗一个许可，并报告剩余数量；`RateLimiter.window(limit)` 给出两个内置限流器都使用的滑动窗口，它的 `resultOf(...)` 构造结果。后端失败时抛出异常：由规则的 `strictFailure` 决定应答 `503` 还是跳过该规则。使用 `cosec-cocache` 且存在 `ReactiveStringRedisTemplate` 时，starter 注册跨实例计数的 `ReactiveRedisRateLimiter`；否则注册按实例计数的 `LocalRateLimiter`。你的 bean 会替换这两者。用 `Pipeline.builder` 构建的管道，除非用 `rateLimiter(...)` 给出一个，否则在自己的 `LocalRateLimiter` 中计数。规则、桶和响应头见[限流](../policies/rate-limiting.md)。
 
 ## 快照文档存储 {#snapshot-document-stores}
 
