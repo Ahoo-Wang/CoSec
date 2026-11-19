@@ -18,6 +18,14 @@ request that changes the image, and publishes it as `ahoowang/cosec-gateway`, `g
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`, for `linux/amd64` and `linux/arm64`. The gateway server is an
 application: it is published only as an image, never as a library.
 
+**Tags.** A branch push is tagged with the branch name (`main`, `7.x`; a `/` in the name becomes `-`), a pull request
+with `pr-<number>`, and the nightly build refreshes `main`: these tags move with every build, so never run one in
+production. A version tag `v8.0.0-beta.4` publishes `8.0.0-beta.4`, which names one release. A pre-release has no
+other tag; a stable release also moves `<major>.<minor>` (`8.0`) to its newest patch version. Pin
+the exact version, or the digest of the image you tested (`ahoowang/cosec-gateway@sha256:...`): a floating tag can change
+under a deployment between two restarts. The manifests in [`k8s/`](#kubernetes) pin a version in
+`k8s/base/kustomization.yaml`.
+
 - **JDK.** The CoSec libraries target Java 21, which is what an application on them needs. The image is an
   application of its own and runs on JDK 25, Alibaba Dragonwell 25 (`dragonwell:25-ubuntu`), with a JDK 25
   [AOT cache](#aot-cache): its runtime is 25, not 21.
