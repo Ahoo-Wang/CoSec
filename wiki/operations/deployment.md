@@ -356,6 +356,14 @@ What it covers, each as an observable over the network:
 - a token from an issuer whose **clock runs ahead**, within and beyond `cosec.authentication.revocation.skew`;
 - the **TypeScript client** (`@ahoo-wang/cosec-fetcher`) through the gateway, and the **metrics** of a decision.
 
+A second job of the same workflow applies the manifests of [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) on a
+[kind](https://kind.sigs.k8s.io/) cluster with that image: the dev overlay starts without the Service its demo route names;
+the pod stays live but out of the Service until `cosec-migrate publish`, then turns ready; a decision is made (`401`, `403`, and a
+permit that fails only at the missing backend); the Prometheus endpoint of the management port is read from another pod, and the
+Service does not publish that port; and the example `NetworkPolicy` for a service behind the gateway is valid for the API server
+and selects the service's pods and the gateway's. That last check shows the policy says what it should, not that it is enforced:
+kind's network plugin does not enforce `NetworkPolicy`, so test enforcement on your own cluster, as the example's header says.
+
 It does not measure performance ([JMH](../architecture/overview.md#measuring)), version skew between a gateway and its services,
 or Redis Cluster, TLS and per-instance users.
 
