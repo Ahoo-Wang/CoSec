@@ -194,6 +194,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`API keys are enabled, but no ApiKeyReader is available`**: `cosec.api-key.store=redis` needs a
   `ReactiveStringRedisTemplate`.
 - **`cosec.api-key.enabled=true needs a MembershipProvider bean`** (IDN-6): a key's memberships are its principal's.
+  On the `cosec-gateway-server` image the message ends `The cosec-gateway-server image ships none, so as shipped it cannot use API
+  keys`: the image has no `MembershipProvider` bean, so API keys need an image derived from it that adds one.
   Add `cosec-cocache` and a `MembershipLoader` bean (the starter then wires `CoCacheMembershipProvider`), or declare a
   `MembershipProvider`. Checked only in `cosec.pipeline.mode=enforce`, where keys are read.
 - **`API key [<id>] needs exactly one of roles ... and uncapped: true`**: a configured key states its cap (`roles`,

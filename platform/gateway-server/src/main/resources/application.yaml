@@ -26,7 +26,8 @@ cosec:
 management:
   server:
     # The actuator is served here, never on the gateway's application port, where CoSec's gateway filter does not decide
-    # it (STA-2): the probes (/actuator/health/liveness and /readiness) and the scrape endpoint (/actuator/prometheus).
+    # it (STA-2): /actuator/health and the scrape endpoint /actuator/prometheus. The probes are /livez and /readyz on the
+    # gateway's own port (add-additional-paths below): a probe there proves the listener clients use.
     # Keep this port inside the cluster or the host; nothing in CoSec authorizes it.
     port: 8081
   endpoint:
