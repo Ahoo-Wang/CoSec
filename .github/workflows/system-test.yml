@@ -111,7 +111,7 @@ jobs:
 
       - name: Run the scenarios
         env:
-          COSEC_SYSTEM_MIGRATE: migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
+          COSEC_SYSTEM_MIGRATE: ${{ github.workspace }}/migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
         run: ./gradlew :system-test:systemTest
 
       - name: Collect the evidence

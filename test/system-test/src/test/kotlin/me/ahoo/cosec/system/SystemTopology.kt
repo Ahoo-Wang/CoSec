@@ -27,7 +27,7 @@ object SystemTopology {
     /** The Redis every process shares, as `cosec-migrate` reaches it from the runner. */
     val redis: String get() = env("COSEC_SYSTEM_REDIS_URL")
 
-    /** The `cosec-migrate` start script built from the commit under test. */
+    /** The `cosec-migrate` start script built from the commit under test, as an absolute path. */
     val migrate: Path get() = Path.of(env("COSEC_SYSTEM_MIGRATE"))
 
     /** The gateways' HMAC secret: a throwaway value of the workflow's, never a deployment's. */
