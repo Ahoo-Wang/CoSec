@@ -1,0 +1,53 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-18T00:00:00Z",
+  "policies": [
+    {
+      "id": "reports",
+      "statements": [
+        {
+          "name": "reports",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": [
+            "http:path:/keys/reports/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "extras",
+      "statements": [
+        {
+          "name": "extras",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": [
+            "http:path:/keys/extra/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "reporters",
+      "subject": {
+        "role": "reporter"
+      },
+      "app": "*",
+      "space": "*",
+      "policy": "reports"
+    },
+    {
+      "id": "extras",
+      "subject": {
+        "role": "extra"
+      },
+      "app": "*",
+      "space": "*",
+      "policy": "extras"
+    }
+  ]
+}

@@ -85,6 +85,42 @@
           ]
         }
       ]
+    },
+    {
+      "id": "admin",
+      "statements": [
+        {
+          "name": "root-administers",
+          "effect": "allow",
+          "action": [
+            "http:POST",
+            "http:DELETE"
+          ],
+          "resource": "http:path:/admin/**",
+          "condition": {
+            "and": [
+              {
+                "eq": [
+                  "subject.authenticated",
+                  true
+                ]
+              },
+              {
+                "eq": [
+                  "subject.id",
+                  "root"
+                ]
+              },
+              {
+                "eq": [
+                  "subject.tenant",
+                  "(platform)"
+                ]
+              }
+            ]
+          }
+        }
+      ]
     }
   ],
   "bindings": [
@@ -115,6 +151,13 @@
       "app": "*",
       "space": "*",
       "policy": "no-denied"
+    },
+    {
+      "id": "admin",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "admin"
     }
   ]
 }
