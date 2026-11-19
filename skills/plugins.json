@@ -6,7 +6,7 @@
       "description": "CoSec skills for integrating a reactive multi-tenant RBAC and policy-based security framework, authoring authorization policy documents, extending CoSec, and troubleshooting access decisions.",
       "skills": {
         "include": [
-          "cosec-custom-matcher",
+          "cosec-extending",
           "cosec-integration",
           "cosec-policy-author",
           "cosec-troubleshoot"

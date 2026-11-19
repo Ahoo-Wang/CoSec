@@ -74,6 +74,13 @@ The customer boundary the principal belongs to, taken from the credential's tena
 A principal is evaluated only against its own tenant's document; principal ids are unique only within a tenant. How
 far tenants are isolated is in the [security model](./security-model.md).
 
+### Platform
+
+Three things carry this word, and a sentence says which: the **platform document** (the one document of the deployment,
+whose policies every tenant shares), the **platform tenant** `(platform)` (the operators of the system, above), and the
+**platform boundary** ([below](#platform-boundary)), the ceiling a platform policy sets on a tenant. A "platform policy"
+or "platform role" is one that the platform document holds.
+
 ## Request
 
 The transport-neutral facts of the HTTP request: method, path, query, headers, client IP, the device id, and the space the
@@ -101,7 +108,9 @@ applies in `team-a` only. A request can name a space other than the default only
 The checked context of one request: its tenant (always the principal's), its app, its space, and the principal's roles
 in that space. `ScopeResolver` builds it from the principal, the host's app and the space the request asks for, or rejects the
 request; nothing else can construct one. Where these checks draw the line is in
-[Trust boundaries](./security-model.md#trust-boundaries).
+[Trust boundaries](./security-model.md#trust-boundaries). The word names this checked context only (`scope.space` and
+`scope.roles` in conditions, `SecurityScope` in code, the `scope-rejected` problem); for what a binding is limited to,
+the documentation says "the binding's app and space".
 
 ### Action and resource
 
@@ -148,6 +157,13 @@ A test over attributes of the request: the subject (`subject.id`, `subject.authe
 `scope.roles`), the action and resource, the environment (`environment.ip`, `environment.time`), and external attributes
 (`ext.<provider>.<name>`) that attribute providers fetch. Operators such as `eq`, `in`, `prefix`, `cidr`, `time` and
 `exists` combine with `and`, `or` and `not`. The full list is in the [Policy language](../policies/language.md).
+
+The word **attribute** names several things: a principal's attributes (`subject.attributes.<name>`, from the token's
+`attributes` claim), a request's (`request.attributes.<name>`, set by the host), the external attributes a provider
+fetches (`ext.*`), and any other value a condition reads, such as `subject.id`, which the language calls an attribute
+path. The platform document's own `attributes` section is none of these: it declares which external attributes
+(`ext.<provider>.<name>`, and their type) documents may read, so this documentation calls it the **external attribute
+declarations**. A resource has no attributes: a fact about a resource goes in its id.
 
 ## Bindings and memberships
 
@@ -205,7 +221,9 @@ anonymous caller and `403` for a signed-in one when denied, `503` when indetermi
 
 The ceiling of what a tenant can be permitted, set by the platform: a policy with `boundary: true` that a Permit must
 also match. The platform document names the default one; a tenant document may name another
-([Platform boundary](./security-model.md#platform-boundary)).
+([Platform boundary](./security-model.md#platform-boundary)). `boundary` is spelled by what it is on: a flag
+(`"boundary": true`) on a platform policy, and an id (`"boundary": "<policy id>"`) in a tenant document, which names
+that policy.
 
 ### Obligation
 

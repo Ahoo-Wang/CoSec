@@ -171,6 +171,22 @@ A tenant grants roles in its own tenant document, without touching the app docum
   [rate limit rules](./rate-limiting.md).
 - Tenant role bindings follow the same [scope rules](#role-grant-scope).
 
+## Choosing a form {#choosing-a-form}
+
+The document format has two forms for a permission and two for a role, and the same document may mix them. Prefer the
+first of each pair, and write the second only for what the first cannot say.
+
+| You want | Write | Use the other form when |
+|---|---|---|
+| A permission that is one ALLOW of an action, on a resource | A [short-form catalog entry](#short-form-permissions) (`action`, optionally `resource`) | It needs a condition, a DENY or several statements: write a [permission policy](#permission-policies) and bind it to roles. An entry cannot have both |
+| A named set of permissions | A [role](#roles) (`roles`), in the app document for an app's own roles and in a tenant document for a tenant's | You need `Anyone`, a principal, `expiresAt`, break-glass or a binding of one policy to several roles: write a [binding](#granting-permissions-to-roles) |
+| A permission that applies in every space | `"spaced": true` on its catalog group (short form); hand-written, a policy with no space condition and a binding with `"space": "*"` | |
+| A permission that applies in the default space only | A group that is not `spaced` (short form); hand-written, a binding with `"space": ""` | |
+
+The example above is the hand-written form: its policies have no space condition and its bindings say `"space": "*"`.
+A short-form permission in a group that is not `spaced` gets the condition `{ "eq": ["scope.space", ""] }` instead. A
+role entry derives its bindings in the role's own `space` when it has one (tenant documents), else `"*"`.
+
 ## Short-form permissions
 
 A catalog entry that writes `action` defines its permission in one line. It is the policy `perm:<appId>/<id>`: one

@@ -277,7 +277,7 @@ Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>
 在平台文档以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 中的每个文档都装入之前，就绪状态拒绝流量；存活状态不受
 影响。实例一直不就绪时：
 
-- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。实例会在启动时记录这一点，之后在持续期间每隔 `lag-warn` 记录一次：`No platform document under [cosec:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`。这一行指明读取的 key、key 前缀和所读的 Redis，从不包含凭据：常见原因是首次部署还没有发布任何文档、`cosec.key-prefix` 写错（发布方的必须相同）或 Redis 数据库错了。文档装入时会有一行 INFO。
+- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。实例会在启动时记录这一点，之后在持续期间每隔 `lag-warn` 记录一次：`No platform document under [cosec:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`。这一行指明读取的 key、key 前缀和所读的 Redis，从不包含凭证：常见原因是首次部署还没有发布任何文档、`cosec.key-prefix` 写错（发布方的必须相同）或 Redis 数据库错了。文档装入时会有一行 INFO。
 - **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
 
 `cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`invalid`、`failed`、`absent` 或 `loading`；`invalid` 是已存储但无法编译的文档）和 `prewarmed`。把它加入 readiness 组即可在
@@ -302,6 +302,16 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 `WARN` 记录一次（[Redis 要求](./storage.md#redis-requirements)）。
 
 这个指示器是告警：不要把它放进就绪组，就绪组只由 `cosecSnapshot` 承担。放进去的话，Redis 的一次改动会让所有实例同时退出轮转。
+
+## pod 内存耗尽 {#a-pod-runs-out-of-memory}
+
+先看是哪一块内存耗尽了；要调的旋钮不同：
+
+| 你看到的 | 原因 | 要改什么 |
+|---|---|---|
+| 日志里有 `java.lang.OutOfMemoryError: Java heap space`，`data/` 里有堆转储（镜像自己的选项会写它），pod 重启 | 编译后的文档加上网关自己的分配放不进堆 | 把 [`max-apps` 和 `max-tenants`](./configuration.md#snapshot) 降到堆能放下的数量（[能放下多少文档](./deployment.md#memory)），或把堆连同容器限制一起调大 |
+| `java.lang.OutOfMemoryError: Direct buffer memory` | 负载下 Netty 的缓冲区达到了 `-XX:MaxDirectMemorySize` | 连同限制一起调大直接内存；读取 `jvm_buffer_memory_used_bytes{id="direct"}` |
+| pod 被 `OOMKilled`（退出码 `137`），没有 Java 错误 | 容器限制低于堆加直接内存再加 JVM 原生部分约 250 MiB | 调大限制，或降低 `-Xmx` 和 `MaxDirectMemorySize`：限制是这三者之和，再加四分之一（[内存](./deployment.md#memory)） |
 
 ## 探针回答 401 或 503，或 pod 在第一次发布之前反复重启 {#probes-answer-401-or-503}
 
@@ -656,6 +666,9 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 
 | 消息 | 修复 |
 |---|---|
+| `STA-5: <n> CorsConfigurationSource beans of the application: the CORS filter before CoSec takes one.` | 只保留一个 `CorsConfigurationSource`，或自己声明一个 `CorsFilter` bean，starter 就不再注册（[CORS](../integration/web.md#cors)）。 |
+| `cosec.authorization.shadow.report-interval is at least one millisecond, not <d>.` | 把 [`report-interval`](./configuration.md#shadow-windows) 设为一毫秒或更大（默认 `10s`）。 |
+| `cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.` | 写 `required` 或 `best-effort`（[`delivery`](./configuration.md#audit)）；大小写、空格以及用 `-` 代替 `_` 都无所谓。 |
 | `Decision listener <name> is registered twice.` | 给每个 `DecisionListener` 一个独立的 `name`。 |
 | `CoSec's <CacheName> is the store of record: a Store.` | 有东西替换了某个 CoSec 缓存的定义；CoSec 自己创建这些缓存。 |
 | `lagWarn must not exceed lagEscalate.` 以及其他快照选项检查 | 修正 [`cosec.authorization.snapshot.*`](./configuration.md#snapshot)。 |
@@ -681,10 +694,10 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 | 状态码 | 原因 | 修复 |
 |---|---|---|
 | `401` | 请求背后没有管道放行的主体：匿名，或者该路由没有部署在管道之后。请求体一个字节也不读。 | 发送凭证。文档必须为这个主体放行发往 `cosec.control.http.base-path` 的 HTTP 请求。 |
-| `403` | 操作者无权对这个文档执行这个动作（对 `simulate` 与 `explain`，是请求在其中决策的租户：没有 `principal` 时是 `(0)`），或者硬性规则禁止：作者审批自己的变更、其他人变基该变更，或作者以外的人放弃撤销仍在生效的 break-glass 绑定的变更（`BRK-10`）。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
+| `403` | 操作者无权对这个文档执行这个动作（对 `simulate` 与 `explain`，是请求在其中决策的租户：没有 `principal` 时是 `(0)`），或者硬性规则禁止：作者审批自己的变更、其他人变基该变更，或作者以外的人放弃吊销仍在生效的 break-glass 绑定的变更（`BRK-10`）。 | 为操作者绑定该文档的控制面策略（`cosec:platform-admin`、`cosec:tenant-admin` 等）（[测试变更](../policies/testing.md)）。 |
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
-| `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
+| `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有吊销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而吊销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的吊销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 吊销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再吊销一次。 |
 | `:apply` 的 `REPLACE` 返回 `409`：`[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | 文件头写明了读取时的修订，而头修订之后已变化：应用它会删掉期间发布的内容。 | 读取头修订（`GET /documents/<doc>`），把变化合并进文件，把 `revision` 设为头修订，再应用一次（[变更](../policies/testing.md#changes)）。 |
 | 发布返回 `422`：`publishing change <id>: after this change <principal>@<tenant> could not reach the control plane: …` | 对平台文档、平台租户的文档或控制应用的文档的变更，会让发布者到达不了控制面：原因点名了请求以及拒绝它的是什么（`V4`）。 | 修改这个变更；如果是交接，就在发布请求体里用 `"lockout": true` 确认（[发布与回滚](../policies/testing.md#publishing-and-rolling-back)）。 |
 | 平台文档变更之后，每个控制面调用都返回 `401` 或 `403` | 已发布的变更关闭了控制 API 的路径，或者拿走了每个操作者的授权：谁都无法通过控制面把它改回来。 | `cosec-migrate restore --document platform --revision <最后一个正常的修订>`，再加 `--confirm`（[从被锁在外面中恢复](./storage.md#recovering-from-a-lock-out)）。不要清空 Redis。 |
@@ -712,10 +725,10 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 - **只删除条目的平台或应用变更停在 `AWAITING_APPROVAL`**，带一项 `NOT_ANALYZED` 升级 `policy <id> of <doc>` 或 `binding <id> of <doc>`（`it removes a DENY: only the trust root does it alone`）：这个变更拿掉了一条 DENY，而平台和应用之上没有别的约束还在（`CTL-31`）。删除角色按角色派生的每条绑定计，即 `role:<role>@<app>:<permission>`。请另一位持有 `cosec:approve` 的平台主体审批它（[审批](../policies/testing.md#approval)）。
 - **发布时审批不再算数**：变更回到 `AWAITING_APPROVAL`，`APPROVAL` 发现写着 `the token the approver approved with is revoked`、`the approver's tokens are revoked`、`the approver no longer holds cosec:approve on the document`、`only a platform principal approves a boundary change`、`under four-eyes, only a platform principal approves a platform principal's change`，或 `the approval does not say what credential its approver approved with`（升级前的审批、旧实例接受的审批，或用不带 id 的凭证给出的审批）。请重新申请审批。`:approve` 返回 `403` 而日志中写着 `an API key cannot approve`：请用人的令牌审批；写着 `an approval names the approver's credential, and this one names none`：请用带 id 的凭证审批，例如 CoSec 的令牌。
 - **发布在暂存槽上遇到另一个变更时出现 `FAILED` 变更事件**：`another change took the staging slot before the head write`（变更在发布期间被抢占，没有写入任何内容）、`the document moved before the head write`（变更最后一次检查暂存槽之后头变化了：取走其暂存槽的变更、bootstrap、迁移，或旧实例写了头，旧实例可能正在发布同一个变更；没有写入任何内容）、`revision <n> was published over the same base first, by <id>`（同一基准上另有一次发布先到：被它抢占、仍在一次存储往返之内发布的变更，或 bootstrap、迁移、旧实例的发布；请变基），或 `conflicted by <id>, which did not take the slot`（一次抢占在标记持有者之后放弃了；请变基持有者）。这个版本的发布写头时遇到的若是本变更自己的修订（同一变更的并发发布写下的），不记失败。
-- **撤销返回 `503`，break-glass 绑定仍在**：撤销的发布停住了（REQUIRED 变更监听器没有记录 `PUBLISHING`），它以 `READY` 留在平台文档的暂存槽中。等监听器的存储恢复后再撤销一次该绑定，即会把它发布出去；看不到它的撤销人用自己的撤销变更抢走它的槽。在此期间，吊销该主体的令牌照样有效。只有撤销的作者能放弃它（其他人得到 `403`，`BRK-10`），放弃同样需要这个监听器（`503`）。
-- **`DELETE /break-glass/{bindingId}` 返回 `409` `binding [<id>] still grants: change <id> is <state>`**：撤销没有生效，该绑定仍在生效。`CONFLICTED`：其他撤销或写入不断改变平台文档，撤销又试了三次后放弃；请再撤销一次，并在此期间吊销该主体的令牌。`DRAFT`：查看变更的 `findings`。
+- **吊销返回 `503`，break-glass 绑定仍在**：吊销的发布停住了（REQUIRED 变更监听器没有记录 `PUBLISHING`），它以 `READY` 留在平台文档的暂存槽中。等监听器的存储恢复后再吊销一次该绑定，即会把它发布出去；看不到它的吊销人用自己的吊销变更抢走它的槽。在此期间，吊销该主体的令牌照样有效。只有吊销的作者能放弃它（其他人得到 `403`，`BRK-10`），放弃同样需要这个监听器（`503`）。
+- **`DELETE /break-glass/{bindingId}` 返回 `409` `binding [<id>] still grants: change <id> is <state>`**：吊销没有生效，该绑定仍在生效。`CONFLICTED`：其他吊销或写入不断改变平台文档，吊销又试了三次后放弃；请再吊销一次，并在此期间吊销该主体的令牌。`DRAFT`：查看变更的 `findings`。
 - **`DELETE /break-glass/{bindingId}` 返回 `409` `binding [<id>] is not a break-glass binding`**：平台文档中该 id 的绑定是普通绑定（无论是否到期），没有提议任何变更。请用变更删除它（[策略测试](../policies/testing.md)）。
-- **`DELETE /break-glass/{bindingId}` 返回 `409` `[platform] is at revision <n>, not <m>`**：撤销提议时另一次写入恰好改变了平台文档，那可能是另一个撤销同一绑定的调用。请确认该绑定是否还在：重试（返回 `404` 即已删除），或读取 `GET /documents/platform`。
+- **`DELETE /break-glass/{bindingId}` 返回 `409` `[platform] is at revision <n>, not <m>`**：吊销提议时另一次写入恰好改变了平台文档，那可能是另一个吊销同一绑定的调用。请确认该绑定是否还在：重试（返回 `404` 即已删除），或读取 `GET /documents/platform`。
 - **`DELETE /break-glass/{bindingId}` 返回 `404`**：平台文档中没有该 id 的绑定，也没有提议任何变更。请核对 id（`GET /documents/platform` 列出所有绑定）。首次调用超时或失败之后重试得到的 `404`，说明该绑定已被删除，可能是那次调用删的，也可能是别的调用：平台文档的修订历史写明是哪个修订删除了它。和控制 API 的所有 `404` 一样，它不带 `detail`；控制面所在主机以 `INFO` 记录 `the platform document has no binding [<id>]`。
 - **升级之后，覆盖所有 app 的每个租户授出都等待审批**（`UNREADABLE`），并以 `WARN` 记录 `The app list is missing or incomplete: run cosec-migrate repair-references; ...`（每分钟至多一次，启动时也会出现）：app 列表尚不完整，分析无法判断作者在它没有读的 app 中持有什么。在每个控制面实例和 `cosec-migrate` 都运行这个版本之后，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)。列表丢失之后（`FLUSHDB`、驱逐）也是如此。`The app list misses an app document that exists`、`The app list has an entry that names no app document`，以及回收任务记的 `The app list misses the app documents [...]; it is incomplete again`（旧版本的实例或 `cosec-migrate` 发布了一个 app），同样需要运行 `repair-references`。
 

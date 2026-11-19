@@ -60,6 +60,10 @@ flowchart LR
 
 主体只会对照它自己租户的文档求值；主体 id 只在租户内唯一。租户之间隔离到什么程度，见[安全模型](./security-model.md)。
 
+### 平台 {#platform}
+
+这个词指三样东西，每次出现时句子会说明是哪一样：**平台文档**（一个部署只有一份文档，它的策略被所有租户共享）、**平台租户** `(platform)`（系统的运营方，见上文）、**平台边界**（[见下](#platform-boundary)，平台策略给租户设定的上限）。“平台策略”或“平台角色”指平台文档持有的策略或角色。
+
 ## 请求 {#request}
 
 HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求头、客户端 IP、设备 id，以及客户端在 `CoSec-Space-Id` 参数中要求的空间（见 [Web 集成](../integration/web.md)）。这些全部由客户端决定。客户端从不指定应用。
@@ -76,7 +80,7 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 
 ### 作用域 {#scope}
 
-一个请求经过检查的上下文：它的租户（总是主体的租户）、应用、空间，以及主体在该空间中的角色。`ScopeResolver` 根据主体、宿主的应用和请求要求的空间构建它，或者拒绝请求；其他任何代码都无法构造作用域。这些检查的界线在哪里，见[信任边界](./security-model.md#trust-boundaries)。
+一个请求经过检查的上下文：它的租户（总是主体的租户）、应用、空间，以及主体在该空间中的角色。`ScopeResolver` 根据主体、宿主的应用和请求要求的空间构建它，或者拒绝请求；其他任何代码都无法构造作用域。这些检查的界线在哪里，见[信任边界](./security-model.md#trust-boundaries)。这个词只指这个经过检查的上下文（条件里的 `scope.space` 和 `scope.roles`、代码里的 `SecurityScope`、`scope-rejected` 问题）；说绑定被限制在什么范围时，文档写“绑定的应用和空间”。
 
 ### 动作与资源 {#action-and-resource}
 
@@ -114,6 +118,8 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 ### 条件 {#condition}
 
 对请求属性的测试：主体（`subject.id`、`subject.authenticated`）、作用域（`scope.space`、`scope.roles`）、动作与资源、环境（`environment.ip`、`environment.time`），以及由属性提供者获取的外部属性（`ext.<provider>.<name>`）。`eq`、`in`、`prefix`、`cidr`、`time`、`exists` 等运算符可以用 `and`、`or`、`not` 组合。完整列表见[策略语言](../policies/language.md)。
+
+**属性**这个词指几样东西：主体的属性（`subject.attributes.<name>`，来自令牌的 `attributes` 声明）、请求的属性（`request.attributes.<name>`，由宿主设置）、由提供者获取的外部属性（`ext.*`），以及条件读取的任何其他值，例如 `subject.id`，语言里把它叫作属性路径。平台文档自己的 `attributes` 部分不是这些中的任何一种：它声明文档可以读取哪些外部属性（`ext.<provider>.<name>` 及其类型），所以本文档把它叫作**外部属性声明**。资源没有属性：关于资源的事实写进它的 id。
 
 ## 绑定与成员关系 {#bindings-and-memberships}
 
@@ -155,7 +161,7 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 
 ### 平台边界 {#platform-boundary}
 
-平台为租户设定的、能被放行的上限：Permit 还必须匹配一条 `boundary: true` 的策略。平台文档指定默认边界；租户文档可以指定另一条（[平台边界](./security-model.md#platform-boundary)）。
+平台为租户设定的、能被放行的上限：Permit 还必须匹配一条 `boundary: true` 的策略。平台文档指定默认边界；租户文档可以指定另一条（[平台边界](./security-model.md#platform-boundary)）。`boundary` 的写法取决于它写在哪里：平台策略上是一个标志（`"boundary": true`），租户文档里是一个 id（`"boundary": "<策略 id>"`），指向那条策略。
 
 ### 义务 {#obligation}
 

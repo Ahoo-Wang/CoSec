@@ -68,6 +68,11 @@ section above it:
   recompile. Kotlin sources stay the same; Java drops `INSTANCE` (`PermittedRequest.withToken(...)`). `@JvmOverloads`
   and `@JvmStatic` are added to `PipelineFixture`'s companion (`load`, `of`, `unreadable`), `PipelineFixture.request`,
   the constructors of `PipelineFixture.Principal` and `TokenSubject`, and `TokenSubject.of`, which only adds.
+- **The skill `cosec-custom-matcher` is `cosec-extending`** (UE-21). 8.0 has no matchers, and the skill is about
+  extending CoSec with beans (`AttributeProvider`, `MembershipProvider`, `DecisionListener`, `RateLimiter`,
+  `Authenticator`). The directory is `skills/cosec-extending`, its `name` is `cosec-extending`, and an agent invokes it as
+  `$cosec-extending`. Affected: an agent configuration, a prompt or a plugin list that names `cosec-custom-matcher`;
+  nothing in a running deployment changes.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

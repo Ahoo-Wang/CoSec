@@ -21,6 +21,9 @@ import java.time.Instant
  * What a new token says about whom it is issued for: the one input of a [TokenConverter], an immutable value.
  *
  * [roles] holds what the principal may hold in the token's [app], as `role` or `role@space` (RFC 0012 §3.5).
+ *
+ * Pass every argument after [id] by name: [app] comes before [tenant], so `TokenSubject("alice", "acme")` is the app
+ * `acme` in the default tenant, not the tenant `acme`.
  */
 class TokenSubject @JvmOverloads constructor(
     /** The principal's id: the token's subject. Not empty, and not beginning with `(`, which is CoSec's (`IDN-12`). */

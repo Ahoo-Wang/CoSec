@@ -156,7 +156,7 @@ flowchart LR
 - 桶耗尽时，在控制 API 做任何工作之前就答 `429`。控制 API 只服务这些确切的路径：末尾带 `/` 的路径是 `404`，含空段（`//`）的路径被管道以 `400`
   拒绝，因此这些模式覆盖它服务的每个请求。
 - 不要把 break-glass 的路由（`/break-glass` 及其下）放进这条规则：给它们单独一条规则，或者不限，这样耗尽的桶永远不会挡住
-  紧急撤销。`changes/*` 仍覆盖 break-glass 的三个步骤：让已审批的 break-glass 授予生效的 `:publish`、恢复卡住的撤销的
+  紧急吊销。`changes/*` 仍覆盖 break-glass 的三个步骤：让已审批的 break-glass 授予生效的 `:publish`、恢复卡住的吊销的
   `:publish`，以及 break-glass 变更的 `:abandon`。给平台的桶留出余量，或者用
   `"condition": {"not": {"eq": ["scope.tenant", "(platform)"]}}` 把平台主体排除在这条规则之外。
 - `documents/{key}:apply` 和 `:rollback` 也会提出变更，可以加入这条规则。

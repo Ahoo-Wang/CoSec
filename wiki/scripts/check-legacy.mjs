@@ -105,7 +105,7 @@ const ALLOWED = [
     reason: 'the section for readers of the old client says it sent this header and that the new one does not',
   },
   {
-    files: ['skills/cosec-custom-matcher/SKILL.md'],
+    files: ['skills/cosec-extending/SKILL.md'],
     terms: ['ActionMatcherFactory', 'ConditionMatcherFactory'],
     reason: 'tells the reader that 7.x custom matchers have no 8.0 equivalent',
   },

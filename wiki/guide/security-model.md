@@ -478,6 +478,22 @@ CoSec decides whether a request may reach your handler. It does not:
   ([Testing policies](../policies/testing.md));
 - replace transport security: run behind TLS, and keep `cosec.jwt.secret` secret.
 
+## Names in output {#names-in-output}
+
+One decision is reported under several names, because each output (the check in code, the control plane, the audit
+event, the span, the metrics) was written for its reader. Each pair below is one concept spelled by two outputs; none is
+renamed.
+
+| Concept | Where and how it is spelled |
+|---|---|
+| The effect of a statement | `allow` or `deny` in a document. The prose says ALLOW and DENY for the statements. |
+| What was decided | `Permit`, `Deny`, `Indeterminate`, `Rejected`, `InvalidRequest` in code and in the scenarios' `expect`; `PERMIT`, `EXPLICIT_DENY`, `IMPLICIT_DENY` and the rest in the audit's `decision` and the span's `cosec.authorize.result`; the same words in lower case in the metrics' `result` ([What decided, in every output](../operations/observability.md#what-decided-in-every-output)). Say "permit" for the decision and "allow" for the statement |
+| The deciding statement | `by` in code, in the scenarios, and in the control plane's `simulate` and `explain`: `policy` (the policy id), `statement` (its zero-based index) and `name`. The audit has `authorization.source.policy` and `.statement` (`index`, `name`); the span `cosec.authorize.policy.id`, `.statement.index` and `.statement.name`. **Pin `name` in a scenario**: the index changes when statements are added or reordered |
+| How the statement applied | `via` in `by`: in code and in scenarios `{"binding": id, "document": …}`, `{"attached": policyId}`, `"builtin"` or `{"boundaryOf": tenant}`; in the control plane's answer a string, the binding id with the `document` beside it, or `attached:<policyId>`. The audit has `binding` (the same strings) and `authorization.source.via`; the span `cosec.binding.id`. A policy's own condition, which guards all its statements, is the `guard` of a `MatcherFailed` cause |
+| Names CoSec derives | A short-form permission is the policy `perm:<appId>/<id>`; a role entry derives one binding per permission, `role:<roleId>@<app>:<permission>` ([Roles](../policies/role-permissions.md#roles)); the blacklist is `builtin`. They appear in `by` and in the audit's `binding` where you wrote no policy or binding of that name |
+| A document's revision | `revision` in the document; `version` (`platform`, `app`, `tenant`) in an `explain` answer; `snapshotVersion` in the audit; `<platform>/<app>/<tenant>` in the span's `cosec.snapshot.version`; `at` is the request member of `explain` that takes the `version` back ([Explaining a decision](../integration/checks.md)) |
+| What an action is in | `service` in `service:verb`; `http` for the namespace of an unmapped route, `http:<METHOD>` ([Route maps](../policies/language.md#route-maps)) |
+
 ## Hardening checklist
 
 Before production:

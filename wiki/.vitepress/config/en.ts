@@ -37,6 +37,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Apps With Spaces', link: '/scenarios/spaces' },
       { text: 'A Service Account in One Space', link: '/scenarios/service-account' },
       { text: 'A Tenant Owner', link: '/scenarios/tenant-owner' },
+      { text: 'Several Tenants', link: '/scenarios/several-tenants' },
       { text: 'Roles From an External Source', link: '/scenarios/external-source' },
       { text: 'Authorizing Business Actions', link: '/scenarios/route-maps' },
       { text: 'Gateway Topologies', link: '/scenarios/gateway' },

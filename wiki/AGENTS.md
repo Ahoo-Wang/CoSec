@@ -14,6 +14,7 @@ pnpm check:mermaid       # parses every Mermaid diagram in headless Chrome and c
 pnpm fix:mermaid         # rewrites <br/> to <br>, adds autonumber to sequence diagrams, and similar fixes
 pnpm check:docs          # links, #anchors, en/zh heading parity, en/zh sidebar parity, then check:legacy
 pnpm check:legacy        # no mention of an API or property that 8.0 removed (RFC 0008 G4)
+pnpm check:problems      # every problem type of contract/problems/ has its page under public/problems/ (UE-12); `--write` makes it
 pnpm build               # production build; fails on dead links
 ```
 
@@ -128,7 +129,7 @@ they are in the code.
 | credential | 凭证 | A JWT access token or an API key. Not 凭据. |
 | token; access token; refresh token | 令牌；访问令牌；刷新令牌 | Not "Token" in Chinese prose. |
 | API key | API key | Not API Key or API 密钥. |
-| revocation, revoke | 吊销 | Not 撤销 or 注销. |
+| revocation, revoke | 吊销 | Not 撤销 or 注销. Taking a change or a document back is 回滚 or 恢复, never 撤销 or 吊销. |
 | membership; membership claims | 成员关系；成员关系声明 | |
 | app; space; default space | 应用；空间；默认空间 | |
 | scope | 作用域 | A resolved tenant, app and space, with the roles there. |
