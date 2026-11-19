@@ -28,7 +28,15 @@ class PublicApiStabilityTest {
         private const val INTERNAL_API = "me.ahoo.cosec.annotations.InternalCoSecApi"
         private const val EXPERIMENTAL_API = "me.ahoo.cosec.annotations.ExperimentalCoSecApi"
         private val PUBLISHED_GROUPS = setOf("api", "core", "backends", "edge", "extensions", "host", "test")
-        private val NOT_PUBLISHED = setOf("conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "code-coverage-report")
+        private val NOT_PUBLISHED = setOf(
+            "conformance",
+            "architecture",
+            "e2e",
+            "client-host",
+            "system-test",
+            "system-behind",
+            "code-coverage-report"
+        )
 
         /** Whether [project] is a library module applications compile against. */
         fun published(project: String): Boolean =
