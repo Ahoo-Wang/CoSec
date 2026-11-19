@@ -188,7 +188,7 @@ management:
 - **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
   Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
 - **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；`-Djava.net.preferIPv4Stack=true`（因为
-  [netty#16082](https://github.com/netty/netty/issues/16082)）。镜像不启动 JMX agent（直到 beta.3，它在 5555 端口、所有网卡上启动一个不需要认证的 JMX agent）。
+  [netty#16082](https://github.com/netty/netty/issues/16082)）。镜像不启动 JMX agent。
 
 ### 内存 {#memory}
 
@@ -259,6 +259,12 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
   `cosec.authentication.revocation.fail-closed` 的两种设置按文档行为，每个进程无需重启即恢复；**副本在流量下重启**时不放行任何应被拒绝的请求；
 - 签发方**时钟超前**的令牌，在 `cosec.authentication.revocation.skew` 之内与之外；
 - 经网关的 **TypeScript 客户端**（`@ahoo-wang/cosec-fetcher`），以及一次决策的**指标**。
+
+同一工作流的第二个作业用该镜像在 [kind](https://kind.sigs.k8s.io/) 集群上应用 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s)
+的清单：dev overlay 在没有其演示路由所指的 Service 时也能启动；`cosec-migrate publish` 之前 Pod 存活但不在 Service 中，之后变为就绪；
+做出一次决策（`401`、`403`，以及只在缺失的后端失败的放行）；从另一个 Pod 读取管理端口的 Prometheus 端点，而 Service 不发布该端口；
+供网关后端服务使用的示例 `NetworkPolicy` 通过 API 服务器的校验，并选中该服务的 Pod 与网关的 Pod。最后一项只说明该策略写的是它该写的，
+并不证明它被强制执行：kind 的网络插件不强制执行 `NetworkPolicy`，请像示例开头所说的那样在你自己的集群上测试强制执行。
 
 它不衡量性能（[JMH](../architecture/overview.md#measuring)）、网关与其后端服务之间的版本差异，也不覆盖 Redis Cluster、TLS 和按实例的用户。
 

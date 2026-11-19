@@ -439,7 +439,9 @@ through the control plane, which checks and compiles every document it writes:
 2. **Name the first administrator** with `cosec-migrate bootstrap`, and issue that principal a token for the tenant
    `(platform)` and the app `cosec-control` ([Change a document later](../guide/quick-start.md#change-a-document-later)).
 3. **Apply each other document** (`app:<id>`, `tenant:<id>`) as a change. `apply` takes the whole document and turns
-   the current revision, or an empty one, into it; `MERGE` only adds and changes. The control API is under
+   the current revision, or an empty one, into it; `MERGE` only adds and changes, so what a later file leaves out stays
+   published (the change carries a `WARNING` naming it); `REPLACE` removes it, and applies only on the revision the file
+   was read at ([Changes](../policies/testing.md#changes)). The control API is under
    [`cosec.control.http.base-path`](./configuration.md#control-plane):
 
    ```bash

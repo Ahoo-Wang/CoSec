@@ -12,6 +12,7 @@ lower test can see; what a unit, slice or embedded-server test already proves is
 | `documents/` | The documents the scenarios publish: the platform's with `cosec-migrate`, the tenants' through the control plane. |
 | `profile/shortened-bounds.yaml` | Test configuration only: the bounds the suite shortens (shadow windows), each with the default it replaces. |
 | `../../typescript/cosec-fetcher/test-system/` | The TypeScript client's scenarios against the gateway, run by `pnpm test:system` in `typescript/` after the Kotlin ones. |
+| `kind/` | The kind leg: the manifests of `k8s/` on a real cluster (`run.sh`, its platform document). A second job of the same workflow. |
 | `docker/app.Dockerfile` | The image of each `test/system-*` service, from its `installDist`. |
 | `src/test/kotlin/` | The harness and the scenarios (`@Tag("system")`), Kotlin over the JDK's HTTP client. |
 | `scripts/summary.py` | The run summary: each failed scenario, the bound it waited for, the evidence artifact. |

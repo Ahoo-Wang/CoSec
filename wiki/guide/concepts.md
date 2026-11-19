@@ -44,7 +44,10 @@ The principal and its memberships come from the verified credential (or your mem
 Who is making the request: an id, a tenant and free-form attributes. The principal comes from the verified credential,
 a JWT access token or an API key, so the client cannot change it. A request without a valid credential has the
 **anonymous** principal, id `(0)`, in the default tenant, with no roles and no attachments. Policies can allow the
-anonymous principal too; that is how public endpoints work.
+anonymous principal too; that is how public endpoints work. The id `(0)` is for the security context and the decision
+event: a document has no `subject.id` for an anonymous request, and a condition that compares it with `(0)`, or a
+principal binding whose id begins with `(`, does not compile. Test `subject.authenticated` to tell the two apart
+([Conditions](../policies/language.md#absent-values)).
 
 ### Credential
 
