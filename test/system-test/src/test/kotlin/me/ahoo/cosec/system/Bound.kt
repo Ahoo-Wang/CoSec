@@ -82,6 +82,17 @@ object Bounds {
     )
 
     /**
+     * A decision reaches the audit topic: the Kafka audit listener is `BEST_EFFORT` (the default): the event goes to a
+     * queue of 1,024 sends and a thread of its own (OBS-3), the producer batches and sends, and the consumer the scenario
+     * runs (about 4 s each, its own timeout) must read it; 20 s is the bound for a record that is normally there at once.
+     */
+    val AUDIT_DELIVERY = Bound(
+        "AUDIT_DELIVERY",
+        Duration.ofSeconds(20),
+        "BEST_EFFORT Kafka audit listener queue and producer batch (OBS-3), plus one to four 4 s consumer runs",
+    )
+
+    /**
      * A tenant that fails closed on lag is refused once the oldest document it reads was last confirmed more than
      * `cosec.authorization.snapshot.fail-closed.max-lag` ago (20 s here, default 30 min; SNP-5), counted from the last
      * confirmation, which may be one `revalidate-interval` (10 s, SNP-6) before Redis went away, plus 3 s.
