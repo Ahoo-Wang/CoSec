@@ -27,6 +27,10 @@ import me.ahoo.cosec.model.TenantId
  * contract: failure means deny. A failed or late answer makes the memberships unavailable, and the request fails closed
  * with 503; it never counts as "no memberships", because no roles also means no `inRole` DENY matches.
  *
+ * It is asked for a tenant and a principal, never an app: the roles it answers apply in every app the principal holds a
+ * credential for, so role ids are one namespace across apps wherever memberships come from a provider (and for every
+ * API key). Apps that share principals and a provider give their roles distinct ids (`wms.admin`, `pos.admin`).
+ *
  * A suspend function, like every data-plane SPI (RFC 0006 Q11).
  * Its timeout is cooperative: the pipeline cancels a late call and waits for it to return, so a blocking client goes
  * in `runInterruptible(myDispatcher)` and keeps timeouts of its own (RC1-14, `wiki/architecture/extending.md`).

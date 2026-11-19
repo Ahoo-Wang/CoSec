@@ -1,0 +1,39 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-18T00:00:00Z",
+  "policies": [
+    {
+      "id": "behind",
+      "statements": [
+        {
+          "name": "behind",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": [
+            "http:path:/behind/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "behind",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "behind"
+    }
+  ],
+  "rateLimits": [
+    {
+      "id": "per-user",
+      "action": "http:GET",
+      "resource": "http:path:/behind/**",
+      "key": "subject.id",
+      "permitsPerSecond": 0.00390625,
+      "windowSeconds": 1280
+    }
+  ]
+}

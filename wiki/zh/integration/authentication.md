@@ -182,7 +182,7 @@ fun refreshTokenAuthentication(
     tokenVerifier: TokenVerifier,
     tokenRevocation: TokenRevocation,
     tokenFamilies: TokenFamilies,
-) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies, MembershipRefresh.CLAIMS)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -194,7 +194,7 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 
 会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过或刷新令牌已过期时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。吊销记录或会话存储无法应答时，它抛出 `RevocationUnavailableException` 或 `SessionStoreUnavailableException`：请应答 `503`：此时没有签发任何东西；除非存储恰在记录轮换本身时失败，否则也没有消耗任何东西，而那种情况由宽限期内的重试覆盖。其他任何异常都是错误：提供的路由以 `500` 应答，与流水线应答未建模错误的方式相同。两者都不会结束客户端的会话。
 
-默认情况下，刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个 `MembershipRefresh`。它回答用户现在拥有什么（重新查询）。用户不能再登录时，它通过抛出 `TokenVerificationException`（成员关系已不存在时用 `TokenRevokedException`）来拒绝，这是一个 `401`；其他任何异常都是错误，而不是拒绝：
+`MembershipRefresh.CLAIMS`（上面的示例，以及未声明 `MembershipRefresh` Bean 时 starter 的刷新路由）不会重新读取用户：新令牌携带旧令牌的声明，所以从用户移除的角色会留在其会话每个刷新出的令牌里，直到用户重新登录，或直到你[吊销主体的全部令牌](#revoking-every-token-of-a-principal)。`RefreshTokenAuthentication` 对它没有默认值：保留声明要写出来。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个你自己的 `MembershipRefresh`。它回答用户现在拥有什么（重新查询）。用户不能再登录时，它通过抛出 `TokenVerificationException`（成员关系已不存在时用 `TokenRevokedException`）来拒绝，这是一个 `401`；其他任何异常都是错误，而不是拒绝：
 
 ```kotlin
 @Bean
@@ -413,6 +413,7 @@ class SelectTenantTest {
         val request = PermittedRequest.withToken(
             pair.accessToken,
             verifier,
+            RevocationReader.NONE,
             headers = mapOf("CoSec-Device-Id" to listOf("phone")),
         )
 
@@ -439,7 +440,9 @@ class SelectTenantTest {
 | 未配置 | `order` | 请求属于 `order` |
 | 未配置 | 未声明 | 没有应用，不读取应用文档 |
 
-匿名请求没有凭证，它的应用取宿主的应用。所以发给一个应用的令牌在另一个应用的服务上没有用，即使签名密钥相同、角色同名；一次登录访问多个应用时，按应用各签发一个令牌，只放该应用的角色。操作控制面的令牌发给控制面的应用 `cosec.control.app-id`。
+匿名请求没有凭证，它的应用取宿主的应用。所以在有应用的服务上，发给一个应用的令牌在另一个应用的服务上没有用，即使签名密钥相同、角色同名。没有应用的服务按凭证声明的应用决策，没有 `aud` 的令牌不读取任何应用文档。一次登录访问多个应用时，按应用各签发一个令牌，只放该应用的角色。
+
+**凡是成员关系不来自令牌声明的地方，角色 id 在各应用之间是同一个命名空间。** `MembershipProvider` 只被问到租户和主体，从不被问到应用，所以它回答的角色在主体持有凭证的每个应用中都生效；每个 API key 的角色也取自提供者（`IDN-6`）。提供者给某主体的、本意属于应用 A 的角色 `admin`，只要应用 B 的文档也有角色 `admin`，它就是 B 的 `admin`。共用主体和提供者的应用，请给角色起互不相同的 id（`wms.admin`、`pos.admin`）。令牌声明里的角色，只要签发方按应用过滤（如登录示例），就没有这个问题。操作控制面的令牌发给控制面的应用 `cosec.control.app-id`。
 
 由签发令牌的一方在 `TokenSubject.app` 中说明它属于哪个应用。省略时为 null，与没有应用的主机一致：有应用的主机拒绝这样的令牌（`SCP-11`）。刷新令牌时保留它的应用。`aud` 有多个值、不是字符串或不能作为应用 id（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符）的令牌为 `token-invalid`。
 

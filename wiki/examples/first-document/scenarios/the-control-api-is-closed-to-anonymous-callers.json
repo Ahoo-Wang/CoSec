@@ -1,0 +1,16 @@
+{
+  "description": "An anonymous caller does not.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/cosec/control/v1/changes"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

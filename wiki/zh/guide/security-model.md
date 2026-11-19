@@ -15,7 +15,7 @@ description: "CoSec 何时放行请求、何时拒绝请求、何时拒绝作出
 2. 认证凭证。被拒绝的凭证（无效、过期、已吊销）不会中止请求：请求按匿名主体求值（[认证](../integration/authentication.md)）；
 3. 解析主体的成员关系，并获取黑名单属性；
 4. 用 `ScopeResolver` 解析作用域（租户、应用、空间及主体在该空间的角色）。作用域被拒绝即为拒绝（[信任边界](#trust-boundaries)）；
-5. 读取快照视图：平台文档、作用域所在租户的文档，以及主体在作用域应用中有角色、或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时该应用的文档。被黑名单拦截的请求只读取平台文档；
+5. 读取快照视图：平台文档、作用域所在租户的文档，以及作用域有应用、且主体在作用域的空间中持有任意角色（不限于该应用的角色），或租户文档把该应用的某个权限策略绑定给 `Anyone` 或某个主体时该应用的文档。被黑名单拦截的请求只读取平台文档；
 6. 获取候选语句所需的外部属性。
 
 随后引擎（`Evaluator`）对**候选**（对该请求适用的策略）分两轮求值：
@@ -78,7 +78,7 @@ ALLOW 永远不会胜过命中的 DENY。所有候选的 DENY 语句都在任何
 
 ## 默认拒绝 {#default-deny}
 
-没有任何语句命中时，决策为隐式拒绝。只有 ALLOW 授予的地方才有访问权限：新端点在有策略开放它之前是关闭的，模式里的拼写错误只会关闭端点，而不会开放端点。
+没有任何语句命中时，决策为隐式拒绝。只有 ALLOW 授予的地方才有访问权限：新端点在有策略开放它之前是关闭的，模式里的拼写错误只会关闭端点，而不会开放端点。但省略不是拼写错误：没有 `resource` 的 ALLOW 会在每个服务的每个资源上授予它的动作（[语句](../policies/language.md#statements)）。
 
 隐式拒绝和显式拒绝产生相同的响应，因此响应永远不会告诉调用方某条 DENY 存在。两者只在排查时不同：没有对应语句，或者给出命中的 DENY（[解释一个决策](../integration/checks.md#explaining-a-decision)）。
 
@@ -108,6 +108,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 | 吊销存储报告错误 | `503`（但见[两个已写明的例外](#the-two-documented-exceptions)） |
 | 无法解析成员关系（没有提供者、提供者失败或超时、令牌同时带有提供者标记并声明了角色） | `503`，绝不当作“没有成员关系” |
 | 快照源失败 | `503` |
+| 文档已安装，但 Redis 超过 `cosec.authorization.snapshot.fail-closed.max-lag` 未确认它 | 仅 `cosec.authorization.snapshot.fail-closed.tenants` 中的租户返回 `503`；其他租户无论文档多旧，都继续按已安装的文档决策（[存储](../operations/storage.md#how-instances-read-documents)） |
 | 文档、策略、语句、黑名单或边界无法读取或求值 | Indeterminate（`503`），除非有 DENY 命中 |
 | 某个属性提供者失败或超时 | 只有它自己的属性不可用；见[外部属性缺失](#missing-external-attributes) |
 | Permit 时某个 REQUIRED 决策监听器失败或超时 | `503` |
@@ -208,7 +209,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 被拒绝的作用域即为 Deny：匿名调用方返回 `401`，已认证调用方返回 `403`（`scope-rejected`）。
 
-**应用是薄弱环节。** 主体的角色属于空间，而不属于应用。没有宿主应用时，由客户端选择哪个应用文档的角色绑定作用于这些角色。如果两个应用的角色绑定在相同的动作和资源上授权（比如两个应用在同一路径前缀下共用 `http` 命名空间），就由客户端决定哪组授权生效。客户端也决定某个应用的 DENY 是否生效：应用文档只为该应用中的请求读取，所以没有宿主应用时，它绑定给角色的 DENY 只在客户端声明了该应用时才生效。声明了其他应用或没有声明的客户端会绕过这些 DENY，而平台和租户中不限定应用的 ALLOW 仍然生效。要避免应用 id 放大权限：
+**应用是薄弱环节。** 主体的角色属于空间，而不属于应用，客户端也从不指定应用：没有宿主应用时，由**凭证声明的应用**决定哪个应用文档的角色绑定生效。为应用 A 签发的令牌，用在没有设置 `cosec.authorization.scope.app-id` 的应用 B 的服务上，仍按 A 决策：如果两个应用的角色绑定在相同的动作和资源上授权（比如两个应用在同一路径前缀下共用 `http` 命名空间），决定哪组授权生效的是令牌的签发方，而不是该服务。没有应用（`aud`）的令牌完全不读取应用文档，所以应用文档绑定给角色的 DENY 永远不对它生效，而平台和租户中不限定应用的 ALLOW 仍然生效。凡是角色不来自令牌自身声明的地方，角色也不按应用区分：成员关系提供者只被问到租户和主体，每个 API key 的角色都取自提供者，所以它回答的角色在每个应用中都生效（见[应用](../integration/authentication.md#apps)）。要避免应用放大权限：
 
 - 在每个只服务一个应用的服务上设置 `cosec.authorization.scope.app-id`；
 - 在面向多个应用的网关上，用元数据 `cosec-app-id` 为每条路由指定它的应用（[网关](../integration/web.md#gateway)）。路由没有指定、网关也没有宿主应用时，请让各应用的路由映射和资源互不重叠，或为每个应用的前缀加一条平台 DENY，例如对 `http:path:/orders/**` 拒绝 `http:*`，条件为 `{"not": {"eq": ["scope.app", "order"]}}`。
@@ -273,7 +274,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 
 CoSec 决定请求能否到达你的处理器。它不会：
 
-- 在未设置宿主应用时，校验客户端指定的应用是否与路径相符（见[信任边界](#trust-boundaries)）；
+- 在未设置宿主应用时，检查凭证声明的应用是否与路径相符（见[信任边界](#trust-boundaries)）；
 - 阻止网关以外的人访问 gateway 模式的服务：这是网络的职责（[信任边界](#trust-boundaries)）；
 - 授权没有网关路由匹配的请求，例如网关的 actuator 端点：在应用端口上暴露了 `health` 以外端点的网关不会启动（[网关上的 actuator](../integration/web.md#actuator-on-a-gateway)）；
 - 决定处理器返回哪些记录或字段：请在自己的代码中过滤数据，对象级规则可使用[代码中的权限检查](../integration/checks.md)；
@@ -296,6 +297,8 @@ CoSec 决定请求能否到达你的处理器。它不会：
   影子报告和状态，启用 JWT 时还会写入吊销和刷新令牌族。运行控制面的进程需要对文档的写权限。数据面凭证仍能在文档的通道上
   发布失效消息：这会让实例从 Redis 重新读取它持有的文档，代价是负载，从不改变决策，因为失效消息不携带文档。
 - 以 `maxmemory-policy noeviction` 运行 Redis，并从主节点读取（[Redis 要求](../operations/storage.md#redis-requirements)）。
+- 决定 `cosec.authentication.revocation.fail-closed`。默认值 `false` 在读不到吊销时接受请求的令牌，暴露窗口受访问令牌有效期限制；`true` 则返回 `503`，代价是 Redis 故障期间每个已认证请求都失败（[这个例外](#the-two-documented-exceptions)）。
+- 决定哪些租户不得按旧文档决策：只有 `cosec.authorization.snapshot.fail-closed.tenants` 中的租户，在其文档超过 `fail-closed.max-lag`（默认 30 分钟）后返回 `503`；其他租户继续按已安装的文档决策（[存储](../operations/storage.md#how-instances-read-documents)）。
 - 用一条平台限流规则按租户限制控制 API（[限流](../policies/rate-limiting.md#the-control-api)）。
 - 在任何人需要 break-glass 之前注册一个 REQUIRED 决策监听器。
 - 必须始终生效的 DENY 放在没有条件的策略里，并且永远不要基于客户端写入的请求头授权。

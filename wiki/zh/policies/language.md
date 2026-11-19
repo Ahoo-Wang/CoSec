@@ -17,7 +17,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 | 应用文档 | `app:<appId>` | 应用 | 应用的[目录](#catalogs)、权限策略 `perm:<appId>/<permission>`、系统[角色](#roles)、角色绑定、限流规则。 |
 | 租户文档 | `tenant:<tenantId>` | 租户 | 租户自己的策略、它的绑定（任何人、它的主体、它的角色）、它的 `boundary`、自定义[角色](#roles)、限流规则。 |
 
-键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色，或租户文档把该应用的某个权限策略绑定给任何人或某个主体时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的文档按空文档读取。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
+键是[控制面](./testing.md)对文档的称呼。每个请求都读取平台文档和它所属租户的文档（匿名请求：租户 `(0)`）。只有当主体在请求的空间中至少拥有一个角色，或租户文档把该应用的某个权限策略绑定给任何人或某个主体时，请求才会读取其应用的应用文档；被黑名单拦截的请求只读取平台文档。没有发布过的应用文档或租户文档按空文档读取；缺失的平台文档则不是：在发布平台文档之前，每个请求都是 `503`（[失败即拒绝](../guide/security-model.md#fail-closed)）。哪些候选适用、按什么顺序，见[安全模型](../guide/security-model.md)。
 
 租户 id 和应用 id 都是一个路径段：不为空、不是 `*`，至多 128 个字符，且不含 `:`、`/`、控制字符或未配对的 UTF-16 代理项。控制面在 `doc/tenant/<tenantId>/…`、`scope/<tenantId>/<appId>/<space>` 这样的资源上授权，含 `/` 的 id 在那里会读作另一个租户的 id 后面再接一段路径（`SCP-13`）。其他字符都是普通字符：`acme.west`、`acme-west` 和 `acme west` 都是租户 id。租户或应用违反这条规则的令牌是 `token-invalid`（[升级](../operations/upgrading.md#tenant-and-app-ids-hold-no-slash)）。
 
@@ -104,7 +104,7 @@ description: "CoSec 文档每个字段的含义：平台、应用和租户文档
 | `name` | 字符串 | `""` | 出现在决策、追踪和 `explain` 中。 |
 | `effect` | `"allow"` 或 `"deny"` | 必填 | |
 | `action` | [动作模式](#actions)，或其非空数组 | 必填 | 所有动作写 `"*"`。 |
-| `resource` | [资源模式](#resources)或模式对象，或其非空数组 | 任意资源 | |
+| `resource` | [资源模式](#resources)或模式对象，或其非空数组 | **每个服务的每个资源** | “任意资源”没有别的写法，只能省略该字段，所以一次疏忽看上去就像有意为之：绑定给 `"*"`、写在平台文档里的 ALLOW `{"action": "http:GET"}` 放行每个服务的每个 `GET`，对所有租户、包括匿名调用方（[场景](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/no-resource)）。每条 ALLOW 都要写明资源。 |
 | `condition` | [条件](#conditions) | 恒为真 | |
 | `onMissing` | `"indeterminate"` 或 `"nomatch"` | `"indeterminate"` | 无法获取的外部属性意味着什么（[外部属性](#external-attributes-and-onmissing)）。只用于读取外部属性的条件。 |
 | `onMissingConfirmed` | 对象 | 无 | 谁在哪个变更中确认了一条 `onMissing: "nomatch"` 的 DENY：`{"by": {"tenant", "principal"}, "change"}`。只有控制面写入它。 |

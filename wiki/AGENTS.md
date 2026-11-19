@@ -32,7 +32,7 @@ Organized by the task the reader is doing, not by module.
 | `scenarios/` | Building a whole use case end to end | `simple-mode`, `resource-server`, `app`, `roles`, `spaces`, `service-account`, `tenant-owner`, `external-source`, `route-maps`, `gateway` |
 | `integration/` | Developer wiring CoSec into an application, or building a client of one | `web`, `authentication`, `clients`, `checks` |
 | `policies/` | Writing and reviewing the rules | `language`, `role-permissions`, `rate-limiting`, `testing` |
-| `operations/` | Running CoSec in production | `configuration`, `storage`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting` |
+| `operations/` | Running CoSec in production | `configuration`, `storage`, `deployment`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting` |
 | `architecture/` | Contributor, or integrator who wants the internals | `overview`, `extending` |
 | `zh/` | One-to-one Chinese mirror of everything above | |
 
@@ -47,9 +47,9 @@ option, is harder to use for both jobs.
 
 | Type | Answers | Shape | Pages |
 |---|---|---|---|
-| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting`, `extending` |
+| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `deployment`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting`, `extending` |
 | **Reference** | "What exactly does X mean?" | Complete, terse, ordered for lookup (tables); no narrative | `policies/language`, `operations/configuration` |
-| **Explanation** | "Why does it behave this way?" | Concepts, guarantees, trade-offs, diagrams | `introduction`, `concepts`, `model`, `security-model`, `architecture/overview` |
+| **Explanation** | "Why does it behave this way?" | Concepts, guarantees, trade-offs, diagrams | `introduction`, `concepts`, `model`, `security-model`, `roadmap`, `architecture/overview` |
 
 ## One fact, one home
 

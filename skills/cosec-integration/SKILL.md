@@ -35,7 +35,7 @@ other CoSec module it finds on the classpath. Add each integration as a dependen
 | Ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 | OpenTelemetry spans | `cosec-opentelemetry` | |
 | Micrometer metrics | `cosec-micrometer` | |
-| OpenAPI route map and app document generation | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-common` |
+| OpenAPI route map and app document generation | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-webflux-api` or `-webmvc-api` |
 | Kafka audit | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 
 ```kotlin
@@ -59,16 +59,17 @@ adapter is missing (MVC, WebFlux, or Gateway even with `cosec.enabled=false`), w
 ```yaml
 cosec:
   jwt:
-    algorithm: hmac256          # hmac256 | hmac384 | hmac512
-    secret: ${COSEC_JWT_SECRET} # blank fails startup while JWT is enabled
-  authorization:
-    scope:
-      app-id: order-service     # the app this host serves: only credentials declaring it are served
-    remote-ip:
-      max-trusted-index: 1      # trusted X-Forwarded-For hops; 0 ignores the header
-    routes:
-      location: classpath:cosec-routes.json   # names the route map; unset, the host loads none
+    secret: ${COSEC_JWT_SECRET} # HMAC key; blank fails startup while JWT is enabled
 ```
+
+Everything else has a default. Add a setting only for the need it serves, and know its consequence:
+
+| Add | When | Consequence |
+|---|---|---|
+| `cosec.authorization.scope.app-id: order-service` | the host serves one app | Only credentials declaring that app are served: a token issued with `TokenSubject(app = null)`, as the Quick Start's demo issues, is `403` `scope-rejected` on every request |
+| `cosec.authorization.routes.location: classpath:cosec-routes.json` | actions come from a route map | The file must exist and hold routes, or startup fails; unset, the host loads none and a request is `http:<METHOD>` |
+| `cosec.authorization.remote-ip.max-trusted-index: 0` | clients reach the host directly | The default `1` trusts one `X-Forwarded-For` hop, which a directly exposed host's clients can forge; `0` ignores the header |
+| `cosec.authentication.revocation.fail-closed: true` | a Redis outage must not accept tokens whose revocation cannot be read | Every authenticated request is `503` while revocations cannot be read |
 
 Startup fails, on purpose, when:
 
@@ -231,7 +232,9 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
   of your own with `membershipClaimLimit` set issues such tokens when the claims would exceed that many bytes (the
   starter's converter never does). Register the provider before issuing them, or those requests are 503.
 - Sessions: issue tokens through `TokenCompositeAuthentication`, which starts a session (a token family); refresh with
-  `RefreshTokenAuthentication(verifier, tokenRevocation, tokenFamilies)`. Only the newest pair refreshes, an older
+  `RefreshTokenAuthentication(verifier, tokenRevocation, tokenFamilies, memberships)`, where `memberships` is
+  `MembershipRefresh.CLAIMS` (keeps the old token's roles: a removed role applies at the next sign-in or after
+  `revokeSubject`) or a `MembershipRefresh` that looks the user up again. Only the newest pair refreshes, an older
   one presented again ends the session, and a session lasts `cosec.jwt.session.lifetime` (30 days).
 - Refresh and logout routes: set `cosec.authentication.login.refresh.path` and `logout.path` and the starter serves them
   (`POST`, the pair as JSON; `200` pair, `401` token-*, `503` unavailable, `500` error; logout `204`), on Spring MVC and

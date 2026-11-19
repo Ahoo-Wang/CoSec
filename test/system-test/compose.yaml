@@ -1,0 +1,121 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# The system test's topology (test/system-test/README.md): two replicas of the gateway image built from the commit under
+# test, a service behind them in cosec.pipeline.mode=gateway, the login and control-plane host, an enforcing servlet
+# service, and Redis as the store of record. The scenarios reach them through ports bound to the runner's loopback
+# interface, and the service behind not at all: it believes any CoSec-Identity, so only the gateways reach it.
+name: cosec-system
+
+x-cosec: &cosec
+  SPRING_DATA_REDIS_URL: redis://redis:6379
+  COSEC_JWT_SECRET: ${COSEC_SYSTEM_JWT_SECRET:?the throwaway HMAC secret of the run}
+  # The shortened bounds, test configuration only: profile/shortened-bounds.yaml says what each replaces.
+  SPRING_CONFIG_ADDITIONALLOCATION: optional:file:/opt/system/shortened-bounds.yaml
+
+x-gateway: &gateway
+  image: ${COSEC_SYSTEM_GATEWAY_IMAGE:-cosec-gateway:system}
+  depends_on:
+    redis:
+      condition: service_healthy
+    behind:
+      condition: service_healthy
+  environment:
+    <<: *cosec
+    # After the image's own options (-Xmx2048M, ZGC, ...), so these win; a runner has room for this.
+    JAVA_OPTS: -Xms256m -Xmx512m -XX:MaxDirectMemorySize=128m -Djava.net.preferIPv4Stack=true
+  # The configuration the image reads, ./config/, replaced as the Kubernetes base replaces it.
+  volumes:
+    - ./gateway:/opt/cosec-gateway-server/config:ro
+    - ./profile:/opt/system:ro
+  # The liveness group, as the image's own HEALTHCHECK, more often: readiness is what the cold start asserts.
+  healthcheck:
+    test: [ CMD, curl, -fs, -o, /dev/null, http://localhost:8080/actuator/health/liveness ]
+    interval: 2s
+    timeout: 3s
+    retries: 90
+
+services:
+  redis:
+    image: redis:7.4
+    # noeviction: Redis is the store of record, and each instance refuses to start otherwise (SNP-3). No persistence: a
+    # run starts from an empty Redis, which the cold start scenario needs.
+    command: [ redis-server, --maxmemory-policy, noeviction, --maxmemory, 256mb, --appendonly, "no", --save, "" ]
+    ports:
+      - "127.0.0.1:6379:6379"
+    healthcheck:
+      test: [ CMD, redis-cli, ping ]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+
+  behind:
+    image: ${COSEC_SYSTEM_BEHIND_IMAGE:-cosec-system-behind:test}
+    environment:
+      JAVA_OPTS: -Xms128m -Xmx256m
+    # No port on the runner. The image has no curl: bash asks the liveness group itself.
+    healthcheck:
+      test: [ CMD, bash, -c, 'exec 3<>/dev/tcp/127.0.0.1/8080 && printf "GET /actuator/health/liveness HTTP/1.0\r\n\r\n" >&3 && head -n 1 <&3 | grep -q " 200 "' ]
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  auth:
+    image: ${COSEC_SYSTEM_AUTH_IMAGE:-cosec-system-auth:test}
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *cosec
+      JAVA_OPTS: -Xms192m -Xmx384m
+    volumes:
+      - ./profile:/opt/system:ro
+    ports:
+      - "127.0.0.1:8090:8080"
+    # A WebFlux application's probes are requests like any other, refused until the platform document is published, so
+    # the container is healthy once it listens (the deployment guide's tcpSocket probe); readiness is a scenario's.
+    healthcheck:
+      test: [ CMD, bash, -c, 'exec 3<>/dev/tcp/127.0.0.1/8080' ]
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  enforcer:
+    image: ${COSEC_SYSTEM_ENFORCER_IMAGE:-cosec-system-enforcer:test}
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      <<: *cosec
+      JAVA_OPTS: -Xms192m -Xmx384m
+    volumes:
+      - ./profile:/opt/system:ro
+    ports:
+      - "127.0.0.1:8091:8080"
+      # The management port, outside CoSec on Spring MVC: its probes answer before any document is published.
+      - "127.0.0.1:8092:8081"
+    healthcheck:
+      test: [ CMD, bash, -c, 'exec 3<>/dev/tcp/127.0.0.1/8081 && printf "GET /actuator/health/liveness HTTP/1.0\r\n\r\n" >&3 && head -n 1 <&3 | grep -q " 200 "' ]
+      interval: 2s
+      timeout: 3s
+      retries: 90
+
+  gw-1:
+    <<: *gateway
+    ports:
+      - "127.0.0.1:8080:8080"
+
+  gw-2:
+    <<: *gateway
+    ports:
+      - "127.0.0.1:8081:8080"

@@ -63,7 +63,12 @@ import java.time.Duration
  */
 class TokenAuthenticator(
     private val verifier: TokenVerifier,
-    private val revocations: RevocationReader = RevocationReader.NONE,
+    /**
+     * Where revocations are read: always named, so that a host that accepts revoked tokens says so. Pass the reader of
+     * the [me.ahoo.cosec.spi.token.TokenStore] logout writes to; [RevocationReader.NONE] accepts every revoked token
+     * until it expires, and only fits a host where nothing is ever revoked.
+     */
+    private val revocations: RevocationReader,
     /** How audit names this way of authenticating, and the credential of a verifier other than CoSec's. */
     private val method: String = METHOD,
     /**

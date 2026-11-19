@@ -16,10 +16,13 @@ flowchart LR
     CRED[Credential] -->|verified into| PR[Principal]
     PR -->|belongs to| T[Tenant]
     PR -->|has| MEM[Memberships<br>roles per space, attachments]
-    REQ[Request] -->|names| APPSP[App and space]
+    REQ[Request] -->|asks for| APPSP[Space]
+    CRED -->|names| APP[App]
+    HOST[Host] -->|may bind| APP
     PR --> SC[Scope<br>tenant, app, space, roles]
     MEM --> SC
     APPSP --> SC
+    APP --> SC
     DOC[Documents<br>platform, app, tenant] --> POL[Policies]
     DOC --> BND[Bindings]
     BND -->|apply| POL
@@ -51,11 +54,11 @@ flowchart LR
 
 ## 请求 {#request}
 
-HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求头、客户端 IP、设备 id，以及客户端在 `CoSec-*` 参数中声明的应用和空间（见 [Web 集成](../integration/web.md)）。这些全部由客户端决定。
+HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求头、客户端 IP、设备 id，以及客户端在 `CoSec-Space-Id` 参数中要求的空间（见 [Web 集成](../integration/web.md)）。这些全部由客户端决定。客户端从不指定应用。
 
 ### 应用 {#app}
 
-请求所属的应用。每个应用有自己的文档：权限目录、权限策略，以及授予这些权限的角色绑定。服务可以绑定到一个应用，此时请求声明的应用必须与之一致。
+请求所属的应用。每个应用有自己的文档：权限目录、权限策略，以及授予这些权限的角色绑定。应用来自宿主和凭证，从不来自客户端：服务可以绑定到一个应用（`cosec.authorization.scope.app-id`），此时只接受为它签发的凭证；没有应用的服务按凭证声明的应用决策，没有声明应用的凭证不读取任何应用文档（[应用](../integration/authentication.md#apps)）。
 
 ### 空间 {#space}
 
@@ -63,7 +66,7 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 
 ### 作用域 {#scope}
 
-一个请求经过检查的上下文：它的租户（总是主体的租户）、应用、空间，以及主体在该空间中的角色。`ScopeResolver` 根据主体和请求声明的应用、空间构建它，或者拒绝请求；其他任何代码都无法构造作用域。这些检查的界线在哪里，见[信任边界](./security-model.md#trust-boundaries)。
+一个请求经过检查的上下文：它的租户（总是主体的租户）、应用、空间，以及主体在该空间中的角色。`ScopeResolver` 根据主体、宿主的应用和请求要求的空间构建它，或者拒绝请求；其他任何代码都无法构造作用域。这些检查的界线在哪里，见[信任边界](./security-model.md#trust-boundaries)。
 
 ### 动作与资源 {#action-and-resource}
 

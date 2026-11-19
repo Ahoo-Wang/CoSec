@@ -67,14 +67,15 @@ class RefreshTokenAuthentication<C : RefreshTokenCredentials>(
 }
 
 /**
- * The refresh of [RefreshTokenCredentials], whatever class the application's carry them in: the usual one. With
- * [memberships], the user is read again on every refresh from the token alone; a hook that reads the application's own
- * credentials takes their class, through the constructor.
+ * The refresh of [RefreshTokenCredentials], whatever class the application's carry them in: the usual one. [memberships]
+ * answers what the user holds now, from the token alone; [MembershipRefresh.CLAIMS] keeps what the token claimed, so a
+ * removed role applies only after a new sign-in. A hook that reads the application's own credentials takes their class,
+ * through the constructor.
  */
 fun RefreshTokenAuthentication(
     tokenVerifier: TokenVerifier,
     revocation: TokenRevocation,
     families: TokenFamilies,
-    memberships: MembershipRefresh<RefreshTokenCredentials> = MembershipRefresh.CLAIMS,
+    memberships: MembershipRefresh<RefreshTokenCredentials>,
 ): RefreshTokenAuthentication<RefreshTokenCredentials> =
     RefreshTokenAuthentication(tokenVerifier, revocation, families, RefreshTokenCredentials::class.java, memberships)

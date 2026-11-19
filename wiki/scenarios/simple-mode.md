@@ -73,7 +73,9 @@ is in [`wiki/examples/simple-roles`](https://github.com/Ahoo-Wang/CoSec/tree/mai
 ## Limits of simple mode
 
 - The platform document cannot bind a role. It is shared by every tenant, so a role there would mean the same thing to
-  all of them. Use the condition above, or the `(0)` document.
+  all of them. Use the condition above, or the `(0)` document. The condition has the same reach: a role condition in
+  the platform document applies to that role in **every tenant**. Once you have tenants, move it to the tenant's
+  document ([Many roles](#many-roles)), or one tenant's `admin` is every tenant's.
 - Role changes take effect when a user next logs in, as roles travel in the token
   ([Roles and spaces](../integration/authentication.md#roles-and-spaces)).
 - A service that does not decide with policies but verifies the tokens another service issues, and decides in its own

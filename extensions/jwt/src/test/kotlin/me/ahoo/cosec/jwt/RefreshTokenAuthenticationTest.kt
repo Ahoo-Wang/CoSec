@@ -59,6 +59,7 @@ class RefreshTokenAuthenticationTest {
             jwtTokenVerifier,
             TokenRevocation(RevocationReader.NONE),
             families,
+            MembershipRefresh.CLAIMS,
         )
         refreshTokenAuthentication.credentialsType.assert().isEqualTo(RefreshTokenCredentials::class.java)
         val oldToken: CompositeToken = issue(TokenSubject("alice", null))
@@ -89,7 +90,12 @@ class RefreshTokenAuthenticationTest {
         subject.attributes.assert().isEqualTo(mapOf("department" to "audit"))
         subject.session.assert().isNotNull()
         // Without an answer, the token's claims are kept.
-        val kept = RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families)
+        val kept = RefreshTokenAuthentication(
+            jwtTokenVerifier,
+            TokenRevocation(RevocationReader.NONE),
+            families,
+            MembershipRefresh.CLAIMS,
+        )
             .authenticate(credentials(jwtTokenConverter.toToken(subject)))
         kept.roles.assert().containsExactly("auditor")
     }
@@ -159,8 +165,12 @@ class RefreshTokenAuthenticationTest {
 
     @Test
     fun `a refresh token of another token is refused`(): Unit = runBlocking {
-        val authentication =
-            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families)
+        val authentication = RefreshTokenAuthentication(
+            jwtTokenVerifier,
+            TokenRevocation(RevocationReader.NONE),
+            families,
+            MembershipRefresh.CLAIMS,
+        )
         val alice = issue(TokenSubject("alice", null))
         val bob = issue(TokenSubject("bob", null))
 
@@ -192,7 +202,8 @@ class RefreshTokenAuthenticationTest {
             RefreshTokenAuthentication(
                 verifier,
                 TokenRevocation(revocations),
-                families
+                families,
+                MembershipRefresh.CLAIMS,
             ).authenticate(credentials(old))
         }
         verifying.assert().isSameAs(Thread.currentThread())
@@ -217,6 +228,7 @@ class RefreshTokenAuthenticationTest {
                 jwtTokenVerifier,
                 TokenRevocation(unavailable),
                 families,
+                MembershipRefresh.CLAIMS,
             ).authenticate(credentials(old))
         }
     }

@@ -1,0 +1,16 @@
+{
+  "description": "The statement names no resource, so it permits every GET on every path, for an anonymous caller too.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/anything/at/all"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

@@ -68,6 +68,7 @@ import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.ratelimit.RateLimitResult
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.cosec.webflux.PipelineWebFilter
@@ -236,7 +237,8 @@ class WebAdapterParityTest {
             override fun verify(accessToken: String) = VerifiedToken("jti", "alice", "acme/west", null)
 
             override fun refresh(token: CompositeToken): VerifiedToken = throw UnsupportedOperationException()
-        }
+        },
+        RevocationReader.NONE,
     )
 
     private val authenticator = Authenticator { credentials ->

@@ -1,0 +1,18 @@
+# Rule: PIP-26
+# Mutant: the WebFlux and gateway bridge ends the request after passing its completion on (doFinally), so a
+# subscriber that sees the chain complete can still have a check of it answered
+# Tests: :webflux:test --tests me.ahoo.cosec.webflux.RequestEndTest
+
+diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
+index 594ce3ca..1021c4c2 100644
+--- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
++++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
+@@ -92,7 +92,7 @@ abstract class ReactivePipelineBridge(
+         // goes on, so whoever sees the chain complete sees the request ended: `doOnTerminate` runs before passing on
+         // `onComplete` and `onError`, `doOnCancel` before cancelling upstream; `doFinally` runs after passing them on.
+         val end = Runnable { security.end() }
+-        return chain(authorized, outcome).writeSecurityContext(securityContext).doOnTerminate(end).doOnCancel(end)
++        return chain(authorized, outcome).writeSecurityContext(securityContext).doFinally { end.run() }
+     }
+ 
+     private companion object {
