@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "PIP-30"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "The hex digits in either case: %3b is refused as %3B is.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "no-admin",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "http:*",
+              "resource": "http:path:/admin/**"
+            }
+          ]
+        },
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:GET"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "no-admin",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-admin"
+        },
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/admin%3bx/users"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "expect": {
+    "status": 400,
+    "type": "invalid-request"
+  }
+}
