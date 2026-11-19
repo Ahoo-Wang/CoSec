@@ -25,6 +25,4 @@ dependencies {
     compileOnly("io.micrometer:context-propagation")
     testImplementation("io.micrometer:context-propagation")
     testImplementation("org.springframework:spring-test")
-    // The documented way to test an application (PIP-29): the kit's contexts and pipeline behind this module's filter.
-    testImplementation(project(":testkit"))
 }

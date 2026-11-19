@@ -13,7 +13,7 @@
 
 @file:OptIn(ExperimentalCoSecApi::class)
 
-package me.ahoo.cosec.webmvc.testing
+package me.ahoo.cosec.testkit.webmvc
 
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
@@ -38,7 +38,7 @@ import org.springframework.web.bind.annotation.RestController
  * The samples of "Testing your application" (`wiki/policies/testing.md`), Spring MVC side, and `PIP-29`: the kit's
  * contexts behind CoSec's own filter, or bound by hand for a unit test, and a hand-made context refused.
  */
-class TestingYourApplicationTest {
+class TestingYourWebMvcApplicationTest {
     private val documents = """{"policies":[{"id":"reads","statements":[""" +
         """{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]}],""" +
         """"bindings":[{"id":"reads","subject":{"role":"reader"},"app":"*","space":"*","policy":"reads"}]}"""

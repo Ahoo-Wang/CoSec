@@ -93,6 +93,19 @@ Which preview of the library may run behind which preview of the gateway image: 
   `Authenticator`). The directory is `skills/cosec-extending`, its `name` is `cosec-extending`, and an agent invokes it as
   `$cosec-extending`. Affected: an agent configuration, a prompt or a plugin list that names `cosec-custom-matcher`;
   nothing in a running deployment changes.
+- **The test bindings are the test kit's** (the Wow drill). Affected: tests that import `CoSecTestBindings`. They move
+  out of the production jars into `cosec-testkit`, one for each stack:
+
+  | Through beta.4 | From beta.5 |
+  |---|---|
+  | `me.ahoo.cosec.webflux.testing.CoSecTestBindings` (`cosec-webflux`) | `me.ahoo.cosec.testkit.webflux.CoSecTestBindings` (`cosec-testkit`) |
+  | `me.ahoo.cosec.webmvc.testing.CoSecTestBindings` (`cosec-webmvc`) | `me.ahoo.cosec.testkit.webmvc.CoSecTestBindings` (`cosec-testkit`) |
+
+  Change the import and add `cosec-testkit` as a test dependency if the build lacks it. Its functions are the same.
+  The WebFlux one adds a suspending `withSecurityContext(context) { ... }` for coroutine code under test, and
+  `PipelineFixture.of` and `load` take an `authenticator` of the application's own
+  ([Testing your application](../policies/testing.md#testing-your-application)). The kit brings neither adapter; the
+  bindings need the one of your web stack on the test's classpath, which a test of such a handler has.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
