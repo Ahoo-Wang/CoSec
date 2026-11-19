@@ -48,7 +48,13 @@ class PublishCompileTest {
     @Test
     fun `ignoreCase beyond ASCII is a warning where it narrows and a compile error where it admits`() = runBlocking<Unit> {
         val umlaut = Condition.Eq("subject.attributes.dept", Literal.Str("Ärzte"), ignoreCase = true)
-        val narrowing = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("doctors", condition = umlaut))), "narrows")
+        val narrowing = changes.propose(
+            ALICE_OP,
+            ACME,
+            0,
+            listOf(Operation.PutPolicy(allow("doctors", condition = umlaut))),
+            "narrows"
+        )
         narrowing.state.assert().describedAs("${narrowing.findings}").isEqualTo(ChangeState.CHECKED)
         val warning = narrowing.findings.single()
         warning.severity.assert().isEqualTo(Severity.WARNING)

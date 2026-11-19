@@ -35,8 +35,8 @@ internal object Unreachable {
     fun drop(translated: Translated): Translated {
         val condition = (translated as? Translated.Ast)?.condition ?: return translated
         return when (condition) {
-            is Condition.Eq -> if (unreachable(condition.attribute, condition.value)) Translated.Never else translated
-            is Condition.Prefix -> if (unreachable(condition.attribute, condition.value)) Translated.Never else translated
+            is Condition.Eq -> keep(translated, condition.attribute, condition.value)
+            is Condition.Prefix -> keep(translated, condition.attribute, condition.value)
             is Condition.In -> {
                 val values = condition.values.filterNot { unreachable(condition.attribute, it) }
                 when {
@@ -49,6 +49,9 @@ internal object Unreachable {
             else -> translated
         }
     }
+
+    private fun keep(translated: Translated, attribute: String, value: Any): Translated =
+        if (unreachable(attribute, value)) Translated.Never else translated
 
     private fun unreachable(attribute: String, value: Any): Boolean = when {
         attribute.startsWith(Attribute.Kind.RESOURCE_ATTRIBUTE.path) -> true

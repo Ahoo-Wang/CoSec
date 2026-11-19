@@ -306,7 +306,14 @@ class PolicyCompilerTest {
         val anonymous = eq("subject.id", "(0)")
         errors(null, StatementSource("a", Effect.ALLOW, listOf("*"), emptyList(), Condition.Not(anonymous))).single()
             .message.assert().contains("subject.authenticated").contains("DOC-11")
-        errors(anonymous, StatementSource("d", Effect.DENY, listOf("*"))).single().path.assert().isEqualTo("$.condition.eq[1]")
-        compiler.statement(id, 0, StatementSource("a", Effect.ALLOW, listOf("*"), emptyList(), eq("subject.tenant", "(0)")))
+        errors(
+            anonymous,
+            StatementSource("d", Effect.DENY, listOf("*"))
+        ).single().path.assert().isEqualTo("$.condition.eq[1]")
+        compiler.statement(
+            id,
+            0,
+            StatementSource("a", Effect.ALLOW, listOf("*"), emptyList(), eq("subject.tenant", "(0)"))
+        )
     }
 }

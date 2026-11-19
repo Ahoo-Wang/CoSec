@@ -50,7 +50,9 @@ class ConditionCheckerTest {
         checker.unresolved("resource.attributes.classification").assert()
             .contains("is never set").contains("resource.var.<name>").contains("DOC-10")
         single(Condition.Eq("resource.attributes.classification", str("secret"))).path.assert().isEqualTo("$.eq[0]")
-        single(Condition.Eq("subject.id", Operand.Attr("resource.attributes.owner"))).path.assert().isEqualTo("$.eq[1].attr")
+        single(
+            Condition.Eq("subject.id", Operand.Attr("resource.attributes.owner"))
+        ).path.assert().isEqualTo("$.eq[1].attr")
         single(Condition.Exists("resource.attributes.owner")).message.assert().contains("DOC-10")
         // The near miss: the resource's own facts that a request has.
         checked(Condition.Eq("resource.var.owner", str("a")), checker)

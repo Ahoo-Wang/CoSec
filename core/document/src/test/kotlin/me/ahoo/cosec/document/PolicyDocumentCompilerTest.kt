@@ -422,7 +422,10 @@ class PolicyDocumentCompilerTest {
         error.assert().contains("subject.authenticated").contains("DOC-11")
         // A reserved tenant is the anonymous principal's and the platform's: a principal of it binds.
         val platformPrincipal = anonymous.replace("\"(0)\",\"tenant\"", "\"ops\",\"tenant\"")
-        compiler.compile(SnapshotKey.Platform, stored(""","policies":[{"id":"p","statements":[]}],"bindings":[$platformPrincipal]"""))
+        compiler.compile(
+            SnapshotKey.Platform,
+            stored(""","policies":[{"id":"p","statements":[]}],"bindings":[$platformPrincipal]""")
+        )
     }
 
     /** DOC-1: a publisher checks references against the platform it will be read with. */

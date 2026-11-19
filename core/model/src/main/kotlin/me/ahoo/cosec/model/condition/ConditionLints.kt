@@ -64,29 +64,45 @@ object ConditionLints {
             }
 
             is Condition.Not -> walk(condition.condition, "$path.not", !negated, fewerAdmits, moreAdmits, findings)
-            is Condition.Eq -> (condition.value as? Literal.Str)?.let { literal ->
-                val at = "$path.eq[1]"
-                reservedSubject(condition.attribute, literal.value, at, "eq")?.let { findings += it }
-                if (condition.ignoreCase) {
-                    fold("eq", literal.value, at, if (negated) moreAdmits else fewerAdmits)?.let { findings += it }
-                }
+            is Condition.Eq -> (condition.value as? Literal.Str)?.let {
+                atom(
+                    Atom("eq", condition.attribute, it.value, condition.ignoreCase),
+                    path,
+                    admits(negated, fewerAdmits, moreAdmits),
+                    findings
+                )
             }
 
-            is Condition.Prefix -> (condition.value as? Literal.Str)?.let { literal ->
-                val at = "$path.prefix[1]"
-                reservedSubject(condition.attribute, literal.value, at, "prefix")?.let { findings += it }
-                if (condition.ignoreCase) {
-                    fold("prefix", literal.value, at, if (negated) moreAdmits else fewerAdmits)?.let { findings += it }
-                }
+            is Condition.Prefix -> (condition.value as? Literal.Str)?.let {
+                atom(
+                    Atom("prefix", condition.attribute, it.value, condition.ignoreCase),
+                    path,
+                    admits(negated, fewerAdmits, moreAdmits),
+                    findings
+                )
             }
 
             is Condition.In -> condition.values.forEachIndexed { i, value ->
-                (value as? Literal.Str)?.let { literal ->
-                    reservedSubject(condition.attribute, literal.value, "$path.in[1][$i]", "in")?.let { findings += it }
-                }
+                (value as? Literal.Str)?.let { reservedSubject(condition.attribute, it.value, "$path.in[1][$i]", "in") }
+                    ?.let { findings += it }
             }
 
             else -> Unit
+        }
+    }
+
+    /** Whether an atom that matches fewer values lets a request through where it stands. */
+    private fun admits(negated: Boolean, fewerAdmits: Boolean, moreAdmits: Boolean): Boolean =
+        if (negated) moreAdmits else fewerAdmits
+
+    /** An `eq` or `prefix` of [attribute] with a string literal [value]. */
+    private class Atom(val operator: String, val attribute: String, val value: String, val ignoreCase: Boolean)
+
+    private fun atom(atom: Atom, path: String, admits: Boolean, findings: MutableList<Finding>) {
+        val at = "$path.${atom.operator}[1]"
+        reservedSubject(atom.attribute, atom.value, at, atom.operator)?.let { findings += it }
+        if (atom.ignoreCase) {
+            fold(atom.operator, atom.value, at, admits)?.let { findings += it }
         }
     }
 

@@ -314,11 +314,11 @@ attribute path and every operand type is checked when the document compiles.
 
 | Operator | Form | True when | Attribute types |
 |---|---|---|---|
-| `eq` | `[attribute, literal]` | the value equals the literal. With `"ignoreCase": true` (String only), ignoring ASCII case. An Ip attribute compares with an address. | String, Bool, Ip |
+| `eq` | `[attribute, literal]` | the value equals the literal. With `"ignoreCase": true` (String only), ignoring ASCII case ([Case folding](#case-folding)). An Ip attribute compares with an address. | String, Bool, Ip |
 | `eq` | `[attribute, {"attr": attribute}]` | both values are present and equal; both attributes have the same type | String, Bool, Ip |
 | `in` | `[attribute, [literals]]` | the value is one of the literals: 1 to `maxInValues` of them | String, Bool, Ip |
 | `in` | `[literal, attribute]` | the set holds the string literal | Set |
-| `prefix` | `[attribute, "text"]` | the value starts with the text; `ignoreCase` allowed. On a Labels attribute, whole labels: `com.example` matches `example.com` and `api.example.com`, not `badexample.com`. | String, Labels |
+| `prefix` | `[attribute, "text"]` | the value starts with the text; `ignoreCase` allowed ([Case folding](#case-folding)). On a Labels attribute, whole labels: `com.example` matches `example.com` and `api.example.com`, not `badexample.com`. | String, Labels |
 | `cidr` | `[attribute, ["block", ...]]` | the address is in one of the IPv4 or IPv6 blocks: 1 to `maxCidrBlocks` | Ip |
 | `time` | `{...}` | the request time is in the window ([Time conditions](#time-conditions)) | |
 | `exists` | `"attribute"` | the attribute is present (for Labels, its host is) | any |
@@ -329,11 +329,28 @@ attribute path and every operand type is checked when the document compiles.
 Literals are JSON strings or booleans, never numbers; a string is never read as a boolean. There is no `true` or
 `false` condition: leave `condition` out instead.
 
+### Case folding
+
+`ignoreCase` folds the ASCII letters `A` to `Z` and nothing else: `Ärzte` does not match `ärzte`. So with a literal that
+holds a letter beyond ASCII, the comparison matches fewer spellings than it reads. Where that lets a request through,
+the document does not compile (`DOC-9`):
+
+- a DENY statement's condition, outside a `not` (or under two);
+- an ALLOW statement's condition under a `not`, where missing a spelling makes the ALLOW match more;
+- a rate limit rule's condition, which matches as a DENY's does;
+- a policy condition, in the direction of each statement it guards: outside a `not` when the policy has a DENY, under a
+  `not` when it has an ALLOW.
+
+The message names a spelling the fold misses. List every spelling in an `in` without `ignoreCase` (for `prefix`, an
+`or` of one `prefix` per spelling). In the other direction, an ALLOW that matches fewer spellings only grants less: it
+compiles, and the control plane's validation reports a warning. A literal of ASCII letters folds every spelling it
+reads, and `ignoreCase` on it compiles anywhere.
+
 ### Attributes
 
 | Attribute | Type | Value |
 |---|---|---|
-| `subject.id` | String | The principal id; absent for an anonymous principal. |
+| `subject.id` | String | The principal id; absent for an anonymous principal, which has no id in a document. A literal compared with it never begins with `(` (`DOC-11`): to tell anonymous from signed-in requests, use `subject.authenticated`. |
 | `subject.tenant` | String | The request's tenant: the principal's, `(0)` when anonymous. |
 | `subject.authenticated` | Bool | Whether a credential was accepted. |
 | `subject.roles` | Set | The principal's role ids, in any space. |
@@ -345,7 +362,7 @@ Literals are JSON strings or booleans, never numbers; a string is never read as 
 | `scope.roles` | Set | The principal's roles in the request's space. |
 | `action.service`, `action.verb` | String | The two parts of the action. |
 | `resource.type`, `resource.id` | String | The two parts of the resource. |
-| `resource.attributes.<name>` | String | Attributes of the resource. Neither the request pipeline nor the documented checks set any: an object-level rule puts its facts in the resource id ([Object-level rules](../integration/checks.md#object-level-rules)). |
+| `resource.attributes.<name>` | String | Does not compile (`DOC-10`): nothing on the request path, in a check, or in the control plane's `simulate` and `explain` gives a resource attributes, so a DENY on one would deny nothing. Put the facts in the resource id and read them as `resource.var.<name>` ([Object-level rules](../integration/checks.md#object-level-rules)). |
 | `resource.var.<name>` | String | A [path variable](#path-variables). |
 | `environment.ip` | Ip | The client address ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)). Absent when the host reported none. When it reported something that is no address (a proxy wrote `unknown`), it is unavailable, never absent: a statement that reads it is decided as one whose external attribute is missing under `onMissing: indeterminate`, so a DENY on it is `503` (`PIP-17`). |
 | `environment.time` | Instant | The request time; only `time` reads it. |
@@ -399,6 +416,11 @@ role whatever space it is in; `subject.scopedRoles` holds `role@space` strings. 
 
 An attribute is absent when the request has no value for it, such as `subject.id` of an anonymous principal or
 `scope.app` of a request without an app.
+
+The anonymous principal's id is `(0)` in a security context and a decision event, but a document never sees it:
+`{"eq": ["subject.id", "(0)"]}` would never match, and `{"not": {"eq": ["subject.id", "(0)"]}}` would match every
+anonymous request. Neither compiles (`DOC-11`); write `{"eq": ["subject.authenticated", false]}` for anonymous requests
+and `true` for signed-in ones.
 
 - `eq`, `in`, `prefix`, `cidr` and `time` are false for an absent value; `exists` is false.
 - Absent is equal to nothing: not to `""`, and not to another absent value.
@@ -479,7 +501,9 @@ A binding says: *subject* is subject to *policy* in *app* and *space*.
 | `{"role": "<id>"}`, optional `"tenant"` | | yes; no `tenant`: any tenant | yes; no `tenant`: this tenant |
 
 A binding that names another tenant in a tenant document, an app document binding scoped to another app, and a role
-binding in the platform document do not compile: they could never apply, and a DENY would be lost silently.
+binding in the platform document do not compile: they could never apply, and a DENY would be lost silently. Nor does a
+principal binding whose id begins with `(` (`DOC-11`): no signed-in principal has a reserved id, and the anonymous
+principal matches no principal binding. To reach anonymous requests, bind `"*"` and test `subject.authenticated`.
 
 What a binding may name in `policy`:
 

@@ -54,7 +54,11 @@ class ConditionLintsTest {
         finding.path.assert().isEqualTo("$.and[1].or[0].not.eq[1]")
         // A policy condition guarding both effects refuses in both directions.
         ConditionLints.check(umlaut, fewerAdmits = true, moreAdmits = true).single().refuses.assert().isTrue()
-        ConditionLints.check(Condition.Not(umlaut), fewerAdmits = true, moreAdmits = true).single().refuses.assert().isTrue()
+        ConditionLints.check(
+            Condition.Not(umlaut),
+            fewerAdmits = true,
+            moreAdmits = true
+        ).single().refuses.assert().isTrue()
     }
 
     @Test
@@ -64,7 +68,9 @@ class ConditionLintsTest {
         deny(Condition.Eq("subject.attributes.dept", str("Ärzte"))).assert().isEmpty()
         // A character beyond ASCII without case: nothing to fold.
         deny(Condition.Eq("subject.attributes.dept", str("医生-1"), ignoreCase = true)).assert().isEmpty()
-        deny(Condition.Eq("subject.attributes.dept", Operand.Attr("subject.tenant"), ignoreCase = true)).assert().isEmpty()
+        deny(
+            Condition.Eq("subject.attributes.dept", Operand.Attr("subject.tenant"), ignoreCase = true)
+        ).assert().isEmpty()
     }
 
     @Test
@@ -83,13 +89,20 @@ class ConditionLintsTest {
     @Test
     fun `a subject id literal beginning with a parenthesis refuses in every direction`() {
         val anonymous = Condition.Eq("subject.id", str("(0)"))
-        for (findings in listOf(deny(anonymous), allow(anonymous), deny(Condition.Not(anonymous)), allow(Condition.Not(anonymous)))) {
+        for (findings in listOf(
+            deny(anonymous),
+            allow(anonymous),
+            deny(Condition.Not(anonymous)),
+            allow(Condition.Not(anonymous))
+        )) {
             val finding = findings.single()
             finding.refuses.assert().isTrue()
             finding.path.assert().endsWith("eq[1]")
             finding.message.assert().contains("subject.authenticated").contains("DOC-11")
         }
-        deny(Condition.In("subject.id", listOf(str("alice"), str("(0)")))).single().path.assert().isEqualTo("$.in[1][1]")
+        deny(
+            Condition.In("subject.id", listOf(str("alice"), str("(0)")))
+        ).single().path.assert().isEqualTo("$.in[1][1]")
         deny(Condition.Prefix("subject.id", str("(p"))).single().path.assert().isEqualTo("$.prefix[1]")
     }
 

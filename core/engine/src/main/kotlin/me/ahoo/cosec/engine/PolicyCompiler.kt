@@ -58,7 +58,15 @@ class PolicyCompiler(
         // matching one too many where it allows (DOC-9).
         val denies = statements.any { it.effect === Effect.DENY }
         val allows = statements.any { it.effect === Effect.ALLOW }
-        val checked = condition?.let { policyCondition(it, "$.condition", errors, fewerAdmits = denies, moreAdmits = allows) }
+        val checked = condition?.let {
+            policyCondition(
+                it,
+                "$.condition",
+                errors,
+                fewerAdmits = denies,
+                moreAdmits = allows
+            )
+        }
         val compiled = statements.mapIndexedNotNull { index, source ->
             statement(index, source, "$.statements[$index]", errors)
         }
