@@ -234,6 +234,24 @@ class PipelineGatewayFilterTest {
     }
 
     /** IDN-8, RC1-5: no credential goes downstream by default, the API key header under its configured name included. */
+    /** R1A-7 (`IDN-8`): a credential the pipeline rejected stays here, though the route permits the anonymous request. */
+    @Test
+    fun `a rejected credential is not forwarded, even when asked for`() {
+        val expired = Authenticator { AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_EXPIRED) }
+        val rejecting = PipelineGatewayFilter(pipeline(expired, IdentityIssuer()), forwardAuthorization = true)
+        val refused = sent(
+            rejecting,
+            get("/orders?page=2&authorization=t")
+                .header(HttpHeaders.AUTHORIZATION, "token")
+                .header("X-API-Key", "key")
+                .header(HttpHeaders.COOKIE, "theme=dark; authorization=c"),
+        )
+        refused.headers[HttpHeaders.AUTHORIZATION].assert().isNull()
+        refused.headers["X-API-Key"].assert().isNull()
+        refused.headers[HttpHeaders.COOKIE].assert().isEqualTo(listOf("theme=dark"))
+        refused.uri.rawQuery.assert().isEqualTo("page=2")
+    }
+
     @Test
     fun `the caller's credentials stay at the gateway unless asked for, and then go only where the identity goes`() {
         val renamed = PipelineOptions(apiKeyHeader = "X-Service-Key")

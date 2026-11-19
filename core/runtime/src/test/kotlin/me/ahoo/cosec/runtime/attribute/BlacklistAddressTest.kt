@@ -72,5 +72,7 @@ class BlacklistAddressTest {
         assertThrows<IllegalStateException> { blocked(provider, "unknown") }
         assertThrows<IllegalArgumentException> { InMemoryBlacklistSource().block(BlacklistKind.IP, "10.0.0.256") }
         InMemoryBlacklistSource().block(BlacklistKind.DEVICE, "not an address")
+        // No client address at all: nothing is looked up, and the attribute is absent.
+        blocked(provider, "").assert().isNull()
     }
 }
