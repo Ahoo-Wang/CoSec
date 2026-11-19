@@ -30,6 +30,9 @@ object SystemTopology {
     /** The gateway that refuses a token while revocations cannot be read (`revocation.fail-closed`). */
     val gatewayStrict: URI get() = url("COSEC_SYSTEM_GATEWAY_STRICT_URL")
 
+    /** The first gateway's management port: `/actuator/health` and the scrape endpoint `/actuator/prometheus`. */
+    val gatewayManagement: URI get() = url("COSEC_SYSTEM_GATEWAY_MANAGEMENT_URL")
+
     /** Both replicas. */
     val gateways: List<URI> get() = listOf(gateway, gateway2)
 

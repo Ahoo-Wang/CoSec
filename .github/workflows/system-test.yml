@@ -64,6 +64,7 @@ jobs:
       COSEC_SYSTEM_GATEWAY_URL: http://127.0.0.1:8080
       COSEC_SYSTEM_GATEWAY2_URL: http://127.0.0.1:8081
       COSEC_SYSTEM_GATEWAY_STRICT_URL: http://127.0.0.1:8082
+      COSEC_SYSTEM_GATEWAY_MANAGEMENT_URL: http://127.0.0.1:9081
       COSEC_SYSTEM_AUTH_URL: http://127.0.0.1:8090
       COSEC_SYSTEM_ENFORCER_URL: http://127.0.0.1:8091
       COSEC_SYSTEM_ENFORCER_MANAGEMENT_URL: http://127.0.0.1:8092
@@ -128,6 +129,31 @@ jobs:
           COSEC_SYSTEM_MIGRATE: ${{ github.workspace }}/migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
         run: ./gradlew :system-test:systemTest
 
+      # The TypeScript client through the gateway (cosec-fetcher): the same stack, a client that is not Kotlin. After the
+      # scenarios whether or not they passed, so one run shows both; JUnit for the summary.
+      - name: Set up pnpm
+        if: ${{ !cancelled() }}
+        uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+        with:
+          version: 11.28.11
+
+      - name: Set up Node
+        if: ${{ !cancelled() }}
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24.22.3
+          cache: pnpm
+          cache-dependency-path: typescript/pnpm-lock.yaml
+
+      - name: Run the TypeScript client's scenarios
+        if: ${{ !cancelled() }}
+        working-directory: typescript
+        env:
+          COSEC_SYSTEM_JUNIT: ${{ runner.temp }}/typescript-junit/TEST-typescript.xml
+        run: |
+          pnpm install --frozen-lockfile
+          pnpm test:system
+
       - name: Collect the evidence
         if: always()
         run: |
@@ -144,10 +170,13 @@ jobs:
           cp -r test/system-test/build/system/transcripts "$evidence/" 2>/dev/null || true
           cp -r test/system-test/build/test-results/systemTest "$evidence/junit" 2>/dev/null || true
           cp -r test/system-test/build/reports/tests/systemTest "$evidence/report" 2>/dev/null || true
+          cp -r "$RUNNER_TEMP/typescript-junit" "$evidence/typescript-junit" 2>/dev/null || true
 
       - name: Summarize
         if: always()
-        run: python3 test/system-test/scripts/summary.py test/system-test/build/test-results/systemTest "$ARTIFACT" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          python3 test/system-test/scripts/summary.py \
+            test/system-test/build/test-results/systemTest "$RUNNER_TEMP/typescript-junit" "$ARTIFACT" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the evidence
         if: always()

@@ -30,6 +30,8 @@ dependencies {
     implementation(project(":spring-boot"))
     implementation(project(":webmvc"))
     implementation(project(":cocache"))
+    // The decision timer `cosec.authorization` on the actuator's metrics endpoint (scenario 10).
+    implementation(project(":micrometer"))
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-data-redis")
