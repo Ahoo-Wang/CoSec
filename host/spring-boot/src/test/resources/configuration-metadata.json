@@ -118,6 +118,12 @@
       "type": "me.ahoo.cosec.spring.boot.control.ControlProperties"
     },
     {
+      "name": "cosec.control.analysis",
+      "type": "me.ahoo.cosec.spring.boot.control.ControlProperties$Analysis",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
+      "sourceMethod": "getAnalysis()"
+    },
+    {
       "name": "cosec.control.approval",
       "sourceMethod": "getApproval()",
       "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties",
@@ -481,6 +487,12 @@
       "name": "cosec.authorization.snapshot.revalidate-interval",
       "sourceType": "me.ahoo.cosec.spring.boot.pipeline.RuntimeAuthorizationProperties$Snapshot",
       "type": "java.time.Duration"
+    },
+    {
+      "name": "cosec.control.analysis.route-maps",
+      "type": "java.lang.String",
+      "description": "The services' route maps, comma-separated resource locations (UC-1): the control plane lists, for a change, the `http:` DENY statements and rate limit rules a mapped route escapes. Unset, nothing is compared, and the change says so. Each host's own WARN needs only its own route map, not this.",
+      "sourceType": "me.ahoo.cosec.spring.boot.control.ControlProperties$Analysis"
     },
     {
       "description": "The app control-plane actions are authorized in (RFC 0007 \u00a77.2).",

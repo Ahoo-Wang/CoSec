@@ -47,6 +47,7 @@ import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.claims
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
 import me.ahoo.cosec.runtime.PipelineFixtures.pipeline
+import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.http.Basis
 import me.ahoo.cosec.runtime.http.Outcome
 import me.ahoo.cosec.runtime.http.ProblemEncoder
@@ -404,7 +405,7 @@ class PipelineTest {
                 cap,
                 credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
             ),
-            "apikey",
+            ApiKeyAuthenticator.METHOD,
         )
 
     /**

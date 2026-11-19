@@ -66,7 +66,10 @@ class PolicyTestKitTest {
 
     @Test
     fun `evaluate answers the decision without an expect`() {
-        val outcome = kit.evaluate("""{"credential": {"tenant": "acme", "roles": ["reader"]}}""")
+        val outcome = kit.evaluate(
+            """{"credential": {"tenant": "acme", "id": "alice", "roles": ["reader"]},""" +
+                """ "request": {"action": "order:read", "resource": {"type": "order", "id": "1"}}}"""
+        )
         (outcome as EngineOutcome.Decided).decision.assert().isInstanceOf(Decision.Permit::class.java)
     }
 
@@ -168,8 +171,8 @@ class PolicyTestKitTest {
             for (url in urls) {
                 val runtimeHost = HttpAttributes(Headers.of(mapOf(header to listOf(url)))).string(Attribute.of(kind))
                 val outcome = kit.evaluate(
-                    """{"credential": {"tenant": "acme"},
-                       "request": {"action": "${header.lowercase()}:read", "headers": {"$header": "$url"}}}"""
+                    """{"credential": {"tenant": "acme", "id": "alice"},
+                       "request": {"action": "${header.lowercase()}:read", "resource": {"type": "order", "id": "1"}, "headers": {"$header": "$url"}}}"""
                 )
                 val decision = (outcome as EngineOutcome.Decided).decision
                 if (runtimeHost == "example.com") {
@@ -182,7 +185,8 @@ class PolicyTestKitTest {
     }
 
     private fun scenario(expect: String, action: String = "order:read") =
-        """{"credential": {"tenant": "acme", "roles": ["reader"]}, "request": {"action": "$action"}, "expect": $expect}"""
+        """{"credential": {"tenant": "acme", "id": "alice", "roles": ["reader"]},""" +
+            """ "request": {"action": "$action", "resource": {"type": "order", "id": "1"}}, "expect": $expect}"""
 
     /** Round 2 L2: an expect that names no decision would pass whatever the documents decide. */
     @Test

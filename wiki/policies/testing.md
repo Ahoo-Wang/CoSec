@@ -91,6 +91,7 @@ the HTTP `status` it stands for and a `severity`:
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
 | `IF_MATCH` | 412 | An entry is no longer what the operation's `ifMatch` says. |
 | `V3` (warning) | | The platform's `limits` or `attributes` change: other documents are compiled again on every instance, and one that no longer compiles fails closed. |
+| `ROUTES` (warning) | | The candidate holds `http:` DENY statements or rate limit rules that a mapped route of the services escapes: the route's requests are decided as its `service:verb` and do not meet them ([Route maps](../scenarios/route-maps.md)). One finding with the count and the first five. Only with [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane); without it, a candidate with such statements says that no route maps were given. |
 
 A change with any error stays `DRAFT` and cannot be staged or published; fix it by proposing a new change. A clean
 change is `CHECKED`. Nothing a change does reaches enforcement before it is published, and publishing compiles the
@@ -643,7 +644,14 @@ With `tenants/acme.json` binding the role `reader` to an ALLOW on `order:read`, 
 }
 ```
 
-`load` fails when a document does not compile; a missing `platform.json` is an empty platform document. A file whose
+A run cannot pass for the wrong reason. `load` fails when a document does not compile, when the directory has no
+`platform.json` (every request reads it; to test without one, write an empty document there), and when the directory
+holds something the kit would not read: another `.json` file or a directory beside `platform.json`, `apps/`,
+`tenants/` and `report.json`, or a file in `apps/` or `tenants/` that is not a `.json`. When the directory holds tenant
+documents, a scenario decided in a tenant that has none (a file named `Acme.json` for tenant `acme`, say) fails, and
+so does one decided in an app that has none among app documents; a scenario meant for one says so,
+`"withoutDocument": ["tenant"]` or `["app"]`. The default tenant `(0)`, an anonymous request's, may have none, and
+documents that hold no tenant document decide every request without one, as a platform-only deployment does. A file whose
 name `cosec-migrate convert` shortened (an id too long for a file name: cut, `~`, the SHA-256 of the id) holds the id
 `report.json` records beside it; without that report, `load` fails. `tests` makes one
 test per `.json` file under the directory, named by its path, and fails when there is none. `check(file)` and
@@ -654,9 +662,10 @@ documents as JSON text.
 | Scenario field | Meaning |
 |---|---|
 | `description` | Free text. |
-| `credential` | The principal: `tenant` (default `acme`), `id` (default `alice`), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; `"anonymous": true` for an anonymous caller. |
+| `credential` | Required. The principal: `tenant` and `id` (both required), `roles` (`role` or `role@space`), `policies` (attachments), `attributes`; or `"anonymous": true` for an anonymous caller. |
 | `membershipProvider` | Memberships a `MembershipProvider` returns, merged with the credential's as the pipeline merges them: `roles` by space (`{"": ["reader"]}`) and `attachments`; or `{"fails": "message"}`. |
-| `request` | `action` (default `order:read`), `resource` (`type`, `id`; default `order/1`; `attributes` is refused, since no host gives a resource attributes: `DOC-10`), `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
+| `request` | Required: `action` and `resource` (`type`, `id`; `attributes` is refused, since no host gives a resource attributes: `DOC-10`), `space`, `hostApp`, `time` (ISO instant), `ip`, `device`, `blocked`, `headers`, `attributes` (`request.attributes.*`). |
+| `withoutDocument` | `["tenant"]`, `["app"]` or both: the scenario is decided, on purpose, in a tenant or an app that has no document among documents that hold some. |
 | `expect` | `decision`: `Permit`, `Deny`, `Indeterminate`, `Rejected` or `InvalidRequest`, with `by` (the deciding statement; `null` for the implicit deny), `cause`, `reason` or `refused` (`action`: an `http` method with a lower-case letter; `resource`: a path the pipeline refuses, or a typed id beyond a request path's bounds; `header`: a header the documents read, sent with different values). Required: an `expect` without a `decision` is an error, since it would pass whatever is decided. |
 
 `http.origin.host` and `http.referer.host` read the `headers` as the instance reads them: the host of the `Origin` or

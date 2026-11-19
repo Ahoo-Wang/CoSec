@@ -1,6 +1,6 @@
 # The system test
 
-A deployed CoSec, driven over the network only: two replicas of the gateway image built from the commit under test
+A deployed CoSec, driven over the network only: two replicas of the gateway image built from the commit under test (and a third that refuses a token while revocations cannot be read), a single-node Kafka the gateways audit to
 (`platform/gateway-server/Dockerfile`, its AOT cache trained), the services of `test/system-*`, and Redis with
 `maxmemory-policy noeviction`, started by [`compose.yaml`](compose.yaml). It proves the wiring between processes, which no
 lower test can see; what a unit, slice or embedded-server test already proves is not proved again here.
@@ -11,6 +11,7 @@ lower test can see; what a unit, slice or embedded-server test already proves is
 | `gateway/application.yaml` | The gateways' configuration, mounted over the image's `config/`. |
 | `documents/` | The documents the scenarios publish: the platform's with `cosec-migrate`, the tenants' through the control plane. |
 | `profile/shortened-bounds.yaml` | Test configuration only: the bounds the suite shortens (shadow windows), each with the default it replaces. |
+| `../../typescript/cosec-fetcher/test-system/` | The TypeScript client's scenarios against the gateway, run by `pnpm test:system` in `typescript/` after the Kotlin ones. |
 | `docker/app.Dockerfile` | The image of each `test/system-*` service, from its `installDist`. |
 | `src/test/kotlin/` | The harness and the scenarios (`@Tag("system")`), Kotlin over the JDK's HTTP client. |
 | `scripts/summary.py` | The run summary: each failed scenario, the bound it waited for, the evidence artifact. |

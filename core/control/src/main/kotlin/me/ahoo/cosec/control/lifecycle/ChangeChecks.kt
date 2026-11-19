@@ -26,7 +26,6 @@ import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.ProvenanceKind
-import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
@@ -60,10 +59,8 @@ val MAX_BREAK_GLASS: java.time.Duration = java.time.Duration.ofHours(24)
 @InternalCoSecApi
 class ChangeChecks(
     private val options: ChangeOptions = ChangeOptions(),
-    /** The host's `AttributeProvider` catalog: a candidate compiles against it as an instance would ([PolicyDocumentCompiler.forPlatform]). */
-    private val attributes: AttributeCatalog = AttributeCatalog.NONE,
-    /** The headers the host reads credentials from besides the fixed ones, which no reference may read (`CND-5`). */
-    private val credentialHeaders: Set<String> = emptySet(),
+    /** What a candidate compiles against as an instance would ([PolicyDocumentCompiler.forPlatform]), and its route maps. */
+    private val compile: CandidateCompile = CandidateCompile(),
 ) {
     suspend fun check(
         key: SnapshotKey,
@@ -99,8 +96,14 @@ class ChangeChecks(
             EntryChecks.sharesPlatformIds(candidate, platform, findings)
         }
         try {
-            PolicyDocumentCompiler.forPlatform(platform, attributes, options.principalBindingLimit, credentialHeaders)
+            val compiled = PolicyDocumentCompiler.forPlatform(
+                platform,
+                compile.attributes,
+                options.principalBindingLimit,
+                compile.credentialHeaders
+            )
                 .compile(candidate)
+            RouteFindings.check(compiled, compile.routes, findings)
         } catch (error: DocumentCompileException) {
             error.errors.forEach { findings += Finding("COMPILE", it.path, it.message, UNPROCESSABLE) }
         }

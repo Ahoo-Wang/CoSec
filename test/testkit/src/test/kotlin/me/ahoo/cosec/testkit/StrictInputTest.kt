@@ -44,11 +44,13 @@ class StrictInputTest {
     @Test
     fun `a scenario that sets resource attributes is refused`() {
         val kit = PolicyTestKit.of(platform)
-        val scenario = """{"request":{"action":"order:read","resource":{"type":"order","id":"1",""" +
+        val scenario = """{"credential":{"tenant":"acme","id":"alice"},"request":{"action":"order:read","resource":{"type":"order","id":"1",""" +
             """"attributes":{"classification":"secret"}}},"expect":{"decision":"Deny"}}"""
         assertThrows<ScenarioFormatException> { kit.evaluate(scenario) }.message.assert()
             .contains("request.resource.attributes").contains("resource.var.<name>").contains("DOC-10")
-        kit.evaluate("""{"request":{"action":"order:read","resource":{"type":"order","id":"1"}}}""")
+        kit.evaluate(
+            """{"credential":{"anonymous":true},"request":{"action":"order:read","resource":{"type":"order","id":"1"}}}"""
+        )
     }
 
     @Test
@@ -86,6 +88,7 @@ class StrictInputTest {
     /** `%61` decodes to `a`: two spellings of acme. The first does not compile and must not vanish behind the second. */
     @Test
     fun `two files of one tenant are refused, naming both`(@TempDir directory: Path) {
+        Files.writeString(directory.resolve("platform.json"), platform)
         Files.createDirectories(directory.resolve("tenants"))
         Files.writeString(directory.resolve("tenants/%61cme.json"), """{"unknown":true}""")
         assertThrows<RuntimeException> { PolicyTestKit.load(directory) }
@@ -99,6 +102,7 @@ class StrictInputTest {
 
     @Test
     fun `two files of one app are refused, and a space spelled two ways too`(@TempDir directory: Path) {
+        Files.writeString(directory.resolve("platform.json"), platform)
         Files.createDirectories(directory.resolve("apps"))
         Files.writeString(directory.resolve("apps/my app.json"), "{}")
         Files.writeString(directory.resolve("apps/my%20app.json"), "{}")
@@ -108,6 +112,7 @@ class StrictInputTest {
 
     @Test
     fun `a shortened name the report maps to an id another file already holds is refused`(@TempDir directory: Path) {
+        Files.writeString(directory.resolve("platform.json"), platform)
         Files.createDirectories(directory.resolve("tenants"))
         Files.writeString(directory.resolve("tenants/long~abc.json"), "{}")
         Files.writeString(directory.resolve("tenants/acme.json"), "{}")
@@ -119,6 +124,7 @@ class StrictInputTest {
 
     @Test
     fun `distinct files and a tenant and an app of one name are fine`(@TempDir directory: Path) {
+        Files.writeString(directory.resolve("platform.json"), platform)
         Files.createDirectories(directory.resolve("tenants"))
         Files.createDirectories(directory.resolve("apps"))
         Files.writeString(directory.resolve("tenants/acme.json"), "{}")

@@ -99,6 +99,25 @@ pnpm test:host     # builds the host with Gradle, starts it, runs every package'
 - Add a case here when a package's unit test asserts what CoSec answers; `:client-host:check` keeps the host itself
   answering as the tests assume.
 
+## Tests against a deployed CoSec
+
+The system test (`test/system-test`, [its README](../test/system-test/README.md)) runs CoSec as a deployment: the gateway
+image built from the commit, services behind it and Redis, under Docker Compose. `cosec-fetcher` is one of its scenarios:
+the client through the gateway, to a service behind it, with the login and refresh and logout routes served by a host
+behind the gateway.
+
+```bash
+COSEC_SYSTEM_GATEWAY_URL=http://127.0.0.1:8080 pnpm test:system   # a stack of test/system-test is already running
+```
+
+- The cases are `cosec-fetcher/test-system/*.system.ts` with a `vitest.system.config.ts`. They reuse `test-host/support.ts`
+  (the client's configuration, `recordWire`) and `test-host/hostApi.ts`: `COSEC_HOST_URL` names the gateway, which
+  `scripts/with-system.mjs` takes from `COSEC_SYSTEM_GATEWAY_URL`, so one client setup serves both kinds of test.
+- `pnpm test:system` starts nothing: the `system-test` workflow (`.github/workflows/system-test.yml`) starts the stack and runs
+  it after the Kotlin scenarios, and only that workflow does. Neither `typescript` nor `typescript-host` of CI runs it.
+- The same rules as the host tests: the wire says which path a case took, never timing; a token that has already expired comes
+  from the login's `accessSeconds`, so no case waits.
+
 ## Releasing
 
 Publishing the GitHub release `vX.Y.Z` publishes the packages to npm, from the `npm-publish` job of

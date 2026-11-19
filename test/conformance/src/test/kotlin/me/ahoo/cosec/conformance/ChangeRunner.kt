@@ -47,6 +47,7 @@ import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.ownerOf
+import me.ahoo.cosec.control.lifecycle.CandidateCompile
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
@@ -276,7 +277,7 @@ object ChangeRunner : ScenarioRunner {
             authorizer,
             clock,
             options,
-            attributes = providers(),
+            compile = CandidateCompile(providers()),
             reports = reader,
             listeners = listeners,
             revocations = revocations,

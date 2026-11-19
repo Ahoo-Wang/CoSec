@@ -82,7 +82,8 @@ class ApiKeyAuthenticator(
     }
 
     companion object {
-        const val METHOD = "apikey"
+        /** How audit and decision events name an API key: [Identity.Method.API_KEY], as `CoSec-Identity` does. */
+        const val METHOD = "api-key"
 
         private val INVALID = AuthnResult.Rejected(AuthnResult.RejectReason.API_KEY_INVALID)
     }

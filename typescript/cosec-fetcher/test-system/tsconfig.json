@@ -1,0 +1,20 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "noEmit": true,
+    "emitDeclarationOnly": false,
+    "declaration": false,
+    "declarationMap": false,
+    "rootDir": "../..",
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "types": ["vitest/globals"]
+  },
+  "include": [
+    "../src/**/*",
+    "./**/*",
+    "../test-host/*.ts",
+    "../../test-host/*.ts"
+  ]
+}

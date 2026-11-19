@@ -3,15 +3,15 @@
 # Tests: :testkit:test --tests me.ahoo.cosec.testkit.KitEnforcementTest
 
 diff --git a/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/PolicyTestKit.kt b/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/PolicyTestKit.kt
-index 3a7fb9d2..254dcf58 100644
+index 7a4eea09..48daa540 100644
 --- a/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/PolicyTestKit.kt
 +++ b/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/PolicyTestKit.kt
-@@ -70,7 +70,7 @@ import kotlin.io.path.relativeTo
+@@ -69,7 +69,7 @@ import kotlin.io.path.relativeTo
   */
  @ExperimentalCoSecApi
  class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) {
--    private val scenarios = EngineScenarios(DocumentSnapshotCompiler.stored, enforceable = true)
-+    private val scenarios = EngineScenarios(DocumentSnapshotCompiler.stored, enforceable = false)
+-    private val scenarios = EngineScenarios(DocumentSnapshotCompiler.stored, enforceable = true, strictDocuments = true)
++    private val scenarios = EngineScenarios(DocumentSnapshotCompiler.stored, enforceable = false, strictDocuments = true)
  
      /** What the documents decide for [scenario], a scenario as JSON text; its `expect`, if any, is not checked. */
      fun evaluate(scenario: String): EngineOutcome = evaluate(ScenarioJson.parse(scenario))

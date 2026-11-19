@@ -1,5 +1,8 @@
 {
   "description": "globex has no night-shift role: the name alone grants nothing there.",
+  "withoutDocument": [
+    "tenant"
+  ],
   "credential": {
     "tenant": "globex",
     "id": "alice",

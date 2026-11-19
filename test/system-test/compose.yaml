@@ -23,6 +23,11 @@ x-cosec: &cosec
   # The shortened bounds, test configuration only: profile/shortened-bounds.yaml says what each replaces.
   SPRING_CONFIG_ADDITIONALLOCATION: optional:file:/opt/system/shortened-bounds.yaml
 
+# The gateways audit to Kafka (the image turns it off by default): what a deployment that keeps an audit trail runs.
+x-kafka: &kafka
+  COSEC_AUDIT_KAFKA_ENABLED: "true"
+  SPRING_KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+
 x-gateway: &gateway
   image: ${COSEC_SYSTEM_GATEWAY_IMAGE:-cosec-gateway:system}
   depends_on:
@@ -30,8 +35,10 @@ x-gateway: &gateway
       condition: service_healthy
     behind:
       condition: service_healthy
+    kafka:
+      condition: service_healthy
   environment:
-    <<: *cosec
+    <<: [ *cosec, *kafka ]
     # After the image's own options (-Xmx2048M, ZGC, ...), so these win; a runner has room for this.
     JAVA_OPTS: -Xms256m -Xmx512m -XX:MaxDirectMemorySize=128m -Djava.net.preferIPv4Stack=true
   # ./config/application.yaml, read in addition to the image's own defaults (the routes and the secret; nothing the image keeps itself).
@@ -59,6 +66,27 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
+
+  # A single-node KRaft broker for the gateways' audit topic (cosec.audit.kafka.topic, `cosec-audit`), created on first use.
+  kafka:
+    image: apache/kafka:3.9.0
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+    healthcheck:
+      test: [ CMD, /opt/kafka/bin/kafka-broker-api-versions.sh, --bootstrap-server, "localhost:9092" ]
+      interval: 3s
+      timeout: 10s
+      retries: 60
 
   behind:
     image: ${COSEC_SYSTEM_BEHIND_IMAGE:-cosec-system-behind:test}
@@ -115,18 +143,21 @@ services:
     <<: *gateway
     ports:
       - "127.0.0.1:8080:8080"
+      # The management port: /actuator/health and the scrape endpoint /actuator/prometheus. Nothing authorizes it.
+      - "127.0.0.1:9081:8081"
 
   gw-2:
     <<: *gateway
     ports:
       - "127.0.0.1:8081:8080"
+      - "127.0.0.1:9082:8081"
 
   # A third gateway of the same image that refuses a token while the revocations cannot be read, instead of accepting it
   # (the documented exception, cosec.authentication.revocation.fail-closed, off by default): the outage scenario asks both.
   gw-strict:
     <<: *gateway
     environment:
-      <<: *cosec
+      <<: [ *cosec, *kafka ]
       JAVA_OPTS: -Xms256m -Xmx512m -XX:MaxDirectMemorySize=128m -Djava.net.preferIPv4Stack=true
       COSEC_AUTHENTICATION_REVOCATION_FAILCLOSED: "true"
     ports:

@@ -105,7 +105,7 @@ class KitEnforcementTest {
     fun `a scenario expecting an invalid request passes`() {
         kit.check(
             "lower-case",
-            """{"credential":{"tenant":"acme"},"request":{"action":"http:delete","resource":{"type":"http","id":"/x"}},
+            """{"credential":{"tenant":"acme","id":"alice"},"request":{"action":"http:delete","resource":{"type":"http","id":"/x"}},
                "expect":{"decision":"InvalidRequest"}}""",
         )
     }
@@ -161,6 +161,9 @@ class KitEnforcementTest {
     /** A hand-written id with a `~`: its file name writes it URL-encoded, and a literal one is told so. */
     @Test
     fun `a literal tilde in a file name names both readings`(@TempDir directory: Path) {
+        directory.resolve(
+            "platform.json"
+        ).writeText("""{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z"}""")
         directory.resolve("tenants").createDirectories().resolve("my~tenant.json").writeText("{}")
         val literal = assertThrows<ScenarioFormatException> { PolicyTestKit.load(directory) }
         literal.message.assert().contains("report.json").contains("%7E")
@@ -168,7 +171,7 @@ class KitEnforcementTest {
         tenants.resolve("my~tenant.json").toFile().renameTo(tenants.resolve("my%7Etenant.json").toFile())
         PolicyTestKit.load(directory).check(
             "my~tenant",
-            """{"credential":{"tenant":"my~tenant"},"request":{"action":"order:read"},"expect":{"decision":"Deny"}}""",
+            """{"credential":{"tenant":"my~tenant","id":"alice"},"request":{"action":"order:read","resource":{"type":"order","id":"1"}},"expect":{"decision":"Deny"}}""",
         )
     }
 }
