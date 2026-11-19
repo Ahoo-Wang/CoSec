@@ -394,6 +394,28 @@ class ControlAuthorizationTest {
         head().assert().isEqualTo(1)
     }
 
+    /** `CTL-9`: holding what the change writes is not the right to publish it; `cosec:publish` is read at publish. */
+    @Test
+    fun `an author who lost cosec publish after staging cannot publish`() = runBlocking<Unit> {
+        val change = windowClosed(changes.propose(alice, TENANT, 1, grant("team-a"), "viewers"))
+        bootstrap(
+            SnapshotKey.Platform,
+            listOf(
+                PolicyDefinition(
+                    PolicyId("no-publish-alice"),
+                    false,
+                    null,
+                    listOf(StatementSource("", Effect.DENY, listOf("cosec:publish")))
+                )
+            ),
+            revisions.head(SnapshotKey.Platform)!!.document.bindings +
+                control("no-publish", SubjectRef.Principal(ACME, PrincipalId("alice")), PolicyId("no-publish-alice")),
+        )
+        refused { changes.publish(alice, change.id) }.assert().isEqualTo(403)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.READY)
+        head().assert().isEqualTo(1)
+    }
+
     /** `CTL-13` (R1B-2): skipping the window is `cosec:skip-shadow`, a right of its own, not part of publishing. */
     @Test
     fun `an operator who may publish but not skip cannot skip the window`() = runBlocking<Unit> {
