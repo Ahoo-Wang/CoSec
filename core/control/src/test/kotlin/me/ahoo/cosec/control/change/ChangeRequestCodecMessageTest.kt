@@ -66,6 +66,11 @@ class ChangeRequestCodecMessageTest {
     }
 
     @Test
+    fun `no bytes at all are refused as such`() {
+        refused("").isSafe()
+    }
+
+    @Test
     fun `a value of the wrong type is quoted escaped and bounded`() {
         refused("[\"x\\u0007" + "y".repeat(5_000) + "\"]").isSafe()
     }

@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeJson.actor
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeJson.factory
+import me.ahoo.cosec.control.change.ChangeJson.format
 import me.ahoo.cosec.control.change.ChangeJson.malformed
 import me.ahoo.cosec.control.change.ChangeJson.need
 import me.ahoo.cosec.control.change.ChangeJson.only
@@ -205,11 +206,11 @@ object ChangeRequestCodec {
         text == "platform" -> SnapshotKey.Platform
         text.startsWith("app:") -> SnapshotKey.App(text.removePrefix("app:"))
         text.startsWith("tenant:") -> SnapshotKey.Tenant(text.removePrefix("tenant:"))
-        else -> malformed("[${quoted(text)}] is not a document key")
+        else -> throw format("[${quoted(text)}] is not a document key")
     }
 
     private fun digest(text: String): SnapshotDigest {
-        if (!SnapshotDigest.isDigest(text)) malformed("[${quoted(text)}] is not a digest")
+        if (!SnapshotDigest.isDigest(text)) throw format("[${quoted(text)}] is not a digest")
         return SnapshotDigest.parse(text)
     }
 
