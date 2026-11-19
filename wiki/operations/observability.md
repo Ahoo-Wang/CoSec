@@ -217,6 +217,16 @@ rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepte
 stored document does not compile on this instance ([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same
 registry ([CoCache's documentation](https://cocache.ahoo.me)).
 
+A service in gateway mode (`cosec.pipeline.mode=gateway`) has no pipeline and records no decision events, so none of the
+meters above. It counts the forwarded identities it refuses:
+
+| Meter | Tag | Counts |
+|---|---|---|
+| `cosec.identity.refused` | `problem`: `invalid-request`, `token-invalid`, `token-expired` | every `CoSec-Identity` header the service refused, including those its log does not print; the reason is logged at `WARN`, at most once a minute for each problem ([Troubleshooting](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)), never in the response |
+
+In gateway mode any non-zero rate means a hop that is misconfigured or a request that did not come through the gateway;
+alert on it.
+
 ## Snapshot metrics
 
 Under the same conditions as the timer (`cosec-micrometer`, a `MeterRegistry`, `cosec.metrics.enabled`), the starter

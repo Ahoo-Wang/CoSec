@@ -13,11 +13,19 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3) |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面那一节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面两节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面三节 |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4) |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面那一节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面两节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面三节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面四节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
+
+## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
+
+- **被拒绝的转发身份会被计数并说明原因，网关不再写出服务会拒绝的身份**（#1690）。受影响的是 `cosec.pipeline.mode=gateway` 的服务、它们的仪表盘和日志告警，以及在测试中调用 `IdentityHeader.of` 的代码。
+  - 这样的服务以 `WARN` 在 logger `me.ahoo.cosec.runtime.identity.IdentityGate` 上记录每个被拒绝的 `CoSec-Identity` 头的原因，每种问题类型最多每分钟一次（每一次都记录在 `DEBUG`）。直到 beta.4，它只在 `DEBUG` 记录。响应不变：从不说明原因。
+  - 有 `cosec-micrometer` 和 `MeterRegistry` 时，它在 `cosec.identity.refused{problem}`（`invalid-request`、`token-invalid`、`token-expired`）中对每次拒绝计数。对任何非零速率告警（[可观测性](./observability.md#metrics)）。
+  - 网关拒绝写出服务会拒绝读取的身份（空 id、落单的 UTF-16 代理项、晚于 9999 年的时间、空的声明名）：请求以 `500` 失败，不转发任何头；直到 beta.4，其后的服务会回答 `400`。CoSec 自己的网关不会构造这样的身份；自定义 `Authenticator` 可能会。对这样的身份，`IdentityHeader.of` 抛出 `IllegalArgumentException`，与身份过大时一样。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

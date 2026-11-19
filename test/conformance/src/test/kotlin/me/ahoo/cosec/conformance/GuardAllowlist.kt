@@ -31,6 +31,18 @@ object GuardAllowlist {
             "testkit:TokenlessContextTest#forSubject is the fixture's context for the same principal, with no identity",
             "testkit:TokenlessContextTest#withIdentity is what a service behind a gateway reads, the forwarded identity included",
             "spring-boot:WebAdapterParityTest#the test entries answer as the adapters do",
+            // OBS-7: a service in gateway mode counts and logs, bounded, every forwarded identity it refuses.
+            "runtime:IdentityRefusalsTest#every refusal is counted by problem type, also those the bounded warning does not print",
+            "runtime:IdentityRefusalsTest#a request the gate lets through counts nothing, and no other problem is counted",
+            "runtime:IdentityRefusalsTest#the gate warns once for a flood of bad headers, and the response says only the problem",
+            "runtime:IdentityRefusalsTest#each problem type warns again once its interval has passed",
+            "micrometer:IdentityRefusedMetricTest#each refusal counts in the series of its problem, and the series are the gate's problems only",
+            "spring-boot:GatewayModeMetricsTest#the gate's refusals are counted in the registry by problem",
+            "spring-boot:GatewayModeMetricsTest#without cosec-micrometer or a registry the gate still counts, and nothing fails",
+            "runtime:IdentityRefusalsTest#a forged header writes one bounded warning line, with nothing of the header unescaped",
+            "document:IdentityCodecMessageTest#a claim name is escaped and bounded",
+            "document:IdentityCodecMessageTest#unknown members are escaped, bounded, and at most three are named",
+            "document:IdentityCodecMessageTest#text that is not JSON is named by where it fails, never by what it holds",
             // OBS-6: one vocabulary for what decided.
             "runtime:AuditVocabularyTest#every reason has the audit decision of its own name",
             "micrometer:ResultVocabularyTest#every reason has the result of its own name",
