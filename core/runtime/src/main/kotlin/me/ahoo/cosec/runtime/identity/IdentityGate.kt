@@ -82,6 +82,8 @@ class IdentityGate(
     private val clock: Clock = Clock.systemUTC(),
     /** The ids of requests without a plain `CoSec-Request-Id` header. */
     idGenerator: IdGenerator = RandomIdGenerator,
+    /** Where each refusal is counted and its reason logged, bounded (`OBS-7`): the response never carries it. */
+    private val refusals: IdentityRefusals = IdentityRefusals(),
 ) : RequestGate {
     /** [idGenerator], falling back to a random id when it throws (round 2 M6). */
     private val ids = FallbackIds(idGenerator)
@@ -160,7 +162,7 @@ class IdentityGate(
     }
 
     private fun reject(requestId: String, type: ProblemType, reason: String, traceId: String?): Outcome {
-        log.debug { "Request [$requestId]: the forwarded identity is refused, $reason." }
+        refusals.record(requestId, type, reason)
         return StatusMapping.identityRejected(requestId, type, reason, traceId)
     }
 
