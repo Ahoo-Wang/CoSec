@@ -32,7 +32,10 @@ Around that function, CoSec provides what it takes to use it in production:
 - **Tenants, apps and spaces.** Principals belong to tenants, and roles apply per space (a team, a project) inside an
   app, so one user can be an admin in one space and a reader in another.
 - **Safe defaults.** Nothing is allowed unless a rule allows it, a deny always beats an allow, and data that cannot be
-  read denies.
+  read denies, with two documented exceptions: while the revocation store cannot be read, a request's token is
+  accepted unless `cosec.authentication.revocation.fail-closed` is `true`, and past the bounded snapshot lag only the
+  tenants in `cosec.authorization.snapshot.fail-closed.tenants` answer `503`
+  ([Security model](./security-model.md#the-two-documented-exceptions)).
 - **Tokens.** JWT issuing and verification, refresh, logout and revocation, and API keys for machine clients.
 - **Operations.** Rate limiting, decision events for audit, metrics and tracing, and an explanation of why any request
   was decided the way it was.

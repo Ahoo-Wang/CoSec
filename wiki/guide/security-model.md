@@ -161,6 +161,7 @@ WebFlux, WebMvc and Gateway adapters answer identically. Only a Permit lets a re
 | The revocation store reports an error | `503` (but see [the exceptions](#the-two-documented-exceptions)) |
 | The memberships cannot be resolved (no provider, provider failure or timeout, a token that both carries the provider marker and claims roles) | `503`, never "no memberships" |
 | The snapshot source fails | `503` |
+| A document is installed but Redis has not confirmed it for longer than `cosec.authorization.snapshot.fail-closed.max-lag` | `503` for the tenants in `cosec.authorization.snapshot.fail-closed.tenants` only; every other tenant keeps deciding on the installed documents however old ([Storage](../operations/storage.md#how-instances-read-documents)) |
 | A document, policy, statement, blacklist or boundary cannot be read or evaluated | Indeterminate (`503`) unless a DENY matches |
 | An attribute provider fails or times out | Only its own attributes are unavailable; see [Missing external attributes](#missing-external-attributes) |
 | A REQUIRED decision listener fails or times out on a Permit | `503` |
@@ -497,6 +498,13 @@ Before production:
   invalidation carries no document.
 - Run Redis with `maxmemory-policy noeviction`, and read it from the primary
   ([Redis requirements](../operations/storage.md#redis-requirements)).
+- Decide `cosec.authentication.revocation.fail-closed`. The default, `false`, accepts a request's token while the
+  revocations cannot be read, bounded by the access token's lifetime; `true` answers `503` instead, at the price of
+  every authenticated request failing during a Redis outage ([the exception](#the-two-documented-exceptions)).
+- Decide which tenants must not be decided on old documents: only those in
+  `cosec.authorization.snapshot.fail-closed.tenants` answer `503` once their documents are `fail-closed.max-lag` old
+  (default 30 minutes); every other tenant keeps deciding on what is installed
+  ([Storage](../operations/storage.md#how-instances-read-documents)).
 - Limit the control API per tenant with a platform rate limit rule
   ([Rate limiting](../policies/rate-limiting.md#the-control-api)).
 - Register a REQUIRED decision listener before anyone needs break-glass.

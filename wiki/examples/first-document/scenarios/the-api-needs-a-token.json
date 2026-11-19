@@ -1,0 +1,16 @@
+{
+  "description": "An anonymous caller reads nothing under /api (a 401).",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/api/orders"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

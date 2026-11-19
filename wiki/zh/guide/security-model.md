@@ -108,6 +108,7 @@ CoSec 无法决策时，不会放行。每种失败都在 `StatusMapping` 这一
 | 吊销存储报告错误 | `503`（但见[两个已写明的例外](#the-two-documented-exceptions)） |
 | 无法解析成员关系（没有提供者、提供者失败或超时、令牌同时带有提供者标记并声明了角色） | `503`，绝不当作“没有成员关系” |
 | 快照源失败 | `503` |
+| 文档已安装，但 Redis 超过 `cosec.authorization.snapshot.fail-closed.max-lag` 未确认它 | 仅 `cosec.authorization.snapshot.fail-closed.tenants` 中的租户返回 `503`；其他租户无论文档多旧，都继续按已安装的文档决策（[存储](../operations/storage.md#how-instances-read-documents)） |
 | 文档、策略、语句、黑名单或边界无法读取或求值 | Indeterminate（`503`），除非有 DENY 命中 |
 | 某个属性提供者失败或超时 | 只有它自己的属性不可用；见[外部属性缺失](#missing-external-attributes) |
 | Permit 时某个 REQUIRED 决策监听器失败或超时 | `503` |
@@ -296,6 +297,8 @@ CoSec 决定请求能否到达你的处理器。它不会：
   影子报告和状态，启用 JWT 时还会写入吊销和刷新令牌族。运行控制面的进程需要对文档的写权限。数据面凭证仍能在文档的通道上
   发布失效消息：这会让实例从 Redis 重新读取它持有的文档，代价是负载，从不改变决策，因为失效消息不携带文档。
 - 以 `maxmemory-policy noeviction` 运行 Redis，并从主节点读取（[Redis 要求](../operations/storage.md#redis-requirements)）。
+- 决定 `cosec.authentication.revocation.fail-closed`。默认值 `false` 在读不到吊销时接受请求的令牌，暴露窗口受访问令牌有效期限制；`true` 则返回 `503`，代价是 Redis 故障期间每个已认证请求都失败（[这个例外](#the-two-documented-exceptions)）。
+- 决定哪些租户不得按旧文档决策：只有 `cosec.authorization.snapshot.fail-closed.tenants` 中的租户，在其文档超过 `fail-closed.max-lag`（默认 30 分钟）后返回 `503`；其他租户继续按已安装的文档决策（[存储](../operations/storage.md#how-instances-read-documents)）。
 - 用一条平台限流规则按租户限制控制 API（[限流](../policies/rate-limiting.md#the-control-api)）。
 - 在任何人需要 break-glass 之前注册一个 REQUIRED 决策监听器。
 - 必须始终生效的 DENY 放在没有条件的策略里，并且永远不要基于客户端写入的请求头授权。
