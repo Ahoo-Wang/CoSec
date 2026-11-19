@@ -1,0 +1,44 @@
+{
+  "rules": [
+    "DOC-11"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "An ALLOW meant for signed-in callers only, written as not eq subject.id (0): the anonymous principal has no subject.id in a document, so the ALLOW would match every anonymous request. The document does not compile, and the message names subject.authenticated.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "signed-in",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "not": {
+                  "eq": [
+                    "subject.id",
+                    "(0)"
+                  ]
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "signed-in",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "signed-in"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "subject.authenticated"
+  }
+}

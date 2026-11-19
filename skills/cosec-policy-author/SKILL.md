@@ -134,9 +134,9 @@ One object with exactly one operator. Literals keep their JSON type: `"true"` is
 
 | Operator | Form | Notes |
 |---|---|---|
-| `eq` | `{"eq": [attr, value]}`, optional sibling `"ignoreCase": true` | value is a string, a boolean, or `{"attr": path}` of the same type; string, bool and IP attributes |
+| `eq` | `{"eq": [attr, value]}`, optional sibling `"ignoreCase": true` | value is a string, a boolean, or `{"attr": path}` of the same type; string, bool and IP attributes. `ignoreCase` folds ASCII only: with a letter beyond ASCII (`Ärzte`) it does not compile in a DENY, a rate limit rule or an ALLOW under `not` (`DOC-9`); list the spellings with `in` |
 | `in` | `{"in": [attr, [values]]}` or `{"in": ["literal", setAttr]}` | value is one of them; or the set contains the literal |
-| `prefix` | `{"prefix": [attr, "text"]}`, optional `ignoreCase` | strings; on `*.host.labels` a prefix of whole labels (`com.example`) |
+| `prefix` | `{"prefix": [attr, "text"]}`, optional `ignoreCase` (ASCII only, as for `eq`) | strings; on `*.host.labels` a prefix of whole labels (`com.example`) |
 | `cidr` | `{"cidr": [ipAttr, ["10.0.0.0/8", ...]]}` | IPv4 and IPv6 blocks |
 | `time` | `{"time": {...}}` | at least one of `notBefore` (inclusive), `notAfter` (exclusive), `daysOfWeek` (exactly `MON`..`SUN`), `from`/`to` (`HH:mm`, may cross midnight); `zone` default `UTC` |
 | `exists` | `{"exists": attr}` | the attribute has a value (the empty string counts) |
@@ -146,13 +146,14 @@ One object with exactly one operator. Literals keep their JSON type: `"true"` is
 There is no `true`/`false` condition, no expression language (no SpEL, no OGNL, no regex), and no `negate` flag:
 use `not`. Attributes:
 
-- `subject.id`, `subject.tenant`, `subject.authenticated` (bool), `subject.roles` (bare role ids in any space),
+- `subject.id` (absent for an anonymous caller: never compare it with `(0)`, which does not compile (`DOC-11`); test
+  `subject.authenticated` instead), `subject.tenant`, `subject.authenticated` (bool), `subject.roles` (bare role ids in any space),
   `subject.scopedRoles` (`role` / `role@space` as claimed), `subject.attributes.<name>` (token or API key attributes);
 - `scope.tenant`, `scope.app`, `scope.space`, `scope.roles` (the roles in effect in the request's space);
-- `action.service`, `action.verb`, `resource.type`, `resource.id`, `resource.attributes.<name>` (**never
-  set**: neither the request pipeline nor `AuthorizationChecker` fills it, so a statement that reads it never matches
-  there; put the facts a rule needs in the resource id, see https://cosec.ahoo.me/integration/checks#object-level-rules),
-  `resource.var.<name>`;
+- `action.service`, `action.verb`, `resource.type`, `resource.id`, `resource.var.<name>` (a fact about a resource goes in
+  its id and is read as a pattern variable, see https://cosec.ahoo.me/integration/checks#object-level-rules;
+  `resource.attributes.<name>` is set by nothing, not the request pipeline nor `AuthorizationChecker`, and does not
+  compile, `DOC-10`);
 - `environment.ip` (IP), `environment.time`, `environment.device`, `environment.blocked` (bool);
 - `http.header.<name>` (name case-insensitive), `http.origin`, `http.referer`, `http.origin.host`,
   `http.referer.host` (lower case), `*.host.labels`, `request.attributes.<name>` (the gateway sets
@@ -201,6 +202,7 @@ write that field by hand.
 ```
 
 - `subject`: `"*"` (anyone, anonymous included), `{"principal": "...", "tenant": "..."}` or `{"role": "...", "tenant": "..."}`.
+  A principal id beginning with `(` does not compile (`DOC-11`): the anonymous principal matches no principal binding.
 - `app`: an app id or `"*"` (never empty). `space`: a space id, `""` for the default space only, or `"*"` for any space.
   `"*"` means any and only that. A space id beginning with `(` is CoSec's: a binding in one does not compile.
 - `expiresAt` (ISO instant): the binding stops applying then. `breakGlass`: see below.

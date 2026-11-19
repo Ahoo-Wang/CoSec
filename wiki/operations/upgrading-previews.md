@@ -43,6 +43,29 @@ section above it:
   `PipelineFixture.securityContext(fixture.request(...))` or `PermittedRequest` from `cosec-testkit`
   ([Testing policies](../policies/testing.md)); a filter of your own that runs the pipeline binds
   `outcome.security!!.securityContext`.
+- **Breaking: three shapes of a document that never did what they read no longer compile** (`DOC-9`, `DOC-10`,
+  `DOC-11`). Each refuses a document whose statement already did not apply as written:
+  - `ignoreCase` on `eq` or `prefix` with a literal holding a letter beyond ASCII (`Ärzte`), where missing a spelling
+    lets a request through: in a DENY statement or a rate limit rule, an ALLOW under a `not`, or a policy condition
+    guarding a DENY. The fold is ASCII only, so `ärzte` passed the DENY. Write every spelling in an `in` without
+    `ignoreCase` ([Case folding](../policies/language.md#case-folding)). In an ALLOW it still compiles, with a warning.
+  - `resource.attributes.<name>`, in a condition or a rate limit `key`: nothing sets it, so a DENY on it denied
+    nothing. Put the fact in the resource id and read it as `resource.var.<name>`
+    ([Object-level rules](../integration/checks.md#object-level-rules)). A test kit scenario that sets
+    `request.resource.attributes` is refused too.
+  - A `subject.id` literal beginning with `(` (`{"not": {"eq": ["subject.id", "(0)"]}}` matched every anonymous
+    request) and a principal binding to an id beginning with `(` (it never applied). Write
+    `{"eq": ["subject.authenticated", false]}` for anonymous requests.
+
+  Affected: whoever stored such a document. After the upgrade an instance installs it as failed, and every request
+  that reads it fails closed (`503`), so find them first. With beta.3 still running, read each head
+  (`GET <control base>/documents/{key}`, [the control API](../policies/testing.md#the-control-plane)) or take the
+  files you publish from, and search them:
+  `grep -nE 'resource\.attributes\.|"subject\.id" *, *"\(|"principal" *: *"\(' <files>` finds the second and third
+  shapes; for the first, `grep -n '"ignoreCase": *true' <files>` and look for a letter beyond ASCII beside it
+  (`grep -nP '[^\x00-\x7F]'`). Or load the files with this version's `PolicyTestKit.load`, which compiles each document
+  as an instance does and names the path of each error. `cosec-migrate convert` now refuses the same shapes from 7.x
+  data: an ALLOW on a 7.x resource attribute is a statement that can never hold, which you remove.
 - **Fixed: a lost invalidation is installed by the first pass after it, even past a load in flight.** The beta.3
   release notes listed it as a known issue: when a revalidation pass met a load of a document already in flight, it
   took that load's read as its confirmation, though the read could predate the change, so a change whose invalidation

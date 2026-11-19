@@ -146,7 +146,7 @@
       "additionalProperties": false,
       "properties": {
         "attr": {
-          "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
+          "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1). Not `resource.attributes.<name>`: nothing sets it, so it does not compile (DOC-10); a fact about a resource is in its id, read as `resource.var.<name>`. A `subject.id` literal never begins with `(`: the anonymous principal has no `subject.id` (DOC-11).",
           "examples": [
             "subject.id",
             "subject.authenticated",
@@ -177,7 +177,7 @@
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1). Not `resource.attributes.<name>`: nothing sets it, so it does not compile (DOC-10); a fact about a resource is in its id, read as `resource.var.<name>`. A `subject.id` literal never begins with `(`: the anonymous principal has no `subject.id` (DOC-11).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -217,7 +217,7 @@
             },
             "ignoreCase": {
               "default": false,
-              "description": "ASCII case folding.",
+              "description": "ASCII case folding only. With a literal holding a letter beyond ASCII (`Ärzte`), it does not compile where a miss lets a request through: a DENY's or a rate limit rule's condition, an ALLOW's under a `not` (DOC-9); list the spellings with `in` instead.",
               "type": "boolean"
             }
           },
@@ -271,7 +271,7 @@
                       "type": "array"
                     },
                     {
-                      "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
+                      "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1). Not `resource.attributes.<name>`: nothing sets it, so it does not compile (DOC-10); a fact about a resource is in its id, read as `resource.var.<name>`. A `subject.id` literal never begins with `(`: the anonymous principal has no `subject.id` (DOC-11).",
                       "examples": [
                         "subject.id",
                         "subject.authenticated",
@@ -304,14 +304,14 @@
           "properties": {
             "ignoreCase": {
               "default": false,
-              "description": "ASCII case folding.",
+              "description": "ASCII case folding only. With a literal holding a letter beyond ASCII (`Ärzte`), it does not compile where a miss lets a request through: a DENY's or a rate limit rule's condition, an ALLOW's under a `not` (DOC-9); list the spellings with `in` instead.",
               "type": "boolean"
             },
             "prefix": {
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1). Not `resource.attributes.<name>`: nothing sets it, so it does not compile (DOC-10); a fact about a resource is in its id, read as `resource.var.<name>`. A `subject.id` literal never begins with `(`: the anonymous principal has no `subject.id` (DOC-11).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -351,7 +351,7 @@
               "additionalItems": false,
               "items": [
                 {
-                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
+                  "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1). Not `resource.attributes.<name>`: nothing sets it, so it does not compile (DOC-10); a fact about a resource is in its id, read as `resource.var.<name>`. A `subject.id` literal never begins with `(`: the anonymous principal has no `subject.id` (DOC-11).",
                   "examples": [
                     "subject.id",
                     "subject.authenticated",
@@ -403,7 +403,7 @@
           "additionalProperties": false,
           "properties": {
             "exists": {
-              "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1).",
+              "description": "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a registered AttributeProvider declares (RFC 0006 §5.4.1). Not `resource.attributes.<name>`: nothing sets it, so it does not compile (DOC-10); a fact about a resource is in its id, read as `resource.var.<name>`. A `subject.id` literal never begins with `(`: the anonymous principal has no `subject.id` (DOC-11).",
               "examples": [
                 "subject.id",
                 "subject.authenticated",
@@ -535,6 +535,7 @@
               "additionalProperties": false,
               "properties": {
                 "principal": {
+                  "description": "A principal id, never one beginning with `(`: no signed-in principal has a reserved id, and the anonymous principal matches no principal binding (DOC-11).",
                   "examples": [
                     "cosec",
                     "svc-batch"
