@@ -14,6 +14,7 @@ package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
 import com.auth0.jwt.RegisteredClaims
+import com.auth0.jwt.algorithms.Algorithm
 import com.auth0.jwt.interfaces.DecodedJWT
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
 import me.ahoo.cosec.spi.membership.MembershipClaims
@@ -30,6 +31,17 @@ import java.util.Collections
  * says (`PIP-11`, `UnverifiedTokenTest`).
  */
 internal object Jwts {
+    /**
+     * Refuses `Algorithm.none()` (UA-6): java-jwt's `none` verifies any token with an empty signature, so a verifier on
+     * it accepts tokens anyone can write, and CoSec takes them for its own, break-glass included (RC1-26).
+     */
+    fun requireSigning(algorithm: Algorithm) {
+        require(algorithm.name != Algorithm.none().name) {
+            "CoSec tokens are signed: Algorithm.none() would issue or accept unsigned tokens that anyone can write. " +
+                "Pass a signing algorithm, such as Algorithm.HMAC256(secret) or an RSA or EC key pair."
+        }
+    }
+
     const val TOKEN_PREFIX = "Bearer "
 
     /** The RFC 8693 actor claim. `may_act` only says who may act for the subject, and does not change it. */
