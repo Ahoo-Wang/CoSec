@@ -31,6 +31,14 @@ Requires Node `^22.12.0 || ^24.0.0 || >=26.0.0` to build.
 
 ## Example
 
+```ts
+// tokenStorage.ts: the module the example below imports.
+import { cosec } from './cosec'; // the module that creates and applies the CoSecConfigurer (see the fetcher package's README)
+
+export const tokenStorage = cosec.tokenStorage;
+export const tokenManager = cosec.tokenManager;
+```
+
 ```tsx
 import {
   RouteGuard,

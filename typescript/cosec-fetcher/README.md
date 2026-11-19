@@ -28,22 +28,50 @@ Requires Node `^22.12.0 || ^24.0.0 || >=26.0.0`, the Node versions nanoid 6 supp
 ## Example
 
 ```ts
+// cosec.ts
 import { Fetcher } from '@ahoo-wang/fetcher';
-import { CoSecConfigurer } from '@ahoo-wang/cosec-fetcher';
+import {
+  CoSecConfigurer,
+  CoSecTokenRefresher,
+  CoSecTokenRevoker,
+  type CompositeToken,
+} from '@ahoo-wang/cosec-fetcher';
 
-const api = new Fetcher({ baseURL: 'https://api.example.com' });
+const baseURL = 'https://api.example.com';
 
-const cosec = new CoSecConfigurer({
+// The application's Fetcher: the one that carries the token.
+export const api = new Fetcher({ baseURL });
+// A second, unconfigured Fetcher for refresh and logout: it never carries the CoSec headers.
+const bare = new Fetcher({ baseURL });
+
+export const cosec = new CoSecConfigurer({
+  tokenRefresher: new CoSecTokenRefresher({ fetcher: bare, endpoint: '/auth/refresh' }),
+  tokenRevoker: new CoSecTokenRevoker({ fetcher: bare, endpoint: '/auth/logout' }),
   onUnauthorized: () => window.location.assign('/login'),
   onForbidden: async () => console.error('Access denied'),
 });
-
 cosec.applyTo(api);
+
+// Sign in: the login route is the application's. It answers the pair
+// (`accessToken`, `refreshToken`), which goes into the TokenStorage.
+export async function login(username: string, password: string): Promise<void> {
+  const response = await fetch(`${baseURL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!response.ok) throw new Error('Sign-in failed');
+  cosec.tokenStorage.signIn((await response.json()) as CompositeToken);
+}
+
+// Log out: ends the session at the server, then forgets the pair here.
+export const logout = () => cosec.tokenManager!.logout();
 ```
 
-This minimal configuration adds attribution headers without authentication.
-Provide a `TokenRefresher` to enable token storage, Bearer injection, and
-automatic refresh. Keep refresh requests on a separate unconfigured Fetcher.
+Every part is needed: the `TokenRefresher` turns on token storage, Bearer injection and automatic refresh; the
+`TokenRevoker` makes `logout()` end the session at the server; `login` is the only place a pair enters the
+`TokenStorage` (`cosec.tokenStorage.signIn`). Keep refresh and logout on the separate unconfigured `Fetcher`, as above.
+Without a `TokenRefresher` the configurer only adds attribution headers.
 
 The token, the CoSec headers (device ID included) and the tenant and owner that
 fill path variables go only to the origin of an absolute `baseURL` and to the
@@ -97,19 +125,9 @@ own: it only forgets the pair here, and the session stays refreshable at the
 server until it ends there.
 
 ```ts
-const cosec = new CoSecConfigurer({
-  tokenRefresher: new CoSecTokenRefresher({
-    fetcher: api,
-    endpoint: '/auth/refresh',
-  }),
-  tokenRevoker: new CoSecTokenRevoker({
-    fetcher: api,
-    endpoint: '/auth/logout',
-  }),
-});
-cosec.applyTo(api);
+import { logout } from './cosec'; // from the example above
 
-await cosec.tokenManager?.logout();
+await logout();
 ```
 
 A refresh in flight is waited for, and the session is ended with the pair it

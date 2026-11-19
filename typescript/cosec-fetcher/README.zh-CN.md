@@ -24,21 +24,47 @@ Peer 依赖：`fetcher`、`fetcher-eventbus` 和 `fetcher-storage`。
 ## 示例
 
 ```ts
+// cosec.ts
 import { Fetcher } from '@ahoo-wang/fetcher';
-import { CoSecConfigurer } from '@ahoo-wang/cosec-fetcher';
+import {
+  CoSecConfigurer,
+  CoSecTokenRefresher,
+  CoSecTokenRevoker,
+  type CompositeToken,
+} from '@ahoo-wang/cosec-fetcher';
 
-const api = new Fetcher({ baseURL: 'https://api.example.com' });
+const baseURL = 'https://api.example.com';
 
-const cosec = new CoSecConfigurer({
+// 应用自己的 Fetcher：携带令牌的那个。
+export const api = new Fetcher({ baseURL });
+// 第二个未配置的 Fetcher，用于刷新和登出：它从不携带 CoSec 请求头。
+const bare = new Fetcher({ baseURL });
+
+export const cosec = new CoSecConfigurer({
+  tokenRefresher: new CoSecTokenRefresher({ fetcher: bare, endpoint: '/auth/refresh' }),
+  tokenRevoker: new CoSecTokenRevoker({ fetcher: bare, endpoint: '/auth/logout' }),
   onUnauthorized: () => window.location.assign('/login'),
   onForbidden: async () => console.error('Access denied'),
 });
-
 cosec.applyTo(api);
+
+// 登录：登录路由是应用自己的。它返回令牌对（`accessToken`、`refreshToken`），
+// 放进 TokenStorage。
+export async function login(username: string, password: string): Promise<void> {
+  const response = await fetch(`${baseURL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username, password }),
+  });
+  if (!response.ok) throw new Error('Sign-in failed');
+  cosec.tokenStorage.signIn((await response.json()) as CompositeToken);
+}
+
+// 登出：先在服务端结束会话，再删除这里的令牌对。
+export const logout = () => cosec.tokenManager!.logout();
 ```
 
-该最小配置只添加归属请求头，不启用认证。提供 `TokenRefresher` 后会启用令牌存储、
-Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fetcher。
+每一部分都不能少：`TokenRefresher` 启用令牌存储、Bearer 注入和自动刷新；`TokenRevoker` 让 `logout()` 在服务端结束会话；`login` 是令牌对进入 `TokenStorage` 的唯一入口（`cosec.tokenStorage.signIn`）。刷新和登出请使用上面那个独立的、未配置的 `Fetcher`。没有 `TokenRefresher` 时，配置器只添加归属请求头。
 
 令牌、CoSec 请求头（含设备 ID）以及用来填充路径变量的租户和所有者，只发往绝对 `baseURL` 所在的源和页面自身的源：
 `isTrusted` 默认是 `sameOriginTrust`。发往其他源绝对 URL 的请求（分页链接、下载地址、回调）不带任何凭据，它的 `401`
@@ -73,19 +99,9 @@ Bearer 注入与自动刷新。刷新请求使用独立、未配置 CoSec 的 Fe
 用户点击“登出”时调用 `logout()`：它在服务端结束会话（CoSec 的登出路由，`cosec.authentication.login.logout.path`），并在本地删除令牌对。已知会话已经结束时，或应用通过自己的登出端点结束会话时，调用 `tokenStorage.signOut()`：它只在本地忘掉令牌对，会话在服务端仍可刷新，直到它在那里结束。
 
 ```ts
-const cosec = new CoSecConfigurer({
-  tokenRefresher: new CoSecTokenRefresher({
-    fetcher: api,
-    endpoint: '/auth/refresh',
-  }),
-  tokenRevoker: new CoSecTokenRevoker({
-    fetcher: api,
-    endpoint: '/auth/logout',
-  }),
-});
-cosec.applyTo(api);
+import { logout } from './cosec'; // 来自上面的示例
 
-await cosec.tokenManager?.logout();
+await logout();
 ```
 
 正在进行的刷新会先被等待，会话用它存下的令牌对结束。服务端结束了会话（`204`）或回答 `401`（会话已不可用）时，`logout()` 正常完成；无论哪种结果，本地的令牌对都会删除。`LogoutUnconfirmedError`（`503`、`500`、网络故障、没有 `tokenRevoker`）要求应用告诉用户：服务端可能仍持有该会话，直到它在那里结束，最迟到其刷新令牌过期。它不携带任何令牌：`problem` 和 `status` 说明服务端的回答。
