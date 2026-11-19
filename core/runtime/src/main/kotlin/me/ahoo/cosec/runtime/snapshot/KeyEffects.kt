@@ -49,6 +49,10 @@ internal class KeyEffects<T : Any>(
     @Volatile
     private var report: CompileReport? = null
 
+    /** The installed entry no review has run for yet (UC-1): set by [review], cleared by the review's task. */
+    @Volatile
+    private var unreviewed: SnapshotEntry<T>? = null
+
     /** The store-read timeout of each load whose read is out, made at the first read; touched inside the drain only. */
     private var readTimeouts: HashMap<Long, ScheduledFuture<*>>? = null
 
@@ -65,7 +69,11 @@ internal class KeyEffects<T : Any>(
     @Suppress("CyclomaticComplexMethod", "UNCHECKED_CAST")
     fun execute(effect: KeyEffect<T>) {
         when (effect) {
-            is KeyEffect.StartPassRead -> effect.ticket.read = effect.ticket.pass.startRead()
+            is KeyEffect.StartPassRead -> {
+                effect.ticket.read = effect.ticket.pass.startRead()
+                // A review housekeeping refused is offered again when a pass visits the key (UC-1).
+                unreviewed?.let(::review)
+            }
             is KeyEffect.EndPassRead -> effect.ticket.read?.end()
             is KeyEffect.StartRead -> startRead(effect)
             is KeyEffect.CancelReadTimeout -> readTimeouts?.remove(effect.loadId)?.cancel(false)
@@ -202,8 +210,34 @@ internal class KeyEffects<T : Any>(
             // Without a report, no failure was logged: only a failed compilation needs one made.
             val made = report ?: if (effect.entry.origin == EntryOrigin.UNCOMPILABLE) report() else null
             made?.installed(effect.entry)
+            if (effect.entry.origin == EntryOrigin.DOCUMENT && context.reviews.isNotEmpty()) {
+                review(effect.entry)
+            }
         } finally {
             owner.published(effect.previous, effect.entry)
+        }
+    }
+
+    /**
+     * UC-1: [entry] to the [InstallReview]s, off housekeeping. Until housekeeping runs it, it is this key's [unreviewed]
+     * entry: a refused offer leaves it there for the next pass, and a later install replaces it, since only the
+     * installed revision is worth a review.
+     */
+    private fun review(entry: SnapshotEntry<T>) {
+        val compiled = (entry.state as? DocumentState.Present)?.compiled ?: return
+        unreviewed = entry
+        context.threads.offHousekeeping(HousekeepingTask.INSTALL_REVIEW, key) {
+            if (unreviewed === entry) {
+                unreviewed = null
+            }
+            for (review in context.reviews) {
+                @Suppress("TooGenericExceptionCaught")
+                try {
+                    review.installed(key, entry.revision, compiled)
+                } catch (error: Exception) {
+                    log.warn(error) { "The review of [$key] revision ${entry.revision} failed; the document stays installed." }
+                }
+            }
         }
     }
 

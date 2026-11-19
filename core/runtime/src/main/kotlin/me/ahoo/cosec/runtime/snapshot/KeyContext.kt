@@ -42,6 +42,8 @@ internal class KeyContext(
     val families: SnapshotFamilies<*>,
     /** How each key's runner is made (RFC 0013 B2b): [KeyRunner.Settings]' defaults in production. */
     val runners: KeyRunner.Settings,
+    /** Who is told of each installed document (UC-1, [InstallReview]); none but the starter's. */
+    val reviews: List<InstallReview<Any>> = emptyList(),
 ) {
     /**
      * Monotonic nanoseconds, the time the scheduler's timeouts keep: whether a periodic pass stalled is measured in it,

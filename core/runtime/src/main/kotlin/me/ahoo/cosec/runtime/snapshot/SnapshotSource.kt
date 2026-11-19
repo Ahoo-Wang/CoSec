@@ -103,6 +103,8 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     housekeeping: ExecutorService? = null,
     /** Tests only (RFC 0013 B2b): the K and the hooks of each key's runner; the defaults in production. */
     runners: KeyRunner.Settings = KeyRunner.Settings(),
+    /** Told of each installed document, off housekeeping (UC-1, [InstallReview]). */
+    reviews: List<InstallReview<*>> = emptyList(),
 ) : AutoCloseable {
     private val refusals = HousekeepingRefusals()
     private val metrics = GuardedSnapshotMetrics(metrics, refusals)
@@ -122,7 +124,11 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     internal val lagReports = LagReports(options, clock, this.metrics, threads, ::entries)
     internal val families = SnapshotFamilies(families, sharedKey.kind, lagReports, this.metrics)
     internal val context =
-        KeyContext(store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, runners)
+        @Suppress("UNCHECKED_CAST")
+        KeyContext(
+            store, sharedKey, options, clock, ticker, this.metrics, threads, this.families, runners,
+            reviews as List<InstallReview<Any>>,
+        )
     internal val shared = runners.create(sharedKey, sharedCompiler, context)
 
     /** Tests only: runs between finding a family's slot and using it, to force an eviction into that gap. */
