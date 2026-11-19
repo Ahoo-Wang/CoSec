@@ -46,6 +46,7 @@ internal class CoSecPropertyCheckAutoConfiguration {
         fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): StartupTask.BeforeBeans =
             StartupTask.BeforeBeans {
                 UnknownProperties.load(CoSecPropertyCheckAutoConfiguration::class.java.classLoader).check(environment)
+                CoSecSwitches.check(environment)
             }
     }
 }

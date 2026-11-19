@@ -79,4 +79,12 @@ class StartupSummaryTest {
             report.line.assert().contains("CoSec is off").contains("cosec.enabled=false").contains("nothing is protected")
         }
     }
+
+    @Test
+    fun `a switch written false is listed as switched off by the configuration`() {
+        runner.withPropertyValues("cosec.audit.enabled=false", "cosec.metrics.enabled=FALSE").run { context ->
+            StartupSummary.report(context, context.environment).line.assert()
+                .contains("switched-off-by-configuration=[cosec.audit.enabled, cosec.metrics.enabled]")
+        }
+    }
 }

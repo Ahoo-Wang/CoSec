@@ -55,6 +55,9 @@ internal object StartupSummary {
             add("rate-limiter=${names(beans, RateLimiter::class.java).ifEmpty { "none" }}")
             add("listeners=[${names(beans, DecisionListener::class.java)}]")
             add("route-map=${routes(beans)}")
+            CoSecSwitches.switchedOff(environment).takeIf { it.isNotEmpty() }?.let {
+                add("switched-off-by-configuration=$it")
+            }
         }
         return Report.On("CoSec${version()}: " + parts.joinToString(", "))
     }
