@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.change.ChangeRejectedException
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDefinition
@@ -46,6 +47,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -151,7 +153,9 @@ class AllActionReachTest {
         val clock = Clock.fixed(at, ZoneOffset.UTC)
         val store = InMemoryControlStore(clock)
         val revisions = Revisions(store, clock)
-        val changes = Changes(store, revisions, { ChangeId("grant-bob") }, reach.authorizer, clock)
+        val changes = Changes(store, revisions, {
+            ChangeId("grant-bob")
+        }, reach.authorizer, clock, revocations = RevocationReader.NONE, lockout = LockoutCheck.UNCHECKED)
         val alice = checkNotNull(Operator.of(security(acme, "alice")))
         val carol = checkNotNull(Operator.of(security(acme, "carol")))
         val key = SnapshotKey.Tenant(acme.value)

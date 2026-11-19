@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
@@ -57,6 +58,7 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -102,15 +104,7 @@ class ChangesB1Test {
             ),
         )
         // Four-eyes, so that the platform's own change is analyzed as far as an app document is.
-        val ids = java.util.concurrent.atomic.AtomicInteger()
-        val fourEyes = Changes(
-            harness.memory,
-            harness.revisions,
-            { ChangeId("four-eyes-${ids.incrementAndGet()}") },
-            PERMIT_ALL,
-            harness.clock,
-            ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),
-        )
+        val fourEyes = fourEyes()
         val widened = fourEyes.propose(
             PLATO,
             order,
@@ -155,6 +149,8 @@ class ChangesB1Test {
             harness.clock,
             ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),
             listeners = listeners,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
     }
 
@@ -484,6 +480,8 @@ class ChangesB1Test {
             PERMIT_ALL,
             harness.clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("read"))), "c")
         changes.skipShadow(ALICE_OP, change.id, "test")
@@ -543,6 +541,8 @@ class ChangesB1Test {
             harness.clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
             listeners = ChangeListeners(listOf(listener)),
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val change = changes.propose(PLATO, SnapshotKey.Platform, 0, listOf(Operation.PutPolicy(allow("read"))), "c")
         changes.skipShadow(PLATO, change.id, "test")

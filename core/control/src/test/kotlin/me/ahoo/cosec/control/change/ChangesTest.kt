@@ -72,18 +72,64 @@ class ChangesTest {
         merge.operations.map { it::class.simpleName }.assert().containsExactly("PutPolicy", "PutPolicy")
         (merge.operations[0] as Operation.PutPolicy).ifMatch.assert().isEqualTo(EntryDigest.of(head.policies[0]))
         (merge.operations[1] as Operation.PutPolicy).ifMatch.assert().isNull()
+        // UC-2: what MERGE keeps although the file leaves it out is named, by section, and so is REPLACE.
+        merge.state.assert().isEqualTo(ChangeState.CHECKED)
+        val kept = merge.findings.filter { it.severity == Severity.WARNING }
+        kept.map { it.path }.assert().containsExactly("$.policies", "$.bindings")
+        kept[0].message.assert().contains("1 of the head's policies is not in the file and stays: [b]")
+            .contains("apply with REPLACE to remove them")
+        kept[1].message.assert().contains("[x]")
         changes.abandon(ALICE_OP, merge.id)
         val replace = changes.apply(ALICE_OP, ACME, desired, ApplyMode.REPLACE, "replace")
         replace.operations.map { it::class.simpleName }.assert()
             .containsExactly("PutPolicy", "PutPolicy", "RemovePolicy", "RemoveBinding")
+        replace.findings.none { it.severity == Severity.WARNING }.assert().isTrue()
         changes.skipShadow(ALICE_OP, replace.id, "test")
         changes.publish(ALICE_OP, replace.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
         harness.revisions.head(ACME)!!.document.let { document ->
             document.policies.map { it.id.value }.assert().containsExactly("a", "c")
             document.bindings.assert().isEmpty()
         }
-        // Applying what is there proposes nothing.
-        changes.apply(ALICE_OP, ACME, desired, ApplyMode.REPLACE, "again").operations.assert().isEmpty()
+        // Applying what is there, read at the head's revision, proposes nothing.
+        changes.apply(
+            ALICE_OP,
+            ACME,
+            desired.copy(revision = 2),
+            ApplyMode.REPLACE,
+            "again"
+        ).operations.assert().isEmpty()
+    }
+
+    /** UC-5: REPLACE removes what the file leaves out, so a file read before the head moved is a 409, as a stale base is. */
+    @Test
+    fun `a replace read at an older revision is refused and removes nothing`() = runBlocking<Unit> {
+        publish(ACME, Operation.PutPolicy(allow("a")))
+        // Revision 1 is what the git-ops file was built from; a colleague publishes revision 2.
+        val file = StoreFixtures.candidate(ACME, listOf(allow("a"), allow("mine")))
+        publish(ACME, Operation.PutPolicy(allow("theirs")))
+        val refused = try {
+            changes.apply(ALICE_OP, ACME, file, ApplyMode.REPLACE, "stale")
+            throw AssertionError("a stale REPLACE was proposed")
+        } catch (e: ChangeRejectedException) {
+            e
+        }
+        refused.status.assert().isEqualTo(409)
+        refused.message.assert().contains("[tenant:acme] is at revision 2, not 1")
+            .contains("set its revision to 2 and apply again")
+        harness.revisions.head(ACME)!!.document.policies.map { it.id.value }.assert().containsExactly("a", "theirs")
+        // MERGE removes nothing, so it proposes on the head whatever the file's revision.
+        changes.apply(ALICE_OP, ACME, file, ApplyMode.MERGE, "merge").operations.map { it::class.simpleName }
+            .assert().containsExactly("PutPolicy")
+        // A document not published yet has nothing to remove: its header is not compared.
+        val fresh = SnapshotKey.Tenant("globex")
+        changes.apply(
+            operatorFor(fresh),
+            fresh,
+            StoreFixtures.candidate(fresh).copy(revision = 7),
+            ApplyMode.REPLACE,
+            "new"
+        )
+            .base.revision.assert().isEqualTo(0)
     }
 
     @Test

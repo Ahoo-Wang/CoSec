@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -48,6 +49,7 @@ import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
@@ -87,6 +89,8 @@ class ControlReviewFixesTest {
             clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
             listeners = registered,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
     }
 
@@ -266,7 +270,7 @@ class ControlReviewFixesTest {
 
     @Test
     fun `an approval that cannot be checked again does not count`() = runBlocking<Unit> {
-        val authority = ChangeAuthority(engine.authorizer)
+        val authority = ChangeAuthority(engine.authorizer, revocations = RevocationReader.NONE)
         val change = changes.propose(
             walt,
             SnapshotKey.Platform,

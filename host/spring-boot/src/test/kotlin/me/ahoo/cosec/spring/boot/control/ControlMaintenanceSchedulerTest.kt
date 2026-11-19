@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.change.ChangeId
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -41,6 +42,7 @@ import me.ahoo.cosec.model.PrincipalId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -130,7 +132,14 @@ class ControlMaintenanceSchedulerTest {
         Revisions(older).publish(legacy, null, document(legacy), PUBLICATION)
         store.apps()!!.value.complete.assert().isTrue()
 
-        val changes = Changes(store, revisions, { ChangeId("unused") }, { _, _, _ -> ControlDecision.PERMIT })
+        val changes = Changes(
+            store,
+            revisions,
+            { ChangeId("unused") },
+            { _, _, _ -> ControlDecision.PERMIT },
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED
+        )
         val maintenance = ControlMaintenance(store, revisions, changes, Duration.ofHours(1))
         val scheduler = ControlMaintenanceScheduler(maintenance, Duration.ofHours(1), Duration.ofHours(1))
         scheduler.start()

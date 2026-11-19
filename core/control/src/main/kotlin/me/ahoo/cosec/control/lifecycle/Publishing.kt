@@ -76,7 +76,8 @@ internal class Publishing(
         publisher: Operator,
         id: ChangeId,
         ack: ShadowAck? = null,
-        again: String? = null
+        again: String? = null,
+        lockout: Boolean = false,
     ): ChangeRequest {
         val change = flow.visible(publisher, id)
         authority.require(publisher, change.key, PublishRules.publishing(change))
@@ -95,10 +96,11 @@ internal class Publishing(
             PublishRules.ownRevision(revisions, change, head)?.let { return republished(change, it, publisher) }
             return movedOn(change, head, publisher)
         }
-        val rechecked = candidates.checked(change, head, publisher)
-        if (rechecked.state != ChangeState.CHECKED || rechecked.candidate != change.candidate) {
-            return flow.settle(change, ChangeState.DRAFT, ChangeStep.PUBLISH, rechecked.findings)
+        val checked = candidates.checked(change, head, publisher)
+        if (checked.state != ChangeState.CHECKED || checked.candidate != change.candidate) {
+            return flow.settle(change, ChangeState.DRAFT, ChangeStep.PUBLISH, checked.findings)
         }
+        val rechecked = PublishRules.lockoutAcknowledged(checked, publisher, lockout)
         val problem = authority.approvalProblem(change, rechecked.escalations, publisher, clock.instant())
             ?: authority.approverProblem(change, rechecked.escalations, publisher)
         problem?.let { problem ->
@@ -206,7 +208,9 @@ internal class Publishing(
         var settled: ChangeRequest? = null
         var mine = true
         try {
-            settled = settledPublished(change, outcome.revision)
+            // An acknowledged lock-out (UC-6) stays with the published change, naming who acknowledged it.
+            val acknowledged = rechecked.findings.takeIf { found -> found.any { it.check == LockoutCheck.CHECK } }
+            settled = settledPublished(change, outcome.revision, acknowledged)
             if (settled == null) {
                 // A retry settled it meanwhile, and recorded it (review D1).
                 mine = false
@@ -247,10 +251,14 @@ internal class Publishing(
      * [change] moved to `PUBLISHED` at [revision] by this call, whatever state it was in: once the head is written it is
      * published. `null` when another call has already settled it, which recorded it then (review D1).
      */
-    private suspend fun settledPublished(change: ChangeRequest, revision: Long): ChangeRequest? {
+    private suspend fun settledPublished(
+        change: ChangeRequest,
+        revision: Long,
+        findings: List<Finding>? = null
+    ): ChangeRequest? {
         val settled = try {
             flow.transition(change.id, ChangeStep.WRITTEN) {
-                it.copy(state = ChangeState.PUBLISHED, publishedRevision = revision)
+                it.copy(state = ChangeState.PUBLISHED, publishedRevision = revision, findings = findings ?: it.findings)
             }
         } catch (e: ChangeRejectedException) {
             if (flow.read(change.id).value.state == ChangeState.PUBLISHED) return null

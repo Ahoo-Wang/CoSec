@@ -582,3 +582,31 @@ the list of open changes.
 A failed pass is logged, and the next one runs. A revision that has been reclaimed answers `410`.
 
 **Next:** see what CoSec decided, in [Observability](./observability.md).
+### Recovering from a lock-out
+
+Every control-plane request is first a request the documents decide, so a change to the platform document, the
+platform tenant's or the control app's can leave nobody able to reach the control plane, and so nobody able to
+change it back. The control plane refuses such a change unless its publisher acknowledges it
+([Publishing and rolling back](../policies/testing.md#publishing-and-rolling-back)); if one was published anyway, the
+way back is `cosec-migrate restore`, run by whoever holds the store's credentials. It is the way back from a lock-out,
+not a way to publish: every other change goes through the control plane.
+
+```bash
+cosec-migrate restore --to-redis redis://host:6379 [--cluster] [--key-prefix cosec] --document platform --revision 11
+```
+
+Without `--confirm` it prints what it would replace (the head's revision, the source, the revision it would write) and
+writes nothing. Run it again with `--confirm <head revision>`, the revision it printed: it writes the kept revision's
+content, or a file's with `--file <document.json>` in place of `--revision`, as the document's next revision, through
+the control plane's own writer. It compiles it as every instance compiles it, writes the revision record first, then
+the head by a compare-and-set on the head it replaces, so a head that moved since the plan, or moves while it writes,
+is refused and nothing is written. It refuses a source that holds a break-glass binding. Nothing is deleted: the
+locked-out revision stays in the history.
+
+The new revision's provenance names `cosec-migrate`, kind `ROLLBACK` for a kept revision or `MIGRATE` for a file, and
+the change `restored from revision <n> by cosec-migrate restore` or `restored from a file by cosec-migrate restore`, so
+the record alone tells it from a rollback published through the control plane. The control plane's change listeners
+run in its host and do not hear of a restore, as they do not hear of `publish` or `bootstrap`: the revision record is
+the only audit of a restore, and the Kafka change audit does not carry it. Every instance installs it as it installs
+any new head.
+

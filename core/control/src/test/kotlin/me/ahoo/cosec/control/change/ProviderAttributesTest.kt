@@ -19,6 +19,7 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Revisions
@@ -27,6 +28,7 @@ import me.ahoo.cosec.model.condition.AttributeCatalog
 import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.Literal
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -44,6 +46,8 @@ class ProviderAttributesTest {
         PERMIT_ALL,
         clock,
         attributes = AttributeCatalog.of(listOf(Attribute.external("ext.geo.country", AttributeType.STRING))),
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private fun on(attribute: String) = runBlocking {

@@ -1,0 +1,96 @@
+{
+  "rules": [
+    "CTL-37"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "A MERGE whose file holds every entry of the head keeps nothing, and a REPLACE removes what its file leaves out: neither carries the warning.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "shared",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ],
+        "bindings": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "apply": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "mode": "MERGE",
+        "desired": {
+          "policies": [
+            {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            },
+            {
+              "id": "mine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      }
+    },
+    {
+      "abandon": "c1"
+    },
+    {
+      "apply": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "mode": "REPLACE",
+        "desired": {
+          "policies": [
+            {
+              "id": "mine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "ABANDONED",
+      "CHECKED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 1
+    }
+  }
+}
