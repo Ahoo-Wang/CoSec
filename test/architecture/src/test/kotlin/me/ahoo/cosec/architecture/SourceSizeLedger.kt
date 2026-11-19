@@ -53,7 +53,7 @@ object SourceSizeLedger {
         ),
         Entry(
             "core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt",
-            403,
+            404,
             Disposition.Stays("a checker, one function per operator of a closed condition AST"),
         ),
     )

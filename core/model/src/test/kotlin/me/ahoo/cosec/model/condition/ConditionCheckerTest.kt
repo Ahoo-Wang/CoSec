@@ -42,6 +42,21 @@ class ConditionCheckerTest {
         single(Condition.In("space", listOf(str("a")))).path.assert().isEqualTo("$.in[0]")
     }
 
+    /** `DOC-10`: nothing gives a resource attributes, so a reference to one would read as absent on every request. */
+    @Test
+    fun `resource attributes are refused wherever they are referred to`() {
+        val checker = ConditionChecker(zones = JavaZones)
+        checker.attribute("resource.attributes.classification").assert().isNull()
+        checker.unresolved("resource.attributes.classification").assert()
+            .contains("is never set").contains("resource.var.<name>").contains("DOC-10")
+        single(Condition.Eq("resource.attributes.classification", str("secret"))).path.assert().isEqualTo("$.eq[0]")
+        single(Condition.Eq("subject.id", Operand.Attr("resource.attributes.owner"))).path.assert().isEqualTo("$.eq[1].attr")
+        single(Condition.Exists("resource.attributes.owner")).message.assert().contains("DOC-10")
+        // The near miss: the resource's own facts that a request has.
+        checked(Condition.Eq("resource.var.owner", str("a")), checker)
+        checked(Condition.Eq("resource.id", str("a")), checker)
+    }
+
     /** `CND-5`: a condition on a credential header would reveal it through decisions. */
     @Test
     fun `credential headers are refused`() {
