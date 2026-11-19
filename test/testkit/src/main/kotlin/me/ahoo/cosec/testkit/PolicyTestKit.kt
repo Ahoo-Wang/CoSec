@@ -69,12 +69,16 @@ import kotlin.io.path.relativeTo
  */
 @ExperimentalCoSecApi
 class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) {
-    private val scenarios = EngineScenarios(DocumentSnapshotCompiler.stored, enforceable = true)
+    private val scenarios = EngineScenarios(DocumentSnapshotCompiler.stored, enforceable = true, strictDocuments = true)
 
     /** What the documents decide for [scenario], a scenario as JSON text; its `expect`, if any, is not checked. */
     fun evaluate(scenario: String): EngineOutcome = evaluate(ScenarioJson.parse(scenario))
 
-    private fun evaluate(scenario: JsonNode): EngineOutcome = scenarios.run(scenario, HEADER, snapshot)
+    private fun evaluate(scenario: JsonNode): EngineOutcome {
+        KitScenarios.requireExplicit(scenario)
+        val (body, without) = KitScenarios.withoutDocument(scenario)
+        return scenarios.run(body, HEADER, snapshot, without)
+    }
 
     /**
      * Throws [AssertionError] naming the scenario [name] when the documents do not decide what the `expect` of
@@ -120,8 +124,10 @@ class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) 
         private val HEADER = setOf("\$comment", "description")
 
         /**
-         * The documents in [directory]. Without a `platform.json` the platform document is empty; no other file of the
-         * directory is read. Throws [DocumentException] when a document does not compile.
+         * The documents in [directory]: its `platform.json`, which every request reads and which must be there (an empty
+         * platform document is a file of its own, written on purpose), `apps/` and `tenants/`. Anything else in it
+         * that the kit would not read fails, naming it, so a document put where the kit does not look is an error rather
+         * than a test that passes without it (UC-7). Throws [DocumentException] when a document does not compile.
          */
         fun load(directory: Path): PolicyTestKit =
             PolicyTestKit(DocumentSnapshotCompiler.stored.compile(documents(directory)))
@@ -129,7 +135,8 @@ class PolicyTestKit private constructor(private val snapshot: CompiledSnapshot) 
         /** The documents under [directory]: see [load]. */
         internal fun documents(directory: Path): ScenarioDocuments {
             require(directory.isDirectory()) { "No document directory at ${directory.toAbsolutePath()}" }
-            val platform = directory.resolve(PLATFORM_FILE).takeIf { it.exists() }?.let(ScenarioJson::read)
+            KitScenarios.requireReadable(directory)
+            val platform = ScenarioJson.read(directory.resolve(PLATFORM_FILE))
             val ids = recordedIds(directory)
             return ScenarioDocuments(
                 platform,

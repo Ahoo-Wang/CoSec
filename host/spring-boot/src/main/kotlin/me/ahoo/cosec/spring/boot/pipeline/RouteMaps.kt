@@ -31,6 +31,7 @@ internal object RouteMaps {
 
     private const val LOCATION_KEY = "${RuntimeAuthorizationProperties.PREFIX}.routes.location"
     private const val DEFAULT_LOCATION = RuntimeAuthorizationProperties.Routes.DEFAULT_LOCATION
+    private const val ANALYSIS_KEY = "cosec.control.analysis.route-maps"
 
     /** [locations] null is the property unset; empty is the host running without a route map on purpose. */
     fun load(locations: String?, resourceLoader: ResourceLoader): RouteMap {
@@ -39,13 +40,7 @@ internal object RouteMaps {
             "$DEFAULT_LOCATION exists but $LOCATION_KEY is not set, so it is not loaded: set it to $DEFAULT_LOCATION, " +
                 "or to empty to run without a route map."
         }
-        val sources = locations.orEmpty().split(',').map { it.trim() }.filter { it.isNotEmpty() }.map { location ->
-            val resource = resourceLoader.getResource(location)
-            check(resource.exists()) {
-                "The route map [$location] ($LOCATION_KEY) does not exist; set the property empty to run without one."
-            }
-            location to resource.inputStream.use { it.readBytes() }
-        }
+        val sources = sources(locations.orEmpty(), resourceLoader, LOCATION_KEY)
         if (sources.isEmpty()) {
             if (defaultExists) {
                 log.warn { "$LOCATION_KEY is empty, so $DEFAULT_LOCATION, which exists, is not loaded." }
@@ -53,10 +48,32 @@ internal object RouteMaps {
             log.info { "No route map: requests are authorized as http:<METHOD> on http:path:<path>." }
             return RouteMap.EMPTY
         }
+        return decode(sources, "Route map")
+    }
+
+    /**
+     * The services' route maps the control plane compares candidates with (`cosec.control.analysis.route-maps`, UC-1),
+     * read and refused as a host's are; null when the property is unset or blank.
+     */
+    fun loadAnalysis(locations: String?, resourceLoader: ResourceLoader): RouteMap? {
+        val sources = sources(locations.orEmpty(), resourceLoader, ANALYSIS_KEY)
+        return if (sources.isEmpty()) null else decode(sources, "Control-plane analysis route map")
+    }
+
+    private fun sources(locations: String, resourceLoader: ResourceLoader, key: String): List<Pair<String, ByteArray>> =
+        locations.split(',').map { it.trim() }.filter { it.isNotEmpty() }.map { location ->
+            val resource = resourceLoader.getResource(location)
+            check(resource.exists()) {
+                "The route map [$location] ($key) does not exist; set the property empty to run without one."
+            }
+            location to resource.inputStream.use { it.readBytes() }
+        }
+
+    private fun decode(sources: List<Pair<String, ByteArray>>, what: String): RouteMap {
         val documents = sources.map { (location, bytes) -> location to RouteMapCodec.decode(bytes, location) }
         val routes = RouteMap.of(RouteMapCodec.located(documents))
         documents.forEach { (location, document) ->
-            log.info { "Route map [$location]: service [${document.service}], ${document.routes.size} routes." }
+            log.info { "$what [$location]: service [${document.service}], ${document.routes.size} routes." }
         }
         return routes
     }

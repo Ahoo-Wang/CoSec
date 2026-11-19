@@ -23,6 +23,14 @@ section above it:
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
+- **The policy test kit refuses a run that could pass for the wrong reason** (`PolicyTestKit`, experimental; UC-7).
+  `load` fails without a `platform.json` (write an empty document there to test without one) and when the directory
+  holds a file or directory the kit would not read. A scenario names its `credential` (`tenant` and `id`, or
+  `"anonymous": true`) and its request's `action` and `resource`: the example defaults (`acme`, `alice`,
+  `order:read`, `order/1`) are gone. Among tenant documents, a scenario decided in a tenant without one fails, and among
+  app documents one in an app without one, unless it says `"withoutDocument": ["tenant"]` or `["app"]`
+  ([Testing decisions](../policies/testing.md#testing-decisions)). Affected: scenarios that relied on the defaults or
+  on a misplaced document; `PipelineFixture.load` reads a directory by the same rules. Name the fields, move the files.
 - **The `cosec-gateway-server` image: no JMX agent, the actuator on a management port, and the image's defaults kept
   under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image.
   - Through beta.3 the start script started a JMX agent on port 5555 with no authentication, on every interface. It no
@@ -58,6 +66,26 @@ section above it:
   series, `none` outside `indeterminate`: a Prometheus registry refuses meters of one name with different tag keys.
   Affected: a query that selects series by the absence of `cause` (`cause=""`) now selects `cause="none"`; a sum over
   the new tags is the old series.
+- **One vocabulary for what decided: metrics, audit and the decision event's method** (UD-7, UD-11). Through beta.3
+  each output named a decision its own way, and an alert on explicit denies also counted requests no DENY statement
+  refused. Now every output takes the decision event's words ([What decided, in every output](./observability.md#what-decided-in-every-output)):
+
+  | Output | Before (beta.3) | Now |
+  |---|---|---|
+  | `cosec.authorization` `result` | `allow` | `permit` |
+  | | `explicit_deny` for a DENY statement, a scope rejection and a boundary refusal | `explicit_deny` (a DENY statement only), `scope_rejected`, `boundary` |
+  | | `bad_request` | `invalid_request` |
+  | Audit `authorization.decision` | `ALLOW` | `PERMIT` |
+  | | `EXPLICIT_DENY` for a DENY statement, a scope rejection, a boundary refusal and a `400` | `EXPLICIT_DENY`, `SCOPE_REJECTED`, `BOUNDARY`, `INVALID_REQUEST` |
+  | Audit `authorization.reasonCode` | `ALLOW`; `EXPLICIT_DENY` for a `400`; `TOKEN_INVALID` for a token not valid yet | `PERMIT`; `INVALID_REQUEST`; `TOKEN_NOT_YET_VALID` |
+  | Decision event `subject.method` | `token` for every token, `apikey` | `jwt` (CoSec's own token), `api-key`, another verifier's name (`token` by default): what `CoSec-Identity` says |
+
+  The timer changes together with the `problem` tag and the `cause` on every series (the entry above): migrate a
+  dashboard once, for both. Affected: dashboards and alerts on `result="allow"`, on `explicit_deny` counts (they now
+  count fewer requests: add `scope_rejected` and `boundary` to keep the old total), on `bad_request`; audit consumers
+  (the log, Kafka records) matching `ALLOW` or expecting `EXPLICIT_DENY` for the three other kinds; decision listeners
+  matching `subject.method` `token` for CoSec's token or `apikey`. `ApiKeyAuthenticator.METHOD` is `api-key`.
+  `AuditDecision` and `AuditReasonCode` (`cosec-api`) lose `ALLOW`: recompile against this version.
 - **New log lines** (nothing to change): one INFO summary of what CoSec is configured as, and one WARN when
   `cosec.enabled=false` ([Startup summary](./observability.md#startup-summary)); a WARN, repeated every `lag-warn`,
   while the platform document is absent, naming the key, the key prefix and the Redis it reads

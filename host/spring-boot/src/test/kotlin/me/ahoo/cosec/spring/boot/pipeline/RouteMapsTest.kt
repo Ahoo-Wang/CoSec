@@ -79,4 +79,31 @@ class RouteMapsTest {
             RouteMaps.load(default, files(default to """{"service":"order","routes":[]}"""))
         }.message.assert().contains("no routes")
     }
+
+    /** UC-1: the control plane's analysis reads the services' maps as a host reads its own, and unset means none. */
+    @Test
+    fun `the control plane's analysis maps load as a host's do, and unset is none`(output: CapturedOutput) {
+        RouteMaps.loadAnalysis(null, files()).assert().isNull()
+        RouteMaps.loadAnalysis(" ", files()).assert().isNull()
+        RouteMaps.loadAnalysis(
+            "classpath:order.json",
+            files("classpath:order.json" to orders)
+        )!!.size.assert().isEqualTo(1)
+        output.out.assert().contains(
+            "Control-plane analysis route map [classpath:order.json]: service [order], 1 routes."
+        )
+        assertThrows<IllegalStateException> {
+            RouteMaps.loadAnalysis(
+                "classpath:nowhere.json",
+                files()
+            )
+        }.message.assert()
+            .contains("cosec.control.analysis.route-maps")
+        assertThrows<RouteMapException> {
+            RouteMaps.loadAnalysis(
+                "classpath:empty.json",
+                files("classpath:empty.json" to """{"service":"order","routes":[]}""")
+            )
+        }.message.assert().contains("no routes")
+    }
 }

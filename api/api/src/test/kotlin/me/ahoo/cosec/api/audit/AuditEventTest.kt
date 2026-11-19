@@ -35,7 +35,17 @@ class AuditEventTest {
     fun auditDecisionValues() {
         val decisions = AuditDecision.entries.map { it.name }.toSet()
         decisions.assert().isEqualTo(
-            setOf("ALLOW", "EXPLICIT_DENY", "IMPLICIT_DENY", "TOO_MANY_REQUESTS", "ERROR", "INDETERMINATE"),
+            setOf(
+                "PERMIT",
+                "EXPLICIT_DENY",
+                "IMPLICIT_DENY",
+                "SCOPE_REJECTED",
+                "BOUNDARY",
+                "INVALID_REQUEST",
+                "TOO_MANY_REQUESTS",
+                "ERROR",
+                "INDETERMINATE",
+            ),
         )
     }
 
@@ -43,7 +53,7 @@ class AuditEventTest {
     fun auditReasonCodeValues() {
         AuditReasonCode.entries.map { it.name }.toSet().assert().isEqualTo(
             setOf(
-                "ALLOW",
+                "PERMIT",
                 "EXPLICIT_DENY",
                 "IMPLICIT_DENY",
                 "TOKEN_EXPIRED",
@@ -56,6 +66,8 @@ class AuditEventTest {
                 "TOKEN_REVOKED",
                 "BOUNDARY",
                 "DELEGATION_UNSUPPORTED",
+                "INVALID_REQUEST",
+                "TOKEN_NOT_YET_VALID",
             ),
         )
     }

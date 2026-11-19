@@ -21,6 +21,7 @@ import kotlinx.coroutines.withTimeout
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
+import me.ahoo.cosec.control.lifecycle.CandidateCompile
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.LockoutCheck
@@ -309,7 +310,7 @@ class ShadowWindowTest {
             PERMIT_ALL,
             clock,
             ChangeOptions(shadow = options),
-            attributes = AttributeCatalog.of(listOf(country)),
+            compile = CandidateCompile(AttributeCatalog.of(listOf(country))),
             reports = reports,
             revocations = RevocationReader.NONE,
             lockout = LockoutCheck.UNCHECKED,
