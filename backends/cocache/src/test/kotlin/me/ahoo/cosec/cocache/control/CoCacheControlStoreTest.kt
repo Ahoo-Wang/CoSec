@@ -41,6 +41,7 @@ import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.PendingRecord
@@ -61,6 +62,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -68,8 +70,6 @@ import java.time.Clock
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.CompletableFuture
-import me.ahoo.cosec.spi.token.RevocationReader
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /** [CoCacheControlStore]'s conditional writes on real CoCache engines; Redis for what must reach Redis. */
 class CoCacheControlStoreTest {

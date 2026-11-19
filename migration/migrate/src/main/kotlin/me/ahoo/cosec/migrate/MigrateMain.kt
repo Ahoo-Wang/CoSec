@@ -83,7 +83,7 @@ object MigrateMain {
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
           verify-chain --to-redis <uri> [--cluster] [--key-prefix <p>] [--document platform|app:<id>|tenant:<id>]
           restore --to-redis <uri> [--cluster] [--key-prefix <p>] --document platform|app:<id>|tenant:<id>
-                  (--revision <n> | --file <document.json>) [--confirm <head revision>]
+                  --revision <n> or --file <document.json>, then the same with --confirm <head revision>
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
           api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--app <id>] [--memberships <file>]

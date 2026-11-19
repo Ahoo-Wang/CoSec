@@ -24,6 +24,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.snapshot.RedisTarget
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ChainCheck
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
@@ -47,7 +48,6 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * The revision chain of RFC 0007 §5.4 on real Redis (AGENTS.md: no mocks for caching and concurrency): records before

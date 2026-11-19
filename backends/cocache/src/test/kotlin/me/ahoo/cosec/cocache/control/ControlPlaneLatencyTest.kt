@@ -31,6 +31,7 @@ import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.Revisions
@@ -56,14 +57,13 @@ import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.membership.MembershipClaims
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.spi.token.RevocationReader
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * The control plane end to end on real Redis against its budget (RFC 0007 §14.2): `propose` and `publish` (without
