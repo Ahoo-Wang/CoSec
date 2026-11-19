@@ -381,7 +381,8 @@ header: anonymous. Otherwise never anonymous:
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).
 - 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.identity.max-age` (60s)
-  plus the skew. Check clocks.
+  plus the skew. Check clocks. In a test without a gateway: a header (`IdentityHeader`) made once and reused; make one
+  per request.
 - On the gateway, a 500 with `Request [<id>]: the identity cannot be forwarded.`: the credential never expires (an API
   key without `expires-at`), or the identity is too large or a `cosec.gateway.identity.claims` value is not a string
   (at most 1024 characters), number or boolean.

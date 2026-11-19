@@ -324,7 +324,7 @@ read as anonymous:
 |---|---|---|
 | `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
-| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
+| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. In a test without a gateway, a header made once and reused: make one per request ([`IdentityHeader`](../integration/web.md#services-behind-the-gateway)). |
 
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
 
