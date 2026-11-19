@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.PolicyDocumentCompiler
 import me.ahoo.cosec.document.SnapshotDocuments
 import me.ahoo.cosec.engine.httpStatements
+import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -97,6 +98,32 @@ class RouteEscapesTest {
         )
         found.map { it.statement }.assert().containsExactly("rate limit platform/api-writes")
         found.single().route.path.assert().isEqualTo("/api/orders")
+    }
+
+    /** `DOC-12` (R1B-3): an id is written as its document wrote it, and a line shows it escaped and bounded. */
+    @Test
+    fun `an id that would forge a line is shown escaped, and a long one cut`() {
+        // Rate limit rule ids are letters, digits, '.', '_' and '-' already; a policy id is checked for nothing.
+        val forged = escapes(
+            """[{"id":"x\n2026-11-19 ERROR forged\u0007\u001b[31m","statements":[{"effect":"deny","action":"http:*",""" +
+                """"resource":"http:path:/admin/**"}]}]""",
+        ).single()
+        forged.statement.assert().isEqualTo("DENY x\n2026-11-19 ERROR forged\u0007\u001b[31m#0")
+        val line = forged.toString()
+        line.none { it.isISOControl() }.assert().describedAs(line).isTrue()
+        line.assert().startsWith("DENY x\\u000A2026-11-19 ERROR forged\\u0007\\u001B[31m#0 escapes DELETE")
+
+        val long = "p".repeat(RouteEscape.MAX_PART * 2)
+        val cut = escapes(
+            """[{"id":"$long","statements":[{"effect":"deny","action":"http:*","resource":"http:path:/admin/**"}]}]"""
+        ).single().toString()
+        // The part is the statement's label, `DENY <id>#<index>`: it is cut, not the id alone.
+        cut.assert().startsWith("DENY " + "p".repeat(RouteEscape.MAX_PART - "DENY ".length) + "… (263 characters) escapes")
+        cut.assert().doesNotContain("p".repeat(RouteEscape.MAX_PART + 1))
+        // A cut never leaves half of a surrogate pair, which a UTF-8 log would write as `?`.
+        val pairs = "a" + "\uD83D\uDE00".repeat(RouteEscape.MAX_PART)
+        RouteEscape.shown(pairs).let { shown -> shown.indices.none { Identifiers.isUnpairedSurrogateAt(shown, it) } }
+            .assert().isTrue()
     }
 
     @Test
