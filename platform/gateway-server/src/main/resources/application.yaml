@@ -33,6 +33,7 @@ management:
     health:
       probes:
         enabled: true
+        add-additional-paths: true
     # The gateway endpoint can read and change routes. Off, so exposing it by mistake exposes nothing.
     gateway:
       access: none
