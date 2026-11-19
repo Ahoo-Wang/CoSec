@@ -4,6 +4,12 @@ Thanks for helping improve CoSec. This guide describes how work flows from an is
 quality bar every change has to meet. For a tour of the codebase and the invariants every change must keep, read the
 [architecture overview](https://cosec.ahoo.me/architecture/overview).
 
+**Read [AGENTS.md](AGENTS.md) before you change code.** It is the contributor's reference, for people as much as for
+coding agents: the commands to run ([Feedback loop](AGENTS.md#feedback-loop): one module's `check`, the conformance
+suite, the ABI dump, the benchmarks, the TypeScript packages), the invariants a change must keep, and
+[Where a change has to land](AGENTS.md#where-a-change-has-to-land): for each kind of change, the pages, schemas, skills
+and guard tests that change with it. A pull request that changes behavior and none of those is incomplete.
+
 ## 1. Start from an issue
 
 Every change is traceable to an issue that states the requirement:
@@ -78,6 +84,11 @@ not apply yet. Nothing checks the title against the dumps: the author and the re
   reviewer sees every signature that changed.
 
 ## 5. Tests and coverage
+
+A change is done when `check` passes for every module it touches and for the modules that depend on them; the
+[Feedback loop](AGENTS.md#feedback-loop) lists the commands and says which checks belong on CI rather than on a
+laptop (the stress, mutation and full benchmark runs). The documentation has its own checks, `pnpm check:docs` and
+`pnpm build` in `wiki/`, described in [`wiki/AGENTS.md`](wiki/AGENTS.md).
 
 ```bash
 ./gradlew check                                   # tests + detekt for all modules
