@@ -1,0 +1,17 @@
+# Rule: OBS-6
+# Mutant: audit records a scope rejection as an explicit deny again, so an alert on explicit denies counts requests no DENY statement refused
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.audit.AuditVocabularyTest --tests me.ahoo.cosec.runtime.audit.AuditEventsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEvents.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEvents.kt
+index b3a5f82c..3100780e 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEvents.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/audit/AuditEvents.kt
+@@ -98,7 +98,7 @@ object AuditEvents {
+         Reason.TOO_MANY_REQUESTS -> AuditDecision.TOO_MANY_REQUESTS
+         Reason.EXPLICIT_DENY -> AuditDecision.EXPLICIT_DENY
+         Reason.IMPLICIT_DENY -> AuditDecision.IMPLICIT_DENY
+-        Reason.SCOPE_REJECTED -> AuditDecision.SCOPE_REJECTED
++        Reason.SCOPE_REJECTED -> AuditDecision.EXPLICIT_DENY
+         Reason.BOUNDARY -> AuditDecision.BOUNDARY
+         // A 400 is refused before any decision; kind says why.
+         Reason.INVALID_REQUEST -> AuditDecision.INVALID_REQUEST
