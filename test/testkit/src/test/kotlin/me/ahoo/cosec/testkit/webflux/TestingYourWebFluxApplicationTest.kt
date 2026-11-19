@@ -42,7 +42,7 @@ import reactor.test.StepVerifier
  * The samples of "Testing your application" (`wiki/policies/testing.md`), WebFlux side, and `PIP-29`: the kit's
  * contexts behind CoSec's own filter, or bound by hand for a unit test, and a hand-made context refused.
  */
-class TestingYourApplicationTest {
+class TestingYourWebFluxApplicationTest {
     private val documents = """{"policies":[{"id":"reads","statements":[""" +
         """{"effect":"allow","action":"http:GET","resource":"http:path:/orders/**"}]}],""" +
         """"bindings":[{"id":"reads","subject":{"role":"reader"},"app":"*","space":"*","policy":"reads"}]}"""

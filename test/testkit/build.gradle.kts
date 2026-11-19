@@ -27,7 +27,7 @@ dependencies {
     compileOnly("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     // PermittedRequestTest issues real tokens with CoSec's own login and verifier, and switches with them.
     testImplementation(project(":jwt"))
-    // TestingYourApplicationTest: the documented way to test an application, on each stack.
+    // TestingYourWebFluxApplicationTest and TestingYourWebMvcApplicationTest: the documented way to test an application, on each stack.
     testImplementation(project(":webflux"))
     testImplementation(project(":webmvc"))
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
