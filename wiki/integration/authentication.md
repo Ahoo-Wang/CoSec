@@ -413,7 +413,7 @@ suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext
 ```
 
 The `SecurityContext` parameter is resolved on Spring MVC (`cosec-webmvc`); on WebFlux, take the `ServerWebExchange` and
-read `exchange.getSecurityContext()`.
+read `exchange.requireSecurityContext()`.
 
 The class keeps every step a refresh needs, in order: it verifies the pair, refuses a revoked token, asks your
 `MembershipRefresh`, moves the session to its next generation, and issues in that session. The new token is for the
@@ -676,7 +676,7 @@ suspend fun select(@PathVariable tenant: String, @PathVariable app: String, secu
 ```
 
 As on [refresh](#refreshing-tokens), the `SecurityContext` parameter is resolved on Spring MVC; on WebFlux, read
-`exchange.getSecurityContext()`.
+`exchange.requireSecurityContext()`.
 
 The new token has the previous principal's id, the target tenant and only that membership: roles belong to a tenant,
 so none of the previous token's roles, policies or attributes reach the new one (an administrator of one tenant is not

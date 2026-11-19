@@ -269,8 +269,9 @@ https://cosec.ahoo.me/guide/security-model#trust-boundaries.
 The starter registers one filter: `PipelineServletFilter` (MVC), `PipelineWebFilter` (WebFlux) or
 `PipelineGatewayFilter` (Gateway). Adapters only translate; status codes and problem+json bodies are decided once, in
 the pipeline: 401/403 deny, 429 rate limited, 503 undecidable, 400 ambiguous request. A permitted request carries a
-`SecurityContext`: `ServerWebExchange.getSecurityContext()` / `HttpServletRequest.getSecurityContext()` (extension
-functions in `ServerWebExchanges` / `ServletRequests`). Web details: https://cosec.ahoo.me/integration/web.
+`SecurityContext`: `requireSecurityContext()` (throws) or `securityContextOrNull()` on a `ServerWebExchange`, a Reactor
+`ContextView` or an `HttpServletRequest` (extension functions in `ServerWebExchanges`, `ReactiveSecurityContexts`,
+`ServletRequests`), or `SecurityContextHolder.requireSecurityContext()` on the request thread of blocking code. Web details: https://cosec.ahoo.me/integration/web.
 
 To decide in code **for the request in progress** (UI buttons, object-level checks), inject `AuthorizationChecker` and
 pass it the `SecurityContext` of that request:

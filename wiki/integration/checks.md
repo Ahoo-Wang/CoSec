@@ -61,14 +61,14 @@ One sample per stack, each with its imports. Each asks which actions the caller 
 ```kotlin
 // WebFlux, returning a Mono
 import me.ahoo.cosec.runtime.AuthorizationChecker
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.requireSecurityContext
 import me.ahoo.cosec.webflux.checkMono
 
 @RestController
 class OrderActionsController(private val checker: AuthorizationChecker) {
     @GetMapping("/orders/{id}/actions")
     fun actions(@PathVariable id: String, exchange: ServerWebExchange): Mono<Map<String, Boolean>> {
-        val security = exchange.getSecurityContext()!!
+        val security = exchange.requireSecurityContext()
         return Mono.zip(
             checker.checkMono(security, "order:cancel", "order/$id"),
             checker.checkMono(security, "order:delete", "order/$id"),
@@ -80,13 +80,13 @@ class OrderActionsController(private val checker: AuthorizationChecker) {
 ```kotlin
 // WebFlux, a suspend handler: the exchange parameter gives the context, and check suspends
 import me.ahoo.cosec.runtime.AuthorizationChecker
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.requireSecurityContext
 
 @RestController
 class OrderActionsController(private val checker: AuthorizationChecker) {
     @GetMapping("/orders/{id}/actions")
     suspend fun actions(@PathVariable id: String, exchange: ServerWebExchange): Map<String, Boolean> {
-        val security = exchange.getSecurityContext()!!
+        val security = exchange.requireSecurityContext()
         return mapOf(
             "cancel" to checker.check(security, "order:cancel", "order/$id"),
             "delete" to checker.check(security, "order:delete", "order/$id"),

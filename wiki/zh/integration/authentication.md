@@ -236,7 +236,7 @@ suspend fun refresh(@RequestBody pair: CompositeToken, security: SecurityContext
     authentication.authenticateAsToken(Renew(pair.accessToken, pair.refreshToken, security.deviceId))
 ```
 
-`SecurityContext` 参数在 Spring MVC（`cosec-webmvc`）上会被解析；在 WebFlux 上，请接收 `ServerWebExchange`，读取 `exchange.getSecurityContext()`。
+`SecurityContext` 参数在 Spring MVC（`cosec-webmvc`）上会被解析；在 WebFlux 上，请接收 `ServerWebExchange`，读取 `exchange.requireSecurityContext()`。
 
 这个类按顺序保留刷新需要的每一步：校验令牌对，拒绝已吊销的令牌，询问你的 `MembershipRefresh`，把会话移到下一代，并在该会话中签发。新令牌属于旧令牌的主体、租户和应用，持有你的回答所说的内容。回答 null 时保留旧声明；回答另一个应用是错误（`IllegalArgumentException`，在提供的路由上为 `500`），因为刷新从不改变令牌所属的应用。被拒绝的刷新不消耗任何一代。
 
@@ -377,7 +377,7 @@ suspend fun select(@PathVariable tenant: String, @PathVariable app: String, secu
     authentication.authenticateAsToken(SelectTenant(tenant, app, security))
 ```
 
-与[刷新](#refreshing-tokens)一样，`SecurityContext` 参数在 Spring MVC 上会被解析；在 WebFlux 上，请读取 `exchange.getSecurityContext()`。
+与[刷新](#refreshing-tokens)一样，`SecurityContext` 参数在 Spring MVC 上会被解析；在 WebFlux 上，请读取 `exchange.requireSecurityContext()`。
 
 新令牌只有先前主体的 id、目标租户和这份成员关系：角色属于租户，因此先前令牌的角色、策略和属性都不会进入新令牌（一个租户的管理员不是另一个租户的管理员）。**它的应用是你的 `TenantSwitch` 回答的应用**（`TenantMembership.app`），必须是令牌的 `aud` 能携带的应用 id；没有回答应用时，保留先前令牌的应用（`SCP-12`）。`targetAppId` 是用户请求的应用，只能经由你的回答进入令牌：用户不能靠指名得到某个应用的令牌，只有在你的代码检查过用户拥有它之后才行。
 

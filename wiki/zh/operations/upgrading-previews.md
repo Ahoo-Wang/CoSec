@@ -26,6 +26,21 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   - 这样的服务以 `WARN` 在 logger `me.ahoo.cosec.runtime.identity.IdentityGate` 上记录每个被拒绝的 `CoSec-Identity` 头的原因，每种问题类型最多每分钟一次（每一次都记录在 `DEBUG`）。直到 beta.4，它只在 `DEBUG` 记录。响应不变：从不说明原因。
   - 有 `cosec-micrometer` 和 `MeterRegistry` 时，它在 `cosec.identity.refused{problem}`（`invalid-request`、`token-invalid`、`token-expired`）中对每次拒绝计数。对任何非零速率告警（[可观测性](./observability.md#metrics)）。
   - 网关拒绝写出服务会拒绝读取的身份（空 id、落单的 UTF-16 代理项、晚于 9999 年的时间、空的声明名）：请求以 `500` 失败，不转发任何头；直到 beta.4，其后的服务会回答 `400`。CoSec 自己的网关不会构造这样的身份；自定义 `Authenticator` 可能会。对这样的身份，`IdentityHeader.of` 抛出 `IllegalArgumentException`，与身份过大时一样。
+- **安全上下文的读取入口按其行为命名**（UA-7）。受影响的是从 Reactor 上下文、exchange、Servlet 请求或 `SecurityContextHolder` 读取 `SecurityContext` 的代码。每个读取入口现在都有两种：`requireSecurityContext()` 在 CoSec 没有处理该请求时抛出 `IllegalStateException`，并说明该怎么做；`securityContextOrNull()` 返回 `null`。它们都带 `@JvmStatic`。旧名称没有了，也没有别名：
+
+  | 直到 beta.4 | 从 beta.5 起 |
+  |---|---|
+  | `ContextView.getSecurityContext()`（抛出 `IllegalStateException("SecurityContext is null.")`） | `ContextView.requireSecurityContext()` |
+  | `ContextView.getSecurityContextOrEmpty()`（返回 `null`） | `ContextView.securityContextOrNull()` |
+  | `ServerWebExchange.getSecurityContext()`（返回 `null`） | `ServerWebExchange.securityContextOrNull()`，或 `requireSecurityContext()` |
+  | `HttpServletRequest.getSecurityContext()`（返回 `null`） | `HttpServletRequest.securityContextOrNull()`，或 `requireSecurityContext()` |
+  | `SecurityContextHolder.context`（Java：`getContext()`） | `SecurityContextHolder.securityContextOrNull()` |
+  | `SecurityContextHolder.requiredContext`（Java：`getRequiredContext()`），抛出 `IllegalArgumentException` | `SecurityContextHolder.requireSecurityContext()`，抛出 `IllegalStateException`：捕获原来那种异常的代码不再捕获它 |
+
+  处理器的 `SecurityContext` 参数不变，它的消息现在与请求读取入口的消息相同（[Web](../integration/web.md)）。
+- **抛出异常的检查报告它自己的原因**（UA-16）。受影响的是读取检查（`AuthorizationChecker.decide`）的 `Indeterminate` 决策原因的代码。现在是 `Cause.CheckFailed(error)`；直到 beta.4，无论什么出错都是 `Cause.SourceUnavailable(PLATFORM, error)`。检查读不到某个文档时仍是 `SourceUnavailable`。检查不经过任何决策监听器，所以事件、审计、指标和 span 都不变（[代码中的权限检查](../integration/checks.md)）。
+- **接受 API key 的管道在构建时就需要成员关系提供者**（UA-12）。受影响的是用 `ApiKeyAuthenticator`（单独或在 `CompositeAuthenticator` 中）构建管道却没有 `memberships(...)` 的应用。`build()` 以 `IllegalStateException` 失败，说明要添加一个。直到 beta.4，它能构建，然后对每个 key 回答 `503`。starter 在启动时就已经拒绝这样的宿主（`IDN-6`）。
+- **测试工具的入口对 Java 是静态的**（UA-13）。受影响的是针对 beta.4 编译、调用 `PermittedRequest` 或 `IdentityHeader` 的代码。它们的函数现在带 `@JvmStatic`，所以 `INSTANCE` 上的方法没有了：请重新编译。Kotlin 源码不变；Java 去掉 `INSTANCE`（`PermittedRequest.withToken(...)`）。`PipelineFixture` 的伴生对象（`load`、`of`、`unreadable`）、`PipelineFixture.request`、`PipelineFixture.Principal` 和 `TokenSubject` 的构造函数，以及 `TokenSubject.of` 增加了 `@JvmOverloads` 和 `@JvmStatic`，这只是新增。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
