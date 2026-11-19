@@ -267,7 +267,7 @@ val securityContext = SecurityContextHolder.requiredContext
 
 CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追加，或覆盖它；只写 `Forwarded`（RFC 7239）、却把客户端的
 `X-Forwarded-For` 原样转发的代理，会让客户端自选地址，所以要把它配置为覆盖或删除 `X-Forwarded-For`。在客户端可直接访问的宿主上，
-请把该索引设为 `0`（且不设策略），否则客户端可以在该请求头里写入任意地址。
+请把该索引设为 `0`（且不设策略），否则客户端可以在该请求头里写入任意地址。没有写这个配置项时，说明读取方式的启动日志会指出默认值 `1` 正在生效，以及它的风险。
 
 ## 请求属性 {#request-attributes}
 
@@ -407,6 +407,10 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
   第一份文档发布之前，探针仍然回答 `503`，这正是“未就绪”该有的回答。Spring Boot 4 在任何平台上都提供探针：`management.endpoint.health.probes.enabled` 默认为 `true`。
 - **存活与启动探针不能依赖平台文档。** 应用的应用端口上的 HTTP 存活探针在第一份文档发布之前回答 `503`，kubelet 会在它能就绪之前就重启 pod。WebMvc 上把它指向管理端口，它不经 CoSec。WebFlux 的管理端口同样经 CoSec，所以对应用端口使用 `tcpSocket` 探针。
 - **管理端口上不经 CoSec 的内容由网络保护**，与网关相同：只在那里暴露你愿意让能访问该端口的任何人访问的东西。
+
+### 网关自己的处理器 {#the-gateways-own-handlers}
+
+网关过滤器决策网关路由。应用自己的控制器或函数式路由（`RouterFunction` bean）映射在所有网关路由之前（Spring WebFlux 的注解控制器映射顺序为 `0`，router-function 映射为 `-1`，网关的路由映射为 `1`），所以对它们的请求不经任何 CoSec 决策就被应答：没有认证、没有策略、没有限流。启动时，starter 一旦发现这类应用自己的处理器，就记录一条 WARN 并指明它们（[日志行](../operations/troubleshooting.md#the-log-says-the-gateways-own-handlers-are-not-decided)）。把这些处理器移到网关之后的服务中，由路由来决策，或者在应用内自行保护；CoSec 的网关过滤器不覆盖它们。
 
 ### 网关上的 actuator {#actuator-on-a-gateway}
 

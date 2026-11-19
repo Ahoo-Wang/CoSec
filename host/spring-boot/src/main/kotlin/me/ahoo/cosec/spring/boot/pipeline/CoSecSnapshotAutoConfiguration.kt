@@ -86,6 +86,7 @@ class CoSecSnapshotAutoConfiguration {
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(name = ["me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache"])
     @ConditionalOnBean(CoCacheFactory::class)
+    @Import(PlatformDocumentWatchConfiguration::class)
     @InternalCoSecApi
     class Redis {
         /**

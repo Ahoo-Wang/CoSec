@@ -341,7 +341,11 @@ Readiness refuses traffic until the platform document and every document in
 [`prewarm-apps` and `prewarm-tenants`](./configuration.md#snapshot) are installed; liveness is not affected. An
 instance that never becomes ready:
 
-- **No platform document is published.** Publish one with `cosec-migrate publish`.
+- **No platform document is published.** Publish one with `cosec-migrate publish`. The instance logs it, at startup and
+  then every `lag-warn` while it lasts: `No platform document under [cosec:snapshot:platform] in Redis <host:port/db>:
+  this instance is not ready ...`. The line names the key, the key prefix and the Redis it read, never a credential: a
+  first deployment that has published nothing, a wrong `cosec.key-prefix` (the publisher's must be the same) or a wrong
+  Redis database are the usual causes. One INFO line says when the document is installed.
 - **A prewarmed document cannot be loaded or compiled.** The logs name it (`Loading snapshot document [<doc>]
   failed.`). Fix or publish the document, or remove it from the prewarm list.
 
@@ -453,6 +457,37 @@ anyway.
   the property from the gateway; set it on the services behind it.
 - A binding failure for `cosec.pipeline.mode`: the value is neither `enforce` nor `gateway`.
 
+### Startup fails on an unreadable switch
+
+```text
+CoSec cannot read 2 cosec.* switches; a value it cannot read would switch the feature off without a word:
+  cosec.enabled=[1]: write true or false
+  cosec.pipeline.mode=[]: write enforce or gateway
+Set each to one of its values, or remove it to take its default: https://cosec.ahoo.me/operations/configuration
+```
+
+A `cosec.*` switch (`cosec.enabled`, `cosec.jwt.enabled`, the other `*.enabled` ones, `cosec.pipeline.mode`,
+`cosec.api-key.store`) is written with a value CoSec does not read: `1`, `on`, `yes`, an empty string (an environment
+variable a template left empty, `mode:` with no value in YAML), or `true` with spaces around it. Write `true` or `false`
+(`enforce` or `gateway`, `memory` or `redis`), or remove the key. The message lists every such key at once. A switch
+written `false` is legitimate: its feature stays off, and the startup summary lists it
+([Startup summary](./observability.md#startup-summary)).
+
+### The log says CoSec is off {#the-log-says-cosec-is-off}
+
+`CoSec is off: cosec.enabled=false. This application authorizes no request and nothing is protected by CoSec.` is one
+WARN, logged once the application has started. Nothing CoSec wires is active: no pipeline, no token verification, no
+snapshot. Remove the property, or set `cosec.enabled=true`, unless that is what you meant; a gateway still strips a
+client's `CoSec-Identity`.
+
+### The log says the gateway's own handlers are not decided {#the-log-says-the-gateways-own-handlers-are-not-decided}
+
+`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the
+application itself ... are answered with no CoSec decision: ...` names controllers or functional routes of the
+application. They are mapped before any gateway route, so CoSec never sees a request for them
+([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). Move them to a service behind the
+gateway, or secure them in the application.
+
 ### Startup fails on a missing module
 
 ```text
@@ -535,6 +570,11 @@ other cloud platforms it detects. Per message:
   index.
 
 The table is in [Client IP behind proxies](../integration/web.md#client-ip-behind-proxies).
+
+When `cosec.authorization.remote-ip.max-trusted-index` is not set and the default `1` is in effect, the startup line
+that names the reading says so, and what it risks: a host that clients reach directly, with no proxy that writes
+`X-Forwarded-For`, lets them choose their own address. Set the index to the number of proxies in front of the host, or
+`0` when there are none.
 
 ### Startup fails on the eviction check
 

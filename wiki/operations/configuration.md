@@ -55,6 +55,14 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 
 ## Feature switches
 
+A switch accepts `true` or `false` (any case, no spaces around it), and the enums `cosec.pipeline.mode` and
+`cosec.api-key.store` the values listed for them; leave a key out to take its default. Any other written value (`1`,
+`on`, an empty string) fails startup, naming the key, the value and what is accepted: Spring's binder would read some
+of them as true while the condition that wires the feature reads them as off
+([Startup fails on an unreadable switch](./troubleshooting.md#startup-fails-on-an-unreadable-switch)). A switch written
+`false` switches its feature off, and the startup summary says so
+([Startup summary](./observability.md#startup-summary)).
+
 | Property | Type | Default | Turns on |
 |---|---|---|---|
 | `cosec.enabled` | boolean | `true` | every CoSec auto-configuration |
