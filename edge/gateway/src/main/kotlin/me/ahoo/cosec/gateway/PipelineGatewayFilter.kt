@@ -115,7 +115,7 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
                 .headers { headers ->
                     // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
                     headers.set(CoSecParameters.REQUEST_ID, outcome.requestId)
-                    // The method decided is the one the backend runs (`PIP-30`): no override header goes on.
+                    // The method decided is the one the backend runs (`PIP-31`): no override header goes on.
                     removeMethodOverrides(headers)
                     outcome.forward.forEach { (name, value) ->
                         if (value == null) headers.remove(name) else headers.set(name, value)
@@ -231,7 +231,7 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
         /**
          * The headers by which frameworks run a request as another method than its request line's (`X-HTTP-Method-Override`
          * of Google's APIs and Microsoft's, `X-HTTP-Method`, `X-Method-Override`), removed from every request the gateway
-         * forwards, whatever the route (`PIP-30`). Header names are case-insensitive, so one removal covers every letter case;
+         * forwards, whatever the route (`PIP-31`). Header names are case-insensitive, so one removal covers every letter case;
          * written in lower case, which is the form the headers map looks keys up by: a lookup of another form first makes
          * the lower-case copy of the name, an allocation on every request.
          */

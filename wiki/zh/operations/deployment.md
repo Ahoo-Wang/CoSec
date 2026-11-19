@@ -88,7 +88,7 @@ cosec:
 
 没有默认值。缺少这一行、设为 `false` 或设为 `true` 以外的任何值，服务都启动失败，信息会说明该模式信任什么、网络必须满足什么，以及要添加的那一行（[网络边界未声明导致启动失败](./troubleshooting.md#startup-fails-because-the-network-boundary-is-not-stated)）。设置之后，启动日志会记录一行 `INFO`，说明运维方已作此声明。这条声明不签署任何东西：保持它为真是你的责任。为头签名计划在 8.1。
 
-**网关之后不要有 hidden-method 过滤器**（`STA-6`）。网关决策的是请求行的方法，并且从它转发的每个请求、每条路由上移除 `X-HTTP-Method-Override`、`X-HTTP-Method` 和 `X-Method-Override`（不区分大小写；`PIP-30`，不可配置）。服务里的 hidden-method 过滤器仍会按表单字段 `_method` 所指把 `POST` 当作另一个方法执行，而网关无法从请求体里移除它，于是 `http:DELETE` 上的 `DENY` 会被绕过。`gateway` 模式的服务在 `spring.mvc.hiddenmethod.filter.enabled` 或 `spring.webflux.hiddenmethod.filter.enabled` 为 `true`（默认都关闭），或应用声明了 `HiddenHttpMethodFilter` bean 时启动失败。自己决策的宿主（`enforce`）不受影响：那里 CoSec 的过滤器在 hidden-method 过滤器之后运行。
+**网关之后不要有 hidden-method 过滤器**（`STA-6`）。网关决策的是请求行的方法，并且从它转发的每个请求、每条路由上移除 `X-HTTP-Method-Override`、`X-HTTP-Method` 和 `X-Method-Override`（不区分大小写；`PIP-31`，不可配置）。服务里的 hidden-method 过滤器仍会按表单字段 `_method` 所指把 `POST` 当作另一个方法执行，而网关无法从请求体里移除它，于是 `http:DELETE` 上的 `DENY` 会被绕过。`gateway` 模式的服务在 `spring.mvc.hiddenmethod.filter.enabled` 或 `spring.webflux.hiddenmethod.filter.enabled` 为 `true`（默认都关闭），或应用声明了 `HiddenHttpMethodFilter` bean 时启动失败。自己决策的宿主（`enforce`）不受影响：那里 CoSec 的过滤器在 hidden-method 过滤器之后运行。
 
 `cosec.pipeline.mode` 既不是 `enforce` 也不是 `gateway` 时启动失败；在 Spring Cloud Gateway 主机上设为 `gateway`
 时也启动失败：网关自己总是用文档做决策。这条边界为什么重要、截获的头能做什么，见

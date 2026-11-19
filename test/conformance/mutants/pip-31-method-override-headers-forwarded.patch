@@ -1,4 +1,4 @@
-# Rule: PIP-30
+# Rule: PIP-31
 # Mutant: the gateway forwards a method-override header it should remove, so a backend may run a POST as a DELETE the gateway never decided
 # Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
 

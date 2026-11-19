@@ -1,6 +1,6 @@
 {
   "rules": [
-    "PIP-30"
+    "PIP-31"
   ],
   "polarity": "positive",
   "level": "pipeline",

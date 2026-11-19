@@ -19,7 +19,7 @@ import org.springframework.http.HttpHeaders
 import java.lang.management.ManagementFactory
 
 /**
- * `PIP-30` on the hot path: the filter's removal of the three method-override headers allocates nothing when the request
+ * `PIP-31` on the hot path: the filter's removal of the three method-override headers allocates nothing when the request
  * carries none of them. Measured on the headers type the forwarding builder hands the filter (a copy in a
  * case-insensitive map), with the names as the filter writes them.
  */

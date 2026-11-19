@@ -143,7 +143,7 @@ yours to keep true. Signing the header is planned for 8.1.
 
 **No hidden-method filter behind a gateway** (`STA-6`). The gateway decides the method of the request line, and it
 removes `X-HTTP-Method-Override`, `X-HTTP-Method` and `X-Method-Override`, in any letter case, from every request it
-forwards, on every route (`PIP-30`, not configurable). A hidden-method filter in the service would still run a `POST`
+forwards, on every route (`PIP-31`, not configurable). A hidden-method filter in the service would still run a `POST`
 as the method a form field `_method` names, which the gateway cannot remove from a body, so a `DENY` on `http:DELETE`
 would be stepped around. A service in gateway mode fails to start when `spring.mvc.hiddenmethod.filter.enabled` or
 `spring.webflux.hiddenmethod.filter.enabled` is `true` (both are off by default) or the application declares a

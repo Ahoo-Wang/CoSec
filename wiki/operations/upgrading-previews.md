@@ -28,7 +28,7 @@ Which preview of the library may run behind which preview of the gateway image: 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
 - **Gateway mode states the network boundary it trusts, and the gateway forwards the method it decided** (`STA-7`,
-  `STA-6`, `PIP-30`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
+  `STA-6`, `PIP-31`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
   - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
     boundary. It now **fails to start** unless you write `cosec.pipeline.identity.only-gateway-can-reach: true`
     (`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`), your statement that nothing but the gateway can reach it.

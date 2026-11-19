@@ -49,7 +49,7 @@ sealed interface Outcome {
         val identity: Pair<Boolean, JsonNode?> = false to null,
         /** Through a gateway: the caller's credentials its backend receives, sorted (RC1-5). */
         val credentials: List<String> = emptyList(),
-        /** Through a gateway: the `X-` headers its backend receives, lowercased and sorted (`PIP-30`). */
+        /** Through a gateway: the `X-` headers its backend receives, lowercased and sorted (`PIP-31`). */
         val forwardedHeaders: List<String> = emptyList(),
         /** The kind of decision a check of the permitted request answered (`"check"`); null without one. */
         val check: String? = null,

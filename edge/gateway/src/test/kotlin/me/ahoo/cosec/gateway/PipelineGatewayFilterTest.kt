@@ -213,7 +213,7 @@ class PipelineGatewayFilterTest {
             .assert().isNull()
     }
 
-    /** `PIP-30`: the method decided is the one the backend runs, so no override header goes on, on any route. */
+    /** `PIP-31`: the method decided is the one the backend runs, so no override header goes on, on any route. */
     @Test
     fun `a method override header never reaches a backend, in any letter case, on any route`() {
         val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))

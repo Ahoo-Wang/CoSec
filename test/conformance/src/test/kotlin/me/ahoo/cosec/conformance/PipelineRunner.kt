@@ -370,7 +370,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
 
     /**
      * `"gateway": { "route": { "uri": "lb://backend", "identity": false, "app": "billing" }, "forwardAuthorization": true }`
-     * (`"reportHeaders": true` adds the `X-` headers the backend receives to the outcome, `PIP-30`):
+     * (`"reportHeaders": true` adds the `X-` headers the backend receives to the outcome, `PIP-31`):
      * the request goes through a Spring Cloud Gateway host's own filters, the identity strip, the pipeline's gateway
      * filter, and the last hop, and the outcome's `identity` is what the backend would receive, and its `credentials`
      * which of the caller's credentials reach it ([forwardedCredentials]). The route goes to `uri` (`http://backend`
