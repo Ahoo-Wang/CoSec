@@ -32,6 +32,13 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  *   `\` as `/` (as some containers and every browser do) serves as `/admin/1`. A trailing `/` is kept: it is one more
  *   thing a pattern says or does not, and no merging turns it into another path. A double-encoded separator (`%252F`,
  *   `%255C`) decodes to text and is kept, as `%252e` is.
+ * - An encoded `;` (`%3B`) or an encoded control character (`%00` to `%1F`, `%7F`), in either case of the hex digits
+ *   and anywhere in the path, path parameters included, is rejected (`PIP-30`). CoSec and Spring read them as text in
+ *   a segment, but a backend that decodes before it strips path parameters serves `/admin%3Bx/users` as `/admin/users`,
+ *   one in native code stops at NUL, and one that drops what follows a control character serves another path again: a
+ *   gateway fronts backends of any kind. A double-encoded one (`%253B`, `%2500`) decodes to text and is kept. A raw
+ *   control character is rejected too: the servers CoSec runs on refuse one before any filter, and the rule does not
+ *   depend on which server hands the path over. A raw `;` is a path parameter, removed as above.
  * - A path longer than [MAX_PATH_LENGTH] characters, or with a segment longer than [MAX_SEGMENT_LENGTH] after removing
  *   path parameters, is rejected (both counted encoded, which bounds the decoded length). Wildcard matching in the
  *   engine costs about the square of a segment's length: an 8 KB segment takes hundreds of milliseconds per statement,
@@ -51,14 +58,76 @@ object PathNormalizer {
     const val MAX_SEGMENT_LENGTH = 256
 
     private const val ENCODED_SEPARATOR = "%2F"
+    private const val PATH = "path"
+    private const val HEX = 16
+    private const val SEMICOLON = 0x3B
+    private const val FIRST_PRINTABLE = 0x20
+    private const val DELETE = 0x7F
 
     /** The path to authorize, still encoded; null when [rawPath] cannot be interpreted without ambiguity. */
     fun normalize(rawPath: String): String? {
-        if (rawPath.length > MAX_PATH_LENGTH) {
+        if (rawPath.length > MAX_PATH_LENGTH || hazardAt(rawPath) >= 0) {
             return null
         }
         val path = withoutPathParameters(rawPath)
         return if (hasLongSegment(path) || isAmbiguous(path)) null else path
+    }
+
+    /**
+     * Why [normalize] rejects [rawPath], for the outcome's reason: the kind of sequence and the segment it is in for an
+     * encoded `;`, an encoded or a raw control character (`PIP-30`), `path` for every other rejection. It never repeats the path, so
+     * nothing a client sent reaches a log through it. Called only for a path [normalize] rejected.
+     */
+    fun rejection(rawPath: String): String {
+        val at = hazardAt(rawPath)
+        if (at < 0) {
+            return PATH
+        }
+        val kind = when {
+            rawPath[at] != '%' -> "a control character"
+            escaped(rawPath, at) == SEMICOLON -> "an encoded ';'"
+            else -> "an encoded control character"
+        }
+        return "$PATH: $kind in segment ${segmentOf(rawPath, at)}"
+    }
+
+    /**
+     * The index in [path] of the first control character, or of the first `%` that encodes `;` or a control character;
+     * -1 when there is none. One pass, with no allocation.
+     */
+    private fun hazardAt(path: String): Int {
+        for (index in path.indices) {
+            val char = path[index]
+            if (isControl(char.code) || (char == '%' && isHazard(escaped(path, index)))) {
+                return index
+            }
+        }
+        return -1
+    }
+
+    private fun isHazard(value: Int): Boolean = value == SEMICOLON || isControl(value)
+
+    private fun isControl(value: Int): Boolean = value in 0 until FIRST_PRINTABLE || value == DELETE
+
+    /** The byte the escape at [index] of [path] encodes, in either case of its hex digits; -1 when it is malformed. */
+    private fun escaped(path: String, index: Int): Int {
+        if (index + 2 >= path.length) {
+            return -1
+        }
+        val high = Character.digit(path[index + 1], HEX)
+        val low = Character.digit(path[index + 2], HEX)
+        return if (high < 0 || low < 0) -1 else high * HEX + low
+    }
+
+    /** The number, from 1, of the segment of [path] that holds [index]. */
+    private fun segmentOf(path: String, index: Int): Int {
+        var separators = 0
+        for (at in 0 until index) {
+            if (path[at] == '/') {
+                separators++
+            }
+        }
+        return if (path.startsWith('/')) separators else separators + 1
     }
 
     /**
