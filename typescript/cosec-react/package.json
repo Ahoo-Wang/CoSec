@@ -77,7 +77,6 @@
     "@vitest/ui": "catalog:",
     "babel-plugin-react-compiler": "catalog:",
     "eslint": "catalog:",
-    "eslint-plugin-react-compiler": "catalog:",
     "eslint-plugin-react-hooks": "catalog:",
     "globals": "catalog:",
     "jsdom": "catalog:",

@@ -1,0 +1,17 @@
+# Rule: CTL-13
+# Mutant: a change exempt from the window is skipped by anyone who sees it, without the right to publish it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.BreakGlassAuthorityTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+index c37bd11d..4e38c288 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Staging.kt
+@@ -171,7 +171,7 @@ internal class Staging(
+         requireRequest(reason.isNotBlank()) { "Skipping the shadow window needs a reason." }
+         val change = flow.visible(operator, id)
+         if (PublishRules.exempt(change, revisions.head(change.key))) {
+-            authority.require(operator, change.key, PublishRules.publishing(change))
++            Unit
+         } else {
+             authority.require(operator, change.key, ControlActions.SKIP_SHADOW)
+         }

@@ -380,6 +380,29 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `maxLiteralBytes` | 1024 | 单个字面量或属性路径的 UTF-8 字节数。 |
 | `maxCost` | 256 | 单个条件的节点权重之和：`and`、`or`、`not`、`exists` 为 1；`eq`、`prefix` 为 2；`in`、`cidr` 为 4；`time` 为 8。 |
 
+## id 与特殊值 {#ids-and-special-values}
+
+各类 id 可以是什么，以及 CoSec 赋予特殊含义的值。每个 id 都是不含未配对 UTF-16 代理项的文本（`IDN-10`）：Redis 键分不清它和另一个 id。
+
+| 类别 | 可以是 | 被拒绝 |
+|---|---|---|
+| 租户、应用 | 至多 128 个字符，是控制面资源名中的一个路径段 | 空白、`*`、`:`、`/`、控制字符（`SCP-13`） |
+| 主体 | 非空字符串，在租户内唯一 | 令牌里以 `(` 开头的 id（`IDN-12`） |
+| 空间 | 任意字符串，`""` 表示默认空间 | `*`，以及以 `(` 开头的 id：不能作为请求的空间，也不能作为绑定或角色的空间 |
+| 角色 | 字符串 | `*` 和 `@`（`@` 用来分隔成员关系里的角色和空间） |
+
+| 值 | 出现在 | 含义 |
+|---|---|---|
+| `*` | 绑定的 `subject`、`app` 和 `space`；模式 | 任意，且只有这个意思：id 永远不会是 `*` |
+| 作为租户的 `(0)` | 租户文档、安全上下文 | 默认租户，用于匿名主体和没有租户的凭证 |
+| 作为主体的 `(0)` | 安全上下文、决策事件 | 匿名主体。文档永远看不到它：它没有 `subject.id`，也不能与它比较（[缺失值](#absent-values)） |
+| `(platform)` | 租户 id | 平台租户，系统的运营方 |
+| `""` | `scope.space`、绑定的 `space`、不带 `@` 的声明 | 默认空间 |
+| `(default)` | 控制面的资源名，例如 `scope/<tenant>/<app>/(default)` | 默认空间，用于资源名的写法；没有请求能选择它 |
+| `cosec:…` | 策略 id | CoSec 自己的策略（[内置策略](../guide/security-model.md#built-in-policies)） |
+
+每个以 `(` 开头的 id 都是 CoSec 的（[概念](../guide/concepts.md#tenant)）。
+
 ## 绑定 {#bindings}
 
 绑定表示：*主体*在*应用*和*空间*中受*策略*约束。
@@ -387,7 +410,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | 字段 | 类型 | 默认值 | 含义 |
 |---|---|---|---|
 | `id` | 字符串 | 必填 | 在所属文档内唯一。控制面拒绝以 `cosec:`、`g:` 或 `r:` 开头的新 id。 |
-| `subject` | `"*"` 或对象 | 必填 | 对谁生效，见下。 |
+| `subject` | `"*"` 或对象 | 必填 | 授予对象：绑定对谁生效，见下。 |
 | `app` | 字符串 | 必填 | 应用 id，或 `*` 表示任意应用。不能为空。 |
 | `space` | 字符串 | 必填 | 空间 id，`""` 表示默认空间，`*` 表示任意空间。以 `(` 开头的空间 id 归 CoSec 所有，在这种空间中的绑定不能编译。 |
 | `policy` | 字符串 | 必填 | 策略 id。 |
@@ -483,6 +506,8 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 边界限定一个租户最多能被允许什么。`"boundary": true` 的策略就是边界：只在平台文档中，只有 ALLOW 语句，至多 64 条，不可附加，不可绑定。`boundaries.default` 指定约束所有租户的边界；租户文档的 `boundary` 指定改为约束该租户的平台边界。`(platform)` 租户没有边界。此时 Permit 只有在租户边界中也有语句匹配时才成立；否则变为 Deny，若边界语句出错或指定的边界不存在则为 Indeterminate。
 
+`boundary` 的含义取决于它写在哪里：写在策略上它是一个布尔值，即让该策略成为边界的标志；写在租户文档里它是一个字符串，即约束该租户的平台边界的 id（`boundaries.default` 也是这样一个 id）。这些名字保持不变。
+
 一个平台文档：
 
 ```json
@@ -558,14 +583,14 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `definitions.schema.json` | 共享定义 |
 | `problem.schema.json` | 错误响应体（[Web 集成](../integration/web.md)） |
 
-文档是封闭的，所以不要在文档中加 `$schema` 字段：在编辑器中把 schema 映射到你的文件，例如在 VS Code 的 `settings.json` 中：
+文档是封闭的，所以不要在文档中加 `$schema` 字段：在编辑器中把 schema 映射到你的文件，例如在 VS Code 的 `settings.json` 中。URL 要指向你所运行的 CoSec 版本的标签，如下（`v8.0.0-beta.4`）：`main` 描述的是下一个版本，你的版本读不了的文档在编辑器里也会通过：
 
 ```json
 {
   "json.schemas": [
     {
       "fileMatch": ["policies/*.json"],
-      "url": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-snapshot-document.schema.json"
+      "url": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/tags/v8.0.0-beta.4/schema/cosec-snapshot-document.schema.json"
     }
   ]
 }

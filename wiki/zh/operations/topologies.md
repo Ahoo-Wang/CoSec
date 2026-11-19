@@ -110,7 +110,7 @@ Spring Cloud Gateway 用文档决策；每个服务设置 `cosec.pipeline.mode=g
 | CoSec 会检查 | 模块、吊销读取器、令牌保留时间与审批过期时间、控制面的 Bean（不可替换），以及 Redis 权限失败；逐个变更时，对平台文档、平台租户的文档或控制应用的文档的变更不会把发布者挡在控制面之外（检查 `V4`：除非发布请求带 `"lockout": true`，否则是 `422`） |
 | CoSec 不检查 | 管理员是否真的能拿到令牌；发布者以外的其他运维人员是否保有访问权限 |
 
-已被确认的锁定，或检查看不到的锁定，由持有存储凭证的人用 `cosec-migrate restore` 撤销（[从被锁在外面中恢复](./storage.md#recovering-from-a-lock-out)）。
+已被确认的锁定，或检查看不到的锁定，由持有存储凭证的人用 `cosec-migrate restore` 恢复（[从被锁在外面中恢复](./storage.md#recovering-from-a-lock-out)）。
 
 见[控制面](../policies/testing.md#the-control-plane)、[存储](./storage.md#publishing-documents)和[之后修改文档](../guide/quick-start.md#change-a-document-later)。
 

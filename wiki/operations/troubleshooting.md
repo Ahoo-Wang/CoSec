@@ -345,6 +345,21 @@ read as anonymous:
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. In a test without a gateway, a header made once and reused: make one per request ([`IdentityHeader`](../integration/web.md#services-behind-the-gateway)). |
 
+The response says only the problem, never why, in every environment. The reason is in the service's log, from the
+logger `me.ahoo.cosec.runtime.identity.IdentityGate`:
+
+```text
+Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>.
+```
+
+at `WARN`, at most once a minute for each problem type so a flood of bad headers does not flood the log, and every one
+at `DEBUG`. `<reason>` is the field that failed, such as `The identity header is malformed:
+$.rid is empty.`, or the time that is out of bounds. Text of the header in it, such as a claim or member name, is
+[escaped as ids are](#a-log-line-names-an-id-with-u-escapes) and cut to 64 characters, and at most three names are
+listed; a header that is not JSON is named by the line and column where it fails, never by what it holds. A service in gateway mode records no decision events and no
+audit, but it counts every refusal, also those the log does not print, in
+[`cosec.identity.refused{problem}`](./observability.md#metrics): a rise names the problem, and the log says why.
+
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
 
 **Every request is anonymous.** The gateway forwards the identity only to a route that receives it: a route to a
@@ -394,6 +409,16 @@ timing out, or no node to ask) under `eviction-check=fail`: allow `INFO` (`+info
 
 The indicator is an alert: keep it out of the readiness group, which `cosecSnapshot` alone serves. In it, one change to
 Redis would take every instance out of rotation at once.
+
+## A pod runs out of memory {#a-pod-runs-out-of-memory}
+
+Read which memory ran out; the knob differs:
+
+| What you see | Cause | What to change |
+|---|---|---|
+| `java.lang.OutOfMemoryError: Java heap space` in the log, a heap dump in `data/` (the image's own options write it), and the pod restarts | The compiled documents and the gateway's own allocation do not fit the heap | Lower [`max-apps` and `max-tenants`](./configuration.md#snapshot) to what the heap holds ([How many documents fit](./deployment.md#memory)), or raise the heap together with the container's limit |
+| `java.lang.OutOfMemoryError: Direct buffer memory` | Netty's buffers reached `-XX:MaxDirectMemorySize` under load | Raise the direct memory with the limit; read `jvm_buffer_memory_used_bytes{id="direct"}` |
+| The pod is `OOMKilled` (exit code `137`) with no Java error | The container's limit is below the heap plus the direct memory plus about 250 MiB for the JVM's native part | Raise the limit, or lower `-Xmx` and `MaxDirectMemorySize`: the limit is the sum of the three, plus a quarter ([Memory](./deployment.md#memory)) |
 
 ## Probes answer 401 or 503, or pods restart before the first publish {#probes-answer-401-or-503}
 
@@ -844,6 +869,9 @@ random one.
 
 | Message | Fix |
 |---|---|
+| `STA-5: <n> CorsConfigurationSource beans of the application: the CORS filter before CoSec takes one.` | Keep one `CorsConfigurationSource`, or declare a `CorsFilter` bean of your own, which the starter then leaves in place ([CORS](../integration/web.md#cors)). |
+| `cosec.authorization.shadow.report-interval is at least one millisecond, not <d>.` | Set [`report-interval`](./configuration.md#shadow-windows) to one millisecond or more (default `10s`). |
+| `cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.` | Write `required` or `best-effort` ([`delivery`](./configuration.md#audit)); case, spaces and `-` for `_` do not matter. |
 | `Decision listener <name> is registered twice.` | Give each `DecisionListener` its own `name`. |
 | `CoSec's <CacheName> is the store of record: a Store.` | Something replaced the spec of one of CoSec's caches; CoSec creates them itself. |
 | `lagWarn must not exceed lagEscalate.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |

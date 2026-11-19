@@ -1,0 +1,17 @@
+{
+  "description": "The same platform policy permits a principal of globex: a platform binding is every tenant's.",
+  "credential": {
+    "tenant": "globex",
+    "id": "gina"
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/api/orders"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

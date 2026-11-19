@@ -18,6 +18,14 @@ request that changes the image, and publishes it as `ahoowang/cosec-gateway`, `g
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`, for `linux/amd64` and `linux/arm64`. The gateway server is an
 application: it is published only as an image, never as a library.
 
+**Tags.** A branch push is tagged with the branch name (`main`, `7.x`; a `/` in the name becomes `-`), a pull request
+with `pr-<number>`, and the nightly build refreshes `main`: these tags move with every build, so never run one in
+production. A version tag `v8.0.0-beta.4` publishes `8.0.0-beta.4`, which names one release. A pre-release has no
+other tag; a stable release also moves `<major>.<minor>` (`8.0`) to its newest patch version. Pin
+the exact version, or the digest of the image you tested (`ahoowang/cosec-gateway@sha256:...`): a floating tag can change
+under a deployment between two restarts. The manifests in [`k8s/`](#kubernetes) pin a version in
+`k8s/base/kustomization.yaml`.
+
 - **JDK.** The CoSec libraries target Java 21, which is what an application on them needs. The image is an
   application of its own and runs on JDK 25, Alibaba Dragonwell 25 (`dragonwell:25-ubuntu`), with a JDK 25
   [AOT cache](#aot-cache): its runtime is 25, not 21.
@@ -152,6 +160,16 @@ published ([The first documents](./storage.md#the-first-documents)), and reports
    window, that instance answers `503` for every request that needs the document, unless a DENY matches.
 
 ## Readiness
+
+**What to prewarm.** The platform document is always loaded before an instance is ready. List an app in `prewarm-apps`,
+or a tenant in `prewarm-tenants`, when the first request for it after a start must not wait: the apps and tenants that
+carry the traffic, and any whose document is large enough that loading and compiling it takes longer than
+[`cold-load-timeout`](./configuration.md#snapshot) (2 seconds), since a request that waits longer is `503`. Every listed
+document delays readiness, and one that cannot be loaded or compiled keeps the instance unready
+([Instance is not ready](./troubleshooting.md#instance-is-not-ready)), so list the documents you would not serve
+without, not every tenant. Keep `cold-load-timeout` below [`cosec.pipeline.timeout`](./configuration.md#pipeline)
+(5 seconds), with room left for the rest of the pipeline: a request that has waited the whole pipeline timeout is
+`503` with the cause `deadline`, whatever the load's own bound is.
 
 An instance is ready only once it has installed the platform document and every document named in
 [`prewarm-apps` and `prewarm-tenants`](./configuration.md#snapshot) (empty lists mean the platform document only).
@@ -297,6 +315,17 @@ overlay size them for their limits:
   overlay replaces it; change it together with the memory request and limit.
 - **CPU.** The JVM sizes its GC, JIT and Netty threads from the CPU limit, and the autoscaler measures against the
   request.
+
+**How many documents fit.** The compiled documents live on the heap, and CoSec holds at most `max-apps` app documents and
+`max-tenants` tenant documents (1,024 each by default; for a moment a family may hold up to twice that, during a burst of
+cold loads), plus the platform document, which is never dropped
+([How instances read documents](./storage.md#how-instances-read-documents)). What one document costs depends on its
+policies, statements and bindings, and CoSec does not report it. Measure it with your own documents: start an instance
+with the platform document and one tenant, request a path that needs each tenant's document in turn, and read
+`jvm_memory_used_bytes{area="heap"}` after a full collection, or `jcmd <pid> GC.heap_info`, at a few counts. Then set
+`max-apps` and `max-tenants` to what the heap holds with room to spare, rather than to the number of tenants you have: a
+document that is dropped is loaded again when it is next needed. If the heap is too small, see
+[A pod runs out of memory](./troubleshooting.md#a-pod-runs-out-of-memory).
 
 The native part was measured in the image (an 8.0 preview build, `linux/arm64`, Docker with these limits and a read-only
 root filesystem), after about 45,000 requests to a route and to the health endpoint with no platform document

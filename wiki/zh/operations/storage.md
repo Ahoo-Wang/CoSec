@@ -112,8 +112,8 @@ key 都在它之下（`SNP-9`）。
   `eviction-check` 都是如此（[故障排查](./troubleshooting.md#cosecsnapshoteviction-is-down)）。读不到策略时，`fail` 下也是
   `DOWN`；`warn` 在启动时已经接受了这一点，所以是 `UP`，详情为 `eviction: unknown`。请求不会因此被拒绝：已装入的文档保持
   不变，丢失的文档在每个持有它的实例上都失败即拒绝。不要把这个指示器放进就绪组：它是告警。
-- **从主节点读。** Redis 是权威存储，副本落后于它：在两者之间交替读取，可能把一个已撤销的 API key、或一份刚被覆盖发布的
-  文档当成当前的。CoCache 自己的客户端读取文档、控制面记录和撤销记录，它连接 `spring.data.redis.*` 指定的节点或集群的
+- **从主节点读。** Redis 是权威存储，副本落后于它：在两者之间交替读取，可能把一个已吊销的 API key、或一份刚被覆盖发布的
+  文档当成当前的。CoCache 自己的客户端读取文档、控制面记录和吊销记录，它连接 `spring.data.redis.*` 指定的节点或集群的
   各个主节点，不设置 `ReadFrom`。CoSec 注入的 Redis 模板（唯一的或 `@Primary` 的 `StringRedisTemplate` 与
   `ReactiveStringRedisTemplate`：API key、限流器、OAuth 状态）背后的 Lettuce 客户端也必须从主节点读：某个
   `LettuceConnectionFactory` 从副本读（`spring.data.redis.lettuce.read-from`，或设置了非 upstream
@@ -372,7 +372,7 @@ app 的状态；以及 `repair-references` 读到的 `<s>:control:list:documents
 
 一次发布只对一个 key 做比较并交换：它所修改文档的头。它的检查还读了别的头（平台文档的、各 app 文档的，某些检查还有租户文档的），
 并记在变更上。这些是不同的 key，分布在 Redis Cluster 的不同槽位，没有一次写入能覆盖它们，所以在发布的最后一次检查与写入之间，
-其中某个头可能变化。这个时间窗很短（写入前刚刚又检查过一次），留着也是安全的：限制授出者从不撤销它之前已做的授出，所以期间发布的
+其中某个头可能变化。这个时间窗很短（写入前刚刚又检查过一次），留着也是安全的：限制授出者从不收回它之前已做的授出，所以期间发布的
 限制与这次授出，结果等同于"先授出、后限制"的串行顺序。唯一不能串行化的情形，是两个变更各自移除对方授出所依赖的权利，并在同一个
 时间窗内落地。
 

@@ -481,6 +481,30 @@ Every condition is bounded when it compiles. The platform document sets the boun
 | `maxLiteralBytes` | 1024 | UTF-8 bytes of one literal or attribute path. |
 | `maxCost` | 256 | The sum of node weights of one condition: `and`, `or`, `not`, `exists` 1; `eq`, `prefix` 2; `in`, `cidr` 4; `time` 8. |
 
+## Ids and special values {#ids-and-special-values}
+
+What an id may be, by kind, and the values CoSec gives a meaning. Every id is text without an unpaired UTF-16 surrogate
+(`IDN-10`): a Redis key could not tell it from another id.
+
+| Kind | May be | Refused |
+|---|---|---|
+| Tenant, app | Up to 128 characters, one path segment of the control plane's resources | Blank, `*`, `:`, `/`, a control character (`SCP-13`) |
+| Principal | A non-empty string, unique within its tenant | An id beginning with `(` in a token (`IDN-12`) |
+| Space | Any string, `""` for the default space | `*`, and an id beginning with `(`: not as the space of a request, nor of a binding or a role |
+| Role | A string | `*` and `@`, which separates a membership's role and space |
+
+| Value | Where | Means |
+|---|---|---|
+| `*` | a binding's `subject`, `app` and `space`; a pattern | Any, and only that: an id is never `*` |
+| `(0)` as a tenant | tenant documents, a security context | The default tenant, for anonymous principals and credentials without a tenant |
+| `(0)` as a principal | a security context, a decision event | The anonymous principal. A document never sees it: it has no `subject.id`, and nothing may compare with it ([Absent values](#absent-values)) |
+| `(platform)` | a tenant id | The platform tenant, the system's operators |
+| `""` | `scope.space`, a binding's `space`, a claim without `@` | The default space |
+| `(default)` | the control plane's resource names, such as `scope/<tenant>/<app>/(default)` | The default space, spelled for a resource name; no request selects it |
+| `cosec:…` | policy ids | CoSec's own policies ([Built-in policies](../guide/security-model.md#built-in-policies)) |
+
+Every id that begins with `(` is CoSec's ([Concepts](../guide/concepts.md#tenant)).
+
 ## Bindings
 
 A binding says: *subject* is subject to *policy* in *app* and *space*.
@@ -615,6 +639,10 @@ instead. The `(platform)` tenant has none. A permit then stands only if a statem
 matches; otherwise it becomes a Deny, or Indeterminate when a boundary statement failed or the named boundary is
 missing.
 
+`boundary` means two things by where it is written: on a policy it is a boolean, the flag that makes the policy a
+boundary; in a tenant document it is a string, the id of the platform boundary that holds that tenant (and
+`boundaries.default` is such an id too). The names are kept as they are.
+
 A platform document:
 
 ```json
@@ -694,14 +722,15 @@ in CI:
 | `problem.schema.json` | an error response body ([Web integration](../integration/web.md)) |
 
 A document is closed, so do not add a `$schema` field to it: map the schema to your files in the editor instead, for
-example in VS Code's `settings.json`:
+example in VS Code's `settings.json`. Point the URL at the tag of the CoSec version you run, as below (`v8.0.0-beta.4`):
+`main` describes the next release, and a document your version does not read would pass in the editor.
 
 ```json
 {
   "json.schemas": [
     {
       "fileMatch": ["policies/*.json"],
-      "url": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/heads/main/schema/cosec-snapshot-document.schema.json"
+      "url": "https://raw.githubusercontent.com/Ahoo-Wang/CoSec/refs/tags/v8.0.0-beta.4/schema/cosec-snapshot-document.schema.json"
     }
   ]
 }

@@ -103,6 +103,11 @@ enum class AuditDocument {
 interface AuditPrincipal {
     val id: String
     val authenticated: Boolean
+
+    /**
+     * The principal's roles in the request's space, by their bare names: the roles of the resolved scope, not every
+     * role of the token.
+     */
     val roles: Set<String>
 }
 

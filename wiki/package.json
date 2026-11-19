@@ -4,7 +4,7 @@
   "private": true,
   "description": "CoSec Security Framework Documentation",
   "type": "module",
-  "packageManager": "pnpm@11.28.11",
+  "packageManager": "pnpm@11.28.13",
   "scripts": {
     "dev": "vitepress dev",
     "build": "vitepress build",
@@ -13,7 +13,8 @@
     "check:mermaid": "node scripts/check-mermaid.mjs",
     "check:legacy": "node scripts/check-legacy.mjs",
     "check:contract": "node scripts/check-contract.mjs",
-    "check:docs": "node .vitepress/check-docs.mjs && node scripts/check-legacy.mjs && node scripts/check-contract.mjs"
+    "check:problems": "node scripts/check-problem-pages.mjs",
+    "check:docs": "node .vitepress/check-docs.mjs && node scripts/check-legacy.mjs && node scripts/check-contract.mjs && node scripts/check-problem-pages.mjs"
   },
   "devDependencies": {
     "mermaid": "^12.2.0",

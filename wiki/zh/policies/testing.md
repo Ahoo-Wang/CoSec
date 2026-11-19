@@ -7,6 +7,18 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 面向在生产环境修改文档的策略作者和评审者。每个文档变更都经过控制面：控制面检查并编译变更，可以在影子窗口中用线上流量试运行，在无法证明变更安全时要求第二个人审批，然后才发布。本页介绍这一流程及其周边工具。字段本身见[策略语言](./language.md)。
 
+## 用测试证明 {#prove-it-with-a-test}
+
+文档到达控制面之前，你自己构建里的测试就可以用每个实例都在运行的引擎证明它会做出什么决策。`cosec-testkit` 有三个层次，从文档到你的应用：
+
+| 你想证明 | 使用 | 位置 |
+|---|---|---|
+| 文档应当放行的请求被放行，应当拒绝的请求没有被放行：放在文档旁边的场景文件 | `PolicyTestKit` | [测试决策](#testing-decisions) |
+| 决策周围的代码行为正确：CoSec 回答的状态和 problem，读取调用方的处理器 | `PipelineFixture` | [用真实管道测试代码](#testing-your-code-against-a-real-pipeline) |
+| 读取调用方的处理器或函数，在管道生成的 `SecurityContext` 下工作正常 | `PermittedRequest` | [测试你的应用](#testing-your-application) |
+
+不写测试也可以用编译器检查同样的文档（[CI 中的策略](#policies-in-ci)）。本页其余部分讲的是修改已经上线的文档。
+
 ## 控制面 {#the-control-plane}
 
 控制面随 `cosec-control` 模块提供（它需要 `cosec-cocache`，因为文档保存在 Redis 中）。它在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供 HTTP API；其设置为 `cosec.control.*`（[配置](../operations/configuration.md)），文档如何存储以及如何首次发布见[存储](../operations/storage.md)。
@@ -17,7 +29,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 |---|---|
 | 读取文档、历史、差异 | `cosec:read` |
 | 提议、`apply`、rebase | 对写入或删除的每个条目需要 `cosec:write`，对写入的每个绑定的作用域、以及因此派生出新绑定的每个角色的作用域需要 `cosec:grant`；`apply` 和回滚还需要 `cosec:read` |
-| 开启影子窗口、发布 | `cosec:publish`；break-glass 的申请和撤销改为需要 `cosec:breakglass` |
+| 开启影子窗口、发布 | `cosec:publish`；break-glass 的申请和吊销改为需要 `cosec:breakglass` |
 | 跳过影子窗口 | `cosec:skip-shadow` |
 | 审批、驳回 | `cosec:approve` |
 | `simulate`、`explain`、`analyze` | 在决定该请求的租户文档上分别需要 `cosec:simulate`、`cosec:explain`（没有主体的请求是 `(0)` 的文档）；在所查询租户的文档上需要 `cosec:analyze` |
@@ -36,7 +48,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
 | `POST /changes/{id}:rebase`、`:shadow`、`:skip-shadow`、`:approve`、`:reject`、`:abandon`、`:publish` | 推进变更。 |
-| `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、撤销绑定（[安全模型](../guide/security-model.md#break-glass)）。撤销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
+| `POST /break-glass`、`POST /break-glass/{change}:approve`、`DELETE /break-glass/{bindingId}?reason=` | 申请 break-glass、审批申请、吊销绑定（[安全模型](../guide/security-model.md#break-glass)）。吊销只在该绑定不再生效之后才返回 `200`，平台文档中没有该 id 的绑定时返回 `404`，其他情况（包括该 id 是普通绑定）返回 `409`（[抢占被占用的暂存槽](#taking-a-busy-slot)）。 |
 | `POST /simulate`、`POST /explain`、`POST /analyze` | 不做任何修改地决策或分析。 |
 
 路径参数（`{key}`、`{id}`、`{revision}`、`{bindingId}`）在路径划分为段之后做一次百分号解码：`tenant:acme%20west` 是租户 `acme west`，`tenant%3Aacme` 是 `tenant:acme`，编码的 `/`（`%2F`）是值的一部分，从不成为另一个段，`+` 仍是 `+`，编码两次的 `%25`（`%2520`）解码为 `%20` 而不是空格。畸形的转义（`%zz`、孤立的 `%`、不是 UTF-8 的字节）是 `400`。路由自己的词（`documents`、`revisions`、`:apply`）按原样匹配。
@@ -154,7 +166,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 `ifMatch` 是条目按文档写法的 SHA-256：只有条目仍是这个样子时操作才生效。不想手写操作时，`POST /documents/{key}:apply` 接受整份文档（`{"document", "mode", "note"}`），并提议把当前修订变成该文档所需的操作：`MERGE` 只新增和修改，`REPLACE` 还会删除文档中没有的内容。
 
-- **`MERGE` 保留文件里没有的内容。** 从文件中删掉的条目（例如撤销的授权）仍然处于发布状态。变更会说明这一点：每个保留了条目的部分给出一个 `WARNING` 检查结果（检查 `OPERATION`），位于 `$.policies`、`$.bindings`、`$.roles` 或 `$.rateLimits`，并点名保留的 id。要删除它们，请用 `REPLACE` 应用。
+- **`MERGE` 保留文件里没有的内容。** 从文件中删掉的条目（例如收回的授权）仍然处于发布状态。变更会说明这一点：每个保留了条目的部分给出一个 `WARNING` 检查结果（检查 `OPERATION`），位于 `$.policies`、`$.bindings`、`$.roles` 或 `$.rateLimits`，并点名保留的 id。要删除它们，请用 `REPLACE` 应用。
 - **`REPLACE` 在文件读取时的修订上提议**，即文件头的 `revision`，而不是到达时的头修订。在修订 12 上读取、在修订 13 发布之后才应用的文件，会删掉修订 13 的条目，所以返回 `409`：读取头修订（`GET /documents/{key}`），把变化合并进文件，把它的 `revision` 设为头修订，再应用一次。从 git 应用的作业要发送它上次读取的修订。尚未发布的文档不比较文件头。`REPLACE` 删除的内容就是它的操作。
 
 设置租户的 `boundary` 或平台的默认边界请使用 `apply`。租户的边界属于平台：租户主体的 `REPLACE` 或回滚如果会删除或改变平台设定的边界，返回 `403`。限流规则变更如何授权和审批见[限流](./rate-limiting.md#publishing-rules)。
@@ -177,7 +189,7 @@ flowchart LR
     X -->|rebase| D
 ```
 
-一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。变更在占用暂存槽之前就已进入暂存状态，所以仍在写候选的调用也占着暂存槽；写不成或被取消的调用会归还暂存槽，变更回到 `CHECKED`。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`，而控制面的维护任务每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次所有未完成的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，撤销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
+一个文档至多有一个暂存的变更（`SHADOWING`、`AWAITING_APPROVAL` 或 `READY`）；在它发布、放弃、驳回或过期之前，暂存另一个变更返回 `409`。变更在占用暂存槽之前就已进入暂存状态，所以仍在写候选的调用也占着暂存槽；写不成或被取消的调用会归还暂存槽，变更回到 `CHECKED`。未完成的变更在提议后 `cosec.control.changes.expire-after`（默认 7 天）过期：此后第一次被读取时即为 `EXPIRED`，而控制面的维护任务每隔 `cosec.control.shadow.check-interval`（默认 1 分钟）读取一次所有未完成的变更。作者可以对 `CONFLICTED`、`DRAFT` 或 `CHECKED` 的变更执行 `:rebase`，把它放到当前修订上，这会重新运行所有检查，并丢弃之前的审批和影子证据。作者或持有 `cosec:publish` 的人可以 `:abandon` 它；设置租户边界的变更只有平台主体能驳回或放弃，吊销仍在生效的 break-glass 绑定的变更只有其作者能放弃（`BRK-10`）。每次放弃都记一条 `ABANDONED` 变更事件，备注写明变更的作者；放弃 break-glass 变更需要一个 REQUIRED 变更监听器，由它先记下（没有时返回 `503`）。
 
 ## 在影子模式中试运行变更 {#trying-changes-in-shadow-mode}
 
@@ -216,7 +228,7 @@ flowchart LR
 
 一个文档的暂存槽同一时间只由一个变更持有：它在影子窗口中、等待审批或已就绪时都占着槽；同一文档的其他变更要等待（`409`）。紧急情况不能排队：有两类变更可以抢占槽。
 
-- **撤销 break-glass**，只要该绑定尚未到期，总是可以。撤销仍在生效的绑定的变更持槽时，只有另一个这样的撤销能抢走它的暂存槽，也只有其作者能放弃它（`BRK-10`），所以被撤销的主体无法用自己的变更拖住它。撤销已过期的绑定并不紧急，因为该绑定已不授予任何权限：这样的撤销像普通变更一样等待暂存槽、持有暂存槽，撤销仍在生效的绑定的变更或只收窄的变更能抢走它，其他变更仍要等待。发布中途停住的撤销（其 REQUIRED 监听器的存储不可用）以 `READY` 留在槽中：再撤销一次该绑定会把它发布出去，其 `REVOKED` 事件写明是你、出于什么原因；看不到它的撤销人用自己的撤销变更抢走它的槽；`POST /changes/{id}:publish` 也能清掉它。两个撤销同时进行时可能互相抢占：以 `CONFLICTED` 结束的撤销（被抢占，或遇到已变化的头），或在提议、暂存之前头就变化了的撤销，只要其绑定仍在生效，就在新的头上再撤销一次，至多再试三次。`DELETE /break-glass/{bindingId}` 只在该绑定不再生效之后才返回 `200`，无论是谁删除的；平台文档中没有该 id 的绑定时（输错了 id，或已被删除）返回 `404`；该 id 的绑定不是 break-glass 绑定时（无论是否到期）返回 `409`（普通绑定请用变更删除）；其他情况返回 `409`，`detail` 写明你的变更所处的状态。返回 `404` 或遇到普通绑定时都不提议任何变更。没有生效的撤销永远不会看起来像已生效；反过来的情况可能出现一次：另一个调用恰在你的撤销提议时删除了同一个绑定，你的调用返回 `409`，重试则返回 `404`（`BRK-11`）。撤销只有经一个记录它的 REQUIRED 变更监听器才能发布；该监听器的存储不可用时，改为吊销该主体的令牌（`TokenRevoker.revokeSubject`），这不需要监听器。
+- **吊销 break-glass**，只要该绑定尚未到期，总是可以。吊销仍在生效的绑定的变更持槽时，只有另一个这样的吊销能抢走它的暂存槽，也只有其作者能放弃它（`BRK-10`），所以被吊销的主体无法用自己的变更拖住它。吊销已过期的绑定并不紧急，因为该绑定已不授予任何权限：这样的吊销像普通变更一样等待暂存槽、持有暂存槽，吊销仍在生效的绑定的变更或只收窄的变更能抢走它，其他变更仍要等待。发布中途停住的吊销（其 REQUIRED 监听器的存储不可用）以 `READY` 留在槽中：再吊销一次该绑定会把它发布出去，其 `REVOKED` 事件写明是你、出于什么原因；看不到它的吊销人用自己的吊销变更抢走它的槽；`POST /changes/{id}:publish` 也能清掉它。两个吊销同时进行时可能互相抢占：以 `CONFLICTED` 结束的吊销（被抢占，或遇到已变化的头），或在提议、暂存之前头就变化了的吊销，只要其绑定仍在生效，就在新的头上再吊销一次，至多再试三次。`DELETE /break-glass/{bindingId}` 只在该绑定不再生效之后才返回 `200`，无论是谁删除的；平台文档中没有该 id 的绑定时（输错了 id，或已被删除）返回 `404`；该 id 的绑定不是 break-glass 绑定时（无论是否到期）返回 `409`（普通绑定请用变更删除）；其他情况返回 `409`，`detail` 写明你的变更所处的状态。返回 `404` 或遇到普通绑定时都不提议任何变更。没有生效的吊销永远不会看起来像已生效；反过来的情况可能出现一次：另一个调用恰在你的吊销提议时删除了同一个绑定，你的调用返回 `409`，重试则返回 `404`（`BRK-11`）。吊销只有经一个记录它的 REQUIRED 变更监听器才能发布；该监听器的存储不可用时，改为吊销该主体的令牌（`TokenRevoker.revokeSubject`），这不需要监听器。
 - **只收窄的变更**，由在该文档上持有 `cosec:skip-shadow` 的人暂存或跳过影子。每个操作都必须属于下列之一：删除一条绑定，被绑定的策略只含 ALLOW；把一条只含 ALLOW 的可附加策略改为不可附加，语句不变；新增一条只含 DENY 的策略，或新增一条指向这种策略的绑定。删除 DENY、把含 DENY 的策略改为不可附加、替换任何已有条目，或对租户与平台都定义的策略 id 所做的操作，都会放宽或可能放宽，与其他变更一样等待。
 
 拉黑一个主体、设备或地址不是文档变更：黑名单在请求时读取（[安全模型](../guide/security-model.md#blacklist)），不需要等待暂存槽。
@@ -252,7 +264,7 @@ flowchart LR
 
 删除条目和收窄 ALLOW 不授予任何东西，只有一个例外：删除租户自己的一条策略，而平台也定义了同一个 id 时，租户中指向这个 id 的绑定，以及平台的策略可附加时对它的附加，都改为指向平台的策略。这按把平台的策略授给它们来分析。
 
-租户可以独自删除自己的 DENY：平台和各应用的 DENY 以及它的边界仍然约束着它。平台文档和应用文档之上没有这样的约束，所以删除其中一条 DENY 的变更需要第二个人（`CTL-31`）：每条含 DENY 的 `policy <id> of <document>`、每条所绑策略含 DENY 或找不到的 `binding <id> of <document>`，各是一项 `NOT_ANALYZED` 升级。两份文档按[展开后](./role-permissions.md#roles)的形式读取：删除角色，或用 `putRole` 去掉一项权限，按角色不再派生的每条绑定计。撤销 break-glass 绑定不算这样的删除：它结束的是一次应急，一个人即可（[break-glass](../guide/security-model.md#break-glass)）。
+租户可以独自删除自己的 DENY：平台和各应用的 DENY 以及它的边界仍然约束着它。平台文档和应用文档之上没有这样的约束，所以删除其中一条 DENY 的变更需要第二个人（`CTL-31`）：每条含 DENY 的 `policy <id> of <document>`、每条所绑策略含 DENY 或找不到的 `binding <id> of <document>`，各是一项 `NOT_ANALYZED` 升级。两份文档按[展开后](./role-permissions.md#roles)的形式读取：删除角色，或用 `putRole` 去掉一项权限，按角色不再派生的每条绑定计。吊销 break-glass 绑定不算这样的删除：它结束的是一次应急，一个人即可（[break-glass](../guide/security-model.md#break-glass)）。
 
 对文档持有 `cosec:approve` 的平台主体是信任根：其自己的变更不做分析，除非开启了 `cosec.control.approval.four-eyes`，这时它们会像其他人的变更一样被分析。平台授予了其租户文档上 `cosec:approve` 的租户主体，审批别人的变更，它自己的变更要经分析。开启 four-eyes 时，信任根的变更需要审批的部分必须由另一位平台主体审批。租户的边界属于平台：只有平台主体能设置它（否则 `403`），也只有平台主体能审批、驳回或放弃设置边界的变更。
 
@@ -287,7 +299,7 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 
 写入时只比较该文档自己的头。检查读过的其他文档（例如同一时刻落地的平台变更）可能在发布的最后一次检查与写入之间变化；这时控制面重新分析这次变更，记 `HEADS_MOVED`，分析发现了无人审批的升级项时记 `REVIEW_NEEDED`。变更保持已发布：为什么这是安全的、如何复核这类事件，见[一次发布比较什么](../operations/storage.md#what-a-publish-compares)。
 
-要撤销某个修订，用 `{"revision": 11, "note": "..."}` 调用 `POST /documents/{key}:rollback`，它会提议一个 `ROLLBACK` 变更，把文档恢复为该修订时的样子。它和其他变更一样经过检查、窗口、审批和发布，所以恢复带 `onMissing: "nomatch"` 的 DENY 时要像提议一样带上 `confirmations`：旧修订中的确认是为另一个变更给出的。保留哪些修订、保留多久，见[存储](../operations/storage.md)。
+要吊销某个修订，用 `{"revision": 11, "note": "..."}` 调用 `POST /documents/{key}:rollback`，它会提议一个 `ROLLBACK` 变更，把文档恢复为该修订时的样子。它和其他变更一样经过检查、窗口、审批和发布，所以恢复带 `onMissing: "nomatch"` 的 DENY 时要像提议一样带上 `confirmations`：旧修订中的确认是为另一个变更给出的。保留哪些修订、保留多久，见[存储](../operations/storage.md)。
 
 ## 访问审查 {#access-reviews}
 
@@ -311,7 +323,7 @@ import java.io.File
 
 val platform = PolicyDocumentCodec.decode(DocumentKind.PLATFORM, "", File("platform.json").readBytes())
 val acme = PolicyDocumentCodec.decode(DocumentKind.TENANT, "acme", File("tenant-acme.json").readBytes())
-// The platform's limits and declared attributes, as the control plane checks a candidate.
+// 平台的 limits 和声明的属性，与控制面检查候选文档时一致。
 val compiler = PolicyDocumentCompiler.forPlatform(platform)
 compiler.validate(platform)
 compiler.validate(acme)

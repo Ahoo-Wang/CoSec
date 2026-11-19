@@ -38,7 +38,10 @@ class IdentityIssuer(
     private val maxBytes: Int = IdentityCodec.DEFAULT_MAX_BYTES,
     private val clock: Clock = Clock.systemUTC(),
 ) {
-    /** The header for [security]; null for an anonymous request. [IdentityOverflowException] when it is too large. */
+    /**
+     * The header for [security]; null for an anonymous request. [IdentityOverflowException] when it is too large,
+     * [IdentityFormatException] when no service would read it back (#1690).
+     */
     fun issue(security: RequestSecurity): String? {
         val principal = security.principal ?: return null
         val credential = principal.credential ?: return null
