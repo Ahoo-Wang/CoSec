@@ -60,6 +60,8 @@ object PermittedRequest {
      * @throws IllegalStateException when the pipeline does not permit the request: a header it refuses, such as a
      * `CoSec-Device-Id` sent with two different values (`400`), as it would on a host
      */
+    @JvmStatic
+    @JvmOverloads
     fun withToken(
         token: String,
         verifier: TokenVerifier,
@@ -104,6 +106,8 @@ object PermittedRequest {
      * @throws IllegalArgumentException when [headers] names a credential header, or the pipeline refuses the request: an
      * id it does not accept, or a [space] in which [roles] holds none
      */
+    @JvmStatic
+    @JvmOverloads
     fun forSubject(
         subject: String,
         tenant: String = TenantId.DEFAULT.value,
@@ -143,6 +147,8 @@ object PermittedRequest {
      * @throws IllegalArgumentException when [headers] names a credential header, or the gate refuses the header (expired,
      * too old, malformed), naming the status and the problem
      */
+    @JvmStatic
+    @JvmOverloads
     fun withIdentity(header: String, headers: Map<String, List<String>> = emptyMap()): SecurityContext {
         refuseCredentials(headers)
         val outcome = runBlocking {
@@ -183,6 +189,7 @@ object PermittedRequest {
      *
      * @throws IllegalArgumentException when [context] is not one the pipeline made
      */
+    @JvmStatic
     fun end(context: SecurityContext) {
         requireNotNull(RequestSecurity.of(context)) { "The context [$context] is not one the pipeline made." }.end()
     }

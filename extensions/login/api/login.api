@@ -134,6 +134,14 @@ public final class me/ahoo/cosec/login/token/TokenFamilies$Issue {
 
 public final class me/ahoo/cosec/login/token/TokenSubject {
 	public static final field Companion Lme/ahoo/cosec/login/token/TokenSubject$Companion;
+	public fun <init> (Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;)V
+	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;)V
 	public fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;)V
 	public synthetic fun <init> (Ljava/lang/String;Ljava/lang/String;Ljava/lang/String;Ljava/util/Set;Ljava/util/Set;Ljava/util/Map;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenSession;Ljava/time/Instant;ILkotlin/jvm/internal/DefaultConstructorMarker;)V
 	public fun equals (Ljava/lang/Object;)Z
@@ -148,10 +156,13 @@ public final class me/ahoo/cosec/login/token/TokenSubject {
 	public final fun getTenant ()Ljava/lang/String;
 	public fun hashCode ()I
 	public final fun inSession (Lme/ahoo/cosec/login/token/TokenFamilies$Issue;)Lme/ahoo/cosec/login/token/TokenSubject;
+	public static final fun of (Lme/ahoo/cosec/spi/token/VerifiedToken;)Lme/ahoo/cosec/login/token/TokenSubject;
+	public static final fun of (Lme/ahoo/cosec/spi/token/VerifiedToken;Lme/ahoo/cosec/login/token/TokenFamilies$Issue;)Lme/ahoo/cosec/login/token/TokenSubject;
 	public fun toString ()Ljava/lang/String;
 }
 
 public final class me/ahoo/cosec/login/token/TokenSubject$Companion {
+	public final fun of (Lme/ahoo/cosec/spi/token/VerifiedToken;)Lme/ahoo/cosec/login/token/TokenSubject;
 	public final fun of (Lme/ahoo/cosec/spi/token/VerifiedToken;Lme/ahoo/cosec/login/token/TokenFamilies$Issue;)Lme/ahoo/cosec/login/token/TokenSubject;
 	public static synthetic fun of$default (Lme/ahoo/cosec/login/token/TokenSubject$Companion;Lme/ahoo/cosec/spi/token/VerifiedToken;Lme/ahoo/cosec/login/token/TokenFamilies$Issue;ILjava/lang/Object;)Lme/ahoo/cosec/login/token/TokenSubject;
 }

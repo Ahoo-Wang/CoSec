@@ -22,7 +22,7 @@ import java.time.Instant
  *
  * [roles] holds what the principal may hold in the token's [app], as `role` or `role@space` (RFC 0012 §3.5).
  */
-class TokenSubject(
+class TokenSubject @JvmOverloads constructor(
     /** The principal's id: the token's subject. Not empty, and not beginning with `(`, which is CoSec's (`IDN-12`). */
     val id: String,
     /**
@@ -68,6 +68,8 @@ class TokenSubject(
          * What the token [token] said, so that refreshing it says the same, its app and tenant included; in [issue]'s
          * session when one is given.
          */
+        @JvmStatic
+        @JvmOverloads
         fun of(token: VerifiedToken, issue: TokenFamilies.Issue? = null): TokenSubject = TokenSubject(
             id = token.principal,
             app = token.app,
