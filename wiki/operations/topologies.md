@@ -33,7 +33,11 @@ topology rests on, the checklist what to set before it carries traffic. The sett
   has the other secret, and every session has to log in again. There is one secret per deployment and no key id, so a
   rolling restart is a mixed fleet for its duration; plan a rotation in a quiet window, and expect to log everyone out.
 - **The starter checks modules at startup** and fails naming the artifact that is missing
-  ([Modules](../guide/introduction.md#modules), STA-1).
+  ([Modules](../guide/introduction.md#modules), STA-1). It also refuses a `cosec.*` switch written with a value it cannot
+  read (`true` or `false`; `enforce` or `gateway` for `cosec.pipeline.mode`; `memory` or `redis` for the API key store)
+  rather than reading it as "off" ([Feature switches](./configuration.md#feature-switches)), and logs one `INFO` line of
+  what CoSec is configured as, or one `WARN` when `cosec.enabled=false`
+  ([Startup summary](./observability.md#startup-summary)).
 
 ## One service that enforces
 
@@ -68,6 +72,10 @@ The header is unsigned base64url JSON, with no key and no signature. **A service
 `CoSec-Identity` it receives**: anyone who can send it a request can be the platform administrator. What holds the
 boundary is the network: a Kubernetes `NetworkPolicy` that admits only the gateway's pods, a private network, or mutual
 TLS. A namespace with no policy, which is the Kubernetes default, lets any pod in the cluster send the header.
+[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)
+is a `NetworkPolicy` to copy for the service: it admits the service's port from the pods labeled
+`app.kubernetes.io/name: cosec-gateway` in the gateway's namespace and from nothing else. It needs a network plugin that
+enforces `NetworkPolicy`; without one it does nothing, so test that a pod of another label cannot connect.
 `cosec.pipeline.identity.max-age` bounds only how old a captured header may be, and a forger sets it to now. Build
 the boundary before the service is reachable at all ([Services behind the gateway](./deployment.md#services-behind-the-gateway),
 [Trust boundaries](../guide/security-model.md#trust-boundaries)).
@@ -131,8 +139,11 @@ The only writer of documents: changes are validated, shadowed and approved befor
 | Sets | `cosec.control.*`; Redis credentials that may write the documents; `cosec.control.enabled=false` on the data-plane instances, which then read the documents read-only; the first administrator with `cosec-migrate bootstrap`, and a way to issue a `(platform)` token |
 | Reaches | Redis (writes), and Kafka when audit goes there |
 | Rests on | whoever holds a `(platform)` administrator token or the signing secret; write access to Redis |
-| CoSec checks | the modules, the revocation reader, the token retention against approval expiry, the control-plane beans (not replaceable), and Redis permission failures |
-| CoSec does not check | that an administrator can obtain a token at all |
+| CoSec checks | the modules, the revocation reader, the token retention against approval expiry, the control-plane beans (not replaceable), and Redis permission failures; per change, that a change to the platform document, the platform tenant's or the control app's does not keep its publisher out of the control plane (check `V4`: a `422` unless the publish says `"lockout": true`) |
+| CoSec does not check | that an administrator can obtain a token at all; that an operator other than the publisher keeps access |
+
+A lock-out that was acknowledged, or one the check cannot see, is undone with `cosec-migrate restore`, run by whoever holds
+the store's credentials ([Recovering from a lock-out](./storage.md#recovering-from-a-lock-out)).
 
 See [The control plane](../policies/testing.md#the-control-plane), [Storage](./storage.md#publishing-documents) and
 [Change a document later](../guide/quick-start.md#change-a-document-later).

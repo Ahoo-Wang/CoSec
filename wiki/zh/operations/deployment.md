@@ -188,7 +188,7 @@ management:
 - **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
   Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
 - **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；`-Djava.net.preferIPv4Stack=true`（因为
-  [netty#16082](https://github.com/netty/netty/issues/16082)）。镜像不启动 JMX agent（直到 beta.3，它在 5555 端口、所有网卡上启动一个不需要认证的 JMX agent）。
+  [netty#16082](https://github.com/netty/netty/issues/16082)）。镜像不启动 JMX agent。
 
 ### 内存 {#memory}
 

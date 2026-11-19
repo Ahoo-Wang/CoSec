@@ -36,6 +36,8 @@ The response body says only what the client can act on. The detail is in the aud
 | `503` | `UNAVAILABLE` | [`unavailable`](#unavailable) |
 | `500` | `INTERNAL_ERROR` | [`internal-error`](#internal-error) |
 
+A `5xx` whose body has no `type` under `https://cosec.ahoo.me/problems/` is not CoSec's
+([a gateway error](#a-permitted-request-answers-500-with-the-gateways-own-error-body)).
 An explicit and an implicit deny give the same response; the audit event tells them apart. How outcomes map to
 statuses, headers and bodies is defined once, for every adapter, in [Web integration](../integration/web.md).
 Control-plane responses have more statuses: [Control-plane errors](#control-plane-errors).
@@ -98,8 +100,7 @@ tenant, and
 - **Intermittent, at second boundaries:** a few requests fail with `token-invalid`, each in the last milliseconds of a
   second, and the log says `Token refused as not valid yet: The token's iat is later than this instance's clock`. The
   issuer's clock is ahead of this instance's by more than
-  [`cosec.authentication.revocation.skew`](./configuration.md#authentication) (5 seconds; through beta.3 there was
-  no room at all, `IDN-29`), and a token stamped with the issuer's next second reaches a host still in the previous
+  [`cosec.authentication.revocation.skew`](./configuration.md#authentication) (5 seconds, `IDN-29`), and a token stamped with the issuer's next second reaches a host still in the previous
   one. The decision event's `subject.rejected` is `TOKEN_NOT_YET_VALID`. Synchronize the clocks (NTP); raise the skew
   only for a known, bounded drift, since it also widens what a subject revocation covers.
 - **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
@@ -247,6 +248,20 @@ is a <type>, not a string: ...`: quote the value, and give one app.
   over 1024.` or `Claim [<name>] is a <type>, not a string, number or boolean.`: fewer roles or
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity), or a larger `max-size` on the gateway and
   the services.
+
+## A permitted request answers 500 with the gateway's own error body {#a-permitted-request-answers-500-with-the-gateways-own-error-body}
+
+CoSec decided to permit, and the gateway then failed to reach the route's target. The answer is a `500` whose body has no
+`type`: Spring Boot's default error object (`timestamp`, `path`, `status`, `error`, `requestId`), not a problem document.
+The gateway log has, at `ERROR` from `AbstractErrorWebExceptionHandler`, `500 Server Error for HTTP GET "<path>"` followed
+by `java.net.UnknownHostException: Failed to resolve '<host>'`: the host of the route's `uri` does not resolve, for
+example a Kubernetes Service that does not exist in the gateway's namespace (the demo route `cosec-auth` of `k8s/`
+points at one it does not create).
+
+CoSec's own refusals tell apart: they are always `application/problem+json`, and their `type` begins with
+`https://cosec.ahoo.me/problems/` ([Web integration](../integration/web.md)). A `5xx` without that type is the gateway's
+or the target's, and no decision of CoSec's caused it: do not look in the documents. Fix the route's `uri`, or create
+the Service or the DNS name it names.
 
 ## Request allowed unexpectedly
 

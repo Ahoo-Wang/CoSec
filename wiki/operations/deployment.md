@@ -265,8 +265,7 @@ and an overlay for each kind of cluster. Deploy an overlay, never the base on it
   covers it, Spring's graceful shutdown (30 seconds at most) and the decision listeners' drain ([Shutdown](#shutdown)).
 - **JVM options**, through `JAVA_OPTS`: the memory sizes below, `-XX:+ExitOnOutOfMemoryError` so that a JVM that ran
   out of memory is restarted, `-Djava.net.preferIPv4Stack=true` (for
-  [netty#16082](https://github.com/netty/netty/issues/16082)). The image starts no JMX agent (through beta.3 it started
-  one on port 5555 with no authentication, on every interface).
+  [netty#16082](https://github.com/netty/netty/issues/16082)). The image starts no JMX agent.
 
 ### Memory
 

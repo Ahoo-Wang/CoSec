@@ -24,20 +24,20 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 
 决策事件的 `outcome.reason` 说明什么做出了决定，每个输出都使用它的词（UD-7）：span 的 `cosec.authorize.result` 原样使用，指标的 `result` 标签用小写，审计的 `decision` 用大写。只有 `explicit_deny` 表示 DENY 语句拒绝了请求。
 
-| `outcome.reason` / span | 指标 `result` | 审计 `decision` | 计数的是 | 之前（8.0.0-beta.3：指标 / 审计） |
-|---|---|---|---|---|
-| `PERMIT` | `permit` | `PERMIT` | 被放行的请求 | `allow` / `ALLOW` |
-| `TOO_MANY_REQUESTS` | `too_many_requests` | `TOO_MANY_REQUESTS` | 被耗尽的限流规则拦下的放行（`429`） | 相同 |
-| `EXPLICIT_DENY` | `explicit_deny` | `EXPLICIT_DENY` | 被 DENY 语句拒绝的请求 | 同样的词还计入了下面三种 |
-| `IMPLICIT_DENY` | `implicit_deny` | `IMPLICIT_DENY` | 没有任何允许的请求 | 相同 |
-| `SCOPE_REJECTED` | `scope_rejected` | `SCOPE_REJECTED` | 主体不能在其应用或空间中操作的请求（`403` `scope-rejected`） | `explicit_deny` / `EXPLICIT_DENY` |
-| `BOUNDARY` | `boundary` | `BOUNDARY` | 超出租户平台边界的放行（`403` `forbidden`） | `explicit_deny` / `EXPLICIT_DENY` |
-| `INVALID_REQUEST` | `invalid_request` | `INVALID_REQUEST` | 无法无歧义读取的请求（`400`） | `bad_request` / `EXPLICIT_DENY` |
-| `INDETERMINATE`、`AUTHENTICATOR_UNAVAILABLE`、`DEADLINE_EXCEEDED` | `indeterminate`（`cause` 说明是哪种） | `INDETERMINATE` | 无法做出决定的请求（`503`） | 相同 |
-| `ERROR` | `error` | `ERROR` | 缺陷（`500`） | 相同 |
-| `CANCELLED` | `cancelled` | 没有审计记录 | 离开的调用方 | 相同 |
+| `outcome.reason` / span | 指标 `result` | 审计 `decision` | 计数的是 |
+|---|---|---|---|
+| `PERMIT` | `permit` | `PERMIT` | 被放行的请求 |
+| `TOO_MANY_REQUESTS` | `too_many_requests` | `TOO_MANY_REQUESTS` | 被耗尽的限流规则拦下的放行（`429`） |
+| `EXPLICIT_DENY` | `explicit_deny` | `EXPLICIT_DENY` | 被 DENY 语句拒绝的请求 |
+| `IMPLICIT_DENY` | `implicit_deny` | `IMPLICIT_DENY` | 没有任何允许的请求 |
+| `SCOPE_REJECTED` | `scope_rejected` | `SCOPE_REJECTED` | 主体不能在其应用或空间中操作的请求（`403` `scope-rejected`） |
+| `BOUNDARY` | `boundary` | `BOUNDARY` | 超出租户平台边界的放行（`403` `forbidden`） |
+| `INVALID_REQUEST` | `invalid_request` | `INVALID_REQUEST` | 无法无歧义读取的请求（`400`） |
+| `INDETERMINATE`、`AUTHENTICATOR_UNAVAILABLE`、`DEADLINE_EXCEEDED` | `indeterminate`（`cause` 说明是哪种） | `INDETERMINATE` | 无法做出决定的请求（`503`） |
+| `ERROR` | `error` | `ERROR` | 缺陷（`500`） |
+| `CANCELLED` | `cancelled` | 没有审计记录 | 离开的调用方 |
 
-事件的 `subject.method` 用 `CoSec-Identity` 对同一凭证使用的词说明主体如何认证：CoSec 自己的令牌为 `jwt`，`api-key`，或其他校验器的令牌被赋予的名字（默认 `token`）；没有凭证的主体用它的认证器命名。直到 8.0.0-beta.3，它对每个令牌（包括 CoSec 自己的）都是 `token`，API key 为 `apikey`。
+事件的 `subject.method` 用 `CoSec-Identity` 对同一凭证使用的词说明主体如何认证：CoSec 自己的令牌为 `jwt`，`api-key`，或其他校验器的令牌被赋予的名字（默认 `token`）；没有凭证的主体用它的认证器命名。
 
 starter 注册的监听器：
 
