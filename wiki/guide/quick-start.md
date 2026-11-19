@@ -271,7 +271,8 @@ This guide leaves four demo artifacts. Remove each before the code runs anywhere
    it can administer the deployment. Delete it; issue `(platform)` tokens only from a source users cannot influence.
 3. **Redis on every interface.** `docker run -p 6379:6379` publishes the port on every host interface; the guide uses
    `127.0.0.1:6379:6379`. Redis holds every document and revocation: anyone who can write it decides every request.
-   Connect with TLS and a user of CoSec's own ([Redis requirements](../operations/storage.md#redis-requirements)).
+   Connect with TLS and a user of CoSec's own, turn on persistence, and back it up: Redis is the only copy of the documents and
+   revocations ([Redis requirements](../operations/storage.md#redis-requirements)).
 4. **The client address.** `cosec.authorization.remote-ip.max-trusted-index` defaults to `1`, one proxy in front of the
    service. Served directly, as in this guide, set it to `0`; with a longer proxy chain, set the chain's length
    ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)).
