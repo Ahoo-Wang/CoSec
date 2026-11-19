@@ -165,6 +165,25 @@ class TypeScriptWorkspaceTest {
     }
 
     /**
+     * The client against a deployed CoSec (`pnpm test:system`): the system test's workflow starts the stack and runs the
+     * script, the script starts nothing, and neither CI's `typescript` job (no JVM) nor `typescript-host` runs it.
+     */
+    @Test
+    fun `the system tests run through one script that starts nothing, and only the system test workflow runs them`() {
+        json(workspace.resolve("package.json"))["scripts"]["test:system"].asString()
+            .assert().isEqualTo(
+                "node scripts/with-system.mjs -- pnpm --filter @ahoo-wang/cosec-fetcher test:system"
+            )
+        json(workspace.resolve("cosec-fetcher/package.json"))["scripts"]["test:system"].asString()
+            .assert().contains("vitest.system.config.ts")
+        Projects.root.resolve("test/system-test/compose.yaml").exists().assert().isTrue()
+        val ci = Projects.root.resolve(".github/workflows/ci.yml").readText()
+        ci.contains("test:system").assert().describedAs("CI's own jobs run no system test").isFalse()
+        val systemTest = Projects.root.resolve(".github/workflows/system-test.yml").readText()
+        systemTest.contains("pnpm test:system").assert().isTrue()
+    }
+
+    /**
      * The client is held to what the server is tested against (`PIP-25`, `contract/`): its contract test reads the
      * repository's files, its fake server answers from them, and both run with the other unit tests in the `typescript`
      * job, so a change of a file fails there until the client follows.

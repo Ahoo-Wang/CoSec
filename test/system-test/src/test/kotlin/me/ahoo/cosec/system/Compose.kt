@@ -30,8 +30,18 @@ object Compose {
 
     fun restart(service: String) = run("restart", service)
 
-    private fun run(verb: String, service: String) {
-        val command = listOf("docker", "compose", verb, service)
+    /** Runs [command] in the running [service] (`docker compose exec`) and returns what it printed; fails when it exits non-zero. */
+    fun exec(service: String, vararg command: String): String = run("exec", "-T", service, *command)
+
+    /** Like [exec], but whatever the command's exit code: a console consumer that read nothing before its timeout exits 1. */
+    fun execAnyway(
+        service: String,
+        vararg command: String
+    ): String = run("exec", "-T", service, *command, check = false)
+
+    private fun run(verb: String, vararg arguments: String, check: Boolean = true): String {
+        val service = arguments.joinToString(" ")
+        val command = listOf("docker", "compose", verb) + arguments
         Transcript.note("$ ${command.joinToString(" ")}")
         val process = ProcessBuilder(command).redirectErrorStream(true).start()
         val output = process.inputStream.bufferedReader().readText()
@@ -40,6 +50,7 @@ object Compose {
         finished.assert().describedAs(
             "docker compose $verb $service did not end in $TIMEOUT_SECONDS s: $output"
         ).isTrue()
-        process.exitValue().assert().describedAs("docker compose $verb $service: $output").isEqualTo(0)
+        if (check) process.exitValue().assert().describedAs("docker compose $verb $service: $output").isEqualTo(0)
+        return output
     }
 }
