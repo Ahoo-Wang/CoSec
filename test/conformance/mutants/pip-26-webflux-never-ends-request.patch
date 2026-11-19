@@ -3,14 +3,14 @@
 # Tests: :webflux:test --tests me.ahoo.cosec.webflux.RequestEndTest
 
 diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
-index 855c3334..54a7eb28 100644
+index 594ce3ca..0000000 100644
 --- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
 +++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
-@@ -89,7 +89,7 @@ abstract class ReactivePipelineBridge(
-         val authorized = exchange.mutate().principal(securityContext.principal.toMono()).build()
-         // The request ends when the chain's Mono terminates: after a streamed body's last element is written, on an
-         // error, or when the client goes away. From then on no check permits as it (PIP-26).
--        return chain(authorized, outcome).writeSecurityContext(securityContext).doFinally { security.end() }
+@@ -92,7 +92,6 @@ abstract class ReactivePipelineBridge(
+         // goes on, so whoever sees the chain complete sees the request ended: `doOnTerminate` runs before passing on
+         // `onComplete` and `onError`, `doOnCancel` before cancelling upstream; `doFinally` runs after passing them on.
+-        val end = Runnable { security.end() }
+-        return chain(authorized, outcome).writeSecurityContext(securityContext).doOnTerminate(end).doOnCancel(end)
 +        return chain(authorized, outcome).writeSecurityContext(securityContext)
      }
  

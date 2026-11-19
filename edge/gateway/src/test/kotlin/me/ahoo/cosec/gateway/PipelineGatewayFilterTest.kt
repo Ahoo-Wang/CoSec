@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.gateway
 
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
@@ -397,7 +398,9 @@ class PipelineGatewayFilterTest {
 
     /**
      * `PIP-26`: the gateway shares the WebFlux bridge. A check while the route's response is still on its way is
-     * answered; once the chain completed, a check of the same context is denied.
+     * answered; once the chain completed, a check of the same context is denied, also one made as the completion
+     * reaches the filter's subscriber, on the thread that completed it: the bridge ends the request before it passes
+     * the completion on.
      */
     @Test
     fun aCheckAfterTheRoutedRequestCompletedIsDenied() {
@@ -418,6 +421,7 @@ class PipelineGatewayFilterTest {
             Route.async().id("orders").uri(URI.create("http://orders")).predicate { true }.build()
         var kept: SecurityContext? = null
         var during: Boolean? = null
+        var onCompletion: Boolean? = null
         PipelineGatewayFilter(pipeline).filter(exchange) { next ->
             kept = next.getSecurityContext()
             // The backend answers later; the request is still in progress meanwhile.
@@ -425,8 +429,10 @@ class PipelineGatewayFilterTest {
                 .then(checker.checkMono(kept!!, "order:read", "order/1"))
                 .doOnNext { during = it }
                 .then()
-        }.block(Duration.ofSeconds(5))
+        }.doOnSuccess { onCompletion = runBlocking { checker.check(kept!!, "order:read", "order/1") } }
+            .block(Duration.ofSeconds(5))
         during.assert().isEqualTo(true)
+        onCompletion.assert().isEqualTo(false)
         checker.checkMono(kept!!, "order:read", "order/1").block(Duration.ofSeconds(5)).assert().isEqualTo(false)
     }
 }
