@@ -64,6 +64,7 @@ class JwtTokenConverter(
     }
 
     init {
+        Jwts.requireSigning(algorithm)
         require(membershipClaimLimit == null || membershipClaimLimit >= 0) {
             "The membership claim limit must not be negative, not $membershipClaimLimit."
         }

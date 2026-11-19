@@ -83,7 +83,8 @@ class SwitchBehindGatewayTest {
     ) { TenantMembership(roles = setOf("clerk")) }
     private val tokens = TokenCompositeAuthentication.of(listOf(switching), converter, families)
 
-    private val gateway = Pipeline.builder(TokenAuthenticator(verifier), SuspendingSnapshotSource(EMPTY))
+    private val gateway = Pipeline
+        .builder(TokenAuthenticator(verifier, RevocationReader.NONE), SuspendingSnapshotSource(EMPTY))
         .engine(PERMITTING)
         .identity(IdentityIssuer())
         .build()
