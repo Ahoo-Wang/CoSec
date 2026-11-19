@@ -93,6 +93,17 @@ section above it:
   controllers or functional routes of its own, which CoSec does not decide
   ([Web](../integration/web.md#the-gateways-own-handlers)); and the client-address line now says what the default
   `max-trusted-index` risks.
+- **Mapped routes that escape `http:` statements are reported** (UC-1; nothing to change). A platform DENY or rate
+  limit rule on `http:*` stops applying to a path once a route map maps it. A host with a route map now logs one WARN
+  for each document revision it installs that holds such statements, naming them
+  ([What CoSec warns about](../scenarios/route-maps.md#what-cosec-warns-about)); a review it could not run is counted
+  in `cosec.snapshot.housekeeping.refused` under `task="install-review"`. The control plane, given the services' route
+  maps in the new optional `cosec.control.analysis.route-maps`, adds a `ROUTES` warning to a change whose candidate
+  holds them ([Validating policies](../policies/testing.md#validating-policies)).
+- **`IdentityHeader` in `cosec-testkit`** (#1656, experimental; nothing to change) writes the `CoSec-Identity` header a
+  gateway forwards, with CoSec's own encoder, for a test of a service behind a gateway or a local client: `of`,
+  `forSubject` and `withToken`
+  ([Testing your code against a real pipeline](../policies/testing.md#testing-your-code-against-a-real-pipeline)).
 - **Security: a check of a request that has ended is denied** (`PIP-26`). Through beta.3, a `SecurityContext` kept
   after its request (in a field, a cache, a message to a consumer) went on permitting with
   `AuthorizationChecker`, on the memberships it was made with, after logout, a revoked token or a removed role. Now the
