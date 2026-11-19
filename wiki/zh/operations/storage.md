@@ -83,6 +83,13 @@ key 都在它之下（`SNP-9`）。
 
 ### Redis 要求 {#redis-requirements}
 
+- **持久化。** Redis 保存着文档、文档的修订历史、吊销记录、会话（刷新令牌族）、`cosec.api-key.store=redis` 时的 API key，以及部署的成员关系和影子报告，而且这是唯一的一份。没有持久化的 Redis 重启后是空的：所有文档都没了，在有人重新发布平台文档之前每个请求都是 `503`（历史也一并没了）；所有吊销记录都没了，已吊销的令牌在过期之前又会被接受（访问令牌的有效期是 `cosec.jwt.token-validity.access`，默认 10 分钟，你设得更长，暴露窗口就更长）；所有会话终止。请至少开启 AOF 并设为 `appendfsync everysec`，或使用托管服务的等价功能，并把数据放在比 Pod 或机器活得更久的卷上。CoSec 不读取 `INFO persistence`：持久化关着时没有任何告警。
+- **带故障转移的副本。** 一个节点就是每个决策的单点故障。请运行带自动故障转移的副本（Sentinel、托管服务或集群），并从主节点读取（见下）。复制是异步的：故障转移可能丢掉旧主节点已确认的最后几次写入。刚发布的文档修订可能在新主节点上消失（已安装它的实例会记录 `regressed from revision <a> to <b>`，见[实例如何读取文档](#how-instances-read-documents)，[`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains)会指出记录丢失的修订），刚写入的吊销记录也可能消失，它对应的令牌在过期之前又会被接受。故障转移之后，检查你改过的每份文档的头部，并把必须吊销的重新吊销。
+- **备份，以及恢复演练。** 按你能承受丢失多少天发布和吊销的节奏，备份[键前缀](#redis-keys)下的整个键空间（`<s>:*`），并至少把它恢复到一个独立的 Redis 里一次，确认可用：用一个实例连上它并运行 `verify-chain`。恢复带回的是备份那一刻的文档和吊销记录，而不是今天的：重新发布之后改动过的内容，并把此后吊销的令牌都当作未吊销。
+- **每个环境一个前缀。** [`cosec.key-prefix`](./configuration.md#key-prefix)是同一个 Redis 上两个部署之间唯一的隔离。两个环境用了同一个前缀，就共享文档、吊销记录和控制面，没有任何机制能发现。
+- **独占的 Redis，或所有使用者都设 `noeviction`。** CoSec 在节点可能淘汰数据时拒绝启动（见下），所以和应用自己的 LRU 缓存共用的 Redis 不能再存 CoSec 的数据：给 CoSec 一个 Redis，或在共用的 Redis 上设 `noeviction` 并按所有使用者的总量定容。
+- **把文档从运行中的部署里取出来。** 文档在别处没有文件。用控制 API 读取每份文档的头部：`platform` 文档、每个应用和每个租户各 `GET /documents/<doc>`（[策略测试](../policies/testing.md#the-control-plane)），把内容和备份放在一起。
+
 - **每个节点的 `maxmemory-policy` 都是 `noeviction`。** 文档没有 TTL，也没有其他副本。在 `allkeys-*` 策略下 Redis
   可能驱逐一个文档：已经装入它的实例会失败即拒绝，但之后才加载它的实例会把被驱逐的应用文档或租户文档读成不存在，于是
   其中的 DENY 语句悄悄失效。使用 `noeviction`，并按数据量规划 Redis 的容量。

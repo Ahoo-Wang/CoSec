@@ -216,7 +216,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
 1. **`/token` 端点及其语句。** 删除 `DemoController.token`，并把 `public` 策略换成只列出 `/hello` 的策略：通过控制面提交一个类似上文的 `putPolicy` 变更。留下的语句会让 `GET /token` 对任何人保持开放，以后出现在那里的任何处理器都会受影响。
 2. **`platformToken` 运行器。** 它在每次启动时打印一个 `(platform)` 管理员令牌，任何能运行它的人都能管理整个部署。删掉它；`(platform)` 令牌只从用户无法影响的来源签发。
-3. **监听在所有网卡上的 Redis。** `docker run -p 6379:6379` 把端口发布在宿主机的每个网卡上；本指南用的是 `127.0.0.1:6379:6379`。Redis 保存每份文档和每条吊销记录：能写 Redis 的人就决定每个请求。请使用 TLS 和 CoSec 专用的用户（[Redis 要求](../operations/storage.md#redis-requirements)）。
+3. **监听在所有网卡上的 Redis。** `docker run -p 6379:6379` 把端口发布在宿主机的每个网卡上；本指南用的是 `127.0.0.1:6379:6379`。Redis 保存每份文档和每条吊销记录：能写 Redis 的人就决定每个请求。请使用 TLS 和 CoSec 专用的用户，开启持久化并做好备份：Redis 是文档和吊销记录的唯一一份（[Redis 要求](../operations/storage.md#redis-requirements)）。
 4. **客户端地址。** `cosec.authorization.remote-ip.max-trusted-index` 默认是 `1`，即服务前面有一层代理。像本指南这样直接对外服务时，请设为 `0`；代理链更长时，设为链的长度（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 
 然后逐项完成[加固清单](./security-model.md#hardening-checklist)。

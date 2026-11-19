@@ -107,8 +107,10 @@ The gateway starts without any document, but answers every routed request `503` 
 published ([The first documents](./storage.md#the-first-documents)), and reports itself not ready meanwhile
 ([Readiness](#readiness)). For each environment:
 
-1. **Redis with `maxmemory-policy noeviction`.** Each instance checks it at startup with `INFO memory` and does not
-   start otherwise ([Redis requirements](./storage.md#redis-requirements)). On a Redis that denies `INFO`, set
+1. **Redis with `maxmemory-policy noeviction`, persistence, a replica and a backup.** Redis is the only copy of the
+   documents and the revocations: without persistence a restart leaves every request `503` and revoked tokens valid
+   again ([Redis requirements](./storage.md#redis-requirements)). With `noeviction`: Each instance checks it at startup with `INFO memory` and does not
+   start otherwise. On a Redis that denies `INFO`, set
    `noeviction` yourself and `COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn`.
 2. **The documents.** Publish them with `cosec-migrate publish --to-redis <uri> --in <dir>`, then name the first
    administrator with `cosec-migrate bootstrap` if a control plane will manage them. The gateway, the control plane and

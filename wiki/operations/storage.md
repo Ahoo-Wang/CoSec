@@ -106,6 +106,36 @@ contain `:` or `/`, so a key names one document only.
 
 ### Redis requirements
 
+- **Persistence.** Redis holds the only copy of the documents, their revision history, the revocations, the sessions
+  (refresh token families), the API keys with `cosec.api-key.store=redis`, and the memberships and shadow reports of a
+  deployment. A Redis that restarts without persistence comes back empty: every document is gone and every request is
+  `503` until someone publishes the platform document again (the history is gone with it); every revocation is gone, so
+  a revoked token is accepted again until it expires (an access token lives `cosec.jwt.token-validity.access`, 10
+  minutes by default, and a longer lifetime you set is the exposure); every session ends. Turn on the append-only file
+  with `appendfsync everysec` at least, or the managed service's equivalent, and keep the data on a volume that
+  outlives the pod or machine. CoSec does not read `INFO persistence`: nothing warns you when it is off.
+- **A replica with failover.** One node is one point of failure for every decision. Run a replica with automatic
+  failover (Sentinel, a managed service, or a cluster), and read from the primary (below). Replication is asynchronous:
+  a failover can drop the last writes the old primary acknowledged. A document revision published just before may
+  vanish from the new primary (the instances that had installed it log `regressed from revision <a> to <b>`,
+  [How instances read documents](#how-instances-read-documents), and [`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains)
+  names the revision whose record is lost), and a revocation written just before may vanish too, so its token is accepted
+  again until it expires. After a failover, check the head of each document you changed and revoke again what you must.
+- **A backup, and a restore test.** Back up the whole keyspace under [the key prefix](#redis-keys) (`<s>:*`), on a
+  schedule that matches how much of a day's publishing and revocations you can lose, and restore it into a Redis of
+  its own at least once, to see that it works: start an instance against it and run `verify-chain`. A restore brings back
+  the documents and revocations of the backup's time, not of today: republish what changed since, and treat every token
+  revoked since as not revoked.
+- **One prefix per environment.** [`cosec.key-prefix`](./configuration.md#key-prefix) is the only separation between
+  two deployments on one Redis. Two environments given the same prefix share documents, revocations and a control
+  plane, and nothing detects it.
+- **A Redis of its own, or `noeviction` for every user of it.** CoSec refuses to start against a node that may evict
+  (below), so a Redis shared with an application's own LRU caches cannot also hold CoSec's data: give CoSec a Redis,
+  or set `noeviction` on the shared one and size it for everyone.
+- **Taking the documents out of a running deployment.** The documents are not files anywhere else. Read the head of each
+  with the control API, `GET /documents/<doc>` for the `platform` document, each app and each tenant
+  ([Testing policies](../policies/testing.md#the-control-plane)), and keep the bodies with your backups.
+
 - **`maxmemory-policy noeviction` on every node.** The documents have no TTL and no other copy. Under an `allkeys-*`
   policy Redis can evict a document: an instance that had it installed fails closed, but an instance that loads it
   afterwards reads an evicted app or tenant document as absent, so its DENY statements silently stop applying. Use
