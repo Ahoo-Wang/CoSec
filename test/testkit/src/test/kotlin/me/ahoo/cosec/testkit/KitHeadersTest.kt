@@ -98,13 +98,13 @@ class KitHeadersTest {
         val kit = PolicyTestKit.of(xMode)
         kit.check(
             "ambiguous",
-            """{"credential":{"tenant":"acme"},"request":{"action":"http:GET","resource":{"type":"http","id":"/orders/1"},
+            """{"credential":{"tenant":"acme","id":"alice"},"request":{"action":"http:GET","resource":{"type":"http","id":"/orders/1"},
                "headers":{"X-Mode":"no","x-mode":"yes"}},"expect":{"decision":"InvalidRequest","refused":"header"}}""",
         )
         val failure = runCatching {
             kit.check(
                 "ambiguous",
-                """{"credential":{"tenant":"acme"},"request":{"action":"http:GET","resource":{"type":"http","id":"/orders/1"},
+                """{"credential":{"tenant":"acme","id":"alice"},"request":{"action":"http:GET","resource":{"type":"http","id":"/orders/1"},
                    "headers":{"X-Mode":"no","x-mode":"yes"}},"expect":{"decision":"Permit"}}""",
             )
         }.exceptionOrNull()

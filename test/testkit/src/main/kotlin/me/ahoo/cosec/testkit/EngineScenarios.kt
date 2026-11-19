@@ -97,6 +97,13 @@ class EngineScenarios(
      * requests; off for the conformance suite's engine-level scenarios, which state what the engine itself decides.
      */
     private val enforceable: Boolean = false,
+    /**
+     * Whether a scenario decided in a tenant or an app with no document, among documents that hold some of that kind,
+     * fails instead of reading an empty one (UC-7): on for [PolicyTestKit], whose documents come from a directory a typo
+     * can misplace; off for the conformance suite, whose scenarios carry their documents. The default tenant, an
+     * anonymous request's, may have none.
+     */
+    private val strictDocuments: Boolean = false,
 ) {
     /** A scenario that carries its `documents`, besides the [header] fields it may have. */
     fun run(node: JsonNode, header: Set<String>): EngineOutcome {
@@ -118,12 +125,22 @@ class EngineScenarios(
     }
 
     /** A scenario over documents compiled beforehand; it has no `documents` of its own. */
-    fun run(node: JsonNode, header: Set<String>, snapshot: CompiledSnapshot): EngineOutcome {
+    fun run(
+        node: JsonNode,
+        header: Set<String>,
+        snapshot: CompiledSnapshot,
+        without: Set<DocumentKind> = emptySet(),
+    ): EngineOutcome {
         node.only(*(header + BODY).toTypedArray())
-        return evaluate(node, snapshot, EMPTY)
+        return evaluate(node, snapshot, EMPTY, without)
     }
 
-    private fun evaluate(node: JsonNode, snapshot: CompiledSnapshot, documents: JsonNode): EngineOutcome {
+    private fun evaluate(
+        node: JsonNode,
+        snapshot: CompiledSnapshot,
+        documents: JsonNode,
+        without: Set<DocumentKind> = emptySet(),
+    ): EngineOutcome {
         val credential = Credential(node.get("credential") ?: EMPTY)
         val memberships = try {
             memberships(credential, node.get("membershipProvider"))
@@ -143,7 +160,7 @@ class EngineScenarios(
         }
         val headers = headers(request)
         val flat = flatRequest(credential, memberships, scope, request, headers) ?: return refused(request)
-        val view = view(snapshot, scope, documents)
+        val view = view(snapshot, scope, documents, without)
         // PIP-12: a header a document reads, sent with different values, is refused before any decision. At the
         // engine level it is read as the runtime reads it instead: it has no value, and a statement on it errs.
         if (enforceable && HttpAttributes(headers).ambiguousHeader(view) != null) {
@@ -274,21 +291,42 @@ class EngineScenarios(
         return Resource(node.required("type").text(), node.get("id")?.text().orEmpty(), emptyMap())
     }
 
-    private fun view(snapshot: CompiledSnapshot, scope: Scope, documents: JsonNode): SnapshotView {
+    private fun view(snapshot: CompiledSnapshot, scope: Scope, documents: JsonNode, without: Set<DocumentKind>): SnapshotView {
         val notLoaded = documents.get("notLoaded")?.strings().orEmpty().map(::kind).toSet()
         val tenant = if (DocumentKind.TENANT in notLoaded) {
             null
         } else {
-            snapshot.tenants[scope.tenant.value] ?: CompiledDocument.tenant(scope.tenant, emptyList(), emptyList())
+            snapshot.tenants[scope.tenant.value] ?: absent(DocumentKind.TENANT, scope.tenant.value, without, snapshot.tenants.isEmpty())
+                .let { CompiledDocument.tenant(scope.tenant, emptyList(), emptyList()) }
         }
         val app = when {
             scope.app.value.isEmpty() || DocumentKind.APP in notLoaded -> null
-            else -> snapshot.apps[scope.app.value] ?: CompiledDocument.app(scope.app, emptyList(), emptyList())
+            else -> snapshot.apps[scope.app.value] ?: absent(DocumentKind.APP, scope.app.value, without, snapshot.apps.isEmpty())
+                .let { CompiledDocument.app(scope.app, emptyList(), emptyList()) }
         }
         val unresolved = documents.get("unavailable")?.strings().orEmpty().map {
             Cause.SourceUnavailable(kind(it), IllegalStateException("The scenario makes the $it document unavailable"))
         }
         return SnapshotView(snapshot.platform, app, tenant, unresolved)
+    }
+
+    /**
+     * UC-7: when the documents hold some of [kind] ([none] when they hold none), a scenario decided without the one of
+     * [id] fails, unless it says so ([without]): a file named for another id, say `Acme.json` for tenant `acme`. Documents
+     * that hold none of [kind], a platform-only directory, decide every request without one, as such a deployment does.
+     */
+    private fun absent(kind: DocumentKind, id: String, without: Set<DocumentKind>, none: Boolean) {
+        val defaultTenant = kind == DocumentKind.TENANT && id == TenantId.DEFAULT.value
+        if (!strictDocuments || none || kind in without || defaultTenant) {
+            return
+        }
+        val (name, directory) = if (kind == DocumentKind.TENANT) "tenant" to "tenants" else "app" to "apps"
+        throw ScenarioFormatException(
+            "The scenario is decided in $name [$id], which has no document here ($directory/" +
+                "${java.net.URLEncoder.encode(id, Charsets.UTF_8)}.json): it would be decided on an empty one, and an " +
+                "expected Deny would pass for no reason. Put the document there, or say \"withoutDocument\": " +
+                "[\"$name\"] for a $name that has none on purpose",
+        )
     }
 
     private class Credential(node: JsonNode) {
