@@ -6,6 +6,8 @@
 > 基线：`main` @ `a361084d`（第 1 版写于 `334da022`） · 交付：全部合入 `main`（8.0 线）；8.0 在 RFC 0001 第 2–6 阶段全部完成、各做完两轮审查之前不发布任何版本 ·
 > 范围：`model/`、`engine/`、`cosec-core`、`cosec-cocache`、`cosec-jwt`、`cosec-spring-boot-starter`，新增 `migrate/`（`cosec-migrate`）
 >
+> **2026-11-19 修订（易用性审查，#1665，`DOC-11`）**：§4.2 在 BND-4 之后增加一条：主体 id 以 `(` 开头的主体绑定不得编译，以 `(` 开头的 `subject.id` 字面量也不得编译。匿名主体在文档里没有 `subject.id`，不匹配任何主体绑定；已登录的主体不会有保留 id（`IDN-12`）。要区分匿名与已登录，用 `subject.authenticated`。
+>
 > **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 A（§9 整节）、PR-6（分类器）取消；PR-7、PR-8 并入 RFC 0008 的切换 PR；PR-4 的文档直接使用
 > RFC 0005 的 AST，不再有"绑定模型 + 7.x 匹配器"的中间格式，也不做 `UnifiedAuthorization`；PR-5 不做 `verify`（RFC 0008 §4.1、§6 Q3）。
 > §5.3 的 C1–C6 不再是差异类别，而是登记在一致性套件中的规则；P1′、P8–P12 作为规范性质保留（RFC 0008 §3.5）。下文保留原样以便追溯。
