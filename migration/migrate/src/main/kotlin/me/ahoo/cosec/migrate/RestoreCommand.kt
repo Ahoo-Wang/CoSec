@@ -35,15 +35,9 @@ import java.nio.file.Path
  */
 internal object RestoreCommand {
     fun restore(options: Options, out: PrintStream): Int {
-        val text = options.required("document")
-        val key = PublishCommand.documentKey(text)
-            ?: throw UsageException("--document is platform, app:<id> or tenant:<id>, not [${Identifiers.printable(text)}].")
-        val revision = options.value("revision")?.let {
-            it.toLongOrNull() ?: throw UsageException("--revision is a number, not [$it].")
-        }
-        val confirm = options.value("confirm")?.let {
-            it.toLongOrNull() ?: throw UsageException("--confirm is the head revision, not [$it].")
-        }
+        val key = key(options.required("document"))
+        val revision = number(options, "revision", "a number")
+        val confirm = number(options, "confirm", "the head revision")
         val file = options.value("file")?.let { read(key, Path.of(it)) }
         if ((revision == null) == (file == null)) {
             throw UsageException("restore takes one of --revision <n> and --file <document.json>.")
@@ -69,6 +63,12 @@ internal object RestoreCommand {
             FAILED
         }
     }
+
+    private fun key(text: String): SnapshotKey = PublishCommand.documentKey(text)
+        ?: throw UsageException("--document is platform, app:<id> or tenant:<id>, not [${Identifiers.printable(text)}].")
+
+    private fun number(options: Options, name: String, what: String): Long? =
+        options.value(name)?.let { it.toLongOrNull() ?: throw UsageException("--$name is $what, not [$it].") }
 
     private fun read(key: SnapshotKey, path: Path) = run {
         if (!Files.isRegularFile(path)) throw UsageException("$path is not a file.")
