@@ -30,8 +30,8 @@ on:
         default: ''
   schedule:
     - cron: '40 3 * * *'
+  # Any base, so a batch stacked on another's branch runs too.
   pull_request:
-    branches: [ main ]
     paths:
       - 'test/system-*/**'
       - '.github/workflows/system-test.yml'
