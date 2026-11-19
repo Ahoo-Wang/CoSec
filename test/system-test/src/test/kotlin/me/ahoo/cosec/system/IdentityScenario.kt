@@ -111,6 +111,30 @@ class IdentityScenario {
     }
 
     @Test
+    fun `a method override header never arrives, so the service runs the method the gateway decided`() {
+        val token = Token.issue("alice", "identity-tenant")
+        for (gateway in SystemTopology.gateways) {
+            val echo = Http.send(
+                "POST",
+                gateway.resolve("/behind/orders/42"),
+                listOf(
+                    "Authorization" to token.bearer.second,
+                    "X-HTTP-Method-Override" to "DELETE",
+                    "x-http-method" to "DELETE",
+                    "X-Method-Override" to "DELETE",
+                    "X-Trace" to "kept",
+                ),
+                "{}",
+            )
+            echo.status.assert().isEqualTo(200)
+            val received = echo.json()
+            received["method"].assert().isEqualTo("POST")
+            received.headers().keys.assert().doesNotContain("x-http-method-override", "x-http-method", "x-method-override")
+            received.headers()["x-trace"].assert().isEqualTo(listOf("kept"))
+        }
+    }
+
+    @Test
     fun `a CoSec-Identity the client sends never arrives`() {
         val forged = forgedIdentity()
         val anonymous = Http.get(at("/behind/public/page"), "CoSec-Identity" to forged)
