@@ -1,0 +1,17 @@
+# Rule: DOC-12
+# Mutant: a route escape shows the statement's label as the document wrote it: a policy id with a line break forges a log line on every host with a route map
+# Tests: :document:test --tests me.ahoo.cosec.document.route.RouteEscapesTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteEscape.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteEscape.kt
+index 2d2c7206..d4d468ba 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteEscape.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/route/RouteEscape.kt
+@@ -27,7 +27,7 @@ import me.ahoo.cosec.model.Identifiers
+ @InternalCoSecApi
+ data class RouteEscape(val statement: String, val route: Route, val location: String) {
+     override fun toString(): String =
+-        "${shown(statement)} escapes ${shown(route.method)} ${shown(route.path)} " +
++        "$statement escapes ${shown(route.method)} ${shown(route.path)} " +
+             "(${shown(route.action)} on ${shown(route.resource)}, ${shown(location)})"
+ 
+     // The class's marker does not reach its companion in the ABI dump.
