@@ -186,7 +186,11 @@ class ControlHttpTest {
             "GET",
             "/documents/tenant:acme/diff",
             query = mapOf("from" to "1", "to" to "1")
-        ).second.get("sections").asBoolean().assert().isFalse()
+        ).second.get("sections").let { sections ->
+            // UC-14: the names of the sections that differ, none here.
+            sections.isArray.assert().isTrue()
+            sections.size().assert().isEqualTo(0)
+        }
         call("GET", "/documents/tenant:acme/diff").first.assert().isEqualTo(400)
         call("GET", "/documents/tenant:acme/revisions/1/propagation").second.get("recent").asInt().assert().isEqualTo(0)
         val desired = """{"mode":"MERGE","note":"apply","document":{"schema":2,"revision":1,"publishedAt":"2026-11-01T00:00:00Z",""" +

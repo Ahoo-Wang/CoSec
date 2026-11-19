@@ -503,6 +503,18 @@
         "control:ControlLockoutTest#a lock-out is a warning at proposal and publishes only acknowledged"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-39",
+      "source": "RFC 0007 §10.1 (usability triage for beta.5, UC-14; its review)",
+      "statement": "The diff of two revisions names, in sections, every member of a document besides its header (kind, owner, revision, publishedAt, provenance) and the entries it lists by id (policies, bindings, roles), each compared by its whole content: catalog, boundary, limits, attributes, rateLimits, in that order. A member added to the document format is placed in one of the three or a test fails, so no difference in it diffs as nothing.",
+      "level": "control",
+      "guards": [
+        "control:DiffMembersTest#every member of a document is a header, an entry list or a section of the diff",
+        "control:DiffMembersTest#the diff places no member a document does not have",
+        "control:DiffAndAccessReviewTest#the sections that differ are each named, in the format's order"
+      ],
+      "pending": null
     }
   ]
 }

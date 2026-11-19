@@ -138,6 +138,16 @@ jobs:
           # Keep the A/B script itself independent of the refs under test.
           cp "$GITHUB_WORKSPACE"/scripts/jmh-ab/*.py "$RUNNER_TEMP/"
 
+      # Downloads only, retried (.github/scripts/resolve-dependencies.sh): this job has no Gradle cache, so it asks the plugin
+      # portal and Maven Central for everything, twice, and they answer 429 or a 404 for an artifact that exists now and then.
+      # The builds below run once, as before.
+      - name: Resolve the dependencies of both refs
+        run: |
+          for side in base head; do
+            "$GITHUB_WORKSPACE/.github/scripts/resolve-dependencies.sh" "$RUNNER_TEMP/$side" \
+              "-Porg.gradle.java.installations.fromEnv=JAVA_HOME_17_X64,JAVA_HOME_21_X64"
+          done
+
       # Names setup-java's JDKs to Gradle's toolchain detection, whichever ref's gradle.properties is in use.
       # The Gradle log of each side goes to a file (at --info, with stack traces) and is uploaded when a build fails: the e2e
       # build has failed at the configuration cache's store of :cocache:compileKotlin's classpath, "Could not find" every jar
