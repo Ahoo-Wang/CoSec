@@ -65,6 +65,7 @@ object MigrateMain {
         "bootstrap" to setOf("to-redis", "cluster", "key-prefix", "platform-admin", "force"),
         "repair-references" to setOf("to-redis", "cluster", "key-prefix"),
         "verify-chain" to setOf("to-redis", "cluster", "key-prefix", "document"),
+        "restore" to setOf("to-redis", "cluster", "key-prefix", "document", "revision", "file", "confirm"),
         "partition plan" to setOf("from-redis", "from-files", "key-prefix", "out"),
         "api-keys" to setOf(
             "redis", "key-prefix", "out", "app", "memberships", "grant-to-principal", "role-prefix", "dry-run"
@@ -81,6 +82,8 @@ object MigrateMain {
           bootstrap --to-redis <uri> [--cluster] [--key-prefix <p>] --platform-admin <principal> [--force]
           repair-references --to-redis <uri> [--cluster] [--key-prefix <p>]
           verify-chain --to-redis <uri> [--cluster] [--key-prefix <p>] [--document platform|app:<id>|tenant:<id>]
+          restore --to-redis <uri> [--cluster] [--key-prefix <p>] --document platform|app:<id>|tenant:<id>
+                  (--revision <n> | --file <document.json>) [--confirm <head revision>]
           (--cluster: --to-redis names seed nodes of a Redis Cluster, comma-separated)
           partition plan (--from-redis <uri> [--key-prefix <p>] | --from-files <dir>) --out <dir>
           api-keys --redis <uri> [--key-prefix <p>] --out <dir> [--app <id>] [--memberships <file>]
@@ -139,6 +142,7 @@ object MigrateMain {
         "bootstrap" -> BootstrapCommand.bootstrap(options, out)
         "repair-references" -> RepairReferencesCommand.repairReferences(options, out)
         "verify-chain" -> VerifyChainCommand.verifyChain(options, out)
+        "restore" -> RestoreCommand.restore(options, out)
         "partition plan" -> PartitionPlanCommand.partitionPlan(options, out)
         "api-keys" -> ApiKeysCommand.apiKeys(options, out)
         else -> {
