@@ -1,0 +1,21 @@
+{
+  "description": "globex binds globex-export, but its boundary boundary-read-only allows only GET: the permit does not stand.",
+  "credential": {
+    "tenant": "globex",
+    "id": "gina"
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/api/export"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "boundary": "boundary-read-only",
+      "tenant": "globex"
+    }
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "description": "acme binds acme-export to everyone in its own document: its principals may POST /api/export.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/api/export"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}
