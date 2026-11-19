@@ -289,6 +289,55 @@ endpoint, and checks that the health probe answers `200`, an anonymous request `
 that it probes the liveness group and that Docker reports the container healthy. The same steps are a quick check of
 your own deployment.
 
+## The system test {#the-system-test}
+
+[`system-test.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/system-test.yml) runs CoSec as a
+deployment, which no unit, slice or embedded-server test does: the gateway image built from the commit (its own
+Dockerfile, the AOT cache trained), two replicas of it and a third that refuses a token while revocations cannot be read,
+a service behind them in `cosec.pipeline.mode=gateway`, a login and control-plane host, a Spring MVC service that
+enforces on its own, and a Redis with `maxmemory-policy noeviction`, started with Docker Compose on a GitHub-hosted runner.
+The scenarios drive it over the network only, with `cosec-migrate` and `docker compose stop`, `start` and `restart` as the
+operator would. It is not part of `check`; it runs nightly on `main`, on the pull requests that change it, and on demand.
+
+To run it on a commit, such as a release candidate (a run takes about five minutes):
+
+```bash
+gh workflow run system-test.yml --ref main -f ref=<commit>
+```
+
+`-f image=ghcr.io/ahoo-wang/cosec-gateway:<tag>` tests a published gateway image instead of building one; only images of
+`ghcr.io/ahoo-wang/` are accepted. A run uploads the containers' logs and state, the JUnit results and each scenario's
+transcript (every request and answer) as the artifact `system-test-<run id>-<attempt>`, and its summary names each failed
+scenario and the bound it waited for.
+
+What it covers, each as an observable over the network:
+
+- the **cold start**: with no documents every request is `503` and readiness refuses, while liveness holds; after
+  `cosec-migrate publish` and `bootstrap`, every process is ready and decides;
+- the **identity** a real gateway forwards (`CoSec-Identity`, with the session of CoSec's own tokens), what it strips (a
+  forged identity, the client's credentials), the problem types of [`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract),
+  and the paths a pattern could misread;
+- **documents across processes**: deny-first, tenant isolation, apps, spaces;
+- a **policy change** through the control plane, from its refusals and its shadow window on live traffic to approval, publish
+  and rollback, taking effect at every process without a restart;
+- **revocation** (logout, a subject), refresh rotation and reuse, a **rate limit** one bucket of which both gateways count,
+  and an **API key**;
+- a **Redis outage**: installed documents keep deciding, a tenant never read is `503`, a tenant that fails closed stops at
+  its lag, the two settings of `cosec.authentication.revocation.fail-closed` behave as documented, and every process
+  recovers without a restart; a **replica restarted under traffic** permits nothing it should refuse;
+- a token from an issuer whose **clock runs ahead**, within and beyond `cosec.authentication.revocation.skew`;
+- the **TypeScript client** (`@ahoo-wang/cosec-fetcher`) through the gateway, and the **metrics** of a decision.
+
+It does not measure performance ([JMH](../architecture/overview.md#measuring)), version skew between a gateway and its services,
+or Redis Cluster, TLS and per-instance users.
+
+Every wait is a bounded poll against a documented property, named after it (the snapshot revalidation interval, the
+revocation cache's 30 seconds, the fail-closed lag, the shadow window), never a sleep, and nothing is retried: a scenario
+that fails once in ten runs is a finding. The bounds the suite shortens (a shadow window of seconds, a fail-closed lag of
+20 seconds) are in
+[`profile/shortened-bounds.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/test/system-test/profile/shortened-bounds.yaml),
+with the default each replaces: test configuration, never to be copied into a deployment.
+
 ## AOT cache
 
 The image ships an AOT cache (JDK 25, [JEP 483](https://openjdk.org/jeps/483), [JEP 514](https://openjdk.org/jeps/514),

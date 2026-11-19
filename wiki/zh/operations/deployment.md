@@ -238,6 +238,45 @@ management:
 `HEALTHCHECK`（每 2 秒一次，而不是 30 秒），要求它探测 liveness 组，并且 Docker 报告容器健康。同样的步骤
 也可以用来快速检查你自己的部署。
 
+## 系统测试 {#the-system-test}
+
+[`system-test.yml`](https://github.com/Ahoo-Wang/CoSec/blob/main/.github/workflows/system-test.yml) 把 CoSec 当作一次部署来运行，
+这是单元、切片和嵌入式服务器测试都做不到的：用提交构建的网关镜像（它自己的 Dockerfile，AOT 缓存已训练）、它的两个副本和第三个
+在吊销无法读取时拒绝令牌的网关、一个 `cosec.pipeline.mode=gateway` 的后端服务、一个登录与控制面主机、一个自己执行决策的 Spring MVC
+服务，以及 `maxmemory-policy noeviction` 的 Redis，在 GitHub 托管的运行器上用 Docker Compose 启动。场景只通过网络驱动它，并像运维人员
+那样使用 `cosec-migrate` 和 `docker compose stop`、`start`、`restart`。它不属于 `check`；每晚在 `main` 上运行，在修改它的拉取请求上运行，
+也可以按需运行。
+
+在某个提交（例如候选发布版本）上运行（一次运行约五分钟）：
+
+```bash
+gh workflow run system-test.yml --ref main -f ref=<commit>
+```
+
+`-f image=ghcr.io/ahoo-wang/cosec-gateway:<tag>` 测试已发布的网关镜像而不是现构建一个；只接受 `ghcr.io/ahoo-wang/` 的镜像。
+每次运行把容器日志与状态、JUnit 结果和每个场景的记录（每个请求与响应）上传为制品 `system-test-<run id>-<attempt>`，摘要会列出
+每个失败的场景以及它等待的界限。
+
+它覆盖的内容，每一项都是网络上可观察的结果：
+
+- **冷启动**：没有文档时每个请求都是 `503`，就绪检查拒绝而存活检查保持；`cosec-migrate publish` 和 `bootstrap` 之后，每个进程就绪并做出决策；
+- 真实网关转发的**身份**（`CoSec-Identity`，带 CoSec 自己令牌的会话）、被剥离的内容（伪造的身份、客户端的凭据）、
+  [`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract) 中的问题类型，以及模式可能误读的路径；
+- **跨进程的文档**：拒绝优先、租户隔离、应用、空间；
+- 通过控制面的**策略变更**：从被拒绝的变更、真实流量上的影子窗口，到批准、发布和回滚，无需重启即在每个进程生效；
+- **吊销**（登出、某个主体）、刷新轮换与重用、两个网关共同计数同一个桶的**限流**，以及 **API key**；
+- **Redis 故障**：已安装的文档继续决策，从未读取过的租户为 `503`，故障时关闭的租户在其滞后后停止，
+  `cosec.authentication.revocation.fail-closed` 的两种设置按文档行为，每个进程无需重启即恢复；**副本在流量下重启**时不放行任何应被拒绝的请求；
+- 签发方**时钟超前**的令牌，在 `cosec.authentication.revocation.skew` 之内与之外；
+- 经网关的 **TypeScript 客户端**（`@ahoo-wang/cosec-fetcher`），以及一次决策的**指标**。
+
+它不衡量性能（[JMH](../architecture/overview.md#measuring)）、网关与其后端服务之间的版本差异，也不覆盖 Redis Cluster、TLS 和按实例的用户。
+
+每一次等待都是针对某个已记录属性的、有上限的轮询，并以该属性命名（快照复核间隔、吊销缓存的 30 秒、故障时关闭的滞后、影子窗口），
+从不是睡眠，也从不重试：一个十次里失败一次的场景就是一个发现。套件缩短的界限（几秒的影子窗口、20 秒的故障时关闭滞后）都在
+[`profile/shortened-bounds.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/test/system-test/profile/shortened-bounds.yaml)，
+每个都标明它替换的默认值：仅是测试配置，切勿复制进部署。
+
 ## AOT 缓存 {#aot-cache}
 
 镜像自带一份 AOT 缓存（JDK 25，[JEP 483](https://openjdk.org/jeps/483)、[JEP 514](https://openjdk.org/jeps/514)、
