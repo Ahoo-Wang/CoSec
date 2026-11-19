@@ -48,11 +48,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      # The JDK and Gradle's dependency cache, which only main writes (a pull request reads it): this job downloaded every
-      # dependency on every run, and the plugin portal and Maven Central fail a cold resolution now and then (429, or a 404 for
-      # an artifact that exists). The build below still compiles everything, with no build cache.
-      - name: Set up Java and Gradle
-        uses: ./.github/actions/setup-java-gradle
+      # No Gradle cache, on purpose: the closest entry a pull request restores is another job's (the gateway image's), whose
+      # index names jars it does not hold, and Gradle then answers "Could not find" for everything else without asking a
+      # repository (what jmh-ab.yml found, #1490; this job's first run with a cache failed that way, four attempts in a row).
+      # A cold resolution is protected by the retried step below instead.
+      - name: Set up JDK 21
+        uses: actions/setup-java@v6
+        with:
+          java-version: '21'
+          distribution: 'temurin'
 
       # Downloads only, retried, before CodeQL traces anything (.github/scripts/resolve-dependencies.sh): Gradle's own
       # distribution, the plugins and every dependency, so that the traced build below finds them and the retry never wraps

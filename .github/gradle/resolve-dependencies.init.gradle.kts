@@ -25,14 +25,21 @@ val downloadFailure = Regex(
 
 fun Throwable.causes(): Sequence<Throwable> = generateSequence(this) { it.cause?.takeIf { cause -> cause !== it } }.take(20)
 
+// What a build downloads: the classpaths its compilations and its tests use, the Kotlin compiler's, the annotation processors
+// and the benchmark generator. Not the tools of tasks a CI job does not run (detekt, Dokka, the ABI validator, the commonizer):
+// resolving them would fail a step for an artifact nothing in that job asks for. `-PresolveConfigurations=<regex>` replaces it.
+val resolved: Regex = (providers.gradleProperty("resolveConfigurations").orNull
+    ?: "(.*(CompileClasspath|RuntimeClasspath)|annotationProcessor|kapt.*|kotlinCompiler.*|kotlinBuildTools.*|jmh)")
+    .toRegex()
+
 allprojects {
     tasks.register("resolveDependencies") {
         group = "ci"
-        description = "Resolves every resolvable configuration, which downloads the dependencies the build needs."
+        description = "Resolves the configurations a build downloads for, which downloads the dependencies it needs."
         // It reads the project's configurations when it runs.
         notCompatibleWithConfigurationCache("resolves the configurations of its project at execution time")
         doLast {
-            val failed = configurations.filter { it.isCanBeResolved }.mapNotNull { configuration ->
+            val failed = configurations.filter { it.isCanBeResolved && resolved.matches(it.name) }.mapNotNull { configuration ->
                 try {
                     configuration.incoming.artifacts.artifacts
                     null

@@ -24,10 +24,12 @@
 # Gradle resolves the plugins' classpath and fetches its own distribution on the way. It never compiles, tests or measures,
 # so a retry of it never repeats work that could change a result; the job's own steps run once, as before.
 #
-# Attempt 1 is a plain resolution. Later attempts wait (20 s, 40 s, 60 s: a rate limit is not helped by asking at once) and
-# `--refresh-dependencies`, which asks the repositories again whatever the Gradle home remembers, so a "not found" it
-# cached from a bad answer, or an index that names a jar it lacks, does not decide the retry. Gradle's own patience with a
-# repository is raised for this step (more tentatives per download, a longer first pause).
+# Attempt 1 is a plain resolution. Later attempts wait first (20 s, 40 s, 60 s: a rate limit is not helped by asking at once).
+# Attempt 2 adds `--refresh-dependencies`, which asks the repositories again about what the Gradle home remembers. From
+# attempt 3 the dependency cache of the Gradle home (`caches/modules-2`: the jars and the index that names them) is removed
+# first, because a restored cache can hold an index that names jars it lacks, and Gradle then answers "Could not find" for
+# them without asking any repository, however often it is asked (jmh-ab.yml, #1490); the retry resolves from the repositories
+# alone. Gradle's own patience with a repository is raised for this step (more tentatives per download, a longer first pause).
 # RESOLVE_ATTEMPTS and RESOLVE_PAUSE (seconds, per attempt number) override the bounds; a test sets them to 0.
 set -uo pipefail
 
@@ -40,6 +42,11 @@ shift || true
 for attempt in $(seq 1 "$ATTEMPTS"); do
   refresh=()
   [ "$attempt" -gt 1 ] && refresh=(--refresh-dependencies)
+  if [ "$attempt" -gt 2 ]; then
+    modules="${GRADLE_USER_HOME:-$HOME/.gradle}/caches/modules-2"
+    echo "Removing $modules: the retry resolves from the repositories alone."
+    rm -rf "$modules"
+  fi
   echo "::group::Resolve dependencies in $PWD, attempt $attempt of $ATTEMPTS"
   ./gradlew ${refresh[@]+"${refresh[@]}"} \
     -Dorg.gradle.internal.repository.max.tentatives=5 -Dorg.gradle.internal.repository.initial.backoff=1000 \
