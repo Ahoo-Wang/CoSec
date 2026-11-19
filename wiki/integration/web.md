@@ -726,6 +726,8 @@ adapter (`cosec-webflux` or `cosec-webmvc`). JWT is off in this mode; a service 
 cosec:
   pipeline:
     mode: gateway
+    identity:
+      only-gateway-can-reach: true   # your statement that it is so; the service does not start without it
 ```
 
 In this mode the adapter reads the forwarded identity through `IdentityGate`, and the starter wires no authenticator,
@@ -733,7 +735,8 @@ snapshot, route map, rate limits, control plane, `AuthorizationChecker` or Redis
 classpath is not used, so it needs no Redis template and no CoCache starter; with `cosec.jwt.enabled=true` it is used
 for the revocations of the tokens the service issues, and startup then requires both
 ([Modules](../guide/introduction.md#modules)). The service decides nothing with policies: the gateway decided. It believes any `CoSec-Identity` it receives, so **only the gateway may be able to
-reach it**: how to enforce that, and the startup checks, are in
+reach it**: the statement above, how to enforce it, and the startup checks (no hidden-method filter either: the gateway
+decided the request line's method and removes the method-override headers from what it forwards) are in
 [Services behind the gateway](../operations/deployment.md#services-behind-the-gateway) of the deployment guide.
 
 | Request | Answer |

@@ -44,7 +44,7 @@ Spring Cloud Gateway 用文档决策；每个服务设置 `cosec.pipeline.mode=g
 | | |
 |---|---|
 | 运行 | 网关（[镜像](./deployment.md)，或 `cosec-gateway` 加 `cosec-cocache`），以及每个带 `cosec-webflux` 或 `cosec-webmvc` 的服务 |
-| 设置 | 网关：`cosec.jwt.secret`、Redis、路由；服务：`cosec.pipeline.mode=gateway`，别无其他（没有 Redis，没有密钥） |
+| 设置 | 网关：`cosec.jwt.secret`、Redis、路由；服务：`cosec.pipeline.mode=gateway` 和 `cosec.pipeline.identity.only-gateway-can-reach=true`（没有 Redis，没有密钥） |
 | 连到 | 网关：Redis 和各服务；服务：CoSec 方面什么都不连 |
 | 靠什么成立 | **只靠网络** |
 | CoSec 会检查 | 服务启动时的一条 `WARN`；网关主机设置 `gateway` 模式时启动失败；每个请求中，无法读取、格式版本未知、太旧或太大的头会被拒绝 |

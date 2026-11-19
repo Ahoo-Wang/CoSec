@@ -47,6 +47,8 @@ spring:
 cosec:
   pipeline:
     mode: gateway
+    identity:
+      only-gateway-can-reach: true   # your statement; the service does not start without it
 ```
 
 A service in this mode runs no policies; it believes the identity header, so only the gateway may be able to reach it

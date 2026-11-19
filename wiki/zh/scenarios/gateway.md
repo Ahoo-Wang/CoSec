@@ -43,6 +43,8 @@ spring:
 cosec:
   pipeline:
     mode: gateway
+    identity:
+      only-gateway-can-reach: true   # 你的声明；没有它服务不会启动
 ```
 
 这种模式下的服务不运行策略；它相信身份头，所以只有网关能够访问它（[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)）。

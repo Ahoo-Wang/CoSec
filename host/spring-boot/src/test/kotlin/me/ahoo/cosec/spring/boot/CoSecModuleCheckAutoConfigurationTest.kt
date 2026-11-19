@@ -277,7 +277,11 @@ class CoSecModuleCheckAutoConfigurationTest {
     fun `a service in gateway mode does not need Redis for an unused cosec-cocache`() {
         // No Redis template and no CacheRuntime: nothing here uses either.
         val gateway = ApplicationContextRunner().withConfiguration(config)
-            .withPropertyValues("cosec.pipeline.mode=gateway", "cosec.jwt.enabled=false")
+            .withPropertyValues(
+                "cosec.pipeline.mode=gateway",
+                "cosec.pipeline.identity.only-gateway-can-reach=true",
+                "cosec.jwt.enabled=false"
+            )
         starts(gateway)
     }
 
@@ -295,9 +299,19 @@ class CoSecModuleCheckAutoConfigurationTest {
         failsNamingTemplate(noRedis)
         failsNamingTemplate(noRedis.withPropertyValues("cosec.pipeline.mode=enforce", "cosec.jwt.enabled=false"))
         // A gateway-mode service that turns JWT on issues tokens, and logout revokes them in Redis.
-        failsNamingTemplate(noRedis.withPropertyValues("cosec.pipeline.mode=gateway", "cosec.jwt.enabled=true"))
+        failsNamingTemplate(
+            noRedis.withPropertyValues(
+                "cosec.pipeline.mode=gateway",
+                "cosec.pipeline.identity.only-gateway-can-reach=true",
+                "cosec.jwt.enabled=true"
+            )
+        )
         starts(
-            noRedis.withPropertyValues("cosec.pipeline.mode=gateway", "cosec.jwt.enabled=true")
+            noRedis.withPropertyValues(
+                "cosec.pipeline.mode=gateway",
+                "cosec.pipeline.identity.only-gateway-can-reach=true",
+                "cosec.jwt.enabled=true"
+            )
                 .withBean(ReactiveStringRedisTemplate::class.java, redis)
         )
     }

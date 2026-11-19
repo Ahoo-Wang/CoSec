@@ -44,7 +44,7 @@ import org.springframework.context.ApplicationContext
  */
 class GatewayModeMetricsTest {
     private val runner = ApplicationContextRunner()
-        .withPropertyValues("cosec.pipeline.mode=gateway")
+        .withPropertyValues("cosec.pipeline.mode=gateway", "cosec.pipeline.identity.only-gateway-can-reach=true")
         .withConfiguration(
             AutoConfigurations.of(
                 CoSecGatewayModeAutoConfiguration::class.java,
@@ -111,7 +111,7 @@ class GatewayModeMetricsTest {
     fun `without cosec-micrometer or a registry the gate still counts, and nothing fails`() {
         val noMicrometer = runner.withClassLoader(FilteredClassLoader("me.ahoo.cosec.micrometer"))
         val noRegistry = ApplicationContextRunner()
-            .withPropertyValues("cosec.pipeline.mode=gateway")
+            .withPropertyValues("cosec.pipeline.mode=gateway", "cosec.pipeline.identity.only-gateway-can-reach=true")
             .withConfiguration(AutoConfigurations.of(CoSecGatewayModeAutoConfiguration::class.java))
         listOf(noMicrometer, noRegistry).forEach { variant ->
             variant.run { context ->
