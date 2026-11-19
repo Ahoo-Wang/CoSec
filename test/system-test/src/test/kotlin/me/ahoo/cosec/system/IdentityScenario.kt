@@ -129,7 +129,11 @@ class IdentityScenario {
             echo.status.assert().isEqualTo(200)
             val received = echo.json()
             received["method"].assert().isEqualTo("POST")
-            received.headers().keys.assert().doesNotContain("x-http-method-override", "x-http-method", "x-method-override")
+            received.headers().keys.assert().doesNotContain(
+                "x-http-method-override",
+                "x-http-method",
+                "x-method-override"
+            )
             received.headers()["x-trace"].assert().isEqualTo(listOf("kept"))
         }
     }
