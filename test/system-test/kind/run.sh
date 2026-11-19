@@ -26,9 +26,9 @@
 #      by CoSec and fails only at the missing backend, and is counted;
 #   4. the scrape endpoint on the management port, read from another pod through the pod's address, and that the Service
 #      does not publish that port;
-#   6. last, because its label values are the runtime's: the decisions of step 3 are counted, by result.
 #   5. k8s/examples/gateway-mode-service-networkpolicy.yaml is valid for the API server, and selects what it says: the
 #      service's pods in its namespace, admitted from the gateway's pods of the namespace the gateway runs in.
+#   6. last, because its label values are the runtime's: the decisions of step 3 are counted, by result.
 # Every wait is a bounded poll against the property it comes from; nothing is retried.
 set -euo pipefail
 
