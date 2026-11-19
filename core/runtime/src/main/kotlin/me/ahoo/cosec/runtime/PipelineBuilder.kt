@@ -24,6 +24,7 @@ import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
+import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
@@ -34,7 +35,6 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.id.IdGenerator
 import me.ahoo.cosec.spi.id.RandomIdGenerator
 import me.ahoo.cosec.spi.membership.MembershipProvider
-import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import java.time.Clock

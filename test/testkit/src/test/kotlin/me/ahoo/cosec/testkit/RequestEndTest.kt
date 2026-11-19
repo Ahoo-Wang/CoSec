@@ -55,7 +55,8 @@ class RequestEndTest {
             fixture.end(context)
             checker.decide(context, "order:read", "order/42").assert().isEqualTo(Decision.Deny(null))
             // An outcome of evaluate ends its request when it is closed, as a transport closes it.
-            val kept = fixture.evaluate(fixture.request("GET", "/orders/1", alice)).use { it.security!!.securityContext }
+            val outcome = fixture.evaluate(fixture.request("GET", "/orders/1", alice))
+            val kept = outcome.use { it.security!!.securityContext }
             checker.check(kept, "order:read", "order/42").assert().isFalse()
             assertThrownBy<IllegalArgumentException> { fixture.end(mockk<SecurityContext>()) }
         }
