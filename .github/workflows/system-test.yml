@@ -190,3 +190,96 @@ jobs:
       - name: Stop the stack
         if: always()
         run: docker compose down --volumes --timeout 30
+
+  # The manifests of k8s/ on a real cluster (test/system-test/kind/run.sh): the dev overlay with the image under test, the
+  # readiness gating, a decision, the scrape endpoint of the management port and the example NetworkPolicy. A job of its own:
+  # the Compose stack above is what the scenarios drive; this proves the shipped manifests work as documented.
+  kind:
+    name: Kubernetes manifests on kind
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GATEWAY_IMAGE_INPUT: ${{ inputs.image }}
+      ARTIFACT: system-test-kind-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check the inputs
+        shell: bash
+        run: |
+          pattern='^ghcr\.io/ahoo-wang/[a-z0-9._/-]+(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$'
+          if [ -n "$GATEWAY_IMAGE_INPUT" ] && ! [[ "$GATEWAY_IMAGE_INPUT" =~ $pattern ]]; then
+            echo "::error::the image input must be an image of ghcr.io/ahoo-wang/"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: true
+
+      - name: Build the distributions
+        run: ./gradlew :gateway-server:installDist :migrate:installDist
+
+      # The image as the Dockerfile ships it, or a published one under the tag the script loads into the cluster.
+      - name: Build or pull the gateway image
+        run: |
+          if [ -n "$GATEWAY_IMAGE_INPUT" ]; then
+            docker pull "$GATEWAY_IMAGE_INPUT"
+            docker tag "$GATEWAY_IMAGE_INPUT" cosec-gateway:system
+          else
+            docker build --tag cosec-gateway:system platform/gateway-server
+          fi
+
+      # kind and kubectl come with the runner image; the script says so when they do not.
+      - name: Run the kind leg
+        run: |
+          set -o pipefail
+          test/system-test/kind/run.sh cosec-gateway:system "$PWD/migration/migrate/build/install/cosec-migrate/bin/cosec-migrate" 2>&1 \
+            | tee "$RUNNER_TEMP/kind-leg.log"
+
+      - name: Collect the evidence
+        if: always()
+        run: |
+          evidence="$RUNNER_TEMP/kind-evidence"
+          mkdir -p "$evidence"
+          cp "$RUNNER_TEMP/kind-leg.log" "$evidence/" 2>/dev/null || true
+          kubectl get all,endpoints,networkpolicy,events -A -o wide > "$evidence/cluster.txt" 2>&1 || true
+          kubectl describe pods -A > "$evidence/pods.txt" 2>&1 || true
+          kubectl -n cosec-dev logs deployment/cosec-gateway --all-containers > "$evidence/gateway.log" 2>&1 || true
+          kubectl -n cosec-dev logs deployment/redis --all-containers > "$evidence/redis.log" 2>&1 || true
+          kind export logs "$evidence/kind" --name cosec-system > /dev/null 2>&1 || true
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "## Kubernetes manifests on kind"
+            echo
+            echo "Evidence (cluster state, pod logs, the script's output): artifact \`$ARTIFACT\`."
+            echo
+            grep -E '^(ok|FAIL|kind leg)' "$RUNNER_TEMP/kind-leg.log" 2>/dev/null | sed 's/^/- /' || echo "- the leg did not start"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: ${{ runner.temp }}/kind-evidence
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Delete the cluster
+        if: always()
+        run: kind delete cluster --name cosec-system || true

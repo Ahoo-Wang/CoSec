@@ -260,6 +260,12 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 - 签发方**时钟超前**的令牌，在 `cosec.authentication.revocation.skew` 之内与之外；
 - 经网关的 **TypeScript 客户端**（`@ahoo-wang/cosec-fetcher`），以及一次决策的**指标**。
 
+同一工作流的第二个作业用该镜像在 [kind](https://kind.sigs.k8s.io/) 集群上应用 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s)
+的清单：dev overlay 在没有其演示路由所指的 Service 时也能启动；`cosec-migrate publish` 之前 Pod 存活但不在 Service 中，之后变为就绪；
+做出一次决策（`401`、`403`，以及只在缺失的后端失败的放行）；从另一个 Pod 读取管理端口的 Prometheus 端点，而 Service 不发布该端口；
+供网关后端服务使用的示例 `NetworkPolicy` 通过 API 服务器的校验，并选中该服务的 Pod 与网关的 Pod。最后一项只说明该策略写的是它该写的，
+并不证明它被强制执行：kind 的网络插件不强制执行 `NetworkPolicy`，请像示例开头所说的那样在你自己的集群上测试强制执行。
+
 它不衡量性能（[JMH](../architecture/overview.md#measuring)）、网关与其后端服务之间的版本差异，也不覆盖 Redis Cluster、TLS 和按实例的用户。
 
 每一次等待都是针对某个已记录属性的、有上限的轮询，并以该属性命名（快照复核间隔、吊销缓存的 30 秒、故障时关闭的滞后、影子窗口），
