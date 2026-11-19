@@ -24,6 +24,9 @@
 # Gradle resolves the plugins' classpath and fetches its own distribution on the way. It never compiles, tests or measures,
 # so a retry of it never repeats work that could change a result; the job's own steps run once, as before.
 #
+# A "configuration cache state could not be cached" error in a build can be a failed download underneath: read the cause
+# below it (`Could not find` or `Could not GET`, with the repository), and look at this step's earlier attempts.
+#
 # Attempt 1 is a plain resolution. Later attempts wait first (20 s, 40 s, 60 s: a rate limit is not helped by asking at once).
 # Attempt 2 adds `--refresh-dependencies`, which asks the repositories again about what the Gradle home remembers. From
 # attempt 3 the dependency cache of the Gradle home (`caches/modules-2`: the jars and the index that names them) is removed

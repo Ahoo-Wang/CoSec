@@ -99,6 +99,21 @@ jobs:
         with:
           cache-read-only: true
 
+      # The scripts of this workflow's commit: the ref under test may predate them. Downloads only, retried: a download
+      # that fails (a 429 or a 404 for an artifact that exists) fails this step, never the build below, which then reports
+      # it as a configuration cache error (.github/scripts/resolve-dependencies.sh).
+      - name: Checkout the CI scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .ci-actions
+          sparse-checkout: |
+            .github/scripts
+            .github/gradle
+          persist-credentials: false
+
+      - name: Resolve the dependencies
+        run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
+
       - name: Build the distributions
         run: ./gradlew :gateway-server:installDist :system-behind:installDist :system-auth:installDist :system-enforcer:installDist :migrate:installDist :system-test:testClasses
 
@@ -227,6 +242,21 @@ jobs:
         uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
         with:
           cache-read-only: true
+
+      # The scripts of this workflow's commit: the ref under test may predate them. Downloads only, retried: a download
+      # that fails (a 429 or a 404 for an artifact that exists) fails this step, never the build below, which then reports
+      # it as a configuration cache error (.github/scripts/resolve-dependencies.sh).
+      - name: Checkout the CI scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: .ci-actions
+          sparse-checkout: |
+            .github/scripts
+            .github/gradle
+          persist-credentials: false
+
+      - name: Resolve the dependencies
+        run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
 
       - name: Build the distributions
         run: ./gradlew :gateway-server:installDist :migrate:installDist
