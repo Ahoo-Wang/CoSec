@@ -13,8 +13,12 @@
 
 @file:OptIn(InternalCoSecApi::class)
 
-package me.ahoo.cosec.webflux.testing
+package me.ahoo.cosec.testkit.webflux
 
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.reactor.ReactorContext
+import kotlinx.coroutines.reactor.asCoroutineContext
+import kotlinx.coroutines.withContext
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
@@ -26,16 +30,19 @@ import me.ahoo.cosec.webflux.ServerWebExchanges.setSecurityContext
 import org.springframework.web.server.ServerWebExchange
 import org.springframework.web.server.WebFilter
 import reactor.core.publisher.Mono
+import reactor.util.context.Context
 
 /**
  * For tests only: how a test of a WebFlux application puts CoSec in front of the code under test (`PIP-29`). In
- * production the adapter binds every context, and nothing else does (round 2 L5): an application never imports this.
+ * production the adapter binds every context, and nothing else does (round 2 L5): this is the test kit's, and needs
+ * `cosec-webflux` on the test's classpath, which a test of a WebFlux handler has.
  *
  * - [filter] is CoSec's own filter over a test pipeline (`PipelineFixture.pipeline`, or [me.ahoo.cosec.runtime.Pipeline.behindGateway]
  *   for a service behind a gateway): the faithful form for a handler test with `WebTestClient`, or a `@WebFluxTest`
  *   slice that declares it as a bean. A slice needs no CoSec auto-configuration: it needs the filter.
  * - [withSecurityContext] and [bind] put a context the kit made (`PermittedRequest`, `PipelineFixture.securityContext`)
- *   where the code under test reads it: the Reactor context, the exchange. For a unit test of a function.
+ *   where the code under test reads it: the Reactor context of a `Mono`, of a coroutine, the exchange. For a unit test
+ *   of a function.
  *
  * Every binder refuses a context the pipeline did not make, so a test never runs as anonymous without saying so; a bound
  * context whose request has ended is denied as any other (`PIP-26`).
@@ -50,6 +57,20 @@ object CoSecTestBindings {
     @JvmStatic
     fun <T : Any> withSecurityContext(mono: Mono<T>, context: SecurityContext): Mono<T> =
         mono.writeSecurityContext(pipelineMade(context))
+
+    /**
+     * [block]'s answer, run with [context] in the Reactor context of its coroutine (`ReactorContext`), as the adapter
+     * writes it for the chain: a `Mono` the block awaits, or one it builds with `mono { }`, reads it there
+     * (`ReactiveSecurityContexts.requireSecurityContext()` in `Mono.deferContextual`). For coroutine code under test,
+     * without a `mono { }.block()` of the test's own.
+     */
+    @JvmStatic
+    suspend fun <T> withSecurityContext(context: SecurityContext, block: suspend () -> T): T {
+        val bound = pipelineMade(context)
+        val outer = currentCoroutineContext()[ReactorContext]?.context ?: Context.empty()
+        val reactor = outer.put(SecurityContext.KEY, bound)
+        return withContext(reactor.asCoroutineContext()) { block() }
+    }
 
     /** [exchange] with [context] bound, as the adapter binds it for the handler. */
     @JvmStatic

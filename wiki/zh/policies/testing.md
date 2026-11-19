@@ -43,7 +43,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `GET /documents/{key}` | 当前修订。`{key}` 为 `platform`、`app:<appId>` 或 `tenant:<tenantId>`。 |
 | `GET /documents/{key}/revisions?before=&limit=` | 修订历史，最新的在前（`limit` 为 1 到 200，默认 20）。 |
 | `GET /documents/{key}/revisions/{revision}` | 某个保留的修订；已不再保留时返回 `410`。 |
-| `GET /documents/{key}/diff?from=&to=` | 两个修订之间（[展开后](./role-permissions.md#roles)的文档）新增、删除和修改的策略与绑定，按原样的 `roles`，以及 `sections`：其余部分（目录、限制、属性、边界或限流规则）是否不同，按其内容比较。 |
+| `GET /documents/{key}/diff?from=&to=` | 两个修订之间（[展开后](./role-permissions.md#roles)的文档）新增、删除和修改的策略与绑定，按原样的 `roles`，以及 `sections`：其余部分中不同的那些的名称，取自 `catalog`、`boundary`、`limits`、`attributes` 和 `rateLimits`，按此顺序，每个按其完整内容比较（都相同时为 `[]`）。 |
 | `GET /documents/{key}/revisions/{revision}/propagation` | 最近上报的实例中有多少已安装该修订。 |
 | `POST /documents/{key}:apply`、`POST /documents/{key}:rollback` | 从整份文档提议变更，或提议回到旧修订。 |
 | `POST /changes`、`GET /changes/{id}` | 提议变更；读取变更。 |
@@ -472,11 +472,27 @@ class OrderPermissionsTest {
 | `PermittedRequest.withIdentity(header)` | 网关后面的服务（`gateway` 模式），使用 `IdentityHeader` 生成的头 | 身份网关从该头构造的内容：`forwardedIdentity` 是转发的身份 |
 | `PermittedRequest.withToken(token, verifier, revocations)` | 需要真实令牌会话的代码（租户切换） | `TokenAuthenticator` 从该令牌构造的内容 |
 
-适配器用 `CoSecTestBindings` 把上下文放到你的代码读取的地方：`cosec-webflux` 的（`me.ahoo.cosec.webflux.testing`）和 `cosec-webmvc` 的（`me.ahoo.cosec.webmvc.testing`）。它们只用于测试：在生产中，每个上下文都由适配器绑定，别的东西都不绑定。每个绑定方法都拒绝管道没有构造的上下文，所以测试永远不会在不声明的情况下以匿名身份运行；请求已结束的上下文在那里同样被拒绝（`PIP-29`）。
-
-**在 CoSec 自己的过滤器后面测试处理器。** `filter(gate)` 就是 starter 注册的过滤器，运行在测试管道之上。切片测试不需要 CoSec 的自动配置：它需要的是过滤器。在 `@WebFluxTest` 或 `@WebMvcTest` 的测试配置中把它声明为 Bean（Spring MVC 上为 `SecurityContext` 参数加上 `SecurityContextArgumentResolver`），或者像下面这样把它交给 `WebTestClient` 和 `MockMvc`。这些示例就是 `cosec-webflux` 和 `cosec-webmvc` 的测试 `TestingYourApplicationTest`：
+工具包用 `CoSecTestBindings` 把上下文放到你的代码读取的地方，每个栈一个：`me.ahoo.cosec.testkit.webflux` 和 `me.ahoo.cosec.testkit.webmvc`。它们只用于测试，在 `cosec-testkit` 中：在生产中，每个上下文都由适配器绑定，别的东西都不绑定。每个绑定方法都拒绝管道没有构造的上下文，所以测试永远不会在不声明的情况下以匿名身份运行；请求已结束的上下文在那里同样被拒绝（`PIP-29`）。绑定需要测试的 classpath 上有你的 Web 栈的适配器，测试这种处理器时本来就有；工具包不带来任何适配器：
 
 ```kotlin
+dependencies {
+    testImplementation(platform("me.ahoo.cosec:cosec-bom:<version>"))   // 或者你的构建已经导入的 BOM
+    testImplementation("me.ahoo.cosec:cosec-testkit")
+}
+// 不用 BOM 时：testImplementation("me.ahoo.cosec:cosec-testkit:<version>")
+```
+
+**在 CoSec 自己的过滤器后面测试处理器。** `filter(gate)` 就是 starter 注册的过滤器，运行在测试管道之上。切片测试不需要 CoSec 的自动配置：它需要的是过滤器。在 `@WebFluxTest` 或 `@WebMvcTest` 的测试配置中把它声明为 Bean（Spring MVC 上为 `SecurityContext` 参数加上 `SecurityContextArgumentResolver`），或者像下面这样把它交给 `WebTestClient` 和 `MockMvc`。这些示例就是工具包的测试 `TestingYourWebFluxApplicationTest` 和 `TestingYourWebMvcApplicationTest`：
+
+```kotlin
+@file:OptIn(ExperimentalCoSecApi::class)
+
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.testkit.IdentityHeader
+import me.ahoo.cosec.testkit.PermittedRequest
+import me.ahoo.cosec.testkit.PipelineFixture
+import me.ahoo.cosec.testkit.webflux.CoSecTestBindings   // Spring MVC 上为 me.ahoo.cosec.testkit.webmvc.CoSecTestBindings
+
 // WebFlux：工具包的文档和主体，位于真实的过滤器之后
 PipelineFixture.of(tenants = mapOf("acme" to documents)).use { fixture ->
     val client = WebTestClient.bindToRouterFunction(routes)
@@ -504,7 +520,11 @@ val alice = PermittedRequest.forSubject("alice", tenant = "acme", roles = setOf(
 // WebFlux：Reactor 上下文，或者 exchange
 StepVerifier.create(CoSecTestBindings.withSecurityContext(currentUser(), alice)).expectNext("alice").verifyComplete()
 CoSecTestBindings.bind(exchange, alice)
+// WebFlux，协程代码：上下文在协程的 Reactor 上下文中，所以它等待的 Mono 能读到
+val user = CoSecTestBindings.withSecurityContext(alice) { currentUser().awaitSingle() }
 // Spring MVC：SecurityContextHolder，之后恢复原样；或者请求
 CoSecTestBindings.withSecurityContext(alice) { currentUser() }
 CoSecTestBindings.bind(request, alice)
 ```
+
+已经有自己凭证的测试套件（自己的令牌约定，或请求里带的真实令牌）可以保留它们：`PipelineFixture.of(..., authenticator = yours)`（以及 `load`）用你的认证器而不是夹具的令牌来决定请求是谁。这样的夹具不签发令牌，所以 `fixture.authorization(principal)` 和 `fixture.request(..., principal)` 会抛出异常。

@@ -30,6 +30,8 @@ dependencies {
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
     compileOnly(project(":gateway"))
     testImplementation(project(":gateway"))
+    // WebAdapterParityTest: the test bindings' filters (PIP-29) are the adapters'.
+    testImplementation(project(":testkit"))
     compileOnly(project(":social"))
     testImplementation(project(":social"))
     compileOnly(project(":cosid"))
