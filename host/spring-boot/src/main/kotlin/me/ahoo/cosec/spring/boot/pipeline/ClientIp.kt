@@ -75,8 +75,25 @@ internal object ClientIpReadings {
             explicit
         )
         rewritingFilter(beans)?.let { throw framework(it) }
-        log.info { "The client address of requests: $reading (PIP-16)." }
+        log.info { report(reading, explicit) }
         return reading
+    }
+
+    /**
+     * The startup line (UB-4): what is read, and, when the default index is in effect and trusts X-Forwarded-For, what
+     * that risks. A host that clients reach directly lets them write their own address.
+     */
+    fun report(reading: ClientIpReading, explicit: Boolean): String {
+        val line = "The client address of requests: $reading (PIP-16)."
+        if (explicit || reading.maxTrustedIndex == 0) {
+            return line
+        }
+        val hops = reading.maxTrustedIndex
+        return "$line $MAX_TRUSTED_INDEX is not set, so its default, $hops, is in effect: this host trusts $hops " +
+            "X-Forwarded-For hop(s). If clients reach it directly, without a proxy that writes that header, a client " +
+            "chooses its own address, and what reads it follows: IP conditions in policies, rate limits keyed on the " +
+            "address, the blacklist. Set $MAX_TRUSTED_INDEX to the number of proxies in front of this host, or to 0 " +
+            "when there are none ($TROUBLESHOOTING)."
     }
 
     /** The reading for [strategy] on [server]; throws [ClientIpConfigurationException] where none is safe. */

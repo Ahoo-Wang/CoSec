@@ -87,6 +87,21 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   namespace). 8.0.0-alpha.2 and later skip exactly those variables, only from the process environment; a mistyped
   `COSEC_*` variable or the same key in `application.yaml` still fails. On alpha.1, or to keep them out of the pod, set
   `enableServiceLinks: false` on the pod, as `k8s/` does.
+- **`CoSec cannot read <n> cosec.* switch(es); a value it cannot read would switch the feature off without a word:`**
+  followed by `<key>=[<value>]: write true or false` (or `enforce or gateway`, `memory or redis`): a switch such as
+  `cosec.enabled`, `cosec.jwt.enabled`, another `*.enabled`, `cosec.pipeline.mode` or `cosec.api-key.store` was written
+  `1`, `on`, `yes`, an empty string (a Helm or Compose template that left the variable empty) or `true` with spaces.
+  Write `true` or `false` (the enum's value), or remove the key to take its default. Never suggest `cosec.enabled=false`
+  to get past it.
+- **`CoSec is off: cosec.enabled=false.` (WARN, not a failure):** nothing is protected by CoSec on that application;
+  ask whether that is intended.
+- **`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. ... answered with no CoSec
+  decision: <beans>` (WARN):** the application's own controllers or functional routes are outside CoSec; move them
+  behind the gateway, or secure them in the application.
+- **`No platform document under [<prefix>:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`
+  (WARN, repeated every `lag-warn`):** the instance waits for its platform document. Check, in this order, that
+  something was published (`cosec-migrate publish --key-prefix <prefix>`), that `cosec.key-prefix` is the publisher's, and
+  that the Redis database and host are the publisher's.
 - **`<what> needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath: add it to the application's dependencies
   (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
   `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with

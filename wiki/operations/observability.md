@@ -146,6 +146,16 @@ refuses, or one longer than 512 characters, is no tracestate: the span is still 
 A `500` sets the span's status to `ERROR`. Audit events and problem bodies carry the trace id of the request's span,
 which ties a response to its trace.
 
+## Startup summary
+
+Once every bean exists, the starter logs one INFO line of what CoSec is configured as, for example
+`CoSec 8.0.0-beta.4: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
+Each entry is what a request meets, resolved as the authenticator resolves it: the revocation reader is the application's bean, the CoCache token store's, or `RevocationReader.NONE`, which the line spells out because revoked tokens are then accepted until they expire; with no token verification (`jwt=off`) there is no reader to name.
+A switch written `false` is added as `switched-off-by-configuration=[...]`. A rate limiter named `LocalRateLimiter` counts
+per instance: with several instances the limit is multiplied by their number. When `cosec.enabled=false` the line is
+one WARN instead: `CoSec is off ... nothing is protected by CoSec`
+([troubleshooting](./troubleshooting.md#the-log-says-cosec-is-off)).
+
 ## Metrics
 
 With `cosec-micrometer` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision event is
@@ -156,7 +166,8 @@ number of time series stays bounded however many policies, apps and tenants ther
 |---|---|
 | `result` | `allow`, `too_many_requests`, `explicit_deny` (scope rejections and boundary denies included), `implicit_deny`, `indeterminate` (every `503`), `bad_request`, `cancelled`, `error` |
 | `source` | `binding`, `attachment`, `builtin`, `boundary`, `scope` (a scope rejection), `none` |
-| `cause` | on `indeterminate` only: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
+| `problem` | what the client was told: `unauthorized` (`401`, anonymous), `token-invalid`, `token-expired`, `token-revoked` (`401`), `forbidden`, `scope-rejected` (`403`), `too-many-requests`, `invalid-request`, `unavailable`, `internal-error`, or `none` when the request proceeds or was cancelled |
+| `cause` | `none`, and on `indeterminate`: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
 
 The listeners themselves are counted:
 
