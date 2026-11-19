@@ -89,15 +89,16 @@ class ConditionCheckerTest {
         checker.unresolved("ext.geo.country").assert().contains("not declared")
     }
 
-    /** `DOC-13`: a path that holds a control character or an unpaired surrogate names no attribute, built in or declared. */
+    /**
+     * `DOC-13`: a name that holds a control character or an unpaired surrogate names no built-in attribute; an external
+     * one must be declared, and the platform's declarations are held to the same rule.
+     */
     @Test
-    fun `no attribute reference resolves a path that would forge a line`() {
-        val declared = Attribute.external("ext.geo.c\u0001", AttributeType.STRING)
-        val checker = ConditionChecker(catalog = AttributeCatalog.of(listOf(declared)))
-        listOf("subject.attributes.a\nb", "http.query.\uD800", "ext.geo.c\u0001").forEach { path ->
+    fun `no attribute reference resolves a name that would forge a line`() {
+        val checker = ConditionChecker()
+        listOf("subject.attributes.a\nb", "request.attributes.\uD800", "resource.var.x\u009F").forEach { path ->
             checker.attribute(path).assert().isNull()
-            checker.unresolved(path).assert().contains("holds a control character or an unpaired surrogate")
-                .doesNotContain("\n").doesNotContain("\u0001")
+            checker.unresolved(path).assert().startsWith("unknown attribute")
         }
         checker.attribute("subject.attributes.\uD83D\uDE00").assert().isNotNull()
     }

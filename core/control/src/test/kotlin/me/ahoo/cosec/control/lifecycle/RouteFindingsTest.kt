@@ -63,7 +63,9 @@ class RouteFindingsTest {
             PolicyCompiler().compile(
                 PolicyId(policyId),
                 null,
-                listOf(StatementSource("", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/admin/**")))),
+                listOf(
+                    StatementSource("", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/admin/**")))
+                ),
             ),
         ),
         emptyList(),
@@ -87,7 +89,13 @@ class RouteFindingsTest {
     /** `DOC-12` (R1B-3): the finding shows a policy id escaped, as the host's line does. */
     @Test
     fun `an id that would forge a line is shown escaped`() {
-        val found = ArrayList<Finding>().also { RouteFindings.check(engineOnly("x\n2026-11-19 ERROR forged"), routes(1), it) }
+        val found = ArrayList<Finding>().also {
+            RouteFindings.check(
+                engineOnly("x\n2026-11-19 ERROR forged"),
+                routes(1),
+                it
+            )
+        }
         val message = found.single().message
         message.none { it.isISOControl() }.assert().describedAs(message).isTrue()
         message.assert().contains("DENY x\\u000A2026-11-19 ERROR forged#0 escapes DELETE")

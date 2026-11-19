@@ -157,10 +157,20 @@ class PolicyCompilerTest {
         compiler.statement(
             id,
             0,
-            StatementSource("d", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/a/**", caseSensitive = false))),
+            StatementSource(
+                "d",
+                Effect.DENY,
+                listOf("http:*"),
+                listOf(ResourceSource("http:path:/a/**", caseSensitive = false))
+            ),
         )
         // A rate limit rule compiles as a DENY: encoded spellings would escape its limit.
-        val rule = RateLimitSource("r", StatementSource("", Effect.ALLOW, listOf("http:*"), listOf(raw)), null, RateLimitSpec(1.0))
+        val rule = RateLimitSource(
+            "r",
+            StatementSource("", Effect.ALLOW, listOf("http:*"), listOf(raw)),
+            null,
+            RateLimitSpec(1.0)
+        )
         assertThrows<CompileException> { compiler.rateLimit(DocumentKind.PLATFORM, "", rule) }
             .errors.single().path.assert().isEqualTo("$.resource[0]")
     }

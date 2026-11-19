@@ -66,7 +66,9 @@ class RouteEscapeReviewTest {
             PolicyCompiler().compile(
                 PolicyId(policyId),
                 null,
-                listOf(StatementSource("", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/admin/**")))),
+                listOf(
+                    StatementSource("", Effect.DENY, listOf("http:*"), listOf(ResourceSource("http:path:/admin/**")))
+                ),
             ),
         ),
         emptyList(),

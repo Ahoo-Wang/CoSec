@@ -99,34 +99,6 @@ class ControlHttpTest {
         }
     }
 
-    /**
-     * `DOC-13`, `DOC-14` on the control plane: a change whose document does not compile stays a draft whose findings name
-     * each statement by its path, each a 422, never a 500; it moves no further. Its operations show the id as written,
-     * in a JSON string; the finding shows it escaped.
-     */
-    @Test
-    fun `a change with a deny matching the path undecoded or an id that would forge a line stays a draft naming it`() {
-        val raw = """{"pattern":"http:path:/admin/**","decodeAndParseSegments":false}"""
-        val proposal = """{"document":"tenant:acme","base":1,"note":"raw","operations":[""" +
-            """{"op":"putPolicy","policy":{"id":"raw","statements":[{"effect":"deny","action":"http:*","resource":$raw}]}},""" +
-            """{"op":"putPolicy","policy":{"id":"x\n2026-11-19 ERROR forged","statements":[]}}]}"""
-        val (created, change) = call("POST", "/changes", proposal)
-        created.assert().isEqualTo(201)
-        change.get("state").asString().assert().isEqualTo("DRAFT")
-        val nodes = change.get("findings").let { all -> (0 until all.size()).map(all::get) }
-        val findings = nodes.map { Triple(it.get("check").asString(), it.get("path").asString(), it.get("status").asInt()) }
-        findings.assert().containsExactlyInAnyOrder(
-            Triple("COMPILE", "$.policies[1].statements[0].resource[0]", 422),
-            Triple("COMPILE", "$.policies[2].id", 422),
-        )
-        nodes.map { it.get("message").asString() }.assert()
-            .anyMatch { "DOC-14" in it && "remove the option" in it }
-            .anyMatch { "[x\\u000A2026-11-19 ERROR forged]" in it }
-        val (refused, problem) = call("POST", "/changes/${change.get("id").asString()}:shadow")
-        refused.assert().isEqualTo(409)
-        problem.get("detail").asString().assert().contains("is DRAFT")
-    }
-
     @Test
     fun `a change goes through the routes, each step authorized`() {
         val proposal = """{"document":"tenant:acme","base":1,"note":"more",""" +

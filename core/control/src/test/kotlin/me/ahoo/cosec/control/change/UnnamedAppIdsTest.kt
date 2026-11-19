@@ -74,8 +74,9 @@ class UnnamedAppIdsTest {
         publish(SnapshotKey.Platform, Operation.PutPolicy(allow("shared")))
         for (app in refused) {
             val change = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutBinding(bind("b", "shared", app))), "t")
-            val finding = change.errors.single()
-            finding.check.assert().isEqualTo("V2")
+            val finding = change.errors.single { it.check == "V2" }
+            // An id with a control character is also one no document may write (DOC-13).
+            change.errors.filter { it.check != "V2" }.forEach { it.message.assert().contains("DOC-13") }
             finding.path.assert().isEqualTo("$.bindings[0].app")
             finding.status.assert().isEqualTo(400)
             finding.message.assert().contains("binding [b]").contains("cannot be an app id")

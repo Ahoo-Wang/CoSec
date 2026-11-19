@@ -54,6 +54,7 @@
     "by": {
       "policy": "no admin: é 😀",
       "statement": 0,
+      "name": "deny (all)",
       "via": {
         "binding": "b é 😀",
         "document": "platform"

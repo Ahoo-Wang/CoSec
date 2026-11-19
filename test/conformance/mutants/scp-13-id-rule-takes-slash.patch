@@ -3,15 +3,15 @@
 # Tests: :model:test --tests me.ahoo.cosec.model.scope.ScopeResolverTest
 
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-index a8178f94..85c60ea0 100644
+index 4ad373e82..b1b6f53a4 100644
 --- a/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
 +++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/scope/ScopeResolver.kt
-@@ -79,7 +79,7 @@ object ScopeResolver {
+@@ -80,7 +80,7 @@ object ScopeResolver {
          for (index in app.indices) {
              val c = app[index]
              val refused = when (c) {
 -                ':', '/' -> true
 +                ':' -> true
-                 else -> c.isISOControl() || Identifiers.isUnpairedSurrogateAt(app, index)
+                 else -> Identifiers.isUnprintableAt(app, index)
              }
              if (refused) {
