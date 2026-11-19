@@ -506,7 +506,9 @@ class StarterWiringTest {
     fun `a second control-plane authorization bean fails startup`() {
         val authorizer = ControlAuthorizer { _, _, _ -> ControlDecision.DENY }
         secondBeanFailsStartup(ControlAuthorizer::class.java) { authorizer }
-        secondBeanFailsStartup(ChangeAuthority::class.java) { ChangeAuthority(authorizer, revocations = RevocationReader.NONE) }
+        secondBeanFailsStartup(
+            ChangeAuthority::class.java
+        ) { ChangeAuthority(authorizer, revocations = RevocationReader.NONE) }
         secondBeanFailsStartup(ControlPlane::class.java) { mockk<ControlPlane>() }
     }
 

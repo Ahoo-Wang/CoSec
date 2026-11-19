@@ -109,6 +109,3 @@ class DocumentRestorer(
         }
     }
 }
-
-/** What `restore` refuses, with what to do instead. */
-class RestoreException(message: String) : RuntimeException(message)
