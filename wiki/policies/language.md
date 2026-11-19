@@ -343,8 +343,10 @@ the document does not compile (`DOC-9`):
 
 The message names a spelling the fold misses. List every spelling in an `in` without `ignoreCase` (for `prefix`, an
 `or` of one `prefix` per spelling). In the other direction, an ALLOW that matches fewer spellings only grants less: it
-compiles, and the control plane's validation reports a warning. A literal of ASCII letters folds every spelling it
-reads, and `ignoreCase` on it compiles anywhere.
+compiles, and the control plane's validation reports a warning. A literal of ASCII letters folds every ASCII spelling
+it reads, and `ignoreCase` on it compiles anywhere. The fold does not cover characters beyond ASCII that other case
+rules fold to an ASCII letter: U+212A KELVIN SIGN (`K`) is not `k`, and U+017F LATIN SMALL LETTER LONG S (`ſ`) is not
+`s`. A value that holds them does not match a literal of ASCII letters, with or without `ignoreCase`.
 
 ### Attributes
 

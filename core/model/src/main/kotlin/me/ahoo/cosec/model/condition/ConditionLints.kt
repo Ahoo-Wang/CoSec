@@ -149,7 +149,13 @@ object ConditionLints {
      * Why `resource.attributes.<name>` does not resolve in a document (`DOC-10`), and where facts about a resource go
      * instead. The attribute kind stays in the model for a later producer; [ConditionChecker.attribute] refuses it.
      */
-    fun unsetResourceAttribute(path: String): String =
+    fun unsetResourceAttribute(path: String): String = unset(path)
+
+    /** [unsetResourceAttribute] when [parsed] is a resource attribute, else null: the checker's `unresolved` asks. */
+    fun unsetResourceAttribute(parsed: Attribute?, path: String): String? =
+        unset(path).takeIf { parsed?.kind == Attribute.Kind.RESOURCE_ATTRIBUTE }
+
+    private fun unset(path: String): String =
         "`$path` is never set: no request, check, simulate or explain gives a resource attributes, so a DENY on it " +
             "would deny nothing and a not on it would match every request. Put facts about a resource in its id and " +
             "read them with a pattern variable, resource.var.<name> (Object-level rules, integration/checks.md) (DOC-10)"

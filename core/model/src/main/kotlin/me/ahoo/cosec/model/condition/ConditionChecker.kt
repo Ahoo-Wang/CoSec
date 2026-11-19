@@ -64,10 +64,9 @@ class ConditionChecker(
                 "`$path` is not a header name: a header name is an ASCII token (RFC 9110)"
             parsed != null && isCredential(parsed) ->
                 "`$path` is a credential header, which no attribute reference may read"
-            parsed?.kind == Attribute.Kind.RESOURCE_ATTRIBUTE -> ConditionLints.unsetResourceAttribute(path)
             parsed == null && Attribute.isExternalPath(path) ->
                 "external attribute `$path` is not declared by any registered AttributeProvider"
-            else -> "unknown attribute `$path`"
+            else -> ConditionLints.unsetResourceAttribute(parsed, path) ?: "unknown attribute `$path`"
         }
     }
 

@@ -269,7 +269,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 - 限流规则的条件，它与 DENY 的条件同样匹配；
 - 策略条件，按它所守护的每条语句的方向：策略含 DENY 时在 `not` 之外，含 ALLOW 时在 `not` 之下。
 
-错误消息会给出一种折叠漏掉的写法。改为在不带 `ignoreCase` 的 `in` 里列出每种写法（`prefix` 则写成每种写法一个 `prefix` 的 `or`）。另一个方向上，匹配写法更少的 ALLOW 只会授予得更少：它能编译，控制面的校验给出警告。只含 ASCII 字母的字面量会折叠它字面上的每一种写法，在任何地方加 `ignoreCase` 都能编译。
+错误消息会给出一种折叠漏掉的写法。改为在不带 `ignoreCase` 的 `in` 里列出每种写法（`prefix` 则写成每种写法一个 `prefix` 的 `or`）。另一个方向上，匹配写法更少的 ALLOW 只会授予得更少：它能编译，控制面的校验给出警告。只含 ASCII 字母的字面量会折叠它字面上的每一种 ASCII 写法，在任何地方加 `ignoreCase` 都能编译。折叠不覆盖那些在别的大小写规则下会折叠成 ASCII 字母的非 ASCII 字符：U+212A KELVIN SIGN（`K`）不是 `k`，U+017F LATIN SMALL LETTER LONG S（`ſ`）不是 `s`。含有它们的值，无论加不加 `ignoreCase`，都不匹配只含 ASCII 字母的字面量。
 
 ### 属性 {#attributes}
 
