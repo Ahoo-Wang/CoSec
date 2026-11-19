@@ -123,7 +123,7 @@ object ShadowCodec {
         node.only("window", "instance", "counts", "samples", "baseRevisions", "first", "last")
         val instance = node.need("instance").text()
         if (!ShadowReport.isInstanceId(instance)) {
-            malformed("[${SnapshotKeyText.quoted(instance.toString())}] is not an instance id")
+            malformed("[${SnapshotKeyText.quoted(instance)}] is not an instance id")
         }
         return ShadowReport(
             window = node.need("window").text(),
