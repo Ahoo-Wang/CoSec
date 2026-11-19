@@ -1,0 +1,16 @@
+# Rule: OBS-7
+# Mutant: the gate refuses a forwarded identity without counting it, so cosec.identity.refused stays flat while a misconfigured hop or a request around the gateway is refused
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityRefusalsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityRefusals.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityRefusals.kt
+index be748137..6ae5eed8 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityRefusals.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/identity/IdentityRefusals.kt
+@@ -50,7 +50,6 @@ class IdentityRefusals(
+     fun count(type: ProblemType): Long = counts[type]?.get() ?: 0
+ 
+     internal fun record(requestId: String, type: ProblemType, reason: String) {
+-        counts.getValue(type).incrementAndGet()
+         if (warns(type)) {
+             log.warn { message(requestId, type, reason) }
+         } else if (log.isDebugEnabled()) {
