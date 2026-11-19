@@ -131,9 +131,13 @@ The rules behind the picture:
   format, which `conformance` runs too, so the suite and the applications' tests evaluate scenarios one way.
 - **`cosec-migrate`** converts 7.x data into 8.0 documents and publishes them; no application depends on it.
   **`cosec-gateway-server`** is a ready-to-run gateway built from the starter; it is never published. **`conformance`**,
-  **`architecture`**, **`e2e`** and **`client-host`** are test-only modules and are never published either.
+  **`architecture`**, **`e2e`**, **`client-host`**, **`system-test`** and **`system-behind`** are test-only modules and
+  are never published either.
   **`client-host`** (directory `test/client-host/`) is a real CoSec 8 application, the starter over WebFlux with CoCache
   in memory, that the TypeScript client's tests run against (`pnpm test:host` in `typescript/` starts it).
+  **`system-test`** (directory `test/system-test/`) is the system test: the gateway image built from the commit, the
+  services of `test/system-*` (such as **`system-behind`**, a service in `cosec.pipeline.mode=gateway`) and Redis, run
+  with Docker Compose by the `system-test.yml` workflow and driven over the network only; its `check` runs no scenario.
 
 `architecture` (directory `test/architecture/`) holds the structural rules that scan several modules (RFC 0011 §5):
 

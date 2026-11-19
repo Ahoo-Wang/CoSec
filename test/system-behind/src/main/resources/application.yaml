@@ -1,0 +1,19 @@
+# The service behind the gateway (test/system-test's topology). It trusts any CoSec-Identity it receives: in the system test only
+# the gateway reaches it, on the Compose network; its port is published to the runner for the health check alone.
+server:
+  port: 8080
+spring:
+  application:
+    name: system-behind
+cosec:
+  pipeline:
+    mode: gateway
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  endpoints:
+    web:
+      exposure:
+        include: health
