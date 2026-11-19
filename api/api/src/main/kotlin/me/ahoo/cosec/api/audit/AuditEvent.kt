@@ -15,10 +15,28 @@ package me.ahoo.cosec.api.audit
 
 import java.time.Instant
 
+/**
+ * What decided the request, in the words of the decision event's `outcome.reason` (UD-7): one vocabulary for events,
+ * metrics (`result`) and audit. Only [EXPLICIT_DENY] means a DENY statement refused the request.
+ */
 enum class AuditDecision {
-    ALLOW,
+    /** The request was permitted. */
+    PERMIT,
+
+    /** A DENY statement matched. */
     EXPLICIT_DENY,
+
+    /** Nothing allowed the request. */
     IMPLICIT_DENY,
+
+    /** The scope was rejected: an app or space the principal may not act in (403 `scope-rejected`). */
+    SCOPE_REJECTED,
+
+    /** A permit outside the tenant's platform boundary (RFC 0007 §7.6); the response says only `forbidden`. */
+    BOUNDARY,
+
+    /** The request could not be interpreted without ambiguity, refused before any decision (400). */
+    INVALID_REQUEST,
     TOO_MANY_REQUESTS,
     ERROR,
 
@@ -27,7 +45,7 @@ enum class AuditDecision {
 }
 
 enum class AuditReasonCode {
-    ALLOW,
+    PERMIT,
     EXPLICIT_DENY,
     IMPLICIT_DENY,
     TOKEN_EXPIRED,
@@ -46,6 +64,15 @@ enum class AuditReasonCode {
 
     /** A token that delegates (an `act` claim), which 8.0 refuses (RFC 0009 §6); the response says `token-invalid`. */
     DELEGATION_UNSUPPORTED,
+
+    /** The request could not be interpreted without ambiguity (400). */
+    INVALID_REQUEST,
+
+    /**
+     * A token issued, or valid from, later than this instance's clock beyond the skew (`IDN-29`): an issuer's clock is
+     * ahead. The response says `token-invalid`.
+     */
+    TOKEN_NOT_YET_VALID,
 }
 
 /** How the statement that decided came to apply to the request. */

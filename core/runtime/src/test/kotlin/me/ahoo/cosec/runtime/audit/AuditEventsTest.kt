@@ -40,6 +40,7 @@ import me.ahoo.cosec.runtime.PipelineFixtures.StubEngine
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticated
 import me.ahoo.cosec.runtime.PipelineFixtures.authenticator
 import me.ahoo.cosec.runtime.PipelineFixtures.facts
+import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.event.BridgeContextContributor
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
@@ -106,7 +107,7 @@ class AuditEventsTest {
                 MembershipSource.Provider.UNCAPPED,
                 credential = Identity.Credential(Identity.Method.API_KEY, "k1", null),
             ),
-            "apikey",
+            ApiKeyAuthenticator.METHOD,
         )
         try {
             runBlocking {
@@ -155,8 +156,8 @@ class AuditEventsTest {
             BindingRef.Bound(BindingId("g:orders"), DocumentKind.TENANT)
         )
         val event = audit(Decision.Permit(bound))
-        event.authorization.decision.assert().isEqualTo(AuditDecision.ALLOW)
-        event.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.ALLOW)
+        event.authorization.decision.assert().isEqualTo(AuditDecision.PERMIT)
+        event.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.PERMIT)
         event.authorization.source.let {
             it.via.assert().isEqualTo(AuditVia.BINDING)
             it.document.assert().isEqualTo(AuditDocument.TENANT)
@@ -187,13 +188,15 @@ class AuditEventsTest {
             it.statement.assert().isNull()
         }
         audit(Decision.Deny(StatementRef.ScopeRejected(ScopeResolution.Rejected.Reason.APP_MISMATCH))).let {
+            // UD-7: a scope rejection is its own decision, never an explicit deny.
+            it.authorization.decision.assert().isEqualTo(AuditDecision.SCOPE_REJECTED)
             it.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.SCOPE_REJECTED)
             it.authorization.source.via.assert().isEqualTo(AuditVia.NONE)
             it.binding.assert().isNull()
         }
-        // RFC 0007 §7.6: a boundary deny is an explicit deny whose reason only audit records.
+        // RFC 0007 §7.6, UD-7: a boundary refusal is its own decision; the response says only `forbidden`.
         audit(Decision.Deny(StatementRef.Boundary(PolicyId("fence"), PipelineFixtures.TENANT))).authorization.let {
-            it.decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
+            it.decision.assert().isEqualTo(AuditDecision.BOUNDARY)
             it.reasonCode.assert().isEqualTo(AuditReasonCode.BOUNDARY)
             it.reason.assert().isEqualTo("BOUNDARY: fence")
         }
@@ -207,9 +210,10 @@ class AuditEventsTest {
         val delegated = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.DELEGATION_UNSUPPORTED))
         audit(Decision.Deny(null), delegated).authorization.reasonCode
             .assert().isEqualTo(AuditReasonCode.DELEGATION_UNSUPPORTED)
-        // IDN-29: a token not valid yet is token-invalid to audit's fixed codes; the decision event names it.
+        // IDN-29: the client reads token-invalid, audit names a token not valid yet: a clock, not a key.
         val early = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_NOT_YET_VALID))
-        audit(Decision.Deny(null), early).authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_INVALID)
+        val earlyCode = audit(Decision.Deny(null), early).authorization.reasonCode
+        earlyCode.assert().isEqualTo(AuditReasonCode.TOKEN_NOT_YET_VALID)
     }
 
     /** #1237: a boundary refusal is recorded as the boundary, not as "no statement decided". */
@@ -274,7 +278,8 @@ class AuditEventsTest {
         unavailable.kind.assert().isEqualTo("AUTHENTICATION_UNAVAILABLE")
         val badRequest = audit(PipelineFixtures.PERMIT, path = "/a/%2e%2e/b")
         badRequest.kind.assert().isEqualTo("BAD_REQUEST")
-        badRequest.authorization.decision.assert().isEqualTo(AuditDecision.EXPLICIT_DENY)
+        badRequest.authorization.decision.assert().isEqualTo(AuditDecision.INVALID_REQUEST)
+        badRequest.authorization.reasonCode.assert().isEqualTo(AuditReasonCode.INVALID_REQUEST)
     }
 
     @Test

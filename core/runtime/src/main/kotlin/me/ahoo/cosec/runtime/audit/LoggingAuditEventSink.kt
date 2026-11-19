@@ -37,9 +37,12 @@ class LoggingAuditEventSink @InternalCoSecApi constructor(
 
     override fun publish(event: AuditEvent) {
         when (event.authorization.decision) {
-            AuditDecision.ALLOW -> logger.debug { CoSecJson.mapper.writeValueAsString(event) }
+            AuditDecision.PERMIT -> logger.debug { CoSecJson.mapper.writeValueAsString(event) }
             AuditDecision.EXPLICIT_DENY,
             AuditDecision.IMPLICIT_DENY,
+            AuditDecision.SCOPE_REJECTED,
+            AuditDecision.BOUNDARY,
+            AuditDecision.INVALID_REQUEST,
             AuditDecision.TOO_MANY_REQUESTS,
             AuditDecision.INDETERMINATE,
             -> logger.warn { CoSecJson.mapper.writeValueAsString(event) }

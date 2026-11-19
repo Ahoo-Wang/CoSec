@@ -135,8 +135,14 @@ internal class RequestState(
     val decided: Boolean get() = ::decision.isInitialized
 
     private fun subject(): SubjectSummary = when (val authn = if (::authn.isInitialized) authn else null) {
-        is AuthnResult.Authenticated ->
-            SubjectSummary(authn.principal.tenant.value, authn.principal.id.value, true, authn.method, null)
+        // The credential's method, as `CoSec-Identity` names it (UD-11); the authenticator's name when it set none.
+        is AuthnResult.Authenticated -> SubjectSummary(
+            authn.principal.tenant.value,
+            authn.principal.id.value,
+            true,
+            authn.principal.credential?.method?.value ?: authn.method,
+            null,
+        )
         is AuthnResult.Rejected -> anonymous(authn.reason, authn.refused)
         AuthnResult.Anonymous, is AuthnResult.Unavailable, null -> anonymous(null, null)
     }

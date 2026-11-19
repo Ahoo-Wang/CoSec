@@ -34,6 +34,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 | `503` | `UNAVAILABLE` | [`unavailable`](#unavailable) |
 | `500` | `INTERNAL_ERROR` | [`internal-error`](#internal-error) |
 
+响应体没有 `https://cosec.ahoo.me/problems/` 下 `type` 的 `5xx` 不是 CoSec 的（[网关的错误](#a-permitted-request-answers-500-with-the-gateways-own-error-body)）。
 显式拒绝和隐式拒绝的响应相同；审计事件会区分它们。结果如何映射为状态码、响应头和响应体，对所有适配器统一定义在
 [Web 集成](../integration/web.md)中。控制面的响应还有更多状态码：[控制面错误](#control-plane-errors)。
 
@@ -78,7 +79,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - **含 `/` 的租户或应用 id：** 令牌的 `tenantId` 或 `aud` 含 `/`，例如 `acme/west`，7.x 或预览版的签发方可能签出过这样的令牌（`SCP-13`）。
   租户 id 和应用 id 都是一个路径段，所以这个令牌既不指租户 `acme/west`，也不指 `acme`。请在保存该 id 的地方给租户或应用改名，然后让主体重新登录
   （[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。
-- **偶发，在整秒边界：** 少数请求以 `token-invalid` 失败，每次都在某一秒的最后几毫秒，日志写着 `Token refused as not valid yet: The token's iat is later than this instance's clock`。签发方的时钟比本实例快，超过了 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒；直到 beta.3 完全没有余量，`IDN-29`），按签发方下一秒签发的令牌到达了仍在上一秒的主机。决策事件的 `subject.rejected` 为 `TOKEN_NOT_YET_VALID`。请同步时钟（NTP）；只有对已知且有界的偏差才调大这个余量，因为它也会扩大主体吊销覆盖的范围。
+- **偶发，在整秒边界：** 少数请求以 `token-invalid` 失败，每次都在某一秒的最后几毫秒，日志写着 `Token refused as not valid yet: The token's iat is later than this instance's clock`。签发方的时钟比本实例快，超过了 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒，`IDN-29`），按签发方下一秒签发的令牌到达了仍在上一秒的主机。决策事件的 `subject.rejected` 为 `TOKEN_NOT_YET_VALID`。请同步时钟（NTP）；只有对已知且有界的偏差才调大这个余量，因为它也会扩大主体吊销覆盖的范围。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -192,6 +193,12 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - `The identity of [<subject>] is <n> bytes encoded, over the limit of <max>: ...`、`Claim [<name>] is <n> characters, over 1024.`
   或 `Claim [<name>] is a <type>, not a string, number or boolean.`：减少角色或
   [`cosec.gateway.identity.claims`](./configuration.md#gateway-identity)，或在网关和服务上都调大 `max-size`。
+
+## 已放行的请求以网关自己的错误体返回 500 {#a-permitted-request-answers-500-with-the-gateways-own-error-body}
+
+CoSec 决定放行之后，网关没能连到路由的目标。响应是一个 `500`，它的响应体没有 `type`：是 Spring Boot 的默认错误对象（`timestamp`、`path`、`status`、`error`、`requestId`），不是 problem 文档。网关日志里有 `ERROR` 级别、来自 `AbstractErrorWebExceptionHandler` 的 `500 Server Error for HTTP GET "<path>"`，后面跟着 `java.net.UnknownHostException: Failed to resolve '<host>'`：路由 `uri` 的主机名解析不了，例如网关所在命名空间里没有那个 Kubernetes Service（`k8s/` 的演示路由 `cosec-auth` 指向的就是它不会创建的一个 Service）。
+
+CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`，`type` 以 `https://cosec.ahoo.me/problems/` 开头（[Web 集成](../integration/web.md)）。没有这个 `type` 的 `5xx` 来自网关或目标，不是 CoSec 的任何决策造成的：不必去查文档。修正路由的 `uri`，或创建它指向的 Service 或 DNS 名称。
 
 ## 请求被意外放行 {#request-allowed-unexpectedly}
 

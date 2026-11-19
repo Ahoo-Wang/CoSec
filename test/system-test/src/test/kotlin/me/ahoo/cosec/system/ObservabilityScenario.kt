@@ -23,8 +23,9 @@ import java.net.URI
 /**
  * Scenario 10, observability as an operator sees it (OBS-1, OBS-5, STA-1): the health of a running process and that a
  * decision is visible in its metrics. A decision is counted once, by its result: `cosec.authorization` with the tag
- * `result` (`allow`, `explicit_deny`, ...), over the whole pipeline. Measured as a difference, so what earlier scenarios
- * decided does not matter, and exactly: the requests sent are the requests counted.
+ * `result` (`permit`, `explicit_deny`, ...: the decision event's words, OBS-6), over the whole pipeline. Measured as a
+ * difference, so what earlier scenarios decided does not matter, and exactly: the requests sent are the requests counted.
+ * The denies are the platform's `no-denied` DENY statement, so they are `explicit_deny`.
  *
  * At the enforcer (the metrics endpoint of its management port) and at the gateway (the Prometheus scrape endpoint of the
  * image's management port, `cosec_authorization_seconds_count`), and in the audit trail: the gateways audit to Kafka, and the
@@ -72,7 +73,7 @@ class ObservabilityScenario {
 
     @Test
     fun `the gateway counts its decisions by result, and each is on the audit topic with its request id`() {
-        val allowedBefore = gatewayDecisions("allow")
+        val permittedBefore = gatewayDecisions("permit")
         val deniedBefore = gatewayDecisions("explicit_deny")
         val caller = Token.issue("kay", "audit-tenant", app = "orders")
         val path = "/behind/orders/audit-${java.util.UUID.randomUUID()}"
@@ -93,9 +94,9 @@ class ObservabilityScenario {
         eventually(
             Bounds.LISTENER_DELIVERY,
             "the gateway's decisions counted",
-            { gatewayDecisions("allow") to gatewayDecisions("explicit_deny") }
+            { gatewayDecisions("permit") to gatewayDecisions("explicit_deny") }
         ) {
-            it == (allowedBefore + 3 to deniedBefore + 2)
+            it == (permittedBefore + 3 to deniedBefore + 2)
         }
         val record = eventually(
             Bounds.AUDIT_DELIVERY,
@@ -106,7 +107,7 @@ class ObservabilityScenario {
         }!!
         Transcript.note("audit record: $record")
         record.substringBefore('\t').assert().isEqualTo("[\"audit-tenant\",\"kay\"]")
-        record.assert().contains(permitted.header("CoSec-Request-Id")!!).contains("ALLOW")
+        record.assert().contains(permitted.header("CoSec-Request-Id")!!).contains("\"decision\":\"PERMIT\"")
     }
 
     @Test
@@ -115,7 +116,7 @@ class ObservabilityScenario {
         health.status.assert().describedAs("health: $health").isEqualTo(200)
         health.json()["status"].assert().isEqualTo("UP")
 
-        val allowedBefore = decisions("allow")
+        val permittedBefore = decisions("permit")
         val deniedBefore = decisions("explicit_deny")
         val caller = Token.issue("olga", "observability", app = "orders")
         repeat(
@@ -128,9 +129,9 @@ class ObservabilityScenario {
         eventually(
             Bounds.LISTENER_DELIVERY,
             "the decisions counted",
-            { decisions("allow") to decisions("explicit_deny") }
+            { decisions("permit") to decisions("explicit_deny") }
         ) {
-            it == (allowedBefore + 3 to deniedBefore + 2)
+            it == (permittedBefore + 3 to deniedBefore + 2)
         }
     }
 }

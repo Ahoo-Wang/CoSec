@@ -323,7 +323,7 @@ CoCache 为文档、控制面记录和吊销记录自建客户端（[Redis 客�
 
 1. **发布平台文档**，用 `publish --file … --document platform`（[快速开始](../guide/quick-start.md#publish-the-platform-document)）。它必须放行管理员访问控制 API 的路径，除此之外只放平台范围的策略。
 2. **指定第一位管理员**：运行 `cosec-migrate bootstrap`，并给该主体签发租户为 `(platform)`、应用为 `cosec-control` 的令牌（[之后修改文档](../guide/quick-start.md#change-a-document-later)）。
-3. **把其他每个文档**（`app:<id>`、`tenant:<id>`）作为一个变更 `apply`。`apply` 接收整份文档，把当前修订（或空文档）变成它；`MERGE` 只新增与修改。控制 API 在 [`cosec.control.http.base-path`](./configuration.md#control-plane) 之下：
+3. **把其他每个文档**（`app:<id>`、`tenant:<id>`）作为一个变更 `apply`。`apply` 接收整份文档，把当前修订（或空文档）变成它；`MERGE` 只新增与修改，所以之后的文件里没有的内容仍保持发布状态（变更带一条点名它们的 `WARNING`）；`REPLACE` 会移除它们，并且只在文件被读取时的修订上应用（[变更](../policies/testing.md#changes)）。控制 API 在 [`cosec.control.http.base-path`](./configuration.md#control-plane) 之下：
 
    ```bash
    CONTROL=https://gateway.example.com/cosec/control/v1
