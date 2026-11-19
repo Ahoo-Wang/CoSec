@@ -24,6 +24,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **gateway 模式声明它所信任的网络边界，网关转发它所决策的方法**（`STA-7`、`STA-6`、`PIP-30`）。受影响的是每个 `cosec.pipeline.mode=gateway` 的服务和每个网关。
+  - `gateway` 模式的服务相信任何 `CoSec-Identity` 头，而这个头没有签名，所以网络就是它的边界。现在除非你写下 `cosec.pipeline.identity.only-gateway-can-reach: true`（`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`），声明只有网关能访问它，否则它**启动失败**。未设置、空、`false`、`1` 和 `on` 同样失败，信息会说明该写什么。先让它成真（只放行网关 pod 的 `NetworkPolicy`、双向 TLS、私有网络；[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）。设置之后，beta.4 之前的 `WARN` 变为一行 `INFO`。
+  - `gateway` 模式的服务只要有 hidden-method 过滤器就会**启动失败**：`spring.mvc.hiddenmethod.filter.enabled=true`、`spring.webflux.hiddenmethod.filter.enabled=true`，或它自己的 `HiddenHttpMethodFilter` bean。网关决策的是请求行的方法，而 `_method` 表单字段会让服务执行另一个方法。移除它。自己决策的宿主（`enforce`）不受影响。
+  - 网关从它转发的每个请求、每条路由上移除 `X-HTTP-Method-Override`、`X-HTTP-Method` 和 `X-Method-Override`（不区分大小写）。不可配置。以前会遵从这些头的后端，对经过网关的请求不再遵从：把方法写在请求行里。
 - **被拒绝的转发身份会被计数并说明原因，网关不再写出服务会拒绝的身份**（#1690）。受影响的是 `cosec.pipeline.mode=gateway` 的服务、它们的仪表盘和日志告警，以及在测试中调用 `IdentityHeader.of` 的代码。
   - 这样的服务以 `WARN` 在 logger `me.ahoo.cosec.runtime.identity.IdentityGate` 上记录每个被拒绝的 `CoSec-Identity` 头的原因，每种问题类型最多每分钟一次（每一次都记录在 `DEBUG`）。直到 beta.4，它只在 `DEBUG` 记录。响应不变：从不说明原因。
   - 有 `cosec-micrometer` 和 `MeterRegistry` 时，它在 `cosec.identity.refused{problem}`（`invalid-request`、`token-invalid`、`token-expired`）中对每次拒绝计数。对任何非零速率告警（[可观测性](./observability.md#metrics)）。

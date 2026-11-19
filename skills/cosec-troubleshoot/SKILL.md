@@ -124,6 +124,13 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address
 - **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
   Redis; without it no snapshot is read and rate limits would count per instance.
+- **`cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives ... State it once it is
+  true: cosec.pipeline.identity.only-gateway-can-reach=true`** (`STA-7`): a service in gateway mode starts only when the
+  operator states that nothing but the gateway can reach it. `It is [<value>]` names a value that is not `true`. Make the
+  network true (NetworkPolicy, mTLS, private network) and write the line; never suggest writing it just to start.
+- **`cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true` (or the WebFlux property, or `a
+  HiddenHttpMethodFilter bean, [name]`)** (`STA-6`): the gateway decided the request line's method and the service
+  would run the one `_method` names. Remove the property or the bean.
 - **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on
   the services behind it. A binding failure on `cosec.pipeline.mode` means a value other than `enforce` or `gateway`.
 - **`Actuator endpoints [<ids>] are exposed over HTTP on the gateway's application port, where CoSec does not

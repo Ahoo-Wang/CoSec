@@ -383,6 +383,10 @@ hold only if the gateway is the only one that can reach the service:
 - The gateway removes any `CoSec-Identity` a client sends, on every request and whatever its own configuration, and
   sets one only on a permit for an authenticated principal. So a request through the gateway carries either the
   identity the gateway verified, in the scope it decided in, or none.
+- The service does not start until its operator has stated that only the gateway can reach it
+  (`cosec.pipeline.identity.only-gateway-can-reach`), so the boundary is written in configuration, not only in a log
+  line. The gateway also removes the method-override headers from what it forwards, and the service may run no
+  hidden-method filter, so the method the gateway decided is the one the service runs.
 - Anyone else who can send the service a request can claim any principal, tenant and role. Keep the service
   reachable from the gateway only: a network policy, a private network, or mutual TLS
   ([Services behind the gateway](../operations/deployment.md#services-behind-the-gateway)).

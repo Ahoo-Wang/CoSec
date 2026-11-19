@@ -125,11 +125,30 @@ flowchart LR
 **Only the gateway may reach a service in gateway mode.** The service believes any `CoSec-Identity` it receives, so
 anyone else who can send it a request can be whoever they claim. Enforce it in the network: a Kubernetes
 `NetworkPolicy` that admits only the gateway's pods, a private network, or mutual TLS between the gateway and the
-services. Each such service logs at startup, at `WARN`:
+services. Each such service starts only when you state that it is so (`STA-7`):
 
-```text
-cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives. Only the CoSec gateway, which strips the clients' own, may be able to reach it: anyone else who can is whoever they claim.
+```yaml
+cosec:
+  pipeline:
+    mode: gateway
+    identity:
+      only-gateway-can-reach: true   # or COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true
 ```
+
+There is no default. Without the line, with `false`, or with any value but `true`, the service fails to start and the
+message says what the mode trusts, what must be true of the network and the line to add
+([Startup fails because the network boundary is not stated](./troubleshooting.md#startup-fails-because-the-network-boundary-is-not-stated)).
+With it, the startup logs one `INFO` line saying that the operator has stated it. The statement signs nothing: it is
+yours to keep true. Signing the header is planned for 8.1.
+
+**No hidden-method filter behind a gateway** (`STA-6`). The gateway decides the method of the request line, and it
+removes `X-HTTP-Method-Override`, `X-HTTP-Method` and `X-Method-Override`, in any letter case, from every request it
+forwards, on every route (`PIP-30`, not configurable). A hidden-method filter in the service would still run a `POST`
+as the method a form field `_method` names, which the gateway cannot remove from a body, so a `DENY` on `http:DELETE`
+would be stepped around. A service in gateway mode fails to start when `spring.mvc.hiddenmethod.filter.enabled` or
+`spring.webflux.hiddenmethod.filter.enabled` is `true` (both are off by default) or the application declares a
+`HiddenHttpMethodFilter` bean. A host that decides itself (`enforce`) is not affected: CoSec's filter runs after the
+hidden-method filter there.
 
 Startup fails when `cosec.pipeline.mode` is neither `enforce` nor `gateway`, and when it is `gateway` on a Spring Cloud
 Gateway host: the gateway itself always decides with the documents. Why the boundary matters, and what a captured

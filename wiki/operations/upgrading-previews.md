@@ -27,6 +27,22 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **Gateway mode states the network boundary it trusts, and the gateway forwards the method it decided** (`STA-7`,
+  `STA-6`, `PIP-30`). Affected: every service in `cosec.pipeline.mode=gateway`, and every gateway.
+  - A service in `gateway` mode believes any `CoSec-Identity` header, which carries no signature, so the network is its
+    boundary. It now **fails to start** unless you write `cosec.pipeline.identity.only-gateway-can-reach: true`
+    (`COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true`), your statement that nothing but the gateway can reach it.
+    Absent, empty, `false`, `1` and `on` fail alike, and the message says what to write. Make it true first (a
+    `NetworkPolicy` that admits the gateway's pods only, mutual TLS, a private network;
+    [`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)).
+    Once it is set, the `WARN` through beta.4 is one `INFO` line.
+  - A service in `gateway` mode **fails to start** with a hidden-method filter:
+    `spring.mvc.hiddenmethod.filter.enabled=true`, `spring.webflux.hiddenmethod.filter.enabled=true`, or a
+    `HiddenHttpMethodFilter` bean of its own. The gateway decided the method of the request line, and a `_method` form
+    field would run another. Remove it. A host that decides itself (`enforce`) is unaffected.
+  - The gateway removes `X-HTTP-Method-Override`, `X-HTTP-Method` and `X-Method-Override`, in any letter case, from
+    every request it forwards, on every route. Not configurable. A backend that honoured one of them for a request
+    through the gateway no longer does: send the method in the request line.
 - **A refused forwarded identity is counted and says why, and the gateway no longer writes one a service would refuse**
   (#1690). Affected: services in `cosec.pipeline.mode=gateway`, their dashboards and log alerts, and code that calls
   `IdentityHeader.of` in tests.
