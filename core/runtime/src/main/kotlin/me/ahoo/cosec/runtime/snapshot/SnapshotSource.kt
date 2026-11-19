@@ -165,22 +165,23 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /**
      * The installed shared document and the documents of [keys], each a key of one of this source's families, or null
-     * when one of them is not installed or this source is closed. Like [peek]: no I/O, no executor, the caller's thread.
+     * when one of them is not installed or this source is closed. Like [peek]: no I/O, no executor, the caller's thread,
+     * and indexed loops, so it allocates only what its result holds, whatever escape analysis removes.
      *
-     * @throws IllegalArgumentException when a key belongs to no family of this source.
+     * @throws IllegalArgumentException when a key belongs to no family of this source, even when it is closed.
      */
     internal fun peekAll(keys: List<SnapshotKey>): SnapshotSet<P, A>? {
-        val families = keys.map(::familyOf)
+        for (i in keys.indices) familyOf(keys[i])
         if (context.closed.get()) {
             return null
         }
         val sharedEntry = shared.installed ?: return null
         val entries = ArrayList<SnapshotEntry<A>>(keys.size)
         for (i in keys.indices) {
-            entries += peekScoped(families[i], families[i].spec.idOf(keys[i])) ?: return null
+            entries += familyOf(keys[i]).let { peekScoped(it, it.spec.idOf(keys[i])) } ?: return null
         }
         metrics.onLoad(sharedKey.kind, LoadOutcome.HIT)
-        families.forEach { metrics.onLoad(it.spec.kind, LoadOutcome.HIT) }
+        for (i in keys.indices) metrics.onLoad(keys[i].kind, LoadOutcome.HIT)
         return SnapshotSet(sharedEntry, entries)
     }
 
@@ -433,8 +434,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun familyOf(key: SnapshotKey): Family<A> = family(key.kind)
 
     private fun family(kind: SnapshotKind): Family<A> =
-        families.firstOrNull { it.spec.kind == kind }
-            ?: throw IllegalArgumentException("This source has no $kind documents.")
+        families.of(kind) ?: throw IllegalArgumentException("This source has no $kind documents.")
 
     /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
     internal fun evict(key: SnapshotKey): Boolean {

@@ -62,7 +62,7 @@ from the `CoSec-Identity` header the gateway forwards.
 | | |
 |---|---|
 | Runs | the gateway (the [image](./deployment.md), or `cosec-gateway` with `cosec-cocache`), and each service with `cosec-webflux` or `cosec-webmvc` |
-| Sets | gateway: `cosec.jwt.secret`, Redis, the routes; service: `cosec.pipeline.mode=gateway` and nothing else (no Redis, no secret) |
+| Sets | gateway: `cosec.jwt.secret`, Redis, the routes; service: `cosec.pipeline.mode=gateway` and `cosec.pipeline.identity.only-gateway-can-reach=true` (no Redis, no secret) |
 | Reaches | gateway: Redis and the services; service: nothing of CoSec's |
 | Rests on | **the network, alone** |
 | CoSec checks | a `WARN` at the service's start; startup fails when a gateway host sets `gateway` mode; per request, a header that is unreadable, from an unknown format version, too old or too large is refused |

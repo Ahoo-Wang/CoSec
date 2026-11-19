@@ -1,0 +1,60 @@
+{
+  "rules": [
+    "PIP-31"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "A POST carrying X-HTTP-Method-Override, X-HTTP-Method and X-Method-Override (in three letter cases) is permitted on a route to a registered service: the gateway decided POST, so the backend must not run it as DELETE. Only the unrelated X-Trace header is forwarded.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "open",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:POST"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "open",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "open"
+        }
+      ]
+    }
+  },
+  "identity": {},
+  "http": {
+    "method": "POST",
+    "path": "/orders",
+    "headers": {
+      "X-HTTP-Method-Override": "DELETE",
+      "x-http-method": "DELETE",
+      "X-METHOD-OVERRIDE": "DELETE",
+      "X-Trace": "t1"
+    }
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "identity": null,
+    "forwardedHeaders": [
+      "x-trace"
+    ]
+  },
+  "gateway": {
+    "route": {
+      "uri": "lb://backend"
+    },
+    "reportHeaders": true
+  }
+}

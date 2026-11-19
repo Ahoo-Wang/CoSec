@@ -509,6 +509,30 @@ anyway.
   the property from the gateway; set it on the services behind it.
 - A binding failure for `cosec.pipeline.mode`: the value is neither `enforce` nor `gateway`.
 
+### Startup fails because the network boundary is not stated {#startup-fails-because-the-network-boundary-is-not-stated}
+
+```text
+cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and the header carries no signature, so whoever can reach this service is whoever they claim to be ... State it once it is true: cosec.pipeline.identity.only-gateway-can-reach=true (the environment variable COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true). It is not set (STA-7, ...).
+```
+
+A service in `cosec.pipeline.mode=gateway` trusts the network (`STA-7`). Make it true, then write the line: a
+`NetworkPolicy` that admits the gateway's pods only
+([`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)),
+mutual TLS, or a private network only the gateway is on. `It is [false]` (or `1`, `on`, an empty value) means the
+property is written with a value that is not `true`. Do not write it to get past the message before the network
+holds. After it, startup logs one `INFO` line.
+
+### Startup fails on a hidden-method filter behind a gateway {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
+
+```text
+cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true. The gateway decided the method of the request line, but this service would run a POST as the method a form field `_method` names ... (STA-6).
+```
+
+Remove `spring.mvc.hiddenmethod.filter.enabled`, `spring.webflux.hiddenmethod.filter.enabled` and any
+`HiddenHttpMethodFilter` bean of the application (`a HiddenHttpMethodFilter bean, [name]`): the gateway cannot remove
+a `_method` field from a form body, so a `DENY` on `http:DELETE` would be stepped around. A host in `enforce` mode is
+not affected.
+
 ### Startup fails on an unreadable switch
 
 ```text

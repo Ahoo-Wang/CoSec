@@ -38,7 +38,7 @@ internal class SnapshotChanges(
                 continue
             }
             // A key of no family here is another source's document.
-            val family = families.firstOrNull { it.spec.kind == key.kind } ?: continue
+            val family = families.of(key.kind) ?: continue
             family.slots[family.spec.idOf(key)]?.changed()
         }
     }

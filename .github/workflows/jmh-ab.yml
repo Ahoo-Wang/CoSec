@@ -60,6 +60,10 @@ on:
         description: 'JMH measurement time per iteration (-r)'
         required: true
         default: '1s'
+      jvm-args:
+        description: 'Extra JVM options for the forked benchmark JVMs of both sides, e.g. "-XX:-DoEscapeAnalysis"'
+        required: false
+        default: ''
 
 permissions:
   contents: read
@@ -92,6 +96,7 @@ jobs:
       ITERATIONS: ${{ inputs.iterations }}
       WARMUP_TIME: ${{ inputs.warmup-time }}
       MEASUREMENT_TIME: ${{ inputs.measurement-time }}
+      JVM_ARGS: ${{ inputs.jvm-args }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -210,7 +215,7 @@ jobs:
               # The WARN-level logback config: without it forked JVMs log at DEBUG and skew the numbers.
               "$JAVA25" -jar "$jar" "$INCLUDE" "${args[@]}" \
                 -rff "$RUNNER_TEMP/results/$side-$round.json" \
-                -jvmArgsAppend "-Dlogback.configurationFile=$RUNNER_TEMP/$side/config/logback-jmh.xml"
+                -jvmArgsAppend "-Dlogback.configurationFile=$RUNNER_TEMP/$side/config/logback-jmh.xml $JVM_ARGS"
               echo "::endgroup::"
             done
           done

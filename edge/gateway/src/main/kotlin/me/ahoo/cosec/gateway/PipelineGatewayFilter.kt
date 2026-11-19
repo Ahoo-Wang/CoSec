@@ -115,6 +115,8 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
                 .headers { headers ->
                     // Set, not added: the backend sees exactly the id the pipeline used, never the client's alongside it.
                     headers.set(CoSecParameters.REQUEST_ID, outcome.requestId)
+                    // The method decided is the one the backend runs (`PIP-31`): no override header goes on.
+                    removeMethodOverrides(headers)
                     outcome.forward.forEach { (name, value) ->
                         if (value == null) headers.remove(name) else headers.set(name, value)
                     }
@@ -137,6 +139,16 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
             // The last hop ([IdentityHeadersFilter]) forwards this value, and only this, whatever later filters do.
             outcome.forward[IdentityCodec.HEADER]?.let { authorized.attributes[IdentityHeadersFilter.FORWARDED_ATTRIBUTE] = it }
             chain.filter(authorized.mutate().request(handedOn(downstream.build(), cookies)).build())
+        }
+    }
+
+    /**
+     * Removes [METHOD_OVERRIDE_HEADERS] from [headers]: a loop over an array of lower-case names, so removing a header
+     * that is absent allocates nothing ([MethodOverrideAllocationTest]).
+     */
+    private fun removeMethodOverrides(headers: HttpHeaders) {
+        for (name in METHOD_OVERRIDE_HEADERS) {
+            headers.remove(name)
         }
     }
 
@@ -216,6 +228,15 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
     override fun getOrder(): Int = AUTHORIZATION_GATEWAY_FILTER_ORDER
 
     companion object {
+        /**
+         * The headers by which frameworks run a request as another method than its request line's (`X-HTTP-Method-Override`
+         * of Google's APIs and Microsoft's, `X-HTTP-Method`, `X-Method-Override`), removed from every request the gateway
+         * forwards, whatever the route (`PIP-31`). Header names are case-insensitive, so one removal covers every letter case;
+         * written in lower case, which is the form the headers map looks keys up by: a lookup of another form first makes
+         * the lower-case copy of the name, an allocation on every request.
+         */
+        private val METHOD_OVERRIDE_HEADERS = arrayOf("x-http-method-override", "x-http-method", "x-method-override")
+
         /**
          * Filter order for gateway authorization.
          * Uses HIGHEST_PRECEDENCE + 10 to run very early in the gateway filter chain,

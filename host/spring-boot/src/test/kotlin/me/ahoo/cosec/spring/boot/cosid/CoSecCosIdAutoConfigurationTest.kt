@@ -151,7 +151,12 @@ class CoSecCosIdAutoConfigurationTest {
             CoSecCosIdAutoConfiguration::class.java,
             CosIdAutoConfiguration::class.java,
         ),
-    ).withPropertyValues("cosec.cosid.generator=trace", "cosec.pipeline.mode=gateway", "cosec.jwt.enabled=false")
+    ).withPropertyValues(
+        "cosec.cosid.generator=trace",
+        "cosec.pipeline.mode=gateway",
+        "cosec.pipeline.identity.only-gateway-can-reach=true",
+        "cosec.jwt.enabled=false"
+    )
 
     private fun failsNamingCosId(runner: ApplicationContextRunner) = runner.run { context ->
         val messages = generateSequence(context.startupFailure) { it.cause }.mapNotNull { it.message }.joinToString()
@@ -171,6 +176,7 @@ class CoSecCosIdAutoConfigurationTest {
                 .withPropertyValues(
                     "cosec.cosid.generator=order",
                     "cosec.pipeline.mode=gateway",
+                    "cosec.pipeline.identity.only-gateway-can-reach=true",
                     "cosec.jwt.enabled=false"
                 ),
         )
