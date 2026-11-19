@@ -171,6 +171,9 @@ class CompiledDocument private constructor(
 
     internal fun policy(id: String): CompiledPolicy? = policies[id]
 
+    /** Its policies, for [httpStatements]. */
+    internal val allPolicies: Collection<CompiledPolicy> get() = policies.values
+
     /** The platform's boundary policy [id], or null. */
     internal fun boundaryPolicy(id: String): CompiledPolicy? = boundaries[id]
 

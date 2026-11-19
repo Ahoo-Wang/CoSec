@@ -1,5 +1,8 @@
 {
   "description": "A token for the control plane's app, with the role owner, is the tenant's administrator there.",
+  "withoutDocument": [
+    "app"
+  ],
   "credential": {
     "tenant": "acme",
     "id": "bob",

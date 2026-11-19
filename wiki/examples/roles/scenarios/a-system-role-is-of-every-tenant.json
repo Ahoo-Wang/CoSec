@@ -1,5 +1,8 @@
 {
   "description": "The system role manager applies in any tenant.",
+  "withoutDocument": [
+    "tenant"
+  ],
   "credential": {
     "tenant": "globex",
     "id": "alice",
