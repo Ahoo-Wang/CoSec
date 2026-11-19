@@ -1,0 +1,17 @@
+# Rule: PIP-28
+# Mutant: the servlet adapter leaves getUserPrincipal() to the wrapped request, so a request CoSec authenticated carries no principal, or another layer's
+# Tests: :webmvc:test --tests me.ahoo.cosec.webmvc.RequestPrincipalTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RealServerParityTest
+
+diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PermittedServletRequest.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PermittedServletRequest.kt
+index 7844b572..d2aadab0 100644
+--- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PermittedServletRequest.kt
++++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PermittedServletRequest.kt
+@@ -42,7 +42,7 @@ internal class PermittedServletRequest private constructor(
+     private val forward: Map<String, String?>,
+     private val principal: CoSecPrincipal?,
+ ) : HttpServletRequestWrapper(request) {
+-    override fun getUserPrincipal(): Principal? = principal ?: super.getUserPrincipal()
++    override fun getUserPrincipal(): Principal? = super.getUserPrincipal()
+ 
+     override fun getRemoteUser(): String? = if (principal != null) principal.id else super.getRemoteUser()
+ 

@@ -76,13 +76,29 @@ request, `Outcome.security?.securityContext`: the `SecurityContext` your code re
 `AuthorizationChecker` accepts ([Checks in code](../integration/checks.md)):
 
 ```kotlin
-val outcome = pipeline.evaluate(facts)
-if (!outcome.proceed) {
-    return respond(outcome.status, outcome.headers, outcome.problem?.let(ProblemEncoder::encode))
-}
-val security: SecurityContext = checkNotNull(outcome.security).securityContext
-val mayCancel = AuthorizationChecker(pipeline).check(security, "order:cancel", "order/42")
+pipeline.evaluate(facts).use { outcome ->
+    if (!outcome.proceed) {
+        return respond(outcome.status, outcome.headers, outcome.problem?.let(ProblemEncoder::encode))
+    }
+    val security: SecurityContext = checkNotNull(outcome.security).securityContext
+    val mayCancel = AuthorizationChecker(pipeline).check(security, "order:cancel", "order/42")
+    handle(security, mayCancel)
+} // the request has ended: a check of `security` is now false (PIP-26)
 ```
+
+Closing the `Outcome` ends the request (`PIP-26`): every later check of its context is `false`, as after a web
+adapter's response. Close it when the response is complete. For a response that outlives the handler (a streamed
+body, a WebSocket session after its handshake), close it from the response's completion callback, not when the
+handler returns, or the request ends while the stream is still being written and the checks it makes are `false`:
+
+```kotlin
+val outcome = pipeline.evaluate(facts)
+connection.onClose { outcome.close() } // completion, failure and cancellation alike
+```
+
+Closing a refused `Outcome` does nothing, and closing twice is harmless. A transport that never closes it leaves the
+request in progress for as long as its context is held. CoSec's web adapters end the requests they bind themselves: an
+application that uses them never closes anything.
 
 The context is for that request only, like the one a web adapter binds. `Pipeline.evaluate`, `Outcome`, `HttpFacts`
 and `RequestSecurity` are `@ExperimentalCoSecApi` ([Stability levels](#stability-levels)). Running the pipeline on such
@@ -454,7 +470,8 @@ Spend one permit of `limit` from `bucket` of rule `ruleId` and report what is le
 the sliding window both built-in limiters use, and its `resultOf(...)` builds the result. Throw when the backend
 fails: the rule's `strictFailure` then decides between `503` and skipping the rule. With `cosec-cocache` and a
 `ReactiveStringRedisTemplate`, the starter registers `ReactiveRedisRateLimiter`, which counts across instances; otherwise
-the per-instance `LocalRateLimiter`. Your bean replaces both. Rules, buckets and headers are in
+the per-instance `LocalRateLimiter`. Your bean replaces both. A pipeline built with `Pipeline.builder` counts in a
+`LocalRateLimiter` of its own unless given one with `rateLimiter(...)`. Rules, buckets and headers are in
 [Rate limiting](../policies/rate-limiting.md).
 
 ## Snapshot document stores

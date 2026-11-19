@@ -27,7 +27,10 @@ import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
@@ -38,8 +41,10 @@ import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
 import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
 import me.ahoo.test.asserts.assert
@@ -90,6 +95,57 @@ class PipelineWebFilterTest {
             .block(Duration.ofSeconds(5))
         seen.assert().isEqualTo("order" to "(0)")
         exchange.response.headers.getFirst("CoSec-Request-Id").assert().isNotNull()
+    }
+
+    /**
+     * UA-8: the request's `Principal` is set for an authenticated caller only, as the servlet containers set theirs, so a
+     * handler that reads "a principal is present" as "signed in" never counts anonymous callers as one user. The
+     * anonymous principal stays in the security context.
+     */
+    @Test
+    fun anAnonymousPermitHasNoRequestPrincipal() {
+        fun principalOf(authenticator: Authenticator): Pair<String?, String?> {
+            var seen: Pair<String?, String?>? = null
+            val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))
+            PipelineWebFilter(pipeline(permit, authenticator)).filter(exchange) { authorized ->
+                authorized.getPrincipal<java.security.Principal>().map { it.name }.defaultIfEmpty("none")
+                    .doOnNext { seen = it to authorized.getSecurityContext()?.principal?.id }
+                    .then()
+            }.block(Duration.ofSeconds(5))
+            return seen!!
+        }
+        principalOf(Authenticator { AuthnResult.Anonymous }).assert().isEqualTo("none" to "(0)")
+        val alice = AuthenticatedPrincipal(
+            PrincipalId("alice"),
+            TenantId("acme"),
+            MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
+        )
+        principalOf(Authenticator { AuthnResult.Authenticated(alice, "test") }).assert().isEqualTo("alice" to "alice")
+    }
+
+    /**
+     * `PIP-28` with a filter in front (Spring Security) that set its own principal: CoSec's replaces it on a request
+     * CoSec authenticated; on one CoSec treats as anonymous, the other layer's is left as it was.
+     */
+    @Test
+    fun anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated() {
+        fun principalOf(authenticator: Authenticator): String? {
+            var seen: String? = null
+            val front = MockServerWebExchange.builder(MockServerHttpRequest.get("/orders"))
+                .principal(java.security.Principal { "bob" })
+                .build()
+            PipelineWebFilter(pipeline(permit, authenticator)).filter(front) { authorized ->
+                authorized.getPrincipal<java.security.Principal>().doOnNext { seen = it.name }.then()
+            }.block(Duration.ofSeconds(5))
+            return seen
+        }
+        principalOf(Authenticator { AuthnResult.Anonymous }).assert().isEqualTo("bob")
+        val alice = AuthenticatedPrincipal(
+            PrincipalId("alice"),
+            TenantId("acme"),
+            MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
+        )
+        principalOf(Authenticator { AuthnResult.Authenticated(alice, "test") }).assert().isEqualTo("alice")
     }
 
     /** IDN-9, RC1-18: the handler of an enforcing host never sees a `CoSec-Identity` a client sent. */

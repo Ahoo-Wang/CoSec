@@ -1,0 +1,51 @@
+{
+  "rules": [
+    "PIP-26"
+  ],
+  "polarity": "positive",
+  "level": "pipeline",
+  "description": "Closing an outcome whose request the adapter already ended changes nothing: the request stays ended, and a check of its context is an implicit deny.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "orders",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/orders/{*rest}"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "orders",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "orders"
+        }
+      ]
+    }
+  },
+  "http": {
+    "method": "GET",
+    "path": "/orders/1"
+  },
+  "authentication": {
+    "result": "anonymous"
+  },
+  "check": {
+    "action": "http:DELETE",
+    "resource": "/orders/2",
+    "ended": true,
+    "closed": true
+  },
+  "expect": {
+    "status": 200,
+    "proceed": true,
+    "check": "Deny"
+  }
+}

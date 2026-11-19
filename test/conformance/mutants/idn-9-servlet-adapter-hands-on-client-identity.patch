@@ -3,14 +3,15 @@
 # Tests: :webmvc:test --tests me.ahoo.cosec.webmvc.PipelineServletFilterTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.WebAdapterParityTest
 
 diff --git a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
-index 499df25a..c53eac42 100644
+index 02cb9131..87b20058 100644
 --- a/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
 +++ b/edge/webmvc/src/main/kotlin/me/ahoo/cosec/webmvc/PipelineServletFilter.kt
-@@ -87,7 +87,7 @@ class PipelineServletFilter(
+@@ -59,8 +59,7 @@ class PipelineServletFilter @InternalCoSecApi constructor(
          val outcome = runBlocking(BridgeContextContributor.capture(contributors)) { pipeline.evaluate(facts) }
          try {
              if (write(servletRequest, servletResponse, outcome)) {
--                chain.doFilter(ForwardedHeadersRequest.of(servletRequest, outcome.forward), response)
+-                val principal = outcome.security?.securityContext?.principal?.takeIf { it.authenticated }
+-                chain.doFilter(PermittedServletRequest.of(servletRequest, outcome.forward, principal), response)
 +                chain.doFilter(request, response)
              }
          } finally {
