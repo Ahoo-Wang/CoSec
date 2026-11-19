@@ -83,7 +83,7 @@ internal object ControlResponseJson {
         set("policies", entries(diff.policies))
         set("bindings", entries(diff.bindings))
         set("roles", entries(diff.roles))
-        put("sections", diff.sections)
+        putArray("sections").apply { diff.sections.forEach(::add) }
     }
 
     fun entries(changes: EntryChanges): ObjectNode = factory.objectNode().apply {

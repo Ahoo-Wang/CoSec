@@ -85,7 +85,7 @@
       "CHECKED",
       "READY",
       "PUBLISHED",
-      "diff policies=[] bindings=[+role:night@wms:edit,+role:night@wms:read] roles=[+night] sections=false"
+      "diff policies=[] bindings=[+role:night@wms:edit,+role:night@wms:read] roles=[+night] sections=[]"
     ],
     "errors": {
       "c1": []

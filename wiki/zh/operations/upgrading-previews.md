@@ -24,6 +24,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **两个修订的差异列出不同的部分**（`GET /documents/{key}/diff`，UC-14）。受影响的是读取其 `sections` 的脚本和工具。直到 beta.4，
+  `sections` 是布尔值，策略、绑定和角色之外有任何不同即为 `true`。现在它是这些部分名称的列表，取自 `catalog`、`boundary`、
+  `limits`、`attributes` 和 `rateLimits`，按此顺序，都相同时为 `[]`。原来读取 `sections` 的地方改为 `sections.length > 0`
+  （或等价写法），或查找你关心的那个部分（[测试策略](../policies/testing.md)）。
 - **被拒绝的转发身份会被计数并说明原因，网关不再写出服务会拒绝的身份**（#1690）。受影响的是 `cosec.pipeline.mode=gateway` 的服务、它们的仪表盘和日志告警，以及在测试中调用 `IdentityHeader.of` 的代码。
   - 这样的服务以 `WARN` 在 logger `me.ahoo.cosec.runtime.identity.IdentityGate` 上记录每个被拒绝的 `CoSec-Identity` 头的原因，每种问题类型最多每分钟一次（每一次都记录在 `DEBUG`）。直到 beta.4，它只在 `DEBUG` 记录。响应不变：从不说明原因。
   - 有 `cosec-micrometer` 和 `MeterRegistry` 时，它在 `cosec.identity.refused{problem}`（`invalid-request`、`token-invalid`、`token-expired`）中对每次拒绝计数。对任何非零速率告警（[可观测性](./observability.md#metrics)）。
@@ -46,6 +50,14 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **接受 API key 的管道在构建时就需要成员关系提供者**（UA-12）。受影响的是用 `ApiKeyAuthenticator`（单独或在 `CompositeAuthenticator` 中）构建管道却没有 `memberships(...)` 的应用。`build()` 以 `IllegalStateException` 失败，说明要添加一个。直到 beta.4，它能构建，然后对每个 key 回答 `503`。starter 在启动时就已经拒绝这样的宿主（`IDN-6`）。
 - **测试工具的入口对 Java 是静态的**（UA-13）。受影响的是针对 beta.4 编译、调用 `PermittedRequest` 或 `IdentityHeader` 的代码。它们的函数现在带 `@JvmStatic`，所以 `INSTANCE` 上的方法没有了：请重新编译。Kotlin 源码不变；Java 去掉 `INSTANCE`（`PermittedRequest.withToken(...)`）。`PipelineFixture` 的伴生对象（`load`、`of`、`unreadable`）、`PipelineFixture.request`、`PipelineFixture.Principal` 和 `TokenSubject` 的构造函数，以及 `TokenSubject.of` 增加了 `@JvmOverloads` 和 `@JvmStatic`，这只是新增。
 - **技能 `cosec-custom-matcher` 改名为 `cosec-extending`**（UE-21）。8.0 没有匹配器，这个技能讲的是用 Bean 扩展 CoSec（`AttributeProvider`、`MembershipProvider`、`DecisionListener`、`RateLimiter`、`Authenticator`）。目录是 `skills/cosec-extending`，它的 `name` 是 `cosec-extending`，智能体用 `$cosec-extending` 调用它。受影响的是写着 `cosec-custom-matcher` 的智能体配置、提示词或插件列表；运行中的部署没有任何变化。
+- **测试绑定属于测试工具包**（Wow 演练）。受影响的是导入 `CoSecTestBindings` 的测试。它们从生产 jar 移到 `cosec-testkit`，每个栈一个：
+
+  | 直到 beta.4 | 从 beta.5 起 |
+  |---|---|
+  | `me.ahoo.cosec.webflux.testing.CoSecTestBindings`（`cosec-webflux`） | `me.ahoo.cosec.testkit.webflux.CoSecTestBindings`（`cosec-testkit`） |
+  | `me.ahoo.cosec.webmvc.testing.CoSecTestBindings`（`cosec-webmvc`） | `me.ahoo.cosec.testkit.webmvc.CoSecTestBindings`（`cosec-testkit`） |
+
+  修改导入；构建里没有 `cosec-testkit` 时把它加为测试依赖。函数不变。WebFlux 的增加了挂起的 `withSecurityContext(context) { ... }`，用于被测的协程代码；`PipelineFixture.of` 和 `load` 接受应用自己的 `authenticator`（[测试你的应用](../policies/testing.md#testing-your-application)）。工具包不带来任何适配器；绑定需要测试的 classpath 上有你的 Web 栈的适配器，测试这种处理器时本来就有。
 
 - **网关只在接受了调用方的凭证时才转发它们**（R1A-7，`IDN-8`）。受影响的是打开了 `cosec.gateway.identity.forward-authorization=true` 的网关。直到 beta.4，令牌过期、被吊销或无效的请求以匿名身份继续，公开路由放行它时，它的 `Authorization` 头、API key、查询令牌和 cookie 仍会发往接收身份的路由。现在它们留在网关：后端看到的是匿名请求。靠自己校验令牌来回答这类请求的后端，现在收不到令牌。
 - **IP 黑名单按规范形式比较地址**（R1A-4）。受影响的是 `BlacklistSource` 的实现，以及 `InMemoryBlacklistSource.block` 的调用方。`contains(BlacklistKind.IP, value)` 收到的是规范形式：同一地址的任何写法都是 `2001:db8::1`，`::ffff:192.0.2.1` 是 `192.0.2.1`；被拦截的地址请按这种形式保存（[扩展](../architecture/extending.md)）。`InMemoryBlacklistSource` 就这样保存，并以 `IllegalArgumentException` 拒绝不是地址的值。

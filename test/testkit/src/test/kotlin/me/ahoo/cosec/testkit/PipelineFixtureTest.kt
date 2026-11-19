@@ -18,11 +18,19 @@ package me.ahoo.cosec.testkit
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.document.route.RouteMapCodec
+import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.RoleId
+import me.ahoo.cosec.model.SpaceId
+import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.http.ProblemType
+import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
+import me.ahoo.cosec.spi.authn.Authenticator
+import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -59,6 +67,27 @@ class PipelineFixtureTest {
             it.evaluate(it.request("GET", "/orders/1", reader)).status.assert().isEqualTo(200)
             val stranger = PipelineFixture.Principal("bob", tenant = "acme")
             it.evaluate(it.request("GET", "/orders/1", stranger)).status.assert().isEqualTo(403)
+        }
+    }
+
+    /** The Wow drill: a suite with its own token convention adopts the fixture with its own authenticator. */
+    @Test
+    fun `the application's own authenticator decides who a request is`() = runBlocking<Unit> {
+        val own = Authenticator { credentials ->
+            val id = credentials.token?.removePrefix("Bearer wow:") ?: return@Authenticator AuthnResult.Anonymous
+            val memberships = Memberships(
+                Memberships.Source.CLAIMS,
+                mapOf(SpaceId.DEFAULT to setOf(RoleId("reader"))),
+                emptyList(),
+            )
+            AuthnResult.Authenticated(AuthenticatedPrincipal(PrincipalId(id), TenantId("acme"), memberships), "wow")
+        }
+        PipelineFixture.of(platform = anyone, tenants = mapOf("acme" to tenant), authenticator = own).use {
+            val alice = it.request("GET", "/orders/1", headers = mapOf("Authorization" to "Bearer wow:alice"))
+            it.evaluate(alice).status.assert().isEqualTo(200)
+            it.evaluate(it.request("GET", "/orders/1")).status.assert().isEqualTo(401)
+            assertThrownBy<IllegalStateException> { it.authorization(reader) }.hasMessageContaining("own")
+            assertThrownBy<IllegalStateException> { it.request("GET", "/orders/1", reader) }
         }
     }
 
