@@ -82,6 +82,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-webflux-api` 或 `-webmvc-api` |
 | 把决策事件（以及可选的控制面变更）发送到 Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | 把客户端所在地区作为外部属性 | `cosec-ip2region` | |
+| CoSec 应用的浏览器或 Node 客户端：登录、轮换下的刷新、登出、problem 类型 | npm 上的 `@ahoo-wang/cosec-fetcher`、`@ahoo-wang/cosec-react`，随 CoSec 一起发布；不是 Gradle 模块 | [构建客户端](../integration/clients.md) |
 | 来自 CosId 5 的请求 id、令牌 id 和变更 id | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
 “同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。请像构建里的其他库一样给出它们的版本：CoSec 不管理它们（见[CoSec 对构建的要求](#what-cosec-needs-from-your-build)）。
@@ -127,7 +128,8 @@ CoSec 自己的构建所依据的 platform `cosec-dependencies` 从 8.0 起不�
 | 接入 CoSec 的开发者 | [快速开始](./quick-start.md) → [Web 集成](../integration/web.md) → [认证](../integration/authentication.md) → [代码中的权限检查](../integration/checks.md) → [配置](../operations/configuration.md) |
 | 策略作者 | [核心概念](./concepts.md) → [模型](./model.md) → [策略语言](../policies/language.md) → [角色权限](../policies/role-permissions.md) → [限流](../policies/rate-limiting.md) → [测试策略](../policies/testing.md) |
 | 跟着完整示例走 | [模型](./model.md) → [简单模式](../scenarios/simple-mode.md) → [不使用空间的应用](../scenarios/app.md) → [系统角色与自定义角色](../scenarios/roles.md) → [使用空间的应用](../scenarios/spaces.md) → [限定在一个空间的服务账号](../scenarios/service-account.md) → [租户所有者](../scenarios/tenant-owner.md) → [外部事实源同步角色](../scenarios/external-source.md) → [按业务动作授权](../scenarios/route-maps.md) → [网关拓扑](../scenarios/gateway.md) |
-| 在生产环境运行 CoSec 的人 | [配置](../operations/configuration.md) → [存储与缓存](../operations/storage.md) → [可观测性](../operations/observability.md) → [故障排查](../operations/troubleshooting.md) → [升级](../operations/upgrading.md) |
+| 在生产环境运行 CoSec 的人 | [选择部署方式](../operations/topologies.md) → [部署](../operations/deployment.md) → [配置](../operations/configuration.md) → [存储与缓存](../operations/storage.md) → [可观测性](../operations/observability.md) → [故障排查](../operations/troubleshooting.md) → [升级](../operations/upgrading.md) → [加固清单](./security-model.md#hardening-checklist) |
+| 构建 CoSec 应用的客户端 | [快速开始](./quick-start.md) → [构建客户端](../integration/clients.md) → `@ahoo-wang/cosec-fetcher` 的 README |
 | CoSec 的贡献者 | [架构概览](../architecture/overview.md) → [扩展 CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
 
-上线之前，每个人都应该读一遍[安全模型](./security-model.md)。
+上线之前，每个人都应该读一遍[安全模型](./security-model.md)，并逐项完成它的[加固清单](./security-model.md#hardening-checklist)。

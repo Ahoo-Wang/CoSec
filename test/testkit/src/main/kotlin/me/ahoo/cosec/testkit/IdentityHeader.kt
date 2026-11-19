@@ -130,14 +130,16 @@ object IdentityHeader {
     }
 
     /**
-     * What a gateway forwards for a request that carries [token], verified by [verifier] over [revocations], with the
-     * token claims [claims] names (`cosec.gateway.identity.claims`): made as a gateway makes it, by CoSec's token
+     * What a gateway forwards for a request that carries [token], verified by [verifier] over [revocations] (name
+     * [RevocationReader.NONE] for a test in which nothing is revoked), with the token claims [claims] names
+     * (`cosec.gateway.identity.claims`): made as a gateway makes it, by CoSec's token
      * authenticator and identity issuer, so with CoSec's own token it carries the token's real session, which a tenant
      * switch behind the gateway issues from. As [PermittedRequest.withToken], only the gateway's rule is a stand-in: it
      * permits the request, and its scope is the token's tenant, with no app or space. The header is made now and is
      * refused a minute later (above).
      *
-     * @throws IllegalArgumentException when [verifier] refuses [token] (invalid, expired, revoked), or as [of]
+     * @throws IllegalArgumentException when [verifier] refuses [token] (invalid, expired, not valid yet, revoked), or
+     * as [of]
      * @throws IllegalStateException when the gateway would forward nothing: a principal whose authenticator names no
      * credential, or an identity too large to forward
      */
@@ -165,7 +167,9 @@ object IdentityHeader {
             "The gateway would fail the request (${outcome.problem?.type?.name}): see the log, such as an identity too " +
                 "large to forward."
         }
-        require(outcome.security?.principal != null) { "The verifier refused the token: invalid, expired or revoked." }
+        require(outcome.security?.principal != null) {
+            "The verifier refused the token: invalid, expired, not valid yet or revoked."
+        }
         val header = checkNotNull(outcome.forward[NAME]) {
             "The gateway would forward no identity for this token: ${outcome.status}."
         }

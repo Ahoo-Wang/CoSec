@@ -79,6 +79,8 @@ sealed interface Outcome {
         val heads: Map<String, Long>,
         /** The reasons of each change's escalations (RFC 0007 §7.5), for the changes that have any. */
         val escalations: Map<String, List<String>> = emptyMap(),
+        /** Each change's `WARNING` findings as `<check> <path>`, for the changes that have any. */
+        val warnings: Map<String, List<String>> = emptyMap(),
     ) : Outcome
 
     /** A control scenario of publishing: each publish's answer, the head afterwards, the records and the write order. */

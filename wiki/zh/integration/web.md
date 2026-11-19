@@ -260,7 +260,7 @@ val securityContext = SecurityContextHolder.requiredContext
 
 CoSec 只读取 `X-Forwarded-For`。它前面的代理必须向该请求头追加，或覆盖它；只写 `Forwarded`（RFC 7239）、却把客户端的
 `X-Forwarded-For` 原样转发的代理，会让客户端自选地址，所以要把它配置为覆盖或删除 `X-Forwarded-For`。在客户端可直接访问的宿主上，
-请把该索引设为 `0`（且不设策略），否则客户端可以在该请求头里写入任意地址。
+请把该索引设为 `0`（且不设策略），否则客户端可以在该请求头里写入任意地址。没有写这个配置项时，说明读取方式的启动日志会指出默认值 `1` 正在生效，以及它的风险。
 
 ## 请求属性 {#request-attributes}
 
@@ -401,6 +401,10 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 - **存活与启动探针不能依赖平台文档。** 应用的应用端口上的 HTTP 存活探针在第一份文档发布之前回答 `503`，kubelet 会在它能就绪之前就重启 pod。WebMvc 上把它指向管理端口，它不经 CoSec。WebFlux 的管理端口同样经 CoSec，所以对应用端口使用 `tcpSocket` 探针。
 - **管理端口上不经 CoSec 的内容由网络保护**，与网关相同：只在那里暴露你愿意让能访问该端口的任何人访问的东西。
 
+### 网关自己的处理器 {#the-gateways-own-handlers}
+
+网关过滤器决策网关路由。应用自己的控制器或函数式路由（`RouterFunction` bean）映射在所有网关路由之前（Spring WebFlux 的注解控制器映射顺序为 `0`，router-function 映射为 `-1`，网关的路由映射为 `1`），所以对它们的请求不经任何 CoSec 决策就被应答：没有认证、没有策略、没有限流。启动时，starter 一旦发现这类应用自己的处理器，就记录一条 WARN 并指明它们（[日志行](../operations/troubleshooting.md#the-log-says-the-gateways-own-handlers-are-not-decided)）。把这些处理器移到网关之后的服务中，由路由来决策，或者在应用内自行保护；CoSec 的网关过滤器不覆盖它们。
+
 ### 网关上的 actuator {#actuator-on-a-gateway}
 
 网关过滤器授权的是网关的路由，因此网关自己的 actuator 端点不受 CoSec 管辖。它们暴露在应用端口上时，任何能访问网关的人都能访问；`gateway` 端点甚至能修改路由，任何人都可以把用户请求的路由连同他们的身份指向自己选择的主机。所以，按策略决策的网关宿主在应用端口上通过 HTTP 暴露了 `health` 以外的 actuator 端点时（`management.server.port` 未设置，或与 `server.port` 相同），无法启动（`STA-2`；[故障排查](../operations/troubleshooting.md#startup-fails-on-an-exposed-actuator-endpoint)）。
@@ -445,7 +449,7 @@ spring:
 | `v` | `1`。 |
 | `tenant`、`sub` | 网关校验的租户和主体。 |
 | `scope` | `{app, space}`，即网关解析出的应用和空间。 |
-| `roles` | 主体在该空间中的角色：决策所用的角色。 |
+| `roles` | 主体在该空间中的角色，用裸名：决策所用的角色。这是作用域的角色，而不是令牌的全部角色（令牌的 `roles` 声明以 `role@space` 列出所有空间的角色）。 |
 | `auth` | `{method, jti, exp, iat, capped, session}`：主体的认证方式（`jwt` 和 `api-key` 是 CoSec 自带的；其他任何非空名称都按原样读取，因此使用其他认证器的网关也能工作）、令牌的 `jti` 或 key 的 id、凭证的过期时间，以及凭证的签发时间（`iat`，凭证不说明时没有，且绝不晚于 `exp`）；`session` 只出现在 CoSec 自己的令牌（`jwt`）上：它的 `sid`、`auth_time`（用户登录的时间）和 `generation`，使网关之后的服务知道登录时间，并让那里的[租户切换](./authentication.md#switching-tenant-and-app)可以从它签发；`capped: true` 只出现在带角色上限的凭证上，此时在网关之后，主体绑定和附加策略同样不授予它任何东西（它们的 DENY 照样生效）。只有 `jwt` 能得到 break-glass，网关只为 CoSec 自己的令牌转发它。绝不包含凭证本身。 |
 | `iat` | 网关生成该请求头的时间，单位为 epoch 秒。 |
 | `rid` | 网关的请求 id。 |

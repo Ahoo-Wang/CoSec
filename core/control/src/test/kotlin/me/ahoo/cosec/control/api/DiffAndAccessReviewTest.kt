@@ -57,6 +57,7 @@ import me.ahoo.cosec.model.condition.AttributeType
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -72,7 +73,7 @@ class DiffAndAccessReviewTest {
     private val plane = DefaultControlPlane(
         harness.changes,
         revisions,
-        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW)),
+        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW), revocations = RevocationReader.NONE),
         Simulator(),
     )
     private val acme = SnapshotKey.Tenant("acme")
@@ -328,7 +329,13 @@ class DiffAndAccessReviewTest {
             }
         }
         val options = ChangeOptions(shadow = IMMEDIATE_WINDOW)
-        val blind = DefaultControlPlane(harness.changes, revisions, ChangeAuthority(noOrder, options), Simulator())
+        val blind =
+            DefaultControlPlane(
+                harness.changes,
+                revisions,
+                ChangeAuthority(noOrder, options, revocations = RevocationReader.NONE),
+                Simulator()
+            )
 
         val report = runBlocking { blind.analyze(PLATO, orderRead) }
 

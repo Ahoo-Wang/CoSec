@@ -78,6 +78,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - **含 `/` 的租户或应用 id：** 令牌的 `tenantId` 或 `aud` 含 `/`，例如 `acme/west`，7.x 或预览版的签发方可能签出过这样的令牌（`SCP-13`）。
   租户 id 和应用 id 都是一个路径段，所以这个令牌既不指租户 `acme/west`，也不指 `acme`。请在保存该 id 的地方给租户或应用改名，然后让主体重新登录
   （[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。
+- **偶发，在整秒边界：** 少数请求以 `token-invalid` 失败，每次都在某一秒的最后几毫秒，日志写着 `Token refused as not valid yet: The token's iat is later than this instance's clock`。签发方的时钟比本实例快，超过了 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒；直到 beta.3 完全没有余量，`IDN-29`），按签发方下一秒签发的令牌到达了仍在上一秒的主机。决策事件的 `subject.rejected` 为 `TOKEN_NOT_YET_VALID`。请同步时钟（NTP）；只有对已知且有界的偏差才调大这个余量，因为它也会扩大主体吊销覆盖的范围。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -248,7 +249,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 在平台文档以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 中的每个文档都装入之前，就绪状态拒绝流量；存活状态不受
 影响。实例一直不就绪时：
 
-- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。
+- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。实例会在启动时记录这一点，之后在持续期间每隔 `lag-warn` 记录一次：`No platform document under [cosec:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`。这一行指明读取的 key、key 前缀和所读的 Redis，从不包含凭据：常见原因是首次部署还没有发布任何文档、`cosec.key-prefix` 写错（发布方的必须相同）或 Redis 数据库错了。文档装入时会有一行 INFO。
 - **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
 
 `cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`invalid`、`failed`、`absent` 或 `loading`；`invalid` 是已存储但无法编译的文档）和 `prewarmed`。把它加入 readiness 组即可在
@@ -331,6 +332,25 @@ Spring 把它们读作 `cosec.*` key。从 8.0.0-alpha.2 起，检查只在进�
 - `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`：网关总是用策略决策。从网关上去掉这个配置项；在其后的服务上设置它。
 - `cosec.pipeline.mode` 绑定失败：值既不是 `enforce` 也不是 `gateway`。
 
+### 开关无法读取导致启动失败 {#startup-fails-on-an-unreadable-switch}
+
+```text
+CoSec cannot read 2 cosec.* switches; a value it cannot read would switch the feature off without a word:
+  cosec.enabled=[1]: write true or false
+  cosec.pipeline.mode=[]: write enforce or gateway
+Set each to one of its values, or remove it to take its default: https://cosec.ahoo.me/operations/configuration
+```
+
+某个 `cosec.*` 开关（`cosec.enabled`、`cosec.jwt.enabled`、其他 `*.enabled`、`cosec.pipeline.mode`、`cosec.api-key.store`）写成了 CoSec 不读取的值：`1`、`on`、`yes`、空字符串（模板留空的环境变量，YAML 里没有值的 `mode:`），或者两侧带空格的 `true`。写成 `true` 或 `false`（`enforce` 或 `gateway`，`memory` 或 `redis`），或者删掉这个 key。信息一次列出所有这样的 key。写成 `false` 的开关是合法的：它的功能保持关闭，启动摘要会列出它（[启动摘要](./observability.md#startup-summary)）。
+
+### 日志说 CoSec 已关闭 {#the-log-says-cosec-is-off}
+
+`CoSec is off: cosec.enabled=false. This application authorizes no request and nothing is protected by CoSec.` 是应用启动后记录的一条 WARN。CoSec 装配的一切都不起作用：没有管道、没有令牌校验、没有快照。除非你本就这样打算，否则删掉该配置项或设为 `cosec.enabled=true`；网关仍会剥掉客户端的 `CoSec-Identity`。
+
+### 日志说网关自己的处理器不被决策 {#the-log-says-the-gateways-own-handlers-are-not-decided}
+
+`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself ... are answered with no CoSec decision: ...` 指明应用自己的控制器或函数式路由。它们映射在所有网关路由之前，所以 CoSec 看不到对它们的请求（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。把它们移到网关之后的服务中，或在应用内自行保护。
+
 ### 缺少模块时启动失败 {#startup-fails-on-a-missing-module}
 
 ```text
@@ -396,6 +416,8 @@ CoSec 只读取一次客户端地址，且只从它信任的一方读取（`PIP-
 - CoSec 无法判断的服务器，例如部署在外部容器中的 war：设置 `server.forward-headers-strategy=none` 和该索引。
 
 对照表见[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)。
+
+没有设置 `cosec.authorization.remote-ip.max-trusted-index` 且默认值 `1` 生效时，说明读取方式的启动日志会指出这一点及其风险：客户端直接访问的宿主上，如果前面没有写 `X-Forwarded-For` 的代理，客户端可以自选地址。把该索引设为宿主前面的代理数量，没有代理时设为 `0`。
 
 ### 驱逐检查导致启动失败 {#startup-fails-on-the-eviction-check}
 
@@ -635,6 +657,9 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
+| `:apply` 的 `REPLACE` 返回 `409`：`[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | 文件头写明了读取时的修订，而头修订之后已变化：应用它会删掉期间发布的内容。 | 读取头修订（`GET /documents/<doc>`），把变化合并进文件，把 `revision` 设为头修订，再应用一次（[变更](../policies/testing.md#changes)）。 |
+| 发布返回 `422`：`publishing change <id>: after this change <principal>@<tenant> could not reach the control plane: …` | 对平台文档、平台租户的文档或控制应用的文档的变更，会让发布者到达不了控制面：原因点名了请求以及拒绝它的是什么（`V4`）。 | 修改这个变更；如果是交接，就在发布请求体里用 `"lockout": true` 确认（[发布与回滚](../policies/testing.md#publishing-and-rolling-back)）。 |
+| 平台文档变更之后，每个控制面调用都返回 `401` 或 `403` | 已发布的变更关闭了控制 API 的路径，或者拿走了每个操作者的授权：谁都无法通过控制面把它改回来。 | `cosec-migrate restore --document platform --revision <最后一个正常的修订>`，再加 `--confirm`（[从被锁在外面中恢复](./storage.md#recovering-from-a-lock-out)）。不要清空 Redis。 |
 | 某一个变更回答 `503`，或每轮维护都记录 `Could not read the open changes; no revision is reclaimed this pass.` | 该变更的记录解码失败：它属于不能作为应用 id 的应用（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符，`SCP-10`、`SCP-13`），或者是 alpha 写入的、这个版本不再读取的形状，例如不带 `principalBindings` 的批准。它既无法查看也无法放弃，在移除之前什么都不会回收。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading-previews.md#from-8-0-0-alpha-3)。 |
 | 预览版发布的某个文档不在 `GET /documents` 里，日志记录 `The documents list names [tenant:<id>], which is no document key: left out.`，`/documents/tenant:<id>` 回答 `400` `That names no document` | 它的租户或应用 id 含 `/`（`acme/west`），任何 8.0 id 都不能含 `/`（`SCP-13`）：没有请求读取它，控制面也再无法指名它。 | 给租户或应用改名，以新 id 发布它的文档，然后删除旧 key（[从预览版升级](./upgrading-previews.md#from-8-0-0-alpha-4)）。 |
 | 控制面回答 `503`（变更、发布、`simulate`、维护轮次或影子窗口），日志中的格式错误指名一条记录和一个含 `/` 的 id：`Change [<id>] does not read: … Tenant id [acme/west] must not …`、`The back-reference set of [<doc>] policy [<id>] does not read: … [tenant:acme/west] is not a document key`、`The status of instance [<id>] does not read: …` | 8.0 预览版在含 `/` 的租户或应用 id 下存储了记录，本版本拒绝这种 id（`SCP-13`）。该记录整体失败即拒绝（`SCP-10`），没有任何读取会跳过它。 | 按[从预览版升级](./upgrading-previews.md#from-8-0-0-alpha-4)列出的那样删除该 id 的记录：预览版的控制面做不到。 |

@@ -31,7 +31,6 @@ The app document of app `order` has the key `app:order`. It holds a [catalog](#p
       {
         "name": "order",
         "description": "Orders",
-        "spaced": true,
         "permissions": [
           { "id": "read", "name": "Read orders" },
           { "id": "ship", "name": "Ship orders" }
@@ -300,7 +299,7 @@ validation, compilation and audit.
 | A role's permissions | `putRole`, without `ifMatch` |
 | A role is deleted | `removeRole` |
 | An app's permissions | `putCatalog` |
-| Periodic reconciliation | `apply` with `MERGE`; `REPLACE` when the source is the only writer |
+| Periodic reconciliation | `apply` with `REPLACE` when the source is the only writer; `MERGE` adds and changes but never removes: an entry the source deleted stays, and the change names it in a `WARNING` |
 
 - Each change goes `propose`, `skip-shadow`, `publish`. The caller is a platform service principal holding
   `cosec:approve`, `cosec:skip-shadow` and `cosec:publish`: the trust root ([Testing policies](./testing.md)). The source

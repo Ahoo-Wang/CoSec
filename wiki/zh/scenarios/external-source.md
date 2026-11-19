@@ -55,7 +55,7 @@ description: "让 CoSec 的角色和权限与拥有它们的身份系统保持�
 | 角色的权限变化 | `putRole`，不带 `ifMatch` |
 | 角色被删除 | `removeRole` |
 | 应用的权限变化 | `putCatalog` |
-| 定期对账 | `apply`，`MERGE`；事实源是该文档唯一写入者时用 `REPLACE` |
+| 定期对账 | 事实源是该文档唯一写入者时用 `apply` 的 `REPLACE`；`MERGE` 从不删除，并在 `WARNING` 中点名它保留的内容 |
 
 ## 一次变更变成的调用 {#the-calls-a-change-becomes}
 

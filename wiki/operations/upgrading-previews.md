@@ -8,8 +8,45 @@ description: "What changed from each 8.0 preview (alpha and beta) to the next, n
 Only for a deployment that already runs an 8.0.0 preview: what changed from each preview to the next, newest first. A 7.x
 deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. These notes are removed when 8.0 is released.
 
+## Start here {#start-here}
+
+Each section below is what changes when you leave that preview. Read the section of the version you run and every
+section above it:
+
+| You run | Read |
+|---|---|
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3) |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the one above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the two above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the three above |
+| `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
+
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
+- **A `cosec.*` switch whose value CoSec cannot read fails startup** (`UB-1`). Through beta.3 a value such as
+  `cosec.enabled=1`, `on`, an empty string or ` true ` was true to Spring's binder and "off" to the condition that wires
+  the beans, so CoSec, or the feature, was switched off without a word; an empty `cosec.pipeline.mode` wired no pipeline,
+  and a Spring Cloud Gateway host started as an open proxy. `cosec.authorization.shadow.enabled=off` (or `0`) left
+  shadowing on. Now the starter refuses, before any bean, every switch that is not `true` or `false` (any case, no
+  surrounding spaces; `cosec.pipeline.mode` accepts `enforce` or `gateway`, `cosec.api-key.store` `memory` or `redis`),
+  naming the key, the value found and the values accepted
+  ([Startup fails on an unreadable switch](./troubleshooting.md#startup-fails-on-an-unreadable-switch)). Affected:
+  a configuration, an environment variable or a Helm value that writes a switch another way. Write `true` or `false`,
+  or remove the key to take its default. A switch written `false` still switches its feature off.
+- **The `cosec.authorization` timer has a `problem` tag, and every series has the same tag keys** (`UB-8`). The new tag
+  holds the slug of the problem the client was told (`unauthorized`, `token-expired`, `forbidden`, ...) or `none`, so a
+  `401` tells apart from a `403` and one token problem from another
+  ([Metrics](./observability.md#metrics)). The `cause` tag, which only `indeterminate` series had, is now on every
+  series, `none` outside `indeterminate`: a Prometheus registry refuses meters of one name with different tag keys.
+  Affected: a query that selects series by the absence of `cause` (`cause=""`) now selects `cause="none"`; a sum over
+  the new tags is the old series.
+- **New log lines** (nothing to change): one INFO summary of what CoSec is configured as, and one WARN when
+  `cosec.enabled=false` ([Startup summary](./observability.md#startup-summary)); a WARN, repeated every `lag-warn`,
+  while the platform document is absent, naming the key, the key prefix and the Redis it reads
+  ([Instance is not ready](./troubleshooting.md#instance-is-not-ready)); a WARN on a Spring Cloud Gateway host that has
+  controllers or functional routes of its own, which CoSec does not decide
+  ([Web](../integration/web.md#the-gateways-own-handlers)); and the client-address line now says what the default
+  `max-trusted-index` risks.
 - **Security: a check of a request that has ended is denied** (`PIP-26`). Through beta.3, a `SecurityContext` kept
   after its request (in a field, a cache, a message to a consumer) went on permitting with
   `AuthorizationChecker`, on the memberships it was made with, after logout, a revoked token or a removed role. Now the
@@ -30,6 +67,42 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
   `PipelineFixture.securityContext(fixture.request(...))` or `PermittedRequest` from `cosec-testkit`
   ([Testing policies](../policies/testing.md)); a filter of your own that runs the pipeline binds
   `outcome.security!!.securityContext`.
+- **Breaking: three shapes of a document that never did what they read no longer compile** (`DOC-9`, `DOC-10`,
+  `DOC-11`). Each refuses a document whose statement already did not apply as written:
+  - `ignoreCase` on `eq` or `prefix` with a literal holding a letter beyond ASCII (`Ärzte`), where missing a spelling
+    lets a request through: in a DENY statement or a rate limit rule, an ALLOW under a `not`, or a policy condition
+    guarding a DENY. The fold is ASCII only, so `ärzte` passed the DENY. Write every spelling in an `in` without
+    `ignoreCase` ([Case folding](../policies/language.md#case-folding)). In an ALLOW it still compiles, with a warning.
+  - `resource.attributes.<name>`, in a condition or a rate limit `key`: nothing sets it, so a DENY on it denied
+    nothing. Put the fact in the resource id and read it as `resource.var.<name>`
+    ([Object-level rules](../integration/checks.md#object-level-rules)). A test kit scenario that sets
+    `request.resource.attributes` is refused too.
+  - A `subject.id` literal beginning with `(` (`{"not": {"eq": ["subject.id", "(0)"]}}` matched every anonymous
+    request) and a principal binding to an id beginning with `(` (it never applied). Write
+    `{"eq": ["subject.authenticated", false]}` for anonymous requests.
+
+  Affected: whoever stored such a document. After the upgrade an instance installs it as failed, and every request
+  that reads it fails closed (`503`), so find them first. With beta.3 still running, read each head
+  (`GET <control base>/documents/{key}`, [the control API](../policies/testing.md#the-control-plane)) or take the
+  files you publish from, and search them:
+  `grep -nE 'resource\.attributes\.|"subject\.id" *, *"\(|"principal" *: *"\(' <files>` finds the second and third
+  shapes; for the first, `grep -n '"ignoreCase": *true' <files>` and look for a letter beyond ASCII beside it
+  (`grep -nP '[^\x00-\x7F]'`). Or load the files with this version's `PolicyTestKit.load`, which compiles each document
+  as an instance does and names the path of each error. `cosec-migrate convert` now refuses the same shapes from 7.x
+  data: an ALLOW on a 7.x resource attribute is a statement that can never hold, which you remove.
+- **Breaking: `:apply` with `REPLACE` checks the revision the file was read at.** Through beta.3 the header's
+  `revision` was required and ignored, and a `REPLACE` removed whatever the head held that the file did not, including
+  what was published after the file was read. Now a file whose `revision` is not the head's is a `409`. Affected: jobs
+  that apply a file from git with a fixed or stale `revision`. Send the revision the job last read (`GET
+  /documents/{key}`, its `revision`), merging what changed since ([Changes](../policies/testing.md#changes)). A
+  document not published yet is not compared. `MERGE` is unchanged, and its change now names, in a `WARNING`, the
+  entries it keeps because the file leaves them out.
+- **A change that would lock its publisher out of the control plane needs an acknowledgement.** A change to the
+  platform document, the platform tenant's or the control app's that would leave its operator unable to reach the
+  control plane carries a `V4` warning, and its publish is a `422` unless the body says `"lockout": true`
+  ([Publishing and rolling back](../policies/testing.md#publishing-and-rolling-back)). Affected: automation that
+  publishes such a change on purpose; add the acknowledgement. The way back from a lock-out is the new
+  `cosec-migrate restore`, not an emptied Redis ([Recovering from a lock-out](./storage.md#recovering-from-a-lock-out)).
 - **Fixed: a lost invalidation is installed by the first pass after it, even past a load in flight.** The beta.3
   release notes listed it as a known issue: when a revalidation pass met a load of a document already in flight, it
   took that load's read as its confirmation, though the read could predate the change, so a change whose invalidation
@@ -72,6 +145,22 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
   Redis key. Now a value shaped like a token (a JOSE compact serialization, with or without `Bearer `) throws
   `IllegalArgumentException`, which names `TokenRevoker`; no token id CoSec or another issuer gives is refused.
   Affected: a logout written against `TokenStore`, which never worked. Call `TokenRevoker.revoke(accessToken)`.
+- **Fixed: a token from an issuer whose clock runs ahead is accepted** (#1666, `IDN-29`). Through beta.3,
+  `JwtTokenVerifier` allowed no room for clocks: a token whose `iat` was even milliseconds later than the verifier's
+  clock was `401 token-invalid`, so a deployment whose issuer and gateway do not share a clock saw intermittent `401`s
+  in the last milliseconds of a second. A token's `iat` and `nbf` may now be up to
+  `cosec.authentication.revocation.skew` (5 seconds) ahead; `exp` stays strict. A token beyond the skew is still
+  `token-invalid` to the client, and the decision event names it `TOKEN_NOT_YET_VALID` (a new member of
+  `AuthnResult.RejectReason`, a set that grows; a `when` over it already has an `else`); the log says
+  `Token refused as not valid yet`. `JwtTokenVerifier(algorithm, issuerSkew)` takes the skew, the starter passes
+  `cosec.authentication.revocation.skew`; a verifier you build yourself defaults to 5 seconds, so pass the value your
+  `TokenAuthenticator`'s `revocationSkew` uses if you changed it. Nothing breaks.
+
+- **What the host logs at startup.** Nothing breaks, but the log an operator reads changes. A `cosec.*` property CoSec
+  does not read fails startup before any bean is created, so a configuration with removed keys hears of every one
+  first. When tokens are verified against `RevocationReader.NONE`, the host logs a `WARN` that says a revoked token is
+  accepted until it expires. When the token stores are missing, one startup message names every store that is
+  missing, not the first.
 
 ## From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 
@@ -1039,6 +1128,7 @@ analysis read the author's rights as enforcement does, so some changes that publ
 the edge of tenant isolation (RC1-5, RC1-6, RC1-15 to RC1-18, RC1-48, RC1-49), from **Identity forwarding** on, change
 what a gateway forwards and to which routes: read them before upgrading a gateway.
 
+- **A store upgraded from 8.0.0-alpha.2 runs [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) once**, so that the list of app documents (`<s>:control:list:documents`) is complete ([Storage](./storage.md#publishing-through-the-control-plane)).
 - **Token attributes of every type** (RC1-2, `GRT-5`). The analysis reads `subject.attributes.*` as the engine does,
   a boolean or a number as its text. An author whose ALLOW is conditioned on not being `suspended` no longer counts
   as holding it when the token says `"suspended": true`. In code, `Operator.attributes` and `Grantor.attributes` are
@@ -1369,6 +1459,7 @@ produce 32-byte SHA-256 digests, or every read fails closed ([Extending](../arch
 [RC security review](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md), break decisions,
 code or configuration written against it. A 7.x deployment reads them in the sections below.
 
+- **The `cosec.gateway.*` variables Kubernetes sets from a Service** (`COSEC_GATEWAY_SERVICE_HOST` and the like) were refused at startup by 8.0.0-alpha.1 as `cosec.*` keys CoSec does not read. Since alpha.2 the check skips exactly these variables; `enableServiceLinks: false` in the manifests keeps them out anyway ([Deployment](./deployment.md#what-the-manifests-set)).
 - **A role cap removes ALLOWs only** (RC1-1, `BND-9`, `IDN-2`). A capped credential (an API key with `roles`) still
   gets no grant from its principal's attached policies and principal bindings, but their DENYs now apply to it: a
   request its principal is denied is denied to every key of the principal, capped or not. In alpha.1 a cap dropped

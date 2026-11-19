@@ -1,0 +1,17 @@
+# Rule: DOC-10
+# Mutant: resource.attributes.* resolves again, so a DENY on one compiles and denies nothing
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionCheckerTest :engine:test --tests me.ahoo.cosec.engine.PolicyCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+index 9695c9d2..df03d627 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionChecker.kt
+@@ -48,7 +48,7 @@ class ConditionChecker(
+     fun attribute(path: String): Attribute? {
+         val attribute = Attribute.parse(path)
+             ?: return if (Attribute.isExternalPath(path)) catalog.external(path) else null
+-        return attribute.takeUnless { isCredential(it) || it.kind == Attribute.Kind.RESOURCE_ATTRIBUTE }
++        return attribute.takeUnless { isCredential(it) }
+     }
+ 
+     /** Whether [attribute] is a credential header of this host: [CREDENTIAL_HEADERS] or one it was given (`CND-5`). */

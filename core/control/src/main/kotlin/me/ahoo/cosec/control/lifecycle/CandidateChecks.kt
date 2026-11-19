@@ -20,9 +20,12 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.ControlStatus.UNPROCESSABLE
 import me.ahoo.cosec.control.change.Finding
+import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.control.store.Head
 import me.ahoo.cosec.document.PolicyDocument
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import java.time.Clock
 
 /** A change's candidate on a head, and the checks and grant analysis it goes through there (RFC 0007 §6.2, §7.4). */
@@ -32,6 +35,7 @@ internal class CandidateChecks(
     private val authority: ChangeAuthority,
     private val clock: Clock,
     private val options: ChangeOptions,
+    private val lockout: LockoutCheck,
 ) {
     /** That [operator] may make [change]'s operations on its document's current head ([ChangeAuthority.authorize]). */
     suspend fun authorize(operator: Operator, change: ChangeRequest) {
@@ -73,7 +77,11 @@ internal class CandidateChecks(
             now,
             options.breakGlassMaxDuration
         )
-        val result = CheckResult(applyFindings + breakGlass + checkedResult.findings, checkedResult.checkedWith)
+        val checked = CheckResult(applyFindings + breakGlass + checkedResult.findings, checkedResult.checkedWith)
+        // UC-6: a clean candidate that would keep [operator] out of the control plane says so; publishing it needs an
+        // acknowledgement ([Publishing.publish]).
+        val lockedOut = if (checked.clean) lockedOut(operator, change.key, candidate) else null
+        val result = lockedOut?.let { CheckResult(checked.findings + it, checked.checkedWith) } ?: checked
         val escalations = if (result.clean) {
             authority.escalations(operator, change.key, change.operations, head?.document, candidate, recording, now)
         } else {
@@ -105,5 +113,12 @@ internal class CandidateChecks(
             change.id
         )
         return confirmed to applied.findings + findings
+    }
+
+    private suspend fun lockedOut(operator: Operator, key: SnapshotKey, candidate: PolicyDocument): Finding? {
+        val lockout = lockout.check(operator, key, candidate) ?: return null
+        val message = "after this change ${operator.actor.principal.value}@${operator.actor.tenant.value} could not reach the control plane: ${lockout.reason}. Publishing " +
+            "it needs the acknowledgement \"lockout\": true; the way back from a lock-out is cosec-migrate restore"
+        return Finding(LockoutCheck.CHECK, "$", message, UNPROCESSABLE, Severity.WARNING)
     }
 }

@@ -128,6 +128,26 @@ class MetricsListenerTest {
     }
 
     @Test
+    fun `UB-8 tells a 401 from a 403 and one token problem from another, with the same tag keys on every series`() {
+        val bound = StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("g"), DocumentKind.PLATFORM))
+        evaluate(Decision.Deny(bound))
+        evaluate(Decision.Deny(bound), Authenticator { AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_EXPIRED) })
+        evaluate(Decision.Deny(bound), Authenticator { AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED) })
+        evaluate(Decision.Permit(StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Attached(PolicyId("p")))))
+        val problems = registry.get(MetricsListener.METRIC_NAME).timers()
+            .flatMap { timer -> timer.id.tags.filter { it.key == "problem" }.map { it.value } }
+        problems.assert().contains("unauthorized", "token-expired", "token-revoked")
+        // A Prometheus registry refuses meters of one name with different tag keys.
+        registry.get(MetricsListener.METRIC_NAME).timers().map { timer -> timer.id.tags.map { it.key }.toSet() }
+            .toSet().assert().hasSize(1)
+        // The failing REQUIRED listener turned that permit into a 503: its cause is a tag, the others have none.
+        registry.get(MetricsListener.METRIC_NAME).tags("problem", "unavailable", "cause", "required_listener").timer()
+            .count().assert().isEqualTo(1)
+        registry.get(MetricsListener.METRIC_NAME).tags("problem", "token-expired", "cause", "none").timer()
+            .count().assert().isEqualTo(1)
+    }
+
+    @Test
     fun recordsTheResultSourceAndCause() {
         val bound = StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("g"), DocumentKind.PLATFORM))
         evaluate(Decision.Deny(bound))

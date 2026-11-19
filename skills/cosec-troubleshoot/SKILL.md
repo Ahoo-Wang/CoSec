@@ -87,6 +87,21 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   namespace). 8.0.0-alpha.2 and later skip exactly those variables, only from the process environment; a mistyped
   `COSEC_*` variable or the same key in `application.yaml` still fails. On alpha.1, or to keep them out of the pod, set
   `enableServiceLinks: false` on the pod, as `k8s/` does.
+- **`CoSec cannot read <n> cosec.* switch(es); a value it cannot read would switch the feature off without a word:`**
+  followed by `<key>=[<value>]: write true or false` (or `enforce or gateway`, `memory or redis`): a switch such as
+  `cosec.enabled`, `cosec.jwt.enabled`, another `*.enabled`, `cosec.pipeline.mode` or `cosec.api-key.store` was written
+  `1`, `on`, `yes`, an empty string (a Helm or Compose template that left the variable empty) or `true` with spaces.
+  Write `true` or `false` (the enum's value), or remove the key to take its default. Never suggest `cosec.enabled=false`
+  to get past it.
+- **`CoSec is off: cosec.enabled=false.` (WARN, not a failure):** nothing is protected by CoSec on that application;
+  ask whether that is intended.
+- **`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. ... answered with no CoSec
+  decision: <beans>` (WARN):** the application's own controllers or functional routes are outside CoSec; move them
+  behind the gateway, or secure them in the application.
+- **`No platform document under [<prefix>:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`
+  (WARN, repeated every `lag-warn`):** the instance waits for its platform document. Check, in this order, that
+  something was published (`cosec-migrate publish --key-prefix <prefix>`), that `cosec.key-prefix` is the publisher's, and
+  that the Redis database and host are the publisher's.
 - **`<what> needs <artifact> (me.ahoo.cosec:<artifact>) on the classpath: add it to the application's dependencies
   (STA-1).`**: a feature that is on needs a CoSec module that is missing. `A Spring MVC host` needs `cosec-webmvc`,
   `A WebFlux host` `cosec-webflux`, `A Spring Cloud Gateway host` `cosec-gateway` (checked even with
@@ -288,6 +303,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
   delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4;
+  or, intermittently at second boundaries, an issuer's clock ahead by more than `cosec.authentication.revocation.skew`:
+  log `Token refused as not valid yet`, decision event `subject.rejected` `TOKEN_NOT_YET_VALID`, IDN-29;
   or a claim CoSec refuses: `tenantId` empty or not a string, `roles` or `policies` not an array of strings, `attributes` not an
   object).
 - `token-invalid` for an API key, or a token marked `cosec.membership: provider`, whose principal the
@@ -428,10 +445,19 @@ application port. https://cosec.ahoo.me/operations/troubleshooting#probes-answer
 
 A first platform document that does not let authenticated callers reach `/cosec/control/v1/**` leaves the control plane
 unreachable (403 from the pipeline, before any control check) and `cosec-migrate publish` never overwrites: add the
-`control-api` policy of https://cosec.ahoo.me/guide/quick-start to the platform document, which is only possible through
-the control plane, so a deployment without it must be re-published into an empty Redis or key prefix. A control token
+`control-api` policy of https://cosec.ahoo.me/guide/quick-start to the platform document. Once a platform document
+exists, never empty Redis: a later change that closed the control API (every control call 401/403) is undone with
+`cosec-migrate restore --to-redis <uri> --document platform --revision <last good>`, which prints the plan, then
+`--confirm <head revision>` writes the kept revision as the next one through the control plane's writer
+(https://cosec.ahoo.me/operations/storage#recovering-from-a-lock-out). The control plane refuses such a change with 422
+(`V4`, `... could not reach the control plane: ...`) unless the publisher sends `"lockout": true`. A control token
 is issued for tenant `(platform)` (or the tenant) and app `cosec.control.app-id`; a token for another app is
 `scope-rejected` on a host with an app.
+
+An `:apply` with `REPLACE` answers 409 `REPLACE removes what the file leaves out, and the file was read at revision <m>`
+when the file's header `revision` is not the head's: re-read the head, merge, set `revision` to the head's. An `:apply`
+with `MERGE` never removes: its `OPERATION` WARNING at `$.policies`/`$.bindings`/`$.roles`/`$.rateLimits` names what
+it kept.
 
 A change refused with `REFERENCES` or `V2` (422) names what it met: `[<id>] is referred to by [<doc>]` for a `<doc>` that
 does not refer to it is a publish of `<doc>` that indexed the reference and lost its head write (run `cosec-migrate

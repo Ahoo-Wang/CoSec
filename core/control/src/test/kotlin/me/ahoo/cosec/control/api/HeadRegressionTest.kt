@@ -34,6 +34,7 @@ import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 
@@ -49,7 +50,7 @@ class HeadRegressionTest {
     private val plane = DefaultControlPlane(
         harness.changes,
         revisions,
-        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW)),
+        ChangeAuthority(PERMIT_ALL, ChangeOptions(shadow = IMMEDIATE_WINDOW), revocations = RevocationReader.NONE),
         Simulator(),
     )
 

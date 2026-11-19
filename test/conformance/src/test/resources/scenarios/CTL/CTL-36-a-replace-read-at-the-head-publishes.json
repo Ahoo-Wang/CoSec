@@ -1,0 +1,118 @@
+{
+  "rules": [
+    "CTL-36"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The same REPLACE, its file read at revision 2, the head: it is proposed, and publishing it removes theirs as the file says.",
+  "documents": {
+    "tenants": {
+      "acme": {
+        "policies": [
+          {
+            "id": "shared",
+            "statements": [
+              {
+                "effect": "allow",
+                "action": "order:read"
+              }
+            ]
+          }
+        ],
+        "bindings": []
+      }
+    }
+  },
+  "steps": [
+    {
+      "apply": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "mode": "MERGE",
+        "desired": {
+          "policies": [
+            {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            },
+            {
+              "id": "theirs",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "apply": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "mode": "REPLACE",
+        "revision": 2,
+        "desired": {
+          "policies": [
+            {
+              "id": "shared",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            },
+            {
+              "id": "mine",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          ],
+          "bindings": []
+        }
+      }
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 3
+    }
+  }
+}

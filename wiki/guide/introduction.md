@@ -114,6 +114,7 @@ record for policy snapshots and revoked tokens.
 | Route maps and app documents generated from your OpenAPI description | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-webflux-api` or `-webmvc-api` |
 | Decision events, and optionally control-plane changes, sent to Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | The client's region as an external attribute | `cosec-ip2region` | |
+| A browser or Node client of a CoSec application: sign-in, refresh under rotation, logout, problem types | `@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react` on npm, released with CoSec; not Gradle modules | [Building a client](../integration/clients.md) |
 | Request, token and change ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
 The "With" column is what the starter's auto-configuration for that module needs besides the module itself. Give each
@@ -192,7 +193,9 @@ Pick the path that matches what you are doing. Every page on it ends with a link
 | A developer integrating it | [Quick start](./quick-start.md) → [Web integration](../integration/web.md) → [Authentication](../integration/authentication.md) → [Checks in code](../integration/checks.md) → [Configuration](../operations/configuration.md) |
 | A policy author | [Concepts](./concepts.md) → [Model](./model.md) → [Policy language](../policies/language.md) → [Role permissions](../policies/role-permissions.md) → [Rate limiting](../policies/rate-limiting.md) → [Testing policies](../policies/testing.md) |
 | Following a worked example | [Model](./model.md) → [Simple mode](../scenarios/simple-mode.md) → [An app without spaces](../scenarios/app.md) → [System and custom roles](../scenarios/roles.md) → [Apps with spaces](../scenarios/spaces.md) → [A service account in one space](../scenarios/service-account.md) → [A tenant owner](../scenarios/tenant-owner.md) → [Roles from an external source](../scenarios/external-source.md) → [Authorizing business actions](../scenarios/route-maps.md) → [Gateway topologies](../scenarios/gateway.md) |
-| Running it in production | [Configuration](../operations/configuration.md) → [Storage and caching](../operations/storage.md) → [Observability](../operations/observability.md) → [Troubleshooting](../operations/troubleshooting.md) → [Upgrading](../operations/upgrading.md) |
+| Running it in production | [Choosing a deployment](../operations/topologies.md) → [Deployment](../operations/deployment.md) → [Configuration](../operations/configuration.md) → [Storage and caching](../operations/storage.md) → [Observability](../operations/observability.md) → [Troubleshooting](../operations/troubleshooting.md) → [Upgrading](../operations/upgrading.md) → the [hardening checklist](./security-model.md#hardening-checklist) |
+| Building a client of a CoSec application | [Quick start](./quick-start.md) → [Building a client](../integration/clients.md) → the README of `@ahoo-wang/cosec-fetcher` |
 | Contributing to CoSec | [Architecture overview](../architecture/overview.md) → [Extending CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
 
-Everyone should read the [Security model](./security-model.md) before going to production.
+Everyone should read the [Security model](./security-model.md) before going to production, and work through its
+[hardening checklist](./security-model.md#hardening-checklist).

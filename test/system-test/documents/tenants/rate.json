@@ -32,8 +32,8 @@
       "action": "http:GET",
       "resource": "http:path:/behind/**",
       "key": "subject.id",
-      "permitsPerSecond": 0.00390625,
-      "windowSeconds": 1280
+      "permitsPerSecond": 6.103515625e-05,
+      "windowSeconds": 81920
     }
   ]
 }

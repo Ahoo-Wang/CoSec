@@ -30,7 +30,9 @@ internal object ConditionFormats {
     private val attribute = StringType(
         examples = attributeExamples,
         description = "An attribute of the catalog (RFC 0005 §3.2), or an external attribute (`ext.<provider>.<name>`) a " +
-            "registered AttributeProvider declares (RFC 0006 §5.4.1)."
+            "registered AttributeProvider declares (RFC 0006 §5.4.1). Not `resource.attributes.<name>`: nothing sets it, " +
+            "so it does not compile (DOC-10); a fact about a resource is in its id, read as `resource.var.<name>`. A " +
+            "`subject.id` literal never begins with `(`: the anonymous principal has no `subject.id` (DOC-11)."
     )
 
     private val conditionLiteral = AnyOf(
@@ -40,9 +42,13 @@ internal object ConditionFormats {
     private fun operator(name: String, operands: FormatType, ignoreCase: Boolean = false, description: String? = null) =
         ObjectType(
             listOf(Field(name, operands, required = true)) +
-                if (ignoreCase) listOf(Field("ignoreCase", BooleanType(), description = "ASCII case folding.", default = false)) else emptyList(),
+                if (ignoreCase) listOf(Field("ignoreCase", BooleanType(), description = IGNORE_CASE, default = false)) else emptyList(),
             description = description,
         )
+
+    private const val IGNORE_CASE = "ASCII case folding only. With a literal holding a letter beyond ASCII (`Ärzte`), " +
+        "it does not compile where a miss lets a request through: a DENY's or a rate limit rule's condition, an " +
+        "ALLOW's under a `not` (DOC-9); list the spellings with `in` instead."
 
     val condition = AnyOf(
         listOf(

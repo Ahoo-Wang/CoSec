@@ -1,0 +1,55 @@
+{
+  "rules": [
+    "DOC-11"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A DENY bound to the principal (0): the anonymous principal matches no principal binding (BND-4) and no signed-in principal has a reserved id (IDN-12), so the DENY would never apply. The document does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "no-anonymous",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "p:(0):no-anonymous",
+          "subject": {
+            "principal": "(0)",
+            "tenant": "(0)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "no-anonymous"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "[(0)] is reserved"
+  }
+}

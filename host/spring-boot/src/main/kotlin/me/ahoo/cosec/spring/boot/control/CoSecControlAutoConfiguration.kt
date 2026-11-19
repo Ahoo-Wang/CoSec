@@ -23,6 +23,7 @@ import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlHttp
+import me.ahoo.cosec.control.api.ControlLockout
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.Simulator
@@ -269,8 +270,12 @@ internal class CoSecControlAutoConfiguration {
         attributes: AttributeProviders,
         cosec: CoSecProperties,
         environment: Environment,
+        revocationReader: ObjectProvider<RevocationReader>,
+        tokenStore: ObjectProvider<TokenStore>,
+        controlProperties: ControlProperties,
     ): Changes {
         val ids = idGenerator.getIfAvailable { RandomIdGenerator }
+        val simulator = Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment))
         return Changes(
             store,
             revisions,
@@ -280,10 +285,12 @@ internal class CoSecControlAutoConfiguration {
             // Candidates compile against the host's providers and credential headers, as enforcement compiles them.
             attributes = attributes.catalog,
             credentialHeaders = credentialHeaders(environment),
+            revocations = revocations(revocationReader, tokenStore),
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
+            lockout = ControlLockout(revisions, simulator, AppId(controlProperties.appId)),
         )
     }
 

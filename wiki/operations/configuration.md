@@ -55,6 +55,14 @@ never unknown whatever its source, so the exemption cannot hide a property CoSec
 
 ## Feature switches
 
+A switch accepts `true` or `false` (any case, no spaces around it), and the enums `cosec.pipeline.mode` and
+`cosec.api-key.store` the values listed for them; leave a key out to take its default. Any other written value (`1`,
+`on`, an empty string) fails startup, naming the key, the value and what is accepted: Spring's binder would read some
+of them as true while the condition that wires the feature reads them as off
+([Startup fails on an unreadable switch](./troubleshooting.md#startup-fails-on-an-unreadable-switch)). A switch written
+`false` switches its feature off, and the startup summary says so
+([Startup summary](./observability.md#startup-summary)).
+
 | Property | Type | Default | Turns on |
 |---|---|---|---|
 | `cosec.enabled` | boolean | `true` | every CoSec auto-configuration |
@@ -201,7 +209,7 @@ How windows work: [Testing changes](../policies/testing.md).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.authentication.revocation.skew` | duration | `5s` | How much later than a subject revocation a token may have been issued and still be revoked by it: room for an issuer whose clock runs ahead. |
+| `cosec.authentication.revocation.skew` | duration | `5s` | How far an issuer's clock may run ahead of this instance's. A token issued up to this long after a subject revocation is still revoked by it, and a token's issue time (`iat`) and not-before time (`nbf`) may be this much later than this instance's clock (`IDN-29`); a token's expiry gets no such room. |
 | `cosec.authentication.revocation.fail-closed` | boolean | `false` | Whether a request's token is refused (`503`) while the revocations cannot be read, instead of accepted ([the documented exception](../guide/security-model.md#the-two-documented-exceptions)). A refresh fails then either way. |
 | `cosec.authentication.login.refresh.path` | string | unset | Where the starter serves the refresh route, `POST` of the pair (`IDN-23`, [Building a client](../integration/clients.md#what-your-application-serves)). Unset, none is served. A document must permit an anonymous `POST` of it. Set on a gateway, on a host that serves no HTTP, with login or JWT off, or to anything but one plain absolute path, startup fails. |
 | `cosec.authentication.login.logout.path` | string | unset | Where the starter serves the logout route, `POST` of the pair, `204` (`IDN-24`); as `refresh.path` otherwise, and not the same path. |
@@ -210,7 +218,7 @@ How windows work: [Testing changes](../policies/testing.md).
 
 | Property | Type | Default | Effect |
 |---|---|---|---|
-| `cosec.jwt.secret` | string | none | **Required** while JWT is enabled; startup fails when it is blank or shorter than the algorithm needs: 32 bytes (UTF-8) for `hmac256`, 48 for `hmac384`, 64 for `hmac512` (RFC 7518 §3.2). Use a long random value from a secret store. |
+| `cosec.jwt.secret` | string | none | **Required** while JWT is enabled; startup fails when it is blank or shorter than the algorithm needs: 32 bytes (UTF-8) for `hmac256`, 48 for `hmac384`, 64 for `hmac512` (RFC 7518 §3.2). Use a long random value from a secret store. HMAC is symmetric: **every process that holds the secret can sign a token for any tenant, principal and role**, the `(platform)` administrator included, so give it only to processes you would trust to issue. Rotating it invalidates every token signed with the old one: instances still on the old secret and instances on the new one each answer `401` `token-invalid` for the other's tokens until the restart ends, and every session logs in again ([Choosing a deployment](./topologies.md#what-every-topology-shares)). |
 | `cosec.jwt.algorithm` | `hmac256`, `hmac384`, `hmac512` | `hmac256` | Signing algorithm. Issuers and verifiers must agree. |
 | `cosec.jwt.token-validity.access` | duration | `10m` | Access token lifetime. |
 | `cosec.jwt.token-validity.refresh` | duration | `7d` | Refresh token lifetime; a revocation is kept in Redis this long, plus one second. A refresh token never outlives its session. |

@@ -52,7 +52,8 @@ jobs:
       # Inputs reach the scripts through the environment only, never interpolated into a command.
       GATEWAY_IMAGE_INPUT: ${{ inputs.image }}
       ARTIFACT: system-test-${{ github.run_id }}-${{ github.run_attempt }}
-      COMPOSE_FILE: test/system-test/compose.yaml
+      # Absolute: the scenarios' JVM runs in the module directory, and starts docker compose itself.
+      COMPOSE_FILE: ${{ github.workspace }}/test/system-test/compose.yaml
       COSEC_SYSTEM_BEHIND_IMAGE: cosec-system-behind:test
       COSEC_SYSTEM_AUTH_IMAGE: cosec-system-auth:test
       COSEC_SYSTEM_ENFORCER_IMAGE: cosec-system-enforcer:test
@@ -60,6 +61,7 @@ jobs:
       COSEC_SYSTEM_JWT_SECRET: system-test-only-not-a-secret-0123456789abcdef
       COSEC_SYSTEM_GATEWAY_URL: http://127.0.0.1:8080
       COSEC_SYSTEM_GATEWAY2_URL: http://127.0.0.1:8081
+      COSEC_SYSTEM_GATEWAY_STRICT_URL: http://127.0.0.1:8082
       COSEC_SYSTEM_AUTH_URL: http://127.0.0.1:8090
       COSEC_SYSTEM_ENFORCER_URL: http://127.0.0.1:8091
       COSEC_SYSTEM_ENFORCER_MANAGEMENT_URL: http://127.0.0.1:8092

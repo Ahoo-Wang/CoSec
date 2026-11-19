@@ -1,0 +1,73 @@
+{
+  "rules": [
+    "DOC-10"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The near miss, and what to write instead: the fact is in the resource's id, read with a pattern variable. The document compiles and the DENY applies to a secret document.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "no-secrets",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "resource": "doc/{classification}/*",
+              "condition": {
+                "eq": [
+                  "resource.var.classification",
+                  "secret"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "no-secrets",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-secrets"
+        }
+      ]
+    }
+  },
+  "request": {
+    "action": "doc:read",
+    "resource": {
+      "type": "doc",
+      "id": "secret/7"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "no-secrets",
+      "statement": 0,
+      "via": {
+        "binding": "no-secrets",
+        "document": "platform"
+      }
+    }
+  }
+}

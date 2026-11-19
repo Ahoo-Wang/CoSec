@@ -27,6 +27,7 @@ import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -52,6 +53,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -72,8 +74,22 @@ class AppDocumentDecisionsTest {
     private val ids = AtomicInteger()
     private val options = ChangeOptions(shadow = IMMEDIATE_WINDOW)
     private val changes =
-        Changes(store, revisions, { ChangeId("c${ids.incrementAndGet()}") }, engine.authorizer, clock, options)
-    private val plane = DefaultControlPlane(changes, revisions, ChangeAuthority(engine.authorizer, options))
+        Changes(
+            store,
+            revisions,
+            { ChangeId("c${ids.incrementAndGet()}") },
+            engine.authorizer,
+            clock,
+            options,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
+        )
+    private val plane =
+        DefaultControlPlane(
+            changes,
+            revisions,
+            ChangeAuthority(engine.authorizer, options, revocations = RevocationReader.NONE)
+        )
     private val plato = engine.operator(TenantId.PLATFORM, "plato")
 
     private val read = PolicyDefinition(

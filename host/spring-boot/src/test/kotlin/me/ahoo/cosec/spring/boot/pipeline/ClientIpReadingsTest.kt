@@ -203,4 +203,19 @@ class ClientIpReadingsTest {
                     .assert().isTrue()
             }
     }
+
+    @Test
+    fun `UB-4 the default index names the risk of a direct client, a written one does not`() {
+        val reading = ClientIpReading(1, true, "the X-Forwarded-For entry 1 from the right, or the connection's peer")
+        val byDefault = ClientIpReadings.report(reading, explicit = false)
+        byDefault.assert().contains("is not set, so its default, 1, is in effect")
+        byDefault.assert().contains("a client chooses its own address")
+        byDefault.assert().contains("number of proxies in front of this host")
+        // Written, or reading the peer: nothing to warn about.
+        ClientIpReadings.report(reading, explicit = true).assert().doesNotContain("default")
+        ClientIpReadings.report(
+            ClientIpReading(0, true, "the peer"),
+            explicit = false
+        ).assert().doesNotContain("default")
+    }
 }

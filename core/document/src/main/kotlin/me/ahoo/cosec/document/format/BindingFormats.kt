@@ -66,7 +66,7 @@ internal object BindingFormats {
         definitions = mapOf(
             "principalSubject" to ObjectType(
                 listOf(
-                    Field("principal", StringType(examples = listOf("cosec", "svc-batch")), required = true),
+                    Field("principal", StringType(examples = listOf("cosec", "svc-batch"), description = RESERVED_PRINCIPAL), required = true),
                     Field(
                         "tenant",
                         StringType(examples = listOf("(platform)", "acme")),
@@ -87,12 +87,20 @@ internal object BindingFormats {
         ),
     )
 
+    /** `DOC-11`: what a principal subject never is. */
+    private const val RESERVED_PRINCIPAL = "A principal id, never one beginning with `(`: no signed-in principal has a " +
+        "reserved id, and the anonymous principal matches no principal binding (DOC-11)."
+
     /** A binding of the platform document: as [bindingSchema], except that a principal always names its tenant. */
     internal fun platformBinding(): ObjectType {
         val root = bindingSchema.root as ObjectType
         val principal = ObjectType(
             listOf(
-                Field("principal", StringType(examples = listOf("cosec", "svc-batch")), required = true),
+                Field(
+                    "principal",
+                    StringType(examples = listOf("cosec", "svc-batch"), description = RESERVED_PRINCIPAL),
+                    required = true
+                ),
                 Field("tenant", StringType(examples = listOf("(platform)", "acme")), required = true),
             ),
         )

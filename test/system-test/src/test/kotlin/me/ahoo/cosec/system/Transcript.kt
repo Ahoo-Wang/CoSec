@@ -27,16 +27,19 @@ import java.time.Instant
 object Transcript {
     private var file: Path? = null
 
+    @Synchronized
     fun start(file: Path) {
         Files.createDirectories(file.parent)
         Files.writeString(file, "")
         this.file = file
     }
 
+    @Synchronized
     fun stop() {
         file = null
     }
 
+    @Synchronized
     fun note(line: String) {
         val target = file ?: return
         Files.writeString(target, "${Instant.now()} $line\n", Charsets.UTF_8, java.nio.file.StandardOpenOption.APPEND)

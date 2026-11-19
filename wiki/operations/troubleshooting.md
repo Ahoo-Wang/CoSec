@@ -95,6 +95,13 @@ tenant, and
   preview issuer could sign (`SCP-13`). A tenant or app id is one path segment, so the token names neither tenant
   `acme/west` nor `acme`. Rename the tenant or app where its id is kept, then have the principal sign in again
   ([Upgrading](./upgrading.md#tenant-and-app-ids-hold-no-slash)).
+- **Intermittent, at second boundaries:** a few requests fail with `token-invalid`, each in the last milliseconds of a
+  second, and the log says `Token refused as not valid yet: The token's iat is later than this instance's clock`. The
+  issuer's clock is ahead of this instance's by more than
+  [`cosec.authentication.revocation.skew`](./configuration.md#authentication) (5 seconds; through beta.3 there was
+  no room at all, `IDN-29`), and a token stamped with the issuer's next second reaches a host still in the previous
+  one. The decision event's `subject.rejected` is `TOKEN_NOT_YET_VALID`. Synchronize the clocks (NTP); raise the skew
+  only for a known, bounded drift, since it also widens what a subject revocation covers.
 - **Delegation token:** the token carries an `act` claim, which CoSec refuses whatever else about it is valid; the
   audit event's `reasonCode` is `DELEGATION_UNSUPPORTED` (`IDN-4`). Have the caller use a token of its own instead
   of one that acts for someone else ([Authentication](../integration/authentication.md#tokens)).
@@ -321,7 +328,11 @@ Readiness refuses traffic until the platform document and every document in
 [`prewarm-apps` and `prewarm-tenants`](./configuration.md#snapshot) are installed; liveness is not affected. An
 instance that never becomes ready:
 
-- **No platform document is published.** Publish one with `cosec-migrate publish`.
+- **No platform document is published.** Publish one with `cosec-migrate publish`. The instance logs it, at startup and
+  then every `lag-warn` while it lasts: `No platform document under [cosec:snapshot:platform] in Redis <host:port/db>:
+  this instance is not ready ...`. The line names the key, the key prefix and the Redis it read, never a credential: a
+  first deployment that has published nothing, a wrong `cosec.key-prefix` (the publisher's must be the same) or a wrong
+  Redis database are the usual causes. One INFO line says when the document is installed.
 - **A prewarmed document cannot be loaded or compiled.** The logs name it (`Loading snapshot document [<doc>]
   failed.`). Fix or publish the document, or remove it from the prewarm list.
 
@@ -433,6 +444,37 @@ anyway.
   the property from the gateway; set it on the services behind it.
 - A binding failure for `cosec.pipeline.mode`: the value is neither `enforce` nor `gateway`.
 
+### Startup fails on an unreadable switch
+
+```text
+CoSec cannot read 2 cosec.* switches; a value it cannot read would switch the feature off without a word:
+  cosec.enabled=[1]: write true or false
+  cosec.pipeline.mode=[]: write enforce or gateway
+Set each to one of its values, or remove it to take its default: https://cosec.ahoo.me/operations/configuration
+```
+
+A `cosec.*` switch (`cosec.enabled`, `cosec.jwt.enabled`, the other `*.enabled` ones, `cosec.pipeline.mode`,
+`cosec.api-key.store`) is written with a value CoSec does not read: `1`, `on`, `yes`, an empty string (an environment
+variable a template left empty, `mode:` with no value in YAML), or `true` with spaces around it. Write `true` or `false`
+(`enforce` or `gateway`, `memory` or `redis`), or remove the key. The message lists every such key at once. A switch
+written `false` is legitimate: its feature stays off, and the startup summary lists it
+([Startup summary](./observability.md#startup-summary)).
+
+### The log says CoSec is off {#the-log-says-cosec-is-off}
+
+`CoSec is off: cosec.enabled=false. This application authorizes no request and nothing is protected by CoSec.` is one
+WARN, logged once the application has started. Nothing CoSec wires is active: no pipeline, no token verification, no
+snapshot. Remove the property, or set `cosec.enabled=true`, unless that is what you meant; a gateway still strips a
+client's `CoSec-Identity`.
+
+### The log says the gateway's own handlers are not decided {#the-log-says-the-gateways-own-handlers-are-not-decided}
+
+`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the
+application itself ... are answered with no CoSec decision: ...` names controllers or functional routes of the
+application. They are mapped before any gateway route, so CoSec never sees a request for them
+([The gateway's own handlers](../integration/web.md#the-gateways-own-handlers)). Move them to a service behind the
+gateway, or secure them in the application.
+
 ### Startup fails on a missing module
 
 ```text
@@ -515,6 +557,11 @@ other cloud platforms it detects. Per message:
   index.
 
 The table is in [Client IP behind proxies](../integration/web.md#client-ip-behind-proxies).
+
+When `cosec.authorization.remote-ip.max-trusted-index` is not set and the default `1` is in effect, the startup line
+that names the reading says so, and what it risks: a host that clients reach directly, with no proxy that writes
+`X-Forwarded-For`, lets them choose their own address. Set the index to the number of proxies in front of the host, or
+`0` when there are none.
 
 ### Startup fails on the eviction check
 
@@ -793,6 +840,9 @@ principal sets a tenant's boundary`.
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per segment) or a typed id over those lengths, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. A path with a trailing `/` or an empty segment (`//`) is no route. | Use the route's exact path. |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
+| `409` from `:apply` with `REPLACE`: `[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | The file's header names the revision it was read at, and the head moved since: applying it would remove what was published in between. | Read the head (`GET /documents/<doc>`), bring what changed into the file, set its `revision` to the head's and apply again ([Changes](../policies/testing.md#changes)). |
+| `422` from a publish: `publishing change <id>: after this change <principal>@<tenant> could not reach the control plane: …` | The change to the platform document, the platform tenant's or the control app's would leave the publisher unable to reach the control plane: the reason names the request and what denies it (`V4`). | Change the change, or acknowledge it with `"lockout": true` in the publish's body when it is a handover ([Publishing and rolling back](../policies/testing.md#publishing-and-rolling-back)). |
+| Every control-plane call answers `401` or `403` after a change to the platform document | A published change keeps the control API's path closed, or takes away the grants of every operator: nobody can change it back through the control plane. | `cosec-migrate restore --document platform --revision <the last good one>`, then `--confirm` ([Recovering from a lock-out](./storage.md#recovering-from-a-lock-out)). Do not empty Redis. |
 | `503` on one change, or `Could not read the open changes; no revision is reclaimed this pass.` at every maintenance pass | The change's record does not decode: it is of an app that cannot be an app id (blank, `*`, `:`, `/`, a control character, over 128 characters, `SCP-10`, `SCP-13`), or an alpha wrote it in a shape this version no longer reads, such as an approval without `principalBindings`. It can be neither shown nor abandoned, and until it is removed nothing is reclaimed. | Remove its record from the control store (with `cosec-cocache`, the key `<key-prefix>:control:change:<id>`), as [Upgrading](./upgrading-previews.md#from-8-0-0-alpha-3) says. |
 | A document a preview published is not in `GET /documents`, logged `The documents list names [tenant:<id>], which is no document key: left out.`, and `/documents/tenant:<id>` answers `400` `That names no document` | Its tenant or app id holds `/` (`acme/west`), which no 8.0 id can (`SCP-13`): no request reads it, and the control plane can name it no more. | Rename the tenant or app, publish its document under the new id, then remove the old keys ([Upgrading from a preview](./upgrading-previews.md#from-8-0-0-alpha-4)). |
 | `503` from the control plane (a change, a publish, `simulate`, the maintenance pass or the shadow windows), logged with a format error that names a record and an id with `/`: `Change [<id>] does not read: … Tenant id [acme/west] must not …`, `The back-reference set of [<doc>] policy [<id>] does not read: … [tenant:acme/west] is not a document key`, `The status of instance [<id>] does not read: …` | An 8.0 preview stored a record under a tenant or app id with `/`, which this version refuses (`SCP-13`). The record fails whole and closed (`SCP-10`); nothing skips it. | Remove the records of that id, as [Upgrading from a preview](./upgrading-previews.md#from-8-0-0-alpha-4) lists them: the preview's control plane cannot. |

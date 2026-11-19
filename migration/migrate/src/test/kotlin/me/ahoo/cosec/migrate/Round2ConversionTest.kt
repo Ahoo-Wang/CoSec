@@ -198,8 +198,10 @@ class Round2ConversionTest {
     /** Review of #1342, point 2: the ownership check of 7.x, `eq resource.owner #{principal.id}`, is dead in 8.0. */
     @Test
     fun `an ALLOW against a template on a part only 7x filled is recorded as never holding`() {
+        // 8.0 sets no resource attributes and a document may not read one (DOC-10): the ALLOW can never hold, and a
+        // statement that can never hold is the author's to remove.
         val conversion = convert(statement(condition = on("resource.owner", "#{principal.id}")))
-        conversion.report.rejections.assert().isEmpty()
+        conversion.report.rejections.single().message.assert().contains("can never hold")
         val changes = conversion.report.semanticChanges.filter { it.location.contains("condition") }
         changes.map { it.change }.assert().containsExactly("NOT-IN-8.0")
         changes.single().shape.assert().contains("resource.owner").contains("never holds")

@@ -85,7 +85,7 @@ contain `:` or `/`, so a key names one document only.
 | `<s>:shadow:reporters:<window>` | every data-plane instance | the ids of the instances that reported on `<window>`; same expiry |
 | `<s>:shadow:status:<instance>` | data-plane instance `<instance>` only | that instance's installed revisions and their lag; a heartbeat writes this one value, whatever the size of the cluster; expires 2 minutes after its last write, and a status older than a minute is ignored |
 | `<s>:shadow:instances:all` | every data-plane instance | the instances that have a status, each with when it listed itself; an instance lists itself when it starts and again every hour, and whoever writes the list drops entries older than 3 hours; expires as the reports |
-| `<s>:token:revoked:<tokenId>` | `TokenStore.revoke` (logout) | `true` for a revoked token id; expires one second after the refresh token lifetime |
+| `<s>:token:revoked:<tokenId>` | `TokenRevoker` (logout), through `TokenStore.revoke`, which takes the token's `jti`: an application logs out through `TokenRevoker`, never through the store | `true` for a revoked token id; expires one second after the refresh token lifetime |
 | `<s>:token:family:<sid>` | login, refresh and logout | one session's token family: its principal, login time, end, current generation and whether it was revoked. One key per live session, written at login and at each refresh, a few hundred bytes; it expires at the session's end (`cosec.jwt.session.lifetime` after the login), and a revoked one stays, marked, until then. Read only on refresh and logout, never on a request |
 | `<s>:token:subject:revoked:<n>:<tenantId>:<principalId>` | `TokenStore.revokeSubject` | `issuedBefore` in epoch milliseconds; `<n>` is the length of `<tenantId>`; expires one second after the refresh token lifetime past `issuedBefore` |
 | `<s>:membership:<n>:<tenantId>:<principalId>` | `CoCacheMembershipProvider`, when the application registers one | a principal's memberships; expires (one minute by default) |
@@ -105,6 +105,36 @@ contain `:` or `/`, so a key names one document only.
   keys and its channels.
 
 ### Redis requirements
+
+- **Persistence.** Redis holds the only copy of the documents, their revision history, the revocations, the sessions
+  (refresh token families), the API keys with `cosec.api-key.store=redis`, and the memberships and shadow reports of a
+  deployment. A Redis that restarts without persistence comes back empty: every document is gone and every request is
+  `503` until someone publishes the platform document again (the history is gone with it); every revocation is gone, so
+  a revoked token is accepted again until it expires (an access token lives `cosec.jwt.token-validity.access`, 10
+  minutes by default, and a longer lifetime you set is the exposure); every session ends. Turn on the append-only file
+  with `appendfsync everysec` at least, or the managed service's equivalent, and keep the data on a volume that
+  outlives the pod or machine. CoSec does not read `INFO persistence`: nothing warns you when it is off.
+- **A replica with failover.** One node is one point of failure for every decision. Run a replica with automatic
+  failover (Sentinel, a managed service, or a cluster), and read from the primary (below). Replication is asynchronous:
+  a failover can drop the last writes the old primary acknowledged. A document revision published just before may
+  vanish from the new primary (the instances that had installed it log `regressed from revision <a> to <b>`,
+  [How instances read documents](#how-instances-read-documents), and [`cosec-migrate verify-chain`](./upgrading.md#verify-the-revision-chains)
+  names the revision whose record is lost), and a revocation written just before may vanish too, so its token is accepted
+  again until it expires. After a failover, check the head of each document you changed and revoke again what you must.
+- **A backup, and a restore test.** Back up the whole keyspace under [the key prefix](#redis-keys) (`<s>:*`), on a
+  schedule that matches how much of a day's publishing and revocations you can lose, and restore it into a Redis of
+  its own at least once, to see that it works: start an instance against it and run `verify-chain`. A restore brings back
+  the documents and revocations of the backup's time, not of today: republish what changed since, and treat every token
+  revoked since as not revoked.
+- **One prefix per environment.** [`cosec.key-prefix`](./configuration.md#key-prefix) is the only separation between
+  two deployments on one Redis. Two environments given the same prefix share documents, revocations and a control
+  plane, and nothing detects it.
+- **A Redis of its own, or `noeviction` for every user of it.** CoSec refuses to start against a node that may evict
+  (below), so a Redis shared with an application's own LRU caches cannot also hold CoSec's data: give CoSec a Redis,
+  or set `noeviction` on the shared one and size it for everyone.
+- **Taking the documents out of a running deployment.** The documents are not files anywhere else. Read the head of each
+  with the control API, `GET /documents/<doc>` for the `platform` document, each app and each tenant
+  ([Testing policies](../policies/testing.md#the-control-plane)), and keep the bodies with your backups.
 
 - **`maxmemory-policy noeviction` on every node.** The documents have no TTL and no other copy. Under an `allkeys-*`
   policy Redis can evict a document: an instance that had it installed fails closed, but an instance that loads it
@@ -445,7 +475,7 @@ the app list, `<s>:control:apps:all`, and the head of every app it names. The li
   platform head that was lost and is published again may find app documents a rebuilt list does not name. A first
   revision that conflicts marks nothing;
 - [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index) lists every app document
-  `<s>:control:list:documents` names and marks the list complete. A store upgraded from 8.0.0-alpha.2 needs it once;
+  `<s>:control:list:documents` names and marks the list complete;
 - each control-plane instance at startup, and every reclamation pass before anything else, marks a complete list
   incomplete again when an app document `<s>:control:list:documents` lists, and that has a head, is missing from it,
   and logs a WARN: an instance or a `cosec-migrate` that does not keep the list published it, during a rolling
@@ -552,3 +582,31 @@ the list of open changes.
 A failed pass is logged, and the next one runs. A revision that has been reclaimed answers `410`.
 
 **Next:** see what CoSec decided, in [Observability](./observability.md).
+### Recovering from a lock-out
+
+Every control-plane request is first a request the documents decide, so a change to the platform document, the
+platform tenant's or the control app's can leave nobody able to reach the control plane, and so nobody able to
+change it back. The control plane refuses such a change unless its publisher acknowledges it
+([Publishing and rolling back](../policies/testing.md#publishing-and-rolling-back)); if one was published anyway, the
+way back is `cosec-migrate restore`, run by whoever holds the store's credentials. It is the way back from a lock-out,
+not a way to publish: every other change goes through the control plane.
+
+```bash
+cosec-migrate restore --to-redis redis://host:6379 [--cluster] [--key-prefix cosec] --document platform --revision 11
+```
+
+Without `--confirm` it prints what it would replace (the head's revision, the source, the revision it would write) and
+writes nothing. Run it again with `--confirm <head revision>`, the revision it printed: it writes the kept revision's
+content, or a file's with `--file <document.json>` in place of `--revision`, as the document's next revision, through
+the control plane's own writer. It compiles it as every instance compiles it, writes the revision record first, then
+the head by a compare-and-set on the head it replaces, so a head that moved since the plan, or moves while it writes,
+is refused and nothing is written. It refuses a source that holds a break-glass binding. Nothing is deleted: the
+locked-out revision stays in the history.
+
+The new revision's provenance names `cosec-migrate`, kind `ROLLBACK` for a kept revision or `MIGRATE` for a file, and
+the change `restored from revision <n> by cosec-migrate restore` or `restored from a file by cosec-migrate restore`, so
+the record alone tells it from a rollback published through the control plane. The control plane's change listeners
+run in its host and do not hear of a restore, as they do not hear of `publish` or `bootstrap`: the revision record is
+the only audit of a restore, and the Kafka change audit does not carry it. Every instance installs it as it installs
+any new head.
+

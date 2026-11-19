@@ -381,7 +381,8 @@ blacklist cannot be read for it (`PIP-17`). The IP is never resolved through rev
 CoSec reads `X-Forwarded-For` only. A proxy in front of it must append to that header, or overwrite it; one that writes
 only `Forwarded` (RFC 7239) and passes a client's `X-Forwarded-For` on lets the client choose the address, so configure
 it to overwrite or remove `X-Forwarded-For`. On a host that clients reach directly, set the index to `0` (with no
-strategy), or a client can write any address into the header.
+strategy), or a client can write any address into the header. While the property is not written, the startup line that
+names the reading says that the default `1` is in effect and what that risks.
 
 ## Request attributes
 
@@ -575,6 +576,16 @@ With one port, or `management.server.port` equal to the application's, every row
 - **What is served on a management port outside CoSec is protected by the network**, as on a gateway: expose there only
   what you would expose to whoever can reach that port.
 
+### The gateway's own handlers {#the-gateways-own-handlers}
+
+The gateway filter decides gateway routes. A controller or a functional route (`RouterFunction` bean) of the
+application itself is mapped before any gateway route (Spring WebFlux's annotated-controller mapping has order `0` and
+the router-function mapping `-1`; the gateway's route mapping `1`), so the request is answered with no CoSec decision:
+no authentication, no policy, no rate limit. The starter logs one WARN at startup when it finds such a handler of the
+application's own, naming it ([the log line](../operations/troubleshooting.md#the-log-says-the-gateways-own-handlers-are-not-decided)).
+Move those handlers to a service behind the gateway, where a route decides them, or secure them in the application;
+CoSec's gateway filter does not cover them.
+
 ### Actuator on a gateway
 
 The gateway filter authorizes the gateway's routes, so the gateway's own actuator endpoints are not under CoSec. Served
@@ -643,7 +654,7 @@ whose authenticator names no credential (CoSec's token and API key authenticator
 | `v` | `1`. |
 | `tenant`, `sub` | The tenant and principal the gateway verified. |
 | `scope` | `{app, space}`, as the gateway resolved them. |
-| `roles` | The principal's roles in that space: those the decision used. |
+| `roles` | The principal's roles in that space, by their bare names: those the decision used. The scope's roles, not every role of the token (the token's `roles` claim lists the roles of every space as `role@space`). |
 | `auth` | `{method, jti, exp, iat, capped, session}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, the credential's expiry, and when it was issued (`iat`, absent when the credential does not say, never after `exp`); `session` only for CoSec's own token (`jwt`): its `sid`, `auth_time` (when the user signed in) and `generation`, so that a service behind the gateway knows the login time and a [tenant switch](./authentication.md#switching-tenant-and-app) there can issue from it; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |

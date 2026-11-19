@@ -1,0 +1,103 @@
+{
+  "rules": [
+    "DOC-9"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "The near misses compile: an ALLOW with ignoreCase on Ärzte only narrows (the control plane warns), a DENY under a negation only denies more, and a DENY with ignoreCase on an ASCII literal folds every spelling it reads. ÄRZTE folds to Ärzte under the ASCII fold, so the ALLOW permits it.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "doctors",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "subject.attributes.dept",
+                  "Ärzte"
+                ],
+                "ignoreCase": true
+              }
+            }
+          ]
+        },
+        {
+          "id": "not-not",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:delete",
+              "condition": {
+                "not": {
+                  "eq": [
+                    "subject.attributes.dept",
+                    "Ärzte"
+                  ],
+                  "ignoreCase": true
+                }
+              }
+            }
+          ]
+        },
+        {
+          "id": "ascii",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:delete",
+              "condition": {
+                "eq": [
+                  "subject.attributes.dept",
+                  "Finance"
+                ],
+                "ignoreCase": true
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "doctors",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "doctors"
+        },
+        {
+          "id": "not-not",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "not-not"
+        },
+        {
+          "id": "ascii",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "ascii"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "attributes": {
+      "dept": "ÄRZTE"
+    }
+  },
+  "expect": {
+    "decision": "Permit",
+    "by": {
+      "policy": "doctors",
+      "statement": 0,
+      "via": {
+        "binding": "doctors",
+        "document": "platform"
+      }
+    }
+  }
+}
