@@ -83,6 +83,11 @@ jobs:
       - name: Set up Java and Gradle
         uses: ./.github/actions/setup-java-gradle
 
+      # Downloads only, retried (.github/scripts/resolve-dependencies.sh): 36 shards ask Maven Central at once. Nothing is
+      # compiled or run here; the steps below run once.
+      - name: Resolve the dependencies
+        run: .github/scripts/resolve-dependencies.sh
+
       # Each mutant builds in a worktree of its own: with the dependencies and the unchanged modules already built, a
       # mutant rebuilds only what it changes, and 36 shards do not all ask Maven Central for everything at once (it
       # answers 429 to that).

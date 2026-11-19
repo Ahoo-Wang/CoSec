@@ -117,10 +117,17 @@ jobs:
         uses: actions/checkout@v7
         with:
           path: .ci-actions
-          sparse-checkout: .github/actions
+          sparse-checkout: |
+            .github/actions
+            .github/scripts
+            .github/gradle
 
       - name: Set up Java and Gradle
         uses: ./.ci-actions/.github/actions/setup-java-gradle
+
+      # Downloads only, retried; the tested ref's own checkout, the script of this workflow's commit.
+      - name: Resolve the dependencies
+        run: ./.ci-actions/.github/scripts/resolve-dependencies.sh
 
       - name: Run property stress
         run: |

@@ -210,12 +210,15 @@ the adapters, snapshots or the control plane. The parts that take several files 
     `cosec-migrate` (`migration/migrate/`) converts 7.x data, and holds the only copy of the 7.x model
     (`me.ahoo.cosec.migrate.v7`).
   - `cosec-testkit` (`test/testkit/`) is the policy test kit applications run their own scenarios with. It depends on
-    `cosec-runtime` and `junit-jupiter-api` (api: `DynamicTest` is part of its API). It holds the engine level of
+    `cosec-runtime` and `junit-jupiter-api` (api: `DynamicTest` is part of its API), and on `cosec-webflux` and
+    `cosec-webmvc` `compileOnly`, for its test bindings only: neither reaches a build that uses the kit
+    (`ApiVariantTest`'s reviewed exception for the two binding packages). It holds the engine level of
     the scenario format, which `conformance` reuses: change the format there, not in `test/conformance/`.
     It also makes what a test of an application needs: a context the pipeline made (`PermittedRequest`,
-    `PipelineFixture.securityContext`) and the header a gateway forwards (`IdentityHeader`). The web adapters put them
-    in place for a test with `testing.CoSecTestBindings` (`cosec-webflux`, `cosec-webmvc`): CoSec's own filter over a
-    kit pipeline, or a binder that refuses a context the pipeline did not make (`PIP-29`). In production only the
+    `PipelineFixture.securityContext`) and the header a gateway forwards (`IdentityHeader`). It puts them in place with
+    `CoSecTestBindings` (`me.ahoo.cosec.testkit.webflux`, `.webmvc`): CoSec's own filter over a kit pipeline, or a
+    binder that refuses a context the pipeline did not make (`PIP-29`). Reactor, Spring and the Servlet API appear in
+    those two packages only (`SourceRulesTest`). In production only the
     adapter binds a context, and its writers stay `@InternalCoSecApi`.
   - `cosec-spring-boot` (`host/spring-boot/`) brings `cosec-runtime`, `cosec-login` and `cosec-jwt`, and wires every
     other module it finds on the classpath (`compileOnly` in its build, `@ConditionalOnClass`): an application adds
@@ -277,7 +280,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | `cosec.*` property or default | `wiki/operations/configuration.md` |
 | Status codes, adapters, security-context access, request attributes | `wiki/integration/web.md` |
 | Checking permissions in code, explaining decisions | `wiki/integration/checks.md` |
-| What a test of an application uses: the kit's contexts and identity headers, the adapters' test bindings | `wiki/policies/testing.md#testing-your-application`, whose samples are the `TestingYourApplicationTest`s of `cosec-webflux` and `cosec-webmvc`; `skills/cosec-integration` |
+| What a test of an application uses: the kit's contexts and identity headers, the kit's test bindings | `wiki/policies/testing.md#testing-your-application`, whose samples are the kit's `TestingYourWebFluxApplicationTest` and `TestingYourWebMvcApplicationTest`; `skills/cosec-integration` |
 | Rate limit rules, backends, headers | `wiki/policies/rate-limiting.md`, the format descriptor (`generateSchemas`) |
 | Control-plane changes: validation, simulate, shadow windows, approval, analysis | `wiki/policies/testing.md` |
 | Candidate order or decision combination in the engine | the ALG/BND conformance rules and scenarios, `wiki/guide/security-model.md` |
