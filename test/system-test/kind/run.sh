@@ -26,6 +26,7 @@
 #      by CoSec and fails only at the missing backend, and is counted;
 #   4. the scrape endpoint on the management port, read from another pod through the pod's address, and that the Service
 #      does not publish that port;
+#   6. last, because its label values are the runtime's: the decisions of step 3 are counted, by result.
 #   5. k8s/examples/gateway-mode-service-networkpolicy.yaml is valid for the API server, and selects what it says: the
 #      service's pods in its namespace, admitted from the gateway's pods of the namespace the gateway runs in.
 # Every wait is a bounded poll against the property it comes from; nothing is retried.
@@ -155,13 +156,12 @@ ok "decisions: anonymous 401 unauthorized, a denied path 403 forbidden, a permit
 POD_IP=$(kc get pod "$GATEWAY_POD" -o jsonpath='{.status.podIP}')
 SCRAPE=$(kc run scrape --image=curlimages/curl:8.11.1 --restart=Never --rm -i --quiet --command -- \
   curl -fs "http://$POD_IP:8081/actuator/prometheus") || fail "the scrape endpoint is not reachable from another pod on $POD_IP:8081"
-echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{.*result="allow"' || fail "the scrape has no cosec.authorization timer for a permit"
-echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{.*result="explicit_deny"' || fail "the scrape has no cosec.authorization timer for a deny"
+echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{' || fail "the scrape has no cosec.authorization timer"
 # 000: curl got no answer at all (the Service has no port 8081), whatever kubectl does with the pod's exit code.
 PUBLISHED=$(kc run published --image=curlimages/curl:8.11.1 --restart=Never --rm -i --quiet --command -- \
   curl -s -m 5 -o /dev/null -w '%{http_code}' http://cosec-gateway:8081/actuator/prometheus || true)
 case "$PUBLISHED" in *000*) ;; *) fail "the Service cosec-gateway publishes the management port 8081 (answered: $PUBLISHED)" ;; esac
-ok "the scrape endpoint answers on the pod's management port, with the decisions counted; the Service does not publish it"
+ok "the scrape endpoint answers on the pod's management port, with the decision timer; the Service does not publish it"
 
 # --- 5. the example NetworkPolicy ---------------------------------------------------------------------------------------
 EXAMPLE="$ROOT/k8s/examples/gateway-mode-service-networkpolicy.yaml"
@@ -179,5 +179,11 @@ FROM_POD=$(kubectl -n "$SERVICE_NS" get networkpolicy only-the-gateway-reaches-t
 kubectl get namespace -l "kubernetes.io/metadata.name=$NS" -o name | grep -q . || fail "no namespace carries the label the example selects"
 [ -n "$(kc get pods -l app.kubernetes.io/name=cosec-gateway -o name)" ] || fail "the example's gateway label ($FROM_POD) selects no gateway pod of $NS"
 ok "the example NetworkPolicy is valid, selects the service's pod ($SELECTOR_KEY=$SELECTOR_VALUE) and admits the gateway's pods of $NS"
+
+# --- 6. the decisions are counted, by result (last: the label values are the runtime's, which #1682 renames) ----------------
+# The scrape of step 4 was taken after the three decisions of step 3; the label values are `permit` and `explicit_deny`.
+echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{.*result="permit"' || fail "the scrape has no cosec.authorization count for result=permit (this line waits for #1682, which renames allow to permit)"
+echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{.*result="explicit_deny"' || fail "the scrape has no cosec.authorization count for result=explicit_deny"
+ok "the decisions of step 3 are counted: a permit and an explicit deny"
 
 echo "kind leg: passed"
