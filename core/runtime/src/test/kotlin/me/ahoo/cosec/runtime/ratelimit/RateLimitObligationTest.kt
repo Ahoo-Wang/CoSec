@@ -181,9 +181,15 @@ class RateLimitObligationTest {
      */
     @Test
     fun aPipelineBuiltWithoutALimiterCountsLocally() {
+        // The builder's limiter is on the real clock, whose sliding window permits again just past a boundary: what
+        // holds whatever the clock does is that a bounded run of back-to-back requests has a 429 after permits, never a
+        // 503 and never a skipped rule. Twenty never refused would take about ten seconds of stalls at two a second.
         val strict = """{"id":"strict","action":"*","permitsPerSecond":2,"strictFailure":true}"""
-        evaluate(strict, null, times = 3).map { it.status }.assert().containsExactly(200, 200, 429)
-        evaluate(twoPerSecond, null, times = 3).map { it.status }.assert().containsExactly(200, 200, 429)
+        listOf(strict, twoPerSecond).forEach { rule ->
+            val statuses = evaluate(rule, null, times = 20).map { it.status }
+            statuses.first().assert().isEqualTo(200)
+            statuses.assert().describedAs(rule).contains(429).containsOnly(200, 429)
+        }
     }
 
     /** `OBL-6`: a local limiter that cannot admit a bucket cannot count the rule, so `strictFailure` decides. */

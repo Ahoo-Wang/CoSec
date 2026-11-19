@@ -81,10 +81,17 @@ class RequestEndTest {
     @Test
     fun `a request over a rate limit is 429`() = runBlocking<Unit> {
         val limited = everything.dropLast(1) + ""","rateLimits":[{"id":"one","action":"*","permitsPerSecond":1}]}"""
+        // The kit's default limiter on the real clock (UA-10: it counts with no limiter passed). Its window slides: a
+        // request just past a window boundary is permitted again, so "the second request is 429" depends on when the
+        // test runs. What holds whatever the clock does: in a bounded run of back-to-back requests one is refused, after
+        // a permit. Two permits in a row need a window boundary between them, so twenty never refused would take about
+        // twenty seconds of stalls.
         PipelineFixture.of(platform = limited).use { fixture ->
             val request = fixture.request("GET", "/orders/1", alice)
-            fixture.evaluate(request).status.assert().isEqualTo(200)
-            fixture.evaluate(request).status.assert().isEqualTo(429)
+            val statuses = mutableListOf<Int>()
+            while (statuses.size < BOUND && 429 !in statuses) statuses += fixture.evaluate(request).status
+            statuses.assert().describedAs("one request refused within $BOUND").contains(429)
+            statuses.dropLast(1).assert().isNotEmpty().containsOnly(200)
         }
         var now = 0L
         PipelineFixture.of(platform = limited, rateLimiter = LocalRateLimiter(clock = { now })).use { fixture ->
@@ -94,5 +101,10 @@ class RequestEndTest {
             now += 2_000
             fixture.evaluate(request).status.assert().isEqualTo(200)
         }
+    }
+
+    private companion object {
+        /** Back-to-back requests within which a rule of one permit a second refuses one, whatever the clock. */
+        const val BOUND = 20
     }
 }
