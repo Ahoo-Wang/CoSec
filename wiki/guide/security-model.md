@@ -122,7 +122,8 @@ has to reason about their order.
 ## Default deny
 
 When no statement matches, the decision is the implicit deny. Access exists only where an ALLOW grants it: a new
-endpoint is closed until a policy opens it, and a typo in a pattern closes an endpoint rather than opening one.
+endpoint is closed until a policy opens it, and a typo in a pattern closes an endpoint rather than opening one. An omission is not a typo: an ALLOW without
+`resource` grants its actions on every resource of every service ([Statements](../policies/language.md#statements)).
 
 An implicit deny and an explicit one produce the same response, so a response never tells a caller that a DENY
 exists. They differ only in what you see when you investigate: no statement, or the DENY that matched
