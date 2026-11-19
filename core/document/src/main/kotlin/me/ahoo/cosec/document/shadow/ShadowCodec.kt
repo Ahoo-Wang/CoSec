@@ -102,7 +102,7 @@ object ShadowCodec {
                 // later version can gate a publish on it (a later field added to a status is refused as an unknown one).
                 node.need("formatLevel").long().takeIf {
                     it in 1..Int.MAX_VALUE
-                }?.toInt() ?: malformed("formatLevel is not a positive integer"),
+                }?.toInt() ?: throw malformed("formatLevel is not a positive integer"),
             )
         }
     }
@@ -123,7 +123,7 @@ object ShadowCodec {
         node.only("window", "instance", "counts", "samples", "baseRevisions", "first", "last")
         val instance = node.need("instance").text()
         if (!ShadowReport.isInstanceId(instance)) {
-            malformed("[$instance] is not an instance id")
+            throw malformed("[${SnapshotKeyText.quoted(instance)}] is not an instance id")
         }
         return ShadowReport(
             window = node.need("window").text(),
@@ -159,45 +159,63 @@ object ShadowCodec {
         text == "platform" -> SnapshotKey.Platform
         text.startsWith("app:") -> SnapshotKey.App(text.removePrefix("app:"))
         text.startsWith("tenant:") -> SnapshotKey.Tenant(text.removePrefix("tenant:"))
-        else -> malformed("[$text] is not a document key")
+        else -> throw malformed("[${SnapshotKeyText.quoted(text)}] is not a document key")
     }
 
     private fun write(node: JsonNode): ByteArray = CoSecJson.mapper.writeValueAsBytes(node)
 
+    // stays: Jackson's exception quotes the stored bytes; only where it failed is kept.
+    @Suppress("SwallowedException")
     private fun read(bytes: ByteArray): JsonNode = try {
-        reader.readTree(bytes) ?: malformed("empty")
+        reader.readTree(bytes) ?: throw malformed("empty")
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A shadow value is not JSON: ${printable(error.originalMessage)}", error)
+        // Where, never what: Jackson's message and the exception quote the stored bytes, which a log line would carry.
+        throw SnapshotFormatException("A shadow value is not JSON${error.at}.")
     }
 
+    // stays: a cause's message quotes the stored bytes, and whoever reads the value logs the exception with its causes.
+    @Suppress("SwallowedException")
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (error: SnapshotFormatException) {
-        throw error
+        // The document format's codecs, which read a candidate's document, quote what they read as they found it.
+        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.originalMessage)}", error)
+        throw SnapshotFormatException("A shadow value is malformed${error.at}.")
     } catch (error: IllegalArgumentException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.message)}", error)
+        throw SnapshotFormatException(
+            "A shadow value is malformed: ${SnapshotKeyText.quoted(error.message.orEmpty())}."
+        )
     } catch (error: java.time.format.DateTimeParseException) {
-        throw SnapshotFormatException("A shadow value is malformed: ${printable(error.message)}", error)
+        throw SnapshotFormatException(
+            "A shadow value is malformed: ${SnapshotKeyText.quoted(error.message.orEmpty())}."
+        )
     }
 
-    private fun JsonNode.need(name: String): JsonNode = get(name) ?: malformed("[$name] is missing")
+    /** Where Jackson failed, never what it read. */
+    private val JacksonException.at: String
+        get() = location?.let { " at line ${it.lineNr}, column ${it.columnNr}" }.orEmpty()
 
-    private fun JsonNode.text(): String = if (isString) asString() else malformed("$this is not a string")
+    /** This node as a message quotes it, escaped and bounded. */
+    private val JsonNode.shown: String get() = SnapshotKeyText.quoted(toString())
 
-    private fun JsonNode.long(): Long = if (isIntegralNumber) asLong() else malformed("$this is not an integer")
+    private fun JsonNode.need(name: String): JsonNode = get(name) ?: throw malformed("[$name] is missing")
+
+    private fun JsonNode.text(): String = if (isString) asString() else throw malformed("$shown is not a string")
+
+    private fun JsonNode.long(): Long = if (isIntegralNumber) asLong() else throw malformed("$shown is not an integer")
 
     /** A count is never negative: summed over instances, a negative one would cancel another instance's (review). */
-    private fun JsonNode.count(): Long = long().takeIf { it >= 0 } ?: malformed("$this is not a count")
+    private fun JsonNode.count(): Long = long().takeIf { it >= 0 } ?: throw malformed("$shown is not a count")
 
     private fun JsonNode.only(vararg names: String) {
-        if (!isObject) malformed("$this is not an object")
+        if (!isObject) throw malformed("$shown is not an object")
         val unknown = properties().map { it.key }.toSet() - names.toSet()
-        if (unknown.isNotEmpty()) malformed("unknown fields $unknown")
+        if (unknown.isNotEmpty()) throw malformed("unknown fields ${SnapshotKeyText.names(unknown)}")
     }
 
-    private fun malformed(reason: String): Nothing = throw SnapshotFormatException(
+    /** The error of [reason], thrown where it is found (`throw malformed(…)`), so coverage sees the refusal run. */
+    private fun malformed(reason: String): SnapshotFormatException = SnapshotFormatException(
         "A shadow value is malformed: ${printable(reason)}."
     )
 }
