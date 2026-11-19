@@ -1,0 +1,16 @@
+# Rule: CTL-9
+# Mutant: publishing no longer checks the publisher's rights on every target: who may publish a document publishes another's change, or their own after losing the rights it needs
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+index 7ca9ffb2..7cd56bd9 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+@@ -89,7 +89,6 @@ internal class Publishing(
+         }
+         PublishRules.requireState(change, ChangeStep.PUBLISH.from)
+         PublishRules.acknowledged(change, ack)
+-        candidates.authorize(publisher, change)
+         val head = revisions.head(change.key)
+         if (head?.digest != change.base.digest) {
+             // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).

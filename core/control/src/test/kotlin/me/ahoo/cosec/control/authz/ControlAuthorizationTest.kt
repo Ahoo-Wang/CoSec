@@ -345,6 +345,90 @@ class ControlAuthorizationTest {
         head().assert().isEqualTo(1)
     }
 
+    /** Gives [who] of acme a platform policy of [actions] on acme's document alone: none of its entries or scopes. */
+    private suspend fun documentRights(who: String, vararg actions: String) {
+        bootstrap(
+            SnapshotKey.Platform,
+            revisions.head(SnapshotKey.Platform)!!.document.policies + PolicyDefinition(
+                PolicyId("$who-rights"),
+                false,
+                null,
+                listOf(StatementSource("", Effect.ALLOW, actions.toList(), listOf(ResourceSource("doc/tenant/acme")))),
+            ),
+            revisions.head(SnapshotKey.Platform)!!.document.bindings +
+                control(who, SubjectRef.Principal(ACME, PrincipalId(who)), PolicyId("$who-rights")),
+        )
+    }
+
+    /** `CTL-9` (R1B-1): `cosec:publish` on the document is not the right to write what the change writes. */
+    @Test
+    fun `a publisher without the rights the change needs cannot publish another's change`() = runBlocking<Unit> {
+        documentRights("pat", "cosec:publish", "cosec:read")
+        val pat = engine.operator(ACME, "pat")
+        val change = windowClosed(changes.propose(alice, TENANT, 1, grant("team-a"), "viewers"))
+        change.state.assert().isEqualTo(ChangeState.READY)
+        refused { changes.publish(pat, change.id) }.assert().isEqualTo(403)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.READY)
+        head().assert().isEqualTo(1)
+    }
+
+    /** `CTL-9` (R1B-1): the author's rights are read again at publish, not kept from the proposal. */
+    @Test
+    fun `an author who lost cosec grant after proposing cannot publish`() = runBlocking<Unit> {
+        val change = windowClosed(changes.propose(alice, TENANT, 1, grant("team-a"), "viewers"))
+        bootstrap(
+            SnapshotKey.Platform,
+            listOf(
+                PolicyDefinition(
+                    PolicyId("no-grant-alice"),
+                    false,
+                    null,
+                    listOf(StatementSource("", Effect.DENY, listOf("cosec:grant")))
+                )
+            ),
+            revisions.head(SnapshotKey.Platform)!!.document.bindings +
+                control("no-grant", SubjectRef.Principal(ACME, PrincipalId("alice")), PolicyId("no-grant-alice")),
+        )
+        refused { changes.publish(alice, change.id) }.assert().isEqualTo(403)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.READY)
+        head().assert().isEqualTo(1)
+    }
+
+    /** `CTL-9`: holding what the change writes is not the right to publish it; `cosec:publish` is read at publish. */
+    @Test
+    fun `an author who lost cosec publish after staging cannot publish`() = runBlocking<Unit> {
+        val change = windowClosed(changes.propose(alice, TENANT, 1, grant("team-a"), "viewers"))
+        bootstrap(
+            SnapshotKey.Platform,
+            listOf(
+                PolicyDefinition(
+                    PolicyId("no-publish-alice"),
+                    false,
+                    null,
+                    listOf(StatementSource("", Effect.DENY, listOf("cosec:publish")))
+                )
+            ),
+            revisions.head(SnapshotKey.Platform)!!.document.bindings +
+                control("no-publish", SubjectRef.Principal(ACME, PrincipalId("alice")), PolicyId("no-publish-alice")),
+        )
+        refused { changes.publish(alice, change.id) }.assert().isEqualTo(403)
+        changes.get(change.id).state.assert().isEqualTo(ChangeState.READY)
+        head().assert().isEqualTo(1)
+    }
+
+    /** `CTL-13` (R1B-2): skipping the window is `cosec:skip-shadow`, a right of its own, not part of publishing. */
+    @Test
+    fun `an operator who may publish but not skip cannot skip the window`() = runBlocking<Unit> {
+        documentRights("pat", "cosec:publish", "cosec:read")
+        val pat = engine.operator(ACME, "pat")
+        val change = changes.propose(alice, TENANT, 1, grant("team-a"), "viewers")
+        refused { changes.skipShadow(pat, change.id, "hurry") }.assert().isEqualTo(403)
+        val after = changes.get(change.id)
+        after.state.assert().isEqualTo(ChangeState.CHECKED)
+        after.skipShadow.assert().isNull()
+        head().assert().isEqualTo(1)
+    }
+
     @Test
     fun `narrowing never needs an approval`() = runBlocking<Unit> {
         val change = changes.propose(alice, TENANT, 1, listOf(Operation.RemoveBinding(BindingId("ops"))), "revoke")
