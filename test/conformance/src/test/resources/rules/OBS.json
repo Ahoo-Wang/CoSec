@@ -74,6 +74,26 @@
         "micrometer:ResultVocabularyTest#every reason has the result of its own name",
         "runtime:SubjectMethodTest#the event names the credential as the identity header does"
       ]
+    },
+    {
+      "id": "OBS-7",
+      "source": "RFC 0009 §5; #1690 (maintainer's decision, 2026-11-19)",
+      "statement": "A service in gateway mode counts every refusal of a forwarded identity by problem type (`cosec.identity.refused{problem}`, whose values are the closed set of problems the gate answers, registered with cosec-micrometer and a MeterRegistry and kept without them), including those its log does not print, and logs the refusal's reason at WARN, at most once per interval for each problem type; the logged reason carries nothing of the header unescaped or unbounded (a control character or an unpaired surrogate as its `\\uXXXX` escape, a name at most 64 characters, at most three names, a parse error by its location, never its text), and the response carries the problem only, never the reason.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:IdentityRefusalsTest#every refusal is counted by problem type, also those the bounded warning does not print",
+        "runtime:IdentityRefusalsTest#a request the gate lets through counts nothing, and no other problem is counted",
+        "runtime:IdentityRefusalsTest#the gate warns once for a flood of bad headers, and the response says only the problem",
+        "runtime:IdentityRefusalsTest#each problem type warns again once its interval has passed",
+        "micrometer:IdentityRefusedMetricTest#each refusal counts in the series of its problem, and the series are the gate's problems only",
+        "spring-boot:GatewayModeMetricsTest#the gate's refusals are counted in the registry by problem",
+        "spring-boot:GatewayModeMetricsTest#without cosec-micrometer or a registry the gate still counts, and nothing fails",
+        "runtime:IdentityRefusalsTest#a forged header writes one bounded warning line, with nothing of the header unescaped",
+        "document:IdentityCodecMessageTest#a claim name is escaped and bounded",
+        "document:IdentityCodecMessageTest#unknown members are escaped, bounded, and at most three are named",
+        "document:IdentityCodecMessageTest#text that is not JSON is named by where it fails, never by what it holds"
+      ]
     }
   ]
 }

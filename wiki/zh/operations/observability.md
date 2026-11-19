@@ -185,6 +185,14 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 `indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到；伴随 `cause=document_invalid` 上升，说明某个已存储的文档在本实例上无法编译（[故障排查](./troubleshooting.md#unavailable)）。
 CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标（[CoCache 文档](https://cocache.ahoo.me)）。
 
+网关模式（`cosec.pipeline.mode=gateway`）下的服务没有管道，不记录决策事件，因此上面的指标都没有。它对自己拒绝的转发身份计数：
+
+| 指标 | 标签 | 计数 |
+|---|---|---|
+| `cosec.identity.refused` | `problem`：`invalid-request`、`token-invalid`、`token-expired` | 服务拒绝的每个 `CoSec-Identity` 头，包括日志没有打印的那些；原因以 `WARN` 记录，每种问题最多每分钟一次（[故障排查](./troubleshooting.md#a-service-behind-the-gateway-refuses-requests)），从不出现在响应中 |
+
+在网关模式下，任何非零速率都意味着某一跳配置错误，或者有请求没有经过网关；请对它告警。
+
 ## 快照指标 {#snapshot-metrics}
 
 在与计时器相同的条件下（`cosec-micrometer`、一个 `MeterRegistry`、`cosec.metrics.enabled`），starter 为数据平面的快照源注册指标：

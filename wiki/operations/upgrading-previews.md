@@ -24,6 +24,19 @@ section above it:
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **A refused forwarded identity is counted and says why, and the gateway no longer writes one a service would refuse**
+  (#1690). Affected: services in `cosec.pipeline.mode=gateway`, their dashboards and log alerts, and code that calls
+  `IdentityHeader.of` in tests.
+  - Such a service logs the reason of each refused `CoSec-Identity` header at `WARN` on the logger
+    `me.ahoo.cosec.runtime.identity.IdentityGate`, at most once a minute for each problem type (every one at `DEBUG`).
+    Through beta.4 it logged them only at `DEBUG`. The response is unchanged: it never says why.
+  - With `cosec-micrometer` and a `MeterRegistry` it counts every refusal in `cosec.identity.refused{problem}`
+    (`invalid-request`, `token-invalid`, `token-expired`). Alert on any non-zero rate
+    ([Observability](./observability.md#metrics)).
+  - The gateway refuses to write an identity a service would refuse to read (an empty id, an unpaired UTF-16 surrogate,
+    a time past year 9999, an empty claim name): the request fails with `500` and no header is forwarded, where through
+    beta.4 the service behind answered `400`. CoSec's own gateway builds no such identity; a custom `Authenticator`
+    could. `IdentityHeader.of` throws `IllegalArgumentException` for such an identity, as it did for one too large.
 - **The skill `cosec-custom-matcher` is `cosec-extending`** (UE-21). 8.0 has no matchers, and the skill is about
   extending CoSec with beans (`AttributeProvider`, `MembershipProvider`, `DecisionListener`, `RateLimiter`,
   `Authenticator`). The directory is `skills/cosec-extending`, its `name` is `cosec-extending`, and an agent invokes it as

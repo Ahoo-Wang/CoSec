@@ -72,7 +72,8 @@ object IdentityCodec {
     const val MAX_CLAIM_LENGTH = 1024
 
     /** 9999-12-31T23:59:59Z: later seconds are refused, so no time arithmetic on a decoded identity can overflow. */
-    private const val MAX_SECONDS = 253_402_300_799L
+    /** The last second of year 9999: the bound of every time the header holds. */
+    internal const val MAX_SECONDS = 253_402_300_799L
 
     private val FIELDS = arrayOf("v", "tenant", "sub", "scope", "roles", "auth", "iat", "rid", "claims")
     private val SCOPE_FIELDS = arrayOf("app", "space")
@@ -84,13 +85,21 @@ object IdentityCodec {
     private val encoder = Base64.getUrlEncoder().withoutPadding()
     private val decoder = Base64.getUrlDecoder()
 
-    /** The header value of [identity]; [IdentityOverflowException] when it is longer than [maxBytes] or a claim is. */
+    /**
+     * The header value of [identity]; [IdentityOverflowException] when it is longer than [maxBytes] or a claim is, and
+     * [IdentityFormatException] when [decode] would refuse what it wrote, as [decode] refuses it (#1690): a header written
+     * is a header read.
+     */
     fun encode(identity: Identity, maxBytes: Int = DEFAULT_MAX_BYTES): String {
+        WrittenIdentity.check(identity)
         val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(tree(identity)))
         if (header.length > maxBytes) {
-            throw IdentityOverflowException(
-                "The identity of [${identity.subject}] is ${header.length} bytes encoded, over the limit of $maxBytes: " +
-                    "${identity.roles.size} roles, ${identity.claims.size} claims."
+            throw Unencodable.tooLarge(
+                identity.subject,
+                header.length,
+                maxBytes,
+                identity.roles.size,
+                identity.claims.size,
             )
         }
         return header
@@ -122,14 +131,16 @@ object IdentityCodec {
         val root = try {
             reader.readTree(bytes) ?: throw malformed("empty")
         } catch (error: JacksonException) {
-            throw malformed("not JSON: ${error.originalMessage}", error)
+            // Where, never what: Jackson's message and the exception quote the input, which a forged header chooses.
+            val at = error.location?.let { " at line ${it.lineNr}, column ${it.columnNr}" }.orEmpty()
+            throw malformed("not JSON$at")
         }
         root.only("$", *FIELDS)
         val version = root.need("v")
         if (!version.isIntegralNumber || version.asLong() != VERSION.toLong()) {
             throw IdentityFormatException(
                 Reason.UNSUPPORTED_VERSION,
-                "The identity header is version $version, not $VERSION."
+                "The identity header is version ${QuotedText.of(version.toString())}, not $VERSION."
             )
         }
         val scope = root.need("scope").also { it.only("$.scope", *SCOPE_FIELDS) }
@@ -190,9 +201,7 @@ object IdentityCodec {
         root.putObject("auth").apply {
             put("method", identity.credential.method.value)
             put("jti", identity.credential.id)
-            val expiresAt = identity.credential.expiresAt ?: throw IdentityOverflowException(
-                "The credential of [${identity.subject}] never expires: a service could not bound the identity."
-            )
+            val expiresAt = identity.credential.expiresAt ?: throw Unencodable.neverExpires(identity.subject)
             put("exp", expiresAt.epochSecond)
             identity.credential.issuedAt?.let { put("iat", it.epochSecond) }
             if (identity.credential.capped) {
@@ -215,17 +224,13 @@ object IdentityCodec {
         when (value) {
             is String -> {
                 if (value.length > MAX_CLAIM_LENGTH) {
-                    throw IdentityOverflowException(
-                        "Claim [$name] is ${value.length} characters, over $MAX_CLAIM_LENGTH."
-                    )
+                    throw Unencodable.claimTooLong(name, value.length)
                 }
                 claims.put(name, value)
             }
             is Boolean -> claims.put(name, value)
             is Number -> number(claims, name, value)
-            else -> throw IdentityOverflowException(
-                "Claim [$name] is a ${value::class.simpleName}, not a string, number or boolean."
-            )
+            else -> throw Unencodable.claimType(name, value)
         }
     }
 
@@ -239,9 +244,7 @@ object IdentityCodec {
         when (val exact = exactly(value)) {
             is Long -> claims.put(name, exact)
             is Double -> claims.put(name, exact)
-            else -> throw IdentityOverflowException(
-                "Claim [$name] is ${value::class.simpleName} $value, which the identity header cannot hold exactly."
-            )
+            else -> throw Unencodable.claimInexact(name, value)
         }
     }
 
@@ -271,12 +274,14 @@ object IdentityCodec {
             if (name.isEmpty()) throw malformed("$.claims has an empty name")
             name to when {
                 value.isString -> value.asString().also {
-                    if (it.length > MAX_CLAIM_LENGTH) throw malformed("$.claims.$name is over $MAX_CLAIM_LENGTH characters")
+                    if (it.length > MAX_CLAIM_LENGTH) {
+                        throw malformed("$.claims.${QuotedText.of(name)} is over $MAX_CLAIM_LENGTH characters")
+                    }
                 }
                 value.isBoolean -> value.booleanValue()
                 value.isIntegralNumber -> value.longValue()
                 value.isNumber -> value.doubleValue()
-                else -> throw malformed("$.claims.$name is not a string, number or boolean")
+                else -> throw malformed("$.claims.${QuotedText.of(name)} is not a string, number or boolean")
             }
         }
     }
@@ -284,7 +289,7 @@ object IdentityCodec {
     private fun JsonNode.only(path: String, vararg names: String) {
         if (!isObject) throw malformed("$path is not an object")
         val unknown = properties().map { it.key }.filter { it !in names }
-        if (unknown.isNotEmpty()) throw malformed("$path has unknown members $unknown")
+        if (unknown.isNotEmpty()) throw malformed("$path has unknown members ${QuotedText.names(unknown)}")
     }
 
     private fun JsonNode.need(name: String): JsonNode = get(name) ?: throw malformed("[$name] is missing")
