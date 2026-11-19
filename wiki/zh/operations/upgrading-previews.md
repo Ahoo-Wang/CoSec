@@ -20,6 +20,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 | `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面四节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
 
+库的哪个预览版可以运行在网关镜像的哪个预览版之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
+
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
 - **被拒绝的转发身份会被计数并说明原因，网关不再写出服务会拒绝的身份**（#1690）。受影响的是 `cosec.pipeline.mode=gateway` 的服务、它们的仪表盘和日志告警，以及在测试中调用 `IdentityHeader.of` 的代码。
@@ -48,7 +50,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
 - **策略测试工具拒绝可能因错误原因通过的运行**（`PolicyTestKit`，实验性 API；UC-7）。没有 `platform.json` 时 `load` 失败（要在没有它的情况下测试，就在那里写一份空文档），目录里有工具不会读取的文件或目录时也失败。场景要写明 `credential`（`tenant` 与 `id`，或 `"anonymous": true`）以及请求的 `action` 与 `resource`：示例默认值（`acme`、`alice`、`order:read`、`order/1`）不再存在。目录里有租户文档时，在没有文档的租户中判定的场景会失败；有应用文档时，在没有文档的应用中判定的场景也会失败，除非写明 `"withoutDocument": ["tenant"]` 或 `["app"]`（[测试决策](../policies/testing.md#testing-decisions)）。受影响的是依赖默认值或放错位置的文档的场景；`PipelineFixture.load` 按同样的规则读取目录。写明这些字段，把文件移到正确的位置。
-- **`cosec-gateway-server` 镜像：没有 JMX agent，actuator 在管理端口，镜像默认值在挂载文件之下依然保留**（`UB-2`、`UB-21`）。受影响的是运行该镜像的人。
+- **`cosec-gateway-server` 镜像：没有 JMX agent，actuator 在管理端口，镜像默认值在挂载文件之下依然保留**（`UB-2`、`UB-21`）。受影响的是运行该镜像的人。库的一个预览版上的服务放在另一个预览版的网关镜像之后：见[升级运行中的部署](./upgrading.md#upgrading-a-running-deployment)。
   - 直到 beta.3，启动脚本会在 5555 端口、所有网卡上启动一个不需要认证的 JMX agent。现在不再启动。要附加，在 `JAVA_OPTS` 里设置并绑定到回环地址（[镜像](./deployment.md#the-image)）；Kubernetes base 设置的 `-Dcom.sun.management.jmxremote.host=127.0.0.1` 随之取消。
   - actuator 现在由管理端口 `8081`（`management.server.port`）提供，不再在 `8080` 上：8080 上的 `/actuator/health/*` 是 `404`。探针现在是 8080 上的 `/livez` 和 `/readyz`（同样的分组，由网关自己的端口提供，不经 CoSec 决策）；`/actuator/health` 和 `/actuator/prometheus` 在 8081 上。把你自己的探针或健康检查改为 `/livez` 和 `/readyz`（镜像的 `HEALTHCHECK` 和 `k8s/` 清单已经改了），如果要抓取 8081，只把它发布给监控网络。
   - 镜像带有 `cosec-micrometer` 和 Prometheus 注册表（Micrometer 1.17.2，来自 Spring Boot 的依赖管理）：`cosec.authorization`、`cosec.snapshot.*` 等在 `/actuator/prometheus` 上。
@@ -74,6 +76,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **`cosec-testkit` 的 `IdentityHeader`**（#1656，实验性，无需改动）用 CoSec 自己的编码器写出网关转发的 `CoSec-Identity` 头，供网关之后的服务的测试与本地客户端使用：`of`、`forSubject`、`withToken`（[用真实管道测试代码](../policies/testing.md#testing-your-code-against-a-real-pipeline)）。
 - **安全：对已结束请求的检查被拒绝**（`PIP-26`）。直到 beta.3，在请求之后保留的 `SecurityContext`（存在字段、缓存或发给消费者的消息里）仍能通过 `AuthorizationChecker` 放行，依据的是创建它时的成员关系，即使已经登出、令牌已被吊销或角色已被移除。现在绑定请求的适配器在请求完成时结束它，之后对它的每次检查都为 `false`（`decide` 返回 `Deny(null)`）。进行中的请求照旧作答，无论持续多久：流式或服务器发送事件（SSE）响应体、异步 Servlet 请求。受影响的是保留上下文并在响应写出之后用它检查的代码。改为在请求内检查；之后运行的工作（消费者、定时作业）自己携带授权（[代码中的权限检查](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)）。你自己的传输交给 `Pipeline.evaluate` 的请求以及测试工具包的请求，其上下文只在你结束它时结束：关闭 `Outcome`，或调用 `PipelineFixture.end` / `PermittedRequest.end`（见下文）。
 - **安全：安全上下文的读取入口只返回管道构造的上下文**（`PIP-27`）。`exchange.getSecurityContext()`、`ContextView.getSecurityContextOrEmpty()` / `getSecurityContext()`、`request.getSecurityContext()`、`SecurityContext` 处理器参数和 `SecurityContextHolder` 以前返回 `SecurityContext.KEY` 下的任何对象，所以应用的过滤器或某个库自己写入的上下文会被当作已认证的调用者。现在其他任何东西都读作没有上下文：`null`，或未绑定上下文时的那种失败。受影响的是在这个 key 下绑定自己构造的 `SecurityContext`（mock、该接口的实现）的代码，尤其是测试代码。测试中使用管道构造的上下文，并让适配器的测试入口把它放到位（[测试你的应用](../policies/testing.md#testing-your-application)）：处理器测试运行在 CoSec 自己的过滤器之后，即 `CoSecTestBindings.filter(fixture.pipeline)`（`cosec-webflux`、`cosec-webmvc`），带上 fixture 主体的 `Authorization`；单元测试用 `CoSecTestBindings.withSecurityContext` 或 `bind` 绑定 `PermittedRequest.forSubject(...)`（或 `withIdentity`、`withToken`）。自己运行管道的过滤器绑定 `outcome.security!!.securityContext`。
+
+  这样的测试不一定会明显地失败。它绑定的上下文读作没有上下文，所以被测代码看到的是缺失或匿名的调用者（`401`、被拒绝的处理器）；而当你的代码放行缺失的上下文时，例如把它当作“没有自己请求的命令”，就会给出测试没有预料到的放行：期望被拒绝的测试看到的是允许。在测试里搜索 `SecurityContext.KEY`、`mockk<SecurityContext>` 以及每个实现了 `SecurityContext` 的类。
 - **破坏性变更：三种从未按字面生效的文档写法不再能编译**（`DOC-9`、`DOC-10`、`DOC-11`）。每一条拒绝的文档，其语句本来就没有按所写的方式生效：
   - 在漏掉一种写法就会放过请求的地方，对 `eq` 或 `prefix` 加 `ignoreCase`、而字面量含有 ASCII 以外的字母（`Ärzte`）：DENY 语句或限流规则、`not` 之下的 ALLOW、守护 DENY 的策略条件。折叠只限 ASCII，所以 `ärzte` 会从 DENY 漏过。改为在不带 `ignoreCase` 的 `in` 里写出每种写法（[大小写折叠](../policies/language.md#case-folding)）。在 ALLOW 里仍能编译，但会给出警告。
   - 条件或限流 `key` 里的 `resource.attributes.<name>`：没有任何地方设置它，对它的 DENY 什么也没拒绝。把事实写进资源 id，用 `resource.var.<name>` 读取（[对象级规则](../integration/checks.md#object-level-rules)）。设置 `request.resource.attributes` 的测试工具场景也会被拒绝。
