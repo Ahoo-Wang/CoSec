@@ -33,6 +33,9 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 containers' logs and state, the JUnit results and each scenario's transcript (`build/system/transcripts/`) as the artifact
 `system-test-<run id>-<attempt>`, and its summary names each failed scenario and the bound it waited for.
 
+A build that fails with "configuration cache state could not be cached" may be a failed download underneath (a `429` or a `404` for
+an artifact that exists): read the cause below it. The `Resolve the dependencies` step retries the downloads before the build.
+
 `./gradlew :system-test:check` runs only the harness's own tests, without Docker. The scenarios (`:system-test:systemTest`) need the
 stack running on an empty Redis, and the environment the workflow sets (`COSEC_SYSTEM_*`); run them on CI, not on a shared
 machine.
