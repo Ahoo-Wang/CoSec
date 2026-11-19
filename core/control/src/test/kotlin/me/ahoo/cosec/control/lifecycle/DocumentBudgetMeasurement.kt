@@ -224,9 +224,12 @@ class DocumentBudgetMeasurement {
         for (n in listOf(1_000, 10_000, 30_000, 100_000)) {
             val line = try {
                 row(n)
-            } catch (error: OutOfMemoryError) {
-                "| $n | ${2 * n} | $n | out of memory with a ${Runtime.getRuntime().maxMemory() shr 20} MB heap: $error |"
+            } catch (error: Throwable) {
+                // runBlocking reports an OutOfMemoryError as the cause of a CoroutinesInternalError.
+                val oom = generateSequence(error) { it.cause }.firstOrNull { it is OutOfMemoryError } ?: throw error
+                "| $n | ${2 * n} | $n | out of memory with a ${Runtime.getRuntime().maxMemory() shr 20} MB heap: $oom |"
             }
+            System.gc()
             println(line)
             System.out.flush()
         }
