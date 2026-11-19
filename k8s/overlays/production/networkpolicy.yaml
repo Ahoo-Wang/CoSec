@@ -1,6 +1,7 @@
-# Admits connections to the gateway's HTTP port only, from anywhere; narrow `from` to your ingress controller. Every
-# other port stays closed, the JMX agent the image starts (5555, no authentication) included, should it ever listen
-# beyond 127.0.0.1. Needs a network plugin that enforces NetworkPolicy.
+# Admits connections to the gateway's HTTP port from anywhere, and to the management port (the Prometheus scrape,
+# /actuator/prometheus, and /actuator/health) from the monitoring namespace only; narrow both `from` to your ingress
+# controller and your Prometheus. Every other port stays closed. The kubelet's probes use the HTTP port. Needs a
+# network plugin that enforces NetworkPolicy.
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
@@ -14,4 +15,12 @@ spec:
   ingress:
     - ports:
         - port: http
+          protocol: TCP
+    - from:
+        # The namespace your Prometheus runs in: a label every namespace has.
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+      ports:
+        - port: management
           protocol: TCP

@@ -169,6 +169,10 @@ number of time series stays bounded however many policies, apps and tenants ther
 | `problem` | what the client was told: `unauthorized` (`401`, anonymous), `token-invalid`, `token-expired`, `token-revoked` (`401`), `forbidden`, `scope-rejected` (`403`), `too-many-requests`, `invalid-request`, `unavailable`, `internal-error`, or `none` when the request proceeds or was cancelled |
 | `cause` | `none`, and on `indeterminate`: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
 
+On the `cosec-gateway-server` image the registry is Prometheus's and the endpoint is `/actuator/prometheus` on the
+management port (`8081`), never on the gateway's port ([the image](./deployment.md#the-image)). The tag values above
+are the whole of CoSec's; no tenant, principal, path or token is ever a tag.
+
 The listeners themselves are counted:
 
 | Meter | Tag | Counts |

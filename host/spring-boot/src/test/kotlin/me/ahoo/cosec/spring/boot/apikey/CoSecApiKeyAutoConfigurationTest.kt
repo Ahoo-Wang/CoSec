@@ -125,6 +125,7 @@ internal class CoSecApiKeyAutoConfigurationTest {
                 assertThat(context).hasFailed()
                 context.startupFailure!!.stackTraceToString().assert()
                     .contains("needs a MembershipProvider bean").contains("CoCacheMembershipProvider").contains("IDN-6")
+                    .contains("cosec-gateway-server image ships none")
             }
     }
 
