@@ -1,0 +1,39 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// The system test's login and control-plane host (test/system-test): WebFlux in cosec.pipeline.mode=enforce on the shared
+// Redis. It issues CoSec's tokens (a login of its own, the starter's refresh and logout routes) and serves the control
+// plane, every request authorized by its own pipeline. Never published (verifyUnpublished); the system-test workflow
+// builds its image from installDist.
+plugins {
+    application
+    alias(libs.plugins.kotlin)
+    alias(libs.plugins.kotlin.spring)
+}
+
+application {
+    mainClass.set("me.ahoo.cosec.system.auth.AuthKt")
+}
+
+dependencies {
+    implementation(platform(project(":dependencies")))
+    implementation(project(":spring-boot"))
+    implementation(project(":webflux"))
+    implementation(project(":cocache"))
+    implementation(project(":control"))
+    implementation("me.ahoo.cocache:cocache-spring-boot-starter")
+    implementation("org.springframework.boot:spring-boot-starter-webflux")
+    implementation("org.springframework.boot:spring-boot-starter-data-redis")
+    implementation("org.springframework.boot:spring-boot-starter-actuator")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-reactor")
+}

@@ -71,6 +71,30 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
   ([Building a client](../integration/clients.md#logout-and-switching)). `signOut` is unchanged: it removes the pair
   here only, and the session stays refreshable at the server until its refresh token expires. Nothing breaks; point
   the user's "Log out" at `logout`.
+- **Security: whoever builds a `TokenAuthenticator` names its revocation reader** (`IDN-27`). Through beta.3,
+  `TokenAuthenticator(verifier)` compiled and read revocations from `RevocationReader.NONE`: an authenticator an
+  application built itself (a custom `Authenticator` bean, a pipeline outside Spring) accepted every revoked token until
+  it expired, after logout or `revokeSubject`, and nothing warned. The parameter has no default any more, and neither
+  has `PermittedRequest.withToken`'s (`cosec-testkit`). Affected: code that builds either without a reader; it no
+  longer compiles. Pass the reader of the `TokenStore` your logout writes to (the starter's `RevocationReader` bean),
+  or `RevocationReader.NONE` where nothing is ever revoked, such as most tests. Binary compatible; the starter is
+  unchanged.
+- **`RefreshTokenAuthentication(verifier, revocation, families)` names its `MembershipRefresh`** (`IDN-27`). The
+  factory defaulted to `MembershipRefresh.CLAIMS`, which keeps the roles the old token claimed, while the KDoc of
+  `MembershipRefresh` said the opposite. Its KDoc now says what happens, and the factory has no default. Affected: code
+  that calls the factory with three arguments; it no longer compiles. Add `MembershipRefresh.CLAIMS` to keep today's
+  behaviour (a removed role applies at the next sign-in or after `revokeSubject`), or a `MembershipRefresh` that looks
+  the user up again. The starter's refresh route still uses `CLAIMS` unless you declare a `MembershipRefresh` bean. The
+  synthetic `RefreshTokenAuthentication$default` method is gone from `cosec-login`: recompile against this version.
+- **Security: `JwtTokenVerifier` and `JwtTokenConverter` refuse `Algorithm.none()`** (`IDN-28`). java-jwt's `none`
+  accepts any token with an empty signature, so a verifier built on it took tokens anyone can write for CoSec's own,
+  break-glass included. Both constructors now throw `IllegalArgumentException`. Affected: code, test code above all,
+  that builds either on `Algorithm.none()`. Pass a signing algorithm, such as `Algorithm.HMAC256(secret)`.
+- **`CoCacheTokenStore.revoke` refuses a token given for its id.** `TokenStore.revoke(tokenId, ttl)` takes a token's id
+  (`VerifiedToken.id`, its `jti`); a logout that passed the access token there revoked nothing and wrote the token as a
+  Redis key. Now a value shaped like a token (a JOSE compact serialization, with or without `Bearer `) throws
+  `IllegalArgumentException`, which names `TokenRevoker`; no token id CoSec or another issuer gives is refused.
+  Affected: a logout written against `TokenStore`, which never worked. Call `TokenRevoker.revoke(accessToken)`.
 
 ## From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 

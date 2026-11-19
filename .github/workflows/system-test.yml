@@ -1,0 +1,159 @@
+#
+# Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#      http://www.apache.org/licenses/LICENSE-2.0
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#
+
+# The system test (test/system-test/README.md): the gateway image built from the commit under test, the services of
+# test/system-*, and Redis, started with Docker Compose and driven over the network only. Not part of `check` or the CI
+# gate. On demand for any commit (the RC candidate: `gh workflow run system-test.yml --ref main -f ref=<sha>`), nightly
+# on main, and on the pull requests that change it. No secrets, read-only, nothing pushed; never retried.
+name: System Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: The commit, branch or tag to test (default, the ref the workflow runs on)
+        required: false
+        default: ''
+      image:
+        description: A published gateway image to test instead of building one from the ref (ghcr.io/ahoo-wang/ only)
+        required: false
+        default: ''
+  schedule:
+    - cron: '40 3 * * *'
+  # Any base, so a batch stacked on another's branch runs too.
+  pull_request:
+    paths:
+      - 'test/system-*/**'
+      - '.github/workflows/system-test.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: system-test-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  system:
+    name: System test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      # Inputs reach the scripts through the environment only, never interpolated into a command.
+      GATEWAY_IMAGE_INPUT: ${{ inputs.image }}
+      ARTIFACT: system-test-${{ github.run_id }}-${{ github.run_attempt }}
+      COMPOSE_FILE: test/system-test/compose.yaml
+      COSEC_SYSTEM_BEHIND_IMAGE: cosec-system-behind:test
+      COSEC_SYSTEM_AUTH_IMAGE: cosec-system-auth:test
+      COSEC_SYSTEM_ENFORCER_IMAGE: cosec-system-enforcer:test
+      # A throwaway HMAC secret for this run's gateways: not a secret, and never a deployment's.
+      COSEC_SYSTEM_JWT_SECRET: system-test-only-not-a-secret-0123456789abcdef
+      COSEC_SYSTEM_GATEWAY_URL: http://127.0.0.1:8080
+      COSEC_SYSTEM_GATEWAY2_URL: http://127.0.0.1:8081
+      COSEC_SYSTEM_AUTH_URL: http://127.0.0.1:8090
+      COSEC_SYSTEM_ENFORCER_URL: http://127.0.0.1:8091
+      COSEC_SYSTEM_ENFORCER_MANAGEMENT_URL: http://127.0.0.1:8092
+      COSEC_SYSTEM_REDIS_URL: redis://127.0.0.1:6379
+    steps:
+      # Before anything is pulled: only CoSec's own published images may be tested in place of the built one.
+      - name: Check the inputs
+        shell: bash
+        run: |
+          # The whole value, not one of its lines: bash's =~ anchors ^ and $ to the string.
+          pattern='^ghcr\.io/ahoo-wang/[a-z0-9._/-]+(:[A-Za-z0-9._-]+)?(@sha256:[0-9a-f]{64})?$'
+          if [ -n "$GATEWAY_IMAGE_INPUT" ] && ! [[ "$GATEWAY_IMAGE_INPUT" =~ $pattern ]]; then
+            echo "::error::the image input must be an image of ghcr.io/ahoo-wang/"
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.ref }}
+          persist-credentials: false
+
+      - name: Set up JDK
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          java-version: '21'
+          distribution: temurin
+
+      # Reads main's Gradle cache and never writes it, as the CI jobs do.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@8da46b539cd8fe6ab27ca75128919a18d757604c # v6.4.1
+        with:
+          cache-read-only: true
+
+      - name: Build the distributions
+        run: ./gradlew :gateway-server:installDist :system-behind:installDist :system-auth:installDist :system-enforcer:installDist :migrate:installDist :system-test:testClasses
+
+      # The image as the Dockerfile ships it, its AOT cache trained, for the runner's platform only.
+      - name: Build or pull the gateway image
+        run: |
+          if [ -n "$GATEWAY_IMAGE_INPUT" ]; then
+            docker pull "$GATEWAY_IMAGE_INPUT"
+            echo "COSEC_SYSTEM_GATEWAY_IMAGE=$GATEWAY_IMAGE_INPUT" >> "$GITHUB_ENV"
+          else
+            docker build --tag cosec-gateway:system platform/gateway-server
+            echo "COSEC_SYSTEM_GATEWAY_IMAGE=cosec-gateway:system" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build the services' images
+        run: |
+          for app in behind auth enforcer; do
+            docker build --file test/system-test/docker/app.Dockerfile --build-arg "APP=system-$app" \
+              --tag "cosec-system-$app:test" "test/system-$app"
+          done
+
+      # Waits on each container's health check (liveness), never on a sleep.
+      - name: Start the stack
+        run: docker compose up --detach --wait --wait-timeout 240
+
+      - name: Run the scenarios
+        env:
+          COSEC_SYSTEM_MIGRATE: ${{ github.workspace }}/migration/migrate/build/install/cosec-migrate/bin/cosec-migrate
+        run: ./gradlew :system-test:systemTest
+
+      - name: Collect the evidence
+        if: always()
+        run: |
+          evidence="$RUNNER_TEMP/evidence"
+          mkdir -p "$evidence/logs"
+          docker compose ps --all > "$evidence/ps.txt" 2>&1 || true
+          for service in $(docker compose config --services); do
+            docker compose logs --no-color --timestamps "$service" > "$evidence/logs/$service.log" 2>&1 || true
+            container=$(docker compose ps --all --quiet "$service")
+            if [ -n "$container" ]; then
+              docker inspect "$container" > "$evidence/logs/$service.inspect.json" 2>&1 || true
+            fi
+          done
+          cp -r test/system-test/build/system/transcripts "$evidence/" 2>/dev/null || true
+          cp -r test/system-test/build/test-results/systemTest "$evidence/junit" 2>/dev/null || true
+          cp -r test/system-test/build/reports/tests/systemTest "$evidence/report" 2>/dev/null || true
+
+      - name: Summarize
+        if: always()
+        run: python3 test/system-test/scripts/summary.py test/system-test/build/test-results/systemTest "$ARTIFACT" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ env.ARTIFACT }}
+          path: ${{ runner.temp }}/evidence
+          retention-days: 14
+          if-no-files-found: warn
+
+      - name: Stop the stack
+        if: always()
+        run: docker compose down --volumes --timeout 30
