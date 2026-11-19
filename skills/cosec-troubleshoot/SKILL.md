@@ -288,6 +288,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - `token-expired`, `token-revoked` (by token, or every token of the principal issued before a `revokeSubject`, with
   `cosec.authentication.revocation.skew`), `token-invalid` (wrong algorithm or secret: only HMAC256/384/512; or a
   delegation token, one with an `act` claim, which 8.0 refuses: audit `reasonCode` `DELEGATION_UNSUPPORTED`, IDN-4;
+  or, intermittently at second boundaries, an issuer's clock ahead by more than `cosec.authentication.revocation.skew`:
+  log `Token refused as not valid yet`, decision event `subject.rejected` `TOKEN_NOT_YET_VALID`, IDN-29;
   or a claim CoSec refuses: `tenantId` empty or not a string, `roles` or `policies` not an array of strings, `attributes` not an
   object).
 - `token-invalid` for an API key, or a token marked `cosec.membership: provider`, whose principal the

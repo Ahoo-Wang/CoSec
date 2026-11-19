@@ -91,6 +91,13 @@ sealed interface AuthnResult {
 
         /** A token that delegates (an `act` claim, RFC 0009 §6): invalid to the client, named in audit (`IDN-4`). */
         DELEGATION_UNSUPPORTED,
+
+        /**
+         * A token issued, or valid from, later than the verifier's clock beyond the skew it tolerates: an issuer's clock
+         * running ahead (`IDN-29`). Invalid to the client (`token-invalid`); named in the decision event, so that an
+         * operator looks at clocks rather than keys.
+         */
+        TOKEN_NOT_YET_VALID,
     }
 }
 

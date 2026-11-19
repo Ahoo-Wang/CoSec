@@ -134,10 +134,15 @@ internal class CoSecJwtAutoConfiguration {
         idGeneratorProvider.getIfAvailable { RandomIdGenerator },
     )
 
-    /** CoSec's own verifier: pure computation, whose answers are then checked against revocations (`TokenRevocation`). */
+    /**
+     * CoSec's own verifier: pure computation, whose answers are then checked against revocations (`TokenRevocation`).
+     * It tolerates an issuer's clock ahead by `cosec.authentication.revocation.skew`, the skew subject revocation judges
+     * with, so that one setting says how far an issuer's clock may run ahead (`IDN-29`).
+     */
     @Bean
     @ConditionalOnMissingBean
-    fun cosecJwtTokenVerifier(algorithm: Algorithm): TokenVerifier = JwtTokenVerifier(algorithm)
+    fun cosecJwtTokenVerifier(algorithm: Algorithm, revocation: RevocationProperties): TokenVerifier =
+        JwtTokenVerifier(algorithm, revocation.skew)
 
     /**
      * The one revocation judgement outside the pipeline: refresh and [TokenRevoker] read revocations through it, with the

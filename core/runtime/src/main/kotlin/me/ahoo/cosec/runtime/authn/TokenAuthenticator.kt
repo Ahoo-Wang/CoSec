@@ -33,6 +33,7 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.RevocationUnavailableException
 import me.ahoo.cosec.spi.token.SubjectRevocation
 import me.ahoo.cosec.spi.token.TokenExpiredException
+import me.ahoo.cosec.spi.token.TokenNotYetValidException
 import me.ahoo.cosec.spi.token.TokenRevokedException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -44,7 +45,9 @@ import java.time.Duration
  *
  * - No token: [AuthnResult.Anonymous]. An API key alone is not read here; the request goes on as anonymous.
  * - An expired token: [AuthnResult.RejectReason.TOKEN_EXPIRED]; a revoked one: `TOKEN_REVOKED`; a delegation token
- *   ([DelegationUnsupportedException], `IDN-4`): `DELEGATION_UNSUPPORTED`; any other [TokenVerificationException]:
+ *   ([DelegationUnsupportedException], `IDN-4`): `DELEGATION_UNSUPPORTED`; a token not valid yet, issued by a clock
+ *   ahead of this one beyond the skew ([TokenNotYetValidException], `IDN-29`): `TOKEN_NOT_YET_VALID`, logged at `WARN`
+ *   at most once a minute since it means a clock is wrong; any other [TokenVerificationException]:
  *   `TOKEN_INVALID`. The request is evaluated as anonymous, and a deny answers 401 with the matching `token-*` problem
  *   (RFC 0006 K2); a delegation token answers `token-invalid`. So does a token whose `attributes` claim names one of
  *   [RESERVED_ATTRIBUTES], which CoSec sets for another kind of credential (RC1-25); the claims every token must follow
@@ -107,6 +110,9 @@ class TokenAuthenticator(
             return REVOKED
         } catch (_: DelegationUnsupportedException) {
             return DELEGATION_UNSUPPORTED
+        } catch (early: TokenNotYetValidException) {
+            EarlyTokens.record(early)
+            return NOT_YET_VALID
         } catch (_: TokenVerificationException) {
             return INVALID
         }
@@ -154,5 +160,6 @@ class TokenAuthenticator(
         private val REVOKED = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_REVOKED)
         private val INVALID = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_INVALID)
         private val DELEGATION_UNSUPPORTED = AuthnResult.Rejected(AuthnResult.RejectReason.DELEGATION_UNSUPPORTED)
+        private val NOT_YET_VALID = AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_NOT_YET_VALID)
     }
 }
