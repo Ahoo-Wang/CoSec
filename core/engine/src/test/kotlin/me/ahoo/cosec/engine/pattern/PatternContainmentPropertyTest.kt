@@ -121,6 +121,9 @@ class PatternContainmentPropertyTest {
     private fun check(outer: ResourcePattern, inner: ResourcePattern, resources: List<Resource>): Int {
         val containment = PatternContainment.contains(outer, inner)
         val disjoint = PatternContainment.disjoint(outer, inner)
+        // The prepared form (UC-1) answers the same, whatever the pair.
+        PatternContainment.disjoint(PatternContainment.prepare(outer), PatternContainment.prepare(inner))
+            .assert().describedAs("prepared $outer and $inner").isEqualTo(disjoint)
         var matched = 0
         for (resource in resources) {
             val innerCaptures = captures(inner, resource) ?: continue
