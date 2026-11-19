@@ -94,10 +94,12 @@ object IdentityCodec {
         WrittenIdentity.check(identity)
         val header = encoder.encodeToString(CoSecJson.mapper.writeValueAsBytes(tree(identity)))
         if (header.length > maxBytes) {
-            throw IdentityOverflowException(
-                "The identity of [${QuotedText.of(identity.subject)}] is ${header.length} bytes encoded, " +
-                    "over the limit of $maxBytes: " +
-                    "${identity.roles.size} roles, ${identity.claims.size} claims."
+            throw Unencodable.tooLarge(
+                identity.subject,
+                header.length,
+                maxBytes,
+                identity.roles.size,
+                identity.claims.size,
             )
         }
         return header
@@ -199,10 +201,7 @@ object IdentityCodec {
         root.putObject("auth").apply {
             put("method", identity.credential.method.value)
             put("jti", identity.credential.id)
-            val expiresAt = identity.credential.expiresAt ?: throw IdentityOverflowException(
-                "The credential of [${QuotedText.of(identity.subject)}] never expires: " +
-                    "a service could not bound the identity."
-            )
+            val expiresAt = identity.credential.expiresAt ?: throw Unencodable.neverExpires(identity.subject)
             put("exp", expiresAt.epochSecond)
             identity.credential.issuedAt?.let { put("iat", it.epochSecond) }
             if (identity.credential.capped) {
@@ -225,17 +224,13 @@ object IdentityCodec {
         when (value) {
             is String -> {
                 if (value.length > MAX_CLAIM_LENGTH) {
-                    throw IdentityOverflowException(
-                        "Claim [${QuotedText.of(name)}] is ${value.length} characters, over $MAX_CLAIM_LENGTH."
-                    )
+                    throw Unencodable.claimTooLong(name, value.length)
                 }
                 claims.put(name, value)
             }
             is Boolean -> claims.put(name, value)
             is Number -> number(claims, name, value)
-            else -> throw IdentityOverflowException(
-                "Claim [${QuotedText.of(name)}] is a ${value::class.simpleName}, not a string, number or boolean."
-            )
+            else -> throw Unencodable.claimType(name, value)
         }
     }
 
@@ -249,10 +244,7 @@ object IdentityCodec {
         when (val exact = exactly(value)) {
             is Long -> claims.put(name, exact)
             is Double -> claims.put(name, exact)
-            else -> throw IdentityOverflowException(
-                "Claim [${QuotedText.of(name)}] is ${value::class.simpleName} ${QuotedText.of(value.toString())}, " +
-                    "which the identity header cannot hold exactly."
-            )
+            else -> throw Unencodable.claimInexact(name, value)
         }
     }
 
