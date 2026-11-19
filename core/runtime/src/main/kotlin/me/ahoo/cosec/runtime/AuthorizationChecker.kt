@@ -97,7 +97,7 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline, 
 
     /** A check refused for how it was called: an implicit deny, logged ([CheckMisuse]), never an exception. */
     private fun misused(kind: CheckMisuse.Kind, requestId: String?, action: String, resource: String): Decision {
-        misuse.record(kind, requestId, "action [$action] on [$resource]")
+        misuse.record(kind, requestId, action, resource)
         return Decision.Deny(null)
     }
 
@@ -118,11 +118,7 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline, 
      * make. Nothing is unavailable, and asking again would not help.
      */
     private fun ended(security: RequestSecurity, action: Action, resource: Resource): Decision {
-        misuse.record(
-            CheckMisuse.Kind.ENDED_REQUEST,
-            security.requestId,
-            "action [${action.namespace}:${action.verb}] on [${resource.type}/${resource.id}]",
-        )
+        misuse.record(CheckMisuse.Kind.ENDED_REQUEST, security.requestId, action, resource)
         return Decision.Deny(null)
     }
 

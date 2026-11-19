@@ -14,6 +14,8 @@
 package me.ahoo.cosec.runtime
 
 import io.github.oshai.kotlinlogging.KotlinLogging
+import me.ahoo.cosec.model.Action
+import me.ahoo.cosec.model.Resource
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicLong
 
@@ -36,12 +38,34 @@ internal class CheckMisuse(
 
     private val lastWarnings = Kind.entries.associateWith { AtomicLong(NEVER) }
 
-    /** Records one refused check of [kind] for the request [requestId] (null when the context has none). */
-    fun record(kind: Kind, requestId: String?, detail: String) {
-        val message = "Check denied before any policy was read: ${kind.explanation}. Request [${requestId ?: "none"}]" +
-            ", $detail. See $PAGE"
-        if (warns(kind)) log.warn { message } else log.debug { message }
+    /**
+     * Records one refused check of [kind] for the request [requestId] (null when the context has none), of [action] on
+     * [resource] as the caller wrote them. The message is built only when it is logged: a loop of refused checks with
+     * DEBUG off allocates nothing for logging.
+     */
+    fun record(kind: Kind, requestId: String?, action: String, resource: String) {
+        if (warns(kind)) {
+            log.warn { message(kind, requestId, action, resource) }
+        } else if (log.isDebugEnabled()) {
+            log.debug { message(kind, requestId, action, resource) }
+        }
     }
+
+    /** As the other [record], for a check the engine's way: [action] and [resource] are rendered only when logged. */
+    fun record(kind: Kind, requestId: String?, action: Action, resource: Resource) {
+        if (warns(kind)) {
+            log.warn { message(kind, requestId, action, resource) }
+        } else if (log.isDebugEnabled()) {
+            log.debug { message(kind, requestId, action, resource) }
+        }
+    }
+
+    private fun message(kind: Kind, requestId: String?, action: Action, resource: Resource): String =
+        message(kind, requestId, "${action.namespace}:${action.verb}", "${resource.type}/${resource.id}")
+
+    private fun message(kind: Kind, requestId: String?, action: String, resource: String): String =
+        "Check denied before any policy was read: ${kind.explanation}. Request [${requestId ?: "none"}], " +
+            "action [$action] on [$resource]. See $PAGE"
 
     private fun warns(kind: Kind): Boolean {
         val last = lastWarnings.getValue(kind)
