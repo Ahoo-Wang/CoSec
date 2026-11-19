@@ -49,11 +49,13 @@ The request cannot be read without ambiguity, so it is refused before authentica
 
 - the path has `.` or `..` segments, a malformed percent-escape, an empty segment before its end (`//`, often two
   URL parts joined with a `/` each), an encoded separator (`%2F`), or a backslash (`\`, `%5C`). A trailing `/` is not refused;
-- the path holds an encoded `;` (`%3B`) or an encoded control character (`%00` to `%1F`, `%7F`), in either case
-  (`PIP-30`, from 8.0.0-beta.5). A client that sent such a path before now gets `400`: usually a value put into a path
-  variable without care, such as a `;`-separated list, a line break or binary data. Send the value in the query or the
-  body, or encode its `%` again (`%253B`), which the pipeline decodes once, to the text `%3B`, and the application
-  decodes again. A trailing `.` or space and `%25` are not refused;
+- the path holds an encoded `;` (`%3B`) or a control character, encoded (`%00` to `%1F`, `%7F`, in either case) or
+  raw (`PIP-30`, from 8.0.0-beta.5). A client that sent such a path before now gets `400`: usually a value put into a
+  path variable without care, such as a `;`-separated list, a line break or binary data. Nothing names this cause
+  apart from the others: the audit record has `kind` `BAD_REQUEST` and `reasonCode` `INVALID_REQUEST`, and its
+  `request.path` is the path as received, as is the access log's. Match that path against `%3B`, `%00` to `%1F` and
+  `%7F`. Send the value in the query or the body, or encode its `%` again (`%253B`), which the pipeline decodes once,
+  to the text `%3B`, and the application decodes again. A trailing `.` or space and `%25` are not refused;
 - a `CoSec-Space-Id` or `CoSec-Device-Id` header is sent with two different values, a blank one beside
   a non-blank one included. Send each header once, or leave it out;
 - a route map captures a value that would change the resource id's segments;

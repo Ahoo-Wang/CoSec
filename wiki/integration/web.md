@@ -132,8 +132,9 @@ Before anything else, `PathNormalizer` checks it. On every adapter the path is:
   them as text of a segment, but a backend behind a gateway that decodes before it strips path parameters serves
   `/admin%3Bx/users` as `/admin/users`, and one that stops at NUL or drops what follows a control character serves
   another path again. `%25` is data of a segment: `%253B` decodes once, to the text `%3B`, and is decided, as is a
-  trailing `.` or space. Some servers refuse a few of these spellings themselves, before any filter runs: Jetty every
-  encoded control character (and `%25`), Tomcat `%00`;
+  trailing `.` or space. A raw control character is refused too, though the servers CoSec runs on already refuse one
+  before any filter. Some servers refuse a few of the encoded spellings themselves as well: Jetty every encoded
+  control character (and `%25`), Tomcat `%00`;
 - **kept with a trailing `/`**: `/admin/` is its own path, as in Spring's routing. A pattern written `/admin` does not
   match it, and `/admin/**` does.
 

@@ -32,10 +32,11 @@ Which preview of the library may run behind which preview of the gateway image: 
   segment, which Spring reads alike, while a backend behind a gateway that decodes before it strips path parameters
   serves `/admin%3Bx/users` as `/admin/users`, past a `DENY` on `/admin/**`. They are now refused before
   authentication, mapped route or not, with the `400` `invalid-request` of any path the pipeline will not interpret,
-  and the gateway refuses them before anything is forwarded. A value that holds such a character goes in the query
+  and the gateway refuses them before anything is forwarded. So is a raw control character, which the servers CoSec
+  runs on already refuse themselves. A value that holds such a character goes in the query
   or the body, or has its `%` encoded again (`%253B`), which the pipeline decodes once, to the text `%3B`. `%25`, a
-  trailing `.` and a trailing space are unchanged. To check: search access logs for `%3B`, `%00` to `%1F` and `%7F` in
-  request paths ([Troubleshooting](./troubleshooting.md#invalid-request)). There is no switch to accept them.
+  trailing `.` and a trailing space are unchanged. To check: search access logs, or the audit records' `request.path`, for
+  `%3B`, `%00` to `%1F` and `%7F` in request paths ([Troubleshooting](./troubleshooting.md#invalid-request)). There is no switch to accept them.
 - **A refused forwarded identity is counted and says why, and the gateway no longer writes one a service would refuse**
   (#1690). Affected: services in `cosec.pipeline.mode=gateway`, their dashboards and log alerts, and code that calls
   `IdentityHeader.of` in tests.

@@ -24,7 +24,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
-- **路径含有编码后的 `;` 或控制字符时答 `400`**（R1A-3，`PIP-30`）。受影响的是在路径任何位置发送 `%3B` 或 `%00` 到 `%1F`、`%7F`（大小写均可）的客户端。直到 beta.4，它们被当作某一段里的文本来决定，Spring 也这样读；但网关之后先解码、再去掉路径参数的后端会把 `/admin%3Bx/users` 当作 `/admin/users` 提供服务，绕过 `/admin/**` 上的 `DENY`。现在它们在认证之前被拒绝，无论是否映射了路由，答管道不予解释的路径所用的 `400` `invalid-request`；网关在转发任何东西之前就拒绝它们。含有这类字符的值放到查询参数或请求体里，或者把它的 `%` 再编码一次（`%253B`）：管道解码一次，得到文本 `%3B`。`%25`、结尾的 `.` 和结尾的空格不变。检查方法：在访问日志里搜索请求路径中的 `%3B`、`%00` 到 `%1F` 和 `%7F`（[故障排查](./troubleshooting.md#invalid-request)）。没有开关可以接受它们。
+- **路径含有编码后的 `;` 或控制字符时答 `400`**（R1A-3，`PIP-30`）。受影响的是在路径任何位置发送 `%3B` 或 `%00` 到 `%1F`、`%7F`（大小写均可）的客户端。直到 beta.4，它们被当作某一段里的文本来决定，Spring 也这样读；但网关之后先解码、再去掉路径参数的后端会把 `/admin%3Bx/users` 当作 `/admin/users` 提供服务，绕过 `/admin/**` 上的 `DENY`。现在它们在认证之前被拒绝，无论是否映射了路由，答管道不予解释的路径所用的 `400` `invalid-request`；网关在转发任何东西之前就拒绝它们。未编码的控制字符也一样，CoSec 运行的服务器本来就会自己拒绝它。含有这类字符的值放到查询参数或请求体里，或者把它的 `%` 再编码一次（`%253B`）：管道解码一次，得到文本 `%3B`。`%25`、结尾的 `.` 和结尾的空格不变。检查方法：在访问日志或审计记录的 `request.path` 里搜索请求路径中的 `%3B`、`%00` 到 `%1F` 和 `%7F`（[故障排查](./troubleshooting.md#invalid-request)）。没有开关可以接受它们。
 - **被拒绝的转发身份会被计数并说明原因，网关不再写出服务会拒绝的身份**（#1690）。受影响的是 `cosec.pipeline.mode=gateway` 的服务、它们的仪表盘和日志告警，以及在测试中调用 `IdentityHeader.of` 的代码。
   - 这样的服务以 `WARN` 在 logger `me.ahoo.cosec.runtime.identity.IdentityGate` 上记录每个被拒绝的 `CoSec-Identity` 头的原因，每种问题类型最多每分钟一次（每一次都记录在 `DEBUG`）。直到 beta.4，它只在 `DEBUG` 记录。响应不变：从不说明原因。
   - 有 `cosec-micrometer` 和 `MeterRegistry` 时，它在 `cosec.identity.refused{problem}`（`invalid-request`、`token-invalid`、`token-expired`）中对每次拒绝计数。对任何非零速率告警（[可观测性](./observability.md#metrics)）。
