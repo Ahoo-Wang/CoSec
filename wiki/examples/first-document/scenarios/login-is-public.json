@@ -1,0 +1,16 @@
+{
+  "description": "Anyone may POST /auth/login.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/auth/login"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

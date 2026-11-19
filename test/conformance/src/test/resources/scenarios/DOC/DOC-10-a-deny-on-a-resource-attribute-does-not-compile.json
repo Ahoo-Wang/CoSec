@@ -1,0 +1,58 @@
+{
+  "rules": [
+    "DOC-10"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "No request, check, simulate or explain gives a resource attributes: a DENY on resource.attributes.classification would deny nothing, and the policy test kit used to fill it from a scenario. The document does not compile, and the message says where facts about a resource go.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "no-secrets",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "resource.attributes.classification",
+                  "secret"
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "no-secrets",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-secrets"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "is never set"
+  }
+}

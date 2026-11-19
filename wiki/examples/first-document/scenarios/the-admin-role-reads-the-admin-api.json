@@ -1,0 +1,20 @@
+{
+  "description": "The role admin lifts the DENY; the ALLOW of members still holds.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "root",
+    "roles": [
+      "admin"
+    ]
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/api/admin/users"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

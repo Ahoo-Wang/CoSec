@@ -3,15 +3,15 @@
 # Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.OneVerifierTest
 
 diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
-index 55802e0c..695eb7f3 100644
+index 839966da..aa36f342 100644
 --- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
 +++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/CoSecPipelineAutoConfiguration.kt
 @@ -169,7 +169,7 @@ class CoSecPipelineAutoConfiguration {
                  log.warn { NONE_WARNING }
              }
              TokenAuthenticator(
--                verifier.getIfAvailable { JwtTokenVerifier(it) },
-+                JwtTokenVerifier(it),
+-                verifier.getIfAvailable { JwtTokenVerifier(it, revocationProperties.skew) },
++                JwtTokenVerifier(it, revocationProperties.skew),
                  reader,
                  revocationSkew = revocationProperties.skew,
                  acceptUnavailableRevocations = !revocationProperties.failClosed,

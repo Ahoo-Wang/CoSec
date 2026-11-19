@@ -169,7 +169,7 @@ class CoSecPipelineAutoConfiguration {
                 log.warn { NONE_WARNING }
             }
             TokenAuthenticator(
-                verifier.getIfAvailable { JwtTokenVerifier(it) },
+                verifier.getIfAvailable { JwtTokenVerifier(it, revocationProperties.skew) },
                 reader,
                 revocationSkew = revocationProperties.skew,
                 acceptUnavailableRevocations = !revocationProperties.failClosed,

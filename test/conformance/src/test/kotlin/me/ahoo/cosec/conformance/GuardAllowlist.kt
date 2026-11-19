@@ -31,6 +31,11 @@ object GuardAllowlist {
             "webmvc:RequestPrincipalTest#CoSec's principal replaces another layer's, and answers none of its roles",
             "webmvc:RequestPrincipalTest#an anonymous request carries none of CoSec's, and keeps another layer's as it was",
             "spring-boot:RealServerParityTest#an anonymous request has no request principal, on every server",
+            // IDN-29: an issuer's clock ahead by the skew, never an expiry.
+            "jwt:IssuerSkewTest#an issue time within the skew ahead is accepted, beyond it refused as not valid yet",
+            "jwt:IssuerSkewTest#a not-before time within the skew ahead is accepted, beyond it refused as not valid yet",
+            "jwt:IssuerSkewTest#an expiry has no skew",
+            "jwt:IssuerSkewTest#a token accepted early is still revoked by a revocation it follows within the skew",
             // IDN-27: no public default reads revocations or memberships.
             "architecture:SafeDefaultsTest#no public parameter that reads revocations or memberships has a default",
             "architecture:SafeDefaultsTest#the scan reads the token API",

@@ -78,6 +78,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - **含 `/` 的租户或应用 id：** 令牌的 `tenantId` 或 `aud` 含 `/`，例如 `acme/west`，7.x 或预览版的签发方可能签出过这样的令牌（`SCP-13`）。
   租户 id 和应用 id 都是一个路径段，所以这个令牌既不指租户 `acme/west`，也不指 `acme`。请在保存该 id 的地方给租户或应用改名，然后让主体重新登录
   （[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。
+- **偶发，在整秒边界：** 少数请求以 `token-invalid` 失败，每次都在某一秒的最后几毫秒，日志写着 `Token refused as not valid yet: The token's iat is later than this instance's clock`。签发方的时钟比本实例快，超过了 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒；直到 beta.3 完全没有余量，`IDN-29`），按签发方下一秒签发的令牌到达了仍在上一秒的主机。决策事件的 `subject.rejected` 为 `TOKEN_NOT_YET_VALID`。请同步时钟（NTP）；只有对已知且有界的偏差才调大这个余量，因为它也会扩大主体吊销覆盖的范围。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带

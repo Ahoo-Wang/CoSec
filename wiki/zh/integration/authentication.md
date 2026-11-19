@@ -42,7 +42,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 管道读取请求的凭证，然后询问一个 `Authenticator` 调用方是谁。starter 提供的是由两个认证器组成的 `CompositeAuthenticator`：
 
-- **`TokenAuthenticator`** 用 `TokenVerifier` Bean 校验令牌，除非应用声明了自己的，否则就是 CoSec 的 `JwtTokenVerifier`（刷新和登出用同一个校验器，`IDN-25`），然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。只有 `TokenVerifier.verify`（以及 `refresh`）能把令牌变成主体：CoSec 没有不校验签名就读取令牌声明的 API。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。只有 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌才能使用 [break-glass](../guide/security-model.md#break-glass)：包装你自己校验器的 `TokenAuthenticator` 可以认证它的令牌，但永远不带 break-glass。你的 `TokenVerifier` Bean 对 CoSec 来说是其他签发者的，即使它包装 `JwtTokenVerifier` 只为加一项检查：在每个请求上，它的令牌凭证方式是 `token`，没有会话（因此不能从它[切换租户](#switching-tenant-and-app)，网关之后也不转发会话），也没有 break-glass。为其他签发者的令牌声明它；要让 CoSec 自己的令牌仍是 CoSec 的，就不要声明。
+- **`TokenAuthenticator`** 用 `TokenVerifier` Bean 校验令牌，除非应用声明了自己的，否则就是 CoSec 的 `JwtTokenVerifier`（刷新和登出用同一个校验器，`IDN-25`），然后询问吊销读取器该令牌或其主体的全部令牌是否已被吊销。`JwtTokenVerifier` 接受签发时间（`iat`）或生效时间（`nbf`）比本实例时钟晚不超过 `cosec.authentication.revocation.skew`（5 秒）的令牌，为时钟偏快的签发方留出余量，超出的按尚未生效拒绝（`token-invalid`，`IDN-29`）；令牌的过期时间没有这样的余量。你自己构造的校验器传入同一个值：`JwtTokenVerifier(algorithm, skew)`。只有 `TokenVerifier.verify`（以及 `refresh`）能把令牌变成主体：CoSec 没有不校验签名就读取令牌声明的 API。没有 JWT 时（`cosec.jwt.enabled=false`），带令牌的请求按 `token-invalid` 拒绝。只有 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌才能使用 [break-glass](../guide/security-model.md#break-glass)：包装你自己校验器的 `TokenAuthenticator` 可以认证它的令牌，但永远不带 break-glass。你的 `TokenVerifier` Bean 对 CoSec 来说是其他签发者的，即使它包装 `JwtTokenVerifier` 只为加一项检查：在每个请求上，它的令牌凭证方式是 `token`，没有会话（因此不能从它[切换租户](#switching-tenant-and-app)，网关之后也不转发会话），也没有 break-glass。为其他签发者的令牌声明它；要让 CoSec 自己的令牌仍是 CoSec 的，就不要声明。
 - **`ApiKeyAuthenticator`**，仅在 `cosec.api-key.enabled=true` 时启用，查找 [API key](#api-keys)。
 
 携带 API key 的请求（且已启用 API key）只依据该 key 判定，即使它同时发送了令牌：被拒绝的 key 绝不会退而使用令牌。其他请求交给令牌认证器；完全不带凭证的请求是匿名的。
@@ -440,7 +440,9 @@ class SelectTenantTest {
 | 未配置 | `order` | 请求属于 `order` |
 | 未配置 | 未声明 | 没有应用，不读取应用文档 |
 
-匿名请求没有凭证，它的应用取宿主的应用。所以发给一个应用的令牌在另一个应用的服务上没有用，即使签名密钥相同、角色同名；一次登录访问多个应用时，按应用各签发一个令牌，只放该应用的角色。操作控制面的令牌发给控制面的应用 `cosec.control.app-id`。
+匿名请求没有凭证，它的应用取宿主的应用。所以在有应用的服务上，发给一个应用的令牌在另一个应用的服务上没有用，即使签名密钥相同、角色同名。没有应用的服务按凭证声明的应用决策，没有 `aud` 的令牌不读取任何应用文档。一次登录访问多个应用时，按应用各签发一个令牌，只放该应用的角色。
+
+**凡是成员关系不来自令牌声明的地方，角色 id 在各应用之间是同一个命名空间。** `MembershipProvider` 只被问到租户和主体，从不被问到应用，所以它回答的角色在主体持有凭证的每个应用中都生效；每个 API key 的角色也取自提供者（`IDN-6`）。提供者给某主体的、本意属于应用 A 的角色 `admin`，只要应用 B 的文档也有角色 `admin`，它就是 B 的 `admin`。共用主体和提供者的应用，请给角色起互不相同的 id（`wms.admin`、`pos.admin`）。令牌声明里的角色，只要签发方按应用过滤（如登录示例），就没有这个问题。操作控制面的令牌发给控制面的应用 `cosec.control.app-id`。
 
 由签发令牌的一方在 `TokenSubject.app` 中说明它属于哪个应用。省略时为 null，与没有应用的主机一致：有应用的主机拒绝这样的令牌（`SCP-11`）。刷新令牌时保留它的应用。`aud` 有多个值、不是字符串或不能作为应用 id（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符）的令牌为 `token-invalid`。
 

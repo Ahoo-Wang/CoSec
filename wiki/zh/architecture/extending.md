@@ -11,7 +11,7 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 
 使用 starter 时，声明一个 Spring bean 就能扩展 CoSec。有些扩展点收集该类型的所有 bean；其余的是单个 bean，替换 starter 的默认实现（`@ConditionalOnMissingBean`）。不使用 Spring 时，用 `Pipeline.builder(authenticator, store)` 在你的文档存储之上构建管道，把实现交给构建器（`memberships`、`attributes`、`listener`、`rateLimiter`、`ids`），并在第一个请求之前调用 `awaitDocuments()`。构建器是 `@ExperimentalCoSecApi`（[稳定性等级](#stability-levels)）；测试用 `PipelineFixture`（`cosec-testkit`）获得真实管道。
 
-扩展点用 Kotlin 实现。数据面的端口是 `suspend` 函数，id（`TenantId`、`AppId`、`PrincipalId`）是值类，所以签名中带有它们的方法在 JVM 中有一个哈希后缀的名字（`memberships-hPxUw84`），Java 无法声明这样的方法。Java 应用配置 starter 或调用构建器，用 Kotlin 编写对 CoSec 端口的实现。公共与 SPI 签名中的时长、时刻和时钟都是 `java.time` 的，从不是 `kotlin.time` 的（`KotlinTimeSignatureTest`）。
+扩展点用 Kotlin 实现。数据面的端口是 `suspend` 函数，id（`TenantId`、`AppId`、`PrincipalId`）是值类，所以签名中带有它们的方法在 JVM 中有一个哈希后缀的名字（`memberships-hPxUw84`），Java 无法声明这样的方法。Java 应用配置 starter、读取调用方，并用 `checkMono`（WebFlux）或 `checkBlocking`（WebMvc）做检查；流水线、令牌签发和吊销都是挂起函数，Java 无法调用。它用 Kotlin 编写对 CoSec 端口的实现。公共与 SPI 签名中的时长、时刻和时钟都是 `java.time` 的，从不是 `kotlin.time` 的（`KotlinTimeSignatureTest`）。
 
 | 扩展点 | 模块、包 | 实现它来 | starter 接收 |
 |---|---|---|---|
@@ -146,13 +146,27 @@ Pipeline 在请求路径上调用每个 SPI，常常是在 Netty 事件循环上
 
 认证器只能看到 Pipeline 读作凭证的内容：令牌（`Authorization` 请求头；开启 `cosec.pipeline.allow-query-token` 时其次是同名查询参数；开启 `cosec.pipeline.allow-cookie-token` 时再次是 Cookie）和 API key 请求头（`cosec.pipeline.api-key-header`）。
 
-starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只由 API key 认证器判断（开启 `cosec.api-key.enabled` 时），其他请求由 JWT 的 `TokenAuthenticator` 判断。**你的 `Authenticator` bean 会替换掉这一切。** 要接受另一种令牌格式并保留内置认证，自己构建内置认证器并委托给它们：
+starter 的默认实现是 `CompositeAuthenticator`：带 API key 的请求只由 API key 认证器判断（开启 `cosec.api-key.enabled` 时），其他请求由 JWT 的 `TokenAuthenticator` 判断。**你的 `Authenticator` bean 会替换掉这一切，连同每一项 `cosec.authentication.revocation.*` 设置**：starter 把这些设置交给它自己构建的 `TokenAuthenticator`，而你构建的 `TokenAuthenticator` 取构造函数的默认值（偏差 5 秒、`fail-closed: false`），不管运维设置了什么。要接受另一种令牌格式并保留内置认证，自己构建内置认证器，像 starter 那样取每一项设置，并委托给它们：
 
 ```kotlin
 @Bean
-fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys: ApiKeyReader): Authenticator {
+fun cosecAuthenticator(
+    algorithm: Algorithm,
+    verifier: ObjectProvider<TokenVerifier>,   // 你自己的校验器（若已注册）；starter 优先使用它
+    tokenStore: TokenStore,                    // cosec-cocache 的存储：它的 `reader` 就是 starter 的吊销读取器
+    unchecked: UncheckedRevocations,           // starter 中统计未经吊销检查而被接受的令牌的计数器
+    keys: ApiKeyReader,                        // Redis API key 的读取器；使用内存存储时是 InMemoryApiKeyStore.reader
+    @Value("\${cosec.authentication.revocation.skew:5s}") skew: Duration,
+    @Value("\${cosec.authentication.revocation.fail-closed:false}") failClosed: Boolean,
+): Authenticator {
     val builtIn = CompositeAuthenticator(
-        TokenAuthenticator(JwtTokenVerifier(algorithm), revocations),
+        TokenAuthenticator(
+            verifier.getIfAvailable { JwtTokenVerifier(algorithm, skew) },
+            (tokenStore as CoCacheTokenStore).reader,   // 若你有自己的 RevocationReader bean，用它
+            revocationSkew = skew,
+            acceptUnavailableRevocations = !failClosed,  // true 表示读不到吊销时接受令牌
+            unchecked = unchecked,
+        ),
         ApiKeyAuthenticator(keys),
     )
     val sessions = SessionTokenAuthenticator() // 你自己的 Authenticator，处理 "Session ..." 令牌
@@ -166,6 +180,8 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 }
 ```
 
+运维设置了 `cosec.authentication.revocation.fail-closed: true`，只要这个写法漏掉读取它的那一行，就重新敞开了，而且没有任何日志：这三项设置要保留，否则吊销方面的加固就丢了（[这个例外](../guide/security-model.md#the-two-documented-exceptions)）。
+
 自定义的 `TokenVerifier` 返回 `VerifiedToken`（`me.ahoo.cosec.spi.token`），一个由它校验过的声明构成的不可变值：`id`、`principal`、`tenant`、`app`（令牌的 `aud`）、`roles`、`policies`、`attributes`、时间和成员关系标记。它的构造函数对任何令牌都不允许的声明（以 `(` 开头的 id、空租户、落单代理项、不可能的应用）抛出 `TokenVerificationException`，所以无论哪个校验器读取，`verify` 都会拒绝。
 
 按契约，`TokenVerifier` 是纯计算：不做 I/O，不做任何阻塞的事，因为流水线在请求的线程上调用它。令牌是否被吊销不由它回答：`TokenAuthenticator`、刷新（`RefreshTokenAuthentication`）和 `TokenRevoker` 都通过挂起式的 `RevocationReader` 读取，并共用同一个判断 `TokenRevocation`。只有 CoSec 自己的校验器签发的令牌才能使用 break-glass。带 `act` 声明的令牌绝不能成为主体（`IDN-4`）：自定义的 `TokenVerifier` 遇到它时抛出 `DelegationUnsupportedException`，`TokenAuthenticator` 把它变成 `token-invalid` 拒绝；自行读取令牌的自定义 `Authenticator` 则返回 `AuthnResult.Rejected(DELEGATION_UNSUPPORTED)`，而不是以它的 `sub` 作为主体。令牌、声明和成员关系对用户意味着什么，见[认证](../integration/authentication.md)。
@@ -174,7 +190,7 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
 
 | 扩展点 | 契约 |
 |---|---|
-| `TokenStore` | 吊销的写入侧，供登出使用：`revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`，两者都是挂起函数，不阻塞。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
+| `TokenStore` | 吊销的写入侧，由 CoSec 自己的 `TokenRevoker` 调用，你的代码从不直接调用：`revoke(tokenId, ttl)` 接收令牌的 `jti`（`VerifiedToken.id`），不是令牌本身，所以 `revoke(accessToken, ttl)` 会写入一个以有效凭证命名的键，却什么也没吊销。应用通过 `TokenRevoker` 登出用户或吊销主体（[登出与吊销](../integration/authentication.md#logout-and-revocation)）。存储的方法是 `revoke(tokenId, ttl)`、`revokeSubject(tenant, principal, issuedBefore, ttl)`，两者都是挂起函数，不阻塞。条目必须比它吊销的刷新令牌存活得更久。无法吊销某主体全部令牌的存储从 `revokeSubject` 抛出异常，紧急吊销因此绝不会悄悄失效。 |
 | `TokenFamilyStore` | 刷新令牌的会话（[会话](../integration/authentication.md#sessions)）：`create`、`read`，以及只在读到的版本之上 `replace` 一个令牌族，跨实例原子。读取失败或写入无法确认时抛出异常。只在登录、刷新和登出时读写。 |
 | `RevocationReader` | 吊销的读取侧，每个已认证请求都会调用：`isRevoked(tokenId)`、`subjectRevokedBefore(tenant, principal)`。两者都是挂起函数，不得阻塞。 |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`，挂起函数。未知的 key 返回 null；查找失败时抛出异常（请求应答 `503`）。 |

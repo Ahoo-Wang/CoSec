@@ -1,0 +1,45 @@
+{
+  "rules": [
+    "DOC-9"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "The DENY direction under a negation: an ALLOW for everyone but Ärzte, written as not eq with ignoreCase, would admit ärzte. The document does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "not-doctors",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*",
+              "condition": {
+                "not": {
+                  "eq": [
+                    "subject.attributes.dept",
+                    "Ärzte"
+                  ],
+                  "ignoreCase": true
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "not-doctors",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "not-doctors"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "does not match [ärzte]"
+  }
+}

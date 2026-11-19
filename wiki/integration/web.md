@@ -659,7 +659,7 @@ whose authenticator names no credential (CoSec's token and API key authenticator
 | `v` | `1`. |
 | `tenant`, `sub` | The tenant and principal the gateway verified. |
 | `scope` | `{app, space}`, as the gateway resolved them. |
-| `roles` | The principal's roles in that space: those the decision used. |
+| `roles` | The principal's roles in that space, by their bare names: those the decision used. The scope's roles, not every role of the token (the token's `roles` claim lists the roles of every space as `role@space`). |
 | `auth` | `{method, jti, exp, iat, capped, session}`: how the principal authenticated (`jwt` and `api-key` are CoSec's own; any other non-empty name is read as it is, so a gateway with another authenticator works), the token's `jti` or the key's id, the credential's expiry, and when it was issued (`iat`, absent when the credential does not say, never after `exp`); `session` only for CoSec's own token (`jwt`): its `sid`, `auth_time` (when the user signed in) and `generation`, so that a service behind the gateway knows the login time and a [tenant switch](./authentication.md#switching-tenant-and-app) there can issue from it; `capped: true` only for a credential with a role cap, which then gets no grant from principal bindings or attachments behind the gateway either (their DENYs still apply). Only `jwt`, which a gateway forwards for CoSec's own token alone, gets break-glass. Never the credential itself. |
 | `iat` | When the gateway made the header, in epoch seconds. |
 | `rid` | The gateway's request id. |

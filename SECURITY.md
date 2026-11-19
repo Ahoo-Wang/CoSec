@@ -9,7 +9,7 @@ Security fixes land on `main` first and are backported to the maintenance branch
 
 | Version | Branch | Supported |
 |---|---|---|
-| 8.0 (in development) | `main` | ✅ |
+| 8.0 (pre-release) | `main` | ✅ |
 | 7.x | `7.x` | ✅ security and critical fixes, until 6 months after 8.0.0 GA |
 | 6.1.x | `release/6.1.x` | ✅ security fixes only |
 | < 6.1 | — | ❌ |

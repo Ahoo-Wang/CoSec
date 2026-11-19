@@ -18,8 +18,7 @@ pnpm add react @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
 
 Until CoSec 8.0 is released, the `latest` tag of both packages points at a `0.0.0`
 placeholder that is marked deprecated, so an install without a tag gets the
-placeholder and a deprecation notice, not the client. Install `@beta`, as above,
-or an exact version. After the release, drop `@beta`. They are published with each
+placeholder and a deprecation notice, not the client. Install the tag of the CoSec release you run: `@beta` for `8.0.0-beta.n` (as above), `@rc` for a release candidate, no tag once 8.0 is released; or an exact version, which stays right through all of them. A tag does not move past its line: once release candidates are out, `@beta` is still the last beta, which does not match an RC server. They are published with each
 CoSec release, at the version of CoSec.
 
 Peer dependencies: `react` (19) and `@ahoo-wang/cosec-fetcher`; the fetcher
@@ -31,6 +30,14 @@ the client share the `TokenStorage` instance.
 Requires Node `^22.12.0 || ^24.0.0 || >=26.0.0` to build.
 
 ## Example
+
+```ts
+// tokenStorage.ts: the module the example below imports.
+import { cosec } from './cosec'; // the module that creates and applies the CoSecConfigurer (see the fetcher package's README)
+
+export const tokenStorage = cosec.tokenStorage;
+export const tokenManager = cosec.tokenManager;
+```
 
 ```tsx
 import {

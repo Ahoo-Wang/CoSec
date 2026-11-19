@@ -40,26 +40,45 @@ that needs it fails closed.
 
 ## Minimal platform document
 
+A first platform document that is safe to start from. Everything not named is denied (default deny), so each grant
+below is the whole of what it opens:
+
+<!-- sample: wiki/examples/first-document/documents/platform.json -->
 ```json
 {
-  "schema": 2, "revision": 1, "publishedAt": "2026-10-28T00:00:00Z",
+  "schema": 2, "revision": 1, "publishedAt": "2026-11-01T08:00:00Z",
   "policies": [
     { "id": "public", "statements": [
-      { "name": "health", "effect": "allow", "action": "http:GET", "resource": "http:path:/actuator/health" },
-      { "name": "login", "effect": "allow", "action": "http:POST", "resource": "http:path:/auth/login" } ] },
+      { "name": "login", "effect": "allow", "action": "http:POST", "resource": "http:path:/auth/login" },
+      { "name": "health", "effect": "allow", "action": "http:GET", "resource": "http:path:/actuator/health" } ] },
     { "id": "members", "statements": [
-      { "effect": "allow", "action": "*", "condition": { "eq": ["subject.authenticated", true] } } ] },
-    { "id": "no-admin-api", "statements": [
-      { "effect": "deny", "action": "http:*", "resource": "http:path:/api/admin/**",
-        "condition": { "not": { "in": ["admin", "scope.roles"] } } } ] }
+      { "name": "read-the-api", "effect": "allow", "action": "http:GET", "resource": "http:path:/api/**",
+        "condition": { "eq": ["subject.authenticated", true] } } ] },
+    { "id": "admins-only", "statements": [
+      { "name": "admin-api-needs-the-admin-role", "effect": "deny", "action": "http:*", "resource": "http:path:/api/admin/**",
+        "condition": { "not": { "in": ["admin", "scope.roles"] } } } ] },
+    { "id": "control-api", "statements": [
+      { "name": "reach-the-control-api", "effect": "allow", "action": ["http:GET", "http:POST", "http:DELETE"],
+        "resource": "http:path:/cosec/control/v1/**", "condition": { "eq": ["subject.authenticated", true] } } ] }
   ],
   "bindings": [
     { "id": "public", "subject": "*", "app": "*", "space": "*", "policy": "public" },
     { "id": "members", "subject": "*", "app": "*", "space": "*", "policy": "members" },
-    { "id": "no-admin-api", "subject": "*", "app": "*", "space": "*", "policy": "no-admin-api" }
+    { "id": "admins-only", "subject": "*", "app": "*", "space": "*", "policy": "admins-only" },
+    { "id": "control-api", "subject": "*", "app": "*", "space": "*", "policy": "control-api" }
   ]
 }
 ```
+
+What it permits: anyone may `POST /auth/login` and `GET /actuator/health`; a signed-in caller of **any tenant** may
+`GET` under `/api/`, except under `/api/admin/`, which also needs the role `admin` (a DENY that lifts only for that
+role); a signed-in caller may reach the control API's paths. What it does not permit: any other method or path, so
+every write, and every anonymous request except the first two. Reaching the control API's paths is a path, not a
+permission: the control plane authorizes each step again, and without that statement a document can never be changed
+later, because `cosec-migrate publish` never overwrites. It is written for requests without a route map (`http:<METHOD>`);
+with a route map, write the mapped actions (see "Actions and resources"). Narrow `/api/**` to the routes of your
+service before real use. This document is a file under `wiki/examples/first-document/`, and its scenarios run on every
+build (`DocumentationExamplesTest`); `check:docs` fails when this copy and the file differ.
 
 A policy does nothing until a binding (or a token's `policies` claim, for an `attachable` policy) names it.
 
@@ -69,8 +88,12 @@ A policy does nothing until a binding (or a token's `policies` claim, for an `at
   before its statements; it cannot read `resource.var.*`), `attachable` (default `false`: a principal may list it in
   its token's `policies` claim), `boundary` (platform only, see below).
 - Statement: `effect` (`allow` or `deny`, required), `action` (one pattern or a non-empty array, required),
-  `resource` (one or an array; absent means any resource), `condition`, `name`, and `onMissing` for external
+  `resource` (one or an array; **absent means every resource of every service**), `condition`, `name`, and `onMissing` for external
   attributes.
+- A statement without `resource` matches every resource. `{"effect": "allow", "action": "http:GET"}`, bound to `"*"` in
+  the platform document, permits every `GET` of every service in every tenant, anonymous callers included
+  (`wiki/examples/no-resource/`, with its scenarios). There is no explicit spelling for "any resource": write the
+  resource of every ALLOW, and leave it out only when "every resource" is meant.
 - Ids starting with `cosec:` are built in: `cosec:blacklist`, `cosec:root` (break-glass only),
   `cosec:platform-admin`, `cosec:tenant-admin`, `cosec:tenant-viewer`. No document defines them, and
   `cosec:platform-admin` is bound only in the platform document and the `(platform)` tenant's own (elsewhere the
@@ -111,9 +134,9 @@ One object with exactly one operator. Literals keep their JSON type: `"true"` is
 
 | Operator | Form | Notes |
 |---|---|---|
-| `eq` | `{"eq": [attr, value]}`, optional sibling `"ignoreCase": true` | value is a string, a boolean, or `{"attr": path}` of the same type; string, bool and IP attributes |
+| `eq` | `{"eq": [attr, value]}`, optional sibling `"ignoreCase": true` | value is a string, a boolean, or `{"attr": path}` of the same type; string, bool and IP attributes. `ignoreCase` folds ASCII only: with a letter beyond ASCII (`Ärzte`) it does not compile in a DENY, a rate limit rule or an ALLOW under `not` (`DOC-9`); list the spellings with `in` |
 | `in` | `{"in": [attr, [values]]}` or `{"in": ["literal", setAttr]}` | value is one of them; or the set contains the literal |
-| `prefix` | `{"prefix": [attr, "text"]}`, optional `ignoreCase` | strings; on `*.host.labels` a prefix of whole labels (`com.example`) |
+| `prefix` | `{"prefix": [attr, "text"]}`, optional `ignoreCase` (ASCII only, as for `eq`) | strings; on `*.host.labels` a prefix of whole labels (`com.example`) |
 | `cidr` | `{"cidr": [ipAttr, ["10.0.0.0/8", ...]]}` | IPv4 and IPv6 blocks |
 | `time` | `{"time": {...}}` | at least one of `notBefore` (inclusive), `notAfter` (exclusive), `daysOfWeek` (exactly `MON`..`SUN`), `from`/`to` (`HH:mm`, may cross midnight); `zone` default `UTC` |
 | `exists` | `{"exists": attr}` | the attribute has a value (the empty string counts) |
@@ -123,11 +146,14 @@ One object with exactly one operator. Literals keep their JSON type: `"true"` is
 There is no `true`/`false` condition, no expression language (no SpEL, no OGNL, no regex), and no `negate` flag:
 use `not`. Attributes:
 
-- `subject.id`, `subject.tenant`, `subject.authenticated` (bool), `subject.roles` (bare role ids in any space),
+- `subject.id` (absent for an anonymous caller: never compare it with `(0)`, which does not compile (`DOC-11`); test
+  `subject.authenticated` instead), `subject.tenant`, `subject.authenticated` (bool), `subject.roles` (bare role ids in any space),
   `subject.scopedRoles` (`role` / `role@space` as claimed), `subject.attributes.<name>` (token or API key attributes);
 - `scope.tenant`, `scope.app`, `scope.space`, `scope.roles` (the roles in effect in the request's space);
-- `action.service`, `action.verb`, `resource.type`, `resource.id`, `resource.attributes.<name>` (set by checks in
-  code), `resource.var.<name>`;
+- `action.service`, `action.verb`, `resource.type`, `resource.id`, `resource.var.<name>` (a fact about a resource goes in
+  its id and is read as a pattern variable, see https://cosec.ahoo.me/integration/checks#object-level-rules;
+  `resource.attributes.<name>` is set by nothing, not the request pipeline nor `AuthorizationChecker`, and does not
+  compile, `DOC-10`);
 - `environment.ip` (IP), `environment.time`, `environment.device`, `environment.blocked` (bool);
 - `http.header.<name>` (name case-insensitive), `http.origin`, `http.referer`, `http.origin.host`,
   `http.referer.host` (lower case), `*.host.labels`, `request.attributes.<name>` (the gateway sets
@@ -176,6 +202,7 @@ write that field by hand.
 ```
 
 - `subject`: `"*"` (anyone, anonymous included), `{"principal": "...", "tenant": "..."}` or `{"role": "...", "tenant": "..."}`.
+  A principal id beginning with `(` does not compile (`DOC-11`): the anonymous principal matches no principal binding.
 - `app`: an app id or `"*"` (never empty). `space`: a space id, `""` for the default space only, or `"*"` for any space.
   `"*"` means any and only that. A space id beginning with `(` is CoSec's: a binding in one does not compile.
 - `expiresAt` (ISO instant): the binding stops applying then. `breakGlass`: see below.
@@ -290,6 +317,7 @@ https://cosec.ahoo.me/guide/security-model.
 Check the final document for:
 
 - broad `subject: "*"` ALLOWs that grant more than intended (`*` includes anonymous callers);
+- an ALLOW with `action: "*"`, or without `resource` (it matches every resource of every service);
 - `http:*` DENYs and `http:` rate limit rules on a path that a route map also maps (they never apply to mapped requests):
   write the statement for the mapped action too (https://cosec.ahoo.me/scenarios/route-maps);
 - ALLOWs built on `not`, or on attributes that can be absent (headers, `request.attributes.*`);

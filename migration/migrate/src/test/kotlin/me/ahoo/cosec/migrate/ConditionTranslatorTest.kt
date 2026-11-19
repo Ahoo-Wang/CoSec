@@ -222,13 +222,9 @@ class ConditionTranslatorTest {
             for (template in listOf("#{principal.id}", "#{principal.attributes['owner']}", "#{tenant.tenantId}")) {
                 val json = """{"eq":{"part":"resource.owner","value":"$template"}}"""
                 val changes = ArrayList<SemanticChange>()
-                val translated = translate(json, false, changes = changes) as Translated.Ast
+                // 8.0 sets no resource attributes, and a document may not read one (DOC-10): it is what it means there.
+                translate(json, false, changes = changes).assert().isEqualTo(Translated.Never)
                 changes.map { it.change }.assert().containsExactly("NOT-IN-8.0")
-                val ast = Matchers7x.evaluator(translated) { it.enforced }
-                val bothEmpty = FIXED.first().copy(principalAttributes = emptyMap(), resourceAttributes = emptyMap())
-                for (request in List(REQUESTS) { Facts.random(Random(SEED + it)) } + FIXED + bothEmpty) {
-                    ast(request).assert().describedAs("$template on $request").isFalse()
-                }
                 val rejections = ArrayList<Rejection>()
                 translate(json, true, rejections).assert().isNull()
                 rejections.single().message.assert().contains("never holds")

@@ -94,8 +94,7 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 网关在没有任何文档时也能启动，但在平台文档发布之前，对每个被路由的请求都回答 `503`
 （[最初的文档](./storage.md#the-first-documents)），在此期间报告自己未就绪（[就绪](#readiness)）。每个环境都需要：
 
-1. **`maxmemory-policy noeviction` 的 Redis。** 每个实例在启动时用 `INFO memory` 检查，否则不启动
-   （[Redis 要求](./storage.md#redis-requirements)）。在拒绝 `INFO` 的 Redis 上，自行设置 `noeviction`，
+1. **`maxmemory-policy noeviction`、持久化、副本和备份。** Redis 是文档和吊销记录的唯一一份：没有持久化，重启之后每个请求都是 `503`，已吊销的令牌又会生效（[Redis 要求](./storage.md#redis-requirements)）。关于 `noeviction`：每个实例在启动时用 `INFO memory` 检查，否则不启动。在拒绝 `INFO` 的 Redis 上，自行设置 `noeviction`，
    并设置 `COSEC_AUTHORIZATION_SNAPSHOT_EVICTION_CHECK=warn`。
 2. **文档。** 用 `cosec-migrate publish --to-redis <uri> --in <dir>` 发布它们；如果将由控制面管理，再用
    `cosec-migrate bootstrap` 指定第一个管理员。网关、控制面和 `cosec-migrate` 必须使用同一个 Redis 和同一个
@@ -182,7 +181,7 @@ management:
 
 - **不注入 Service 链接**（`enableServiceLinks: false`）。否则 Kubernetes 会把 `COSEC_GATEWAY_SERVICE_HOST`、
   `COSEC_GATEWAY_PORT_80_TCP_ADDR` 这类由 Service `cosec-gateway` 派生的变量放进网关的环境。Spring 把它们读作
-  `cosec.gateway.*` 配置项，8.0.0-alpha.1 会把它们当作 CoSec 不读取的 `cosec.*` key 而拒绝启动；从 alpha.2 起，检查会跳过这些确切的变量
+  `cosec.gateway.*` 配置项；检查 CoSec 不读取的 `cosec.*` key 时，会跳过这些确切的变量
   （[未知配置项](./configuration.md#unknown-properties)）。网关通过 DNS 找到服务，环境里并不需要它们。
 - **Pod 安全。** 网关以镜像中的 `appuser` 运行（uid 999；镜像只给出用户名、没有给出 uid，所以清单写明 uid，让
   `runAsNonRoot` 能够检查），根文件系统只读，不允许提权，丢弃所有 capability，使用运行时默认的 seccomp 配置，不挂载
@@ -225,7 +224,7 @@ management:
   overlay 替换这个变量；修改时同时修改内存请求和限制。
 - **CPU。** JVM 按 CPU 限制确定 GC、JIT 和 Netty 的线程数，自动伸缩器按 CPU 请求计算。
 
-原生部分在镜像中测得（`8.0.0-alpha.1`，`linux/arm64`，Docker，使用上述限制和只读根文件系统）：在没有发布平台文档、每个请求都回答
+原生部分在镜像中测得（8.0 预览版构建，`linux/arm64`，Docker，使用上述限制和只读根文件系统）：在没有发布平台文档、每个请求都回答
 `503` 的情况下，向一条路由和健康端点发送约 45,000 个请求后，容器占用 471 MiB（dev）和 1,277 MiB（production），没有进程因内存被杀。
 
 ## CI 如何检查镜像 {#how-ci-checks-the-image}
@@ -343,3 +342,5 @@ java -XX:AOTCache=app.aot -cp "$CLASSPATH" com.example.App
 两种环境下，有缓存时启动都快了约四分之一：容器中位数快 27 %，最快一次快 26 %，原生快 24 %。有缓存时，网关加载的类中有 83 % 来自缓存
 （15,884 个中的 13,127 个）。原始结果、命令和机器信息见
 [`docs/perf/gateway-aot-cache`](https://github.com/Ahoo-Wang/CoSec/tree/main/docs/perf/gateway-aot-cache)。
+
+**下一步：**每个设置项及其默认值，见[配置](./configuration.md)。

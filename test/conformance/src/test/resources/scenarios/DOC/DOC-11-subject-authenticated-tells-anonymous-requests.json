@@ -1,0 +1,78 @@
+{
+  "rules": [
+    "DOC-11"
+  ],
+  "polarity": "negative",
+  "level": "engine",
+  "description": "What to write instead: a DENY on subject.authenticated false, bound to everyone. The document compiles and denies an anonymous request; a tenant id beginning with ( is not a principal id and stays valid in a condition.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "no-anonymous",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "condition": {
+                "and": [
+                  {
+                    "eq": [
+                      "subject.authenticated",
+                      false
+                    ]
+                  },
+                  {
+                    "eq": [
+                      "subject.tenant",
+                      "(0)"
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "no-anonymous",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-anonymous"
+        }
+      ]
+    }
+  },
+  "credential": {
+    "anonymous": true
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": {
+      "policy": "no-anonymous",
+      "statement": 0,
+      "via": {
+        "binding": "no-anonymous",
+        "document": "platform"
+      }
+    }
+  }
+}

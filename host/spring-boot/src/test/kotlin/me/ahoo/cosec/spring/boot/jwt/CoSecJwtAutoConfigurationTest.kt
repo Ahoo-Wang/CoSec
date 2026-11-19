@@ -70,6 +70,30 @@ class CoSecJwtAutoConfigurationTest {
             }
     }
 
+    /** #1666, `IDN-29`: the verifier tolerates an issuer's clock ahead by `cosec.authentication.revocation.skew`. */
+    @Test
+    fun theVerifierTakesTheRevocationSkew() {
+        contextRunner
+            .withPropertyValues(
+                "${JwtProperties.PREFIX}.secret=FyN0Igd80Gas8stTavArGKOYnS9uLwGA_",
+                "cosec.authentication.revocation.skew=30s",
+            )
+            .withBean(TokenStore::class.java, { RecordingTokenStore() })
+            .withBean(TokenFamilyStore::class.java, { InMemoryTokenFamilyStore() })
+            .withBean(RevocationReader::class.java, { RevocationReader.NONE })
+            .withUserConfiguration(
+                CoSecAuthenticationAutoConfiguration::class.java,
+                CoSecJwtAutoConfiguration::class.java,
+            )
+            .run { context: AssertableApplicationContext ->
+                val ahead = JWT.create().withJWTId("t1").withSubject("alice")
+                    .withIssuedAt(java.time.Instant.now().plusSeconds(20))
+                    .withExpiresAt(java.time.Instant.now().plusSeconds(600))
+                    .sign(context.getBean(Algorithm::class.java))
+                context.getBean(TokenVerifier::class.java).verify(ahead).principal.assert().isEqualTo("alice")
+            }
+    }
+
     @Test
     fun contextLoadsIfNotExistIdGenerator() {
         contextRunner

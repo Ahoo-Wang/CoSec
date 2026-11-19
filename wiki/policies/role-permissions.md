@@ -31,7 +31,6 @@ The app document of app `order` has the key `app:order`. It holds a [catalog](#p
       {
         "name": "order",
         "description": "Orders",
-        "spaced": true,
         "permissions": [
           { "id": "read", "name": "Read orders" },
           { "id": "ship", "name": "Ship orders" }
