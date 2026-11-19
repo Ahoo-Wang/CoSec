@@ -108,25 +108,26 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
     private fun cause(event: DecisionEvent): String = when (event.outcome.reason) {
         Reason.AUTHENTICATOR_UNAVAILABLE -> "authenticator"
         Reason.DEADLINE_EXCEEDED -> "deadline"
-        else -> cause(event.outcome.cause)
-    }
-
-    private fun cause(cause: Cause?): String = when (cause) {
-        is Cause.SourceUnavailable, is Cause.NotLoaded -> "source_unavailable"
-        is Cause.DocumentInvalid -> "document_invalid"
-        is Cause.MissingPolicies, is Cause.AmbiguousPolicy -> "missing_policies"
-        is Cause.MembershipUnavailable -> "membership"
-        is Cause.AttributeUnavailable -> "attribute"
-        is Cause.MatcherFailed -> "matcher"
-        is Cause.RequiredListenerFailed -> "required_listener"
-        is Cause.BoundaryUnavailable -> "boundary"
-        is Cause.RateLimiterUnavailable -> "rate_limiter"
-        // Only a check answers it, and a check reaches no listener: never on the timer.
-        is Cause.CheckFailed -> "check"
-        null -> "unknown"
+        else -> causeTag(event.outcome.cause)
     }
 
     companion object {
+        /** The `cause` tag of [cause]: one value for each kind, a closed set (`OBS-6`). */
+        internal fun causeTag(cause: Cause?): String = when (cause) {
+            is Cause.SourceUnavailable, is Cause.NotLoaded -> "source_unavailable"
+            is Cause.DocumentInvalid -> "document_invalid"
+            is Cause.MissingPolicies, is Cause.AmbiguousPolicy -> "missing_policies"
+            is Cause.MembershipUnavailable -> "membership"
+            is Cause.AttributeUnavailable -> "attribute"
+            is Cause.MatcherFailed -> "matcher"
+            is Cause.RequiredListenerFailed -> "required_listener"
+            is Cause.BoundaryUnavailable -> "boundary"
+            is Cause.RateLimiterUnavailable -> "rate_limiter"
+            // Only a check answers it, and a check reaches no listener: never on the timer.
+            is Cause.CheckFailed -> "check"
+            null -> "unknown"
+        }
+
         const val NAME = "metrics"
         const val METRIC_NAME = "cosec.authorization"
         const val RESULT_TAG = "result"
