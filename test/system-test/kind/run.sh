@@ -158,14 +158,24 @@ ok "decisions: anonymous 401 unauthorized, a denied path 403 forbidden, a permit
 # --- 4. the scrape endpoint, from inside the cluster -----------------------------------------------------------------
 # The pods of this leg run the image under test (already loaded into the cluster, never pulled): it has curl and a shell, and
 # nothing else is fetched from a registry that the leg chooses.
-probe() { # <name> <command...>: runs the command in a pod of the image, in the gateway's namespace; prints its output
-  local name=$1
+# A probe pod is created, waited for until it has finished, read with `kubectl logs` and deleted: no `-i`, no attach, which can
+# return before the pod's output (a leg that loses a step's output is a defect of the leg, and nothing is retried).
+pod_finished() { case "$(kc get pod "$1" -o jsonpath='{.status.phase}')" in Succeeded | Failed) return 0 ;; *) return 1 ;; esac; }
+probe() { # <name> <command...>: runs the command in a pod of the image, prints its output; fails when the command does
+  local name=$1 phase
   shift
-  kc run "$name" --image="$IMAGE" --image-pull-policy=Never --restart=Never --rm -i --quiet --command -- "$@"
+  kc run "$name" --image="$IMAGE" --image-pull-policy=Never --restart=Never --command -- "$@" >/dev/null
+  # The image is on the node already (loaded, never pulled): the pod starts in seconds; its longest command is a curl of at
+  # most 10 s (its own -m).
+  wait_for "the probe pod $name to finish" 60 "pod start with the image on the node + curl's own 10 s timeout" pod_finished "$name"
+  phase=$(kc get pod "$name" -o jsonpath='{.status.phase}')
+  kc logs "$name"
+  kc delete pod "$name" --wait=true >/dev/null
+  [ "$phase" = Succeeded ]
 }
 POD_IP=$(kc get pod "$GATEWAY_POD" -o jsonpath='{.status.podIP}')
-SCRAPE=$(probe scrape curl -fs "http://$POD_IP:8081/actuator/prometheus") || fail "the scrape endpoint is not reachable from another pod on $POD_IP:8081"
-echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{' || fail "the scrape has no cosec.authorization timer"
+SCRAPE=$(probe scrape curl -fs -m 10 "http://$POD_IP:8081/actuator/prometheus") || fail "the scrape endpoint is not reachable from another pod on $POD_IP:8081"
+echo "$SCRAPE" | grep -q '^cosec_authorization_seconds_count{' || fail "the scrape has no cosec.authorization timer; the scrape answered: ${SCRAPE:0:300}"
 # 000: curl got no answer at all (the Service has no port 8081), whatever kubectl does with the pod's exit code.
 PUBLISHED=$(probe published curl -s -m 5 -o /dev/null -w '%{http_code}' http://cosec-gateway:8081/actuator/prometheus || true)
 case "$PUBLISHED" in *000*) ;; *) fail "the Service cosec-gateway publishes the management port 8081 (answered: $PUBLISHED)" ;; esac
