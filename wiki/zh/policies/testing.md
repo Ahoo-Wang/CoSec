@@ -7,6 +7,18 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 
 面向在生产环境修改文档的策略作者和评审者。每个文档变更都经过控制面：控制面检查并编译变更，可以在影子窗口中用线上流量试运行，在无法证明变更安全时要求第二个人审批，然后才发布。本页介绍这一流程及其周边工具。字段本身见[策略语言](./language.md)。
 
+## 用测试证明 {#prove-it-with-a-test}
+
+文档到达控制面之前，你自己构建里的测试就可以用每个实例都在运行的引擎证明它会做出什么决策。`cosec-testkit` 有三个层次，从文档到你的应用：
+
+| 你想证明 | 使用 | 位置 |
+|---|---|---|
+| 文档应当放行的请求被放行，应当拒绝的请求没有被放行：放在文档旁边的场景文件 | `PolicyTestKit` | [测试决策](#testing-decisions) |
+| 决策周围的代码行为正确：CoSec 回答的状态和 problem，读取调用方的处理器 | `PipelineFixture` | [用真实管道测试代码](#testing-your-code-against-a-real-pipeline) |
+| 读取调用方的处理器或函数，在管道生成的 `SecurityContext` 下工作正常 | `PermittedRequest` | [测试你的应用](#testing-your-application) |
+
+不写测试也可以用编译器检查同样的文档（[CI 中的策略](#policies-in-ci)）。本页其余部分讲的是修改已经上线的文档。
+
 ## 控制面 {#the-control-plane}
 
 控制面随 `cosec-control` 模块提供（它需要 `cosec-cocache`，因为文档保存在 Redis 中）。它在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供 HTTP API；其设置为 `cosec.control.*`（[配置](../operations/configuration.md)），文档如何存储以及如何首次发布见[存储](../operations/storage.md)。

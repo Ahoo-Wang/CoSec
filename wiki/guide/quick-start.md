@@ -285,6 +285,7 @@ Then go through the [hardening checklist](./security-model.md#hardening-checklis
 - See what you can leave out, then grow: [Simple mode](../scenarios/simple-mode.md), and the scenarios from
   [An app without spaces](../scenarios/app.md) to [Gateway topologies](../scenarios/gateway.md).
 - Grant access by role, per app and space: [Role permissions](../policies/role-permissions.md).
+- Prove in a unit test what your documents decide, with scenario files next to them: [Prove it with a test](../policies/testing.md#prove-it-with-a-test).
 - Change documents safely through the control plane, with simulation and shadow windows: [Testing policies](../policies/testing.md).
 - Replace the demo `/token` endpoint with a real login, which starts a session ([Authentication](../integration/authentication.md)).
   Then let the starter serve refresh and logout: set `cosec.authentication.login.refresh.path: /auth/refresh` and
