@@ -10,6 +10,30 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
+- **A `cosec.*` switch whose value CoSec cannot read fails startup** (`UB-1`). Through beta.3 a value such as
+  `cosec.enabled=1`, `on`, an empty string or ` true ` was true to Spring's binder and "off" to the condition that wires
+  the beans, so CoSec, or the feature, was switched off without a word; an empty `cosec.pipeline.mode` wired no pipeline,
+  and a Spring Cloud Gateway host started as an open proxy. `cosec.authorization.shadow.enabled=off` (or `0`) left
+  shadowing on. Now the starter refuses, before any bean, every switch that is not `true` or `false` (any case, no
+  surrounding spaces; `cosec.pipeline.mode` accepts `enforce` or `gateway`, `cosec.api-key.store` `memory` or `redis`),
+  naming the key, the value found and the values accepted
+  ([Startup fails on an unreadable switch](./troubleshooting.md#startup-fails-on-an-unreadable-switch)). Affected:
+  a configuration, an environment variable or a Helm value that writes a switch another way. Write `true` or `false`,
+  or remove the key to take its default. A switch written `false` still switches its feature off.
+- **The `cosec.authorization` timer has a `problem` tag, and every series has the same tag keys** (`UB-8`). The new tag
+  holds the slug of the problem the client was told (`unauthorized`, `token-expired`, `forbidden`, ...) or `none`, so a
+  `401` tells apart from a `403` and one token problem from another
+  ([Metrics](./observability.md#metrics)). The `cause` tag, which only `indeterminate` series had, is now on every
+  series, `none` outside `indeterminate`: a Prometheus registry refuses meters of one name with different tag keys.
+  Affected: a query that selects series by the absence of `cause` (`cause=""`) now selects `cause="none"`; a sum over
+  the new tags is the old series.
+- **New log lines** (nothing to change): one INFO summary of what CoSec is configured as, and one WARN when
+  `cosec.enabled=false` ([Startup summary](./observability.md#startup-summary)); a WARN, repeated every `lag-warn`,
+  while the platform document is absent, naming the key, the key prefix and the Redis it reads
+  ([Instance is not ready](./troubleshooting.md#instance-is-not-ready)); a WARN on a Spring Cloud Gateway host that has
+  controllers or functional routes of its own, which CoSec does not decide
+  ([Web](../integration/web.md#the-gateways-own-handlers)); and the client-address line now says what the default
+  `max-trusted-index` risks.
 - **Security: a check of a request that has ended is denied** (`PIP-26`). Through beta.3, a `SecurityContext` kept
   after its request (in a field, a cache, a message to a consumer) went on permitting with
   `AuthorizationChecker`, on the memberships it was made with, after logout, a revoked token or a removed role. Now the

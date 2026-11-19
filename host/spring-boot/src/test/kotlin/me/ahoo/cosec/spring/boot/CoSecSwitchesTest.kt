@@ -16,19 +16,19 @@
 package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
-import me.ahoo.test.asserts.assert
-import me.ahoo.test.asserts.assertThrownBy
 import me.ahoo.cosec.spring.boot.apikey.apiKeysEnabled
 import me.ahoo.cosec.spring.boot.audit.kafka.kafkaAuditDelivery
 import me.ahoo.cosec.spring.boot.control.ControlPlaneCondition
+import me.ahoo.test.asserts.assert
+import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
-import org.springframework.boot.test.context.runner.ApplicationContextRunner
-import org.springframework.mock.env.MockEnvironment
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty
+import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.context.annotation.Conditional
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver
 import org.springframework.core.type.classreading.SimpleMetadataReaderFactory
+import org.springframework.mock.env.MockEnvironment
 
 /**
  * UB-1: the table of switches the startup check reads ([CoSecSwitches]) is the set of `cosec.*` keys the starter's
@@ -62,7 +62,9 @@ class CoSecSwitchesTest {
                     merged.stream<Annotation>(CONTAINER).toList()
                         .flatMap { it.getAnnotationArray("value", ConditionalOnProperty::class.java).toList() }
                 properties.forEach { property ->
-                    val prefix = property.getString("prefix").let { if (it.isEmpty() || it.endsWith(".")) it else "$it." }
+                    val prefix = property.getString(
+                        "prefix"
+                    ).let { if (it.isEmpty() || it.endsWith(".")) it else "$it." }
                     val names = property.getStringArray("value") + property.getStringArray("name")
                     val having = property.getString("havingValue")
                     for (name in names) {
@@ -89,7 +91,16 @@ class CoSecSwitchesTest {
     @Test
     fun `the table holds exactly the cosec keys the conditions compare with a value, and the values they compare with`() {
         val scan = scan()
-        val derived = scan.values.mapValues { (_, values) -> if (values == setOf("true")) setOf("true", "false") else values }
+        val derived = scan.values.mapValues { (_, values) ->
+            if (values == setOf("true")) {
+                setOf(
+                    "true",
+                    "false"
+                )
+            } else {
+                values
+            }
+        }
         val table = CoSecSwitches.ALL.associate { it.key to it.accepted.toSet() }
         table.assert().isEqualTo(derived)
     }

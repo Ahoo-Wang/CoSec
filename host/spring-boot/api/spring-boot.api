@@ -1,0 +1,4 @@
+public final class me/ahoo/cosec/spring/boot/pipeline/PlatformDocumentWatch$Companion {
+	public final fun of (Lme/ahoo/cosec/runtime/snapshot/SnapshotSource;Ljava/lang/String;Ljava/time/Duration;Ljava/lang/Object;)Lme/ahoo/cosec/spring/boot/pipeline/PlatformDocumentWatch;
+}
+

@@ -213,6 +213,9 @@ class ClientIpReadingsTest {
         byDefault.assert().contains("number of proxies in front of this host")
         // Written, or reading the peer: nothing to warn about.
         ClientIpReadings.report(reading, explicit = true).assert().doesNotContain("default")
-        ClientIpReadings.report(ClientIpReading(0, true, "the peer"), explicit = false).assert().doesNotContain("default")
+        ClientIpReadings.report(
+            ClientIpReading(0, true, "the peer"),
+            explicit = false
+        ).assert().doesNotContain("default")
     }
 }

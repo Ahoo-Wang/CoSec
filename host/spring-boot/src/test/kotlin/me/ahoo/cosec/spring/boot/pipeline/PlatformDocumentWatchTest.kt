@@ -67,7 +67,9 @@ class PlatformDocumentWatchTest {
     fun `an absent platform document is named at once and again at the interval, then reported installed`() {
         runner.run { context ->
             @Suppress("UNCHECKED_CAST")
-            val source = context.getBean(SnapshotSource::class.java) as SnapshotSource<CompiledDocument, CompiledDocument>
+            val source = context.getBean(
+                SnapshotSource::class.java
+            ) as SnapshotSource<CompiledDocument, CompiledDocument>
             val warnings = CopyOnWriteArrayList<String>()
             val infos = CopyOnWriteArrayList<String>()
             PlatformDocumentWatch(

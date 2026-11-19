@@ -20,9 +20,9 @@ import me.ahoo.cosec.sample.OwnHandlers
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
-import org.springframework.boot.webflux.autoconfigure.WebFluxAutoConfiguration
 import org.springframework.boot.autoconfigure.ssl.SslAutoConfiguration
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
+import org.springframework.boot.webflux.autoconfigure.WebFluxAutoConfiguration
 import org.springframework.cloud.gateway.config.GatewayAutoConfiguration
 import org.springframework.cloud.gateway.filter.GatewayFilterChain
 import org.springframework.cloud.gateway.filter.GlobalFilter

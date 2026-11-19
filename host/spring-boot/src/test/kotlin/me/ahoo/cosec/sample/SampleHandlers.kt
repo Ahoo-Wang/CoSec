@@ -25,6 +25,7 @@ import org.springframework.web.reactive.function.server.ServerResponse
 @RestController
 class OrdersController {
     @GetMapping("/own")
+    @Suppress("FunctionOnlyReturningConstant")
     fun own(): String = "own"
 }
 

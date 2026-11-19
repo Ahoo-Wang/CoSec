@@ -381,7 +381,8 @@ blacklist cannot be read for it (`PIP-17`). The IP is never resolved through rev
 CoSec reads `X-Forwarded-For` only. A proxy in front of it must append to that header, or overwrite it; one that writes
 only `Forwarded` (RFC 7239) and passes a client's `X-Forwarded-For` on lets the client choose the address, so configure
 it to overwrite or remove `X-Forwarded-For`. On a host that clients reach directly, set the index to `0` (with no
-strategy), or a client can write any address into the header.
+strategy), or a client can write any address into the header. While the property is not written, the startup line that
+names the reading says that the default `1` is in effect and what that risks.
 
 ## Request attributes
 
@@ -574,6 +575,16 @@ With one port, or `management.server.port` equal to the application's, every row
   too, so use a `tcpSocket` probe on the application port.
 - **What is served on a management port outside CoSec is protected by the network**, as on a gateway: expose there only
   what you would expose to whoever can reach that port.
+
+### The gateway's own handlers {#the-gateways-own-handlers}
+
+The gateway filter decides gateway routes. A controller or a functional route (`RouterFunction` bean) of the
+application itself is mapped before any gateway route (Spring WebFlux's annotated-controller mapping has order `0` and
+the router-function mapping `-1`; the gateway's route mapping `1`), so the request is answered with no CoSec decision:
+no authentication, no policy, no rate limit. The starter logs one WARN at startup when it finds such a handler of the
+application's own, naming it ([the log line](../operations/troubleshooting.md#the-log-says-the-gateways-own-handlers-are-not-decided)).
+Move those handlers to a service behind the gateway, where a route decides them, or secure them in the application;
+CoSec's gateway filter does not cover them.
 
 ### Actuator on a gateway
 

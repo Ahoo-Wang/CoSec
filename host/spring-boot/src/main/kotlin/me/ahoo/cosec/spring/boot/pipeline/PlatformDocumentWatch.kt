@@ -103,7 +103,12 @@ class PlatformDocumentWatch(
         ): PlatformDocumentWatch {
             val key = CoSecCacheSpecs.storagePath(keyPrefix, CoSecCacheSpecs.POLICY_SNAPSHOT_CACHE_NAME) +
                 ":" + SnapshotKeyEncoder.PLATFORM
-            return PlatformDocumentWatch(source, "[$key] in Redis ${RedisLocation.describe(factory)}", keyPrefix, interval)
+            return PlatformDocumentWatch(
+                source,
+                "[$key] in Redis ${RedisLocation.describe(factory)}",
+                keyPrefix,
+                interval
+            )
         }
     }
 }

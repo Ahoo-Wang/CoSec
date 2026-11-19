@@ -43,6 +43,8 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 
 ## 功能开关 {#feature-switches}
 
+开关接受 `true` 或 `false`（不区分大小写，两侧不能有空格），枚举 `cosec.pipeline.mode` 和 `cosec.api-key.store` 接受为它们列出的值；不写就取默认值。写成其他任何值（`1`、`on`、空字符串）都会使启动失败，信息指明 key、读到的值和可接受的值：Spring 的绑定器会把其中一些读作 true，而装配该功能的条件把它们读作关闭（[开关无法读取导致启动失败](./troubleshooting.md#startup-fails-on-an-unreadable-switch)）。写成 `false` 的开关会关闭它的功能，启动摘要会说明这一点（[启动摘要](./observability.md#startup-summary)）。
+
 | 配置项 | 类型 | 默认值 | 打开 |
 |---|---|---|---|
 | `cosec.enabled` | boolean | `true` | CoSec 的全部自动配置 |
