@@ -16,6 +16,8 @@
 package me.ahoo.cosec.runtime.attribute
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.model.Identifiers
+import me.ahoo.cosec.model.condition.IpAddress
 import java.util.concurrent.ConcurrentHashMap
 
 /** A [BlacklistSource] in memory, for tests and small deployments. */
@@ -25,11 +27,17 @@ class InMemoryBlacklistSource : BlacklistSource {
 
     override suspend fun contains(kind: BlacklistKind, value: String): Boolean = value in entries[kind.ordinal]
 
+    /** Blocks [value] of [kind]; an address in any spelling, kept canonical ([BlacklistKind.IP]). */
     fun block(kind: BlacklistKind, value: String) {
-        entries[kind.ordinal] += value
+        entries[kind.ordinal] += kept(kind, value)
     }
 
     fun unblock(kind: BlacklistKind, value: String) {
-        entries[kind.ordinal] -= value
+        entries[kind.ordinal] -= kept(kind, value)
+    }
+
+    private fun kept(kind: BlacklistKind, value: String): String {
+        if (kind != BlacklistKind.IP) return value
+        return requireNotNull(IpAddress.parse(value)) { "[${Identifiers.printable(value)}] is no address." }.toString()
     }
 }

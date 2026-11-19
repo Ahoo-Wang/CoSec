@@ -704,7 +704,9 @@ it, since its other pairs would read differently. Set
 `cosec.gateway.identity.forward-authorization=true` only when the services behind it verify the token again or call
 other APIs on the user's behalf: the credentials then go to the routes that would receive the identity (a `lb://`
 route, or one marked `cosec-identity: true`), whether or not `cosec.gateway.identity.enabled` forwards it, and to no
-other.
+other, and only when the pipeline accepted them: a rejected token (expired, revoked, invalid) stays at the gateway even
+when a public route lets the request through as anonymous, so a service that verifies it again never sees one the
+gateway refused.
 
 ### Services behind the gateway
 
