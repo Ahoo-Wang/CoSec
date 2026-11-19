@@ -28,4 +28,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 @InternalCoSecApi
 fun interface InstallReview<in T : Any> {
     fun installed(key: SnapshotKey, revision: Long, compiled: T)
+
+    /** [key] left the source (evicted, or dropped empty): what the review keeps for it can go. */
+    fun removed(key: SnapshotKey) {}
 }

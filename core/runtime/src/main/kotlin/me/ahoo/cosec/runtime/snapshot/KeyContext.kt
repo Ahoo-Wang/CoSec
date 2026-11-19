@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.runtime.snapshot
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.snapshot.SnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
@@ -94,4 +95,29 @@ internal class KeyContext(
      * reads is set later than this context's construction, and no slot exists before that.
      */
     fun current(key: SnapshotKey): KeyRunner<*> = families.slotFor(key, this)
+
+    /**
+     * [key] left its family: each review is told so on the housekeeping thread, after any review of it still queued there
+     * (one thread, in order). A refused offer leaves the reviewer's entry, which its own bound covers.
+     */
+    fun reviewRemoved(key: SnapshotKey) {
+        if (reviews.isEmpty()) {
+            return
+        }
+        threads.offHousekeeping(HousekeepingTask.INSTALL_REVIEW, key) {
+            for (review in reviews) {
+                @Suppress("TooGenericExceptionCaught")
+                try {
+                    review.removed(key)
+                } catch (error: Exception) {
+                    log.warn(error) { "A review failed to forget [$key]." }
+                }
+            }
+        }
+    }
+
+    private companion object {
+        // The source's logger, as KeyEffects': operators configure the one name.
+        private val log = KotlinLogging.logger(SnapshotSource::class.java.name)
+    }
 }

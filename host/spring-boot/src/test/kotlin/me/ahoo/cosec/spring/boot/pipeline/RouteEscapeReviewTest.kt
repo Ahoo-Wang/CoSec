@@ -135,6 +135,21 @@ class RouteEscapeReviewTest {
     }
 
     @Test
+    fun `a key that leaves the source is forgotten, and reviewed again when it is back`() {
+        val review = RouteEscapeReview(routes, capacity = 8)
+        val document = compile(SnapshotKey.Platform, 1, denyAdmin)
+        val key = SnapshotKey.App("a")
+        logged { appender ->
+            review.installed(key, 1, document)
+            review.remembered.assert().isEqualTo(1)
+            review.removed(key)
+            review.remembered.assert().isEqualTo(0)
+            review.installed(key, 1, document)
+            appender.at(Level.WARN).size.assert().isEqualTo(2)
+        }
+    }
+
+    @Test
     fun `a host without a route map has no review, and a host with one remembers as many keys as the source holds`() {
         val options = SnapshotOptions(maxApps = 3, maxTenants = 4)
         RouteEscapeReview.of(null, options).assert().isEmpty()

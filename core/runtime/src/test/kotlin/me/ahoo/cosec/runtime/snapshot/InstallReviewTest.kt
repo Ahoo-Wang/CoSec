@@ -28,8 +28,8 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * UC-1's seam: each installed document goes to the [InstallReview]s on the housekeeping thread, after its load has been
- * answered, once per installed revision. A review housekeeping refuses is offered again when the key is next read, and
- * a review that throws leaves the install as it is.
+ * answered, once per install. A review housekeeping refuses is offered again when the key is next read; a slow review
+ * delays no install, and one that throws leaves the install as it is. A key that leaves the source is removed from them.
  */
 class InstallReviewTest {
     private val store = ControllableStore().apply {
@@ -138,6 +138,51 @@ class InstallReviewTest {
             source.revalidate().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
             awaitCondition { housekeeping.queue.isEmpty() && housekeeping.activeCount == 0 }
             of(APP_A).size.assert().isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `a slow review delays no install`() {
+        val held = CountDownLatch(1)
+        val slow = InstallReview<Compiled> { key, revision, compiled ->
+            // Longer than any wait of the test: a review on the load's path fails it rather than races it.
+            held.await(TEST_LIMIT_SECONDS * 3, TimeUnit.SECONDS)
+            recording.installed(key, revision, compiled)
+        }
+        source(slow).use { source ->
+            loadedRevision(source).assert().isEqualTo(1)
+            // The review of revision 1 holds housekeeping; revision 2 installs and is served all the same.
+            store.put(APP_A, document(2))
+            source.revalidate().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
+            source.peekAll(listOf(APP_A))!!.entry(APP_A)!!.revision.assert().isEqualTo(2)
+            of(APP_A).assert().isEmpty()
+            held.countDown()
+            awaitCondition { of(APP_A).size == 2 }
+            of(APP_A).map { it.revision }.assert().containsExactly(1L, 2L)
+        }
+    }
+
+    @Test
+    fun `a key that leaves the source is removed from the reviews, after its review`() {
+        val events = CopyOnWriteArrayList<String>()
+        val review = object : InstallReview<Compiled> {
+            override fun installed(key: SnapshotKey, revision: Long, compiled: Compiled) {
+                events += "installed $key $revision"
+            }
+
+            override fun removed(key: SnapshotKey) {
+                events += "removed $key ${Thread.currentThread().name.startsWith(HOUSEKEEPING)}"
+            }
+        }
+        source(review).use { source ->
+            loadedRevision(source).assert().isEqualTo(1)
+            source.evict(APP_A).assert().isTrue()
+            awaitCondition { events.any { it.startsWith("removed $APP_A") } }
+            // Installed back, it is reviewed again.
+            loadedRevision(source).assert().isEqualTo(1)
+            awaitCondition { events.count { it.startsWith("installed $APP_A") } == 2 }
+            events.filter { APP_A.toString() in it }.assert()
+                .containsExactly("installed $APP_A 1", "removed $APP_A true", "installed $APP_A 1")
         }
     }
 

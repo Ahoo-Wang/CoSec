@@ -49,8 +49,7 @@ internal class KeyEffects<T : Any>(
     @Volatile
     private var report: CompileReport? = null
 
-    /** The installed entry no review has run for yet (UC-1): set by [review], cleared by the review's task. */
-    @Volatile
+    /** The installed entry whose review housekeeping refused (UC-1); set and read inside the drain only. */
     private var unreviewed: SnapshotEntry<T>? = null
 
     /** The store-read timeout of each load whose read is out, made at the first read; touched inside the drain only. */
@@ -219,17 +218,13 @@ internal class KeyEffects<T : Any>(
     }
 
     /**
-     * UC-1: [entry] to the [InstallReview]s, off housekeeping. Until housekeeping runs it, it is this key's [unreviewed]
-     * entry: a refused offer leaves it there for the next pass, and a later install replaces it, since only the
-     * installed revision is worth a review.
+     * UC-1: [entry] to the [InstallReview]s, off housekeeping. A refused offer makes it this key's [unreviewed] entry,
+     * offered again at the key's next read; a later install replaces it, since only the installed revision is worth a
+     * review.
      */
     private fun review(entry: SnapshotEntry<T>) {
         val compiled = (entry.state as? DocumentState.Present)?.compiled ?: return
-        unreviewed = entry
-        context.threads.offHousekeeping(HousekeepingTask.INSTALL_REVIEW, key) {
-            if (unreviewed === entry) {
-                unreviewed = null
-            }
+        val task = {
             for (review in context.reviews) {
                 @Suppress("TooGenericExceptionCaught")
                 try {
@@ -241,6 +236,10 @@ internal class KeyEffects<T : Any>(
                 }
             }
         }
+        val offered = context.threads.offHousekeeping(HousekeepingTask.INSTALL_REVIEW, key, task)
+        // Only a refused offer waits for the key's next read; an offer taken, this one's or a newer install's, is the
+        // review of what is installed.
+        unreviewed = entry.takeUnless { offered }
     }
 
     private fun report(metric: KeyEffect.Metric) {

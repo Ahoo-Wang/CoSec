@@ -29,8 +29,9 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
  * of it that a mapped route escapes ([RouteMap.escapes]) are one WARN for that revision, with the count and the first
  * few; the whole list at DEBUG. A document with none of those statements, most tenant documents, costs a scan of its
  * statements. A revision is reviewed once: a re-install, a revalidation or a restart of the loop logs nothing again.
- * What it remembers is bounded as the source bounds its keys ([capacity]): a key it forgets, as one the source evicts,
- * is reviewed again when it is installed again.
+ * It remembers the last revision of each key, not a history: a key that leaves the source is forgotten ([removed]),
+ * and is reviewed again when it is installed again. [capacity], as many keys as the source holds, bounds it even when
+ * housekeeping refused to tell it of a removal.
  */
 internal class RouteEscapeReview(
     private val routes: RouteMap,
@@ -59,6 +60,10 @@ internal class RouteEscapeReview(
                 "to them: ${escapes.take(SHOWN).joinToString("; ")}$more. Write each statement for the mapped action too."
         }
         log.debug { "[$key] revision $revision, every escape: ${escapes.joinToString("; ")}" }
+    }
+
+    override fun removed(key: SnapshotKey) {
+        synchronized(reviewed) { reviewed.remove(key) }
     }
 
     /** How many keys it remembers now; for tests. */
