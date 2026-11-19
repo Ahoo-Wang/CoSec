@@ -1,17 +1,63 @@
 ---
 title: "Upgrading"
-description: "How to upgrade a CoSec 7.x deployment to 8.0: what changes, and how to migrate the data, the code, the configuration and the clients."
+description: "How to upgrade a running 8.0 deployment, in what order and what is not promised, and how to upgrade a CoSec 7.x deployment to 8.0: what changes, and how to migrate the data, the code, the configuration and the clients."
 ---
 
 # Upgrading
 
-For teams moving a CoSec 7.x deployment to 8.0. The page starts with a checklist, then gives the details by area:
+For teams upgrading a running 8.0 deployment ([Upgrading a running deployment](#upgrading-a-running-deployment)), and
+for teams moving a CoSec 7.x deployment to 8.0. The 7.x part starts with a checklist, then gives the details by area:
 the data migration, what 8.0 decides differently, responses, authentication, storage, APIs, properties and
 observability. This page is the single home of migration steps. Release notes for every version are on
 [GitHub Releases](https://github.com/Ahoo-Wang/CoSec/releases).
 
 A deployment that already runs an 8.0 preview (an `8.0.0-alpha` or `8.0.0-beta`) reads
 [Upgrading between 8.0 previews](./upgrading-previews.md) instead of this page.
+
+## Upgrading a running deployment {#upgrading-a-running-deployment}
+
+For an operator moving a running 8.0 deployment (a gateway, services behind it, a control plane and Redis) to another
+version. This section says what the code does when two versions meet, and so in what order to upgrade and roll back. It
+promises no more than that: what it does not promise is listed at the end. A move from 7.x is the next section.
+
+Four things cross a process boundary, and each is read strictly:
+
+| What crosses | Who writes, who reads | What an instance that does not know the content does |
+|---|---|---|
+| The `CoSec-Identity` header, format `v: 1` | the gateway writes, each service in `gateway` mode reads | refuses it with `400` `invalid-request`: another version, a member it does not know, a repeated role, or a value out of range ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)) |
+| A policy document, `schema: 2` | the control plane and `cosec-migrate` write, every instance reads | refuses a document of another `schema` when it reads it, and does not install one it cannot compile (an unknown member, a repeated key, a wrong type): the requests that need it fail closed (`503`, `DocumentInvalid` or `SourceUnavailable` in the decision event, [Troubleshooting](./troubleshooting.md)) |
+| A value in Redis (revocations, sessions, API keys, memberships, control-plane records) | the instance that wrote it, and every other that reads | a value it cannot decode fails the read and stays in Redis: it is never deleted. A revocation or a stored record it cannot read makes the request `503`, never "not revoked" and never "no document" ([Redis is the store of record](./storage.md#redis-is-the-store-of-record)) |
+| A token | the issuer signs, every verifier reads | reads the claims it knows ([the claims a client may read](../integration/clients.md#the-claims-a-client-may-read)) and ignores the rest; refuses a token with an `act` claim, a refresh token where an access token belongs, or incomplete session claims |
+
+**Order of an upgrade.**
+
+1. **Do not publish a document that uses something new until every instance runs the new version.** An instance that
+   does not know a new member does not install the document, and fails the requests that need it closed. A shadow
+   window that has such an instance reports `CANDIDATE_ERROR` and never closes clean, so the change is not published
+   through it ([Testing policies](../policies/testing.md#trying-changes-in-shadow-mode)).
+2. **Services behind a gateway before the gateway.** A service reads the identity strictly, so one older than its
+   gateway refuses what the gateway added (`400`).
+3. **Then the control plane, and `cosec-migrate`**, and, once every control-plane instance and every `cosec-migrate`
+   that writes to this Redis runs the new version, `cosec-migrate repair-references` once
+   ([Repair the back-reference index](#repair-the-back-reference-index)) and `verify-chain` ([Verify the revision chains](#verify-the-revision-chains)).
+4. **Redis is upgraded as Redis is**, not by CoSec: CoSec's keys live under `cosec.key-prefix`, and a restart or
+   failover is covered by [Redis requirements](./storage.md#redis-requirements).
+
+**Order of a rollback** is the reverse: the gateway first, then the services behind it. A rollback of a document needs
+no instance to change: `POST /documents/<doc>:rollback` makes the document what it was at an earlier revision, as a
+change that is checked like any other ([Revisions, history and rollback](./storage.md#revisions-history-and-rollback)).
+After a downgrade of the control plane or of `cosec-migrate`, run `repair-references` and `verify-chain` again.
+
+**The signature of a mixed fleet** is `503` for the requests that need a document an older instance cannot compile
+(`DocumentInvalid`), `400` from a service that refuses a newer gateway's identity, and `401` `token-invalid` from an
+instance that holds another signing secret. Each ends when the last instance runs one version.
+
+**What is not promised.** That two versions interoperate on any of the four formats above: while an 8.0 pre-release is
+the latest, no promise holds between versions at all ([Upgrading between 8.0 previews](./upgrading-previews.md)), and
+afterwards each release's notes say what it changed. That a newer service reads every older gateway's identity, or an
+older one a newer's. That a value a newer version writes to Redis is readable by an older one. That a token a newer
+issuer signs, with a claim an older verifier does not read, means the same to it. Keep a mixed fleet short, and test an
+upgrade on a copy of the documents with the new version's `simulate` and `explain` before it carries traffic.
 
 ## 7.x to 8.0
 
