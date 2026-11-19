@@ -280,7 +280,7 @@ internal class KeyEffects<T : Any>(
      */
     private fun evictOverCap() {
         val families = context.families
-        val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
+        val family = families.of(key.kind) ?: return
         if (families.overCap(family)) DrainBudget.unbounded { families.evictBeyond(family) }
     }
 
@@ -291,7 +291,7 @@ internal class KeyEffects<T : Any>(
      */
     private fun evictBeyond() {
         val families = context.families
-        val family = families.firstOrNull { it.spec.kind == key.kind } ?: return
+        val family = families.of(key.kind) ?: return
         // Most load ends leave both kinds within their bounds: then there is no pass to run or to queue.
         if (family.count(absent = false).get() <= family.bound(absent = false) &&
             family.count(absent = true).get() <= family.bound(absent = true)
