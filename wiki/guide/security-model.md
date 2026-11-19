@@ -21,9 +21,9 @@ Every request goes through one pipeline, whatever the adapter. Before the engine
 3. resolves the principal's memberships, and fetches the blacklist attributes;
 4. resolves the scope (tenant, app, space and the roles there) with `ScopeResolver`. A rejected scope is a deny
    ([Trust boundaries](#trust-boundaries));
-5. reads the snapshot view: the platform document, the document of the scope's tenant, and the app's document when
-   the principal has roles in the scope's app, or when the tenant's document binds one of that app's permission
-   policies to `Anyone` or to a principal. A blocked request reads the platform document only;
+5. reads the snapshot view: the platform document, the document of the scope's tenant, and the scope's app's document
+   when the scope has an app and the principal holds any role in the scope's space (not only a role of that app), or
+   when the tenant's document binds one of that app's permission policies to `Anyone` or to a principal. A blocked request reads the platform document only;
 6. fetches the external attributes the candidate statements need.
 
 The engine (`Evaluator`) then decides in two passes over the **candidates**, the policies that apply to the
@@ -325,13 +325,16 @@ How `ScopeResolver` checks the scope:
 
 A rejected scope is a Deny: `401` for an anonymous caller, `403` (`scope-rejected`) for an authenticated one.
 
-**The app is the weak spot.** A principal's roles belong to spaces, not to apps. Without a host app, the client
-picks which app document's role bindings apply to those roles. If two apps' role bindings grant on the same actions
-and resources (apps sharing the `http` namespace on one path prefix, say), the client decides which grants apply.
-It also decides whether an app's DENYs apply: an app's document is read only for requests in that app, so without a
-host app, the DENYs it binds to roles apply only when the client declares that app. A client that declares another
-app, or none, steps around them, while the ALLOWs of the platform and the tenant that are not scoped to an app still
-apply. To keep the app id from widening access:
+**The app is the weak spot.** A principal's roles belong to spaces, not to apps, and a client never names the app:
+without a host app, **the credential's app** picks which app document's role bindings apply. A token issued for app A,
+used on a service of app B that sets no `cosec.authorization.scope.app-id`, is decided in A: if the two apps' role
+bindings grant on the same actions and resources (apps sharing the `http` namespace on one path prefix, say), the
+token's issuer, not the service, decided which grants apply. A token without an app (`aud`) reads no app document at
+all, so the DENYs an app document binds to roles never apply to it, while the ALLOWs of the platform and the tenant that
+are not scoped to an app still do. Roles themselves are not per app wherever they do not come from the token's own
+claims: a membership provider is asked for a tenant and a principal only, and every API key takes its roles from the
+provider, so the roles it answers apply in every app (see [Apps](../integration/authentication.md#apps)). To keep the
+app from widening access:
 
 - set `cosec.authorization.scope.app-id` on every service that serves one app;
 - on a gateway that fronts several apps, give each route its app with the metadata `cosec-app-id`
@@ -458,7 +461,7 @@ before it. Scoping makes each statement mean the same thing wherever it sits.
 
 CoSec decides whether a request may reach your handler. It does not:
 
-- verify that a client-named app is the right one for the path when no host app is set (see
+- check that the credential's app is the right one for the path when no host app is set (see
   [Trust boundaries](#trust-boundaries));
 - keep anyone but the gateway from reaching a service in gateway mode: that is the network's job
   ([Trust boundaries](#trust-boundaries));

@@ -18,7 +18,7 @@ decide(principal, scope, action, resource, environment) -> decision
 | 输入 | 在 CoSec 中 | 来自 |
 |---|---|---|
 | principal（主体） | 谁在调用：id、租户、在各空间中的角色、附加策略 | 经过校验的令牌或 API key；角色来自令牌，或来自你的成员关系提供者（API key 总是如此，它只收窄角色） |
-| scope（作用域） | 请求所处的租户、应用和空间，以及主体在其中的角色 | 主体的租户、服务绑定的应用或请求声明的应用，并对照主体的角色检查 |
+| scope（作用域） | 请求所处的租户、应用和空间，以及主体在其中的角色 | 主体的租户、服务绑定的应用（否则是凭证声明的应用）和请求要求的空间，并对照主体的角色检查 |
 | action 与 resource（动作与资源） | 作用于 `http:path:/orders/42` 的 `http:GET`；有路由映射时为作用于 `order/42` 的 `order:read` | 请求 |
 | environment（环境） | 客户端 IP、时间、设备，以及地区、黑名单等外部属性 | 请求、时钟和你的属性提供者 |
 | decision（决策） | `Permit`（可能带有限流义务）、`Deny` 或 `Indeterminate` | |
@@ -38,7 +38,7 @@ decide(principal, scope, action, resource, environment) -> decision
 
 - **它不是身份提供方。** CoSec 校验令牌，也能为你交给它的主体签发令牌，但校验密码、提供登录页面、联合身份是你的应用（或 IdP）的工作。OAuth 社交登录是可选的附加功能。
 - **它不过滤数据。** CoSec 决定请求能否到达处理器。处理器返回哪些行、哪些字段，仍由你的代码决定。策略可以把资源与主体绑定（把资源变量与 `subject.id` 比较），但除非有属性提供者替它获取，它无法查询某条数据库记录归谁所有。
-- **除非你绑定，否则它不校验客户端指定的应用。** 绑定了某个应用（`cosec.authorization.scope.app-id`）的服务会拒绝声明了其他应用的请求；没有绑定的服务接受请求声明的应用。空间会被检查：只有主体在某个非默认空间中有角色时，请求才能声明该空间。见[信任边界](./security-model.md#trust-boundaries)。
+- **没有绑定应用的服务，应用不由 CoSec 来选。** 客户端从不指定应用。绑定了某个应用（`cosec.authorization.scope.app-id`）的服务只接受为该应用签发的凭证；没有绑定的服务按凭证声明的应用决策，所以为应用 A 签发的令牌在应用 B 的服务上仍按 A 决策，没有应用（`aud`）的令牌不读取任何应用文档。空间会被检查：只有主体在某个非默认空间中有角色时，请求才能声明该空间。见[信任边界](./security-model.md#trust-boundaries)。
 - **它没有管理界面。** 文档通过控制面的 HTTP API 或 `cosec-migrate` 发布。
 - **8.0 不支持 Spring AOT 和 GraalVM 原生镜像。** 受支持的是网关镜像的 JDK AOT 缓存（[AOT 缓存](../operations/deployment.md#aot-cache)）。
 
