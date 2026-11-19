@@ -1,0 +1,17 @@
+# Rule: STA-6
+# Mutant: a service in gateway mode starts with a hidden-method filter on, so a form field _method runs a POST as a method the gateway never decided
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.pipeline.GatewayModeTrustTest
+
+diff --git a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
+index fa8dc8e3c..d94b185ba 100644
+--- a/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
++++ b/host/spring-boot/src/main/kotlin/me/ahoo/cosec/spring/boot/pipeline/GatewayModeTrust.kt
+@@ -70,7 +70,7 @@ internal object GatewayModeTrust {
+     }
+ 
+     fun requireNoHiddenMethod(environment: Environment, beans: ListableBeanFactory) {
+-        val found = hiddenMethod(environment, beans) ?: return
++        val found = hiddenMethod(environment, beans)?.takeIf { false } ?: return
+         error(
+             "cosec.pipeline.mode=gateway: $found. The gateway decided the method of the request line, but this service " +
+                 "would run a POST as the method a form field `_method` names, and the gateway cannot remove a field " +

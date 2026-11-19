@@ -1,0 +1,17 @@
+# Rule: PIP-30
+# Mutant: the gateway forwards a method-override header it should remove, so a backend may run a POST as a DELETE the gateway never decided
+# Tests: :gateway:test --tests me.ahoo.cosec.gateway.PipelineGatewayFilterTest :conformance:test
+
+diff --git a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+index 82fcfb37e..8919b7af5 100644
+--- a/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
++++ b/edge/gateway/src/main/kotlin/me/ahoo/cosec/gateway/PipelineGatewayFilter.kt
+@@ -117,7 +117,7 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
+                     headers.set(CoSecParameters.REQUEST_ID, outcome.requestId)
+                     // The method decided is the one the backend runs (`PIP-30`): no override header goes on. A loop over
+                     // an array of lower-case names: removing an absent header allocates nothing (MethodOverrideAllocationTest).
+-                    for (name in METHOD_OVERRIDE_HEADERS) {
++                    for (name in METHOD_OVERRIDE_HEADERS.take(0)) {
+                         headers.remove(name)
+                     }
+                     outcome.forward.forEach { (name, value) ->
