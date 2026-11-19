@@ -256,7 +256,7 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 它覆盖的内容，每一项都是网络上可观察的结果：
 
 - **冷启动**：没有文档时每个请求都是 `503`，就绪检查拒绝而存活检查保持；`cosec-migrate publish` 和 `bootstrap` 之后，每个进程就绪并做出决策；
-- 真实网关转发的**身份**（`CoSec-Identity`，带 CoSec 自己令牌的会话）、被剥离的内容（伪造的身份、客户端的凭据）、
+- 真实网关转发的**身份**（`CoSec-Identity`，带 CoSec 自己令牌的会话）、被剥离的内容（伪造的身份、客户端的凭证）、
   [`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract) 中的问题类型，以及模式可能误读的路径；
 - **跨进程的文档**：拒绝优先、租户隔离、应用、空间；
 - 通过控制面的**策略变更**：从被拒绝的变更、真实流量上的影子窗口，到批准、发布和回滚，无需重启即在每个进程生效；

@@ -74,7 +74,7 @@ ALLOW 永远不会胜过命中的 DENY。所有候选的 DENY 语句都在任何
 
 命中的 DENY 还胜过一切本会导致 Indeterminate 的情况：失败的语句、缺失的策略、无法读取的文档、无法获取的外部属性。
 
-**原因。** 拒绝优先让变更在一个方向上是安全的：新增 DENY 只会收窄权限，新增 ALLOW 永远撤销不了别人写的 DENY。由于决策只取决于候选的集合，评审者无需推敲它们的顺序。
+**原因。** 拒绝优先让变更在一个方向上是安全的：新增 DENY 只会收窄权限，新增 ALLOW 永远推翻不了别人写的 DENY。由于决策只取决于候选的集合，评审者无需推敲它们的顺序。
 
 ## 默认拒绝 {#default-deny}
 
@@ -304,7 +304,7 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`，客户端可直接访问的宿主设为 `0`；使用 `native` 转发头策略时，改为在服务器上配置代理链（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 - 在每个只服务一个应用的服务上设置 `cosec.authorization.scope.app-id`，在面向多个应用的网关的每条路由上设置 `cosec-app-id`。
 - 在网关上，只给指向你自己服务、又不是 `lb://` 的路由标上 `cosec-identity: true`，并把 actuator 放在管理端口上。
-- 把 Redis 的写权限当成对每一个决策的权限：能写 CoSec 的 key 的人，就能改写每个请求据以决策的文档，也能撤销或恢复令牌。
+- 把 Redis 的写权限当成对每一个决策的权限：能写 CoSec 的 key 的人，就能改写每个请求据以决策的文档，也能吊销或恢复令牌。
   通过 TLS 连接 Redis（`rediss://`，或 `spring.data.redis.ssl.enabled`），让中间网络上的任何人都无法读取或篡改实例读到的
   内容；并给控制面和数据面实例各自的用户（[谁可以写哪些 key](../operations/storage.md#who-may-write-which-keys)）。数据面实例（不运行控制面
   的实例：没有 `cosec-control`，或在承载两种角色的镜像上设置 `cosec.control.enabled=false`）以只读方式读取文档和候选，所以它的用户对它们只需要读权限，Redis 会拒绝这个用户写入其中任何一个。它的凭证仍会写入

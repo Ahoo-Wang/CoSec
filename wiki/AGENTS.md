@@ -128,7 +128,7 @@ they are in the code.
 | credential | 凭证 | A JWT access token or an API key. Not 凭据. |
 | token; access token; refresh token | 令牌；访问令牌；刷新令牌 | Not "Token" in Chinese prose. |
 | API key | API key | Not API Key or API 密钥. |
-| revocation, revoke | 吊销 | Not 撤销 or 注销. |
+| revocation, revoke | 吊销 | Not 撤销 or 注销. Taking a change or a document back is 回滚 or 恢复, never 撤销 or 吊销. |
 | membership; membership claims | 成员关系；成员关系声明 | |
 | app; space; default space | 应用；空间；默认空间 | |
 | scope | 作用域 | A resolved tenant, app and space, with the roles there. |
