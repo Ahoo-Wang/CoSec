@@ -235,7 +235,9 @@ internal class KeyEffects<T : Any>(
                 try {
                     review.installed(key, entry.revision, compiled)
                 } catch (error: Exception) {
-                    log.warn(error) { "The review of [$key] revision ${entry.revision} failed; the document stays installed." }
+                    log.warn(
+                        error
+                    ) { "The review of [$key] revision ${entry.revision} failed; the document stays installed." }
                 }
             }
         }

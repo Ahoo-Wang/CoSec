@@ -24,6 +24,7 @@ import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.cocache.snapshot.createPolicySnapshotCache
+import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.shadow.CachingCandidateSource
@@ -335,15 +336,18 @@ class CoSecSnapshotAutoConfiguration {
         compiler: PlatformCompiler,
         properties: RuntimeAuthorizationProperties,
         metrics: ObjectProvider<SnapshotMetrics>,
+        routes: ObjectProvider<RouteMap>,
     ): SnapshotSource<CompiledDocument, CompiledDocument> {
         val snapshot = properties.snapshot
+        val options = snapshot.toOptions()
         // The data plane's source only: the control plane's own would count its reads under the same names.
         val source = DocumentSnapshots.source(
             store,
             compiler,
-            snapshot.toOptions(),
+            options,
             Clock.systemUTC(),
             metrics.getIfAvailable { SnapshotMetrics.NOOP },
+            RouteEscapeReview.of(routes.ifAvailable, options),
         )
         compiler.bind(source)
         // The loads start where the source is made, not in cosecDocumentReadiness: an application may replace that
