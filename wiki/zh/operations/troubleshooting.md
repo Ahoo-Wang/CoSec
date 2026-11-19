@@ -614,7 +614,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
   添加带 Spring Data Redis 的 `cosec-cocache`，或者注册一个 `ApiKeyReader`。
 - `cosec.api-key.enabled=true needs a MembershipProvider bean: an API key's memberships are its principal's ...
   (IDN-6).` key 的成员关系来自其主体的提供者。添加 `cosec-cocache` 和一个 `MembershipLoader` Bean，它会配置
-  `CoCacheMembershipProvider`，或者声明一个 `MembershipProvider`。这项检查只在 `cosec.pipeline.mode=enforce` 中运行，
+  `CoCacheMembershipProvider`，或者声明一个 `MembershipProvider`。这项检查只在 `cosec.pipeline.mode=enforce` 中运行（在 `cosec-gateway-server` 镜像上，信息以 `The cosec-gateway-server image ships none, so as shipped it cannot use API keys` 结尾：镜像没有 `MembershipProvider` Bean，所以 API key 需要加上它的派生镜像），
   因为只有那里读取 key；`gateway` 模式的服务不读取 key。
 - `API key [<id>] needs the SHA-256 hex of the key as hash.`、`... needs a principal-id.`、`... needs a tenant-id.`、
   `Duplicate API key ids: [...].` 修正 [`cosec.api-key.keys`](./configuration.md#api-keys)。
