@@ -75,7 +75,6 @@ class Changes(
     attributes: AttributeCatalog = AttributeCatalog.NONE,
     /** The headers the host reads credentials from besides the fixed ones (`CND-5`), as enforcement compiles with them. */
     credentialHeaders: Set<String> = emptySet(),
-    private val checks: ChangeChecks = ChangeChecks(options, attributes, credentialHeaders),
     /** The host's token revocations, for the default [authority]: no default, as [ChangeAuthority] has none. */
     revocations: RevocationReader,
     /**
@@ -89,6 +88,8 @@ class Changes(
     /** Who hears of every step (RFC 0007 §10.5); publishing and break-glass wait for the REQUIRED ones. */
     private val listeners: ChangeListeners = ChangeListeners.NONE,
 ) {
+    private val checks = ChangeChecks(options, attributes, credentialHeaders)
+
     private val windows = ShadowWindows(reports, options.shadow)
 
     private val context = StoreCurrentDocuments(store, revisions)

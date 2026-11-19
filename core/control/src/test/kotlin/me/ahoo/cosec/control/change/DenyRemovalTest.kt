@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.Narrowing
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.CatalogGroup
@@ -48,7 +49,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * Removing a DENY of the platform or of an app needs a second person (RFC 0007 §7.4.4 as amended on 2026-11-09,

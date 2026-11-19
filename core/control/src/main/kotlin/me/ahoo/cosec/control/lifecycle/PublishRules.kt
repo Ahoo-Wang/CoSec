@@ -180,7 +180,9 @@ internal object PublishRules {
                     "it; the way back is cosec-migrate restore (Storage: Recovering from a lock-out)",
             )
         }
-        val recorded = lockout.copy(message = "${lockout.message} (acknowledged by ${publisher.actor.principal.value}@${publisher.actor.tenant.value})")
+        val recorded = lockout.copy(
+            message = "${lockout.message} (acknowledged by ${publisher.actor.principal.value}@${publisher.actor.tenant.value})"
+        )
         return change.copy(findings = change.findings.map { if (it === lockout) recorded else it })
     }
 

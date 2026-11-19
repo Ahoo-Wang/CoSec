@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.Narrowing
 import me.ahoo.cosec.control.lifecycle.Operations
 import me.ahoo.cosec.control.store.AppList
@@ -48,7 +49,6 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RC review batch B2 through the change flow: a narrowing change takes a busy staging slot (RC1-12), a change an earlier

@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -58,7 +59,6 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * Review item 13: a publish whose head write went through but whose reply was lost is recognised when it is retried,

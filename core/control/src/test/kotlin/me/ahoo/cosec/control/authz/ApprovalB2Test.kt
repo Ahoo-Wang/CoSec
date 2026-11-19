@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -65,7 +66,6 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RC review batch B2 through the real pipeline and engine: the trust root is the platform's (RC1-10), so is a tenant's

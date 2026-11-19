@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -54,7 +55,6 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §8: `cosec:breakglass` is what requesting break-glass, publishing it once approved and revoking it take, and

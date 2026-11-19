@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
@@ -72,7 +73,6 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §10.1, §10.3 through the real engine: the control plane's reads are authorized like its writes, and

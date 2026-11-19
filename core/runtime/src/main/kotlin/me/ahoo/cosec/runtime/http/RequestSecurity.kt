@@ -131,13 +131,19 @@ class RequestSecurity internal constructor(
      * `onMissing` says.
      */
     @InternalCoSecApi
-    fun engineRequest(time: Long, app: AppId? = null, action: Action? = null, resource: Resource? = null): EngineRequest? {
+    fun engineRequest(
+        time: Long,
+        app: AppId? = null,
+        action: Action? = null,
+        resource: Resource? = null
+    ): EngineRequest? {
         if (app == null) {
             return EngineRequest(request, scope, memberships, time, attributes)
         }
         val asked = inApp(app) ?: return null
         val subject = asked.request
-        val authz = AuthzRequest(subject.subject, action ?: subject.action, resource ?: subject.resource, subject.environment)
+        val authz =
+            AuthzRequest(subject.subject, action ?: subject.action, resource ?: subject.resource, subject.environment)
         return EngineRequest(authz, asked.scope, memberships, time, attributes)
     }
 

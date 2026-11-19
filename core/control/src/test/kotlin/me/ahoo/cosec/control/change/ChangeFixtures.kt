@@ -22,6 +22,7 @@ import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -49,7 +50,6 @@ import me.ahoo.cosec.model.condition.Literal
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /** A control plane over an in-memory store and a clock the test moves. */
 class ChangeHarness(
@@ -60,10 +60,18 @@ class ChangeHarness(
 ) {
     private val counter = AtomicInteger()
     val revisions = Revisions(store, clock)
-    val changes = Changes(store, revisions, {
-        ChangeId("c${counter.incrementAndGet()}")
-    }, PERMIT_ALL, clock, options, revocations = RevocationReader.NONE,
-    lockout = LockoutCheck.UNCHECKED,)
+    val changes = Changes(
+        store,
+        revisions,
+        {
+            ChangeId("c${counter.incrementAndGet()}")
+        },
+        PERMIT_ALL,
+        clock,
+        options,
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
+    )
 }
 
 val ACME: SnapshotKey = StoreFixtures.ACME

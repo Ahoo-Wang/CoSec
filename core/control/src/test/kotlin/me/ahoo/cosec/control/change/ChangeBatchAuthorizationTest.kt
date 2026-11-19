@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -59,7 +60,6 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * #1218 (`CTL-8`): the decisions of one change rest on one confirmation of the control documents, confirmed again at

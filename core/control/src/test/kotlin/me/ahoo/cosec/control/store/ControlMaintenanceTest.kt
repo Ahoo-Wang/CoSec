@@ -29,6 +29,7 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.publication
@@ -40,7 +41,6 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /** RFC 0007 §5.7 and §6.4: the periodic passes the host runs over what the store lists. */
 class ControlMaintenanceTest {

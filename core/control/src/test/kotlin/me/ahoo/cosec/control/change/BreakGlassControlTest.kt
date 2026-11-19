@@ -27,6 +27,7 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -62,7 +63,6 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §8 (BRK-3) through the real engine: break-glass is created only through the control plane, by a platform

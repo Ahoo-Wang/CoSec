@@ -26,6 +26,7 @@ import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Publication
@@ -47,7 +48,6 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * `SCP-13` (#1403): a tenant id is one path segment of the resources the control plane authorizes on. A platform
@@ -61,10 +61,18 @@ class OneSegmentTenantIdTest {
     private val store = InMemoryControlStore(clock)
     private val revisions = Revisions(store, clock)
     private val engine = EngineAuthority(revisions)
-    private val changes = Changes(store, revisions, {
-        ChangeId("c")
-    }, engine.authorizer, clock, ChangeOptions(), revocations = RevocationReader.NONE,
-    lockout = LockoutCheck.UNCHECKED,)
+    private val changes = Changes(
+        store,
+        revisions,
+        {
+            ChangeId("c")
+        },
+        engine.authorizer,
+        clock,
+        ChangeOptions(),
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
+    )
     private val http =
         ControlHttp(
             DefaultControlPlane(

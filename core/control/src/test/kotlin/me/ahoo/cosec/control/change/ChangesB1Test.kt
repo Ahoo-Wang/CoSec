@@ -30,6 +30,7 @@ import me.ahoo.cosec.control.audit.ChangeListeners
 import me.ahoo.cosec.control.authz.Operator
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.AppList
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
@@ -61,7 +62,6 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /** The change flow of RFC 0007 §6.1, §6.2 and §6.7 case by case. */
 /**
@@ -104,16 +104,7 @@ class ChangesB1Test {
             ),
         )
         // Four-eyes, so that the platform's own change is analyzed as far as an app document is.
-        val fourEyes = Changes(
-            harness.memory,
-            harness.revisions,
-            { ChangeId("four-eyes-${java.util.UUID.randomUUID()}") },
-            PERMIT_ALL,
-            harness.clock,
-            ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),
-            revocations = RevocationReader.NONE,
-            lockout = LockoutCheck.UNCHECKED,
-        )
+        val fourEyes = fourEyes()
         val widened = fourEyes.propose(
             PLATO,
             order,

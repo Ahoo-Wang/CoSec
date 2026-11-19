@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.Revisions
 import me.ahoo.cosec.document.PolicyDocument
 import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.model.decision.Decision
@@ -67,22 +68,32 @@ class ControlLockout(
         val now = clock.millis()
         val request = security.engineRequest(now)
             ?: return LockoutCheck.Lockout("the request in progress could not be decided again")
-        refusal(request, key, candidate, "the request in progress (${request.request.action})")?.let { return it }
+        refusal(request, key, candidate, "the request in progress (${name(request.request.action)})")?.let { return it }
         val publish = security.engineRequest(now, controlApp, ControlActions.PUBLISH, ControlResources.document(key))
-            ?: return LockoutCheck.Lockout("${ControlActions.PUBLISH} is asked in app ${controlApp.value}, which the credential does not declare")
-        return refusal(publish, key, candidate, "${ControlActions.PUBLISH} on [$key]")
+            ?: return LockoutCheck.Lockout("${name(ControlActions.PUBLISH)} is asked in app ${controlApp.value}, which the credential does not declare")
+        return refusal(publish, key, candidate, "${name(ControlActions.PUBLISH)} on [$key]")
     }
+
+    private fun name(action: Action): String = "${action.namespace}:${action.verb}"
 
     private fun covers(key: SnapshotKey): Boolean = key == SnapshotKey.Platform ||
         key == SnapshotKey.Tenant(TenantId.PLATFORM.value) ||
         key == SnapshotKey.App(controlApp.value)
 
     /** Why [request] would not be permitted with [candidate] in place of [key]; null when it would be. */
-    private suspend fun refusal(request: EngineRequest, key: SnapshotKey, candidate: PolicyDocument, what: String): LockoutCheck.Lockout? {
+    private suspend fun refusal(
+        request: EngineRequest,
+        key: SnapshotKey,
+        candidate: PolicyDocument,
+        what: String
+    ): LockoutCheck.Lockout? {
         val scope = request.scope
         val tenantKey = SnapshotKey.Tenant(scope.tenant.value)
         val tenant = if (tenantKey == key) candidate else retained.held(tenantKey)?.document
-        val heads = simulator.keys(scope, tenant).associateWith { if (it == key) Held(candidate, null) else retained.held(it) }
+        val heads = simulator.keys(
+            scope,
+            tenant
+        ).associateWith { if (it == key) Held(candidate, null) else retained.held(it) }
         val documents = HeldDocuments(
             heads[SnapshotKey.Platform],
             heads.entries.firstOrNull { it.key is SnapshotKey.App }?.value,

@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
@@ -58,7 +59,6 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §7.1–§7.5 through the real pipeline and engine: the built-in control-plane policies, the hard rule, the

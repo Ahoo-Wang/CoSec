@@ -24,6 +24,7 @@ import me.ahoo.cosec.control.change.PERMIT_ALL
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
 import me.ahoo.cosec.control.lifecycle.ControlMaintenance
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.StoreFixtures.ACME
 import me.ahoo.cosec.control.store.StoreFixtures.candidate
 import me.ahoo.cosec.control.store.StoreFixtures.publication
@@ -34,7 +35,6 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * #1226: a record reclamation takes out of the index and then fails to delete is deleted by a later pass. The index
