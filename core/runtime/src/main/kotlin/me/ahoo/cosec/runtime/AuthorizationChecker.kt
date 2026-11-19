@@ -45,8 +45,9 @@ private val log = KotlinLogging.logger {}
  * as they were when it started; no obligation runs and no listener hears of it. A check does not authenticate again: a
  * request in progress is answered as any other, however long it runs, even once its token has expired or been revoked
  * or its roles have changed, since the pipeline authenticated it when it began. Once the adapter that bound it has
- * ended the request, every check of it is denied (`PIP-26`); a request no adapter bound (a transport that calls
- * `Pipeline.evaluate` itself, the test kit) is never ended, and keeps permitting as long as it is held.
+ * ended the request, every check of it is denied (`PIP-26`); a transport of the application's own ends its request by
+ * closing the [me.ahoo.cosec.runtime.http.Outcome] `Pipeline.evaluate` answered, and one that never closes it leaves
+ * the request permitting as long as it is held.
  *
  * [check] answers yes or no; [decide] answers the [Decision] itself, for host code that records what permitted it: a
  * [Decision.Permit] names the statement in [Decision.Permit.by], with the binding it came through in
@@ -60,7 +61,9 @@ private val log = KotlinLogging.logger {}
  * Fails closed: only a permit is true. A context the pipeline did not make, one whose request has ended, an
  * indeterminate decision and an error are false. `cosec-webflux` adds a `Mono<Boolean>` form of [check] and `cosec-webmvc` a blocking one.
  */
-class AuthorizationChecker(private val pipeline: Pipeline) {
+class AuthorizationChecker internal constructor(private val pipeline: Pipeline, private val misuse: CheckMisuse) {
+    constructor(pipeline: Pipeline) : this(pipeline, CheckMisuse.SHARED)
+
     /**
      * Whether the principal of [security] may perform [action] (`service:verb`, or `http:<METHOD>`) on [resource]:
      * `type/id` (`order/42`), or a path (`/orders/42`) for an `http` resource (RFC 0005 §5.1).
@@ -80,9 +83,22 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * the check itself failing. Read `error` for what failed; the failure is logged as a warning too.
      */
     suspend fun decide(security: SecurityContext, action: String, resource: String): Decision {
-        val request = (security as? PipelineSecurityContext)?.security ?: return Decision.Deny(null)
-        val (namespace, verb) = action.split(':', limit = 2).takeIf { it.size == 2 } ?: return Decision.Deny(null)
-        return decide(request, Action(namespace, verb), resource(resource))
+        val request = (security as? PipelineSecurityContext)?.security
+            ?: return misused(CheckMisuse.Kind.FOREIGN_CONTEXT, null, action, resource)
+        val parts = action.split(':', limit = 2)
+        if (parts.size != 2) {
+            return misused(CheckMisuse.Kind.MALFORMED_ACTION, request.requestId, action, resource)
+        }
+        val decidedAs = Enforceable.action(Action(parts[0], parts[1]))
+            ?: return misused(CheckMisuse.Kind.MALFORMED_ACTION, request.requestId, action, resource)
+        val decidable = Enforceable.resource(resource(resource)) ?: return Decision.Deny(null)
+        return decided(request, decidedAs, decidable)
+    }
+
+    /** A check refused for how it was called: an implicit deny, logged ([CheckMisuse]), never an exception. */
+    private fun misused(kind: CheckMisuse.Kind, requestId: String?, action: String, resource: String): Decision {
+        misuse.record(kind, requestId, action, resource)
+        return Decision.Deny(null)
     }
 
     private fun resource(text: String): Resource {
@@ -101,8 +117,8 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
      * The answer for a request its adapter has ended (`PIP-26`): an implicit deny, as for a context the pipeline did not
      * make. Nothing is unavailable, and asking again would not help.
      */
-    private fun ended(security: RequestSecurity): Decision {
-        log.debug { "Check as request [${security.requestId}] after it ended - denied." }
+    private fun ended(security: RequestSecurity, action: Action, resource: Resource): Decision {
+        misuse.record(CheckMisuse.Kind.ENDED_REQUEST, security.requestId, action, resource)
         return Decision.Deny(null)
     }
 
@@ -121,7 +137,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
 
     @Suppress("TooGenericExceptionCaught")
     private suspend fun decided(security: RequestSecurity, action: Action, resource: Resource): Decision = try {
-        if (security.inProgress) pipeline.check(security, action, resource) else ended(security)
+        if (security.inProgress) pipeline.check(security, action, resource) else ended(security, action, resource)
     } catch (e: CancellationException) {
         if (!currentCoroutineContext().isActive) {
             throw e
@@ -147,7 +163,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
     @InternalCoSecApi
     suspend fun decide(security: RequestSecurity, app: AppId, action: Action, resource: Resource): Decision {
         if (!security.inProgress) {
-            return ended(security)
+            return ended(security, action, resource)
         }
         val scoped = security.inApp(app) ?: return Decision.Deny(null)
         return decided(scoped, action, resource)
@@ -188,7 +204,7 @@ class AuthorizationChecker(private val pipeline: Pipeline) {
             return Decision.Deny(null)
         }
         if (!security.inProgress) {
-            return ended(security)
+            return ended(security, action, resource)
         }
         if (principal.membershipSource !is MembershipSource.Provider) {
             return decideOn(security, principal, memberships, app, action, resource)

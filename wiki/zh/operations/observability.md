@@ -146,6 +146,8 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 | `problem` | 客户端被告知的问题：`unauthorized`（`401`，匿名）、`token-invalid`、`token-expired`、`token-revoked`（`401`）、`forbidden`、`scope-rejected`（`403`）、`too-many-requests`、`invalid-request`、`unavailable`、`internal-error`，请求继续或被取消时为 `none` |
 | `cause` | `none`，以及在 `indeterminate` 时：`source_unavailable`、`document_invalid`、`missing_policies`、`membership`、`attribute`、`matcher`、`authenticator`、`required_listener`、`boundary`、`rate_limiter`、`deadline`、`unknown` |
 
+在 `cosec-gateway-server` 镜像上，注册表是 Prometheus 的，端点是管理端口（`8081`）上的 `/actuator/prometheus`，从不在网关的端口上（[镜像](./deployment.md#the-image)）。上面的标签值就是 CoSec 的全部标签；租户、主体、路径、令牌都不会成为标签。
+
 监听器本身也被计数：
 
 | 指标 | 标签 | 计数内容 |

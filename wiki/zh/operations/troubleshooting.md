@@ -210,6 +210,16 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - **上下文不是管道构造的**：手工构造的或 mock。适配器的读取入口甚至不会返回这样的上下文（`PIP-27`）：`exchange.getSecurityContext()` 和 `request.getSecurityContext()` 为 `null`，必需的 `SecurityContext` 处理器参数会失败。测试中使用管道放行的请求的上下文（`PipelineFixture.securityContext`、`PermittedRequest`）。
 - **动作没有 `:`**，或者指向执法会拒绝的东西（含小写字母的 `http` 动词、请求会得到 `400` 的路径：`PIP-15`）。
 
+其中三种是调用代码的错误，日志会指出它们。日志记录器是 `me.ahoo.cosec.runtime.AuthorizationChecker`。每种错误最多每分钟记录一次 `WARN`，所以检查的循环不会刷屏，而每次发生都记录在 `DEBUG`。消息包含请求 id、动作和资源：
+
+| 消息开头 | 需要修改什么 |
+|---|---|
+| `Check denied before any policy was read: the SecurityContext is not one the pipeline made` | 传入适配器绑定的上下文，测试中传入 `PipelineFixture` 或 `PermittedRequest` 给出的上下文。 |
+| `Check denied before any policy was read: its request has ended` | 在请求内检查；你自己的传输只在响应完成时关闭其 `Outcome`。 |
+| `Check denied before any policy was read: the action is not` | 把动作写成 `service:verb`，或者 `http:` 加大写的方法。 |
+
+执法拒绝的路径不会被记录：它可能来自客户端。
+
 ## 决策使用了旧的修订 {#decisions-use-an-old-revision}
 
 审计事件的 `snapshotVersion` 或 span 的 `cosec.snapshot.version` 比控制面发布的修订旧。
@@ -614,7 +624,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
   添加带 Spring Data Redis 的 `cosec-cocache`，或者注册一个 `ApiKeyReader`。
 - `cosec.api-key.enabled=true needs a MembershipProvider bean: an API key's memberships are its principal's ...
   (IDN-6).` key 的成员关系来自其主体的提供者。添加 `cosec-cocache` 和一个 `MembershipLoader` Bean，它会配置
-  `CoCacheMembershipProvider`，或者声明一个 `MembershipProvider`。这项检查只在 `cosec.pipeline.mode=enforce` 中运行，
+  `CoCacheMembershipProvider`，或者声明一个 `MembershipProvider`。这项检查只在 `cosec.pipeline.mode=enforce` 中运行（在 `cosec-gateway-server` 镜像上，信息以 `The cosec-gateway-server image ships none, so as shipped it cannot use API keys` 结尾：镜像没有 `MembershipProvider` Bean，所以 API key 需要加上它的派生镜像），
   因为只有那里读取 key；`gateway` 模式的服务不读取 key。
 - `API key [<id>] needs the SHA-256 hex of the key as hash.`、`... needs a principal-id.`、`... needs a tenant-id.`、
   `Duplicate API key ids: [...].` 修正 [`cosec.api-key.keys`](./configuration.md#api-keys)。

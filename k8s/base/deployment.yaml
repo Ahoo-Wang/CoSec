@@ -39,6 +39,11 @@ spec:
             - name: http
               containerPort: 8080
               protocol: TCP
+            # The actuator: /actuator/prometheus for the scrape, /actuator/health. Not in the Service: reach it from
+            # inside the cluster only (the production overlay's NetworkPolicy admits a monitoring source).
+            - name: management
+              containerPort: 8081
+              protocol: TCP
           env:
             # Required, with no fallback: the gateway signs and verifies tokens with it. Create the Secret in the
             # overlay's namespace before the first apply, for example:
@@ -55,13 +60,11 @@ spec:
             # The image's start script puts JAVA_OPTS after its own defaults (-Xmx2048M, ZGC, ...), so these win.
             # JAVA_TOOL_OPTIONS would not: the JVM reads it before the command line.
             # - ExitOnOutOfMemoryError: a JVM that ran out of memory is restarted rather than left half-working.
-            # - jmxremote.host: the image starts a JMX agent on port 5555 with no authentication; keep it to the pod.
             # - preferIPv4Stack: https://github.com/netty/netty/issues/16082
             - name: JAVA_OPTS
               value: >-
                 $(JVM_MEMORY_OPTS)
                 -XX:+ExitOnOutOfMemoryError
-                -Dcom.sun.management.jmxremote.host=127.0.0.1
                 -Djava.net.preferIPv4Stack=true
           # spring.data.redis.* from the overlay's ConfigMap cosec-gateway-redis.
           envFrom:
@@ -75,26 +78,28 @@ spec:
               # The JVM sizes its GC, JIT and Netty thread pools from the CPU limit.
               cpu: "1"
               memory: 768Mi
-          # Spring Boot's probe groups. Readiness is REFUSING_TRAFFIC until the platform document (and any prewarmed
-          # document) is installed, so a gateway on a Redis with no documents runs but stays out of the Service.
-          # That is by design: it would answer every routed request 503. Never probe /actuator/health, which is DOWN
-          # until then as well.
+          # Spring Boot's probe groups, on the gateway's own port as /livez and /readyz: a probe proves the listener clients
+          # use answers, and CoSec does not decide them (they are not gateway routes). Readiness is REFUSING_TRAFFIC until
+          # the platform document (and any prewarmed document) is installed, so a gateway on a Redis with no documents
+          # runs but stays out of the Service. That is by design: it would answer every routed request 503. Never probe
+          # /actuator/health, which is DOWN until then as well. (The same groups are on the management port, 8081, as
+          # /actuator/health/liveness and /readiness.)
           startupProbe:
             httpGet:
-              path: /actuator/health/liveness
+              path: /livez
               port: http
             periodSeconds: 2
             failureThreshold: 90
           livenessProbe:
             httpGet:
-              path: /actuator/health/liveness
+              path: /livez
               port: http
             periodSeconds: 10
             timeoutSeconds: 3
             failureThreshold: 3
           readinessProbe:
             httpGet:
-              path: /actuator/health/readiness
+              path: /readyz
               port: http
             periodSeconds: 5
             timeoutSeconds: 3

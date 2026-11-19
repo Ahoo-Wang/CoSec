@@ -128,7 +128,7 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 
 检查失败即拒绝：不是由管道构建的 `SecurityContext`（你自己构造的，或者根本没有）一律为 `false`，不论文档怎么写。因此请求之外不存在检查。
 
-检查不会重新认证。它使用请求被放行时解析出的主体、成员关系和作用域做决策，并重新读取文档。它不检查令牌的年龄和吊销，也看不到之后角色的变化。因此在请求进行期间，检查会在用户登出、`revokeSubject` 或角色被移除之后继续放行，只要文档允许；请求本身已经决策过了。请求结束时检查随之停止（`PIP-26`，见下文），而没有适配器绑定的上下文永远不会结束。不要保存上下文：在请求到达处授权，把决策而不是上下文随工作一起传递。
+检查不会重新认证。它使用请求被放行时解析出的主体、成员关系和作用域做决策，并重新读取文档。它不检查令牌的年龄和吊销，也看不到之后角色的变化。因此在请求进行期间，检查会在用户登出、`revokeSubject` 或角色被移除之后继续放行，只要文档允许；请求本身已经决策过了。请求结束时检查随之停止（`PIP-26`，见下文）；你自己的传输通过关闭 `Outcome` 结束请求。不要保存上下文：在请求到达处授权，把决策而不是上下文随工作一起传递。
 
 ### 检查与已映射的路由 {#a-check-and-a-mapped-route}
 
@@ -146,7 +146,8 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 
 - **请求仍在进行时**，检查按上表作答，无论请求持续多久：在流式或服务器发送事件（SSE）响应体写出期间、在异步 Servlet 请求中、在处理器等待的代码里都是如此。它按请求开始时的主体、成员关系和属性判定，即使令牌已在途中过期：管道在请求开始时认证了它，检查不比请求自己的决策更严。
 - **请求结束之后**，对它的上下文的每次检查都为 `false`（`decide` 返回 `Deny(null)`），不论文档怎么写：保存在字段、缓存或消息里的上下文之后不再放行任何操作。WebFlux 和网关在响应写完、失败或客户端离开时结束请求，并且在把完成信号传递下去之前结束，所以看到请求完成的代码看到的是已结束的请求；Spring MVC 在分派返回时结束，异步请求（`DeferredResult`、`StreamingResponseBody`、`suspend` 处理器）则在它完成、失败或超时时结束。异步请求的 ASYNC 分派中的代码（消息转换器、`ResponseBodyAdvice`、拦截器）仍在请求之内。错误页不在：Spring MVC 在请求结束之后的 ERROR 分派中渲染它，所以错误页或错误控制器读得到上下文，但在那里对它的每次检查都为 `false`。
-- **没有适配器绑定的请求**永远不会结束：你自己的传输交给 `Pipeline.evaluate` 的请求，以及测试工具包的请求（`PipelineFixture`、`PermittedRequest`）。对它的检查行为与以往相同，所以也不要在请求之后保留它的上下文。
+- **你自己的传输交给 `Pipeline.evaluate` 的请求**在传输关闭其 `Outcome`（`AutoCloseable`）时结束：响应在代码块返回时已完成的，用 `evaluate(facts).use { … }` 包住；响应比处理器活得更久的（流式响应体、WebSocket 会话），在响应的完成回调里调用 `outcome.close()`。在处理器返回时关闭，会在这种流还在写出时就结束请求，流中的检查都为 `false`。从不关闭它的传输，会让请求在其上下文被持有期间一直处于进行中（[你自己的传输](../architecture/extending.md#pipeline-outside-the-adapters)）。
+- **测试工具包的上下文**在测试结束它们之前一直处于进行中，就像主机在响应完成时那样：`PipelineFixture.end(context)`、`PermittedRequest.end(context)`，或者关闭 `PipelineFixture.evaluate` 的 `Outcome`。测试"在响应之后检查"的代码时，先结束上下文，再断言检查为 `false`。
 
 ## 对象级规则 {#object-level-rules}
 

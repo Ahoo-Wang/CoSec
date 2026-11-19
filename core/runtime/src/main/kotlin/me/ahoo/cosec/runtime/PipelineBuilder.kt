@@ -24,6 +24,7 @@ import me.ahoo.cosec.runtime.attribute.AttributeProviders
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
+import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.runtime.snapshot.DocumentReadiness
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshotViews
 import me.ahoo.cosec.runtime.snapshot.DocumentSnapshots
@@ -96,7 +97,11 @@ class PipelineBuilder internal constructor(
         listenerSettingsSet = true
     }
 
-    /** Counts the permits of rate limit rules; without one a strict rule refuses (503) and any other is skipped. */
+    /**
+     * Counts the permits of rate limit rules. By default a [LocalRateLimiter] of this pipeline's own, as the starter's
+     * default is: per instance, so a limit is per instance too. Give one shared across instances (on Redis) to limit a
+     * service as a whole.
+     */
     fun rateLimiter(limiter: RateLimiter): PipelineBuilder = apply { rateLimiter = limiter }
 
     /** The service's routes (RFC 0005 §5.3); none by default, and every request is in the `http` namespace. */
@@ -217,7 +222,7 @@ class PipelineBuilder internal constructor(
             options = options,
             attributes = attributes,
             listeners = listeners,
-            rateLimiter = rateLimiter,
+            rateLimiter = rateLimiter ?: LocalRateLimiter(),
             routes = routes,
             identity = identity,
         ),

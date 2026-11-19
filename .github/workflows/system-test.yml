@@ -34,6 +34,8 @@ on:
   pull_request:
     paths:
       - 'test/system-*/**'
+      - 'platform/gateway-server/**'
+      - 'k8s/**'
       - '.github/workflows/system-test.yml'
 
 permissions:

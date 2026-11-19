@@ -126,7 +126,7 @@ refused requests are not counted.
 | Limiter | Used when | Scope |
 |---|---|---|
 | `ReactiveRedisRateLimiter` | `cosec-cocache` is on the classpath and a `ReactiveStringRedisTemplate` bean exists | Cluster-wide, checked and counted atomically by a Lua script, without blocking the caller's thread. Each bucket is one key, `<cosec.key-prefix>:rate-limiter:<rule>:<bucket>`, which holds its current and previous window and expires two windows after its last count. The script takes the time from Redis, so instances whose clocks differ count in the same window, and it touches only that key, so it runs on a Redis Cluster as on one node. |
-| `LocalRateLimiter` | otherwise | Per JVM: with N instances the effective limit is N times higher. A bucket is removed once it has been idle for an hour and for two of its rule's windows, when its count can no longer refuse a request. At most 100,000 buckets in all and 50,000 of one rule ([below](#the-local-limiter-is-bounded)). |
+| `LocalRateLimiter` | otherwise, and for a pipeline built with `Pipeline.builder` or the test kit's `PipelineFixture` unless given another | Per JVM: with N instances the effective limit is N times higher. A bucket is removed once it has been idle for an hour and for two of its rule's windows, when its count can no longer refuse a request. At most 100,000 buckets in all and 50,000 of one rule ([below](#the-local-limiter-is-bounded)). |
 
 **The counters are memory a client can grow.** They live in the same Redis as the documents, which must not evict
 ([Storage](../operations/storage.md#redis-requirements)): one key per bucket value, for two windows. A rule whose `key`

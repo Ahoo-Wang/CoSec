@@ -20,16 +20,11 @@ CI 在每次推送到 `main`、`7.x` 和发布分支时、为每个版本标签�
   Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上，并带有 JDK 25 的 [AOT 缓存](#aot-cache)：它的运行时是 25，而不是 21。
 - **必需配置。** `COSEC_JWT_SECRET`（没有默认值，见[认证](../integration/authentication.md)）和 Redis 地址，例如
   `SPRING_DATA_REDIS_URL`。
-- **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。配置文件是
-  `config/application.yaml`；JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数，它排在这些参数之后，因此会覆盖它们（[内存](#memory)）。
-- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪、Kafka 模块和 ip2region。它的配置
-  `config/application.yaml`（它只读这一个，来自
-  [`src/dist/config/`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml)）
-  关闭了 Kafka 审计（`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region
-  （`cosec.ip2region.enabled: false`，与 [Kubernetes](#kubernetes) 的 base 一样）：读取 `ext.ip2region.*` 的文档需要
-  `COSEC_IP2REGION_ENABLED=true`。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。
-- **Docker 健康检查。** 镜像的 `HEALTHCHECK` 每 30 秒探测一次 `/actuator/health/liveness`：应用运行后即为 up，与 Redis 中
-  有什么无关。它从不探测 `/actuator/health`，后者在平台文档安装之前一直是 `DOWN`（[就绪](#readiness)）。
+- **目录结构。** 应用位于 `/opt/cosec-gateway-server`，以非特权用户 `appuser` 运行。镜像的默认值在 jar 里；你的配置是 `config/application.yaml`（挂载到那里），它被追加读取并逐 key 覆盖，所以只设置路由的文件也保留下面所有默认值。列表（例如 `routes`）整体替换。JVM 参数在 `bin/cosec-gateway-server` 中（ZGC，2 GiB 堆）。通过 `JAVA_OPTS` 追加参数，它排在这些参数之后，因此会覆盖它们（[内存](#memory)）。镜像不启动 JMX agent；要附加，在 `JAVA_OPTS` 里设置并绑定到回环地址：`-Dcom.sun.management.jmxremote -Dcom.sun.management.jmxremote.port=5555 -Dcom.sun.management.jmxremote.host=127.0.0.1 -Djava.rmi.server.hostname=127.0.0.1 -Dcom.sun.management.jmxremote.authenticate=false -Dcom.sun.management.jmxremote.ssl=false`，再用 `kubectl port-forward` 或 `docker exec` 连接；`jcmd` 不需要它。
+- **包含什么。** 网关过滤器、Redis 快照存储（`cosec-cocache`）、追踪、Kafka 模块、ip2region，以及指标：`cosec-micrometer` 和 Prometheus 注册表，所以 `cosec.authorization`、`cosec.snapshot.*` 和[可观测性](./observability.md#metrics)中的其他指标都存在，并从管理端口的 `/actuator/prometheus` 抓取（见下）。它的默认值在 jar 里（[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/main/resources/application.yaml)），关闭了 Kafka 审计（`cosec.audit.kafka.enabled: false`）、登录（`cosec.authentication.login.enabled: false`）和 ip2region（`cosec.ip2region.enabled: false`，与 [Kubernetes](#kubernetes) 的 base 一样）：读取 `ext.ip2region.*` 的文档需要 `COSEC_IP2REGION_ENABLED=true`。它没有控制面：文档由 `cosec-migrate` 或同一个 Redis 上的控制面应用发布。它按出厂配置不能使用 [API key](../integration/authentication.md)：`cosec.api-key.enabled=true` 会因为缺少 `MembershipProvider` Bean 而启动失败，镜像里没有它；基于它派生、带有 `MembershipProvider` Bean（cosec-cocache 的，配上你的 `MembershipLoader`，或你自己的）的镜像可以。
+- **端口。** 网关监听 **8080**，探针是 `/livez` 和 `/readyz`：Spring Boot 存活与就绪分组，由网关自己的端口提供，因此探针证明客户端使用的监听器在应答。它们不是网关路由，所以 CoSec 不对它们决策，并且在任何文档发布之前就会应答（存活 `200`，就绪 `503`）。actuator 在**管理端口 8081** 上，从不在网关的端口上：`/actuator/health`（以及 `/actuator/health/liveness`、`/readiness`）和抓取端点 `/actuator/prometheus`。CoSec 授权的是网关的路由，不是 actuator：把 8081 留在集群或主机内部，只发布给监控网络（`-p 8080:8080` 只发布网关）。8081 上的探针证明 actuator 的服务器在应答，不证明 8080 上的监听器在应答：探测 8080 上的 `/livez`。
+- **指标。** 8081 上的 `/actuator/prometheus` 包含 CoSec、Spring Cloud Gateway、JVM 和 CoCache 的指标。CoSec 的标签都是有界的（决策的 `result`、`source`、`problem`、`cause`；快照的 `kind`、`state`、`result`；监听器名）；租户、主体、路径、令牌都不会成为标签。`disk_*` 指标带有工作目录的路径。
+- **Docker 健康检查。** 镜像的 `HEALTHCHECK` 每 30 秒探测一次 8080 上的 `/livez`：应用运行后即为 up，与 Redis 中有什么无关。它从不探测 `/actuator/health`，后者在平台文档安装之前一直是 `DOWN`（[就绪](#readiness)）。
 
 ```bash
 docker run -d -p 8080:8080 \
@@ -78,7 +73,7 @@ flowchart LR
 ```
 
 **只有网关可以访问 gateway 模式的服务。** 服务相信它收到的任何 `CoSec-Identity`，所以其他能向它发请求的人都可以
-自称任何人。在网络上保证这一点：只放行网关 pod 的 Kubernetes `NetworkPolicy`、私有网络，或网关与服务之间的双向 TLS。
+自称任何人。在网络上保证这一点：只放行网关 pod 的 Kubernetes `NetworkPolicy`、私有网络，或网关与服务之间的双向 TLS。[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml) 是这样一个服务的 `NetworkPolicy`，只放行来自网关 pod 的访问。
 每个这样的服务在启动时以 `WARN` 记录：
 
 ```text
@@ -145,9 +140,9 @@ management:
 
 | 目录 | 用途 | 内容 |
 |---|---|---|
-| `base/` | 供 overlay 在其上构建 | Deployment 和一个 Service（80 端口转发到容器的 8080）。`application.yaml`（路由和上面的 `cosec.*` 设置）生成一个 ConfigMap，挂载到 `/opt/cosec-gateway-server/config/`；它的名字带有文件的哈希，所以修改文件会滚动更新 pod。镜像是 `ghcr.io/ahoo-wang/cosec-gateway`，标签在 `images:` 中设置。每个网关 768Mi，堆 256 MiB。 |
+| `base/` | 供 overlay 在其上构建 | Deployment 和一个 Service（80 端口转发到容器的 8080；管理端口 8081 是 Service 不发布的容器端口）。`application.yaml`（路由和上面的 `cosec.*` 设置）生成一个 ConfigMap，挂载为 `/opt/cosec-gateway-server/config/application.yaml`，追加在镜像默认值之后读取；其中的 CORS 来源、发现列表和路由只是演示，请替换；它的名字带有文件的哈希，所以修改文件会滚动更新 pod。镜像是 `ghcr.io/ahoo-wang/cosec-gateway`，标签在 `images:` 中设置。每个网关 768Mi，堆 256 MiB。 |
 | `overlays/dev/` | 在任何集群上试用 CoSec，包括 kind 和 minikube | 命名空间 `cosec-dev`，一个使用 base 资源配置的网关，以及一个单实例 Redis 7.4，`maxmemory-policy noeviction`，没有密码。Redis 的数据放在 `emptyDir` 中，容器重启后还在，pod 删除后就没了：删除 Redis 的 pod 就删除了文档。 |
-| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个只放行 8080 端口的 NetworkPolicy；每个网关 2Gi，堆 1 GiB，分散到不同节点。 |
+| `overlays/production/` | 你自己的 overlay 的起点 | 命名空间 `cosec`；你的 Redis，地址来自 ConfigMap `cosec-gateway-redis`（主机和端口；Redis Cluster 则用 `SPRING_DATA_REDIS_CLUSTER_NODES`），凭证来自 Secret `cosec-redis-secret`（`password`，ACL 用户再加 `username`）；按 CPU 伸缩的 HorizontalPodAutoscaler，2 到 10 个网关（目标为每个网关请求的 1 CPU 的 70 %；需要 metrics server）；一个 PodDisruptionBudget，一次只驱逐一个网关，未就绪的网关总是可以驱逐，所以排空节点从不等待平台文档；一个 NetworkPolicy，放行任何来源访问 8080 端口、只放行 `monitoring` 命名空间访问管理端口；每个网关 2Gi，堆 1 GiB，分散到不同节点。 |
 
 ### 部署 {#deploying}
 
@@ -188,17 +183,12 @@ management:
   service account 令牌：它从不调用 Kubernetes API。两个 overlay 都符合 `restricted` Pod 安全标准。它只写三个
   `emptyDir` 卷：`logs/`（GC 日志）、`data/`（`OutOfMemoryError` 时的堆转储）和 `/tmp`（Netty 的原生传输、JVM 的性能数据）。
   AOT 缓存只读不写。
-- **探针。** 启动探针和存活探针读取 `/actuator/health/liveness`，就绪探针读取 `/actuator/health/readiness`，这两个分组由
-  `application.yaml` 启用（`management.endpoint.health.probes.enabled`）。因此 Redis 中还没有平台文档时 pod 也能启动，
-  并在文档安装前留在 Service 之外。不要让探针指向 `/actuator/health`：在那之前它一直是 DOWN，启动探针指向它会让 pod 被重启。
-- **Actuator。** 通过 HTTP 只暴露 `health`；能读取和修改路由的 `gateway` 端点处于关闭状态
-  （`management.endpoint.gateway.access: none`）。CoSec 授权的是网关的路由，不是它的 actuator 端点。
+- **探针。** 启动探针和存活探针读取 `/livez`，就绪探针读取 `/readyz`，都在容器的 `http` 端口上：这两个分组由 `application.yaml` 启用（`management.endpoint.health.probes.enabled`），并由网关的端口提供（`add-additional-paths`）。所以 pod 在 Redis 里还没有平台文档时就能启动，并在文档安装前留在 Service 之外。不要让探针指向 `/actuator/health`：在那之前它一直是 DOWN，启动探针指向它会让 pod 被重启。
+- **Actuator。** 在管理端口上（`management.server.port: 8081`，容器端口 `management`，Service 不发布它）暴露 `health` 和 `prometheus`；能读取和修改路由的 `gateway` 端点处于关闭状态（`management.endpoint.gateway.access: none`）。CoSec 授权的是网关的路由，不是它的 actuator 端点：production 的 NetworkPolicy 只放行来自 `monitoring` 命名空间的管理端口（改成你的 Prometheus 所在处），dev overlay 没有策略。
 - **关闭。** `preStop` 先暂停 5 秒，让 Service 先摘掉这个 pod；`terminationGracePeriodSeconds: 45` 覆盖这段暂停、
   Spring 的优雅关闭（最多 30 秒）和决策监听器的排空（[关闭](#shutdown)）。
 - **JVM 参数**，通过 `JAVA_OPTS` 传入：下面的内存大小；`-XX:+ExitOnOutOfMemoryError`，让耗尽内存的 JVM 被重启；`-Djava.net.preferIPv4Stack=true`（因为
-  [netty#16082](https://github.com/netty/netty/issues/16082)）；以及
-  `-Dcom.sun.management.jmxremote.host=127.0.0.1`。镜像的启动脚本会在 5555 端口启动一个不需要认证的 JMX agent；这个参数把它
-  限制在 pod 内部，production 的 NetworkPolicy 还关闭了 8080 以外的所有端口。
+  [netty#16082](https://github.com/netty/netty/issues/16082)）。镜像不启动 JMX agent（直到 beta.3，它在 5555 端口、所有网卡上启动一个不需要认证的 JMX agent）。
 
 ### 内存 {#memory}
 
@@ -219,7 +209,7 @@ management:
 - **镜像自己的默认值放不进小集群。** 它的启动脚本设置 `-Xms2048M -Xmx2048M -XX:MaxMetaspaceSize=256M
   -XX:MaxDirectMemorySize=512M -Xss1m -XX:+UseZGC`，加上原生部分约 2.8 GiB，并把 GC 日志写到 `logs/`，把 `OutOfMemoryError`
   时的堆转储写到 `data/`。直接内存是上限，不是预留：Netty 的池化缓冲区（HTTP 服务端与 Redis 客户端）按流量需要占用它，所以网关实际用多少取决于负载和 CPU
-  数。要看实际用量，通过 Pod 内本地的 JMX agent 读 `java.nio:type=BufferPool,name=direct` MBean。`JAVA_OPTS` 在命令行上排在默认值之后，所以其中的大小生效；`JAVA_TOOL_OPTIONS` 改不了它们，因为 JVM 最先读取它。
+  数。要看实际用量，读 `/actuator/prometheus` 上的 `jvm_buffer_memory_used_bytes{id="direct"}`，或在 pod 内运行 `jcmd <pid> VM.native_memory`。`JAVA_OPTS` 在命令行上排在默认值之后，所以其中的大小生效；`JAVA_TOOL_OPTIONS` 改不了它们，因为 JVM 最先读取它。
   固定的 `-Xmx` 也会覆盖 `-XX:MaxRAMPercentage`，所以要给出明确的大小。base 在 `JVM_MEMORY_OPTS` 中设置它们，production
   overlay 替换这个变量；修改时同时修改内存请求和限制。
 - **CPU。** JVM 按 CPU 限制确定 GC、JIT 和 Netty 的线程数，自动伸缩器按 CPU 请求计算。
@@ -298,8 +288,8 @@ JVM 启动时直接映射这个文件，不再重复这些工作。不需要改�
 `Dockerfile` 在最终阶段用 [`aot-train.sh`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/aot-train.sh)
 训练缓存，所用的 jar 和路径与容器运行时完全一致，结果写入 `/opt/cosec-gateway-server/aot/cosec-gateway-server.aot`。
 
-1. **记录。** 脚本用 `-XX:AOTMode=record` 和与生产相同的 JVM 参数启动网关，等到 `/actuator/health/liveness` 有响应后发送几个请求，
-   再用 `SIGTERM` 停止它。它使用临时的 HTTP 和 JMX 端口，因为多平台构建会同时训练所有平台，这些 JVM 可能共享同一个网络。
+1. **记录。** 脚本用 `-XX:AOTMode=record` 和与生产相同的 JVM 参数启动网关，等到管理端口上的 `/actuator/health/liveness` 有响应后发送几个请求，
+   再用 `SIGTERM` 停止它。它使用临时的 HTTP 和管理端口，因为多平台构建会同时训练所有平台，这些 JVM 可能共享同一个网络。
 2. **创建。** 第二次运行使用 `-XX:AOTMode=create`，把记录下的配置生成缓存。
 3. **检查。** 第三次运行使用 `-XX:AOTMode=on`；如果生产参数无法映射缓存，构建失败。
 

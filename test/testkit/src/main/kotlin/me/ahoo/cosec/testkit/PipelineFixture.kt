@@ -36,9 +36,12 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.http.RequestSecurity
+import me.ahoo.cosec.runtime.ratelimit.LocalRateLimiter
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
 import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
+import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.snapshot.InMemorySnapshotDocumentStore
 import me.ahoo.cosec.spi.snapshot.SnapshotChangeListener
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
@@ -134,8 +137,8 @@ class PipelineFixture private constructor(
     suspend fun evaluate(facts: HttpFacts): Outcome = pipeline.evaluate(facts)
 
     /**
-     * The [SecurityContext] of the request [facts] as a host handler would read it. Fails with an [AssertionError]
-     * naming the status and the problem when the pipeline did not permit the request.
+     * The [SecurityContext] of the request [facts] as a host handler would read it, in progress until [end] ends it.
+     * Fails with an [AssertionError] naming the status and the problem when the pipeline did not permit the request.
      */
     suspend fun securityContext(facts: HttpFacts): SecurityContext {
         val outcome = pipeline.evaluate(facts)
@@ -143,6 +146,17 @@ class PipelineFixture private constructor(
             throw AssertionError("The pipeline refused the request: ${outcome.status} ${outcome.problem?.type?.name}")
         }
         return outcome.security!!.securityContext
+    }
+
+    /**
+     * Ends the request of [context], as a host does when its response is complete (`PIP-26`): from then on every check
+     * of it is denied, as for code that keeps a context past its request. An [Outcome] of [evaluate] ends its request
+     * when it is closed, as a transport of the application's own closes it. Idempotent.
+     *
+     * @throws IllegalArgumentException when [context] is not one the pipeline made
+     */
+    fun end(context: SecurityContext) {
+        requireNotNull(RequestSecurity.of(context)) { "The context [$context] is not one the pipeline made." }.end()
     }
 
     override fun close() = close.invoke()
@@ -154,17 +168,21 @@ class PipelineFixture private constructor(
 
         /**
          * The documents in [directory], laid out as [PolicyTestKit.load] reads them, with the route map [routes] and the
-         * decision [listeners]. Throws [DocumentException] when a document does not compile.
+         * decision [listeners]. Throws [DocumentException] when a document does not compile. Rate limit rules count
+         * their permits in [rateLimiter], a [LocalRateLimiter] of the fixture's own as the starter's default is, so a
+         * request over a rule's limit answers `429`; pass one with a clock of the test's to cross a window.
          */
         fun load(
             directory: Path,
             routes: RouteMap = RouteMap.EMPTY,
             listeners: List<DecisionListener> = emptyList(),
-        ): PipelineFixture = assemble(PolicyTestKit.documents(directory), routes, listeners)
+            rateLimiter: RateLimiter = LocalRateLimiter(),
+        ): PipelineFixture = assemble(PolicyTestKit.documents(directory), routes, listeners, rateLimiter)
 
         /**
          * The documents as JSON text: [apps] and [tenants] by id, with the route map [routes] and the decision
-         * [listeners]. Throws [DocumentException] when one does not compile.
+         * [listeners]. Throws [DocumentException] when one does not compile. Rate limits count in [rateLimiter], as
+         * [load]'s do.
          */
         fun of(
             platform: String? = null,
@@ -172,6 +190,7 @@ class PipelineFixture private constructor(
             tenants: Map<String, String> = emptyMap(),
             routes: RouteMap = RouteMap.EMPTY,
             listeners: List<DecisionListener> = emptyList(),
+            rateLimiter: RateLimiter = LocalRateLimiter(),
         ): PipelineFixture = assemble(
             ScenarioDocuments(
                 platform?.let(ScenarioJson::parse),
@@ -180,6 +199,7 @@ class PipelineFixture private constructor(
             ),
             routes,
             listeners,
+            rateLimiter,
         )
 
         /**
@@ -204,6 +224,7 @@ class PipelineFixture private constructor(
             documents: ScenarioDocuments,
             routes: RouteMap,
             listeners: List<DecisionListener>,
+            rateLimiter: RateLimiter,
         ): PipelineFixture {
             // Compiled here first, so that a document that cannot compile fails the test, not its first request.
             DocumentSnapshotCompiler.stored.compile(documents)
@@ -219,6 +240,7 @@ class PipelineFixture private constructor(
                     prewarmTenants = documents.tenants.keys
                 }
                 .routes(routes)
+                .rateLimiter(rateLimiter)
                 .apply { listeners.forEach(::listener) }
                 .build()
             // Installed before the first evaluate, so a test's first request is decided as any later one.

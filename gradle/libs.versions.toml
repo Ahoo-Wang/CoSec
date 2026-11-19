@@ -59,6 +59,9 @@ spring-boot-tomcat = { module = "org.springframework.boot:spring-boot-tomcat" }
 spring-boot-jetty = { module = "org.springframework.boot:spring-boot-jetty" }
 spring-boot-reactor-netty = { module = "org.springframework.boot:spring-boot-reactor-netty" }
 spring-boot-webmvc = { module = "org.springframework.boot:spring-boot-webmvc" }
+# The gateway-server image's scrape endpoint (UB-2): versioned by the Spring Boot BOM above, like micrometer-core, as it
+# is the registry Spring Boot's own prometheus endpoint reads.
+micrometer-registry-prometheus = { module = "io.micrometer:micrometer-registry-prometheus" }
 [plugins]
 detekt = { id = "io.gitlab.arturbosch.detekt", version.ref = "detekt" }
 dokka = { id = "org.jetbrains.dokka", version.ref = "dokka" }
