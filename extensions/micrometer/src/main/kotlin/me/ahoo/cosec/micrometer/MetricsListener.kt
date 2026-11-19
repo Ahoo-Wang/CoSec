@@ -39,7 +39,12 @@ import java.util.concurrent.TimeUnit
  * Every tag is a small fixed enumeration, never a policy, app or tenant id, so the number of series stays bounded:
  * - [RESULT_TAG]: `allow`, `too_many_requests`, `explicit_deny`, `implicit_deny`, `indeterminate`, `bad_request`, `cancelled`, `error`;
  * - [SOURCE_TAG]: how the deciding statement applied: `binding`, `attachment`, `builtin`, `boundary`, `scope` or `none`;
- * - [CAUSE_TAG], on `indeterminate` only: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`,
+ * - [PROBLEM_TAG], what the client was told (UB-8): the slug of the problem type, `unauthorized` (a `401` without a
+ *   token), `token-invalid`, `token-expired`, `token-revoked`, `forbidden`, `scope-rejected`, `too-many-requests`,
+ *   `invalid-request`, `unavailable`, `internal-error`, or `none` when the request proceeds or was cancelled: the
+ *   status code of a refusal is the one of its type, so a `401` and a `403` tell apart, and one token problem from
+ *   another;
+ * - [CAUSE_TAG], `none` unless the result is `indeterminate`, then: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`,
  *   `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline` or `unknown`.
  */
 class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
@@ -49,10 +54,17 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
 
     override suspend fun onDecision(event: DecisionEvent) {
         val result = result(event.outcome.reason)
-        var tags = Tags.of(RESULT_TAG, result, SOURCE_TAG, source(event.by))
-        if (result == INDETERMINATE) {
-            tags = tags.and(CAUSE_TAG, cause(event))
-        }
+        // The same tag keys on every series: a Prometheus registry refuses meters of one name with different keys.
+        val tags = Tags.of(
+            RESULT_TAG,
+            result,
+            SOURCE_TAG,
+            source(event.by),
+            PROBLEM_TAG,
+            event.outcome.problem?.slug ?: NONE,
+            CAUSE_TAG,
+            if (result == INDETERMINATE) cause(event) else NONE,
+        )
         Timer.builder(METRIC_NAME)
             .description("CoSec decisions, over the whole pipeline")
             .tags(tags)
@@ -105,10 +117,12 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
         const val METRIC_NAME = "cosec.authorization"
         const val RESULT_TAG = "result"
         const val SOURCE_TAG = "source"
+        const val PROBLEM_TAG = "problem"
         const val CAUSE_TAG = "cause"
         const val LISTENER_TAG = "listener"
         const val UNCHECKED_REVOCATIONS = "cosec.revocation.unchecked"
         private const val INDETERMINATE = "indeterminate"
+        private const val NONE = "none"
 
         /**
          * Registers what [listeners] count (§9.5.2): `cosec.listener.dropped` and `cosec.listener.failures` by listener,

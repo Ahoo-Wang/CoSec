@@ -91,7 +91,7 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 | scope rejected | `EXPLICIT_DENY` | `SCOPE_REJECTED` |
 | a permit outside the tenant's boundary | `EXPLICIT_DENY` | `BOUNDARY` |
 | nothing allowed | `IMPLICIT_DENY` | `IMPLICIT_DENY` |
-| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key); `DELEGATION_UNSUPPORTED` for a token with an `act` claim, which the response reports as `token-invalid`. The principal stays anonymous; `authorization.reason` names whose credential was refused when that is known (a key that does not work, a principal the membership provider does not know or knows as deactivated), as the decision event's `subject.refused` does |
+| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key); `DELEGATION_UNSUPPORTED` for a token with an `act` claim, which the response reports as `token-invalid`. A token not valid yet (its `iat` or `nbf` later than this instance's clock beyond the skew, `IDN-29`) is `TOKEN_INVALID` here; the decision event's `subject.rejected` names it `TOKEN_NOT_YET_VALID`. The principal stays anonymous; `authorization.reason` names whose credential was refused when that is known (a key that does not work, a principal the membership provider does not know or knows as deactivated), as the decision event's `subject.refused` does |
 | `400` | `EXPLICIT_DENY` | `EXPLICIT_DENY` (with `kind` `BAD_REQUEST`) |
 | `503`, a strict rate-limit rule that could not be counted | `INDETERMINATE` | `RATE_LIMITER_UNAVAILABLE` |
 | any other `503`, and a cancelled request | `INDETERMINATE` | `INDETERMINATE` |
@@ -146,6 +146,16 @@ refuses, or one longer than 512 characters, is no tracestate: the span is still 
 A `500` sets the span's status to `ERROR`. Audit events and problem bodies carry the trace id of the request's span,
 which ties a response to its trace.
 
+## Startup summary
+
+Once every bean exists, the starter logs one INFO line of what CoSec is configured as, for example
+`CoSec 8.0.0-beta.4: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`.
+Each entry is what a request meets, resolved as the authenticator resolves it: the revocation reader is the application's bean, the CoCache token store's, or `RevocationReader.NONE`, which the line spells out because revoked tokens are then accepted until they expire; with no token verification (`jwt=off`) there is no reader to name.
+A switch written `false` is added as `switched-off-by-configuration=[...]`. A rate limiter named `LocalRateLimiter` counts
+per instance: with several instances the limit is multiplied by their number. When `cosec.enabled=false` the line is
+one WARN instead: `CoSec is off ... nothing is protected by CoSec`
+([troubleshooting](./troubleshooting.md#the-log-says-cosec-is-off)).
+
 ## Metrics
 
 With `cosec-micrometer` and a `MeterRegistry` (for example from Spring Boot Actuator), every decision event is
@@ -156,7 +166,8 @@ number of time series stays bounded however many policies, apps and tenants ther
 |---|---|
 | `result` | `allow`, `too_many_requests`, `explicit_deny` (scope rejections and boundary denies included), `implicit_deny`, `indeterminate` (every `503`), `bad_request`, `cancelled`, `error` |
 | `source` | `binding`, `attachment`, `builtin`, `boundary`, `scope` (a scope rejection), `none` |
-| `cause` | on `indeterminate` only: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
+| `problem` | what the client was told: `unauthorized` (`401`, anonymous), `token-invalid`, `token-expired`, `token-revoked` (`401`), `forbidden`, `scope-rejected` (`403`), `too-many-requests`, `invalid-request`, `unavailable`, `internal-error`, or `none` when the request proceeds or was cancelled |
+| `cause` | `none`, and on `indeterminate`: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
 
 The listeners themselves are counted:
 

@@ -48,9 +48,10 @@ x-gateway: &gateway
 services:
   redis:
     image: redis:7.4
-    # noeviction: Redis is the store of record, and each instance refuses to start otherwise (SNP-3). No persistence: a
-    # run starts from an empty Redis, which the cold start scenario needs.
-    command: [ redis-server, --maxmemory-policy, noeviction, --maxmemory, 256mb, --appendonly, "no", --save, "" ]
+    # noeviction: Redis is the store of record, and each instance refuses to start otherwise (SNP-3). A run starts from an
+    # empty Redis, which the cold start scenario needs; the append-only file, in the container, keeps the documents across
+    # the outage scenario's `docker compose stop redis` and `start`, as a Redis with persistence keeps them across a restart.
+    command: [ redis-server, --maxmemory-policy, noeviction, --maxmemory, 256mb, --appendonly, "yes", --appendfsync, always, --save, "" ]
     ports:
       - "127.0.0.1:6379:6379"
     healthcheck:
@@ -119,3 +120,14 @@ services:
     <<: *gateway
     ports:
       - "127.0.0.1:8081:8080"
+
+  # A third gateway of the same image that refuses a token while the revocations cannot be read, instead of accepting it
+  # (the documented exception, cosec.authentication.revocation.fail-closed, off by default): the outage scenario asks both.
+  gw-strict:
+    <<: *gateway
+    environment:
+      <<: *cosec
+      JAVA_OPTS: -Xms256m -Xmx512m -XX:MaxDirectMemorySize=128m -Djava.net.preferIPv4Stack=true
+      COSEC_AUTHENTICATION_REVOCATION_FAILCLOSED: "true"
+    ports:
+      - "127.0.0.1:8082:8080"

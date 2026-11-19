@@ -21,9 +21,11 @@ import org.junit.jupiter.api.extension.ExtendWith
 
 /**
  * Scenario 5, a rate limit shared by the replicas (OBL-1, OBL-4, RTL-1): one bucket per signed-in principal in Redis,
- * counted by both gateways. The rule allows exactly 5 permits per 1280 s window (2^-8 permits per second, which no
- * floating-point rounding can move); a window that rolled over during the scenario would refuse it, and is a finding,
- * not a retry.
+ * counted by both gateways. The rule allows exactly 5 permits per 81920 s window: 2^-14 permits per second, which no
+ * floating-point rounding can move, over 5 * 2^14 seconds, the longest such window the one-day maximum of
+ * `RateLimitSpec.MAX_WINDOW_SECONDS` allows. A window that rolled over during
+ * the scenario would refuse it: it takes about 1 s, so that is one run in 82,000 (a quota of 5 cannot be exact over a longer
+ * period), and it would be a finding to report, never a retry.
  */
 @Tag("system")
 @Order(50)

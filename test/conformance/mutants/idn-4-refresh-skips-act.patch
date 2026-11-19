@@ -3,10 +3,10 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.JwtTokenVerifierTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-index efa7a555..f7d7fb7d 100644
+index ed13ba4a..18bdeea3 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-@@ -82,7 +82,7 @@ class JwtTokenVerifier(
+@@ -118,7 +118,7 @@ class JwtTokenVerifier @JvmOverloads constructor(
          ) {
              throw RefreshTokenMismatchException()
          }
@@ -14,12 +14,12 @@ index efa7a555..f7d7fb7d 100644
 +        return Jwts.toVerifiedToken(decodedAccessToken, refusingDelegation = false)
      }
  
-     @Suppress("TooGenericExceptionCaught")
+     private companion object {
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-index 4c6f92d5..d0853784 100644
+index 646689fa..59ec3d38 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/Jwts.kt
-@@ -66,11 +66,11 @@ internal object Jwts {
+@@ -78,11 +78,11 @@ internal object Jwts {
       * Nor does a refresh token: its `sub` is the access token's id, and a principal of that name is nobody's (`IDN-13`).
       * A token with no `sub` or `jti` is invalid.
       */
