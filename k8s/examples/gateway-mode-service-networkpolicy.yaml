@@ -1,0 +1,33 @@
+# A service behind the gateway, in `cosec.pipeline.mode=gateway`, believes the CoSec-Identity header the gateway
+# forwards: it is base64url JSON with no signature, so anyone who can reach the service can send it as the platform
+# administrator (https://cosec.ahoo.me/operations/deployment#services-behind-the-gateway). The only thing that holds the
+# boundary is the network. This admits the service's HTTP port from the gateway's pods and from nothing else.
+#
+# Apply it in the SERVICE's namespace, and change the three names marked below: the service's label, its port, and the
+# namespace the gateway runs in (the dev and production overlays use cosec-dev and the one you choose). The gateway
+# pods carry app.kubernetes.io/name: cosec-gateway. Needs a network plugin that enforces NetworkPolicy; without
+# one this does nothing, so test that a pod of another label cannot connect.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: only-the-gateway-reaches-the-service
+spec:
+  podSelector:
+    matchLabels:
+      # CHANGE: your service's label.
+      app.kubernetes.io/name: my-service
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              # CHANGE: the namespace the gateway runs in.
+              kubernetes.io/metadata.name: cosec-dev
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: cosec-gateway
+      ports:
+        # CHANGE: your service's port.
+        - port: 8080
+          protocol: TCP

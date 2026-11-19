@@ -31,6 +31,24 @@ section above it:
   app documents one in an app without one, unless it says `"withoutDocument": ["tenant"]` or `["app"]`
   ([Testing decisions](../policies/testing.md#testing-decisions)). Affected: scenarios that relied on the defaults or
   on a misplaced document; `PipelineFixture.load` reads a directory by the same rules. Name the fields, move the files.
+- **The `cosec-gateway-server` image: no JMX agent, the actuator on a management port, and the image's defaults kept
+  under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image.
+  - Through beta.3 the start script started a JMX agent on port 5555 with no authentication, on every interface. It no
+    longer starts one. To attach, set it in `JAVA_OPTS`, bound to loopback ([the image](./deployment.md#the-image)); the
+    `-Dcom.sun.management.jmxremote.host=127.0.0.1` the Kubernetes base set is gone with it.
+  - The actuator is served on the management port `8081` (`management.server.port`), no longer on `8080`:
+    `/actuator/health/*` on 8080 is `404`. The probes are now `/livez` and `/readyz` on 8080 (the same groups, served on
+    the gateway's own port, not decided by CoSec); `/actuator/health` and `/actuator/prometheus` are on 8081. Change a
+    probe or health check of your own to `/livez` and `/readyz` (the image's `HEALTHCHECK` and the `k8s/` manifests
+    did), and publish 8081, if you scrape it, to a monitoring network only.
+  - The image has `cosec-micrometer` and a Prometheus registry (Micrometer 1.17.2, from Spring Boot's dependency
+    management): `cosec.authorization`, `cosec.snapshot.*` and the others are on `/actuator/prometheus`.
+  - The image's defaults are now in its jar, and a `config/application.yaml` you mount is read in addition to them,
+    key by key; it used to replace them (Kafka audit, login and ip2region came back on). A file that set what it needs
+    is unaffected; one that left the defaults out now gets them. A list such as `routes` is still replaced whole.
+  - `k8s/base`: the demo CORS origin is a placeholder (`https://app.example.com`, no longer `*`; `max-age` is in
+    seconds), the demo route and discovery list are marked, the container has a `management` port, and the production
+    NetworkPolicy admits it from the `monitoring` namespace only.
 - **A `cosec.*` switch whose value CoSec cannot read fails startup** (`UB-1`). Through beta.3 a value such as
   `cosec.enabled=1`, `on`, an empty string or ` true ` was true to Spring's binder and "off" to the condition that wires
   the beans, so CoSec, or the feature, was switched off without a word; an empty `cosec.pipeline.mode` wired no pipeline,

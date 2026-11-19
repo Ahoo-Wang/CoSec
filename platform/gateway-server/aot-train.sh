@@ -44,23 +44,29 @@ mkdir -p logs data "$(dirname "$CACHE")"
 unset JDK_JAVA_OPTIONS
 export COSEC_JWT_SECRET=aot-training-only-not-a-secret-0123456789
 export SPRING_DATA_REDIS_URL=redis://127.0.0.1:1
-# Ephemeral HTTP and JMX ports: a multi-platform build trains every platform at once, and the training JVMs can
+# Ephemeral HTTP and management ports: a multi-platform build trains every platform at once, and the training JVMs can
 # share one network namespace. On fixed ports the faster platform's JVM answers the slower one's health check.
-EPHEMERAL_PORTS="-Dserver.port=0 -Dcom.sun.management.jmxremote.port=0"
+EPHEMERAL_PORTS="-Dserver.port=0 -Dmanagement.server.port=0"
 TRAIN_OPTS="-Dcocache.backend=memory $EPHEMERAL_PORTS"
 
 JAVA_OPTS="-XX:AOTMode=record -XX:AOTConfiguration=$CONF $TRAIN_OPTS" bin/cosec-gateway-server >"$LOG" 2>&1 &
 PID=$!
 
-# The port comes from this JVM's own log, so the health check below can only reach this JVM.
+# The ports come from this JVM's own log, so the health check below can only reach this JVM. The gateway and the
+# management server each log "Netty started on port"; the actuator answers on the second only.
 started=false
 PORT=
+MGMT=
 i=0
 while [ "$i" -lt "$TIMEOUT" ]; do
-  if [ -z "$PORT" ]; then
-    PORT=$(sed -n 's/.*Netty started on port \([0-9][0-9]*\).*/\1/p' "$LOG" | head -n 1)
-  fi
-  if [ -n "$PORT" ] && curl -fs -o /dev/null "http://localhost:$PORT/actuator/health/liveness"; then
+  for candidate in $(sed -n 's/.*Netty started on port \([0-9][0-9]*\).*/\1/p' "$LOG"); do
+    if curl -fs -o /dev/null "http://localhost:$candidate/actuator/health/liveness"; then
+      MGMT=$candidate
+    else
+      PORT=$candidate
+    fi
+  done
+  if [ -n "$MGMT" ] && [ -n "$PORT" ]; then
     started=true
     break
   fi
@@ -78,10 +84,13 @@ if [ "$started" != true ]; then
   exit 1
 fi
 
-# Exercise the HTTP path: Netty, WebFlux, route lookup, the error handler and actuator. Only paths that cannot
+# Exercise the HTTP path: Netty, WebFlux, route lookup, the error handler, and the actuator on the management port. Only paths that cannot
 # leave the container: a route to the internet would make the build depend on the network.
-for path in /actuator/health /actuator/health/liveness /cosec-auth/aot-training /aot-training; do
+for path in /cosec-auth/aot-training /aot-training; do
   curl -s -o /dev/null "http://localhost:$PORT$path" || true
+done
+for path in /actuator/health /actuator/health/liveness /actuator/prometheus; do
+  curl -s -o /dev/null "http://localhost:$MGMT$path" || true
 done
 
 kill -TERM "$PID"

@@ -51,7 +51,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.authentication.login.enabled` | boolean | `true` | 把凭证换成令牌的登录 bean：基于你的 `Authentication` bean 的 `CompositeAuthentication`、启用 JWT 时的 `TokenCompositeAuthentication`，以及社交登录。管道中对请求的认证不依赖它 |
 | `cosec.authentication.login.social.enabled` | boolean | `true` | 社交登录（`cosec-social`；需要 `cosec.authentication.login.enabled`） |
 | `cosec.jwt.enabled` | boolean | `true`；`cosec.pipeline.mode=gateway` 时为 `false` | 签发、校验和吊销 JWT。关闭后，管道拒绝每个令牌（`token-invalid`），没有令牌的请求按匿名处理 |
-| `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md)。只能是 `true` 或 `false`：其他值会导致启动失败。 |
+| `cosec.api-key.enabled` | boolean | `false` | 面向机器客户端的 [API key](../integration/authentication.md)。只能是 `true` 或 `false`，需要 `MembershipProvider` Bean，而 `cosec-gateway-server` 镜像没有它：按出厂配置不能使用 API key（[部署](./deployment.md#the-image)）。其他值会导致启动失败。 |
 | `cosec.audit.enabled` | boolean | `true` | 审计日志监听器；与 `cosec.audit.kafka.enabled` 一起决定 Kafka 审计监听器 |
 | `cosec.audit.kafka.enabled` | boolean | `true` | Kafka 审计监听器（需要 `cosec-kafka` 和一个 `KafkaOperations` bean） |
 | `cosec.metrics.enabled` | boolean | `true` | 指标监听器和[快照源的指标](./observability.md#snapshot-metrics)（需要 `cosec-micrometer` 和一个 `MeterRegistry` bean，Spring Boot 自动配置的那个也可以）。显式写为 `true` 而缺少 `cosec-micrometer` 时启动失败；不设置时指标是可选的 |
