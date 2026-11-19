@@ -3,15 +3,15 @@
 # Tests: :conformance:test
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider.kt
-index 0faf29ec..c021c6c5 100644
+index 95858a5c7..fe9cb5a41 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/attribute/BlacklistAttributeProvider.kt
-@@ -87,7 +87,7 @@ class BlacklistAttributeProvider(private val source: BlacklistSource) : Attribut
+@@ -45,7 +45,7 @@ class BlacklistAttributeProvider(private val source: BlacklistSource) : Attribut
              val value = when (kind) {
                  BlacklistKind.PRINCIPAL -> request.subject.takeIf { it.authenticated }
                      ?.let { BlacklistKind.principal(request.tenant.value, it.id) }
--                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }?.also(::requireAddress)
-+                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }
+-                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }?.let(::canonicalAddress)
++                BlacklistKind.IP -> request.remoteIp.takeIf { it.isNotEmpty() }?.let { IpAddress.parse(it)?.toString() ?: it }
                  BlacklistKind.DEVICE -> request.deviceId.takeIf { it.isNotEmpty() }
              } ?: continue
              values[kind.attribute] = source.contains(kind, value)

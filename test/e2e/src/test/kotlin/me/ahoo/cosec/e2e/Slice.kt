@@ -44,6 +44,7 @@ import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
 import me.ahoo.cosec.runtime.http.Outcome
+import me.ahoo.cosec.runtime.identity.IdentityIssuer
 import me.ahoo.cosec.runtime.snapshot.SnapshotOptions
 import me.ahoo.cosec.runtime.snapshot.SnapshotSource
 import me.ahoo.cosec.spi.authn.AuthenticatedPrincipal
@@ -88,6 +89,8 @@ class Slice(
     routeMap: String = "",
     /** The application's registry, as Actuator would give it; none runs without metrics. */
     meterRegistry: MeterRegistry? = null,
+    /** What a gateway forwards to a route that receives the identity: the starter wires one only at a gateway. */
+    identityIssuer: IdentityIssuer? = null,
 ) : AutoCloseable {
     private val context: ConfigurableApplicationContext = SpringApplicationBuilder(SliceConfiguration::class.java)
         .web(WebApplicationType.NONE)
@@ -98,6 +101,7 @@ class Slice(
                 it.beanFactory.registerSingleton("cosecAuthenticator", authenticator)
                 membershipLoader?.let { loader -> it.beanFactory.registerSingleton("membershipLoader", loader) }
                 meterRegistry?.let { registry -> it.beanFactory.registerSingleton("meterRegistry", registry) }
+                identityIssuer?.let { issuer -> it.beanFactory.registerSingleton("cosecIdentityIssuer", issuer) }
                 it.beanFactory.registerSingleton("cosecAttributeProviders", attributes)
                 it.beanFactory.registerSingleton("cosecDecisionListeners", listeners)
             },
@@ -216,12 +220,23 @@ fun request(
     app: String? = null,
     space: String? = null,
     query: String? = null,
+    /** What the adapter adds: at a gateway, whether the route receives the identity ([IdentityIssuer.FORWARD_ATTRIBUTE]). */
+    requestAttributes: Map<String, String> = emptyMap(),
 ): HttpFacts {
     val headers = buildMap<String, List<String>> {
         token?.let { put("Authorization", listOf("Bearer $it" + app?.let { name -> "#$name" }.orEmpty())) }
         space?.let { put(CoSecParameters.SPACE_ID, listOf(it)) }
     }
-    return HttpFacts(method, path, query, Headers.of(headers), Cookies.EMPTY, "10.0.0.1", hostOf(app))
+    return HttpFacts(
+        method,
+        path,
+        query,
+        Headers.of(headers),
+        Cookies.EMPTY,
+        "10.0.0.1",
+        hostOf(app),
+        requestAttributes = requestAttributes,
+    )
 }
 
 /** A request carrying API [key] in `X-API-Key`, the starter's default header. */

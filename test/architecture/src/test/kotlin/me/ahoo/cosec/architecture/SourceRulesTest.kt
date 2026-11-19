@@ -55,6 +55,18 @@ class SourceRulesTest {
         /** Servlet API and Redis clients: never in the contracts or the core. */
         private val NOT_IN_CORE = listOf("jakarta.servlet.", "io.lettuce.", "redis.clients.", "org.springframework.")
 
+        /** The test kit's web bindings, the only packages of it on a web stack. */
+        private val KIT_WEB_PACKAGES = setOf("me.ahoo.cosec.testkit.webflux", "me.ahoo.cosec.testkit.webmvc")
+
+        /** What a web stack brings, which the rest of the test kit never uses. */
+        private val KIT_WEB_TECHNOLOGY = listOf(
+            "reactor.",
+            "org.springframework.",
+            "jakarta.servlet.",
+            "me.ahoo.cosec.webflux.",
+            "me.ahoo.cosec.webmvc.",
+        )
+
         /**
          * What `cocache` may use of `control` (#1140): package of the using class to the classes or packages it may
          * reach. Nothing of `runtime` (RFC 0013 §3): the shadow ports are `cosec-spi`'s, the formats `cosec-document`'s.
@@ -123,6 +135,19 @@ class SourceRulesTest {
     fun `Reactor only at the bridges`() {
         violations { project, target ->
             Projects.groupOf(project) in NO_REACTOR && project !in REACTOR_TECHNOLOGY && target.startsWith("reactor.")
+        }.assert().isEmpty()
+    }
+
+    /**
+     * The test kit carries the test bindings of the two web stacks (`PIP-29`), each in its own package; everywhere else
+     * it stays free of a web stack, so a test of policies alone needs neither adapter.
+     */
+    @Test
+    fun `the test kit uses Reactor, Spring and the Servlet API only in its web bindings`() {
+        CLASSES.filter { projectOf(it) == "testkit" && it.packageName !in KIT_WEB_PACKAGES }.flatMap { origin ->
+            origin.directDependenciesFromSelf.map { it.targetClass.name }.distinct()
+                .filter { target -> KIT_WEB_TECHNOLOGY.any { target.startsWith(it) } }
+                .map { "${origin.name} -> $it" }
         }.assert().isEmpty()
     }
 
