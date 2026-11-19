@@ -176,7 +176,7 @@ What the modules do to your build:
   through it `cosec-runtime`, to run time with either. An application that uses the control plane adds
   `cosec-control` itself.
 
-`cosec-dependencies`, the platform CoSec's own build compiles against, is not published from 8.0 on ([Upgrading](../operations/upgrading.md#from-8-0-0-alpha-4)).
+`cosec-dependencies`, the platform CoSec's own build compiles against, is not published from 8.0 on ([Upgrading](../operations/upgrading-previews.md#from-8-0-0-alpha-4)).
 
 ## Where to go next
 

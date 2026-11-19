@@ -40,12 +40,13 @@ private val log = KotlinLogging.logger {}
 
 /**
  * Answers "may the current principal do this?" in code (RFC 0006 §7.6), within the request: in its handler and the
- * code it calls, or to decide which actions a UI shows. The same evaluation as the request, through [pipeline], for the
- * principal and scope of a request the pipeline permitted, as they were when it started; no obligation runs and no
- * listener hears of it. A request in progress is answered as any other, however long it runs and even once its token
- * has expired: the pipeline authenticated it when it began. Once the adapter that bound it has ended the request,
- * every check of it is denied (`PIP-26`); a request no adapter bound (a transport that calls `Pipeline.evaluate`
- * itself, the test kit) is never ended.
+ * code it calls, or to decide which actions a UI shows, or whether the object the handler loaded is the caller's. The
+ * same evaluation as the request, through [pipeline], for the principal and scope of a request the pipeline permitted,
+ * as they were when it started; no obligation runs and no listener hears of it. A check does not authenticate again: a
+ * request in progress is answered as any other, however long it runs, even once its token has expired or been revoked
+ * or its roles have changed, since the pipeline authenticated it when it began. Once the adapter that bound it has
+ * ended the request, every check of it is denied (`PIP-26`); a request no adapter bound (a transport that calls
+ * `Pipeline.evaluate` itself, the test kit) is never ended, and keeps permitting as long as it is held.
  *
  * [check] answers yes or no; [decide] answers the [Decision] itself, for host code that records what permitted it: a
  * [Decision.Permit] names the statement in [Decision.Permit.by], with the binding it came through in

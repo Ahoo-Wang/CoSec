@@ -163,6 +163,11 @@ A route map gives each route of a service an action and a typed resource, so pol
 - A captured value that is empty or holds a `/` (a decoded `%2F`) cannot be a segment of a typed resource id: the
   request is refused with `400` `invalid-request`, never evaluated as another resource.
 
+A check in code ([Checks in code](./checks.md)) applies no route map: it decides the action and the resource it is
+given, so `check(security, "http:POST", path)` is decided as `http:POST` even where a route maps that request. Check a
+mapped route by its action and typed resource
+([A check and a mapped route](./checks.md#a-check-and-a-mapped-route)).
+
 A Spring Cloud Gateway host loads no route map: every gateway request is in the `http` namespace.
 
 With `cosec-openapi`, springdoc and Spring Boot Actuator, the endpoint `cosecServiceGenerator/routes` generates a
@@ -274,7 +279,7 @@ pipeline's outcome. A refused request never reaches your handler. Its `principal
 | `principal.authenticated` | Whether a credential proved the principal. |
 | `tenantId` | The scope's tenant: the principal's, or `(0)` for an anonymous caller. |
 | `principal.attributes` | The credential's attributes (the token's `attributes` claim; `apiKeyId` for an API key). Behind a gateway: the forwarded `claims`. |
-| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the principal's roles there. |
+| `scope.appId`, `scope.spaceId`, `scope.roles` | The scope `ScopeResolver` validated: app, space (empty for the default space) and the principal's roles there, by their bare names (`editor`, not `editor@team-a`). The principal's roles in other spaces and the policies attached to it are not on the context. |
 | `forwardedIdentity` | Behind a gateway, the gateway's request id and the id of the caller's credential; otherwise null. |
 | `requestId` | The request's id as CoSec used it in audit records, spans and problem responses: the client's `CoSec-Request-Id` when it sent an acceptable one, else the one CoSec generated, which no request header holds. |
 | `deviceId` | The device the client declared in `CoSec-Device-Id`, empty when none. Declared by the client: CoSec checks its form only (one value, else `400`), so it is not proof of a device. |
@@ -344,9 +349,11 @@ use the parameter or the request.
 
 The context is the one `AuthorizationChecker` accepts, to ask whether the same principal may do something else,
 for as long as the request is in progress: once the adapter has ended the request, a check of its context is `false`
-([Checks in code](./checks.md#how-a-check-relates-to-the-request-pipeline), `PIP-26`). On Spring MVC the filter takes
-the REQUEST dispatch only: an error page, rendered on the ERROR dispatch after the request has ended, still reads the
-context, and every check of it there is `false`.
+([Checks in code](./checks.md#how-a-check-relates-to-the-request-pipeline), `PIP-26`). It is what the pipeline resolved
+for that request, and is never re-checked for revocation or changed roles, so do not store it or hand it to work that
+runs after the request ([Work that is not the request](./checks.md#work-that-is-not-the-request)). On Spring MVC the
+filter takes the REQUEST dispatch only: an error page, rendered on the ERROR dispatch after the request has ended,
+still reads the context, and every check of it there is `false`.
 
 ## Client IP behind proxies
 

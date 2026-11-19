@@ -29,10 +29,10 @@ Organized by the task the reader is doing, not by module.
 | Area | Reader | Pages |
 |---|---|---|
 | `guide/` | Evaluating CoSec, or starting with it | `introduction`, `quick-start`, `concepts`, `model`, `security-model`, `roadmap` |
-| `scenarios/` | Building a whole use case end to end | `simple-mode`, `app`, `roles`, `spaces`, `service-account`, `tenant-owner`, `external-source`, `route-maps`, `gateway` |
+| `scenarios/` | Building a whole use case end to end | `simple-mode`, `resource-server`, `app`, `roles`, `spaces`, `service-account`, `tenant-owner`, `external-source`, `route-maps`, `gateway` |
 | `integration/` | Developer wiring CoSec into an application, or building a client of one | `web`, `authentication`, `clients`, `checks` |
 | `policies/` | Writing and reviewing the rules | `language`, `role-permissions`, `rate-limiting`, `testing` |
-| `operations/` | Running CoSec in production | `configuration`, `storage`, `upgrading`, `observability`, `troubleshooting` |
+| `operations/` | Running CoSec in production | `configuration`, `storage`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting` |
 | `architecture/` | Contributor, or integrator who wants the internals | `overview`, `extending` |
 | `zh/` | One-to-one Chinese mirror of everything above | |
 
@@ -47,7 +47,7 @@ option, is harder to use for both jobs.
 
 | Type | Answers | Shape | Pages |
 |---|---|---|---|
-| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `upgrading`, `observability`, `troubleshooting`, `extending` |
+| **Guide** | "How do I …?" | Steps or recipes toward one goal; links to references for every option | `quick-start`, `scenarios/*`, `integration/*`, `role-permissions`, `rate-limiting`, `testing`, `storage`, `upgrading`, `upgrading-previews`, `observability`, `troubleshooting`, `extending` |
 | **Reference** | "What exactly does X mean?" | Complete, terse, ordered for lookup (tables); no narrative | `policies/language`, `operations/configuration` |
 | **Explanation** | "Why does it behave this way?" | Concepts, guarantees, trade-offs, diagrams | `introduction`, `concepts`, `model`, `security-model`, `architecture/overview` |
 
@@ -76,7 +76,7 @@ time one copy is updated. The homes that are easiest to duplicate by accident:
 | Every Redis key; publishing, revisions and rollback | `operations/storage.md` |
 | Behavior when Redis is unavailable | `operations/storage.md#when-redis-is-unavailable` |
 | Decision listeners, audit events, metrics, spans | `operations/observability.md` |
-| Migration steps | `operations/upgrading.md` |
+| Migration steps | `operations/upgrading.md`; from one 8.0 preview to the next, `operations/upgrading-previews.md` |
 | The request path through the pipeline and why | `architecture/overview.md` |
 | Invariants and the tests that guard them; performance numbers | `architecture/overview.md` |
 | Extension points (SPIs) | `architecture/extending.md` |

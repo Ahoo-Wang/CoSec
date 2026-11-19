@@ -13,18 +13,14 @@ versioned and released with CoSec. A CoSec 7 server needs `@ahoo-wang/fetcher-co
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
-  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher
+  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher@beta
 ```
 
-Until CoSec 8.0 is released this is a pre-release, which npm does not install by
-default: use a dist-tag, `pnpm add @ahoo-wang/cosec-fetcher@beta` (`@alpha`,
-`@rc`), or an exact version. It is published with each CoSec release, at the
-version of CoSec.
-
-Until CoSec 8.0 is released this is a pre-release, which npm does not install by
-default: use a dist-tag, `pnpm add @ahoo-wang/cosec-fetcher@beta` (`@alpha`,
-`@rc`), or an exact version. It is published with each CoSec release, at the
-version of CoSec.
+Until CoSec 8.0 is released, the `latest` tag of this package points at a `0.0.0`
+placeholder that is marked deprecated, so an install without a tag gets the
+placeholder and a deprecation notice, not the client. Install `@beta`, as above,
+or an exact version. After the release, drop `@beta`. It is published with each
+CoSec release, at the version of CoSec.
 
 Peer dependencies: `fetcher`, `fetcher-eventbus`, and `fetcher-storage`.
 

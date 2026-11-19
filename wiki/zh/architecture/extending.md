@@ -46,6 +46,21 @@ description: "把自己的认证器、成员关系来源、属性提供者、决
 （`cosec.pipeline.mode=gateway`）是 `IdentityGate`。它不是扩展点：两者都通过 `StatusMapping` 构造每个结果，自己写的
 gate 会成为第二条决策路径。编译器守住这一点：实现 `RequestGate` 需要 `@InternalCoSecApi` 的 opt-in（`@SubclassOptInRequired`），而应用从不这样做。
 
+## 管道在适配器之外 {#pipeline-outside-the-adapters}
+
+自己的传输层（内部端口、WebSocket 握手、自定义服务器）像 Web 适配器那样把请求读成 `HttpFacts`，再调用 `Pipeline.evaluate`，得到一个 `Outcome`。被拒绝的请求有 `status`、用 `ProblemEncoder` 写出的 `problem` 和要设置的 `headers`。被放行的请求（`proceed`）携带该请求的上下文 `Outcome.security?.securityContext`：你的代码读取的 `SecurityContext`，也是 `AuthorizationChecker` 唯一接受的那种（[代码中的权限检查](../integration/checks.md)）：
+
+```kotlin
+val outcome = pipeline.evaluate(facts)
+if (!outcome.proceed) {
+    return respond(outcome.status, outcome.headers, outcome.problem?.let(ProblemEncoder::encode))
+}
+val security: SecurityContext = checkNotNull(outcome.security).securityContext
+val mayCancel = AuthorizationChecker(pipeline).check(security, "order:cancel", "order/42")
+```
+
+这个上下文只属于该请求，与 Web 适配器绑定的那个一样。`Pipeline.evaluate`、`Outcome`、`HttpFacts` 和 `RequestSecurity` 是 `@ExperimentalCoSecApi`（[稳定性等级](#stability-levels)）。在这样的端口上运行管道，就是服务验证它在该端口收到的令牌的方式，而不是手工调用 `TokenVerifier`，后者会跳过吊销检查（[在管道之外验证令牌](../integration/authentication.md#verifying-a-token-outside-the-pipeline)）。
+
 ## 稳定性等级 {#stability-levels}
 
 发布模块的每个公共声明都属于四个等级之一。标记在 `cosec-annotations`（`me.ahoo.cosec.annotations`）中：

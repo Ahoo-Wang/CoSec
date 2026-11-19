@@ -264,6 +264,9 @@ anonymous caller is `401` there; leave `cosec-control` out of a service that onl
 [`wiki/examples/token-issuer`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/token-issuer/scenarios) check
 that an anonymous request and a request with a token are both permitted.
 
+The other direction, a service that only verifies the tokens such a service issues and decides in its own code, is
+[a scenario of its own](../scenarios/resource-server.md): it reads the issuer's revocations.
+
 ## Sessions
 
 A login starts a **session**, a family of token pairs: an id (`sid`), the time its user signed in (`auth_time`) and a
@@ -415,8 +418,11 @@ token is for. A refused refresh spends no generation.
 JWTs are stateless: without extra work a token stays valid until it expires. So that logout takes effect at once,
 revocation is always on, with no switch. It needs `cosec-cocache`, or a `TokenStore`, a `RevocationReader` and a
 `TokenFamilyStore` bean of your own. With JWT enabled and any of them missing, startup fails: a logout that silently
-does nothing is not an option. A service that only verifies tokens it never revokes still needs all three (or
-`cosec-cocache`); one that issues no tokens and reads none can set `cosec.jwt.enabled=false`.
+does nothing is not an option. A service that only verifies tokens another service issues needs all three too (or
+`cosec-cocache`), and it must read the **issuer's** revocations, or it accepts a token the issuer revoked until it
+expires: see [A service that verifies tokens another service issues](../scenarios/resource-server.md).
+`RevocationReader.NONE` is only for tokens that nobody, anywhere, revokes; it starts, with a `WARN`. A service that issues no tokens and reads
+none can set `cosec.jwt.enabled=false`.
 
 With `cosec.authentication.login.logout.path` set, the starter serves the logout route (`IDN-24`), a `POST` of that path
 under CoSec like every route, so a document must permit an anonymous `POST` of it (not on a Spring Cloud Gateway): the
@@ -476,6 +482,42 @@ refresh token of that principal in that tenant whose `iat` is before `issuedBefo
   `SessionStoreUnavailableException`, as revoking one token does: answer `503`, and revoke again.
 - The check behaves as described above: a local "not revoked" answer for up to 30 seconds if an invalidation is
   lost; a request's token is accepted, and a refresh fails, while the store cannot be read.
+
+## Verifying a token outside the pipeline
+
+A request through the pipeline has its token verified and checked for revocation in one place. Prefer that: run the
+code that receives the token (an internal port, a WebSocket handshake) through `Pipeline.evaluate`
+([Pipeline outside the adapters](../architecture/extending.md#pipeline-outside-the-adapters)). When you must verify a
+token yourself, two calls are needed, and the first alone accepts a revoked token:
+
+1. `TokenVerifier.verify(token)` checks the signature, the expiry and the claims, and answers a `VerifiedToken`. It
+   throws a `TokenVerificationException` (`TokenExpiredException` for an expired token, `DelegationUnsupportedException`
+   for a token that delegates). It does not ask whether the token was revoked.
+2. `TokenRevocation.check(verified)` (`me.ahoo.cosec.runtime.token`, a bean of the starter while JWT is on) asks
+   whether the token, or every token of its principal issued before a revocation, was revoked. It uses the same reader
+   and the same skew as the pipeline. It throws `TokenRevokedException` for a revoked token.
+
+```kotlin
+suspend fun principalOf(token: String): String? = try {
+    val verified = verifier.verify(token)
+    revocation.check(verified)
+    verified.principal
+} catch (_: TokenVerificationException) {   // expired, invalid, delegating, and TokenRevokedException
+    null
+} catch (_: RevocationUnavailableException) {
+    null
+}
+```
+
+When the revocations cannot be read, `check` throws `RevocationUnavailableException`, and what that means is yours to
+decide. The pipeline accepts the token by default and counts it (the documented exception to failing closed,
+[Logout and revocation](#logout-and-revocation)); the example refuses it, which is the choice to make unless you accept
+the same window. Never treat the exception as "not revoked" by accident: catching `Exception` around both calls does.
+
+What the two calls do not do is what the rest of the pipeline does with a token: they do not compare the token's app
+(`VerifiedToken.app`) with the app your service is for, resolve its memberships, or decide anything. They answer who
+the token says it is, once, and that it was not revoked a moment ago. Decide with the principal on a request that went
+through the pipeline.
 
 ## API keys
 

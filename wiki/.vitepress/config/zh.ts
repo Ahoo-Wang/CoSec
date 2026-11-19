@@ -39,6 +39,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: '外部事实源同步角色', link: '/zh/scenarios/external-source' },
       { text: '按业务动作授权', link: '/zh/scenarios/route-maps' },
       { text: '网关拓扑', link: '/zh/scenarios/gateway' },
+      { text: '资源服务', link: '/zh/scenarios/resource-server' },
     ],
   },
   {
@@ -66,6 +67,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: '部署', link: '/zh/operations/deployment' },
       { text: '存储与缓存', link: '/zh/operations/storage' },
       { text: '升级', link: '/zh/operations/upgrading' },
+      { text: '8.0 预览版之间的升级', link: '/zh/operations/upgrading-previews' },
       { text: '可观测性', link: '/zh/operations/observability' },
       { text: '故障排查', link: '/zh/operations/troubleshooting' },
     ],

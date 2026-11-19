@@ -218,7 +218,9 @@ How windows work: [Testing changes](../policies/testing.md).
 | `cosec.jwt.session.rotation-leeway` | duration | `30s` | How long after a refresh the pair it replaced is answered with a pair of the current generation instead of ending the session: the window a client has to retry a refresh whose response it lost, and in which two tabs refreshing at once both keep a pair. Cover your clients' timeout and one retry. A copy answered within it is caught at the next refresh after it. |
 
 With JWT enabled, startup fails unless revocations and sessions can be recorded and read: `cosec-cocache`, or a
-`TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own.
+`TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own. A service that only verifies the tokens
+another service issues reads the issuer's revocations
+([A service that verifies tokens another service issues](../scenarios/resource-server.md)).
 
 ## API keys
 

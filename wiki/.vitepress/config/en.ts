@@ -40,6 +40,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Roles From an External Source', link: '/scenarios/external-source' },
       { text: 'Authorizing Business Actions', link: '/scenarios/route-maps' },
       { text: 'Gateway Topologies', link: '/scenarios/gateway' },
+      { text: 'A Resource Server', link: '/scenarios/resource-server' },
     ],
   },
   {
@@ -67,6 +68,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: 'Deployment', link: '/operations/deployment' },
       { text: 'Storage and Caching', link: '/operations/storage' },
       { text: 'Upgrading', link: '/operations/upgrading' },
+      { text: 'Upgrading Between 8.0 Previews', link: '/operations/upgrading-previews' },
       { text: 'Observability', link: '/operations/observability' },
       { text: 'Troubleshooting', link: '/operations/troubleshooting' },
     ],

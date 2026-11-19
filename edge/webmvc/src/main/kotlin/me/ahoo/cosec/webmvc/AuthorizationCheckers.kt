@@ -25,7 +25,8 @@ import reactor.core.scheduler.Schedulers
 
 /**
  * [AuthorizationChecker.check] for servlet code (RFC 0006 §7.6): blocks the calling request thread. Refuses to run on
- * a non-blocking thread, such as a Netty event loop: use `checkMono` from `cosec-webflux` there.
+ * a non-blocking thread, such as a Netty event loop: use `checkMono` from `cosec-webflux` there. As there, for the
+ * request in progress and the `SecurityContext` of that request, never one kept past it.
  */
 fun AuthorizationChecker.checkBlocking(security: SecurityContext, action: String, resource: String): Boolean {
     check(!Schedulers.isInNonBlockingThread()) {

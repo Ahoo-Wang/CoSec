@@ -23,7 +23,11 @@ interface SecurityScope {
     /** Empty for the default space. */
     val spaceId: String
 
-    /** The principal's roles in [spaceId], in claim order. */
+    /**
+     * The principal's roles in [spaceId], in claim order, by their bare names: `editor`, never `editor@team-a`, since
+     * the space is [spaceId]. The roles it holds in other spaces are not here, and nor are the policies attached to it.
+     * Empty for an anonymous principal.
+     */
     val roles: List<String>
 }
 

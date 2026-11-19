@@ -4,6 +4,8 @@
 //   (Chinese headings declare explicit `{#english-slug}` anchors);
 // - the en and zh sidebars in config/{en,zh}.ts list the same pages in the same order, every link
 //   points to an existing page, and every page except the home pages is in the sidebar.
+// - every https://cosec.ahoo.me/... link of llms.txt, the skills and the READMEs names a page and an anchor that exist,
+//   and the site build publishes llms.txt (config/index.ts copies it from the repository root).
 // AGENTS.md is skipped.
 // Usage: node .vitepress/check-docs.mjs   (from the wiki directory or via its path)
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
@@ -89,6 +91,32 @@ for (const page of pages) {
       problems.push(`${rel(page)}: missing anchor #${fragment} in ${rel(file)}`)
     }
   }
+}
+
+// What the repository says outside the wiki about the wiki: llms.txt (served by the build), the skills, the READMEs.
+const repoRoot = join(wikiDir, '..')
+const outside = [
+  join(repoRoot, 'llms.txt'),
+  ...readdirSync(repoRoot).filter((f) => /^README.*\.md$/.test(f)).map((f) => join(repoRoot, f)),
+  ...(existsSync(join(repoRoot, 'skills'))
+    ? readdirSync(join(repoRoot, 'skills'))
+        .map((d) => join(repoRoot, 'skills', d, 'SKILL.md'))
+        .filter((f) => existsSync(f))
+    : []),
+]
+for (const file of outside) {
+  const relative_ = relative(repoRoot, file)
+  for (const m of readFileSync(file, 'utf-8').matchAll(/https:\/\/cosec\.ahoo\.me(\/[^\s)`'"<>\]]*)?/g)) {
+    checked++
+    const [path, fragment] = (m[1] ?? '/').replace(/[.,;:]+$/, '').split('#')
+    if (path === '/' || path === '/zh/' || path === '/llms.txt') continue
+    const page = resolveTarget(wikiDir, path)
+    if (!existsSync(page)) problems.push(`${relative_}: link ${m[0]} has no page`)
+    else if (fragment && !anchors(page).has(fragment)) problems.push(`${relative_}: missing anchor #${fragment} in ${rel(page)}`)
+  }
+}
+if (!/llms\.txt/.test(readFileSync(join(wikiDir, '.vitepress/config/index.ts'), 'utf-8'))) {
+  problems.push('config/index.ts: the build does not publish llms.txt (copy it in buildEnd)')
 }
 
 const sidebarLinks = (locale) =>
