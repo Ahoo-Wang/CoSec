@@ -33,7 +33,7 @@ internal object WrittenIdentity {
         id(identity.subject, "$.sub")
         text(identity.app, "$.scope.app")
         text(identity.space, "$.scope.space")
-        identity.roles.sorted().forEachIndexed { i, role -> id(role, "$.roles[$i]") }
+        roles(identity.roles)
         text(identity.credential.method.value, "$.auth.method")
         id(identity.credential.id, "$.auth.jti")
         identity.credential.expiresAt?.let { seconds(it, "$.auth.exp") }
@@ -43,6 +43,20 @@ internal object WrittenIdentity {
         id(identity.requestId, "$.rid")
         if (identity.claims.keys.any { it.isEmpty() }) throw unwritable("$.claims has an empty name")
     }
+
+    /**
+     * Each role as an id, in one pass that sorts nothing and builds no path for valid roles: the gateway writes the
+     * identity on every forwarded request. The path names the first bad role in the order the header lists them
+     * (sorted), as [IdentityCodec.decode] reading it back would.
+     */
+    private fun roles(roles: Set<String>) {
+        if (roles.all(::writable)) return
+        val sorted = roles.sorted()
+        val i = sorted.indexOfFirst { !writable(it) }
+        id(sorted[i], "$.roles[$i]")
+    }
+
+    private fun writable(id: String): Boolean = id.isNotEmpty() && Identifiers.isWellFormed(id)
 
     private fun text(text: String, path: String) {
         if (!Identifiers.isWellFormed(text)) throw unwritable("$path holds an unpaired surrogate")

@@ -79,6 +79,8 @@ class IdentityCodecSymmetryTest {
             valid.copy(subject = "") to json(sub = ""),
             valid.copy(credential = noJti) to json(jti = ""),
             valid.copy(roles = setOf("")) to json(roles = "\"\""),
+            valid.copy(roles = setOf("zeta", "beta\uD800", "alpha")) to
+                json(roles = "\"alpha\",\"beta\\uD800\",\"zeta\""),
             valid.copy(tenant = surrogate) to json(tenant = "beta\\uD800"),
             valid.copy(app = surrogate) to json(app = "beta\\uD800"),
             valid.copy(issuedAt = Instant.parse("+10000-01-01T00:00:00Z")) to json(iat = 253_402_300_800L),
