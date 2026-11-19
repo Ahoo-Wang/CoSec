@@ -88,8 +88,11 @@ abstract class ReactivePipelineBridge(
         exchange.setSecurityContext(securityContext)
         val authorized = exchange.mutate().principal(securityContext.principal.toMono()).build()
         // The request ends when the chain's Mono terminates: after a streamed body's last element is written, on an
-        // error, or when the client goes away. From then on no check permits as it (PIP-26).
-        return chain(authorized, outcome).writeSecurityContext(securityContext).doFinally { security.end() }
+        // error, or when the client goes away. From then on no check permits as it (PIP-26). Ended before the signal
+        // goes on, so whoever sees the chain complete sees the request ended: `doOnTerminate` runs before passing on
+        // `onComplete` and `onError`, `doOnCancel` before cancelling upstream; `doFinally` runs after passing them on.
+        val end = Runnable { security.end() }
+        return chain(authorized, outcome).writeSecurityContext(securityContext).doOnTerminate(end).doOnCancel(end)
     }
 
     private companion object {
