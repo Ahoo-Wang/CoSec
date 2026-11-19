@@ -1,0 +1,16 @@
+# Rule: SNP-19
+# Mutant: a review housekeeping refused is never offered again: the installed revision is not reviewed, and nothing says so but the refusal count (UC-1)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.InstallReviewTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+index 9dbe5383..95d55013 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+@@ -72,7 +72,6 @@ internal class KeyEffects<T : Any>(
+             is KeyEffect.EndPassRead -> effect.ticket.read?.end()
+             is KeyEffect.StartRead -> {
+                 // A review housekeeping refused is offered again when the key is next read (UC-1): a pass or a reload.
+-                unreviewed?.let(::review)
+                 startRead(effect)
+             }
+             is KeyEffect.CancelReadTimeout -> readTimeouts?.remove(effect.loadId)?.cancel(false)
