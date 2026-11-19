@@ -108,20 +108,22 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
     private fun cause(event: DecisionEvent): String = when (event.outcome.reason) {
         Reason.AUTHENTICATOR_UNAVAILABLE -> "authenticator"
         Reason.DEADLINE_EXCEEDED -> "deadline"
-        else -> when (event.outcome.cause) {
-            is Cause.SourceUnavailable, is Cause.NotLoaded -> "source_unavailable"
-            is Cause.DocumentInvalid -> "document_invalid"
-            is Cause.MissingPolicies, is Cause.AmbiguousPolicy -> "missing_policies"
-            is Cause.MembershipUnavailable -> "membership"
-            is Cause.AttributeUnavailable -> "attribute"
-            is Cause.MatcherFailed -> "matcher"
-            is Cause.RequiredListenerFailed -> "required_listener"
-            is Cause.BoundaryUnavailable -> "boundary"
-            is Cause.RateLimiterUnavailable -> "rate_limiter"
-            // Only a check answers it, and a check reaches no listener: never on the timer.
-            is Cause.CheckFailed -> "check"
-            null -> "unknown"
-        }
+        else -> cause(event.outcome.cause)
+    }
+
+    private fun cause(cause: Cause?): String = when (cause) {
+        is Cause.SourceUnavailable, is Cause.NotLoaded -> "source_unavailable"
+        is Cause.DocumentInvalid -> "document_invalid"
+        is Cause.MissingPolicies, is Cause.AmbiguousPolicy -> "missing_policies"
+        is Cause.MembershipUnavailable -> "membership"
+        is Cause.AttributeUnavailable -> "attribute"
+        is Cause.MatcherFailed -> "matcher"
+        is Cause.RequiredListenerFailed -> "required_listener"
+        is Cause.BoundaryUnavailable -> "boundary"
+        is Cause.RateLimiterUnavailable -> "rate_limiter"
+        // Only a check answers it, and a check reaches no listener: never on the timer.
+        is Cause.CheckFailed -> "check"
+        null -> "unknown"
     }
 
     companion object {
