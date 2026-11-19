@@ -759,8 +759,27 @@ when the store is down.
 
 `IdentityHeader` writes the `CoSec-Identity` header a gateway forwards, for testing a service that runs behind a
 gateway (`cosec.pipeline.mode=gateway`) without one in front. It covers a subject, any `Identity`, or what a gateway
-forwards for a real token. A header is refused a minute after it was made, so make one per request
+forwards for a real token.
+
+**Make a header per request.** A header is made at one moment and is good for a short time: a service refuses it once it
+is older than `cosec.pipeline.identity.max-age` (`60s` by default) plus `cosec.authentication.revocation.skew` (`5s`),
+with `401` `token-expired`, however long the credential inside it is valid (`forSubject`'s `validFor` is an hour by
+default; it is the credential's validity, not the header's). A header kept in a field or a constant works for a test
+that ends in seconds and fails for one that waits, and the `401` looks like a defect of the service. Making a header is
+cheap: make one in each request. `forSubject` takes a `clock` to test the age itself
 ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)).
+
+`PipelineFixture.Principal(id, tenant, roles, policies, app, attributes)` says who a request is authenticated as: the
+facts a token would carry. `tenant` is the principal's tenant (the default tenant `(0)` when left out); `roles` are
+`role` for the default space and `role@space` for a space; `policies` are the policies attached to it; `app` is the app
+its credential declares (none when left out); `attributes` are signed principal attributes, read in conditions as
+`subject.attributes.<name>`. It is a token's equivalent, not an API key, so a key's role cap and break-glass do not
+apply.
+
+`PermittedRequest.withToken(token, verifier, revocations)` has no default for `revocations`: pass
+`RevocationReader.NONE` in a test in which nothing is revoked. To test a revoked token, pass a reader that reports it
+revoked: `withToken` throws `IllegalArgumentException`, as it does for an invalid or expired token, so a test never goes
+on with an anonymous context it did not ask for.
 
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).
 
