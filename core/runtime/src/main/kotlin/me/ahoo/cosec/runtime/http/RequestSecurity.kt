@@ -19,9 +19,12 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.AbsentAttributes
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.scope.HostScope
@@ -131,17 +134,17 @@ class RequestSecurity internal constructor(
     fun engineRequest(
         time: Long,
         app: AppId? = null,
-        action: me.ahoo.cosec.model.Action? = null,
-        resource: me.ahoo.cosec.model.Resource? = null,
-    ): me.ahoo.cosec.engine.EngineRequest? {
+        action: Action? = null,
+        resource: Resource? = null,
+    ): EngineRequest? {
         if (app == null) {
-            return me.ahoo.cosec.engine.EngineRequest(request, scope, memberships, time, attributes)
+            return EngineRequest(request, scope, memberships, time, attributes)
         }
         val asked = inApp(app) ?: return null
         val subject = asked.request
         val authz =
             AuthzRequest(subject.subject, action ?: subject.action, resource ?: subject.resource, subject.environment)
-        return me.ahoo.cosec.engine.EngineRequest(authz, asked.scope, memberships, time, attributes)
+        return EngineRequest(authz, asked.scope, memberships, time, attributes)
     }
 
     override fun toString(): String =
