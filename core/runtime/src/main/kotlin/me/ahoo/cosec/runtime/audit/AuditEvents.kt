@@ -41,7 +41,7 @@ import java.time.Instant
 @InternalCoSecApi
 object AuditEvents {
     fun from(event: DecisionEvent): AuditEvent {
-        val (decision, reasonCode) = decision(event)
+        val (decision, reasonCode) = decision(event.outcome.reason, event.subject.rejected, event.outcome.cause)
         val scope = event.scope
         return AuditEventData(
             eventId = event.id,
@@ -78,43 +78,69 @@ object AuditEvents {
         )
     }
 
-    private fun decision(event: DecisionEvent): Pair<AuditDecision, AuditReasonCode> {
-        val rejected = rejected(event.subject.rejected)
-        return when (event.outcome.reason) {
-            Reason.PERMIT -> AuditDecision.ALLOW to AuditReasonCode.ALLOW
-            Reason.TOO_MANY_REQUESTS -> AuditDecision.TOO_MANY_REQUESTS to AuditReasonCode.TOO_MANY_REQUESTS
-            Reason.EXPLICIT_DENY, Reason.SCOPE_REJECTED, Reason.BOUNDARY ->
-                AuditDecision.EXPLICIT_DENY to (rejected ?: explicit(event.outcome.reason))
-            Reason.IMPLICIT_DENY -> AuditDecision.IMPLICIT_DENY to (rejected ?: AuditReasonCode.IMPLICIT_DENY)
-            // A 400 is refused before any decision; kind says why.
-            Reason.INVALID_REQUEST -> AuditDecision.EXPLICIT_DENY to AuditReasonCode.EXPLICIT_DENY
-            Reason.INDETERMINATE ->
-                if (event.outcome.cause is Cause.RateLimiterUnavailable) {
-                    AuditDecision.INDETERMINATE to AuditReasonCode.RATE_LIMITER_UNAVAILABLE
-                } else {
-                    AuditDecision.INDETERMINATE to AuditReasonCode.INDETERMINATE
-                }
-            Reason.AUTHENTICATOR_UNAVAILABLE, Reason.DEADLINE_EXCEEDED, Reason.CANCELLED ->
-                AuditDecision.INDETERMINATE to AuditReasonCode.INDETERMINATE
-            Reason.ERROR -> AuditDecision.ERROR to AuditReasonCode.ERROR
-        }
+    /**
+     * The audit decision and reason code of an event's [reason], with the credential [rejectedAs] and the [cause] of an
+     * indeterminate one. One mapping from the event's reason (UD-7): exhaustive, so a new Reason without a value does
+     * not compile.
+     */
+    internal fun decision(
+        reason: Reason,
+        rejectedAs: AuthnResult.RejectReason?,
+        cause: Cause?,
+    ): Pair<AuditDecision, AuditReasonCode> {
+        val decision = decisionOf(reason)
+        return decision to reasonCode(decision, rejected(rejectedAs), cause)
     }
 
-    /** Why an explicit deny: a statement, the scope, or the tenant's boundary (RFC 0007 §7.6). */
-    private fun explicit(reason: Reason): AuditReasonCode = when (reason) {
-        Reason.SCOPE_REJECTED -> AuditReasonCode.SCOPE_REJECTED
-        Reason.BOUNDARY -> AuditReasonCode.BOUNDARY
-        else -> AuditReasonCode.EXPLICIT_DENY
+    /** The event's reason in audit's words; the ways a request is undecided before the engine ran are INDETERMINATE. */
+    private fun decisionOf(reason: Reason): AuditDecision = when (reason) {
+        Reason.PERMIT -> AuditDecision.PERMIT
+        Reason.TOO_MANY_REQUESTS -> AuditDecision.TOO_MANY_REQUESTS
+        Reason.EXPLICIT_DENY -> AuditDecision.EXPLICIT_DENY
+        Reason.IMPLICIT_DENY -> AuditDecision.IMPLICIT_DENY
+        Reason.SCOPE_REJECTED -> AuditDecision.SCOPE_REJECTED
+        Reason.BOUNDARY -> AuditDecision.BOUNDARY
+        // A 400 is refused before any decision; kind says why.
+        Reason.INVALID_REQUEST -> AuditDecision.INVALID_REQUEST
+        Reason.INDETERMINATE, Reason.AUTHENTICATOR_UNAVAILABLE, Reason.DEADLINE_EXCEEDED, Reason.CANCELLED ->
+            AuditDecision.INDETERMINATE
+        Reason.ERROR -> AuditDecision.ERROR
     }
+
+    /** The decision's own code, a rejected credential's for a deny, the rate limiter for an indeterminate permit. */
+    private fun reasonCode(decision: AuditDecision, rejected: AuditReasonCode?, cause: Cause?): AuditReasonCode = when {
+        rejected != null && decision in DENIES -> rejected
+        decision == AuditDecision.INDETERMINATE && cause is Cause.RateLimiterUnavailable ->
+            AuditReasonCode.RATE_LIMITER_UNAVAILABLE
+        else -> OWN_CODE.getValue(decision)
+    }
+
+    /** The decisions a rejected credential's code replaces the decision's own in. */
+    private val DENIES = setOf(
+        AuditDecision.EXPLICIT_DENY,
+        AuditDecision.IMPLICIT_DENY,
+        AuditDecision.SCOPE_REJECTED,
+        AuditDecision.BOUNDARY,
+    )
+
+    /** Each decision's own code, the same word (`AuditVocabularyTest` holds every one). */
+    private val OWN_CODE: Map<AuditDecision, AuditReasonCode> = mapOf(
+        AuditDecision.PERMIT to AuditReasonCode.PERMIT,
+        AuditDecision.TOO_MANY_REQUESTS to AuditReasonCode.TOO_MANY_REQUESTS,
+        AuditDecision.EXPLICIT_DENY to AuditReasonCode.EXPLICIT_DENY,
+        AuditDecision.IMPLICIT_DENY to AuditReasonCode.IMPLICIT_DENY,
+        AuditDecision.SCOPE_REJECTED to AuditReasonCode.SCOPE_REJECTED,
+        AuditDecision.BOUNDARY to AuditReasonCode.BOUNDARY,
+        AuditDecision.INVALID_REQUEST to AuditReasonCode.INVALID_REQUEST,
+        AuditDecision.INDETERMINATE to AuditReasonCode.INDETERMINATE,
+        AuditDecision.ERROR to AuditReasonCode.ERROR,
+    )
 
     private fun rejected(reason: AuthnResult.RejectReason?): AuditReasonCode? = when (reason) {
         AuthnResult.RejectReason.TOKEN_EXPIRED -> AuditReasonCode.TOKEN_EXPIRED
         AuthnResult.RejectReason.TOKEN_REVOKED -> AuditReasonCode.TOKEN_REVOKED
-        // A token not valid yet is invalid to audit's fixed codes too; the decision event names it (`IDN-29`).
-        AuthnResult.RejectReason.TOKEN_INVALID,
-        AuthnResult.RejectReason.API_KEY_INVALID,
-        AuthnResult.RejectReason.TOKEN_NOT_YET_VALID,
-        -> AuditReasonCode.TOKEN_INVALID
+        AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> AuditReasonCode.TOKEN_INVALID
+        AuthnResult.RejectReason.TOKEN_NOT_YET_VALID -> AuditReasonCode.TOKEN_NOT_YET_VALID
         AuthnResult.RejectReason.DELEGATION_UNSUPPORTED -> AuditReasonCode.DELEGATION_UNSUPPORTED
         null -> null
     }

@@ -464,8 +464,8 @@ class KafkaAuditListenerTest {
             device = AuditDeviceData(id = "device-1"),
         ),
         authorization = AuditAuthorizationData(
-            decision = AuditDecision.ALLOW,
-            reasonCode = AuditReasonCode.ALLOW,
+            decision = AuditDecision.PERMIT,
+            reasonCode = AuditReasonCode.PERMIT,
             reason = "Allow",
             elapsedNanos = 100,
             source = AuditSourceData(
