@@ -38,7 +38,7 @@ internal class KeyRunner<T : Any>(
     /** Tests only: where a test interleaves with this key's drain. */
     hooks: KeyDrain.Hooks = KeyDrain.Hooks.NONE,
 ) : PeekedKey<T>(key, context.ticker), KeyOwner<T> {
-    private val family = context.families.firstOrNull { it.spec.kind == key.kind }
+    private val family = context.families.of(key.kind)
 
     @Volatile
     private var idleHint = true
