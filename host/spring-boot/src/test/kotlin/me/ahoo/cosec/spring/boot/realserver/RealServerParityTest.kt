@@ -93,9 +93,8 @@ class RealServerParityTest {
     )
 
     /**
-     * UA-8: a handler that reads the request's `java.security.Principal` sees none for an anonymous request, on every
-     * stack, so "a principal is present" means signed in. An authenticated request's is the principal on the reactive
-     * stacks; the servlet stacks set none (`getUserPrincipal()` is the container's), which no reader takes for a caller.
+     * `PIP-28`: a handler that reads the request's `java.security.Principal` sees CoSec's for a request CoSec
+     * authenticated, and none for an anonymous one, on every server: present if and only if signed in.
      */
     @Test
     fun `an anonymous request has no request principal, on every server`() {
@@ -103,8 +102,7 @@ class RealServerParityTest {
             val anonymous = server.send(get("/public/page"))
             anonymous.body.assert().describedAs("$stack: $anonymous").endsWith("principal=null")
             val alice = server.send(get("/orders/1", "Authorization: Bearer alice@acme:clerk"))
-            val expected = if (stack.servlet) "principal=null" else "principal=alice"
-            alice.body.assert().describedAs("$stack: $alice").endsWith(expected)
+            alice.body.assert().describedAs("$stack: $alice").endsWith("principal=alice")
         }
     }
 

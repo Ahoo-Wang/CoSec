@@ -291,15 +291,22 @@ an authenticated caller.
 
 **WebFlux and the gateway**: from the exchange attributes, or from the Reactor context of the request.
 
-**The request's `java.security.Principal`** differs by stack (`PIP-28`), and is not what to read:
+**The request's `java.security.Principal`** is CoSec's if and only if CoSec authenticated the request, on all three
+stacks (`PIP-28`):
 
-| | Anonymous request | Signed-in request |
-|---|---|---|
-| WebFlux and the gateway (`exchange.getPrincipal()`, a `Principal` handler parameter) | empty | CoSec's principal |
-| Spring MVC (`getUserPrincipal()`, `getRemoteUser()`, a `Principal` handler parameter) | none from CoSec | none from CoSec (only what the container or another filter sets) |
+- **A request CoSec authenticated** carries CoSec's principal, the same object as the context's `principal`:
+  `exchange.getPrincipal()` on WebFlux and the gateway, `getUserPrincipal()` on Spring MVC (with `getRemoteUser()` its
+  id), and a `java.security.Principal` handler parameter on both. It replaces whatever the container or a filter in
+  front had set, since CoSec decided the request.
+- **A request CoSec treats as anonymous** carries none of CoSec's: what it already had is left as it was.
 
-So a present principal never stands for an anonymous caller, on any stack. The `SecurityContext` is the same on all
-three and carries the anonymous principal too: read the caller there (`principal.authenticated`, `principal.id`).
+On a host that pairs CoSec with Spring Security or container login, a principal on a request CoSec treated as anonymous
+is that other layer's user, not CoSec's: what CoSec knows about the caller is the `SecurityContext`, and that is the
+thing to read (`principal.authenticated`, `principal.id`). On Spring MVC, `isUserInRole` answers `false` and
+`getAuthType()` `null` for a request CoSec authenticated: CoSec's roles are per space and not the container's, and the
+container's would be another user's. Ask CoSec about roles through the `SecurityContext` and a check
+([Checks in code](./checks.md)), never through `isUserInRole`. On an async request the principal is there on the ASYNC
+dispatch too; the error page, which the container renders after the request has ended, carries none of CoSec's.
 
 ```kotlin
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext

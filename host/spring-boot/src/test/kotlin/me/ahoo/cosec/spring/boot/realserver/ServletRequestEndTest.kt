@@ -121,7 +121,8 @@ class ServletRequestEndTest {
                 return body
             }
             val context = checkNotNull(servlet.getSecurityContext())
-            return "$body advice=${checker.checkBlocking(context, ACTION, RESOURCE)} on=${servlet.dispatcherType}"
+            return "$body advice=${checker.checkBlocking(context, ACTION, RESOURCE)} on=${servlet.dispatcherType}" +
+                " principal=${servlet.userPrincipal?.name}"
         }
     }
 
@@ -132,7 +133,8 @@ class ServletRequestEndTest {
         fun error(request: HttpServletRequest): String {
             val context = request.getSecurityContext()
             val check = context?.let { checker.checkBlocking(it, ACTION, RESOURCE) }
-            return "error context=${context?.principal?.id} check=$check on=${request.dispatcherType}"
+            return "error context=${context?.principal?.id} check=$check on=${request.dispatcherType}" +
+                " principal=${request.userPrincipal?.name}"
         }
     }
 
@@ -216,7 +218,8 @@ class ServletRequestEndTest {
             val checker = context.getBean(AuthorizationChecker::class.java)
             val body = get(context, "/orders/suspending").body
             body.assert().contains("resumed=true")
-            body.assert().contains("advice=true on=ASYNC")
+            // PIP-28: the ASYNC dispatch is the request the handler started async on, with CoSec's principal.
+            body.assert().contains("advice=true on=ASYNC principal=alice")
             deniedOnceCompleted(checker, context.getBean(Handlers::class.java).kept.getValue("suspending"))
                 .assert().isTrue()
         }
@@ -231,18 +234,23 @@ class ServletRequestEndTest {
             val checker = context.getBean(AuthorizationChecker::class.java)
             val kept = context.getBean(Handlers::class.java).kept
             for (path in listOf("deferred", "future")) {
-                get(context, "/orders/$path").body.assert().contains("$path advice=true on=ASYNC")
+                get(context, "/orders/$path").body.assert().contains("$path advice=true on=ASYNC principal=alice")
                 deniedOnceCompleted(checker, kept.getValue(path)).assert().isTrue()
             }
         }
     }
 
-    /** The filter takes the REQUEST dispatch only: the error page reads the context, and every check of it is denied. */
+    /**
+     * The filter takes the REQUEST dispatch only: the error page reads the context, and every check of it is denied.
+     * The container renders it on its own request, not the one the filter handed on, so it carries none of CoSec's
+     * principal (`PIP-28`): the request has ended.
+     */
     @ParameterizedTest
     @ValueSource(strings = ["tomcat", "jetty"])
     fun `the error page finds the context and a check of it is denied`(container: String) {
         start(container).use { context ->
-            get(context, "/orders/failing").body.assert().contains("error context=alice check=false on=ERROR")
+            get(context, "/orders/failing").body.assert()
+                .contains("error context=alice check=false on=ERROR principal=null")
         }
     }
 

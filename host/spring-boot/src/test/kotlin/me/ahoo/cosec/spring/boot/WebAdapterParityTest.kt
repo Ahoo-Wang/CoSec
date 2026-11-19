@@ -127,10 +127,7 @@ class WebAdapterParityTest {
         /** The `CoSec-Identity` values the handler, or the gateway's route, was handed. */
         val identity: List<String> = emptyList(),
     ) {
-        /**
-         * The request's `java.security.Principal` the handler saw (UA-8). Not compared: the servlet containers own
-         * theirs and set none for CoSec, so only "none for an anonymous request" is the same on every adapter.
-         */
+        /** The request's `java.security.Principal` the handler saw (`PIP-28`), asserted on its own below. */
         var requestPrincipal: String? = null
 
         val contentType: String? get() = headers["content-type"]?.single()
@@ -585,15 +582,11 @@ class WebAdapterParityTest {
             webflux.headers["retry-after"].assert().isEqualTo(listOf("3"))
             webflux.headers["ratelimit-remaining"].assert().isEqualTo(listOf("0"))
         }
-        // UA-8: no adapter hands an anonymous request a Principal; an authenticated one's is its principal, where set.
-        servlet.requestPrincipal.assert().isNull()
-        if (webflux.proceeded && webflux.principal!!.startsWith("(0)@")) {
-            webflux.requestPrincipal.assert().isNull()
-            gateway.requestPrincipal.assert().isNull()
-        } else if (webflux.proceeded) {
-            webflux.requestPrincipal.assert().isEqualTo(webflux.principal!!.substringBefore('@'))
-            gateway.requestPrincipal.assert().isEqualTo(webflux.requestPrincipal)
-        }
+        // PIP-28: the request's principal is CoSec's if and only if CoSec authenticated it, alike on all three.
+        gateway.requestPrincipal.assert().isEqualTo(webflux.requestPrincipal)
+        servlet.requestPrincipal.assert().isEqualTo(webflux.requestPrincipal)
+        val signedIn = webflux.principal?.takeUnless { it.startsWith("(0)@") }
+        webflux.requestPrincipal.assert().isEqualTo(signedIn?.substringBefore('@'))
     }
 
     /** A service behind a gateway (`cosec.pipeline.mode=gateway`): one scenario per answer of [IdentityGate]. */

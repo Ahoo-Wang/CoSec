@@ -123,6 +123,31 @@ class PipelineWebFilterTest {
         principalOf(Authenticator { AuthnResult.Authenticated(alice, "test") }).assert().isEqualTo("alice" to "alice")
     }
 
+    /**
+     * `PIP-28` with a filter in front (Spring Security) that set its own principal: CoSec's replaces it on a request
+     * CoSec authenticated; on one CoSec treats as anonymous, the other layer's is left as it was.
+     */
+    @Test
+    fun anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated() {
+        fun principalOf(authenticator: Authenticator): String? {
+            var seen: String? = null
+            val front = MockServerWebExchange.builder(MockServerHttpRequest.get("/orders"))
+                .principal(java.security.Principal { "bob" })
+                .build()
+            PipelineWebFilter(pipeline(permit, authenticator)).filter(front) { authorized ->
+                authorized.getPrincipal<java.security.Principal>().doOnNext { seen = it.name }.then()
+            }.block(Duration.ofSeconds(5))
+            return seen
+        }
+        principalOf(Authenticator { AuthnResult.Anonymous }).assert().isEqualTo("bob")
+        val alice = AuthenticatedPrincipal(
+            PrincipalId("alice"),
+            TenantId("acme"),
+            MembershipSource.Claims(Memberships(Memberships.Source.CLAIMS, emptyMap(), emptyList())),
+        )
+        principalOf(Authenticator { AuthnResult.Authenticated(alice, "test") }).assert().isEqualTo("alice")
+    }
+
     /** IDN-9, RC1-18: the handler of an enforcing host never sees a `CoSec-Identity` a client sent. */
     @Test
     fun aPermitHandsOnNoClientIdentity() {

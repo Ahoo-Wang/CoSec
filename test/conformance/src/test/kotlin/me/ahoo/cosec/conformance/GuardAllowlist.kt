@@ -26,6 +26,10 @@ object GuardAllowlist {
         "build" to setOf(
             // PIP-28: no request Principal for an anonymous request.
             "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
+            "webflux:PipelineWebFilterTest#anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated",
+            "webmvc:RequestPrincipalTest#a request CoSec authenticated carries CoSec's principal",
+            "webmvc:RequestPrincipalTest#CoSec's principal replaces another layer's, and answers none of its roles",
+            "webmvc:RequestPrincipalTest#an anonymous request carries none of CoSec's, and keeps another layer's as it was",
             "spring-boot:RealServerParityTest#an anonymous request has no request principal, on every server",
             // IDN-27: no public default reads revocations or memberships.
             "architecture:SafeDefaultsTest#no public parameter that reads revocations or memberships has a default",

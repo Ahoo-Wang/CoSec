@@ -361,12 +361,16 @@
     },
     {
       "id": "PIP-28",
-      "source": "RFC 0006 §7.6; usability review UA-8 (maintainer's decision, 2026-11-19)",
-      "statement": "An adapter sets the request's `java.security.Principal` only for an authenticated caller: an anonymous request has none, on every web stack (WebFlux and the gateway set none, as the servlet containers set none), so a handler that reads \"a principal is present\" as \"signed in\" never counts anonymous callers as one user. The anonymous principal is read from the `SecurityContext`.",
+      "source": "RFC 0006 §7.6; usability review UA-8 (maintainer's decisions, 2026-11-19)",
+      "statement": "The request's `java.security.Principal` is CoSec's if and only if CoSec authenticated the request, on every web stack (WebFlux, the gateway, Spring MVC): a request CoSec authenticated carries CoSec's principal, the same object on all three (`exchange.getPrincipal()`; `getUserPrincipal()`, with `getRemoteUser()` its id), replacing whatever the container or a filter in front had set; a request CoSec treats as anonymous carries none of CoSec's, and what it already had (another layer's principal) is left as it was. On Spring MVC, where CoSec sets the principal `isUserInRole` answers false and `getAuthType()` null, since CoSec answers no container role and the wrapped request's belong to another principal; where it sets none both are the wrapped request's. The principal holds on an async request's ASYNC dispatch; the ERROR dispatch, which the filter does not take, carries none of CoSec's.",
       "level": "build",
       "pending": null,
       "guards": [
         "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
+        "webflux:PipelineWebFilterTest#anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated",
+        "webmvc:RequestPrincipalTest#a request CoSec authenticated carries CoSec's principal",
+        "webmvc:RequestPrincipalTest#CoSec's principal replaces another layer's, and answers none of its roles",
+        "webmvc:RequestPrincipalTest#an anonymous request carries none of CoSec's, and keeps another layer's as it was",
         "spring-boot:RealServerParityTest#an anonymous request has no request principal, on every server"
       ]
     }
