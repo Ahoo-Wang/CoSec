@@ -15,11 +15,20 @@ section above it:
 
 | You run | Read |
 |---|---|
-| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3) |
-| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the one above |
-| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the two above |
-| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the three above |
+| `8.0.0-beta.4` | [From beta.4](#from-8-0-0-beta-4) |
+| `8.0.0-beta.3` | [From beta.3](#from-8-0-0-beta-3), then the one above |
+| `8.0.0-beta.2` | [From beta.2](#from-8-0-0-beta-2), then the two above |
+| `8.0.0-beta.1` | [From beta.1](#from-8-0-0-beta-1), then the three above |
+| `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the four above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
+
+## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
+
+- **The skill `cosec-custom-matcher` is `cosec-extending`** (UE-21). 8.0 has no matchers, and the skill is about
+  extending CoSec with beans (`AttributeProvider`, `MembershipProvider`, `DecisionListener`, `RateLimiter`,
+  `Authenticator`). The directory is `skills/cosec-extending`, its `name` is `cosec-extending`, and an agent invokes it as
+  `$cosec-extending`. Affected: an agent configuration, a prompt or a plugin list that names `cosec-custom-matcher`;
+  nothing in a running deployment changes.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

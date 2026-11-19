@@ -13,11 +13,16 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 | 你运行的版本 | 阅读 |
 |---|---|
-| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3) |
-| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面那一节 |
-| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面两节 |
-| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面三节 |
+| `8.0.0-beta.4` | [从 beta.4 升级](#from-8-0-0-beta-4) |
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3)，然后是上面那一节 |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面两节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面三节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面四节 |
 | `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
+
+## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
+
+- **技能 `cosec-custom-matcher` 改名为 `cosec-extending`**（UE-21）。8.0 没有匹配器，这个技能讲的是用 Bean 扩展 CoSec（`AttributeProvider`、`MembershipProvider`、`DecisionListener`、`RateLimiter`、`Authenticator`）。目录是 `skills/cosec-extending`，它的 `name` 是 `cosec-extending`，智能体用 `$cosec-extending` 调用它。受影响的是写着 `cosec-custom-matcher` 的智能体配置、提示词或插件列表；运行中的部署没有任何变化。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
