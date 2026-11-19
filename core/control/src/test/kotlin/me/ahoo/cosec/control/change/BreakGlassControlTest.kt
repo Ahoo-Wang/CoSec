@@ -27,6 +27,7 @@ import me.ahoo.cosec.control.authz.PipelineControlAuthorizer
 import me.ahoo.cosec.control.lifecycle.BreakGlass
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.HeadWrite
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -54,6 +55,7 @@ import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotDocument
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.AfterEach
@@ -129,9 +131,7 @@ class BreakGlassControlTest {
     private val audit = Audit()
 
     private fun changes(
-        listeners: List<ChangeListener> = listOf(
-            audit
-        ),
+        listeners: List<ChangeListener> = listOf(audit),
         options: ChangeOptions = ChangeOptions(shadow = IMMEDIATE_WINDOW)
     ): Changes {
         val registered = ChangeListeners(listeners).also { opened += it }
@@ -142,7 +142,9 @@ class BreakGlassControlTest {
             engine.authorizer,
             clock,
             options,
-            listeners = registered
+            listeners = registered,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
     }
 

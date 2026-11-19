@@ -34,6 +34,7 @@ import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.ChangeStep
 import me.ahoo.cosec.control.lifecycle.StagingSlots
 import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -188,7 +189,7 @@ class ChangeTransitionTableTest {
             options,
             StagingSlots(harness.memory, harness.clock, options),
             ChangeListeners.NONE,
-            ChangeAuthority(PERMIT_ALL, options),
+            ChangeAuthority(PERMIT_ALL, options, revocations = RevocationReader.NONE),
         )
         val outside = runCatching {
             runBlocking {

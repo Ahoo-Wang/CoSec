@@ -108,6 +108,19 @@ section above it:
   (`grep -nP '[^\x00-\x7F]'`). Or load the files with this version's `PolicyTestKit.load`, which compiles each document
   as an instance does and names the path of each error. `cosec-migrate convert` now refuses the same shapes from 7.x
   data: an ALLOW on a 7.x resource attribute is a statement that can never hold, which you remove.
+- **Breaking: `:apply` with `REPLACE` checks the revision the file was read at.** Through beta.3 the header's
+  `revision` was required and ignored, and a `REPLACE` removed whatever the head held that the file did not, including
+  what was published after the file was read. Now a file whose `revision` is not the head's is a `409`. Affected: jobs
+  that apply a file from git with a fixed or stale `revision`. Send the revision the job last read (`GET
+  /documents/{key}`, its `revision`), merging what changed since ([Changes](../policies/testing.md#changes)). A
+  document not published yet is not compared. `MERGE` is unchanged, and its change now names, in a `WARNING`, the
+  entries it keeps because the file leaves them out.
+- **A change that would lock its publisher out of the control plane needs an acknowledgement.** A change to the
+  platform document, the platform tenant's or the control app's that would leave its operator unable to reach the
+  control plane carries a `V4` warning, and its publish is a `422` unless the body says `"lockout": true`
+  ([Publishing and rolling back](../policies/testing.md#publishing-and-rolling-back)). Affected: automation that
+  publishes such a change on purpose; add the acknowledgement. The way back from a lock-out is the new
+  `cosec-migrate restore`, not an emptied Redis ([Recovering from a lock-out](./storage.md#recovering-from-a-lock-out)).
 - **Fixed: a lost invalidation is installed by the first pass after it, even past a load in flight.** The beta.3
   release notes listed it as a known issue: when a revalidation pass met a load of a document already in flight, it
   took that load's read as its confirmation, though the read could predate the change, so a change whose invalidation

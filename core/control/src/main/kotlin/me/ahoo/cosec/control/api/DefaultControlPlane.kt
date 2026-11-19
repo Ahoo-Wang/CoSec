@@ -121,8 +121,8 @@ class DefaultControlPlane(
         change
     )
 
-    override suspend fun publish(operator: Operator, change: ChangeId, ack: ShadowAck?): ChangeRequest =
-        changes.publish(operator, change, ack)
+    override suspend fun publish(operator: Operator, change: ChangeId, ack: ShadowAck?, lockout: Boolean): ChangeRequest =
+        changes.publish(operator, change, ack, lockout = lockout)
 
     /** A change is read like its document: one the caller may not read is not there (404), so its id tells nothing. */
     override suspend fun get(operator: Operator, change: ChangeId): ChangeRequest = changes.visible(operator, change)

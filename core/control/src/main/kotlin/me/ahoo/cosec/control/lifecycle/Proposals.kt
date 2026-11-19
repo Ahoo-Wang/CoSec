@@ -32,6 +32,7 @@ import me.ahoo.cosec.control.change.ControlStatus.BAD_REQUEST
 import me.ahoo.cosec.control.change.ControlStatus.CONFLICT
 import me.ahoo.cosec.control.change.ControlStatus.GONE
 import me.ahoo.cosec.control.change.ControlStatus.NOT_FOUND
+import me.ahoo.cosec.control.change.Finding
 import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.change.requireRequest
@@ -80,7 +81,7 @@ internal class Proposals(
         if (kind != ProvenanceKind.PUBLISH && kind != ProvenanceKind.BREAK_GLASS) {
             throw ChangeRejectedException(BAD_REQUEST, "a change is proposed as PUBLISH or BREAK_GLASS, not $kind")
         }
-        return proposeAs(author, key, base, operations, note, kind, confirmations)
+        return proposeAs(author, key, base, operations, note, kind, Applying(confirmations))
     }
 
     private suspend fun proposeAs(
@@ -90,7 +91,8 @@ internal class Proposals(
         operations: List<Operation>,
         note: String,
         kind: ProvenanceKind,
-        confirmations: List<Confirmation>,
+        /** The confirmations it carries, and what an `apply` adds: notes beside the checks' findings, what a stale base says. */
+        applying: Applying,
     ): ChangeRequest {
         val head = revisions.head(key)
         // Keyed on what the change does, not on its kind (review K1).
@@ -99,7 +101,9 @@ internal class Proposals(
         authority.authorize(author, key, operations, kind, glass, head?.document)
         PublishRules.requireAudit(breakGlass, listeners.hasRequired)
         if ((head?.revision ?: 0) != base) {
-            throw ChangeRejectedException(CONFLICT, "[$key] is at revision ${head?.revision ?: 0}, not $base")
+            val current = head?.revision ?: 0
+            val next = applying.stale?.invoke(current) ?: "read [$key] again and propose on revision $current"
+            throw ChangeRejectedException(CONFLICT, "[$key] is at revision $current, not $base: $next")
         }
         val now = clock.instant()
         val draft = ChangeRequest(
@@ -116,9 +120,13 @@ internal class Proposals(
             checkedWith = emptyMap(),
             createdAt = now,
             updatedAt = now,
-            confirmations = confirmations,
+            confirmations = applying.confirmations,
         )
-        val checked = candidates.checked(draft, head, author)
+        val checked = candidates.checked(
+            draft,
+            head,
+            author
+        ).let { if (applying.notes.isEmpty()) it else it.copy(findings = it.findings + applying.notes) }
         if (breakGlass) {
             flow.audit(ChangeEvent.Kind.BREAK_GLASS_REQUESTED, checked, author.actor)
         }
@@ -133,7 +141,15 @@ internal class Proposals(
         return checked
     }
 
-    /** `apply` (RFC 0007 §6.7): proposes the operations that make the head of [key] into [desired]. */
+    /**
+     * `apply` (RFC 0007 §6.7): proposes the operations that make the head of [key] into [desired].
+     *
+     * `REPLACE` removes every entry [desired] leaves out, so it is proposed on the revision [desired] says it was read
+     * at (its header's `revision`), not on whatever the head is now: a file built from revision 12, applied after
+     * revision 13 was published, is a 409 instead of removing revision 13's entries (UC-5), as `POST /changes` is
+     * with a stale `base`. For a document not published yet there is nothing to remove, and the header is not compared.
+     * `MERGE` removes nothing and keeps proposing on the head.
+     */
     suspend fun apply(
         author: Operator,
         key: SnapshotKey,
@@ -146,7 +162,35 @@ internal class Proposals(
         requireRequest(desired.kind == kind && desired.owner == owner) {
             "The desired document is not a document of [$key]."
         }
-        return propose(author, key, head?.revision ?: 0, Operations.diff(key, head?.document, desired, mode), note)
+        val operations = Operations.diff(key, head?.document, desired, mode)
+        if (mode == ApplyMode.MERGE) {
+            val kept = MergeKept.findings(head?.document, desired)
+            return proposeAs(
+                author,
+                key,
+                head?.revision ?: 0,
+                operations,
+                note,
+                ProvenanceKind.PUBLISH,
+                Applying(notes = kept),
+            )
+        }
+        if (head == null) {
+            return propose(author, key, 0, operations, note)
+        }
+        return proposeAs(
+            author,
+            key,
+            desired.revision,
+            operations,
+            note,
+            ProvenanceKind.PUBLISH,
+            Applying(stale = { current ->
+                "REPLACE removes what the file leaves out, and the file was read at revision ${desired.revision}. " +
+                    "Read the head (GET /documents/{key}), bring what changed since into the file, set its revision " +
+                    "to $current and apply again"
+            }),
+        )
     }
 
     /**
@@ -169,7 +213,7 @@ internal class Proposals(
         val body = revisions.revision(key, revision)
             ?: throw ChangeRejectedException(GONE, "[$key] keeps no revision $revision")
         val operations = Operations.diff(key, head.document, body, ApplyMode.REPLACE)
-        return proposeAs(author, key, head.revision, operations, note, ProvenanceKind.ROLLBACK, confirmations)
+        return proposeAs(author, key, head.revision, operations, note, ProvenanceKind.ROLLBACK, Applying(confirmations))
     }
 
     /**
@@ -192,4 +236,14 @@ internal class Proposals(
             )
         }
     }
+
+    /**
+     * What a proposal carries beside its operations: its [confirmations] (RFC 0007 §9.5), and what an `apply` adds,
+     * [notes] beside its checks' findings (UC-2) and what a stale base says to do next (UC-5).
+     */
+    private class Applying(
+        val confirmations: List<Confirmation> = emptyList(),
+        val notes: List<Finding> = emptyList(),
+        val stale: ((Long) -> String)? = null,
+    )
 }

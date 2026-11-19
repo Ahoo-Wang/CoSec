@@ -245,7 +245,7 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
 | 角色的权限变化 | `putRole`，不带 `ifMatch` |
 | 角色删除 | `removeRole` |
 | 应用的权限变化 | `putCatalog` |
-| 定期对账 | `apply`，`MERGE`；来源是唯一写入者时用 `REPLACE` |
+| 定期对账 | 来源是唯一写入者时用 `apply` 的 `REPLACE`；`MERGE` 只新增和修改，从不删除：来源删掉的条目仍然存在，变更会在 `WARNING` 中点名它 |
 
 - 每次变更走 `propose`、`skip-shadow`、`publish`。调用者是持有 `cosec:approve`、`cosec:skip-shadow` 和 `cosec:publish` 的平台服务主体，即信任根（[测试策略](./testing.md)）。谁能授予由来源系统判断，CoSec 记录审计。
 - `putRole` 整体替换角色，重放是幂等的。冲突（`409`）由投影重试。

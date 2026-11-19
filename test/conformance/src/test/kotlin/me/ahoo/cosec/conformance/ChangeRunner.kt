@@ -25,6 +25,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
+import me.ahoo.cosec.control.api.ControlLockout
 import me.ahoo.cosec.control.api.DecisionView
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.EntryChanges
@@ -43,11 +44,13 @@ import me.ahoo.cosec.control.change.ChangeRequest
 import me.ahoo.cosec.control.change.ChangeRequestCodec
 import me.ahoo.cosec.control.change.ChangeState
 import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.change.Severity
 import me.ahoo.cosec.control.change.ShadowAck
 import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -109,7 +112,7 @@ import java.time.Instant
  *                "nia":  { "tenant": "(platform)", "credential": "none" },  // a credential without an id; by default,
  *                                                                           // token "token-<name>", issued at no time
  *                "dave": { "tenant": "acme", "roles": ["approver"], "provider": true } },  // the provider says its roles
- * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
+ * "options":   { "fourEyes": true, "lockout": true (the UC-6 check, off by default), "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
  *                "providers": [ { "path": "ext.geo.country", "type": "string" } ] },   // the host's AttributeProviders
  * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme", "kind": "BREAK_GLASS",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
@@ -121,12 +124,14 @@ import java.time.Instant
  *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" },
  *            { "report": { "change": "c1", "instance": "i1", "counts": { "NARROWED": 2 } } },
  *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } },
+ *            { "publish": { "change": "c1", "by": "walt", "lockout": true } },   // acknowledges a lock-out (UC-6)
  *            { "rollback": { "change": "c2", "by": "walt", "document": "platform", "revision": 1 } },
  *            { "outage": true },   // every check is indeterminate until { "outage": false }
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
  *            { "simulate": { "by": "alice", "request": { ... }, "candidate": "c1" } },
  *            { "explain": { "by": "alice", "request": { ... }, "at": { "platform": 1, "app": 1, "tenant": 1 } } },
  *            { "apply": { "change": "c3", "by": "walt", "document": "platform", "mode": "REPLACE", "desired": {...} } },
+ *                                              // "revision": the header's, the revision the file was read at (default: the head's)
  *            { "rateLimits": "platform" },     // the rule ids of the document's head, in order
  *            { "staged": "tenant:acme" },      // the change whose candidate the document stages: `staged c2`, `staged none`
  *            { "revokeBreakGlass": { "change": "c2", "by": "rita", "binding": "glass" } },  // DELETE /break-glass/glass
@@ -140,7 +145,7 @@ import java.time.Instant
  *  { "diff": { "document": "tenant:acme", "from": 1, "to": 2 } } is the diff of two revisions, as a line of what it lists:
  *  `diff policies=[+p] bindings=[+b,-c] roles=[~r] sections=false`
  * "expect": { "steps": ["CHECKED", "READY", "PUBLISHED"], "errors": { "c1": [] }, "heads": { "tenant:acme": 1 },
- *             "escalations": { "c1": ["NOT_COVERED"] } }
+ *             "escalations": { "c1": ["NOT_COVERED"] }, "warnings": { "c1": ["OPERATION $.bindings"] } }
  * ```
  *
  * A proposal is made on the current head of its document. With `operators`, every step names who takes it (`by`),
@@ -274,7 +279,16 @@ object ChangeRunner : ScenarioRunner {
             attributes = providers(),
             reports = reader,
             listeners = listeners,
+            revocations = revocations,
             authority = ChangeAuthority(authorizer, options, revocations = revocations, revocationSkew = Duration.ZERO),
+            // UC-6: the lock-out check, as a host wires it, when the scenario asks for it.
+            lockout = if (node.get("options")?.get("lockout")?.bool() == true) {
+                ControlLockout(
+                    revisions
+                )
+            } else {
+                LockoutCheck.UNCHECKED
+            },
         )
 
         private var changes = changes()
@@ -284,13 +298,14 @@ object ChangeRunner : ScenarioRunner {
             changes,
             revisions,
             ChangeAuthority(
-                if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }
+                if (authorized) engine.authorizer else ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT },
+                revocations = revocations,
             ),
         )
 
         /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
         private fun shadowOptions(): ShadowOptions {
-            node.get("options")?.only("fourEyes", "shadow", "providers")
+            node.get("options")?.only("fourEyes", "shadow", "providers", "lockout")
             val shadow = node.get("options")?.get("shadow") ?: return ShadowOptions(Duration.ZERO, 0, Duration.ZERO)
             shadow.only("minDuration", "minSamples", "maxDuration")
             return ShadowOptions(
@@ -353,8 +368,13 @@ object ChangeRunner : ScenarioRunner {
             val errors = named.keys.associateWith { id -> changes.get(ChangeId(id)).errors.map { it.check } }
             val escalations = named.keys.associateWith { id -> changes.get(ChangeId(id)).escalations.map { it.reason } }
                 .filterValues { it.isNotEmpty() }
+            val warnings = named.keys.associateWith { id ->
+                changes.get(
+                    ChangeId(id)
+                ).findings.filter { it.severity == Severity.WARNING }.map { "${it.check} ${it.path}" }
+            }.filterValues { it.isNotEmpty() }
             val heads = documents.associate { it.toString() to (revisions.head(it)?.revision ?: 0) }
-            return Outcome.Changed(results, errors, heads, escalations)
+            return Outcome.Changed(results, errors, heads, escalations, warnings)
         }
 
         /** One step's result, as `expect.steps` writes it. */
@@ -390,7 +410,10 @@ object ChangeRunner : ScenarioRunner {
             val plane = DefaultControlPlane(
                 changes,
                 revisions,
-                ChangeAuthority(ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT }),
+                ChangeAuthority(
+                    ControlAuthorizer { _, _, _ -> ControlDecision.PERMIT },
+                    revocations = RevocationReader.NONE
+                ),
             )
             val found = plane.diff(
                 PLATFORM,
@@ -453,7 +476,14 @@ object ChangeRunner : ScenarioRunner {
             val security = securities[by] ?: throw ScenarioFormatException("No operator $by")
             next = ChangeId(argument.required("change").text())
             documents += SnapshotKey.Platform
-            val http = ControlHttp(DefaultControlPlane(changes, revisions, ChangeAuthority(authorizer)))
+            val http =
+                ControlHttp(
+                    DefaultControlPlane(
+                        changes,
+                        revisions,
+                        ChangeAuthority(authorizer, revocations = RevocationReader.NONE)
+                    )
+                )
             val path = "/break-glass/${argument.required("binding").text()}"
             val response = http.handle(ControlHttpRequest("DELETE", path, mapOf("reason" to "scenario")), security)
             val body = CoSecJson.mapper.readTree(response.body).takeIf { response.status / 100 == 2 }
@@ -462,11 +492,16 @@ object ChangeRunner : ScenarioRunner {
         }
 
         private suspend fun transition(action: String, argument: JsonNode): ChangeRequest {
-            val (id, op) = if (action == "publish") target(argument, "ack") else target(argument)
+            val (id, op) = if (action == "publish") target(argument, "ack", "lockout") else target(argument)
             return when (action) {
                 "skipShadow" -> changes.skipShadow(op, id, "scenario")
                 "stage" -> changes.stage(op, id)
-                "publish" -> changes.publish(op, id, ack(id, argument))
+                "publish" -> changes.publish(
+                    op,
+                    id,
+                    ack(id, argument),
+                    lockout = argument.get("lockout")?.bool() == true
+                )
                 "abandon" -> changes.abandon(op, id)
                 "rebase" -> changes.rebase(op, id)
                 "reject" -> changes.reject(op, id, "scenario")
@@ -587,11 +622,14 @@ object ChangeRunner : ScenarioRunner {
 
         /** `:apply` (RFC 0007 §6.7): the change that makes the document's head into `desired`, by `mode`. */
         private suspend fun apply(argument: JsonNode): ChangeRequest {
-            argument.only("change", "by", "document", "desired", "mode")
+            argument.only("change", "by", "document", "desired", "mode", "revision")
             val key = documentKey(argument.required("document").text())
             documents += key
             next = ChangeId(argument.required("change").text())
-            val desired = decode(key, argument.required("desired"), revisions.head(key)?.revision ?: 0)
+            // The header names the revision the file was read at: the head's, unless the scenario says another (UC-5).
+            val head = revisions.head(key)?.revision ?: 0
+            val read = argument.get("revision")?.asLong() ?: head.coerceAtLeast(1)
+            val desired = decode(key, argument.required("desired"), head).copy(revision = read)
             val mode = ApplyMode.valueOf(argument.required("mode").text())
             return plane.apply(by(argument), key, desired, mode, "scenario")
         }

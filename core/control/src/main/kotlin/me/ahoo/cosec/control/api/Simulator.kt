@@ -143,6 +143,14 @@ class Simulator(
         return Decided(evaluation, scope, view.version!!)
     }
 
+    /**
+     * [request] as the engine decided it for the pipeline (`RequestSecurity.engineRequest`), on [documents]: the
+     * lock-out check (UC-6) decides the publisher's own request again with a candidate in place. Its headers were
+     * accepted by the pipeline, so they are not checked again ([decide] refuses an ambiguous one).
+     */
+    internal fun decide(request: EngineRequest, documents: HeldDocuments): Evaluation =
+        engine.evaluate(request, view(request.scope, documents), TraceLevel.FULL)
+
     /** An evaluation, and the documents its view read with their revisions. */
     internal class Decided(val evaluation: Evaluation, scope: Scope, version: ViewVersion) {
         /** The revisions the view read: an app's only when it took the app's document (its revision, 0 for none). */

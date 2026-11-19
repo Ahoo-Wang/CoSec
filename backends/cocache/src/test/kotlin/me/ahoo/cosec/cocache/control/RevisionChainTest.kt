@@ -24,6 +24,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.cocache.snapshot.RedisTarget
 import me.ahoo.cosec.cocache.snapshot.SnapshotNode
 import me.ahoo.cosec.cocache.snapshot.newKeyPrefix
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ChainCheck
 import me.ahoo.cosec.control.store.Publication
 import me.ahoo.cosec.control.store.PublishOutcome
@@ -180,6 +181,8 @@ class RevisionChainTest {
                     java.time.Duration.ZERO
                 ),
             ),
+            revocations = me.ahoo.cosec.spi.token.RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val one = changes(firstNode, first)
         val two = changes(secondNode, second)

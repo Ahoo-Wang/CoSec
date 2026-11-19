@@ -25,6 +25,7 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.Narrowing
 import me.ahoo.cosec.control.lifecycle.Operations
 import me.ahoo.cosec.control.store.AppList
@@ -44,6 +45,7 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -244,6 +246,8 @@ class ChangesB2Test {
             },
             harness.clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val ban = listOf(Operation.PutPolicy(deny("ban")), Operation.PutBinding(binding("ban", PolicyId("ban"))))
         val staged = unskippable.propose(PLATO, SnapshotKey.Platform, head, ban, "ban")
@@ -321,7 +325,9 @@ class ChangesB2Test {
             { ChangeId("h${counter.incrementAndGet()}") },
             PERMIT_ALL,
             harness.clock,
-            ChangeOptions(shadow = IMMEDIATE_WINDOW)
+            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val held = holding(flaky)
         val head = harness.revisions.head(SnapshotKey.Platform)!!.revision
@@ -364,6 +370,8 @@ class ChangesB2Test {
             harness.clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
             listeners = audit,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val head = harness.revisions.head(SnapshotKey.Platform)!!.revision
         val drop = listened.propose(
@@ -422,7 +430,9 @@ class ChangesB2Test {
             Revisions(store, harness.clock),
             { ChangeId("f${counter.incrementAndGet()}") },
             PERMIT_ALL,
-            harness.clock
+            harness.clock,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val change = flaky.propose(PLATO, ACME, 0, listOf(Operation.PutPolicy(allow("reads"))), "reads")
         flaky.skipShadow(PLATO, change.id, "test")
@@ -504,7 +514,9 @@ class ChangesB2Test {
             harness.revisions,
             { ChangeId("s${counter.incrementAndGet()}") },
             PERMIT_ALL,
-            harness.clock
+            harness.clock,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         started.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("acme-reads"))), "first")
             .errors.assert().isEmpty()
@@ -529,7 +541,9 @@ class ChangesB2Test {
             Revisions(failing, harness.clock),
             { ChangeId("t${counter.incrementAndGet()}") },
             PERMIT_ALL,
-            harness.clock
+            harness.clock,
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         repeat(3) {
             started.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(allow("acme-reads-$it"))), "next")
