@@ -27,6 +27,12 @@ Which preview of the library may run behind which preview of the gateway image: 
 
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
+- **The diff of two revisions names the sections that differ** (`GET /documents/{key}/diff`, UC-14). Affected:
+  scripts and tools that read its `sections`. Through beta.4 `sections` was a boolean, `true` when anything besides
+  the policies, bindings and roles differed. It is now the list of those sections' names, of `catalog`, `boundary`,
+  `limits`, `attributes` and `rateLimits` in that order, and `[]` when none differs. Read `sections.length > 0` (or
+  its equivalent) where you read `sections`, or look for the section you care about
+  ([Testing policies](../policies/testing.md)).
 - **A refused forwarded identity is counted and says why, and the gateway no longer writes one a service would refuse**
   (#1690). Affected: services in `cosec.pipeline.mode=gateway`, their dashboards and log alerts, and code that calls
   `IdentityHeader.of` in tests.

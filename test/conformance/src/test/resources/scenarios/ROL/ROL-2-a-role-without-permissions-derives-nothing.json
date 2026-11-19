@@ -82,7 +82,7 @@
       "CHECKED",
       "READY",
       "PUBLISHED",
-      "diff policies=[] bindings=[] roles=[+draft] sections=false"
+      "diff policies=[] bindings=[] roles=[+draft] sections=[]"
     ],
     "errors": {
       "c1": []
