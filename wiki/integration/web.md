@@ -558,11 +558,13 @@ docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT
 The image is also published as `ghcr.io/ahoo-wang/cosec-gateway`. Publish its platform document first
 ([Quick start](../guide/quick-start.md#publish-the-platform-document)); until then every routed request is `503`.
 Configure routes and CoSec through standard Spring configuration; the image reads `config/application.yaml`, whose
-defaults are in
-[`src/dist/config/application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml).
+defaults, in the jar, are in
+[`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/main/resources/application.yaml);
+a mounted `config/application.yaml` is read in addition and wins key by key.
 Kustomize manifests for Kubernetes are in [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s): a `dev` overlay
 to try CoSec out and a `production` one to start from ([Kubernetes](../operations/deployment.md#kubernetes)). The
-image exposes only the `health` actuator endpoint.
+image serves the actuator on a management port (`8081`: `health` and `prometheus`), never on the gateway's, and its
+probes `/livez` and `/readyz` on the gateway's own port.
 
 ### Actuator on an application {#actuator-on-an-application}
 

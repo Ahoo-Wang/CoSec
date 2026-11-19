@@ -386,7 +386,7 @@ spring:
 docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT_SECRET=... ahoowang/cosec-gateway:<version>
 ```
 
-镜像同时以 `ghcr.io/ahoo-wang/cosec-gateway` 发布。请先发布它的平台文档（[快速开始](../guide/quick-start.md#publish-the-platform-document)）；在此之前每个经路由的请求都是 `503`。路由和 CoSec 通过标准 Spring 配置设置；镜像读取 `config/application.yaml`，默认值见 [`src/dist/config/application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml)。Kubernetes 的 Kustomize 清单在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中：用于试用 CoSec 的 `dev` overlay，和作为起点的 `production` overlay（[Kubernetes](../operations/deployment.md#kubernetes)）。镜像只暴露 `health` 这一个 actuator 端点。
+镜像同时以 `ghcr.io/ahoo-wang/cosec-gateway` 发布。请先发布它的平台文档（[快速开始](../guide/quick-start.md#publish-the-platform-document)）；在此之前每个经路由的请求都是 `503`。路由和 CoSec 通过标准 Spring 配置设置；镜像读取 `config/application.yaml`，默认值在 jar 中，见 [`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/main/resources/application.yaml)；挂载的 `config/application.yaml` 被追加读取并逐 key 覆盖。Kubernetes 的 Kustomize 清单在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中：用于试用 CoSec 的 `dev` overlay，和作为起点的 `production` overlay（[Kubernetes](../operations/deployment.md#kubernetes)）。镜像把 actuator 放在管理端口（`8081`：`health` 和 `prometheus`），从不放在网关的端口上，探针 `/livez` 和 `/readyz` 在网关自己的端口上。
 
 ### 应用上的 actuator {#actuator-on-an-application}
 

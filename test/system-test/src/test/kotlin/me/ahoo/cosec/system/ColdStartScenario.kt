@@ -45,7 +45,7 @@ class ColdStartScenario {
 
     private val processes: List<Process>
         get() = SystemTopology.gateways.mapIndexed { index, gateway ->
-            Process("gw-${index + 1}", gateway.resolve("/behind/orders/1"), gateway.resolve(READINESS), gateway.resolve(LIVENESS))
+            Process("gw-${index + 1}", gateway.resolve("/behind/orders/1"), gateway.resolve(GATEWAY_READINESS), gateway.resolve(GATEWAY_LIVENESS))
         } + listOf(
             // A WebFlux application's probes pass CoSec like any request: no liveness to ask before the document.
             Process("auth", SystemTopology.auth.resolve("/cosec/control/v1/documents/platform"), SystemTopology.auth.resolve(READINESS), null),
@@ -105,5 +105,9 @@ class ColdStartScenario {
     private companion object {
         const val READINESS = "/actuator/health/readiness"
         const val LIVENESS = "/actuator/health/liveness"
+
+        // The gateway image serves its probe groups on its own port as these (its actuator is on a management port).
+        const val GATEWAY_READINESS = "/readyz"
+        const val GATEWAY_LIVENESS = "/livez"
     }
 }

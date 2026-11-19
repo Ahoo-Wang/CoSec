@@ -809,7 +809,9 @@ random one.
 - `cosec.api-key.enabled=true needs a MembershipProvider bean: an API key's memberships are its principal's ...
   (IDN-6).` A key's memberships come from its principal's provider. Add `cosec-cocache` and a `MembershipLoader`
   bean, which configures `CoCacheMembershipProvider`, or declare a `MembershipProvider`. The check runs only in
-  `cosec.pipeline.mode=enforce`, where keys are read; a service in `gateway` mode reads none.
+  `cosec.pipeline.mode=enforce`, where keys are read; a service in `gateway` mode reads none. On the `cosec-gateway-server`
+  image the message ends with `The cosec-gateway-server image ships none, so as shipped it cannot use API keys`: the
+  image has no `MembershipProvider` bean, so API keys need an image derived from it that adds one.
 - `API key [<id>] needs the SHA-256 hex of the key as hash.`, `... needs a principal-id.`, `... needs a tenant-id.`,
   `Duplicate API key ids: [...].` Fix [`cosec.api-key.keys`](./configuration.md#api-keys).
 - `API key [<id>] needs exactly one of roles (its cap; [] for no roles) and uncapped: true, not neither` (or `not

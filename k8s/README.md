@@ -7,6 +7,11 @@ Kustomize manifests for the gateway image `ghcr.io/ahoo-wang/cosec-gateway`.
 | [`base/`](base) | The gateway's Deployment, Service and `application.yaml`. The overlays build on it. |
 | [`overlays/dev/`](overlays/dev) | One small gateway and a single Redis, for trying CoSec out on any cluster, kind included. |
 | [`overlays/production/`](overlays/production) | Your own Redis, an autoscaler, a disruption budget, a network policy, 2Gi per gateway. |
+| [`examples/`](examples) | Manifests to copy: a `NetworkPolicy` that lets only the gateway reach a service in `gateway` mode. |
+
+The gateway's probes are `/livez` and `/readyz` on its port 8080; the actuator (`/actuator/health`, `/actuator/prometheus`)
+is on the management port 8081, a container port the Service does not publish. The CORS origin, the discovery list and
+the `cosec-auth` route in `base/application.yaml` are a demo: replace them.
 
 ```bash
 kubectl apply -k k8s/overlays/dev
