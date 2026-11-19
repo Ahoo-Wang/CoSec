@@ -28,8 +28,9 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * UC-1's seam: each installed document goes to the [InstallReview]s on the housekeeping thread, after its load has been
- * answered, once per install. A review housekeeping refuses is offered again when the key is next read; a slow review
- * delays no install, and one that throws leaves the install as it is. A key that leaves the source is removed from them.
+ * answered, once per install. A review housekeeping refuses is offered again when a read confirms its revision, and
+ * dropped when the revision leaves; a slow review delays no install, and one that throws leaves the install as it is.
+ * A key that leaves the source is removed from them.
  */
 class InstallReviewTest {
     private val store = ControllableStore().apply {
@@ -138,6 +139,24 @@ class InstallReviewTest {
             source.revalidate().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
             awaitCondition { housekeeping.queue.isEmpty() && housekeeping.activeCount == 0 }
             of(APP_A).size.assert().isEqualTo(1)
+        }
+    }
+
+    @Test
+    fun `a refused review of a revision no longer installed is dropped`() {
+        source(recording).use { source ->
+            source.load().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
+            awaitCondition { source.quiescent() }
+            fill()
+            source.loadAll(listOf(APP_A)).get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
+            empty()
+            // The document goes: the next read installs the key as failed (the store lost it), not revision 1.
+            store.remove(APP_A)
+            source.revalidate().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
+            source.peekAll(listOf(APP_A))!!.entry(APP_A)!!.state.assert().isInstanceOf(DocumentState.Failed::class.java)
+            source.revalidate().get(TEST_LIMIT_SECONDS, TimeUnit.SECONDS)
+            awaitCondition { housekeeping.queue.isEmpty() && housekeeping.activeCount == 0 }
+            of(APP_A).assert().isEmpty()
         }
     }
 
