@@ -14,6 +14,7 @@ pnpm check:mermaid       # parses every Mermaid diagram in headless Chrome and c
 pnpm fix:mermaid         # rewrites <br/> to <br>, adds autonumber to sequence diagrams, and similar fixes
 pnpm check:docs          # links, #anchors, en/zh heading parity, en/zh sidebar parity, then check:legacy
 pnpm check:legacy        # no mention of an API or property that 8.0 removed (RFC 0008 G4)
+pnpm check:problems      # every problem type of contract/problems/ has its page under public/problems/ (UE-12); `--write` makes it
 pnpm build               # production build; fails on dead links
 ```
 
