@@ -6,6 +6,8 @@
 > 范围：`core/`（`apikey`、`membership`）、`runtime/`（`authn`、`MembershipResolver`）、`jwt/`、`cocache/`、`model/`（属性目录）、
 > `migrate/`、`spring-boot-starter/`、`schema/`、`conformance/`
 
+> **2026-11-19 修订（易用性审查，#1662，`IDN-28`）**：§4.2 增加一条：CoSec 的令牌是签名的。它的校验器与签发器在构造时拒绝不签名的算法（`none`）。
+>
 > **2026-10-28 修订（[RFC 0010](0010-ga-extension-points.md) Q1）**：维护者要求不为未来功能预先抽象。GA 前只做 PR-1（拒绝 `act`，安全）与 PR-3（API Key 新格式，
 > 存储格式的破坏与"策略即数据"）；PR-3 带上 `Memberships.active`（IDN-3 需要）。PR-2 的 `principal.type`、`auth.method` 属性与 `sub_type` 都可以以后新增，
 > 移到 8.1，IDN-5 随之移走。下文保留原样以便追溯。

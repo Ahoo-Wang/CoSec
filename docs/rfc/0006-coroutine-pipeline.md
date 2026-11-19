@@ -7,6 +7,13 @@
 > 范围：新增 `runtime/`（`cosec-runtime`）；改动 `engine/`、`cosec-core`、`cosec-cocache`、`cosec-jwt`、`cosec-webflux`、`cosec-webmvc`、`cosec-gateway`、
 > `cosec-opentelemetry`、`cosec-micrometer`、`cosec-kafka`、`cosec-ip2region`、`cosec-spring-boot-starter`；删除 `cosec-api` 中的响应式授权契约
 >
+> **2026-11-19 修订（易用性审查与 #1666；#1662、#1672、#1676、#1682）**：
+> - §5.3.2（`IDN-27`）：被吊销的令牌、被移除的角色是否仍然算数，绝不是一个默认参数。公开的构造器与函数不为吊销读取器、也不为刷新时的成员关系查询提供默认值；`RevocationReader.NONE` 与 `MembershipRefresh.CLAIMS` 写在选择它们的地方。
+> - §5.3.2（`IDN-29`）：CoSec 的令牌校验器接受 `iat` 或 `nbf` 晚于本机时钟、但不超过签发方时钟偏差的令牌，这个偏差就是主体吊销判断所用的那一个；过了 `exp` 的令牌永不接受。
+> - §7.6（`PIP-26` 的补充）：应用自己的传输层通过关闭 `Pipeline.evaluate` 返回的 `Outcome` 来结束它的请求；从不关闭的，请求一直算进行中。CoSec 的适配器结束它们绑定的请求。
+> - §7.6（`PIP-28`）：当且仅当 CoSec 认证了请求时，请求的 principal 才是 CoSec 的；三种 Web 栈都如此，且是同一个对象。CoSec 视为匿名的请求不带 CoSec 的 principal，保留它原有的。CoSec 设置了 principal 的地方，servlet 适配器不回答任何容器角色。
+> - §9.5（`OBS-6`）：每一种输出都用决策事件的词（`outcome.reason`）说明是什么做出了决定，每种输出各有一处穷尽的映射：span 原样，指标的 `result` 小写，审计的 `decision` 大写。显式拒绝（`explicit_deny`、`EXPLICIT_DENY`）只指被某条 DENY 语句拒绝的请求；范围拒绝、边界拒绝与 `400` 各有自己的值，放行是 `permit` / `PERMIT`。事件的 `subject.method` 是凭证的方法，用 `CoSec-Identity` 给它的名字（`jwt`、`api-key`，或另一个校验器的名字）。§9.5.2、§9.5.3 表中与此不同的旧值（`allow`、`bad_request`、把范围与边界拒绝记作 `EXPLICIT_DENY`）作废。
+>
 > **2026-10-26 修订（[RFC 0008](0008-conformance-and-direct-build.md)）**：8.0 不考虑兼容性。门槛 C（§11）与 PR-8 取消；PR-9、PR-10 并入 RFC 0008 的切换 PR；PR-2 增加"同一 `CoSec-*` 参数的
 > Header 与 query 值不同即 400"；PR-7 的 `WebAdapterParityTest` 只对新 Pipeline 运行。§13 的性能基准从"第 4 阶段结束时"改为 7.0 的实测数字（绝对预算）。
 > R1–R3 是 8.0 的规则（例如 R1 → `PIP-2`）；§10.2 的不变量与 P9′、P13–P15 作为规范性质保留。下文保留原样以便追溯。

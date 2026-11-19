@@ -28,6 +28,8 @@ gh workflow run mutation.yml                       # every mutant, on CI only: 3
 ./gradlew :runtime:updateClientContract :jwt:updateClientContract   # rewrite contract/, what a client receives, after an intended change (PIP-25)
 (cd typescript && pnpm install --frozen-lockfile && pnpm lint && pnpm typecheck && pnpm test)   # the TypeScript packages: what the `typescript` job of CI runs
 (cd typescript && pnpm test:host)                  # the client against a real host: Gradle builds test/client-host, the script starts it, vitest runs (the `typescript-host` job)
+gh workflow run system-test.yml --ref main -f ref=<sha>   # the system test on a commit: the gateway image built from it, services and Redis under Compose, over the network (-f image=ghcr.io/ahoo-wang/cosec-gateway:<tag> tests a published image)
+(cd typescript && pnpm test:system)                # the client through the gateway, against a running stack of the system test (the system-test workflow runs it)
 ```
 
 - `cosec-cocache` and `cosec-spring-boot` tests need Redis on `localhost:6379`
@@ -108,7 +110,8 @@ the adapters, snapshots or the control plane. The parts that take several files 
   (RFC 0011 §3): `api/` (`annotations`, `api`), `core/` (`model`, `engine`, `spi`, `document`, `runtime`, `control`), `backends/`
   (`cocache`), `edge/` (`webflux`, `webmvc`, `gateway`, `openapi`), `extensions/` (`jwt`, `social`, `login`,
   `ip2region`, `micrometer`, `opentelemetry`, `cosid`, `kafka`), `host/` (`spring-boot`), `migration/` (`migrate`), `test/` (`testkit`,
-  `conformance`, `architecture`, `e2e`, `client-host`, `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
+  `conformance`, `architecture`, `e2e`, `client-host`, `system-test`, `system-behind`, `system-auth`, `system-enforcer`,
+  `code-coverage-report`), `bom/` and `platform/` (`gateway-server`). A project
   is named after its directory, without the group or a `cosec-` prefix (`:runtime:check`, `:spring-boot:check`);
   artifact ids keep the prefix (`me.ahoo.cosec:cosec-runtime`). A package belongs to one project
   (`SourceRulesTest`).
@@ -121,6 +124,12 @@ the adapters, snapshots or the control plane. The parts that take several files 
   WebFlux, CoCache in memory, test sources only, never published) the packages' host tests run against: what a unit
   test asserts about CoSec's answers against a model is asserted there too, and `:client-host:check` keeps the host
   answering as those tests assume.
+  `test/system-test` is the system test, the last gate before a release candidate: the gateway image built from the
+  commit, the services of `test/system-*` (a service behind the gateway, the login and control-plane host, a Spring MVC
+  enforcer), Redis and Kafka under Docker Compose, driven over the network only, by the `system-test.yml` workflow
+  ([`wiki/operations/deployment.md#the-system-test`](wiki/operations/deployment.md#the-system-test)). Its `check` runs
+  only the harness's own tests; the scenarios run in `systemTest` against a running stack. A scenario waits for a
+  property within a bound named after it, never a fixed sleep or a retry.
   `test/architecture` holds the structural rules that scan several modules (RFC 0011 §5): `DependencyRulesTest`
   (declared main dependencies point inwards, with the reviewed exceptions in `DependencyRules.EXCEPTIONS`;
   `annotations`, `api`, `model` and `engine` resolve only the Kotlin standard library, `spi` adds coroutines and `document` Jackson;
@@ -279,6 +288,7 @@ Every fact has one home; update it in the same PR. Every English page in `wiki/`
 | What a published module brings into a build (a library dependency, `compileOnlyApi`, the BOM) | nothing to register: `PublishedMetadataTest` reads the generated metadata; `:dependencies` is CoSec's internal platform and is not published; `wiki/guide/introduction.md#what-cosec-needs-from-your-build` when a minimum moves (`CatalogTest`) |
 | A public signature of a TypeScript package (a line of its API report) | the report, `wiki/integration/clients.md`, the client's skill; after GA, `!` in the PR title when a line is removed or changed |
 | What a client receives: a problem type, its status, headers or body; a `CoSec-*` header; the token pair; a claim of CoSec's tokens; what the served refresh and logout routes answer | `contract/` (`./gradlew :runtime:updateClientContract :jwt:updateClientContract`, `PIP-25`), `wiki/integration/clients.md` (its claims table is held to `contract/token/claims.json` by `pnpm check:docs`), and `typescript/cosec-fetcher` in the same PR: its tests against `contract/` and the real host fail otherwise. From GA, `!` in the PR title when a file's member, value, status or header is removed or changed |
+| The gateway image, `k8s/`, or what a system-test scenario asserts (`platform/gateway-server/**`, `k8s/**`, `test/system-*/**`) | the system test runs on the PR and must be green; a changed value a scenario reads (a metric tag, an audit field, a port, a probe path) changes its scenario in the same PR |
 | A new TypeScript package | `typescript/AGENTS.md`, `TypeScriptWorkspaceTest`'s `published`, the labeler, `llms.txt`, the publish workflow's package list |
 | An npm dependency of `typescript/` | the catalog of `typescript/pnpm-workspace.yaml` (packages reference `catalog:`) and its lockfile; nothing else |
 | A new module, or a dependency between modules | `test/architecture` (`ProjectListTest`, `DependencyRules`, `SourceRulesTest`) and RFC 0011 §5; `wiki/architecture/overview.md` |
