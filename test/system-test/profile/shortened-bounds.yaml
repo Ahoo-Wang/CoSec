@@ -5,6 +5,12 @@
 # the harness's bounds (test/system-test/src/test/kotlin/me/ahoo/cosec/system/Bound.kt) are derived from these values.
 cosec:
   authorization:
+    snapshot:
+      fail-closed:
+        # Default: no tenant fails closed. The tenant `lagging` of the Redis outage scenario does...
+        tenants: [ lagging ]
+        # ...Default 30m: once the oldest document it reads was last confirmed 20 seconds ago.
+        max-lag: 20s
     shadow:
       # Default 0.1: every request is evaluated again on a staged candidate, so a window fills from a few requests.
       sample-rate: 1.0

@@ -69,4 +69,33 @@ object Bounds {
         Duration.ofSeconds(9),
         "revocation skew 5 s + iat granularity 1 s (MEM-4) + 3 s margin",
     )
+
+    /**
+     * A tenant that fails closed on lag is refused once the oldest document it reads was last confirmed more than
+     * `cosec.authorization.snapshot.fail-closed.max-lag` ago (20 s here, default 30 min; SNP-5), counted from the last
+     * confirmation, which may be one `revalidate-interval` (10 s, SNP-6) before Redis went away, plus 3 s.
+     */
+    val FAIL_CLOSED_LAG = Bound(
+        "FAIL_CLOSED_LAG",
+        Duration.ofSeconds(33),
+        "fail-closed max-lag 20 s (shortened-bounds.yaml, SNP-5) + revalidate-interval 10 s (SNP-6) + 3 s margin",
+    )
+
+    /**
+     * Every process decides and verifies again after Redis returns, with no restart: its clients reconnect (Lettuce's
+     * default reconnect delay doubles up to 30 s, not tuned by CoSec), and the next revalidation pass
+     * (`revalidate-interval`, 10 s, SNP-6) confirms the documents, plus 5 s.
+     */
+    val REDIS_RECOVERY = Bound(
+        "REDIS_RECOVERY",
+        Duration.ofSeconds(45),
+        "Lettuce reconnect delay up to 30 s (library default) + revalidate-interval 10 s (SNP-6) + 5 s margin",
+    )
+
+    /** A restarted replica turns ready: the image starts (its AOT cache) and installs the documents; the compose health check's own budget. */
+    val REPLICA_START = Bound(
+        "REPLICA_START",
+        Duration.ofSeconds(120),
+        "container start with the AOT cache about 20 s + SNAPSHOT_PROPAGATION 15 s, with a wide margin for a loaded runner",
+    )
 }
