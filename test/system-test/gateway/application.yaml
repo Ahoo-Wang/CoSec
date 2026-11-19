@@ -1,15 +1,7 @@
-# The gateways' configuration in the system test, mounted over the image's config/ (compose.yaml). The image's own
-# src/dist/config/application.yaml, with the routes and probes of k8s/base/application.yaml, and the routes the scenarios
-# call. Nothing here shortens a documented bound.
-server:
-  port: 8080
+# The gateways' configuration in the system test, mounted as the image's config/application.yaml (compose.yaml). The image
+# keeps its own defaults in the jar and reads this in addition: this file holds only what the run adds, the routes the
+# scenarios call and the secret. Nothing here shortens a documented bound.
 spring:
-  application:
-    name: cosec-gateway
-  web:
-    error:
-      whitelabel:
-        enabled: false
   cloud:
     # No discovery client in the image: lb://behind resolves through this list, as lb://cosec-auth does in k8s/base.
     discovery:
@@ -41,25 +33,6 @@ spring:
               predicates:
                 - Path=/plain/**
 cosec:
-  audit:
-    kafka:
-      enabled: false
-  authentication:
-    login:
-      enabled: false
   jwt:
     algorithm: hmac256
     secret: ${COSEC_JWT_SECRET}
-  ip2region:
-    enabled: false
-management:
-  endpoint:
-    health:
-      probes:
-        enabled: true
-    gateway:
-      access: none
-  endpoints:
-    web:
-      exposure:
-        include: health

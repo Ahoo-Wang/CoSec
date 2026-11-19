@@ -328,10 +328,14 @@
     {
       "id": "PIP-26",
       "source": "RFC 0006 §7.6; drill 2 (Wow), finding 1 (2026-11-18)",
-      "statement": "A check by host code (`AuthorizationChecker`, in every form: the public one, and the control plane's in another app and as a recorded principal) is answered for a request in progress however long it runs, on the memberships and attributes it began with, also once its token has expired; once the adapter that bound the request has ended it, every check of it is an implicit deny (`Deny(null)`). The WebFlux and gateway adapters end a request when the chain's `Mono` terminates (after a streamed body's last element is written, on an error, or when the client goes away), before they pass its completion or error on, so a subscriber that sees the chain complete sees the request ended; the servlet filter when the dispatch returns, or, for an async request, when it completes, fails or times out. On the servlet containers the ERROR dispatch, which the filter does not take, finds the context and every check of it denied. A request no adapter bound (a transport that calls `Pipeline.evaluate` itself, the test kit) is never ended.",
+      "statement": "A check by host code (`AuthorizationChecker`, in every form: the public one, and the control plane's in another app and as a recorded principal) is answered for a request in progress however long it runs, on the memberships and attributes it began with, also once its token has expired; once the adapter that bound the request has ended it, every check of it is an implicit deny (`Deny(null)`). The WebFlux and gateway adapters end a request when the chain's `Mono` terminates (after a streamed body's last element is written, on an error, or when the client goes away), before they pass its completion or error on, so a subscriber that sees the chain complete sees the request ended; the servlet filter when the dispatch returns, or, for an async request, when it completes, fails or times out. On the servlet containers the ERROR dispatch, which the filter does not take, finds the context and every check of it denied. A transport of the application's own that calls `Pipeline.evaluate` ends a request by closing its `Outcome` (`AutoCloseable`; nothing for a refused request; idempotent, and one end with an adapter's in either order); one that never closes it leaves the request in progress, and the test kit ends its contexts with `PipelineFixture.end` and `PermittedRequest.end`.",
       "level": "pipeline",
       "guards": [
         "runtime:AuthorizationCheckerTest#a check of a request its adapter ended is denied in every form",
+        "runtime:OutcomeCloseTest#closing the outcome ends the request it permitted",
+        "runtime:OutcomeCloseTest#an adapter's end and a close are one end, in either order",
+        "testkit:RequestEndTest#a fixture context ended is denied",
+        "testkit:RequestEndTest#a permitted request ended is denied",
         "webflux:RequestEndTest#a check while a streamed body is written is answered, and one after it is denied",
         "webflux:RequestEndTest#a check after the client went away is denied",
         "webmvc:PipelineServletFilterTest#aPermitProceedsBoundToTheHolderUntilTheRequestCompletes",
@@ -354,6 +358,21 @@
         "webmvc:SecurityContextHolderTest#a context the pipeline did not make reads as none"
       ],
       "pending": null
+    },
+    {
+      "id": "PIP-28",
+      "source": "RFC 0006 §7.6; usability review UA-8 (maintainer's decisions, 2026-11-19)",
+      "statement": "The request's `java.security.Principal` is CoSec's if and only if CoSec authenticated the request, on every web stack (WebFlux, the gateway, Spring MVC): a request CoSec authenticated carries CoSec's principal, the same object on all three (`exchange.getPrincipal()`; `getUserPrincipal()`, with `getRemoteUser()` its id), replacing whatever the container or a filter in front had set; a request CoSec treats as anonymous carries none of CoSec's, and what it already had (another layer's principal) is left as it was. On Spring MVC, where CoSec sets the principal `isUserInRole` answers false and `getAuthType()` null, since CoSec answers no container role and the wrapped request's belong to another principal; where it sets none both are the wrapped request's. The principal holds on an async request's ASYNC dispatch; the ERROR dispatch, which the filter does not take, carries none of CoSec's.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "webflux:PipelineWebFilterTest#anAnonymousPermitHasNoRequestPrincipal",
+        "webflux:PipelineWebFilterTest#anotherLayersPrincipalIsReplacedOnlyWhenCoSecAuthenticated",
+        "webmvc:RequestPrincipalTest#a request CoSec authenticated carries CoSec's principal",
+        "webmvc:RequestPrincipalTest#CoSec's principal replaces another layer's, and answers none of its roles",
+        "webmvc:RequestPrincipalTest#an anonymous request carries none of CoSec's, and keeps another layer's as it was",
+        "spring-boot:RealServerParityTest#an anonymous request has no request principal, on every server"
+      ]
     }
   ]
 }

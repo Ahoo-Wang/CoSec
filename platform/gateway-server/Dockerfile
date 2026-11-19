@@ -35,12 +35,15 @@ RUN aot-train.sh ${WORK_HOME} ${WORK_HOME}/aot/${APP_NAME}.aot
 # the cache. A missing or mismatched cache only loses the speedup: the default AOTMode=auto falls back.
 ENV JDK_JAVA_OPTIONS="-XX:AOTCache=${WORK_HOME}/aot/${APP_NAME}.aot"
 
-EXPOSE 8080
-# The liveness group: up once the application runs, whatever Redis holds. /actuator/health is DOWN until the platform
-# document is installed, and while Redis may evict it (cosecSnapshotEviction): a probe of it would call a gateway that
-# only waits for its documents unhealthy.
+# 8080 is the gateway (and its probes, /livez and /readyz); 8081 is the management port, the actuator
+# (/actuator/health, /actuator/prometheus): publish it to a monitoring network only, never to clients.
+EXPOSE 8080 8081
+# The liveness group, on the application port as /livez: up once the application runs, whatever Redis holds, and proof
+# that the listener clients use answers. /actuator/health is DOWN until the platform document is installed, and while
+# Redis may evict it (cosecSnapshotEviction): a probe of it would call a gateway that only waits for its documents
+# unhealthy.
 HEALTHCHECK --interval=30s --timeout=3s --retries=3 \
-  CMD curl -f http://localhost:8080/actuator/health/liveness || exit 1
+  CMD curl -f http://localhost:8080/livez || exit 1
 
 STOPSIGNAL SIGTERM
 

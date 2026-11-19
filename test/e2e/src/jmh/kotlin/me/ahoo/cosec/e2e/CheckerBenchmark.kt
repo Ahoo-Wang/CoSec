@@ -67,7 +67,8 @@ open class CheckerBenchmark {
         checker = AuthorizationChecker(slice.pipeline)
         resource = if (scenario == "deny") "/orders/internal/report" else "/orders/op9/detail"
         if (scenario == "ended") {
-            security.end()
+            // As a transport of the application's own ends its request (PIP-26).
+            outcome.close()
         }
         val expected = if (scenario == "permit") Decision.Permit::class else Decision.Deny::class
         check(expected.isInstance(check())) { "Scenario $scenario: ${check()}" }

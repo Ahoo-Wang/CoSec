@@ -1,0 +1,17 @@
+# Rule: PIP-26
+# Mutant: Outcome.close does nothing, so a transport of the application's own that closes its outcome leaves the request permitting
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.http.OutcomeCloseTest :conformance:test
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Outcome.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Outcome.kt
+index 001c200e..3ea11c7b 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Outcome.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/http/Outcome.kt
+@@ -60,7 +60,7 @@ class Outcome internal constructor(
+      * refused request. Idempotent, and the same end as an adapter's, in either order.
+      */
+     override fun close() {
+-        security?.end()
++        Unit
+     }
+ 
+     override fun toString(): String = "Outcome(status=$status, proceed=$proceed, requestId=$requestId, basis=$basis)"

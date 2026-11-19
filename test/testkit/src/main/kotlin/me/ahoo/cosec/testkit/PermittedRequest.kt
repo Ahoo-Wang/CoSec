@@ -35,6 +35,7 @@ import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
+import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
 import me.ahoo.cosec.runtime.snapshot.ViewKey
@@ -102,6 +103,17 @@ object PermittedRequest {
         val context = security.securityContext
         require(context.principal.authenticated) { "The verifier refused the token: invalid, expired or revoked." }
         return context
+    }
+
+    /**
+     * Ends the request of [context], as a host does when its response is complete (`PIP-26`): from then on every check
+     * of it is denied. For a test of code that keeps a context and checks with it after the request. The context
+     * [withToken] answers is not ended until this is called. Idempotent.
+     *
+     * @throws IllegalArgumentException when [context] is not one the pipeline made
+     */
+    fun end(context: SecurityContext) {
+        requireNotNull(RequestSecurity.of(context)) { "The context [$context] is not one the pipeline made." }.end()
     }
 
     /** The headers that carry who the caller is: a test passes the token, never one of these. */
