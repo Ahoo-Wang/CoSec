@@ -137,6 +137,8 @@ they are in the code.
 | policy; statement; action; resource; condition | 策略；语句；动作；资源；条件 | |
 | binding; attachment (attached policy) | 绑定；附加策略 | |
 | role; role binding | 角色；角色绑定 | |
+| subject (of a binding) | 授予对象 | Who a binding grants to: anyone, a principal or a role. |
+| subject (`subject.*`, the requesting principal) | 主体 | The principal making the request; never 授予对象. |
 | catalog; permission | 目录；权限 | Permission catalog: 权限目录. |
 | boundary | 边界 | The platform boundary of a tenant. |
 | break-glass | break-glass | Keep the English term. |
