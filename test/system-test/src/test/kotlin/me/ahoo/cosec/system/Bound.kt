@@ -71,6 +71,17 @@ object Bounds {
     )
 
     /**
+     * A decision shows in the metrics a moment after its response: the decision event goes to the `BEST_EFFORT` listeners
+     * off the request path through a queue (OBS-1, OBS-3), whose hand-off never blocks the request. A few milliseconds
+     * in practice; 5 s as the bound.
+     */
+    val LISTENER_DELIVERY = Bound(
+        "LISTENER_DELIVERY",
+        Duration.ofSeconds(5),
+        "BEST_EFFORT listeners are fed off the request path (OBS-1, OBS-3); a few ms in practice, 5 s margin",
+    )
+
+    /**
      * A tenant that fails closed on lag is refused once the oldest document it reads was last confirmed more than
      * `cosec.authorization.snapshot.fail-closed.max-lag` ago (20 s here, default 30 min; SNP-5), counted from the last
      * confirmation, which may be one `revalidate-interval` (10 s, SNP-6) before Redis went away, plus 3 s.
