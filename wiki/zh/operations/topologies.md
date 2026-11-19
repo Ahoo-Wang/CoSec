@@ -20,7 +20,7 @@ description: "运行 CoSec 的几种方式：一个自己执行授权的服务�
 
 - **Redis 是权威存储**，保存文档、吊销记录和会话，要求 `maxmemory-policy noeviction`、持久化、副本和备份（[Redis 要求](./storage.md#redis-requirements)）。所有读写 CoSec 键的进程，每个环境用同一个 `cosec.key-prefix`。
 - **`cosec.jwt.secret` 既签名又校验。** HMAC 是对称的：**每个持有该密钥的进程，都能为任意租户、主体和角色签发令牌**，包括控制面的 `(platform)` 管理员。“只校验”的服务，对任何拿到它配置的人来说就是签发方。只把密钥交给你愿意让它签发令牌的进程，放在密钥库里，把泄露当作所有账号的泄露。轮换密钥会让用旧密钥签发的每个令牌失效：实例切换的那一刻，持有另一个密钥的实例上每个请求都是 `401` `token-invalid`，所有会话都要重新登录。每个部署只有一个密钥，没有密钥 id，所以滚动重启期间是混合状态；请在安静的时段轮换，并预期所有人会被登出。
-- **starter 在启动时检查模块**，缺什么就在失败信息里写出制品名（[模块](../guide/introduction.md#modules)，STA-1）。
+- **starter 在启动时检查模块**，缺什么就在失败信息里写出制品名（[模块](../guide/introduction.md#modules)，STA-1）。它还会拒绝写成它读不懂的值的 `cosec.*` 开关（`true` 或 `false`；`cosec.pipeline.mode` 为 `enforce` 或 `gateway`；API key 存储为 `memory` 或 `redis`），而不是把它当作“关”（[功能开关](./configuration.md#feature-switches)），并记录一行 `INFO`，说明 CoSec 被配置成什么样；`cosec.enabled=false` 时则是一行 `WARN`（[启动摘要](./observability.md#startup-summary)）。
 
 ## 一个自己执行授权的服务 {#one-service-that-enforces}
 
@@ -50,7 +50,7 @@ Spring Cloud Gateway 用文档决策；每个服务设置 `cosec.pipeline.mode=g
 | CoSec 会检查 | 服务启动时的一条 `WARN`；网关主机设置 `gateway` 模式时启动失败；每个请求中，无法读取、格式版本未知、太旧或太大的头会被拒绝 |
 | CoSec 不检查 | 谁能访问该服务 |
 
-这个头是无签名的 base64url JSON，没有密钥也没有签名。**`gateway` 模式的服务会相信它收到的任何 `CoSec-Identity`**：能向它发请求的人，都可以冒充平台管理员。守住边界的是网络：只放行网关 Pod 的 Kubernetes `NetworkPolicy`、私有网络，或双向 TLS。没有设置策略的命名空间（这是 Kubernetes 的默认状态）允许集群里任何 Pod 发送这个头。`cosec.pipeline.identity.max-age` 只限制被截获的头能有多旧，伪造者把它设成现在即可。服务能被访问之前，先建好这道边界（[网关后面的服务](./deployment.md#services-behind-the-gateway)，[信任边界](../guide/security-model.md#trust-boundaries)）。
+这个头是无签名的 base64url JSON，没有密钥也没有签名。**`gateway` 模式的服务会相信它收到的任何 `CoSec-Identity`**：能向它发请求的人，都可以冒充平台管理员。守住边界的是网络：只放行网关 Pod 的 Kubernetes `NetworkPolicy`、私有网络，或双向 TLS。没有设置策略的命名空间（这是 Kubernetes 的默认状态）允许集群里任何 Pod 发送这个头。[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml) 是一份可以复制给该服务用的 `NetworkPolicy`：它只放行网关所在命名空间里标签为 `app.kubernetes.io/name: cosec-gateway` 的 Pod 访问服务的端口。它需要一个会执行 `NetworkPolicy` 的网络插件；没有就什么都不会发生，所以要测试另一个标签的 Pod 无法连接。`cosec.pipeline.identity.max-age` 只限制被截获的头能有多旧，伪造者把它设成现在即可。服务能被访问之前，先建好这道边界（[网关后面的服务](./deployment.md#services-behind-the-gateway)，[信任边界](../guide/security-model.md#trust-boundaries)）。
 
 ## 网关和服务各自再决策一次 {#a-gateway-and-services-that-decide-again}
 
@@ -107,8 +107,10 @@ Spring Cloud Gateway 用文档决策；每个服务设置 `cosec.pipeline.mode=g
 | 设置 | `cosec.control.*`；可以写文档的 Redis 凭证；数据面实例上设 `cosec.control.enabled=false`，它们此后只读文档；用 `cosec-migrate bootstrap` 指定第一个管理员，并有办法签发 `(platform)` 令牌 |
 | 连到 | Redis（写），审计发往 Kafka 时还有 Kafka |
 | 靠什么成立 | 持有 `(platform)` 管理员令牌或签名密钥的人；对 Redis 的写权限 |
-| CoSec 会检查 | 模块、吊销读取器、令牌保留时间与审批过期时间、控制面的 Bean（不可替换），以及 Redis 权限失败 |
-| CoSec 不检查 | 管理员是否真的能拿到令牌 |
+| CoSec 会检查 | 模块、吊销读取器、令牌保留时间与审批过期时间、控制面的 Bean（不可替换），以及 Redis 权限失败；逐个变更时，对平台文档、平台租户的文档或控制应用的文档的变更不会把发布者挡在控制面之外（检查 `V4`：除非发布请求带 `"lockout": true`，否则是 `422`） |
+| CoSec 不检查 | 管理员是否真的能拿到令牌；发布者以外的其他运维人员是否保有访问权限 |
+
+已被确认的锁定，或检查看不到的锁定，由持有存储凭证的人用 `cosec-migrate restore` 撤销（[从被锁在外面中恢复](./storage.md#recovering-from-a-lock-out)）。
 
 见[控制面](../policies/testing.md#the-control-plane)、[存储](./storage.md#publishing-documents)和[之后修改文档](../guide/quick-start.md#change-a-document-later)。
 
