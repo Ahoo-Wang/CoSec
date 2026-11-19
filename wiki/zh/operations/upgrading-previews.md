@@ -21,6 +21,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **用 `Pipeline.builder` 构建的管道会计数限流**（UA-10）。直到 beta.3，没有调用 `rateLimiter(...)` 构建的管道没有限流器：带 `strictFailure` 的规则对它覆盖的每个请求都返回 `503`，其他规则都被跳过。现在它在自己的 `LocalRateLimiter` 中计数，与 starter 的默认一样，超出规则限制的请求为 `429`。`PipelineFixture.of` 和 `load` 也这样计数，并接受 `rateLimiter` 参数，所以测试能看到 `429`（传入使用测试自己时钟的 `LocalRateLimiter` 可以跨越窗口）。受影响的是 Spring 之外的管道以及测试，其文档带有限流规则：现在它们会被限流。要对整个服务限流，给 `rateLimiter(...)` 一个跨实例共享的限流器。starter 不变。`PipelineFixture.of` 和 `load` 增加了一个参数：请针对这个版本重新编译测试。
 - **你自己的传输可以结束它的请求**（`PIP-26`）。`Outcome` 实现了 `AutoCloseable`：在响应完成时关闭它（`pipeline.evaluate(facts).use { … }`），或者在响应比处理器活得更久时从响应的完成回调里关闭，之后对其上下文的每次检查都为 `false`（[管道在适配器之外](../architecture/extending.md#pipeline-outside-the-adapters)）。测试中用 `PipelineFixture.end(context)` 和 `PermittedRequest.end(context)`。没有破坏性变化：不关闭它的传输行为照旧。
 - **因调用方式而被拒绝的检查会被记录**（UA-5）。管道没有构造的上下文、请求结束之后的检查以及格式错误的动作字符串仍然返回 `false`（`Deny(null)`），现在每种每分钟记录一次 `WARN`，指出请求（[故障排查](./troubleshooting.md#a-check-answers-false)）。无需任何改动。
+- **WebFlux 和网关不再为匿名请求设置请求 `Principal`**（`PIP-28`）。直到 beta.3，对匿名调用方，`exchange.getPrincipal()` 和 `java.security.Principal` 处理器参数是匿名主体 `(0)`（`authenticated = false`），所以把"存在 principal"当作"已登录"的代码会把所有匿名调用方当作同一个用户。现在匿名请求的它们为空，与 Spring MVC 一样；已认证调用方的仍是 CoSec 主体。受影响的是读取请求 principal 并期望匿名调用方也有一个的 WebFlux 和网关代码（现在以空完成的 `exchange.principal.map { … }`、非空的 `Principal` 参数）。改为从 `SecurityContext` 读取调用方（`principal.authenticated`、`principal.id`），它仍携带匿名主体（[Web](../integration/web.md)）。
 
 ## 从 8.0.0-beta.2 升级 {#from-8-0-0-beta-2}
 

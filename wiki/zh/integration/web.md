@@ -198,7 +198,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 上下文是只读的：应用设置的任何内容都不会影响决策。下面的每个读取入口都只返回 CoSec 管道构造的上下文（`PIP-27`）：应用的过滤器或某个库放在 exchange、Reactor 上下文或 Servlet 请求中 `SecurityContext.KEY` 下的其他任何东西，都读作没有上下文，绝不会被当作已认证的调用者。
 
-**WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。exchange 的 principal 也已设置，因此 `exchange.getPrincipal()` 返回 CoSec 主体。
+**WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。对已认证的调用方，exchange 的 principal 也已设置，因此 `exchange.getPrincipal()`（以及 `java.security.Principal` 处理器参数）是 CoSec 主体；对匿名调用方它为空，与 Servlet 栈一样，CoSec 在那里根本不设置请求的 principal（`PIP-28`）。所以"存在 principal"永远不会把匿名调用方当作同一个用户：要知道调用方是谁（包括匿名），请从 `SecurityContext` 读取。
 
 ```kotlin
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext

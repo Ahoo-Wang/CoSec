@@ -89,6 +89,14 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
 - **A check refused for how it was called is logged** (UA-5). A context the pipeline did not make, a check after its
   request ended and a malformed action string still answer `false` (`Deny(null)`), and now log a `WARN` once a minute
   per kind, naming the request ([Troubleshooting](./troubleshooting.md#a-check-answers-false)). Nothing to change.
+- **WebFlux and the gateway set no request `Principal` for an anonymous request** (`PIP-28`). Through beta.3,
+  `exchange.getPrincipal()` and a `java.security.Principal` handler parameter were the anonymous principal `(0)`
+  (`authenticated = false`) for an anonymous caller, so code that took "a principal is present" for "signed in"
+  counted every anonymous caller as one user. Now they are empty for an anonymous request, as on Spring MVC; an
+  authenticated caller's is the CoSec principal as before. Affected: WebFlux and gateway code that reads the request
+  principal and expects one for anonymous callers (an `exchange.principal.map { … }` that now completes empty, a
+  non-null `Principal` parameter). Read the caller from the `SecurityContext` instead (`principal.authenticated`,
+  `principal.id`), which still carries the anonymous principal ([Web](../integration/web.md)).
 
 ## From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 

@@ -289,8 +289,11 @@ context CoSec's pipeline made (`PIP-27`): anything else under `SecurityContext.K
 library may have put on the exchange, the Reactor context or the servlet request, reads as no context at all, never as
 an authenticated caller.
 
-**WebFlux and the gateway**: from the exchange attributes, or from the Reactor context of the request. The exchange
-principal is also set, so `exchange.getPrincipal()` returns the CoSec principal.
+**WebFlux and the gateway**: from the exchange attributes, or from the Reactor context of the request. For an
+authenticated caller the exchange principal is also set, so `exchange.getPrincipal()` (and a `java.security.Principal`
+handler parameter) is the CoSec principal; for an anonymous caller it is empty, as on the servlet stack, where CoSec
+sets no request principal at all (`PIP-28`). So "a principal is present" never counts anonymous callers as one user:
+read who the caller is, anonymous included, from the `SecurityContext`.
 
 ```kotlin
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
