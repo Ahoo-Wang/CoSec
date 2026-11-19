@@ -63,7 +63,7 @@ class StartupSummaryTest {
             line.assert().startsWith("CoSec")
             line.assert().contains("mode=enforce")
             line.assert().contains("rate-limiter=LocalRateLimiter")
-            line.assert().contains("revocation-reader=")
+            line.assert().contains("jwt=off")
             line.assert().contains("listeners=[")
             line.assert().contains("route-map=none")
             line.assert().contains("api-keys=off")

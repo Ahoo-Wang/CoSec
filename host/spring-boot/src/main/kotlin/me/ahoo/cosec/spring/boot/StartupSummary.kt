@@ -15,15 +15,20 @@
 
 package me.ahoo.cosec.spring.boot
 
+import com.auth0.jwt.algorithms.Algorithm
 import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.document.route.RouteMap
 import me.ahoo.cosec.login.CompositeAuthentication
-import me.ahoo.cosec.runtime.event.DecisionListener
+import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.spi.apikey.ApiKeyReader
+import me.ahoo.cosec.spi.apikey.InMemoryApiKeyStore
 import me.ahoo.cosec.spi.ratelimit.RateLimiter
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.spi.token.TokenStore
 import me.ahoo.cosec.spi.token.TokenVerifier
+import me.ahoo.cosec.spring.boot.apikey.apiKeysEnabled
+import me.ahoo.cosec.spring.boot.pipeline.CoSecPipelineAutoConfiguration
 import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.core.env.Environment
 
@@ -48,12 +53,11 @@ internal object StartupSummary {
         val parts = buildList {
             add("mode=$mode")
             add("web=${adapter(beans)}")
-            add("jwt=${names(beans, TokenVerifier::class.java).ifEmpty { "off" }}")
+            addAll(tokens(beans))
             add("login=${if (names(beans, CompositeAuthentication::class.java).isEmpty()) "off" else "on"}")
-            add("revocation-reader=${names(beans, RevocationReader::class.java).ifEmpty { "none" }}")
-            add("api-keys=${names(beans, ApiKeyReader::class.java).ifEmpty { "off" }}")
-            add("rate-limiter=${names(beans, RateLimiter::class.java).ifEmpty { "none" }}")
-            add("listeners=[${names(beans, DecisionListener::class.java)}]")
+            add("api-keys=${apiKeys(beans, environment)}")
+            add("rate-limiter=${beans.getBeanProvider(RateLimiter::class.java).ifAvailable?.let(::named) ?: "none"}")
+            add("listeners=${listeners(beans)}")
             add("route-map=${routes(beans)}")
             CoSecSwitches.switchedOff(environment).takeIf { it.isNotEmpty() }?.let {
                 add("switched-off-by-configuration=$it")
@@ -61,6 +65,51 @@ internal object StartupSummary {
         }
         return Report.On("CoSec${version()}: " + parts.joinToString(", "))
     }
+
+    /**
+     * What a request meets, resolved as the authenticator resolves it ([CoSecPipelineAutoConfiguration]): tokens are on
+     * when an `Algorithm` exists, verified by the application's `TokenVerifier` else CoSec's own, against the reader
+     * [CoSecPipelineAutoConfiguration.revocationReader] picks: a `RevocationReader` bean, else the CoCache token
+     * store's. Nothing about revocations when no token is verified.
+     */
+    private fun tokens(beans: ListableBeanFactory): List<String> {
+        if (beans.getBeanProvider(Algorithm::class.java).ifAvailable == null) {
+            return listOf("jwt=off")
+        }
+        val verifier = beans.getBeanProvider(TokenVerifier::class.java).ifAvailable?.let { "bean ${named(it)}" }
+            ?: "JwtTokenVerifier"
+        val readers = beans.getBeanProvider(RevocationReader::class.java)
+        val reader = CoSecPipelineAutoConfiguration.revocationReader(
+            readers,
+            beans.getBeanProvider(TokenStore::class.java),
+            beans,
+        )
+        val which = when {
+            reader === RevocationReader.NONE -> "RevocationReader.NONE (revoked tokens are accepted until they expire)"
+            readers.ifAvailable != null -> "bean ${named(reader)}"
+            else -> "the CoCache token store's (${named(reader)})"
+        }
+        return listOf("jwt=on ($verifier)", "revocation-reader=$which")
+    }
+
+    private fun apiKeys(beans: ListableBeanFactory, environment: Environment): String {
+        if (!apiKeysEnabled(environment)) {
+            return "off"
+        }
+        val readers = beans.getBeanProvider(ApiKeyReader::class.java)
+        val reader = CoSecPipelineAutoConfiguration.apiKeyReader(
+            readers,
+            beans.getBeanProvider(InMemoryApiKeyStore::class.java),
+        )
+        return if (readers.ifAvailable != null) "on (bean ${named(reader)})" else "on (the in-memory store)"
+    }
+
+    /** The listeners the pipeline delivers to, as `DecisionListeners` holds them. */
+    private fun listeners(beans: ListableBeanFactory): String =
+        beans.getBeanProvider(DecisionListeners::class.java).ifAvailable
+            ?.stats?.joinToString(", ", "[", "]") { it.listener } ?: "[]"
+
+    private fun named(bean: Any): String = bean.javaClass.simpleName.ifEmpty { bean.javaClass.name }
 
     fun log(report: Report) {
         when (report) {
