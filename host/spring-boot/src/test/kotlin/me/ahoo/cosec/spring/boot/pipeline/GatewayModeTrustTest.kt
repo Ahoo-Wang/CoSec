@@ -15,6 +15,10 @@
 
 package me.ahoo.cosec.spring.boot.pipeline
 
+import jakarta.servlet.Filter
+import jakarta.servlet.FilterChain
+import jakarta.servlet.ServletRequest
+import jakarta.servlet.ServletResponse
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
@@ -22,6 +26,7 @@ import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
+import org.springframework.boot.web.servlet.FilterRegistrationBean
 import org.springframework.web.filter.HiddenHttpMethodFilter
 
 /**
@@ -102,6 +107,16 @@ class GatewayModeTrustTest {
             stated.withBean("methodFilter", HiddenHttpMethodFilter::class.java, { HiddenHttpMethodFilter() })
         ).assert()
             .contains("a HiddenHttpMethodFilter bean, [methodFilter]")
+        // Registered without a bean of its own: `FilterRegistrationBean(HiddenHttpMethodFilter())`, as a servlet app may.
+        failure(
+            stated.withBean("methodFilterRegistration", FilterRegistrationBean::class.java, {
+                FilterRegistrationBean(HiddenHttpMethodFilter())
+            })
+        ).assert().contains("a FilterRegistrationBean of a HiddenHttpMethodFilter, [methodFilterRegistration]")
+        // Another filter's registration is not one.
+        stated.withBean("otherRegistration", FilterRegistrationBean::class.java, {
+            FilterRegistrationBean(PassThrough())
+        }).run { it.startupFailure.assert().isNull() }
         // The default, and an explicit false, are no filter.
         stated.run { it.startupFailure.assert().isNull() }
         stated.withPropertyValues(
@@ -130,4 +145,34 @@ class GatewayModeTrustTest {
         }
         reactive.withPropertyValues("$statement=true").run { it.startupFailure.assert().isNull() }
     }
+
+    /**
+     * The link a failed startup ends with opens a heading that exists, in the page and in its Chinese twin: a failure that
+     * points at a dead anchor is worse than none. (No other test holds the links in the starter's messages to the wiki;
+     * the docs check reads the wiki's own links only.)
+     */
+    @Test
+    fun `the link in the boundary message is a heading of the deployment page, in both languages`() {
+        val message = failure(gateway)
+        val anchor = Regex(
+            "https://cosec\\.ahoo\\.me/operations/deployment#([a-z0-9-]+)"
+        ).find(message)!!.groupValues[1]
+        val root = generateSequence(java.nio.file.Path.of("").toAbsolutePath()) { it.parent }
+            .first { java.nio.file.Files.exists(it.resolve("settings.gradle.kts")) }
+        val english = java.nio.file.Files.readAllLines(root.resolve("wiki/operations/deployment.md"))
+        val slugs = english.filter { it.startsWith("#") }.map { heading ->
+            heading.trimStart(
+                '#',
+                ' '
+            ).substringBefore(" {#").lowercase().replace(Regex("[^a-z0-9 -]"), "").replace(' ', '-')
+        }
+        slugs.assert().describedAs("the headings of wiki/operations/deployment.md").contains(anchor)
+        val chinese = java.nio.file.Files.readString(root.resolve("wiki/zh/operations/deployment.md"))
+        chinese.assert().contains("{#$anchor}")
+    }
+}
+
+private class PassThrough : Filter {
+    override fun doFilter(request: ServletRequest, response: ServletResponse, chain: FilterChain) =
+        chain.doFilter(request, response)
 }

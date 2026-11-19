@@ -147,8 +147,14 @@ forwards, on every route (`PIP-31`, not configurable). A hidden-method filter in
 as the method a form field `_method` names, which the gateway cannot remove from a body, so a `DENY` on `http:DELETE`
 would be stepped around. A service in gateway mode fails to start when `spring.mvc.hiddenmethod.filter.enabled` or
 `spring.webflux.hiddenmethod.filter.enabled` is `true` (both are off by default) or the application declares a
-`HiddenHttpMethodFilter` bean. A host that decides itself (`enforce`) is not affected: CoSec's filter runs after the
-hidden-method filter there.
+`HiddenHttpMethodFilter` bean, registered on its own or through a `FilterRegistrationBean`. A host that decides itself
+(`enforce`) is not affected: CoSec's filter runs after the hidden-method filter there.
+
+**Backends that are not CoSec services.** A gateway also fronts backends CoSec knows nothing of. The gateway forwards the
+method it decided and removes the three override headers, but it cannot remove a form field or a query parameter: a
+backend that picks its method from the body or the query (a `_method` field, as Rails and Laravel read it) must have that
+turned off, or a `DENY` on `http:DELETE` is stepped around. CoSec refuses to start only where it can see the filter, in a
+service that runs the starter in gateway mode.
 
 Startup fails when `cosec.pipeline.mode` is neither `enforce` nor `gateway`, and when it is `gateway` on a Spring Cloud
 Gateway host: the gateway itself always decides with the documents. Why the boundary matters, and what a captured

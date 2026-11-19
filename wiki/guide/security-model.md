@@ -386,7 +386,9 @@ hold only if the gateway is the only one that can reach the service:
 - The service does not start until its operator has stated that only the gateway can reach it
   (`cosec.pipeline.identity.only-gateway-can-reach`), so the boundary is written in configuration, not only in a log
   line. The gateway also removes the method-override headers from what it forwards, and the service may run no
-  hidden-method filter, so the method the gateway decided is the one the service runs.
+  hidden-method filter, so the method the gateway decided is the one the service runs. CoSec refuses to start only
+  where it can see such a filter: a backend that is not a CoSec service and picks its method from a form body or the
+  query (`_method`) must have that turned off, since the gateway cannot remove a field.
 - Anyone else who can send the service a request can claim any principal, tenant and role. Keep the service
   reachable from the gateway only: a network policy, a private network, or mutual TLS
   ([Services behind the gateway](../operations/deployment.md#services-behind-the-gateway)).

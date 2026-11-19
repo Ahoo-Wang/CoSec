@@ -225,7 +225,7 @@ break-glass 在有限时间内授予指定主体某条策略，用于紧急情�
 **网关后面的服务。** gateway 模式（`cosec.pipeline.mode=gateway`）的服务不持有密钥和文档：它相信收到的 `CoSec-Identity` 头，自己不做任何决策。只有当网关是唯一能访问该服务的一方时，上面的保证才成立：
 
 - 网关在每个请求上删除客户端发来的 `CoSec-Identity`，不受它自身配置的影响，并且只在已认证主体的 Permit 上设置它。所以经过网关的请求要么带着网关验证过的身份（以及它做决策时的作用域），要么不带。
-- 服务只有在运维方声明只有网关能访问它之后才会启动（`cosec.pipeline.identity.only-gateway-can-reach`），所以这条边界写在配置里，而不只是日志里的一行。网关还会从它转发的内容中移除方法覆盖头，服务也不能有 hidden-method 过滤器，所以服务执行的就是网关决策的那个方法。
+- 服务只有在运维方声明只有网关能访问它之后才会启动（`cosec.pipeline.identity.only-gateway-can-reach`），所以这条边界写在配置里，而不只是日志里的一行。网关还会从它转发的内容中移除方法覆盖头，服务也不能有 hidden-method 过滤器，所以服务执行的就是网关决策的那个方法。CoSec 只在能看到这种过滤器的地方拒绝启动：不是 CoSec 服务、从表单请求体或查询（`_method`）选择方法的后端必须关闭这一功能，因为网关无法移除字段。
 - 其他任何能向该服务发请求的人，都可以冒充任意主体、租户和角色。让服务只能从网关访问：网络策略、私有网络或双向 TLS（[网关后面的服务](../operations/deployment.md#services-behind-the-gateway)）。
 - 网关只把这个头发给接收身份的路由：指向已注册服务的路由（`lb://`），或元数据为 `cosec-identity: true` 的路由（[转发身份](../integration/web.md#forwarding-the-identity)）。
 - 这个头没有签名，也不指明受众：**信任边界是网关与服务之间的网络**，而不是这个头。任何能向服务发请求的人都能写出一个，收到它的服务也可以把它重放给另一个服务。服务拒绝签发时间早于 `cosec.pipeline.identity.max-age`（60 秒）加 `cosec.authentication.revocation.skew` 的头，以及凭证已过期的头，回答 `401` `token-expired`，所以在网络内截获的头只能在这段时间内重放。读不出或出现两次的头是 `400`，从不当作匿名。没有这个头的请求是匿名的。签名或受众会是这个头的新成员，因而是它的新版本（`v`）；8.0 两者都没有。

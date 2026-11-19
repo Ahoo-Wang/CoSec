@@ -34,6 +34,7 @@ import org.springframework.util.ClassUtils
 internal object GatewayModeTrust {
     private const val MVC_PROPERTY = "spring.mvc.hiddenmethod.filter.enabled"
     private const val WEBFLUX_PROPERTY = "spring.webflux.hiddenmethod.filter.enabled"
+    private const val SERVLET_REGISTRATION = "org.springframework.boot.web.servlet.FilterRegistrationBean"
     private val FILTERS = listOf(
         "org.springframework.web.filter.HiddenHttpMethodFilter",
         "org.springframework.web.filter.reactive.HiddenHttpMethodFilter",
@@ -66,7 +67,13 @@ internal object GatewayModeTrust {
         val bean = FILTERS.filter { ClassUtils.isPresent(it, null) }.firstNotNullOfOrNull { type ->
             beans.getBeanNamesForType(ClassUtils.resolveClassName(type, null), true, false).firstOrNull()
         }
-        return bean?.let { "a HiddenHttpMethodFilter bean, [$it]" }
+        if (bean != null) {
+            return "a HiddenHttpMethodFilter bean, [$bean]"
+        }
+        // A servlet filter may be registered without being a bean of its own: `FilterRegistrationBean(HiddenHttpMethodFilter())`.
+        val registration = ClassUtils.isPresent(SERVLET_REGISTRATION, null) && ClassUtils.isPresent(FILTERS.first(), null)
+        return registration.takeIf { it }?.let { ServletRegistrations.hiddenMethod(beans) }
+            ?.let { "a FilterRegistrationBean of a HiddenHttpMethodFilter, [$it]" }
     }
 
     fun requireNoHiddenMethod(environment: Environment, beans: ListableBeanFactory) {
@@ -79,4 +86,13 @@ internal object GatewayModeTrust {
                 "application (STA-6). In-process hosts (`enforce`) are not affected: CoSec's filter runs after it there."
         )
     }
+}
+
+/** The servlet side of [GatewayModeTrust], apart so that a reactive host never loads the servlet classes. */
+private object ServletRegistrations {
+    /** The name of a `FilterRegistrationBean` whose filter is a hidden-method filter, or null. */
+    fun hiddenMethod(beans: ListableBeanFactory): String? =
+        beans.getBeansOfType(org.springframework.boot.web.servlet.FilterRegistrationBean::class.java, true, false)
+            .entries.firstOrNull { (_, registration) -> registration.filter is org.springframework.web.filter.HiddenHttpMethodFilter }
+            ?.key
 }
