@@ -36,7 +36,9 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  *   and anywhere in the path, path parameters included, is rejected (`PIP-30`). CoSec and Spring read them as text in
  *   a segment, but a backend that decodes before it strips path parameters serves `/admin%3Bx/users` as `/admin/users`,
  *   one in native code stops at NUL, and one that drops what follows a control character serves another path again: a
- *   gateway fronts backends of any kind. A double-encoded one (`%253B`, `%2500`) decodes to text and is kept.
+ *   gateway fronts backends of any kind. A double-encoded one (`%253B`, `%2500`) decodes to text and is kept. A raw
+ *   control character is rejected too: the servers CoSec runs on refuse one before any filter, and the rule does not
+ *   depend on which server hands the path over. A raw `;` is a path parameter, removed as above.
  * - A path longer than [MAX_PATH_LENGTH] characters, or with a segment longer than [MAX_SEGMENT_LENGTH] after removing
  *   path parameters, is rejected (both counted encoded, which bounds the decoded length). Wildcard matching in the
  *   engine costs about the square of a segment's length: an 8 KB segment takes hundreds of milliseconds per statement,
@@ -64,7 +66,7 @@ object PathNormalizer {
 
     /** The path to authorize, still encoded; null when [rawPath] cannot be interpreted without ambiguity. */
     fun normalize(rawPath: String): String? {
-        if (rawPath.length > MAX_PATH_LENGTH || encodedHazard(rawPath) >= 0) {
+        if (rawPath.length > MAX_PATH_LENGTH || hazardAt(rawPath) >= 0) {
             return null
         }
         val path = withoutPathParameters(rawPath)
@@ -73,33 +75,39 @@ object PathNormalizer {
 
     /**
      * Why [normalize] rejects [rawPath], for the outcome's reason: the kind of sequence and the segment it is in for an
-     * encoded `;` or control character (`PIP-30`), `path` for every other rejection. It never repeats the path, so
+     * encoded `;`, an encoded or a raw control character (`PIP-30`), `path` for every other rejection. It never repeats the path, so
      * nothing a client sent reaches a log through it. Called only for a path [normalize] rejected.
      */
     fun rejection(rawPath: String): String {
-        val at = encodedHazard(rawPath)
+        val at = hazardAt(rawPath)
         if (at < 0) {
             return PATH
         }
-        val kind = if (escaped(rawPath, at) == SEMICOLON) "an encoded ';'" else "an encoded control character"
+        val kind = when {
+            rawPath[at] != '%' -> "a control character"
+            escaped(rawPath, at) == SEMICOLON -> "an encoded ';'"
+            else -> "an encoded control character"
+        }
         return "$PATH: $kind in segment ${segmentOf(rawPath, at)}"
     }
 
     /**
-     * The index of the first `%` in [path] that encodes `;` or a control character, or -1: one `indexOf` and no
-     * allocation for a path without `%`, which is what most requests' paths are.
+     * The index in [path] of the first control character, or of the first `%` that encodes `;` or a control character;
+     * -1 when there is none. One pass, with no allocation.
      */
-    private fun encodedHazard(path: String): Int {
-        var index = path.indexOf('%')
-        while (index >= 0) {
-            val value = escaped(path, index)
-            if (value == SEMICOLON || value in 0 until FIRST_PRINTABLE || value == DELETE) {
+    private fun hazardAt(path: String): Int {
+        for (index in path.indices) {
+            val char = path[index]
+            if (isControl(char.code) || (char == '%' && isHazard(escaped(path, index)))) {
                 return index
             }
-            index = path.indexOf('%', index + 1)
         }
         return -1
     }
+
+    private fun isHazard(value: Int): Boolean = value == SEMICOLON || isControl(value)
+
+    private fun isControl(value: Int): Boolean = value in 0 until FIRST_PRINTABLE || value == DELETE
 
     /** The byte the escape at [index] of [path] encodes, in either case of its hex digits; -1 when it is malformed. */
     private fun escaped(path: String, index: Int): Int {

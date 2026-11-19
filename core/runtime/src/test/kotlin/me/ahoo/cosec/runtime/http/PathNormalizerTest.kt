@@ -163,6 +163,17 @@ class PathNormalizerTest {
         }
     }
 
+    /** PIP-30: a raw control character, wherever it is: the rule does not depend on the server refusing it first. */
+    @Test
+    fun rawControlCharactersAreRejected() {
+        val controls = ((0x00..0x1F) + 0x7F).map { it.toChar() }
+        controls.size.assert().isEqualTo(33)
+        val paths = controls.flatMap { listOf("/admin${it}x/users", "/$it", "/a/b$it", "$it/a", "/a;x=$it/b") }
+        for (path in paths) {
+            PathNormalizer.normalize(path).assert().describedAs(path.map { it.code }.toString()).isNull()
+        }
+    }
+
     /**
      * PIP-30: what stays as before. A double-encoded `;` or control character decodes to text, a printable character
      * encoded is a character of its segment, and a trailing dot or space is read as written; a raw `;` is a path
@@ -200,6 +211,8 @@ class PathNormalizerTest {
             "/a/b/c%00|path: an encoded control character in segment 3",
             "a%7f/b|path: an encoded control character in segment 1",
             "/a;x=%0A/b|path: an encoded control character in segment 1",
+            "/a/b\u0001c|path: a control character in segment 2",
+            "/a\u007F%3B|path: a control character in segment 1",
             "/public/%2e%2e/admin|path",
             "/admin%2Fx|path",
         ]

@@ -36,7 +36,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.CopyOnWriteArrayList
 
 /**
- * `PIP-30`: a path holding an encoded `;` or control character is 400 before authentication, mapped route or not, and
+ * `PIP-30`: a path holding an encoded `;`, or a control character encoded or raw, is 400 before authentication, mapped route or not, and
  * makes its event as every 400 of the first stage does.
  */
 class EncodedPathTest {
@@ -61,7 +61,9 @@ class EncodedPathTest {
 
     @Test
     fun `an encoded semicolon or control character is refused before authentication, with its event`() = runTest {
-        for (path in listOf("/admin%3Bx/users", "/orders/4%3b2", "/orders/1%00", "/orders/%1F", "/orders/1%7f")) {
+        val encoded = listOf("/admin%3Bx/users", "/orders/4%3b2", "/orders/1%00", "/orders/%1F", "/orders/1%7f")
+        val paths = encoded + "/orders/1\u0001"
+        for (path in paths) {
             events.clear()
             var authenticated = false
             val engine = StubEngine(PERMIT)
@@ -79,7 +81,7 @@ class EncodedPathTest {
             engine.requests.assert().isEmpty()
             events.single().kind.assert().isEqualTo(DecisionEvent.Kind.BAD_REQUEST)
             val reason = (outcome.basis as Basis.InvalidRequest).reason
-            reason.assert().startsWith("path: an encoded ").contains(" in segment ").doesNotContain(path)
+            reason.assert().startsWith("path: a").contains(" in segment ").doesNotContain(path)
         }
     }
 

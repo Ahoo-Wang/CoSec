@@ -96,6 +96,8 @@ class RealServerParityTest {
         Scenario("an encoded control character is 400", get("/public/a%1fb"), 400, refusedFirst = JETTY_STACKS),
         Scenario("an encoded NUL is 400", get("/public/a%00b"), 400, refusedFirst = NUL_REFUSED_FIRST),
         Scenario("a trailing dot is read as written", get("/public/page."), 200, "GET /public/page."),
+        // Every server refuses a raw control character itself; the pipeline refuses one a server would hand over.
+        Scenario("a raw control character is 400", get("/public/a\u0001b"), 400, refusedFirst = Stack.entries.toSet()),
     )
 
     /**
