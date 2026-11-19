@@ -1,0 +1,17 @@
+# Rule: CTL-16
+# Mutant: an instance seen reporting on a window that has no report now no longer keeps the window open: the window closes on what the others report, without the instance that may have seen the errors
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index b31b37af..f135bc78 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -59,7 +59,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
+         check(!negative) { "A report of window $window has a negative count" }
+         val reporters = read.map { it.instance }.toSet()
+         val vanished = state.reporters - reporters
+-        check(vanished.isEmpty()) { "Instances ${vanished.sorted()} reported on window $window and have no report now" }
++        check(vanished.isEmpty() || vanished.isNotEmpty()) { "Instances ${vanished.sorted()} reported on window $window and have no report now" }
+         val counts = ShadowOutcome.entries.associate { it.name to 0L }.toMutableMap()
+         for (report in read) {
+             report.counts.forEach { (outcome, count) -> counts.merge(outcome.name, count, Long::plus) }

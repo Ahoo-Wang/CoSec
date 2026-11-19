@@ -1,0 +1,16 @@
+# Rule: CTL-7
+# Mutant: publishing no longer conflicts when the change's base moved: it checks again on the new head and publishes over it, a rebase nobody asked for
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlFailClosedTest --tests me.ahoo.cosec.control.store.RevisionsTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+index 7ca9ffb2..3ba77713 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
+@@ -94,7 +94,6 @@ internal class Publishing(
+         if (head?.digest != change.base.digest) {
+             // An earlier publish wrote it and could not settle the change: it is in effect (B1 review).
+             PublishRules.ownRevision(revisions, change, head)?.let { return republished(change, it, publisher) }
+-            return movedOn(change, head, publisher)
+         }
+         val checked = candidates.checked(change, head, publisher)
+         if (checked.state != ChangeState.CHECKED || checked.candidate != change.candidate) {

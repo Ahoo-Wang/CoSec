@@ -1,0 +1,17 @@
+# Rule: CTL-4
+# Mutant: the Redis control store writes a head over whatever it holds now, not over the expected digest: two instances publishing on one base both write
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.RevisionChainTest
+
+diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
+index 89ab572d..dba6ddbc 100644
+--- a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
++++ b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
+@@ -110,7 +110,7 @@ class CoCacheControlStore internal constructor(
+ 
+     override suspend fun putHead(key: SnapshotKey, expected: SnapshotDigest?, document: SnapshotDocument): HeadWrite {
+         val mine = digestOf(document)
+-        val written = when (val result = put(heads, key, expected, document, mine)) {
++        val written = when (val result = put(heads, key, read(heads, key)?.second, document, mine)) {
+             is Put.Written -> HeadWrite.Written(mine)
+             is Put.Conflict -> HeadWrite.Conflict(result.current)
+         }

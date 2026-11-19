@@ -1,0 +1,17 @@
+# Rule: CTL-16
+# Mutant: two reports of one instance on a window are both counted instead of keeping the window open: an instance's samples count twice
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index b31b37af..2aef8d58 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -54,7 +54,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
+         val foreign = read.any { it.window != window }
+         check(!foreign) { "A report read for window $window is of another window" }
+         val twice = read.groupingBy { it.instance }.eachCount().filterValues { it > 1 }.keys
+-        check(twice.isEmpty()) { "Instances ${twice.sorted()} reported more than once on window $window" }
++        check(twice.isEmpty() || twice.isNotEmpty()) { "Instances ${twice.sorted()} reported more than once on window $window" }
+         val negative = read.any { report -> report.counts.values.any { it < 0 } }
+         check(!negative) { "A report of window $window has a negative count" }
+         val reporters = read.map { it.instance }.toSet()

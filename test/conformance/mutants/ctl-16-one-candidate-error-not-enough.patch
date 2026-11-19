@@ -1,0 +1,17 @@
+# Rule: CTL-16
+# Mutant: a CANDIDATE_ERROR blocks the window only when every instance reports one: a single instance's errors no longer block it
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+index b31b37af..4bea1619 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
+@@ -64,7 +64,7 @@ class ShadowWindows(private val reports: ShadowReportReader, private val options
+         for (report in read) {
+             report.counts.forEach { (outcome, count) -> counts.merge(outcome.name, count, Long::plus) }
+         }
+-        val blocked = read.any { (it.counts[ShadowOutcome.CANDIDATE_ERROR] ?: 0) > 0 }
++        val blocked = read.isNotEmpty() && read.all { (it.counts[ShadowOutcome.CANDIDATE_ERROR] ?: 0) > 0 }
+         val effective = ShadowOutcome.entries.filter { it.effective }.sumOf { counts.getValue(it.name) }
+         val elapsed = java.time.Duration.between(state.startedAt, now)
+         val summary = when {

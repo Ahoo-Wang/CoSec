@@ -1,0 +1,17 @@
+# Rule: CTL-5
+# Mutant: checking a candidate no longer reports a policy it removes that another document refers to: the change checks clean, and only the head write is left to refuse it
+# Tests: :control:test
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
+index 4b789c25..c0989f81 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
+@@ -45,7 +45,7 @@ internal object RemovedReferences {
+         } catch (_: DocumentCompileException) {
+             return
+         }
+-        if (referenced.isEmpty()) return
++        if (referenced.isNotEmpty()) return
+         val kept = RoleExpansion.effective(candidate).policies.mapTo(HashSet()) { it.id }
+         for ((policy, referrers) in referenced) {
+             val what = if (policy in kept) "changes between a policy and a boundary, and is" else "is"

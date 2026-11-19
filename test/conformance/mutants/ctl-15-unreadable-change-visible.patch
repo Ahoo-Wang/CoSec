@@ -1,0 +1,17 @@
+# Rule: CTL-15
+# Mutant: a change the caller may not read is no longer the 404 of a missing one: every step goes on to the change's state and its own checks, which tell that it exists
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlReviewFixesTest --tests me.ahoo.cosec.control.api.ControlHttpTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
+index 2f534317..0b4621dd 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
+@@ -71,7 +71,7 @@ internal class ChangeLifecycle(
+         }
+         val key = reachable?.key ?: if (operator.platform) SnapshotKey.Platform else SnapshotKey.Tenant(operator.tenant.value)
+         val decision = authority.decide(operator, key, ControlActions.READ)
+-        if (decision == ControlDecision.PERMIT && reachable != null) {
++        if (reachable != null) {
+             return expired(reachable)
+         }
+         throw if (decision == ControlDecision.INDETERMINATE) {
