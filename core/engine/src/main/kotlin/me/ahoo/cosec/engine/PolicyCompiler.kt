@@ -26,6 +26,7 @@ import me.ahoo.cosec.model.condition.CheckResult
 import me.ahoo.cosec.model.condition.CheckedCondition
 import me.ahoo.cosec.model.condition.Condition
 import me.ahoo.cosec.model.condition.ConditionChecker
+import me.ahoo.cosec.model.condition.ConditionLints
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.decision.DocumentKind
 
@@ -53,7 +54,19 @@ class PolicyCompiler(
         attachable: Boolean = false,
     ): CompiledPolicy {
         val errors = ArrayList<CompileError>()
-        val checked = condition?.let { policyCondition(it, "$.condition", errors) }
+        // A policy condition guards every statement: missing a request lets one through where the policy denies,
+        // matching one too many where it allows (DOC-9).
+        val denies = statements.any { it.effect === Effect.DENY }
+        val allows = statements.any { it.effect === Effect.ALLOW }
+        val checked = condition?.let {
+            policyCondition(
+                it,
+                "$.condition",
+                errors,
+                fewerAdmits = denies,
+                moreAdmits = allows
+            )
+        }
         val compiled = statements.mapIndexedNotNull { index, source ->
             statement(index, source, "$.statements[$index]", errors)
         }
@@ -69,7 +82,9 @@ class PolicyCompiler(
      */
     fun condition(policyId: PolicyId, condition: Condition): CheckedCondition {
         val errors = ArrayList<CompileError>()
-        return policyCondition(condition, "$.condition", errors) ?: throw CompileException(policyId.value, errors)
+        // Alone, the statements it guards are unknown: held to both directions.
+        return policyCondition(condition, "$.condition", errors, fewerAdmits = true, moreAdmits = true)
+            ?: throw CompileException(policyId.value, errors)
     }
 
     /** Compiles one statement at [index] of its policy, or throws [CompileException]. */
@@ -128,8 +143,17 @@ class PolicyCompiler(
         return attribute
     }
 
-    private fun policyCondition(condition: Condition, path: String, errors: MutableList<CompileError>): CheckedCondition? {
+    private fun policyCondition(
+        condition: Condition,
+        path: String,
+        errors: MutableList<CompileError>,
+        fewerAdmits: Boolean,
+        moreAdmits: Boolean,
+    ): CheckedCondition? {
         val checked = check(condition, path, errors) ?: return null
+        if (!lint(condition, path, errors, fewerAdmits, moreAdmits)) {
+            return null
+        }
         val variable = ConditionAttributes.of(checked).firstOrNull { it.kind == Attribute.Kind.RESOURCE_VAR }
         if (variable != null) {
             errors += CompileError(path, "a policy condition cannot read $variable: only a statement captures variables")
@@ -181,7 +205,12 @@ class PolicyCompiler(
         if (source.effect === Effect.DENY) {
             checkBare(resources, path, errors)
         }
-        val condition = source.condition?.let { check(it, "$path.condition", errors) }
+        val condition = source.condition?.let { written ->
+            check(written, "$path.condition", errors)?.takeIf {
+                val deny = source.effect === Effect.DENY
+                lint(written, "$path.condition", errors, fewerAdmits = deny, moreAdmits = !deny)
+            }
+        }
         if (condition != null) {
             checkVariables(condition, resources, path, errors)
         }
@@ -287,6 +316,22 @@ class PolicyCompiler(
                 errors += CompileError(at, "the condition reads $variable, which [$resource] does not capture")
             }
         }
+    }
+
+    /**
+     * `DOC-9`, `DOC-11` ([ConditionLints]) on a condition the checker accepted: false when one refuses it. Only the
+     * refusals are the compiler's; what only narrows is the control plane's warning.
+     */
+    private fun lint(
+        condition: Condition,
+        path: String,
+        errors: MutableList<CompileError>,
+        fewerAdmits: Boolean,
+        moreAdmits: Boolean,
+    ): Boolean {
+        val refusals = ConditionLints.check(condition, fewerAdmits, moreAdmits).filter { it.refuses }
+        refusals.forEach { errors += CompileError(path + it.path.removePrefix("$"), it.message) }
+        return refusals.isEmpty()
     }
 
     private fun check(condition: Condition, path: String, errors: MutableList<CompileError>): CheckedCondition? =

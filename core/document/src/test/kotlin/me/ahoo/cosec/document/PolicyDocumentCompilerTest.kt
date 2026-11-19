@@ -412,6 +412,22 @@ class PolicyDocumentCompilerTest {
             )
     }
 
+    /** DOC-11: no principal with a reserved id ever signs in, and the anonymous one matches no principal binding. */
+    @Test
+    fun `no principal binding names a reserved id`() {
+        val anonymous = """{"id":"x","subject":{"principal":"(0)","tenant":"(0)"},"app":"*","space":"*","policy":"p"}"""
+        val error = errors(SnapshotKey.Platform, ""","policies":[{"id":"p","statements":[]}],"bindings":[$anonymous]""")
+            .single()
+        error.assert().startsWith("$.bindings[0].subject.principal: [(0)] is reserved")
+        error.assert().contains("subject.authenticated").contains("DOC-11")
+        // A reserved tenant is the anonymous principal's and the platform's: a principal of it binds.
+        val platformPrincipal = anonymous.replace("\"(0)\",\"tenant\"", "\"ops\",\"tenant\"")
+        compiler.compile(
+            SnapshotKey.Platform,
+            stored(""","policies":[{"id":"p","statements":[]}],"bindings":[$platformPrincipal]""")
+        )
+    }
+
     /** DOC-1: a publisher checks references against the platform it will be read with. */
     @Test
     fun `references to the platform are checked against a given platform`() {

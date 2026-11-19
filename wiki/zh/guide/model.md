@@ -37,14 +37,13 @@ flowchart LR
     P --> ST[Statement<br>action and resource]
 ```
 
-角色属于一个应用，也可以绑定到一个空间。应用与空间只在这里相遇，所以“一个应用多个空间”和“一个空间跨多个应用”不需要任何额外规则，见[应用与空间](#apps-and-spaces)。
+角色定义在一个应用中，也可以绑定到一个空间。凡是成员关系不来自令牌自身声明的地方，角色的 *id* 在各应用之间是同一个命名空间（[应用](../integration/authentication.md#apps)）。应用与空间只在这里相遇，所以“一个应用多个空间”和“一个空间跨多个应用”不需要任何额外规则，见[应用与空间](#apps-and-spaces)。
 
 ## 类图 {#class-diagram}
 
 ```mermaid
 classDiagram
     class PolicyDocument {
-        kind
         revision
         publishedAt
     }
@@ -52,6 +51,7 @@ classDiagram
         id
         attachable
         condition
+        boundary
     }
     class Statement {
         effect
@@ -80,11 +80,21 @@ classDiagram
     class Catalog {
         groups
     }
+    class Group {
+        name
+        spaced
+    }
     class Permission {
         id
         action
         resource
-        spaced
+    }
+    class Boundary {
+        default
+        per tenant
+    }
+    class Obligation {
+        rate limit
     }
     class RateLimitRule {
         action
@@ -117,7 +127,11 @@ classDiagram
     PolicyDocument "1" *-- "0..1" Catalog : app document
     PolicyDocument "1" *-- "*" RateLimitRule
     Policy "1" *-- "1..*" Statement
-    Catalog "1" *-- "*" Permission
+    Catalog "1" *-- "*" Group
+    Group "1" *-- "*" Permission
+    PolicyDocument "1" *-- "0..1" Boundary : platform and tenant documents
+    Boundary --> Policy : names one with boundary true
+    Decision ..> Obligation : a Permit carries
     Permission ..> Policy : defines the perm policy
     Role "1" --> "*" Permission : holds
     Role ..> Binding : expands into one per permission
@@ -173,7 +187,7 @@ classDiagram
 | 一个空间被多个应用共用 | 每个应用自己的角色，在同一个空间 id 里持有 | 同一个空间，每个应用的权限由它自己的角色授予 |
 | 系统角色 | 应用文档里的角色 | 在成员持有它的任何空间里生效，对每个租户都生效 |
 
-只有在请求所在空间持有的角色才算数，而令牌只为一个应用签发，所以空间 id 不会把授权从一个应用带到另一个应用。场景见[不使用空间的应用](../scenarios/app.md)和[使用空间的应用](../scenarios/spaces.md)。
+只有在请求所在空间持有的角色才算数，令牌自身的声明只为一个应用签发，所以在那里空间 id 不会把授权从一个应用带到另一个应用；成员关系提供者的回答不按应用区分，在那里会：共用主体和提供者的应用，请给角色起互不相同的 id（`wms.admin`、`pos.admin`）。场景见[不使用空间的应用](../scenarios/app.md)和[使用空间的应用](../scenarios/spaces.md)。
 
 ## 留在 CoSec 之外的 {#what-stays-outside-cosec}
 

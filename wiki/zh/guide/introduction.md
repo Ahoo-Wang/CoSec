@@ -18,7 +18,7 @@ decide(principal, scope, action, resource, environment) -> decision
 | 输入 | 在 CoSec 中 | 来自 |
 |---|---|---|
 | principal（主体） | 谁在调用：id、租户、在各空间中的角色、附加策略 | 经过校验的令牌或 API key；角色来自令牌，或来自你的成员关系提供者（API key 总是如此，它只收窄角色） |
-| scope（作用域） | 请求所处的租户、应用和空间，以及主体在其中的角色 | 主体的租户、服务绑定的应用或请求声明的应用，并对照主体的角色检查 |
+| scope（作用域） | 请求所处的租户、应用和空间，以及主体在其中的角色 | 主体的租户、服务绑定的应用（否则是凭证声明的应用）和请求要求的空间，并对照主体的角色检查 |
 | action 与 resource（动作与资源） | 作用于 `http:path:/orders/42` 的 `http:GET`；有路由映射时为作用于 `order/42` 的 `order:read` | 请求 |
 | environment（环境） | 客户端 IP、时间、设备，以及地区、黑名单等外部属性 | 请求、时钟和你的属性提供者 |
 | decision（决策） | `Permit`（可能带有限流义务）、`Deny` 或 `Indeterminate` | |
@@ -28,7 +28,7 @@ decide(principal, scope, action, resource, environment) -> decision
 - **访问规则即数据。** 策略以及应用策略的绑定都是 JSON 文档：一个平台文档、每个应用一个文档、每个租户一个文档。修改谁能做什么只是一次数据变更，无需重新部署。
 - **控制面。** 变更先被提出、检查、编译，在影子窗口中用真实流量试验，授予的权限超出作者独自可授予的范围时需要另一个人审批，然后以修订的形式发布，可以 diff 和回滚。
 - **租户、应用与空间。** 主体属于租户，角色在应用内按空间（团队、项目）生效，同一个用户可以在一个空间是管理员、在另一个空间只是只读成员。
-- **安全的默认行为。** 没有规则放行就不允许，拒绝永远胜过放行，读不到的数据导致拒绝。
+- **安全的默认行为。** 没有规则放行就不允许，拒绝永远胜过放行，读不到的数据导致拒绝，但有两个已写明的例外：吊销存储不可读时，除非 `cosec.authentication.revocation.fail-closed` 为 `true`，请求的令牌会被接受；快照滞后超过上限后，只有 `cosec.authorization.snapshot.fail-closed.tenants` 中的租户返回 `503`（[安全模型](./security-model.md#the-two-documented-exceptions)）。
 - **令牌。** JWT 的签发与校验、刷新、登出与吊销，以及面向机器客户端的 API key。
 - **运维。** 限流，用于审计、指标和追踪的决策事件，以及对任一请求为何得到某个决策的解释。
 
@@ -38,7 +38,7 @@ decide(principal, scope, action, resource, environment) -> decision
 
 - **它不是身份提供方。** CoSec 校验令牌，也能为你交给它的主体签发令牌，但校验密码、提供登录页面、联合身份是你的应用（或 IdP）的工作。OAuth 社交登录是可选的附加功能。
 - **它不过滤数据。** CoSec 决定请求能否到达处理器。处理器返回哪些行、哪些字段，仍由你的代码决定。策略可以把资源与主体绑定（把资源变量与 `subject.id` 比较），但除非有属性提供者替它获取，它无法查询某条数据库记录归谁所有。
-- **除非你绑定，否则它不校验客户端指定的应用。** 绑定了某个应用（`cosec.authorization.scope.app-id`）的服务会拒绝声明了其他应用的请求；没有绑定的服务接受请求声明的应用。空间会被检查：只有主体在某个非默认空间中有角色时，请求才能声明该空间。见[信任边界](./security-model.md#trust-boundaries)。
+- **没有绑定应用的服务，应用不由 CoSec 来选。** 客户端从不指定应用。绑定了某个应用（`cosec.authorization.scope.app-id`）的服务只接受为该应用签发的凭证；没有绑定的服务按凭证声明的应用决策，所以为应用 A 签发的令牌在应用 B 的服务上仍按 A 决策，没有应用（`aud`）的令牌不读取任何应用文档。空间会被检查：只有主体在某个非默认空间中有角色时，请求才能声明该空间。见[信任边界](./security-model.md#trust-boundaries)。
 - **它没有管理界面。** 文档通过控制面的 HTTP API 或 `cosec-migrate` 发布。
 - **8.0 不支持 Spring AOT 和 GraalVM 原生镜像。** 受支持的是网关镜像的 JDK AOT 缓存（[AOT 缓存](../operations/deployment.md#aot-cache)）。
 
@@ -82,6 +82,7 @@ CoSec 以过滤器的形式运行在你的处理器之前：WebFlux 中是 `WebF
 | 从 OpenAPI 描述生成路由映射和应用文档 | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`、`org.springdoc:springdoc-openapi-starter-webflux-api` 或 `-webmvc-api` |
 | 把决策事件（以及可选的控制面变更）发送到 Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | 把客户端所在地区作为外部属性 | `cosec-ip2region` | |
+| CoSec 应用的浏览器或 Node 客户端：登录、轮换下的刷新、登出、problem 类型 | npm 上的 `@ahoo-wang/cosec-fetcher`、`@ahoo-wang/cosec-react`，随 CoSec 一起发布；不是 Gradle 模块 | [构建客户端](../integration/clients.md) |
 | 来自 CosId 5 的请求 id、令牌 id 和变更 id | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
 “同时添加”一列是 starter 中该模块的自动配置除模块本身之外还需要的依赖。请像构建里的其他库一样给出它们的版本：CoSec 不管理它们（见[CoSec 对构建的要求](#what-cosec-needs-from-your-build)）。
@@ -127,7 +128,8 @@ CoSec 自己的构建所依据的 platform `cosec-dependencies` 从 8.0 起不�
 | 接入 CoSec 的开发者 | [快速开始](./quick-start.md) → [Web 集成](../integration/web.md) → [认证](../integration/authentication.md) → [代码中的权限检查](../integration/checks.md) → [配置](../operations/configuration.md) |
 | 策略作者 | [核心概念](./concepts.md) → [模型](./model.md) → [策略语言](../policies/language.md) → [角色权限](../policies/role-permissions.md) → [限流](../policies/rate-limiting.md) → [测试策略](../policies/testing.md) |
 | 跟着完整示例走 | [模型](./model.md) → [简单模式](../scenarios/simple-mode.md) → [不使用空间的应用](../scenarios/app.md) → [系统角色与自定义角色](../scenarios/roles.md) → [使用空间的应用](../scenarios/spaces.md) → [限定在一个空间的服务账号](../scenarios/service-account.md) → [租户所有者](../scenarios/tenant-owner.md) → [外部事实源同步角色](../scenarios/external-source.md) → [按业务动作授权](../scenarios/route-maps.md) → [网关拓扑](../scenarios/gateway.md) |
-| 在生产环境运行 CoSec 的人 | [配置](../operations/configuration.md) → [存储与缓存](../operations/storage.md) → [可观测性](../operations/observability.md) → [故障排查](../operations/troubleshooting.md) → [升级](../operations/upgrading.md) |
+| 在生产环境运行 CoSec 的人 | [选择部署方式](../operations/topologies.md) → [部署](../operations/deployment.md) → [配置](../operations/configuration.md) → [存储与缓存](../operations/storage.md) → [可观测性](../operations/observability.md) → [故障排查](../operations/troubleshooting.md) → [升级](../operations/upgrading.md) → [加固清单](./security-model.md#hardening-checklist) |
+| 构建 CoSec 应用的客户端 | [快速开始](./quick-start.md) → [构建客户端](../integration/clients.md) → `@ahoo-wang/cosec-fetcher` 的 README |
 | CoSec 的贡献者 | [架构概览](../architecture/overview.md) → [扩展 CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
 
-上线之前，每个人都应该读一遍[安全模型](./security-model.md)。
+上线之前，每个人都应该读一遍[安全模型](./security-model.md)，并逐项完成它的[加固清单](./security-model.md#hardening-checklist)。

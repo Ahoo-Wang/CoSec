@@ -7,10 +7,28 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 只适用于已在运行 8.0.0 预览版的部署：每个预览版到下一个之间的变化，新的在前。7.x 部署不需要这一部分，[升级](./upgrading.md)就是完整的升级。8.0 正式发布时这些说明将删除。
 
+## 从哪里开始 {#start-here}
+
+下面每一节写的是离开那个预览版时会变什么。读你所运行版本的那一节，以及它上面的每一节：
+
+| 你运行的版本 | 阅读 |
+|---|---|
+| `8.0.0-beta.3` | [从 beta.3 升级](#from-8-0-0-beta-3) |
+| `8.0.0-beta.2` | [从 beta.2 升级](#from-8-0-0-beta-2)，然后是上面那一节 |
+| `8.0.0-beta.1` | [从 beta.1 升级](#from-8-0-0-beta-1)，然后是上面两节 |
+| `8.0.0-alpha.4` | [从 alpha.4 升级](#from-8-0-0-alpha-4)，然后是上面三节 |
+| `8.0.0-alpha.3`、`alpha.2`、`alpha.1` | [从 alpha.3](#from-8-0-0-alpha-3)、[alpha.2](#from-8-0-0-alpha-2) 或 [alpha.1](#from-8-0-0-alpha-1) 升级，然后是它上面的每一节 |
+
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 
 - **安全：对已结束请求的检查被拒绝**（`PIP-26`）。直到 beta.3，在请求之后保留的 `SecurityContext`（存在字段、缓存或发给消费者的消息里）仍能通过 `AuthorizationChecker` 放行，依据的是创建它时的成员关系，即使已经登出、令牌已被吊销或角色已被移除。现在绑定请求的适配器在请求完成时结束它，之后对它的每次检查都为 `false`（`decide` 返回 `Deny(null)`）。进行中的请求照旧作答，无论持续多久：流式或服务器发送事件（SSE）响应体、异步 Servlet 请求。受影响的是保留上下文并在响应写出之后用它检查的代码。改为在请求内检查；之后运行的工作（消费者、定时作业）自己携带授权（[代码中的权限检查](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)）。你自己的传输交给 `Pipeline.evaluate` 的请求以及测试工具包的请求，其上下文永远不会结束：这些不受影响。
 - **安全：安全上下文的读取入口只返回管道构造的上下文**（`PIP-27`）。`exchange.getSecurityContext()`、`ContextView.getSecurityContextOrEmpty()` / `getSecurityContext()`、`request.getSecurityContext()`、`SecurityContext` 处理器参数和 `SecurityContextHolder` 以前返回 `SecurityContext.KEY` 下的任何对象，所以应用的过滤器或某个库自己写入的上下文会被当作已认证的调用者。现在其他任何东西都读作没有上下文：`null`，或未绑定上下文时的那种失败。受影响的是在这个 key 下绑定自己构造的 `SecurityContext`（mock、该接口的实现）的代码，尤其是测试代码。改为绑定管道放行的请求的上下文：测试中用 `cosec-testkit` 的 `PipelineFixture.securityContext(fixture.request(...))` 或 `PermittedRequest`（[测试策略](../policies/testing.md)）；自己运行管道的过滤器绑定 `outcome.security!!.securityContext`。
+- **破坏性变更：三种从未按字面生效的文档写法不再能编译**（`DOC-9`、`DOC-10`、`DOC-11`）。每一条拒绝的文档，其语句本来就没有按所写的方式生效：
+  - 在漏掉一种写法就会放过请求的地方，对 `eq` 或 `prefix` 加 `ignoreCase`、而字面量含有 ASCII 以外的字母（`Ärzte`）：DENY 语句或限流规则、`not` 之下的 ALLOW、守护 DENY 的策略条件。折叠只限 ASCII，所以 `ärzte` 会从 DENY 漏过。改为在不带 `ignoreCase` 的 `in` 里写出每种写法（[大小写折叠](../policies/language.md#case-folding)）。在 ALLOW 里仍能编译，但会给出警告。
+  - 条件或限流 `key` 里的 `resource.attributes.<name>`：没有任何地方设置它，对它的 DENY 什么也没拒绝。把事实写进资源 id，用 `resource.var.<name>` 读取（[对象级规则](../integration/checks.md#object-level-rules)）。设置 `request.resource.attributes` 的测试工具场景也会被拒绝。
+  - 以 `(` 开头的 `subject.id` 字面量（`{"not": {"eq": ["subject.id", "(0)"]}}` 匹配每一个匿名请求），以及主体 id 以 `(` 开头的主体绑定（它从不生效）。匿名请求写 `{"eq": ["subject.authenticated", false]}`。
+
+  受影响的是存有这类文档的部署。升级之后，实例把这样的文档装为失败，每个读取它的请求都失败即拒绝（`503`），所以要先找出来。在 beta.3 仍在运行时，读取每个头修订（`GET <控制面前缀>/documents/{key}`，[控制 API](../policies/testing.md#the-control-plane)），或取你发布所用的文件，搜索它们：`grep -nE 'resource\.attributes\.|"subject\.id" *, *"\(|"principal" *: *"\(' <文件>` 能找出第二、三种写法；第一种用 `grep -n '"ignoreCase": *true' <文件>`，再看旁边有没有 ASCII 以外的字母（`grep -nP '[^\x00-\x7F]'`）。也可以用本版本的 `PolicyTestKit.load` 加载这些文件，它像实例一样编译每个文档，并给出每个错误的路径。`cosec-migrate convert` 现在也拒绝 7.x 数据里的同样写法：基于 7.x 资源属性的 ALLOW 是一条永远不会成立的语句，需要你删掉。
 - **破坏性变更：`:apply` 的 `REPLACE` 检查文件读取时的修订。** 直到 beta.3，文件头的 `revision` 必填却被忽略，`REPLACE` 会删除头修订中文件没有的一切，包括文件读取之后才发布的内容。现在 `revision` 不是头修订的文件返回 `409`。受影响的是从 git 应用文件、`revision` 固定或过时的作业：发送作业上次读取的修订（`GET /documents/{key}` 的 `revision`），并合并之后的变化（[变更](../policies/testing.md#changes)）。尚未发布的文档不比较。`MERGE` 不变，它的变更现在会在 `WARNING` 中点名因文件没有列出而保留的条目。
 - **会把发布者锁在控制面之外的变更需要确认。** 对平台文档、平台租户的文档或控制应用的文档的变更，如果会让其操作者到达不了控制面，就带有 `V4` 警告，它的发布返回 `422`，除非请求体写明 `"lockout": true`（[发布与回滚](../policies/testing.md#publishing-and-rolling-back)）。受影响的是有意发布这类变更的自动化：加上这一确认。被锁在外面之后的出路是新增的 `cosec-migrate restore`，而不是清空 Redis（[从被锁在外面中恢复](./storage.md#recovering-from-a-lock-out)）。
 - **已修复：丢失的失效消息由其后的第一轮装上，即使碰到在途的加载。** beta.3 的发布说明把它列为已知问题：重新确认的一轮碰到某文档已在途的加载时，把那次加载的读当作自己的确认，而那次读可能早于变化，所以失效消息丢失的变化最多要两个 `revalidate-interval` 才装上，其间的决策使用上一修订。现在一轮只加入在它之后开始的加载，否则再等一次加载（`SNP-6`，[存储](./storage.md#how-instances-read-documents)）。无需任何改动；一轮碰到某文档的加载时，Redis 可能多收到一次该文档的条件读。
@@ -20,6 +38,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **`RefreshTokenAuthentication(verifier, revocation, families)` 要指明 `MembershipRefresh`**（`IDN-27`）。这个工厂函数默认使用 `MembershipRefresh.CLAIMS`，它保留旧令牌声明的角色，而 `MembershipRefresh` 的 KDoc 说的恰好相反。现在它的 KDoc 说明实际行为，工厂函数也没有默认值。受影响的是用三个参数调用工厂函数的代码：它不再能编译。加上 `MembershipRefresh.CLAIMS` 以保持现在的行为（移除的角色在下次登录或 `revokeSubject` 之后生效），或者传入重新查询用户的 `MembershipRefresh`。除非你声明 `MembershipRefresh` Bean，starter 的刷新路由仍使用 `CLAIMS`。`cosec-login` 中的合成方法 `RefreshTokenAuthentication$default` 已移除：请针对这个版本重新编译。
 - **安全：`JwtTokenVerifier` 和 `JwtTokenConverter` 拒绝 `Algorithm.none()`**（`IDN-28`）。java-jwt 的 `none` 接受任何签名为空的令牌，所以基于它的校验器会把任何人都能写出的令牌当作 CoSec 自己的令牌，包括应急访问（break-glass）。现在两个构造函数都抛出 `IllegalArgumentException`。受影响的是基于 `Algorithm.none()` 构造二者的代码，尤其是测试代码。请传入签名算法，例如 `Algorithm.HMAC256(secret)`。
 - **`CoCacheTokenStore.revoke` 拒绝把令牌当作令牌 id 传入。** `TokenStore.revoke(tokenId, ttl)` 接收令牌的 id（`VerifiedToken.id`，即 `jti`）；把访问令牌传到这里的登出什么也没吊销，还把令牌写成了 Redis 的 key。现在形如令牌的值（JOSE 紧凑序列化，带或不带 `Bearer `）会抛出 `IllegalArgumentException`，消息指向 `TokenRevoker`；CoSec 或其他签发方给出的令牌 id 都不会被拒绝。受影响的是基于 `TokenStore` 编写的登出，它从未生效过。请调用 `TokenRevoker.revoke(accessToken)`。
+- **宿主在启动时记录的内容。** 不会有什么坏掉，但运维人员读到的日志变了。CoSec 不读取的 `cosec.*` 属性会在创建任何 Bean 之前让启动失败，所以带有已移除键的配置会先听到每一个。令牌按 `RevocationReader.NONE` 校验时，宿主记录一条 `WARN`，说明被吊销的令牌在过期之前仍会被接受。令牌存储缺失时，一条启动信息会列出每个缺失的存储，而不只是第一个。
 
 ## 从 8.0.0-beta.2 升级 {#from-8-0-0-beta-2}
 
@@ -333,6 +352,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 8.0.0-alpha.2 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，让授权分析按执行时的方式读取作者的权限，因此一些过去可以单独发布的变更现在要等待审批（[策略测试](../policies/testing.md#approval)）。文档的内容无需迁移，不过 8.0.0 经 CoCache 8 保存数据，而 CoCache 8 读不了 alpha.2 经 CoCache 6 写入的内容：请在所有实例停止后用 8.0.0-alpha.4 的 `cosec-migrate cocache8` 迁移，它是最后一个带有这条命令的版本（[经 CoCache 6 写入的数据](#data-written-through-cocache-6)）。从 **身份转发** 开始的那些变更涉及网关与租户隔离的边缘（RC1-5、RC1-6、RC1-15 至 RC1-18、RC1-48、RC1-49），改变网关转发什么、转发给哪些路由：升级网关之前请先阅读。
 
+- **从 8.0.0-alpha.2 升级的存储，运行一次 [`cosec-migrate repair-references`](./upgrading.md#repair-the-back-reference-index)**，让 app 文档列表（`<s>:control:list:documents`）完整（[存储](./storage.md#publishing-through-the-control-plane)）。
 - **任意类型的 token 属性**（RC1-2、`GRT-5`）。分析按引擎的方式读取 `subject.attributes.*`，布尔值和数字读作它们的文本。token 中写着 `"suspended": true` 时，条件为未被 `suspended` 的 ALLOW 不再算作作者持有。代码中，`Operator.attributes` 与 `Grantor.attributes` 是 `Map<String, Any>`，即 token 声明原样，alpha.2 只保留了字符串。
 - **会到期的绑定**（RC1-3、`GRT-3`）。作者经带 `expiresAt` 的绑定持有的权限，只包含自身绑定不晚于它到期的授出；没有 `expiresAt` 的授出、到期更晚的授出、把策略设为可附加，都是升级，短缺为 `EXPIRY`。
 - **删除平台也定义了同一 id 的租户策略**（RC1-9、`GRT-4`）按把平台的策略授给租户中该 id 的绑定与附加来分析。两边都定义的 id 不给作者任何权限。
@@ -447,6 +467,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 8.0.0-alpha.1 是预览版，没有兼容性承诺。此后来自 [RC 安全评审](https://github.com/Ahoo-Wang/CoSec/blob/main/docs/security/8.0-rc-review.md)的以下变更，会破坏基于它写成的决策、代码或配置。7.x 部署在下面各节中读到它们。
 
+- **Kubernetes 根据 Service 设置的 `cosec.gateway.*` 变量**（`COSEC_GATEWAY_SERVICE_HOST` 之类）在 8.0.0-alpha.1 中会被当作 CoSec 不读取的 `cosec.*` key 而拒绝启动。从 alpha.2 起，检查会跳过这些确切的变量；清单里的 `enableServiceLinks: false` 本来就不让它们进来（[部署](./deployment.md#what-the-manifests-set)）。
 - **角色上限只移除 ALLOW**（RC1-1、`BND-9`、`IDN-2`）。带上限的凭证（带 `roles` 的 API key）仍然得不到其主体附加策略和主体绑定的授权，但它们的 DENY 现在作用于它：主体被拒绝的请求，该主体的每个 key 都被拒绝，无论是否有上限。alpha.1 中上限把这些 DENY 也一并去掉了，因此带上限的 key 能做主体不能做的事。无需迁移；要看哪些请求的结果会变，用 `principalBindings: false` 对它们做 `simulate`（[策略测试](../policies/testing.md)）。授权分析以同样方式计入带上限作者的 DENY。
 - **break-glass 按来源判断**（RC1-26、`BRK-8`）。只有 CoSec 自己的 `JwtTokenVerifier` 校验过的令牌才能得到 break-glass。包装其他 `TokenVerifier` 的 `TokenAuthenticator` 认证其令牌时不带 break-glass，并以它的 `method`（默认 `token`）而不是 `jwt` 命名凭证。方式 `jwt` 是保留名：`AuthenticatedPrincipal` 拒绝你的代码用这个方式构造的凭证（`IllegalArgumentException`，即 `503`），`TokenAuthenticator` 也拒绝为非 CoSec 的校验器设置 `method = "jwt"`。请按凭证给你的认证器的方式命名（[扩展](../architecture/extending.md#authenticators)）。
 - **改名后的 API key 头是携带凭证的请求头**（RC1-21、`CND-5`）。设置了 `cosec.pipeline.api-key-header` 时，读取该请求头的文档（条件或限流规则的 `key`）无论在控制面还是实例上都不再能编译，管道也从不为条件读取它。升级前删除这类引用。代码中，`ConditionChecker`、`PolicyDocumentCompiler.forPlatform` 和 `of`、`PlatformCompiler`、`ChangeChecks`、`Simulator` 与 `HttpAttributes` 以新参数接收该请求头。

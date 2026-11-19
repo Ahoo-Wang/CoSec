@@ -22,7 +22,7 @@ import org.junit.jupiter.api.Test
 /** What each operator decides, absent attributes included (RFC 0005 §3.3, §3.4). */
 class ConditionEvaluationTest {
     private val id = attr("subject.id")
-    private val owner = attr("resource.attributes.owner")
+    private val owner = attr("request.attributes.owner")
     private val header = attr("http.header.x-debug")
     private val authenticated = attr("subject.authenticated")
     private val blocked = attr("environment.blocked")
@@ -76,10 +76,10 @@ class ConditionEvaluationTest {
     fun `eq of two attributes`() {
         val same = MapInput(strings = mapOf(id to "a", owner to "a"))
         val differ = MapInput(strings = mapOf(id to "a", owner to "A"))
-        eval(Condition.Eq("resource.attributes.owner", Operand.Attr("subject.id")), same).assert().isTrue()
-        eval(Condition.Eq("resource.attributes.owner", Operand.Attr("subject.id")), differ).assert().isFalse()
+        eval(Condition.Eq("request.attributes.owner", Operand.Attr("subject.id")), same).assert().isTrue()
+        eval(Condition.Eq("request.attributes.owner", Operand.Attr("subject.id")), differ).assert().isFalse()
         eval(
-            Condition.Eq("resource.attributes.owner", Operand.Attr("subject.id"), ignoreCase = true),
+            Condition.Eq("request.attributes.owner", Operand.Attr("subject.id"), ignoreCase = true),
             differ
         ).assert().isTrue()
         eval(
@@ -102,7 +102,7 @@ class ConditionEvaluationTest {
     /** Q7: absent is not equal to anything, another absent value and the empty string included (D2). */
     @Test
     fun `absent is equal to nothing`() {
-        val ownerIsSubject = Condition.Eq("resource.attributes.owner", Operand.Attr("subject.id"))
+        val ownerIsSubject = Condition.Eq("request.attributes.owner", Operand.Attr("subject.id"))
         eval(ownerIsSubject, empty).assert().isFalse()
         eval(ownerIsSubject, MapInput(strings = mapOf(id to ""))).assert().isFalse()
         eval(ownerIsSubject, MapInput(strings = mapOf(owner to ""))).assert().isFalse()

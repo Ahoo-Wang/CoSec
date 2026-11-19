@@ -178,7 +178,7 @@ pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-stora
   @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
 ```
 
-在 8.0 正式发布之前，这两个包的 `latest` 标签指向一个标为已弃用的 `0.0.0` 占位版本，所以不带 `@beta` 安装得到的是占位版本和一条弃用提示，而不是客户端；正式发布之后去掉 `@beta`。把 `package.json` 和每处 import 中的包名改掉，把 hooks 的 import 从 `@ahoo-wang/fetcher-react` 改为 `@ahoo-wang/cosec-react`。行为上的不同：
+在 8.0 正式发布之前，这两个包的 `latest` 标签指向一个标为已弃用的 `0.0.0` 占位版本，所以不带标签安装得到的是占位版本和一条弃用提示，而不是客户端。安装你所运行的 CoSec 版本对应的标签：`8.0.0-beta.n` 用 `@beta`（如上），候选发布版用 `@rc`，8.0 正式发布之后不带标签；也可以写明确切版本，它在所有这些阶段都正确。标签不会越过它所指的版本线：候选发布版出现之后，`@beta` 仍是最后一个 beta，与 RC 的服务端不匹配。把 `package.json` 和每处 import 中的包名改掉，把 hooks 的 import 从 `@ahoo-wang/fetcher-react` 改为 `@ahoo-wang/cosec-react`。行为上的不同：
 
 | 旧包的做法 | `cosec-fetcher` 的做法 |
 |---|---|

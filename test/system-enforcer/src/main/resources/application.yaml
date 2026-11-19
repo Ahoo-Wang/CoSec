@@ -7,6 +7,9 @@ spring:
   application:
     name: system-enforcer
 cosec:
+  api-key:
+    enabled: true
+    store: redis
   jwt:
     algorithm: hmac256
     secret: ${COSEC_JWT_SECRET}

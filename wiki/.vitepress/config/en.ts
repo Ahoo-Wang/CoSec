@@ -64,6 +64,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
   {
     text: 'Operations',
     items: [
+      { text: 'Choosing a Deployment', link: '/operations/topologies' },
       { text: 'Configuration', link: '/operations/configuration' },
       { text: 'Deployment', link: '/operations/deployment' },
       { text: 'Storage and Caching', link: '/operations/storage' },
@@ -88,6 +89,7 @@ export const en: DefaultTheme.Config & { label: string, lang: string, title: str
   title: 'CoSec',
   description: 'Multi-tenant reactive security for Spring: IAM-style policies and role-based permissions, evaluated deny-first.',
   themeConfig: {
+    outline: [2, 3],
     nav: [
       { text: 'Guide', link: '/guide/introduction' },
       { text: 'Integration', link: '/integration/web' },

@@ -1,0 +1,17 @@
+{
+  "description": "Without the role admin the DENY applies, though members would permit the GET.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/api/admin/users"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

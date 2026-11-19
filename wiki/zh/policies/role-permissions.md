@@ -23,7 +23,6 @@ description: "在应用文档中描述应用的权限，并按应用和空间把
       {
         "name": "order",
         "description": "Orders",
-        "spaced": true,
         "permissions": [
           { "id": "read", "name": "Read orders" },
           { "id": "ship", "name": "Ship orders" }

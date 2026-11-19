@@ -22,7 +22,7 @@ evaluated deny-first for every request.
   who each policy applies to. Every instance compiles them into a snapshot read from Redis and picks up published
   changes without a restart.
 - **Deny wins, everywhere.** Any matching DENY overrides every ALLOW, in any document; unmatched requests are
-  denied; a request that cannot be decided fails closed with `503`.
+  denied; a request that cannot be decided fails closed with `503`, with two documented exceptions: while the revocation store cannot be read a request's token is accepted unless `cosec.authentication.revocation.fail-closed` is `true`, and past the bounded snapshot lag only the tenants in `cosec.authorization.snapshot.fail-closed.tenants` answer `503` ([Security model](https://cosec.ahoo.me/guide/security-model#the-two-documented-exceptions)).
 - **Multi-tenant and role-based.** Tenants own their documents, each app publishes its permission catalog and
   grants permissions to roles per space, and platform boundaries cap what any tenant can allow.
 - **Reviewed changes.** A control plane validates, simulates and shadow-tests a change on live traffic before it
@@ -83,27 +83,39 @@ cosec:
 Redis must run with `maxmemory-policy noeviction`. Publish a platform document (here with
 `cosec-migrate publish`); until one exists, every request is answered `503`:
 
+<!-- sample: wiki/examples/first-document/documents/platform.json -->
 ```json
 {
-  "schema": 2, "revision": 1, "publishedAt": "2026-10-28T00:00:00Z",
+  "schema": 2, "revision": 1, "publishedAt": "2026-11-01T08:00:00Z",
   "policies": [
     { "id": "public", "statements": [
-      { "effect": "allow", "action": "http:POST", "resource": "http:path:/auth/login" },
-      { "effect": "allow", "action": "http:GET", "resource": "http:path:/actuator/health" } ] },
+      { "name": "login", "effect": "allow", "action": "http:POST", "resource": "http:path:/auth/login" },
+      { "name": "health", "effect": "allow", "action": "http:GET", "resource": "http:path:/actuator/health" } ] },
     { "id": "members", "statements": [
-      { "effect": "allow", "action": "http:*", "resource": "http:path:/api/**",
+      { "name": "read-the-api", "effect": "allow", "action": "http:GET", "resource": "http:path:/api/**",
         "condition": { "eq": ["subject.authenticated", true] } } ] },
     { "id": "admins-only", "statements": [
-      { "effect": "deny", "action": "http:*", "resource": "http:path:/api/admin/**",
-        "condition": { "not": { "in": ["admin", "scope.roles"] } } } ] }
+      { "name": "admin-api-needs-the-admin-role", "effect": "deny", "action": "http:*", "resource": "http:path:/api/admin/**",
+        "condition": { "not": { "in": ["admin", "scope.roles"] } } } ] },
+    { "id": "control-api", "statements": [
+      { "name": "reach-the-control-api", "effect": "allow", "action": ["http:GET", "http:POST", "http:DELETE"],
+        "resource": "http:path:/cosec/control/v1/**", "condition": { "eq": ["subject.authenticated", true] } } ] }
   ],
   "bindings": [
     { "id": "public", "subject": "*", "app": "*", "space": "*", "policy": "public" },
     { "id": "members", "subject": "*", "app": "*", "space": "*", "policy": "members" },
-    { "id": "admins-only", "subject": "*", "app": "*", "space": "*", "policy": "admins-only" }
+    { "id": "admins-only", "subject": "*", "app": "*", "space": "*", "policy": "admins-only" },
+    { "id": "control-api", "subject": "*", "app": "*", "space": "*", "policy": "control-api" }
   ]
 }
 ```
+
+This document permits: anyone `POST /auth/login` and `GET /actuator/health`; a signed-in caller of **any tenant** `GET`
+under `/api/` (under `/api/admin/` only with the role `admin`); and a signed-in caller the control API's paths, which is
+what lets you change this document later through the control plane (`cosec-migrate publish` never overwrites, and each
+control-plane step is authorized again as the caller). Everything else, every write included, is denied. Narrow
+`/api/**` to your own routes before real use. The Quick Start's document differs (it has a demo token endpoint) and
+can be changed the same way.
 
 Continue with the [Quick Start](https://cosec.ahoo.me/guide/quick-start) to issue tokens, then the
 [policy language](https://cosec.ahoo.me/policies/language).
@@ -112,7 +124,7 @@ Continue with the [Quick Start](https://cosec.ahoo.me/guide/quick-start) to issu
 
 `cosec-spring-boot` brings the request pipeline, login, JWT support and auto-configuration; each integration
 (WebFlux, MVC, Gateway, Redis, control plane, OAuth, OpenTelemetry, Micrometer, OpenAPI, ip2region, Kafka) is a module
-you add next to it, and the starter wires what it finds on the classpath. `cosec-migrate` converts 7.x data and publishes documents. See
+you add next to it, and the starter wires what it finds on the classpath. `cosec-migrate` converts 7.x data and publishes documents. A browser or Node client is the npm packages `@ahoo-wang/cosec-fetcher` and `@ahoo-wang/cosec-react`, released with CoSec ([Building a client](https://cosec.ahoo.me/integration/clients)). See
 [Modules](https://cosec.ahoo.me/guide/introduction#modules) for the full list. A ready-to-run gateway is
 published as the container image `ahoowang/cosec-gateway`.
 

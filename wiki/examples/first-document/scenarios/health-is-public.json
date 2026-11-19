@@ -1,0 +1,16 @@
+{
+  "description": "Anyone may GET /actuator/health.",
+  "credential": {
+    "anonymous": true
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/actuator/health"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

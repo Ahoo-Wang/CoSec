@@ -19,7 +19,7 @@
 
 - **策略即数据。** 平台、应用和租户文档都是 JSON：语句作用于动作和资源，条件带类型（角色、租户、应用和空间、IP 段、时间窗口、
   外部属性），绑定说明每条策略适用于谁。每个实例把文档编译成从 Redis 读取的快照，发布的变更无需重启即可生效。
-- **拒绝处处优先。** 任何文档中命中的 DENY 都压过所有 ALLOW；未匹配的请求一律拒绝；无法做出决策的请求失败即拒绝，返回 `503`。
+- **拒绝处处优先。** 任何文档中命中的 DENY 都压过所有 ALLOW；未匹配的请求一律拒绝；无法做出决策的请求失败即拒绝，返回 `503`；有两个已写明的例外：吊销存储不可读时，除非设置 `cosec.authentication.revocation.fail-closed: true`，请求的令牌会被接受；快照滞后超过上限后，只有 `cosec.authorization.snapshot.fail-closed.tenants` 中的租户返回 `503`（[安全模型](https://cosec.ahoo.me/zh/guide/security-model#the-two-documented-exceptions)）。
 - **多租户与角色权限。** 租户拥有自己的文档，每个应用发布自己的权限目录并按空间把权限授予角色，平台边界限定任何租户能放行的范围。
 - **可审查的变更。** 控制面在发布前校验、模拟变更，并用线上流量做影子验证；保留修订记录，可以回滚。
 - **限流。** 按 IP、按用户或共享的配额写成文档中的规则，只由被放行的请求消耗，由 Redis 全集群计数，并返回 `RateLimit-*` 和
@@ -74,34 +74,41 @@ cosec:
 
 Redis 必须使用 `maxmemory-policy noeviction`。发布一份平台文档（这里用 `cosec-migrate publish`）；在它存在之前，所有请求都返回 `503`：
 
+<!-- sample: wiki/examples/first-document/documents/platform.json -->
 ```json
 {
-  "schema": 2, "revision": 1, "publishedAt": "2026-10-28T00:00:00Z",
+  "schema": 2, "revision": 1, "publishedAt": "2026-11-01T08:00:00Z",
   "policies": [
     { "id": "public", "statements": [
-      { "effect": "allow", "action": "http:POST", "resource": "http:path:/auth/login" },
-      { "effect": "allow", "action": "http:GET", "resource": "http:path:/actuator/health" } ] },
+      { "name": "login", "effect": "allow", "action": "http:POST", "resource": "http:path:/auth/login" },
+      { "name": "health", "effect": "allow", "action": "http:GET", "resource": "http:path:/actuator/health" } ] },
     { "id": "members", "statements": [
-      { "effect": "allow", "action": "http:*", "resource": "http:path:/api/**",
+      { "name": "read-the-api", "effect": "allow", "action": "http:GET", "resource": "http:path:/api/**",
         "condition": { "eq": ["subject.authenticated", true] } } ] },
     { "id": "admins-only", "statements": [
-      { "effect": "deny", "action": "http:*", "resource": "http:path:/api/admin/**",
-        "condition": { "not": { "in": ["admin", "scope.roles"] } } } ] }
+      { "name": "admin-api-needs-the-admin-role", "effect": "deny", "action": "http:*", "resource": "http:path:/api/admin/**",
+        "condition": { "not": { "in": ["admin", "scope.roles"] } } } ] },
+    { "id": "control-api", "statements": [
+      { "name": "reach-the-control-api", "effect": "allow", "action": ["http:GET", "http:POST", "http:DELETE"],
+        "resource": "http:path:/cosec/control/v1/**", "condition": { "eq": ["subject.authenticated", true] } } ] }
   ],
   "bindings": [
     { "id": "public", "subject": "*", "app": "*", "space": "*", "policy": "public" },
     { "id": "members", "subject": "*", "app": "*", "space": "*", "policy": "members" },
-    { "id": "admins-only", "subject": "*", "app": "*", "space": "*", "policy": "admins-only" }
+    { "id": "admins-only", "subject": "*", "app": "*", "space": "*", "policy": "admins-only" },
+    { "id": "control-api", "subject": "*", "app": "*", "space": "*", "policy": "control-api" }
   ]
 }
 ```
+
+这份文档放行：任何人 `POST /auth/login` 和 `GET /actuator/health`；**任意租户**的已登录调用方对 `/api/` 下的 `GET`（`/api/admin/` 下还需要角色 `admin`）；已登录调用方访问控制 API 的路径，正是它让你之后能通过控制面修改这份文档（`cosec-migrate publish` 从不覆盖，控制面的每一步还会再以调用方身份授权一次）。其余一切，包括所有写操作，都被拒绝。真正使用前请把 `/api/**` 收窄到你自己的路由。快速开始中的文档不同（它带有演示令牌端点），修改方式相同。
 
 接下来阅读[快速开始](https://cosec.ahoo.me/zh/guide/quick-start)了解如何签发令牌，再阅读[策略语言](https://cosec.ahoo.me/zh/policies/language)。
 
 ## 模块
 
 `cosec-spring-boot` 自带请求处理流程、登录、JWT 支持和自动配置；各项集成（WebFlux、MVC、Gateway、Redis、控制面、OAuth、
-OpenTelemetry、Micrometer、OpenAPI、ip2region、Kafka）都是在它旁边按需添加的模块，starter 装配它在类路径上找到的模块。`cosec-migrate` 用于转换 7.x 数据并发布文档。
+OpenTelemetry、Micrometer、OpenAPI、ip2region、Kafka）都是在它旁边按需添加的模块，starter 装配它在类路径上找到的模块。`cosec-migrate` 用于转换 7.x 数据并发布文档。浏览器或 Node 客户端是 npm 上的 `@ahoo-wang/cosec-fetcher` 和 `@ahoo-wang/cosec-react`，随 CoSec 一起发布（[构建客户端](https://cosec.ahoo.me/zh/integration/clients)）。
 完整列表见[模块](https://cosec.ahoo.me/zh/guide/introduction#modules)。开箱即用的网关以容器镜像 `ahoowang/cosec-gateway` 发布。
 
 ## 文档

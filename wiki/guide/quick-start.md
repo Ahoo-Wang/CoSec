@@ -16,7 +16,7 @@ For developers adding CoSec to a Spring Boot service for the first time. Follow 
   policy documents in Redis and refuses to start when Redis may evict them. For example:
 
   ```bash
-  docker run -d --name redis -p 6379:6379 redis:8
+  docker run -d --name redis -p 127.0.0.1:6379:6379 redis:8
   docker exec redis redis-cli CONFIG GET maxmemory-policy   # noeviction
   ```
 
@@ -78,6 +78,10 @@ documents. Each holds policies and the bindings that say to whom they apply. Cre
 `documents/platform.json`:
 
 <<< @/examples/quick-start/documents/platform.json [documents/platform.json]
+
+**This is a demo document.** `GET /token` is open to anyone, so that you can fetch a token without a login: delete it
+when you replace the demo endpoint ([Before you deploy](#before-you-deploy)). The statement named `reach-the-control-api`
+is not a demo: keep it, or you cannot change the document later.
 
 The four bindings apply each policy to anyone (`"subject": "*"`), in any app and space. Together they say:
 
@@ -257,6 +261,25 @@ acknowledged, and the way back from one is `cosec-migrate restore` ([Storage](..
 The workflow, its checks, shadow windows and approvals are in [Testing policies](../policies/testing.md). Document
 changes by tenants and roles follow the same steps: [System and custom roles](../scenarios/roles.md).
 
+## Before you deploy
+
+This guide leaves four demo artifacts. Remove each before the code runs anywhere other than your machine:
+
+1. **The `/token` endpoint, and its statement.** Delete `DemoController.token`, and replace the `public` policy with one
+   that names only `/hello`: a `putPolicy` change like the one above, through the control plane. A statement left behind
+   keeps `GET /token` open to anyone for whatever handler appears there later.
+2. **The `platformToken` runner.** It prints a `(platform)` administrator token on every start, and anyone who can run
+   it can administer the deployment. Delete it; issue `(platform)` tokens only from a source users cannot influence.
+3. **Redis on every interface.** `docker run -p 6379:6379` publishes the port on every host interface; the guide uses
+   `127.0.0.1:6379:6379`. Redis holds every document and revocation: anyone who can write it decides every request.
+   Connect with TLS and a user of CoSec's own, turn on persistence, and back it up: Redis is the only copy of the documents and
+   revocations ([Redis requirements](../operations/storage.md#redis-requirements)).
+4. **The client address.** `cosec.authorization.remote-ip.max-trusted-index` defaults to `1`, one proxy in front of the
+   service. Served directly, as in this guide, set it to `0`; with a longer proxy chain, set the chain's length
+   ([Client IP behind proxies](../integration/web.md#client-ip-behind-proxies)).
+
+Then go through the [hardening checklist](./security-model.md#hardening-checklist).
+
 ## Next steps
 
 - See what you can leave out, then grow: [Simple mode](../scenarios/simple-mode.md), and the scenarios from
@@ -270,4 +293,5 @@ changes by tenants and roles follow the same steps: [System and custom roles](..
   session, so they never refresh.
 - Read the principal and scope in your handlers: [Web integration](../integration/web.md).
 - Find out why a request was permitted or denied: [Explaining a decision](../integration/checks.md#explaining-a-decision).
-- Before production, read [Security model](./security-model.md).
+- Before production, work through [Before you deploy](#before-you-deploy) and the
+  [hardening checklist](./security-model.md#hardening-checklist).

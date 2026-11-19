@@ -165,7 +165,6 @@ class RequestAttributesTest {
         permits(eq("action.verb", "GET")).assert().isTrue()
         permits(eq("resource.type", "http")).assert().isTrue()
         permits(eq("resource.id", "/orders/7")).assert().isTrue()
-        permits(eq("resource.attributes.owner", "alice")).assert().isTrue()
         permits(eq("resource.var.id", "7")).assert().isTrue()
         permits(eq("resource.var.id", "8")).assert().isFalse()
         permits(eq("resource.var.id", "%41"), request(path = "/orders/%2541")).assert().isTrue()

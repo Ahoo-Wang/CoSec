@@ -17,6 +17,7 @@ package me.ahoo.cosec.migrate
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.condition.Condition
+import me.ahoo.cosec.model.condition.ConditionLints
 import me.ahoo.cosec.model.condition.Literal
 import tools.jackson.databind.JsonNode
 
@@ -173,7 +174,7 @@ internal class PartTranslation(
             return Translated.Always
         }
         country(mapped, value, ignoreCase)?.let { return it }
-        if (!caseFoldable(value)) return null
+        if (!caseFoldable(value, operator = "prefix")) return null
         val base = Translated.Ast(Condition.Prefix(mapped.attribute, Literal.Str(value), ignoreCase))
         return absent(mapped, base) { it.startsWith(value, ignoreCase) }
     }
@@ -243,7 +244,7 @@ internal class PartTranslation(
             is LiteralRegex.Prefix -> {
                 // `.` stops at line terminators, a prefix does not: wider, so only where a wider condition is safe, and
                 // only without letters, whose folding would make it narrower too.
-                if (!deny || hasCaseMapping(shape.prefix)) {
+                if (!deny || ConditionLints.hasCaseMapping(shape.prefix)) {
                     return translator.rejected(
                         RejectionKind.CONDITION_NOT_TRANSLATED,
                         location,
@@ -311,7 +312,7 @@ internal class PartTranslation(
         val base = Condition.Eq(mapped.attribute, ConditionTranslator.attr(right))
         if (mapped.setBy7x != null) {
             // 8.0's eq never holds on an absent value, not even against another absent one: a constant there.
-            return if (neverSet(mapped, holds = false)) null else Translated.Ast(base)
+            return if (neverSet(mapped, holds = false)) null else Unreachable.drop(Translated.Ast(base))
         }
         if (!deny) {
             translator.note(
@@ -345,9 +346,9 @@ internal class PartTranslation(
     /**
      * Folding (RFC 0005 §3.2): 8.0 folds ASCII letters only; 7.x's `equals`/`startsWith` with ignoreCase also fold
      * others (`K`, U+212A, equals `k`). 8.0 then matches fewer values: fine in the ALLOW direction (recorded), not in
-     * the DENY direction, unless [value] has no letter for another character to fold to.
+     * the DENY direction, unless [value] has no letter for another character to fold to (DOC-9 for letters beyond ASCII).
      */
-    private fun caseFoldable(value: String, folds: Boolean = ignoreCase): Boolean {
+    private fun caseFoldable(value: String, folds: Boolean = ignoreCase, operator: String = "eq"): Boolean {
         if (!folds) {
             return true
         }
@@ -359,15 +360,16 @@ internal class PartTranslation(
             )
             return true
         }
-        if (!hasCaseMapping(value)) {
+        if (!ConditionLints.hasCaseMapping(value)) {
             return true
         }
-        translator.rejected<Unit>(
-            RejectionKind.CONDITION_NOT_TRANSLATED,
-            location,
-            "ignoreCase in the DENY direction: 7.x also folds characters beyond ASCII (U+212A KELVIN SIGN equals k, " +
-                "Ⓐ equals ⓐ), 8.0 only ASCII, so the DENY would stop matching some spellings; list them with in instead",
-        )
+        val message = if (ConditionLints.foldsBeyondAscii(value)) {
+            ConditionLints.foldMessage(operator, value)
+        } else {
+            "ignoreCase in the DENY direction: 7.x also folds characters beyond ASCII (U+212A KELVIN SIGN equals k), " +
+                "8.0 only ASCII, so the DENY would stop matching some spellings; list them with in instead"
+        }
+        translator.rejected<Unit>(RejectionKind.CONDITION_NOT_TRANSLATED, location, message)
         return false
     }
 
@@ -379,10 +381,11 @@ internal class PartTranslation(
         if (unmatched(mapped, matches)) {
             return null
         }
+        val reachable = Unreachable.drop(base)
         return if (matches(mapped.absentAs)) {
-            Translated.or(listOf(Translated.Ast(Condition.Not(Condition.Exists(mapped.attribute))), base))
+            Translated.or(listOf(Translated.Ast(Condition.Not(Condition.Exists(mapped.attribute))), reachable))
         } else {
-            base
+            reachable
         }
     }
 
@@ -487,9 +490,6 @@ internal class PartTranslation(
          * Whether a character of [value] has any case mapping, and so a spelling 7.x folds to it. Not only letters
          * do: circled letters (Ⓐ, So) and Roman numerals (Ⅰ, Nl) have case mappings too.
          */
-        fun hasCaseMapping(value: String): Boolean = value.codePoints().anyMatch { c ->
-            Character.toUpperCase(c) != c || Character.toLowerCase(c) != c || Character.toTitleCase(c) != c
-        }
         val HOST_CHARS = ('a'..'z') + ('A'..'Z') + ('0'..'9') + '-'
         val TEMPLATES: List<Pair<Regex, (MatchResult) -> String>> = listOf(
             Regex("""#\{principal\.id}""") to { _ -> "subject.id" },

@@ -16,10 +16,13 @@ flowchart LR
     CRED[Credential] -->|verified into| PR[Principal]
     PR -->|belongs to| T[Tenant]
     PR -->|has| MEM[Memberships<br>roles per space, attachments]
-    REQ[Request] -->|names| APPSP[App and space]
+    REQ[Request] -->|asks for| APPSP[Space]
+    CRED -->|names| APP[App]
+    HOST[Host] -->|may bind| APP
     PR --> SC[Scope<br>tenant, app, space, roles]
     MEM --> SC
     APPSP --> SC
+    APP --> SC
     DOC[Documents<br>platform, app, tenant] --> POL[Policies]
     DOC --> BND[Bindings]
     BND -->|apply| POL
@@ -37,6 +40,14 @@ flowchart LR
 
 发起请求的人或程序：一个 id、一个租户，以及自由格式的属性。主体来自经过校验的凭证（JWT 访问令牌或 API key），所以客户端无法篡改。没有有效凭证的请求属于**匿名**主体，id 为 `(0)`，位于默认租户中，没有角色，也没有附加策略。策略同样可以放行匿名主体，公开接口就是这样实现的。
 
+### 凭证 {#credential}
+
+请求为证明身份而出示的东西：JWT 访问令牌或 API key。CoSec 把它校验成主体；无效、过期或已吊销的凭证按没有凭证处理，请求是匿名的（[认证](../integration/authentication.md)）。
+
+### 授予对象 {#subject}
+
+“subject”这个词在两个地方指两样东西。在**绑定**里，它是绑定授予的对象：任何人（`"*"`）、某个租户的某个主体，或某个角色；本文档中文称为“授予对象”。在**条件**里，`subject.*` 是发出请求的主体，中文仍称“主体”。有歧义时，文档会写“绑定的授予对象”或“发出请求的主体”。
+
 ### 租户 {#tenant}
 
 主体所属的客户边界，取自凭证中的租户：
@@ -51,19 +62,21 @@ flowchart LR
 
 ## 请求 {#request}
 
-HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求头、客户端 IP、设备 id，以及客户端在 `CoSec-*` 参数中声明的应用和空间（见 [Web 集成](../integration/web.md)）。这些全部由客户端决定。
+HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求头、客户端 IP、设备 id，以及客户端在 `CoSec-Space-Id` 参数中要求的空间（见 [Web 集成](../integration/web.md)）。这些全部由客户端决定。客户端从不指定应用。
 
 ### 应用 {#app}
 
-请求所属的应用。每个应用有自己的文档：权限目录、权限策略，以及授予这些权限的角色绑定。服务可以绑定到一个应用，此时请求声明的应用必须与之一致。
+请求所属的应用。每个应用有自己的文档：权限目录、权限策略，以及授予这些权限的角色绑定。应用来自宿主和凭证，从不来自客户端：服务可以绑定到一个应用（`cosec.authorization.scope.app-id`），此时只接受为它签发的凭证；没有应用的服务按凭证声明的应用决策，没有声明应用的凭证不读取任何应用文档（[应用](../integration/authentication.md#apps)）。
 
 ### 空间 {#space}
 
-应用内部的分区，例如一个团队或一个项目，主体可以在其中持有不同的角色。没有声明空间的请求位于**默认空间**。声明为 `clerk` 的角色在默认空间生效；`clerk@team-a` 只在 `team-a` 中生效。只有主体在某个非默认空间中有角色时，请求才能声明该空间。
+应用的角色的可选分区，例如一个团队或一个项目，主体可以在其中持有不同的角色。CoSec 不保存空间的注册表：空间是不透明的 id，多个应用可以使用同一个 id。没有声明空间的请求位于**默认空间**。声明为 `clerk` 的角色在默认空间生效；`clerk@team-a` 只在 `team-a` 中生效。只有主体在某个非默认空间中有角色时，请求才能声明该空间。
+
+**默认空间有两种写法。** 在文档、声明、`scope.space` 和审计记录中，它是空字符串 `""`；在控制面的资源名里，它是 `(default)`，如 `scope/<tenant>/<app>/(default)`。请求无法选择 `(default)`，所以声明 `admin@(default)` 会被读入，但哪里都不生效。空的应用同样表示“没有应用”：它在条件里是缺失的，但在审计记录和转发的身份里是 `""`。
 
 ### 作用域 {#scope}
 
-一个请求经过检查的上下文：它的租户（总是主体的租户）、应用、空间，以及主体在该空间中的角色。`ScopeResolver` 根据主体和请求声明的应用、空间构建它，或者拒绝请求；其他任何代码都无法构造作用域。这些检查的界线在哪里，见[信任边界](./security-model.md#trust-boundaries)。
+一个请求经过检查的上下文：它的租户（总是主体的租户）、应用、空间，以及主体在该空间中的角色。`ScopeResolver` 根据主体、宿主的应用和请求要求的空间构建它，或者拒绝请求；其他任何代码都无法构造作用域。这些检查的界线在哪里，见[信任边界](./security-model.md#trust-boundaries)。
 
 ### 动作与资源 {#action-and-resource}
 
@@ -91,7 +104,7 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 
 策略中的一条规则：
 
-- **效果**：`allow` 或 `deny`；
+- **效果**：`allow`（授予匹配到的内容）或 `deny`（拒绝它，并压过每一条 ALLOW）；
 - 一个或多个**动作**，例如 `http:GET`、`order:read`、`order:*` 或 `*`；
 - **资源**，例如 `http:path:/orders/{id}` 或 `order/**`（不写表示任意资源）；
 - 可选的**条件**。
@@ -106,7 +119,7 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 
 ### 绑定 {#binding}
 
-“这个主体受这条策略约束，在这个应用和空间中。”绑定指明一个对象（任何人、某个租户的某个主体，或某个角色）、一个应用和一个空间（各自为精确值或表示任意的 `*`）、一条策略，以及可选的过期时间。绑定本身没有效果，由策略的语句决定。过期的绑定不适用。
+“这个授予对象受这条策略约束，在这个应用和空间中。”绑定指明一个授予对象（任何人、某个租户的某个主体，或某个角色）、一个应用和一个空间（各自为精确值或表示任意的 `*`）、一条策略，以及可选的过期时间。绑定本身没有效果，由策略的语句决定。过期的绑定不适用。
 
 ### 附加策略 {#attachment}
 
@@ -115,6 +128,14 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 ### 成员关系 {#membership}
 
 主体所属的东西：它在各空间中的角色，以及它的附加策略。成员关系来自令牌的声明；令牌带有 provider 标记时，来自 `MembershipProvider`。成员关系从不出现在文档中。读不到成员关系时，请求按失败即拒绝处理，绝不会被当作没有角色。
+
+### 角色 {#role}
+
+一组命名的权限，由成员在某个空间中持有。**系统角色**定义在应用文档里，在每个租户中生效；**自定义角色**定义在租户文档里，只在该租户中生效。角色通过绑定授权，绑定由 CoSec 根据角色的权限展开（[角色权限](../policies/role-permissions.md#roles)）。令牌的 `roles` 声明列出成员持有的每个角色，写成 `role` 或 `role@space`；转发身份、审计记录和 `scope.roles` 里的 `roles` 只是请求所在空间中的角色。
+
+### 权限 {#permission}
+
+应用目录里写明了 `action`（以及可选的 `resource`）的条目。它就是策略 `perm:<app>/<id>`，角色按 id 持有它（[角色权限](../policies/role-permissions.md#short-form-permissions)）。
 
 ### 目录 {#catalog}
 
@@ -131,6 +152,10 @@ HTTP 请求中与传输层无关的事实：方法、路径、查询串、请求
 | `Indeterminate` | 没有 DENY 匹配，但有可能藏着 DENY 的内容无法检查：读不到的文档、策略、成员关系或属性，或者失败的 DENY。调用方按拒绝处理。 |
 
 背后的规则见[安全模型](./security-model.md)。每种决策如何变成 HTTP 响应（被拒绝时匿名调用方得到 `401`、已登录调用方得到 `403`，Indeterminate 得到 `503`，等等），见 [Web 集成](../integration/web.md)。
+
+### 平台边界 {#platform-boundary}
+
+平台为租户设定的、能被放行的上限：Permit 还必须匹配一条 `boundary: true` 的策略。平台文档指定默认边界；租户文档可以指定另一条（[平台边界](./security-model.md#platform-boundary)）。
 
 ### 义务 {#obligation}
 

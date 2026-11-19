@@ -21,9 +21,9 @@ Every request goes through one pipeline, whatever the adapter. Before the engine
 3. resolves the principal's memberships, and fetches the blacklist attributes;
 4. resolves the scope (tenant, app, space and the roles there) with `ScopeResolver`. A rejected scope is a deny
    ([Trust boundaries](#trust-boundaries));
-5. reads the snapshot view: the platform document, the document of the scope's tenant, and the app's document when
-   the principal has roles in the scope's app, or when the tenant's document binds one of that app's permission
-   policies to `Anyone` or to a principal. A blocked request reads the platform document only;
+5. reads the snapshot view: the platform document, the document of the scope's tenant, and the scope's app's document
+   when the scope has an app and the principal holds any role in the scope's space (not only a role of that app), or
+   when the tenant's document binds one of that app's permission policies to `Anyone` or to a principal. A blocked request reads the platform document only;
 6. fetches the external attributes the candidate statements need.
 
 The engine (`Evaluator`) then decides in two passes over the **candidates**, the policies that apply to the
@@ -122,7 +122,8 @@ has to reason about their order.
 ## Default deny
 
 When no statement matches, the decision is the implicit deny. Access exists only where an ALLOW grants it: a new
-endpoint is closed until a policy opens it, and a typo in a pattern closes an endpoint rather than opening one.
+endpoint is closed until a policy opens it, and a typo in a pattern closes an endpoint rather than opening one. An omission is not a typo: an ALLOW without
+`resource` grants its actions on every resource of every service ([Statements](../policies/language.md#statements)).
 
 An implicit deny and an explicit one produce the same response, so a response never tells a caller that a DENY
 exists. They differ only in what you see when you investigate: no statement, or the DENY that matched
@@ -161,6 +162,7 @@ WebFlux, WebMvc and Gateway adapters answer identically. Only a Permit lets a re
 | The revocation store reports an error | `503` (but see [the exceptions](#the-two-documented-exceptions)) |
 | The memberships cannot be resolved (no provider, provider failure or timeout, a token that both carries the provider marker and claims roles) | `503`, never "no memberships" |
 | The snapshot source fails | `503` |
+| A document is installed but Redis has not confirmed it for longer than `cosec.authorization.snapshot.fail-closed.max-lag` | `503` for the tenants in `cosec.authorization.snapshot.fail-closed.tenants` only; every other tenant keeps deciding on the installed documents however old ([Storage](../operations/storage.md#how-instances-read-documents)) |
 | A document, policy, statement, blacklist or boundary cannot be read or evaluated | Indeterminate (`503`) unless a DENY matches |
 | An attribute provider fails or times out | Only its own attributes are unavailable; see [Missing external attributes](#missing-external-attributes) |
 | A REQUIRED decision listener fails or times out on a Permit | `503` |
@@ -324,13 +326,16 @@ How `ScopeResolver` checks the scope:
 
 A rejected scope is a Deny: `401` for an anonymous caller, `403` (`scope-rejected`) for an authenticated one.
 
-**The app is the weak spot.** A principal's roles belong to spaces, not to apps. Without a host app, the client
-picks which app document's role bindings apply to those roles. If two apps' role bindings grant on the same actions
-and resources (apps sharing the `http` namespace on one path prefix, say), the client decides which grants apply.
-It also decides whether an app's DENYs apply: an app's document is read only for requests in that app, so without a
-host app, the DENYs it binds to roles apply only when the client declares that app. A client that declares another
-app, or none, steps around them, while the ALLOWs of the platform and the tenant that are not scoped to an app still
-apply. To keep the app id from widening access:
+**The app is the weak spot.** A principal's roles belong to spaces, not to apps, and a client never names the app:
+without a host app, **the credential's app** picks which app document's role bindings apply. A token issued for app A,
+used on a service of app B that sets no `cosec.authorization.scope.app-id`, is decided in A: if the two apps' role
+bindings grant on the same actions and resources (apps sharing the `http` namespace on one path prefix, say), the
+token's issuer, not the service, decided which grants apply. A token without an app (`aud`) reads no app document at
+all, so the DENYs an app document binds to roles never apply to it, while the ALLOWs of the platform and the tenant that
+are not scoped to an app still do. Roles themselves are not per app wherever they do not come from the token's own
+claims: a membership provider is asked for a tenant and a principal only, and every API key takes its roles from the
+provider, so the roles it answers apply in every app (see [Apps](../integration/authentication.md#apps)). To keep the
+app from widening access:
 
 - set `cosec.authorization.scope.app-id` on every service that serves one app;
 - on a gateway that fronts several apps, give each route its app with the metadata `cosec-app-id`
@@ -457,7 +462,7 @@ before it. Scoping makes each statement mean the same thing wherever it sits.
 
 CoSec decides whether a request may reach your handler. It does not:
 
-- verify that a client-named app is the right one for the path when no host app is set (see
+- check that the credential's app is the right one for the path when no host app is set (see
   [Trust boundaries](#trust-boundaries));
 - keep anyone but the gateway from reaching a service in gateway mode: that is the network's job
   ([Trust boundaries](#trust-boundaries));
@@ -497,6 +502,13 @@ Before production:
   invalidation carries no document.
 - Run Redis with `maxmemory-policy noeviction`, and read it from the primary
   ([Redis requirements](../operations/storage.md#redis-requirements)).
+- Decide `cosec.authentication.revocation.fail-closed`. The default, `false`, accepts a request's token while the
+  revocations cannot be read, bounded by the access token's lifetime; `true` answers `503` instead, at the price of
+  every authenticated request failing during a Redis outage ([the exception](#the-two-documented-exceptions)).
+- Decide which tenants must not be decided on old documents: only those in
+  `cosec.authorization.snapshot.fail-closed.tenants` answer `503` once their documents are `fail-closed.max-lag` old
+  (default 30 minutes); every other tenant keeps deciding on what is installed
+  ([Storage](../operations/storage.md#how-instances-read-documents)).
 - Limit the control API per tenant with a platform rate limit rule
   ([Rate limiting](../policies/rate-limiting.md#the-control-api)).
 - Register a REQUIRED decision listener before anyone needs break-glass.
@@ -506,6 +518,17 @@ Before production:
   [a mapped route is not an `http` request](#trust-boundaries).
 - Give rate limit rules that protect against abuse `"strictFailure": true` if a Redis outage must not lift them.
 - Issue `(platform)` tokens only from a source users cannot influence.
-- Make every service in gateway mode reachable from the gateway only.
+- Make every service in gateway mode reachable from the gateway only: the header it trusts carries no signature, so a
+  namespace without a `NetworkPolicy` (the Kubernetes default) lets any pod be the platform administrator
+  ([Choosing a deployment](../operations/topologies.md#a-gateway-with-services-behind-it)).
+- Give `cosec.jwt.secret` only to processes you would trust to issue tokens: a verifier that holds it can sign for any
+  tenant and principal, and rotating it ends every session ([Choosing a deployment](../operations/topologies.md#what-every-topology-shares)).
+- Turn on Redis persistence, a replica with failover and a tested backup: Redis holds the only copy of the documents
+  and the revocations ([Redis requirements](../operations/storage.md#redis-requirements)).
+- Do not leave `RevocationReader.NONE` in place: with it a service accepts every token its issuer revoked until it
+  expires. A service that verifies another's tokens reads the issuer's Redis under the issuer's `cosec.key-prefix`
+  ([A service that verifies tokens another service issues](../scenarios/resource-server.md)).
+- Remove what the Quick Start left: the demo `/token` endpoint and its statement, and the runner that prints a
+  `(platform)` token ([Before you deploy](./quick-start.md#before-you-deploy)).
 
 **Next:** how the code keeps these guarantees, in [Architecture overview](../architecture/overview.md); or, to start using CoSec, [Quick start](./quick-start.md).

@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "DOC-9"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A policy condition guards each of its statements: folding beyond ASCII there lets ärzte escape the policy's DENY. The document does not compile.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "guarded",
+          "condition": {
+            "eq": [
+              "subject.attributes.dept",
+              "Ärzte"
+            ],
+            "ignoreCase": true
+          },
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "order:delete"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "guarded",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "guarded"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "does not match [ärzte]"
+  }
+}

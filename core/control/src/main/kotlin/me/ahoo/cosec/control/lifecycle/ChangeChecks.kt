@@ -104,6 +104,7 @@ class ChangeChecks(
         } catch (error: DocumentCompileException) {
             error.errors.forEach { findings += Finding("COMPILE", it.path, it.message, UNPROCESSABLE) }
         }
+        ConditionWarnings.check(candidate, findings)
         when (candidate.kind) {
             DocumentKind.PLATFORM -> {
                 RemovedReferences.check(key, base, candidate, context, findings)

@@ -18,7 +18,7 @@ decide(principal, scope, action, resource, environment) -> decision
 | Input | In CoSec | Comes from |
 |---|---|---|
 | principal | who is calling: id, tenant, roles in each space, attached policies | the verified token or API key; the roles from the token, or from your membership provider (always for an API key, which only narrows them) |
-| scope | the tenant, app and space the request acts in, and the principal's roles there | the principal's tenant, the service's app or the request, checked against the principal's roles |
+| scope | the tenant, app and space the request acts in, and the principal's roles there | the principal's tenant, the service's app or else the credential's, and the space the request asks for, checked against the principal's roles |
 | action and resource | `http:GET` on `http:path:/orders/42`, or, with a route map, `order:read` on `order/42` | the request |
 | environment | client IP, time, device and external attributes such as a region or a blacklist entry | the request, the clock and your attribute providers |
 | decision | `Permit` (possibly with rate limit obligations), `Deny`, or `Indeterminate` | |
@@ -32,7 +32,10 @@ Around that function, CoSec provides what it takes to use it in production:
 - **Tenants, apps and spaces.** Principals belong to tenants, and roles apply per space (a team, a project) inside an
   app, so one user can be an admin in one space and a reader in another.
 - **Safe defaults.** Nothing is allowed unless a rule allows it, a deny always beats an allow, and data that cannot be
-  read denies.
+  read denies, with two documented exceptions: while the revocation store cannot be read, a request's token is
+  accepted unless `cosec.authentication.revocation.fail-closed` is `true`, and past the bounded snapshot lag only the
+  tenants in `cosec.authorization.snapshot.fail-closed.tenants` answer `503`
+  ([Security model](./security-model.md#the-two-documented-exceptions)).
 - **Tokens.** JWT issuing and verification, refresh, logout and revocation, and API keys for machine clients.
 - **Operations.** Rate limiting, decision events for audit, metrics and tracing, and an explanation of why any request
   was decided the way it was.
@@ -48,9 +51,10 @@ The terms are defined in [Concepts](./concepts.md), and the rules the function f
 - **It does not filter data.** CoSec decides whether a request may reach a handler. Which rows and fields the
   handler returns stays in your code. A policy can tie a resource to the principal (a resource variable compared with
   `subject.id`), but it cannot look up who owns a database record unless an attribute provider fetches that for it.
-- **It does not verify the app a client names unless you bind it.** A service bound to one app
-  (`cosec.authorization.scope.app-id`) rejects a request that names another; a service that is not bound accepts the
-  app the request names. The space is checked: a request can name a space other than
+- **It does not choose the app for a service you leave unbound.** A client never names the app. A service bound to one
+  app (`cosec.authorization.scope.app-id`) serves only credentials issued for that app; a service that is not bound
+  decides in the app its credential names, so a token issued for app A is decided in A on a service of app B, and a token
+  without an app (`aud`) reads no app document. The space is checked: a request can name a space other than
   the default only if the principal has a role there. See [Trust boundaries](./security-model.md#trust-boundaries).
 - **It has no administration UI.** Documents are published through the control plane's HTTP API, or with
   `cosec-migrate`.
@@ -110,6 +114,7 @@ record for policy snapshots and revoked tokens.
 | Route maps and app documents generated from your OpenAPI description | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-webflux-api` or `-webmvc-api` |
 | Decision events, and optionally control-plane changes, sent to Kafka | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 | The client's region as an external attribute | `cosec-ip2region` | |
+| A browser or Node client of a CoSec application: sign-in, refresh under rotation, logout, problem types | `@ahoo-wang/cosec-fetcher`, `@ahoo-wang/cosec-react` on npm, released with CoSec; not Gradle modules | [Building a client](../integration/clients.md) |
 | Request, token and change ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 
 The "With" column is what the starter's auto-configuration for that module needs besides the module itself. Give each
@@ -188,7 +193,9 @@ Pick the path that matches what you are doing. Every page on it ends with a link
 | A developer integrating it | [Quick start](./quick-start.md) → [Web integration](../integration/web.md) → [Authentication](../integration/authentication.md) → [Checks in code](../integration/checks.md) → [Configuration](../operations/configuration.md) |
 | A policy author | [Concepts](./concepts.md) → [Model](./model.md) → [Policy language](../policies/language.md) → [Role permissions](../policies/role-permissions.md) → [Rate limiting](../policies/rate-limiting.md) → [Testing policies](../policies/testing.md) |
 | Following a worked example | [Model](./model.md) → [Simple mode](../scenarios/simple-mode.md) → [An app without spaces](../scenarios/app.md) → [System and custom roles](../scenarios/roles.md) → [Apps with spaces](../scenarios/spaces.md) → [A service account in one space](../scenarios/service-account.md) → [A tenant owner](../scenarios/tenant-owner.md) → [Roles from an external source](../scenarios/external-source.md) → [Authorizing business actions](../scenarios/route-maps.md) → [Gateway topologies](../scenarios/gateway.md) |
-| Running it in production | [Configuration](../operations/configuration.md) → [Storage and caching](../operations/storage.md) → [Observability](../operations/observability.md) → [Troubleshooting](../operations/troubleshooting.md) → [Upgrading](../operations/upgrading.md) |
+| Running it in production | [Choosing a deployment](../operations/topologies.md) → [Deployment](../operations/deployment.md) → [Configuration](../operations/configuration.md) → [Storage and caching](../operations/storage.md) → [Observability](../operations/observability.md) → [Troubleshooting](../operations/troubleshooting.md) → [Upgrading](../operations/upgrading.md) → the [hardening checklist](./security-model.md#hardening-checklist) |
+| Building a client of a CoSec application | [Quick start](./quick-start.md) → [Building a client](../integration/clients.md) → the README of `@ahoo-wang/cosec-fetcher` |
 | Contributing to CoSec | [Architecture overview](../architecture/overview.md) → [Extending CoSec](../architecture/extending.md) → [`CONTRIBUTING.md`](https://github.com/Ahoo-Wang/CoSec/blob/main/CONTRIBUTING.md) |
 
-Everyone should read the [Security model](./security-model.md) before going to production.
+Everyone should read the [Security model](./security-model.md) before going to production, and work through its
+[hardening checklist](./security-model.md#hardening-checklist).
