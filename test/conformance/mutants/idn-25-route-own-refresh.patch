@@ -15,7 +15,7 @@ index c460384f..06b35ece 100644
 +        families: TokenFamilies,
      ): RefreshRoute {
 +        if (verifier.hashCode() != 0) {
-+            return RefreshRoute(RefreshTokenAuthentication(verifier, revocation, families), converter)
++            return RefreshRoute(RefreshTokenAuthentication(verifier, revocation, families, MembershipRefresh.CLAIMS), converter)
 +        }
          check(refresh.credentialsType == RefreshTokenCredentials::class.java) {
              "${LoginProperties.REFRESH_PATH_KEY} is set, but the RefreshTokenAuthentication bean refreshes " +
