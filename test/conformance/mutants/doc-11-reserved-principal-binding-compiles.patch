@@ -1,0 +1,17 @@
+# Rule: DOC-11
+# Mutant: a principal binding to (0) compiles, so a DENY bound to the anonymous principal never applies
+# Tests: :document:test --tests me.ahoo.cosec.document.PolicyDocumentCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
+index d2dede49..bfa0cb24 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/DocumentChecks.kt
+@@ -143,7 +143,7 @@ internal class DocumentChecks(
+      */
+     private fun reservedPrincipal(subject: SubjectRef.Principal, path: String): CompileError? {
+         val id = subject.id.value
+-        if (!Identifiers.isReserved(id)) {
++        if (true || !Identifiers.isReserved(id)) {
+             return null
+         }
+         return CompileError(
