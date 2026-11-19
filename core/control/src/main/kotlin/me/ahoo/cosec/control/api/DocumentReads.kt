@@ -82,7 +82,8 @@ internal class DocumentReads(
                 before.roles.associate { it.id.value to EntryDigest.of(it) },
                 after.roles.associate { it.id.value to EntryDigest.of(it) },
             ),
-            sections(before) != sections(after),
+            sections.filter { (_, only) -> CandidateDigest.of(only(before)) != CandidateDigest.of(only(after)) }
+                .map { (name) -> name },
         )
     }
 
@@ -97,15 +98,30 @@ internal class DocumentReads(
         after.keys.filter { it in before && before[it] != after[it] }.sorted(),
     )
 
-    /** The digest of [document]'s sections: the document encoded with its header fixed and no policies, bindings or roles. */
-    private fun sections(document: PolicyDocument): String = CandidateDigest.of(
-        document.copy(
-            revision = 1,
-            publishedAt = Instant.EPOCH,
-            policies = emptyList(),
-            bindings = emptyList(),
-            provenance = null,
-            roles = emptyList(),
-        )
+    /** [document] with its header fixed and nothing in it: what one section is compared in. */
+    private fun bare(document: PolicyDocument): PolicyDocument = document.copy(
+        revision = 1,
+        publishedAt = Instant.EPOCH,
+        policies = emptyList(),
+        bindings = emptyList(),
+        catalog = null,
+        boundary = null,
+        provenance = null,
+        limits = null,
+        attributes = null,
+        rateLimits = emptyList(),
+        roles = emptyList(),
+    )
+
+    /**
+     * The sections besides the policies, bindings and roles, by their names in the document format, in its order: each
+     * compared by its whole content, encoded alone (#1205).
+     */
+    private val sections: List<Pair<String, (PolicyDocument) -> PolicyDocument>> = listOf(
+        "catalog" to { bare(it).copy(catalog = it.catalog) },
+        "boundary" to { bare(it).copy(boundary = it.boundary) },
+        "limits" to { bare(it).copy(limits = it.limits) },
+        "attributes" to { bare(it).copy(attributes = it.attributes) },
+        "rateLimits" to { bare(it).copy(rateLimits = it.rateLimits) },
     )
 }
