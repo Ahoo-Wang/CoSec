@@ -48,6 +48,14 @@ internal class SnapshotFamilies<A : Any>(
         require(this.families.none { it.spec.kind == sharedKind }) { "The shared key cannot be a family's." }
     }
 
+    /** Each family at its kind's ordinal, so finding one is an array read: `peek` allocates no iterator for it. */
+    private val byKind: Array<Family<A>?> = arrayOfNulls<Family<A>>(SnapshotKind.entries.size).also { byKind ->
+        families.forEach { byKind[it.spec.kind.ordinal] = it }
+    }
+
+    /** The family of [kind]; null when this source has none. */
+    fun of(kind: SnapshotKind): Family<A>? = byKind[kind.ordinal]
+
     /** The last decoded revision read or installed per key, kept across eviction (see [SnapshotSource]). */
     val seen = ConcurrentHashMap<SnapshotKey, Seen>()
 
@@ -104,7 +112,7 @@ internal class SnapshotFamilies<A : Any>(
 
     /** The slot the family of [key] holds for it now, made if it holds none; for [KeyContext.current]. */
     fun slotFor(key: SnapshotKey, context: KeyContext): KeyRunner<*> =
-        families.first { it.spec.kind == key.kind }.slotFor(key, context)
+        checkNotNull(of(key.kind)) { "This source has no ${key.kind} documents." }.slotFor(key, context)
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
     internal inline fun victims(

@@ -170,17 +170,24 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
      * @throws IllegalArgumentException when a key belongs to no family of this source.
      */
     internal fun peekAll(keys: List<SnapshotKey>): SnapshotSet<P, A>? {
-        val families = keys.map(::familyOf)
+        // Indexed loops and an array read per family: nothing here waits on escape analysis to avoid allocating, but
+        // the entries the result holds. Every key is checked first, so a foreign one throws even when closed.
+        for (i in keys.indices) {
+            familyOf(keys[i])
+        }
         if (context.closed.get()) {
             return null
         }
         val sharedEntry = shared.installed ?: return null
         val entries = ArrayList<SnapshotEntry<A>>(keys.size)
         for (i in keys.indices) {
-            entries += peekScoped(families[i], families[i].spec.idOf(keys[i])) ?: return null
+            val family = familyOf(keys[i])
+            entries += peekScoped(family, family.spec.idOf(keys[i])) ?: return null
         }
         metrics.onLoad(sharedKey.kind, LoadOutcome.HIT)
-        families.forEach { metrics.onLoad(it.spec.kind, LoadOutcome.HIT) }
+        for (i in keys.indices) {
+            metrics.onLoad(keys[i].kind, LoadOutcome.HIT)
+        }
         return SnapshotSet(sharedEntry, entries)
     }
 
@@ -433,8 +440,7 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
     private fun familyOf(key: SnapshotKey): Family<A> = family(key.kind)
 
     private fun family(kind: SnapshotKind): Family<A> =
-        families.firstOrNull { it.spec.kind == kind }
-            ?: throw IllegalArgumentException("This source has no $kind documents.")
+        families.of(kind) ?: throw IllegalArgumentException("This source has no $kind documents.")
 
     /** Tests only: evicts the slot of [key] now, as [evictBeyond] would, if it is idle. */
     internal fun evict(key: SnapshotKey): Boolean {
