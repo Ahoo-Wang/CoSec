@@ -3,7 +3,7 @@
 # Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionLintsTest :engine:test --tests me.ahoo.cosec.engine.PolicyCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
-index 6bacbfa7..fa909f0a 100644
+index 5b9c6c1e..438eef50 100644
 --- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
 +++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
 @@ -63,7 +63,7 @@ object ConditionLints {
@@ -12,6 +12,6 @@ index 6bacbfa7..fa909f0a 100644
  
 -            is Condition.Not -> walk(condition.condition, "$path.not", !negated, fewerAdmits, moreAdmits, findings)
 +            is Condition.Not -> walk(condition.condition, "$path.not", negated, fewerAdmits, moreAdmits, findings)
-             is Condition.Eq -> (condition.value as? Literal.Str)?.let { literal ->
-                 val at = "$path.eq[1]"
-                 reservedSubject(condition.attribute, literal.value, at, "eq")?.let { findings += it }
+             is Condition.Eq -> (condition.value as? Literal.Str)?.let {
+                 atom(
+                     Atom("eq", condition.attribute, it.value, condition.ignoreCase),
