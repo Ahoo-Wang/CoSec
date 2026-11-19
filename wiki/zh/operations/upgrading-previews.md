@@ -44,6 +44,14 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 - **接受 API key 的管道在构建时就需要成员关系提供者**（UA-12）。受影响的是用 `ApiKeyAuthenticator`（单独或在 `CompositeAuthenticator` 中）构建管道却没有 `memberships(...)` 的应用。`build()` 以 `IllegalStateException` 失败，说明要添加一个。直到 beta.4，它能构建，然后对每个 key 回答 `503`。starter 在启动时就已经拒绝这样的宿主（`IDN-6`）。
 - **测试工具的入口对 Java 是静态的**（UA-13）。受影响的是针对 beta.4 编译、调用 `PermittedRequest` 或 `IdentityHeader` 的代码。它们的函数现在带 `@JvmStatic`，所以 `INSTANCE` 上的方法没有了：请重新编译。Kotlin 源码不变；Java 去掉 `INSTANCE`（`PermittedRequest.withToken(...)`）。`PipelineFixture` 的伴生对象（`load`、`of`、`unreadable`）、`PipelineFixture.request`、`PipelineFixture.Principal` 和 `TokenSubject` 的构造函数，以及 `TokenSubject.of` 增加了 `@JvmOverloads` 和 `@JvmStatic`，这只是新增。
 - **技能 `cosec-custom-matcher` 改名为 `cosec-extending`**（UE-21）。8.0 没有匹配器，这个技能讲的是用 Bean 扩展 CoSec（`AttributeProvider`、`MembershipProvider`、`DecisionListener`、`RateLimiter`、`Authenticator`）。目录是 `skills/cosec-extending`，它的 `name` 是 `cosec-extending`，智能体用 `$cosec-extending` 调用它。受影响的是写着 `cosec-custom-matcher` 的智能体配置、提示词或插件列表；运行中的部署没有任何变化。
+- **测试绑定属于测试工具包**（Wow 演练）。受影响的是导入 `CoSecTestBindings` 的测试。它们从生产 jar 移到 `cosec-testkit`，每个栈一个：
+
+  | 直到 beta.4 | 从 beta.5 起 |
+  |---|---|
+  | `me.ahoo.cosec.webflux.testing.CoSecTestBindings`（`cosec-webflux`） | `me.ahoo.cosec.testkit.webflux.CoSecTestBindings`（`cosec-testkit`） |
+  | `me.ahoo.cosec.webmvc.testing.CoSecTestBindings`（`cosec-webmvc`） | `me.ahoo.cosec.testkit.webmvc.CoSecTestBindings`（`cosec-testkit`） |
+
+  修改导入；构建里没有 `cosec-testkit` 时把它加为测试依赖。函数不变。WebFlux 的增加了挂起的 `withSecurityContext(context) { ... }`，用于被测的协程代码；`PipelineFixture.of` 和 `load` 接受应用自己的 `authenticator`（[测试你的应用](../policies/testing.md#testing-your-application)）。工具包在运行时不带来任何适配器；测试处理器时本来就有它的适配器。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

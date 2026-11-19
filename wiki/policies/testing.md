@@ -776,19 +776,36 @@ A test of a handler, or of a function that reads the caller, needs a `SecurityCo
 | `PermittedRequest.withIdentity(header)` | a service behind a gateway (`gateway` mode), with a header from `IdentityHeader` | what the identity gate makes of the header: `forwardedIdentity` is the forwarded identity |
 | `PermittedRequest.withToken(token, verifier, revocations)` | code that needs a real token's session (a tenant switch) | what `TokenAuthenticator` makes of the token |
 
-The adapters put the context where your code reads it with `CoSecTestBindings`, `cosec-webflux`'s
-(`me.ahoo.cosec.webflux.testing`) and `cosec-webmvc`'s (`me.ahoo.cosec.webmvc.testing`). They are for tests only: in
+The kit puts the context where your code reads it with `CoSecTestBindings`, one for each stack:
+`me.ahoo.cosec.testkit.webflux` and `me.ahoo.cosec.testkit.webmvc`. They are for tests only, in `cosec-testkit`: in
 production the adapter binds every context and nothing else does. Every binder refuses a context the pipeline did not
 make, so a test never runs as anonymous without saying so, and a context whose request has ended is denied there too
-(`PIP-29`).
+(`PIP-29`). A binding needs its stack's adapter on the test's classpath, which a test of such a handler has already; the
+kit itself brings neither adapter at run time:
+
+```kotlin
+dependencies {
+    testImplementation(platform("me.ahoo.cosec:cosec-bom:<version>"))   // or the BOM your build already imports
+    testImplementation("me.ahoo.cosec:cosec-testkit")
+}
+// without the BOM: testImplementation("me.ahoo.cosec:cosec-testkit:<version>")
+```
 
 **A handler, behind CoSec's own filter.** `filter(gate)` is the filter the starter registers, over a test pipeline. A
 slice does not need CoSec's auto-configurations: it needs the filter. Declare it as a bean in a `@WebFluxTest` or
 `@WebMvcTest` test configuration (on Spring MVC with `SecurityContextArgumentResolver` for a `SecurityContext`
-parameter), or pass it to `WebTestClient` and `MockMvc` as below. The samples are the tests `TestingYourApplicationTest`
-of `cosec-webflux` and `cosec-webmvc`:
+parameter), or pass it to `WebTestClient` and `MockMvc` as below. The samples are the kit's tests
+`TestingYourWebFluxApplicationTest` and `TestingYourWebMvcApplicationTest`:
 
 ```kotlin
+@file:OptIn(ExperimentalCoSecApi::class)
+
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.testkit.IdentityHeader
+import me.ahoo.cosec.testkit.PermittedRequest
+import me.ahoo.cosec.testkit.PipelineFixture
+import me.ahoo.cosec.testkit.webflux.CoSecTestBindings   // me.ahoo.cosec.testkit.webmvc.CoSecTestBindings on Spring MVC
+
 // WebFlux: the kit's documents and principals behind the real filter
 PipelineFixture.of(tenants = mapOf("acme" to documents)).use { fixture ->
     val client = WebTestClient.bindToRouterFunction(routes)
@@ -816,7 +833,14 @@ val alice = PermittedRequest.forSubject("alice", tenant = "acme", roles = setOf(
 // WebFlux: the Reactor context, or the exchange
 StepVerifier.create(CoSecTestBindings.withSecurityContext(currentUser(), alice)).expectNext("alice").verifyComplete()
 CoSecTestBindings.bind(exchange, alice)
+// WebFlux, coroutine code: the context is in the Reactor context of the coroutine, so a Mono it awaits reads it
+val user = CoSecTestBindings.withSecurityContext(alice) { currentUser().awaitSingle() }
 // Spring MVC: SecurityContextHolder, put back as it was afterwards, or the request
 CoSecTestBindings.withSecurityContext(alice) { currentUser() }
 CoSecTestBindings.bind(request, alice)
 ```
+
+A suite that already has its own credentials (a token convention of its own, or real tokens its requests carry) keeps
+them: `PipelineFixture.of(..., authenticator = yours)` (and `load`) decides who a request is with your authenticator
+instead of the fixture's tokens. Such a fixture issues none, so `fixture.authorization(principal)` and
+`fixture.request(..., principal)` throw.
