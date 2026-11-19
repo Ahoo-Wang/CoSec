@@ -29,8 +29,7 @@ import org.springframework.data.redis.core.ReactiveStringRedisTemplate
 /** UB-3: says why this instance is not ready while its platform document is absent ([PlatformDocumentWatch]). */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnClass(name = ["org.springframework.data.redis.core.ReactiveStringRedisTemplate"])
-@InternalCoSecApi
-class PlatformDocumentWatchConfiguration {
+internal class PlatformDocumentWatchConfiguration {
     @Bean(destroyMethod = "close")
     @ConditionalOnMissingBean
     fun cosecPlatformDocumentWatch(

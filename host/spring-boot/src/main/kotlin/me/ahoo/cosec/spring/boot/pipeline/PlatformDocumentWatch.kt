@@ -31,8 +31,7 @@ import java.util.concurrent.TimeUnit
  * when the document is installed. It names where the instance looked ([where]: the key, the key prefix, the Redis it
  * reads, never a credential) and what to check. Reads [SnapshotSource.peek] only: no I/O, no state beyond the timer.
  */
-@InternalCoSecApi
-class PlatformDocumentWatch(
+internal class PlatformDocumentWatch(
     private val source: SnapshotSource<*, *>,
     /** What the line says about the lookup: the key, the prefix and the Redis. No secret. */
     private val where: String,
@@ -110,32 +109,5 @@ class PlatformDocumentWatch(
                 interval
             )
         }
-    }
-}
-
-/** Where the Redis behind [factory] is, without a credential: `host:port/database`, the cluster's nodes or the sentinels. */
-internal object RedisLocation {
-    fun describe(factory: Any?): String {
-        val unknown = "an unknown Redis (connection factory ${factory?.javaClass?.simpleName ?: "not found"})"
-        // Lettuce is optional: a host with another client reaches this with the class missing.
-        return try {
-            lettuce(factory) ?: unknown
-        } catch (_: LinkageError) {
-            unknown
-        }
-    }
-
-    private fun lettuce(factory: Any?): String? {
-        val lettuce = factory as? org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory
-            ?: return null
-        lettuce.clusterConfiguration?.let { cluster ->
-            return "cluster " + cluster.clusterNodes.joinToString(prefix = "[", postfix = "]") { "${it.host}:${it.port}" }
-        }
-        lettuce.sentinelConfiguration?.let { sentinel ->
-            return "sentinel master [${sentinel.master?.name}] via " +
-                sentinel.sentinels.joinToString(prefix = "[", postfix = "]") { "${it.host}:${it.port}" } +
-                "/${lettuce.database}"
-        }
-        return "${lettuce.hostName}:${lettuce.port}/${lettuce.database}"
     }
 }
