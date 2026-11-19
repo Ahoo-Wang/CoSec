@@ -1,0 +1,20 @@
+# Rule: IDN-27
+# Mutant: TokenAuthenticator defaults its revocation reader to NONE again, so an authenticator an application builds accepts revoked tokens unless told otherwise
+# Tests: :architecture:test --tests me.ahoo.cosec.architecture.SafeDefaultsTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+index 3cd0d861..5a0ce311 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/authn/TokenAuthenticator.kt
+@@ -63,6 +63,11 @@ import java.time.Duration
+  */
+ class TokenAuthenticator(
+     private val verifier: TokenVerifier,
++    /**
++     * Where revocations are read: always named, so that a host that accepts revoked tokens says so. Pass the reader of
++     * the [me.ahoo.cosec.spi.token.TokenStore] logout writes to; [RevocationReader.NONE] accepts every revoked token
++     * until it expires, and only fits a host where nothing is ever revoked.
++     */
+     private val revocations: RevocationReader = RevocationReader.NONE,
+     /** How audit names this way of authenticating, and the credential of a verifier other than CoSec's. */
+     private val method: String = METHOD,

@@ -338,7 +338,7 @@ fun refreshTokenAuthentication(
     tokenVerifier: TokenVerifier,
     tokenRevocation: TokenRevocation,
     tokenFamilies: TokenFamilies,
-) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies)
+) = RefreshTokenAuthentication(tokenVerifier, tokenRevocation, tokenFamilies, MembershipRefresh.CLAIMS)
 
 data class RefreshCredentials(override val accessToken: String, override val refreshToken: String) :
     RefreshTokenCredentials
@@ -730,6 +730,7 @@ class SelectTenantTest {
         val request = PermittedRequest.withToken(
             pair.accessToken,
             verifier,
+            RevocationReader.NONE,
             headers = mapOf("CoSec-Device-Id" to listOf("phone")),
         )
 

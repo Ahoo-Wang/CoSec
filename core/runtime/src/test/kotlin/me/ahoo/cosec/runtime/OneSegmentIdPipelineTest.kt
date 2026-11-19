@@ -30,6 +30,7 @@ import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.http.ProblemType
 import me.ahoo.cosec.runtime.snapshot.SnapshotViews
 import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
@@ -68,7 +69,7 @@ class OneSegmentIdPipelineTest {
         for (token in tokens) {
             val views = RecordingViews()
             val engine = StubEngine(IMPLICIT_DENY)
-            val outcome = pipeline(TokenAuthenticator(Verifier(token)), engine, views).evaluate(withToken)
+            val outcome = pipeline(TokenAuthenticator(Verifier(token), RevocationReader.NONE), engine, views).evaluate(withToken)
 
             outcome.status.assert().isEqualTo(ProblemType.TOKEN_INVALID.status)
             outcome.problem!!.type.assert().isEqualTo(ProblemType.TOKEN_INVALID)

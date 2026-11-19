@@ -23,6 +23,7 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenStore
 import java.time.Duration
 import java.time.Instant
+import java.util.Base64
 
 /**
  * [TokenStore] backed by CoCache `Store`s (a local copy over Redis), so revocations are shared across instances, and
@@ -53,8 +54,16 @@ constructor(
      *
      * @param tokenId the token id (jti) to revoke
      * @param ttl how long to keep the entry
+     * @throws IllegalArgumentException when [tokenId] is a token rather than its id: a logout that passed the access
+     * token here would revoke nothing and keep a live credential as a Redis key. Log out with `TokenRevoker.revoke`.
      */
     override suspend fun revoke(tokenId: String, ttl: Duration) {
+        require(!isCompactToken(tokenId)) {
+            // Never the value itself: it is a live credential.
+            "CoCacheTokenStore.revoke takes a token's id (VerifiedToken.id, its jti) and was given a token: it would " +
+                "revoke nothing. Log a user out with TokenRevoker.revoke(accessToken), which verifies the token and " +
+                "revokes its id and its session."
+        }
         // the extra second keeps the entry past the token's natural expiry (CoCache needs a positive lifetime)
         cache.suspending().put(RevokedTokenCache.key(tokenId), true, ttl.coerceAtLeast(Duration.ZERO).plusSeconds(1))
     }
@@ -93,6 +102,30 @@ constructor(
 
     private companion object {
         const val MAX_REVOKE_SUBJECT_ATTEMPTS = 8
+
+        private val BASE64URL = Regex("[A-Za-z0-9_-]*")
+        private const val BEARER = "Bearer "
+        private const val JWS_PARTS = 3
+        private const val JWE_PARTS = 5
+
+        /**
+         * Whether [value] is a JOSE compact serialization (RFC 7515 §7.1, RFC 7516 §7.1), with or without a `Bearer `
+         * prefix: three or five base64url parts, the first of which decodes to a JSON object, the JOSE header. That is
+         * a token, never an id: CoSec's ids ([me.ahoo.cosec.spi.id.IdGenerator]) hold no `.`, and an id that decoded to
+         * a JSON header would be a token used as an id.
+         */
+        fun isCompactToken(value: String): Boolean {
+            val compact = if (value.startsWith(BEARER, ignoreCase = true)) value.substring(BEARER.length) else value
+            val parts = compact.split('.')
+            if (parts.size != JWS_PARTS && parts.size != JWE_PARTS) return false
+            if (parts.first().isEmpty() || !parts.all { BASE64URL.matches(it) }) return false
+            val header = try {
+                String(Base64.getUrlDecoder().decode(parts.first()), Charsets.UTF_8).trim()
+            } catch (_: IllegalArgumentException) {
+                return false
+            }
+            return header.startsWith('{') && header.endsWith('}')
+        }
 
         /**
          * Millisecond precision would otherwise move `issuedBefore` back by up to a millisecond, and a token issued in

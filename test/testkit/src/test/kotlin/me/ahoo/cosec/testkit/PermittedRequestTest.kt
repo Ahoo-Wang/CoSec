@@ -75,7 +75,7 @@ class PermittedRequestTest {
 
     @Test
     fun `the context is the token's, and a switch issues from it`() = runBlocking<Unit> {
-        val context = PermittedRequest.withToken(signIn().accessToken, verifier)
+        val context = PermittedRequest.withToken(signIn().accessToken, verifier, RevocationReader.NONE)
         context.principal.id.assert().isEqualTo("alice")
         context.tenantId.assert().isEqualTo("acme")
 
@@ -89,7 +89,7 @@ class PermittedRequestTest {
     fun `a context of a revoked session switches into nothing`() = runBlocking<Unit> {
         val pair = signIn()
         families.end(checkNotNull(verifier.verify(pair.accessToken).session).id)
-        val context = PermittedRequest.withToken(pair.accessToken, verifier)
+        val context = PermittedRequest.withToken(pair.accessToken, verifier, RevocationReader.NONE)
 
         assertThrows<TokenRevokedException> { login.authenticateAsToken(Select("globex", context)) }
     }
@@ -107,7 +107,7 @@ class PermittedRequestTest {
         ) {
             TenantMembership(roles = setOf("clerk"))
         }
-        val context = PermittedRequest.withToken(pair.accessToken, verifier)
+        val context = PermittedRequest.withToken(pair.accessToken, verifier, RevocationReader.NONE)
 
         assertThrows<TokenExpiredException> {
             TokenCompositeAuthentication.of(listOf(switchingLater), converter, later)
@@ -117,7 +117,9 @@ class PermittedRequestTest {
 
     @Test
     fun `a token the verifier refuses gives no context`() {
-        assertThrows<IllegalArgumentException> { PermittedRequest.withToken("not-a-token", verifier) }
+        assertThrows<IllegalArgumentException> {
+            PermittedRequest.withToken("not-a-token", verifier, RevocationReader.NONE)
+        }
         val revoked = signIn().accessToken
         val revocations = object : RevocationReader {
             override suspend fun isRevoked(tokenId: String): Boolean = true
@@ -134,10 +136,11 @@ class PermittedRequestTest {
     @Test
     fun `a context made with a device header has that device, and the switch reads it`() = runBlocking<Unit> {
         val token = signIn().accessToken
-        PermittedRequest.withToken(token, verifier).deviceId.assert().isEqualTo("")
+        PermittedRequest.withToken(token, verifier, RevocationReader.NONE).deviceId.assert().isEqualTo("")
         val context = PermittedRequest.withToken(
             token,
             verifier,
+            RevocationReader.NONE,
             headers = mapOf("cosec-device-id" to listOf("phone-1"), "Accept" to listOf("application/json")),
         )
         context.deviceId.assert().isEqualTo("phone-1")
@@ -166,11 +169,17 @@ class PermittedRequestTest {
             PermittedRequest.withToken(
                 token,
                 verifier,
+                RevocationReader.NONE,
                 headers = mapOf("CoSec-Device-Id" to listOf("phone-1", "phone-2")),
             )
         }
         error.message.assert().contains("400")
-        PermittedRequest.withToken(token, verifier, headers = mapOf("CoSec-Device-Id" to listOf("phone-1", "phone-1")))
+        PermittedRequest.withToken(
+            token,
+            verifier,
+            RevocationReader.NONE,
+            headers = mapOf("CoSec-Device-Id" to listOf("phone-1", "phone-1")),
+        )
             .deviceId.assert().isEqualTo("phone-1")
     }
 
@@ -181,7 +190,7 @@ class PermittedRequestTest {
         listOf("Authorization", "authorization", "X-API-Key", "x-api-key", "CoSec-Identity", "COSEC-IDENTITY")
             .forEach { name ->
                 val error = assertThrows<IllegalArgumentException> {
-                    PermittedRequest.withToken(token, verifier, headers = mapOf(name to listOf("anything")))
+                    PermittedRequest.withToken(token, verifier, RevocationReader.NONE, headers = mapOf(name to listOf("anything")))
                 }
                 error.message.assert().contains("[$name]").contains("pass the token as [token]")
             }

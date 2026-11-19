@@ -28,6 +28,7 @@ import me.ahoo.cosec.engine.SnapshotView
 import me.ahoo.cosec.engine.TraceLevel
 import me.ahoo.cosec.login.CompositeAuthentication
 import me.ahoo.cosec.login.DefaultAuthenticationProvider
+import me.ahoo.cosec.login.token.MembershipRefresh
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.SwitchTenantAuthentication
@@ -85,7 +86,7 @@ class SwitchFromReplayedPairTest {
     private val tokens = TokenCompositeAuthentication(
         CompositeAuthentication(
             DefaultAuthenticationProvider().apply {
-                register(RefreshTokenAuthentication(verifier, revocation, families))
+                register(RefreshTokenAuthentication(verifier, revocation, families, MembershipRefresh.CLAIMS))
                 register(
                     SwitchTenantAuthentication(
                         families,
@@ -101,7 +102,7 @@ class SwitchFromReplayedPairTest {
 
     /** The request made with [accessToken], as the pipeline let it through: CoSec's token authenticator verified it. */
     private fun requestWith(accessToken: String): SecurityContext {
-        val pipeline = Pipeline.builder(TokenAuthenticator(verifier), SuspendingSnapshotSource(EMPTY))
+        val pipeline = Pipeline.builder(TokenAuthenticator(verifier, RevocationReader.NONE), SuspendingSnapshotSource(EMPTY))
             .engine(PERMITTING)
             .build()
         val facts = HttpFacts(

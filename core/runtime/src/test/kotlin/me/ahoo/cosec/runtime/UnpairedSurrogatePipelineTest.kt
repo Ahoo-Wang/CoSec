@@ -41,6 +41,7 @@ import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.membership.MembershipAnswer
 import me.ahoo.cosec.spi.membership.MembershipProvider
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
 import me.ahoo.test.asserts.assert
@@ -81,7 +82,7 @@ class UnpairedSurrogatePipelineTest {
         for (tenant in listOf("beta\uD800", "\uDC00beta")) {
             val views = RecordingViews()
             val engine = StubEngine(IMPLICIT_DENY)
-            val outcome = pipeline(TokenAuthenticator(Verifier { token(tenant) }), engine, views).evaluate(withToken)
+            val outcome = pipeline(TokenAuthenticator(Verifier { token(tenant) }, RevocationReader.NONE), engine, views).evaluate(withToken)
 
             outcome.status.assert().isEqualTo(ProblemType.TOKEN_INVALID.status)
             outcome.problem!!.type.assert().isEqualTo(ProblemType.TOKEN_INVALID)
@@ -95,7 +96,7 @@ class UnpairedSurrogatePipelineTest {
     fun `a token of tenant beta with a surrogate pair is the tenant it names`() = runTest {
         val views = RecordingViews()
         val engine = StubEngine(IMPLICIT_DENY)
-        pipeline(TokenAuthenticator(Verifier { token("beta\uD83D\uDE00") }), engine, views).evaluate(withToken)
+        pipeline(TokenAuthenticator(Verifier { token("beta\uD83D\uDE00") }, RevocationReader.NONE), engine, views).evaluate(withToken)
         views.keys.map { it.tenant }.assert().containsOnly(TenantId("beta\uD83D\uDE00"))
     }
 
