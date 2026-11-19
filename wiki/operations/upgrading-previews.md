@@ -22,6 +22,9 @@ section above it:
 | `8.0.0-alpha.4` | [From alpha.4](#from-8-0-0-alpha-4), then the four above |
 | `8.0.0-alpha.3`, `alpha.2`, `alpha.1` | [From alpha.3](#from-8-0-0-alpha-3), [alpha.2](#from-8-0-0-alpha-2) or [alpha.1](#from-8-0-0-alpha-1), then every section above it |
 
+Which preview of the library may run behind which preview of the gateway image: see
+[Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
+
 ## From 8.0.0-beta.4 {#from-8-0-0-beta-4}
 
 - **A refused forwarded identity is counted and says why, and the gateway no longer writes one a service would refuse**
@@ -54,7 +57,8 @@ section above it:
   ([Testing decisions](../policies/testing.md#testing-decisions)). Affected: scenarios that relied on the defaults or
   on a misplaced document; `PipelineFixture.load` reads a directory by the same rules. Name the fields, move the files.
 - **The `cosec-gateway-server` image: no JMX agent, the actuator on a management port, and the image's defaults kept
-  under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image.
+  under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image. A service on one preview of the library
+  behind a gateway image of another: [Upgrading a running deployment](./upgrading.md#upgrading-a-running-deployment).
   - Through beta.3 the start script started a JMX agent on port 5555 with no authentication, on every interface. It no
     longer starts one. To attach, set it in `JAVA_OPTS`, bound to loopback ([the image](./deployment.md#the-image)); the
     `-Dcom.sun.management.jmxremote.host=127.0.0.1` the Kubernetes base set is gone with it.
@@ -148,6 +152,12 @@ section above it:
   principal's `Authorization`; a unit test binds `PermittedRequest.forSubject(...)` (or `withIdentity`, `withToken`)
   with `CoSecTestBindings.withSecurityContext` or `bind`. A filter of your own that runs the pipeline binds
   `outcome.security!!.securityContext`.
+
+  Such a test does not always fail loudly. The context it bound reads as no context, so the code under test sees a
+  missing or anonymous caller (a `401`, a refused handler); and where your code lets an absent context through, for
+  example as "a command with no request of its own", it gives a permit the test did not expect: a test that expects a
+  denial sees an allow. Search your tests for `SecurityContext.KEY`, `mockk<SecurityContext>` and every class that
+  implements `SecurityContext`.
 - **Breaking: three shapes of a document that never did what they read no longer compile** (`DOC-9`, `DOC-10`,
   `DOC-11`). Each refuses a document whose statement already did not apply as written:
   - `ignoreCase` on `eq` or `prefix` with a literal holding a letter beyond ASCII (`Ärzte`), where missing a spelling
