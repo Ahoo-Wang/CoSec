@@ -21,7 +21,8 @@ request. The builder is `@ExperimentalCoSecApi` ([Stability levels](#stability-l
 
 Extension points are implemented in Kotlin. The data plane's ports are `suspend` functions, and the ids (`TenantId`,
 `AppId`, `PrincipalId`) are value classes, so a method with one in its signature has a mangled JVM name
-(`memberships-hPxUw84`) that Java cannot declare. A Java application configures the starter or calls the builder, and
+(`memberships-hPxUw84`) that Java cannot declare. A Java application configures the starter, reads the caller, and checks with `checkMono` (WebFlux) or `checkBlocking`
+(WebMvc); the pipeline, token issuing and revocation suspend, which Java cannot call. It
 writes its implementations of CoSec's ports in Kotlin. Durations, instants and clocks in public and SPI signatures are
 `java.time`'s, never `kotlin.time`'s (`KotlinTimeSignatureTest`).
 
@@ -213,13 +214,30 @@ and the API key header
 
 The starter's default is a `CompositeAuthenticator`: a request with an API key is judged by the API key authenticator
 alone (when `cosec.api-key.enabled`), any other request by the JWT `TokenAuthenticator`. **Your `Authenticator` bean
-replaces all of it.** To accept another token format and keep the built-in ones, build them yourself and delegate:
+replaces all of it, and with it every `cosec.authentication.revocation.*` setting**: the starter hands those to the
+`TokenAuthenticator` it builds, and a `TokenAuthenticator` you build has the constructor's defaults, a skew of 5 seconds
+and `fail-closed: false`, whatever the operator set. To accept another token format and keep the built-in ones, build
+them yourself, take each setting from where the starter does, and delegate:
 
 ```kotlin
 @Bean
-fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys: ApiKeyReader): Authenticator {
+fun cosecAuthenticator(
+    algorithm: Algorithm,
+    verifier: ObjectProvider<TokenVerifier>,   // your own verifier, if you registered one; the starter prefers it
+    tokenStore: TokenStore,                    // cosec-cocache's store: its `reader` is the starter's revocation reader
+    unchecked: UncheckedRevocations,           // the starter's counter of tokens accepted without a revocation check
+    keys: ApiKeyReader,                        // the Redis keys' reader; with the in-memory store, InMemoryApiKeyStore.reader
+    @Value("\${cosec.authentication.revocation.skew:5s}") skew: Duration,
+    @Value("\${cosec.authentication.revocation.fail-closed:false}") failClosed: Boolean,
+): Authenticator {
     val builtIn = CompositeAuthenticator(
-        TokenAuthenticator(JwtTokenVerifier(algorithm), revocations),
+        TokenAuthenticator(
+            verifier.getIfAvailable { JwtTokenVerifier(algorithm) },
+            (tokenStore as CoCacheTokenStore).reader,   // a RevocationReader bean of your own, if you have one
+            revocationSkew = skew,
+            acceptUnavailableRevocations = !failClosed,  // true accepts a token while revocations cannot be read
+            unchecked = unchecked,
+        ),
         ApiKeyAuthenticator(keys),
     )
     val sessions = SessionTokenAuthenticator() // your own Authenticator for "Session ..." tokens
@@ -232,6 +250,10 @@ fun cosecAuthenticator(algorithm: Algorithm, revocations: RevocationReader, keys
     }
 }
 ```
+
+An operator who set `cosec.authentication.revocation.fail-closed: true` is open again the moment the recipe forgets
+the line that reads it, and nothing logs it: keep the three settings, or the revocation hardening is lost
+([the exception](../guide/security-model.md#the-two-documented-exceptions)).
 
 A `TokenVerifier` of your own returns a `VerifiedToken` (`me.ahoo.cosec.spi.token`), an immutable value built from the
 claims it verified: `id`, `principal`, `tenant`, `app` (the token's `aud`), `roles`, `policies`, `attributes`, its times and
@@ -252,7 +274,7 @@ users is in [Authentication](../integration/authentication.md).
 
 | Extension point | Contract |
 |---|---|
-| `TokenStore` | The write side of revocation, used by logout: `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`, both suspending and non-blocking. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
+| `TokenStore` | The write side of revocation, called by CoSec's own `TokenRevoker`, never by your code: `revoke(tokenId, ttl)` takes a token's `jti` (`VerifiedToken.id`), never the token, so `revoke(accessToken, ttl)` writes a key named after a live credential and revokes nothing. An application logs a user out, or revokes a principal, through `TokenRevoker` ([Logout and revocation](../integration/authentication.md#logout-and-revocation)). The store's methods are `revoke(tokenId, ttl)`, `revokeSubject(tenant, principal, issuedBefore, ttl)`, both suspending and non-blocking. An entry must outlive the refresh token it revokes. A store that cannot revoke every token of a principal throws from `revokeSubject`, so an emergency revocation never silently does nothing. |
 | `TokenFamilyStore` | The sessions of refresh tokens ([Sessions](../integration/authentication.md#sessions)): `create`, `read`, and `replace` a family only over the version read, atomically across instances. A failed read or an unconfirmed write throws. Read and written on login, refresh and logout only. |
 | `RevocationReader` | The read side, called on every authenticated request: `isRevoked(tokenId)`, `subjectRevokedBefore(tenant, principal)`. Both suspend and must not block. |
 | `ApiKeyReader` | `findByHash(hash): ApiKey?`, suspending. Return null for an unknown key; throw when the lookup fails (the request answers `503`). |
