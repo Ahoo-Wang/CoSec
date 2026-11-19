@@ -34,6 +34,7 @@ class PathNormalizerTest {
             "/a/./b",
             "/a/%2e/b",
             "/a/%zz/b",
+            "/a/%2g/b",
             "/a/%2",
             "/a/%",
             "/public/..;/admin",
