@@ -10,6 +10,20 @@ plane, which checks and compiles it, can try it on live traffic in a shadow wind
 approval when it cannot prove a change safe, and only then publishes it. This page walks through that workflow and the
 tools around it. The fields themselves are in the [policy language](./language.md).
 
+## Prove it with a test {#prove-it-with-a-test}
+
+Before a document reaches the control plane, a test in your own build can prove what it decides, with the engine every
+instance runs. `cosec-testkit` has three levels, from the document to your application:
+
+| You want to prove | Use | Where |
+|---|---|---|
+| That a request the documents should permit is permitted, and one they should refuse is not: scenario files next to the documents | `PolicyTestKit` | [Testing decisions](#testing-decisions) |
+| That the code around the decision behaves: the status and problem CoSec answers, a handler reading the caller | `PipelineFixture` | [Testing your code against a real pipeline](#testing-your-code-against-a-real-pipeline) |
+| That your handler or function that reads the caller works, with a `SecurityContext` the pipeline made | `PermittedRequest` | [Testing your application](#testing-your-application) |
+
+The same documents can also be checked without a test, with the compiler ([Policies in CI](#policies-in-ci)). The rest of
+this page is about changing documents that are already live.
+
 ## The control plane
 
 The control plane comes with the `cosec-control` module (it needs `cosec-cocache`, since documents live in

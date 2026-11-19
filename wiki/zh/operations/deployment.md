@@ -16,6 +16,8 @@ CI 在每次推送到 `main`、`7.x` 和发布分支时、为每个版本标签�
 `registry.cn-shanghai.aliyuncs.com/ahoo/cosec-gateway`，支持 `linux/amd64` 和 `linux/arm64`。网关服务是一个应用：只以
 镜像发布，从不作为库发布。
 
+**标签。** 分支推送以分支名为标签（`main`、`7.x`；名称中的 `/` 变为 `-`），拉取请求以 `pr-<编号>` 为标签，每晚的构建会刷新 `main`：这些标签随每次构建移动，所以不要在生产中运行它们。版本标签 `v8.0.0-beta.4` 发布 `8.0.0-beta.4`，它指向唯一的一个发布。预发布版本没有其他标签；稳定版本还会把 `<主版本>.<次版本>`（`8.0`）移到它最新的补丁版本。请固定确切的版本，或固定你测试过的镜像的摘要（`ahoowang/cosec-gateway@sha256:...`）：浮动标签可能在两次重启之间悄悄变化。[`k8s/`](#kubernetes) 里的清单在 `k8s/base/kustomization.yaml` 中固定了版本。
+
 - **JDK。** CoSec 的库以 Java 21 为目标，这也是基于它们的应用所需的版本。镜像本身是一个应用，运行在 JDK 25，即
   Alibaba Dragonwell 25（`dragonwell:25-ubuntu`）上，并带有 JDK 25 的 [AOT 缓存](#aot-cache)：它的运行时是 25，而不是 21。
 - **必需配置。** `COSEC_JWT_SECRET`（没有默认值，见[认证](../integration/authentication.md)）和 Redis 地址，例如
@@ -102,6 +104,8 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
    发布；不经窗口发布时，该实例对需要该文档的每个请求回答 `503`，除非有 DENY 匹配。
 
 ## 就绪 {#readiness}
+
+**预热什么。**平台文档总是在实例就绪之前加载。当某个应用或租户在启动后的第一个请求不能等待时，把应用列入 `prewarm-apps`，或把租户列入 `prewarm-tenants`：承载流量的应用和租户，以及文档大到加载并编译所需时间超过 [`cold-load-timeout`](./configuration.md#snapshot)（2 秒）的那些，因为等待更久的请求是 `503`。每个列出的文档都会推迟就绪，加载或编译不了的文档会让实例一直未就绪（[实例未就绪](./troubleshooting.md#instance-is-not-ready)），所以只列没有它就不应提供服务的文档，而不是每个租户。让 `cold-load-timeout` 小于 [`cosec.pipeline.timeout`](./configuration.md#pipeline)（5 秒），并给管道的其余部分留出余量：等满整个管道超时的请求是 `503`，原因为 `deadline`，不论加载自身的限制是多少。
 
 实例只有在安装了平台文档，以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 列出的每个文档
 （列表为空表示只有平台文档）之后才算就绪。在此之前它会对每个被路由的请求回答 `503`，所以 starter 把 Spring Boot 的
@@ -214,6 +218,8 @@ management:
   overlay 替换这个变量；修改时同时修改内存请求和限制。
 - **CPU。** JVM 按 CPU 限制确定 GC、JIT 和 Netty 的线程数，自动伸缩器按 CPU 请求计算。
 
+**能放下多少文档。**编译后的文档在堆上，CoSec 最多保留 `max-apps` 个应用文档和 `max-tenants` 个租户文档（默认各 1,024 个；在一阵冷加载期间，一个族可能短暂保留最多两倍），外加从不被丢弃的平台文档（[实例如何读取文档](./storage.md#how-instances-read-documents)）。一个文档占多少取决于它的策略、语句和绑定，CoSec 不报告这个数字。用你自己的文档测量：用平台文档和一个租户启动实例，依次请求需要每个租户文档的路径，在一次完整回收之后读取 `jvm_memory_used_bytes{area="heap"}`，或 `jcmd <pid> GC.heap_info`，取几个数量。然后把 `max-apps` 和 `max-tenants` 设为堆能放下的数量并留有余量，而不是你拥有的租户数：被丢弃的文档在下次需要时会重新加载。堆太小时见[pod 内存耗尽](./troubleshooting.md#a-pod-runs-out-of-memory)。
+
 原生部分在镜像中测得（8.0 预览版构建，`linux/arm64`，Docker，使用上述限制和只读根文件系统）：在没有发布平台文档、每个请求都回答
 `503` 的情况下，向一条路由和健康端点发送约 45,000 个请求后，容器占用 471 MiB（dev）和 1,277 MiB（production），没有进程因内存被杀。
 
@@ -250,7 +256,7 @@ gh workflow run system-test.yml --ref main -f ref=<commit>
 它覆盖的内容，每一项都是网络上可观察的结果：
 
 - **冷启动**：没有文档时每个请求都是 `503`，就绪检查拒绝而存活检查保持；`cosec-migrate publish` 和 `bootstrap` 之后，每个进程就绪并做出决策；
-- 真实网关转发的**身份**（`CoSec-Identity`，带 CoSec 自己令牌的会话）、被剥离的内容（伪造的身份、客户端的凭据）、
+- 真实网关转发的**身份**（`CoSec-Identity`，带 CoSec 自己令牌的会话）、被剥离的内容（伪造的身份、客户端的凭证）、
   [`contract/`](https://github.com/Ahoo-Wang/CoSec/tree/main/contract) 中的问题类型，以及模式可能误读的路径；
 - **跨进程的文档**：拒绝优先、租户隔离、应用、空间；
 - 通过控制面的**策略变更**：从被拒绝的变更、真实流量上的影子窗口，到批准、发布和回滚，无需重启即在每个进程生效；

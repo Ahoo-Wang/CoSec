@@ -74,7 +74,7 @@ ALLOW 永远不会胜过命中的 DENY。所有候选的 DENY 语句都在任何
 
 命中的 DENY 还胜过一切本会导致 Indeterminate 的情况：失败的语句、缺失的策略、无法读取的文档、无法获取的外部属性。
 
-**原因。** 拒绝优先让变更在一个方向上是安全的：新增 DENY 只会收窄权限，新增 ALLOW 永远撤销不了别人写的 DENY。由于决策只取决于候选的集合，评审者无需推敲它们的顺序。
+**原因。** 拒绝优先让变更在一个方向上是安全的：新增 DENY 只会收窄权限，新增 ALLOW 永远推翻不了别人写的 DENY。由于决策只取决于候选的集合，评审者无需推敲它们的顺序。
 
 ## 默认拒绝 {#default-deny}
 
@@ -282,6 +282,20 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 拦住被策略误放行的请求：发布前请先试验变更（[策略测试](../policies/testing.md)）；
 - 取代传输层安全：请在 TLS 之后运行，并妥善保管 `cosec.jwt.secret`。
 
+## 输出中的名称 {#names-in-output}
+
+同一个决策在不同输出里有不同的名字，因为每个输出（代码里的检查、控制面、审计事件、span、指标）都是为各自的读者写的。下面每一行是同一个概念在不同输出里的写法；没有任何一个被改名。
+
+| 概念 | 在哪里、怎么写 |
+|---|---|
+| 语句的效果 | 文档里是 `allow` 或 `deny`。正文把这些语句叫作 ALLOW 和 DENY。 |
+| 做出了什么决定 | 代码和场景的 `expect` 里是 `Permit`、`Deny`、`Indeterminate`、`Rejected`、`InvalidRequest`；审计的 `decision` 和 span 的 `cosec.authorize.result` 里是 `PERMIT`、`EXPLICIT_DENY`、`IMPLICIT_DENY` 等；指标的 `result` 用同样的词，小写（[每个输出里是什么做出了决定](../operations/observability.md#what-decided-in-every-output)）。决定说“放行”（permit），语句说“允许”（allow） |
+| 做出决定的语句 | 代码、场景以及控制面的 `simulate` 和 `explain` 里是 `by`：`policy`（策略 id）、`statement`（从零开始的序号）和 `name`。审计有 `authorization.source.policy` 和 `.statement`（`index`、`name`）；span 有 `cosec.authorize.policy.id`、`.statement.index` 和 `.statement.name`。**在场景里固定 `name`**：增加或调整语句顺序时序号会变 |
+| 语句是怎么生效的 | `by` 里的 `via`：代码和场景里是 `{"binding": id, "document": …}`、`{"attached": policyId}`、`"builtin"` 或 `{"boundaryOf": tenant}`；控制面的回答里是一个字符串，即绑定 id，旁边有 `document`，或者 `attached:<policyId>`。审计有 `binding`（同样的字符串）和 `authorization.source.via`；span 有 `cosec.binding.id`。策略自己的条件管着它的所有语句，是 `MatcherFailed` 原因里的 `guard` |
+| CoSec 派生的名称 | 简写权限是策略 `perm:<appId>/<id>`；角色条目为每个权限派生一条绑定 `role:<roleId>@<app>:<permission>`（[角色](../policies/role-permissions.md#roles)）；黑名单是 `builtin`。你没有写过这样名字的策略或绑定，它们也会出现在 `by` 和审计的 `binding` 里 |
+| 文档的修订 | 文档里是 `revision`；`explain` 的回答里是 `version`（`platform`、`app`、`tenant`）；审计里是 `snapshotVersion`；span 的 `cosec.snapshot.version` 里是 `<platform>/<app>/<tenant>`；`at` 是 `explain` 的请求成员，用来把 `version` 传回去（[解释决策](../integration/checks.md)） |
+| 动作属于哪里 | `service:verb` 里的 `service`；未映射的路由属于 `http` 命名空间，写作 `http:<METHOD>`（[路由映射](../policies/language.md#route-maps)） |
+
 ## 加固清单 {#hardening-checklist}
 
 上线之前：
@@ -290,7 +304,7 @@ CoSec 决定请求能否到达你的处理器。它不会：
 - 按你的代理链设置 `cosec.authorization.remote-ip.max-trusted-index`，客户端可直接访问的宿主设为 `0`；使用 `native` 转发头策略时，改为在服务器上配置代理链（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。
 - 在每个只服务一个应用的服务上设置 `cosec.authorization.scope.app-id`，在面向多个应用的网关的每条路由上设置 `cosec-app-id`。
 - 在网关上，只给指向你自己服务、又不是 `lb://` 的路由标上 `cosec-identity: true`，并把 actuator 放在管理端口上。
-- 把 Redis 的写权限当成对每一个决策的权限：能写 CoSec 的 key 的人，就能改写每个请求据以决策的文档，也能撤销或恢复令牌。
+- 把 Redis 的写权限当成对每一个决策的权限：能写 CoSec 的 key 的人，就能改写每个请求据以决策的文档，也能吊销或恢复令牌。
   通过 TLS 连接 Redis（`rediss://`，或 `spring.data.redis.ssl.enabled`），让中间网络上的任何人都无法读取或篡改实例读到的
   内容；并给控制面和数据面实例各自的用户（[谁可以写哪些 key](../operations/storage.md#who-may-write-which-keys)）。数据面实例（不运行控制面
   的实例：没有 `cosec-control`，或在承载两种角色的镜像上设置 `cosec.control.enabled=false`）以只读方式读取文档和候选，所以它的用户对它们只需要读权限，Redis 会拒绝这个用户写入其中任何一个。它的凭证仍会写入

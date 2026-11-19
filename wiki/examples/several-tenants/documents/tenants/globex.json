@@ -1,0 +1,28 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-01T08:00:00Z",
+  "boundary": "boundary-read-only",
+  "policies": [
+    {
+      "id": "globex-export",
+      "statements": [
+        {
+          "name": "export",
+          "effect": "allow",
+          "action": "http:POST",
+          "resource": "http:path:/api/export"
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "globex-export",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "globex-export"
+    }
+  ]
+}

@@ -277,13 +277,13 @@ CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标�
   所有事件，都在之后投递；失败记录为 `Change listener [<name>] could not record <event>.` 修订记录是已发布内容的持久
   记录。受控事件说明这一步即将发生，而不是已经发生：它之后的检查仍可能拒绝这一步（变更在此期间变化了时返回 `409`），
   `BREAK_GLASS_APPROVED` 或 `ABANDONED` 之后都可能如此。发生了什么以变更的状态为准，发布则另以修订历史为准。
-- **备注是自由文本**，其中一部分出自变更的作者（提议、申请或撤销的原因）：某一步是谁做的，看事件的 `operator`，不要看备注。
+- **备注是自由文本**，其中一部分出自变更的作者（提议、申请或吊销的原因）：某一步是谁做的，看事件的 `operator`，不要看备注。
 - **break-glass 需要 `REQUIRED` 变更监听器：** 没有时，创建或修改 break-glass 绑定得到 `503`
   （`break-glass needs a REQUIRED change listener, and none is configured`）。
 - **`ABANDONED` 指明是谁放弃了变更，并在备注中写明变更的作者**（`author <tenant>/<principal>: <note>`）。放弃
   break-glass 变更像 `PUBLISHING` 一样受控：它需要一个 `REQUIRED` 变更监听器（没有时返回 `503`），由它在变更存为已放弃之前
   记下。放弃其他变更在之后记录。
-- **再次撤销而发布的停住的撤销，其 `REVOKED`** 指明再次撤销的人，备注加上其原因
+- **再次吊销而发布的停住的吊销，其 `REVOKED`** 指明再次吊销的人，备注加上其原因
   （`<first reason>; published again by <tenant>/<principal>: <reason>`），它的 `PUBLISHING` 也是如此。
 - **`PUBLISHED` 之后可能跟着 `HEADS_MOVED` 或 `REVIEW_NEEDED`：** 变更检查时读过的其他文档在它写入之前变化了
   （[一次发布比较什么](./storage.md#what-a-publish-compares)）。事件列出变化的头（`moved`：文档，app 列表记为 `list:apps`；

@@ -1,0 +1,17 @@
+{
+  "description": "The platform policy read-orders, bound to everyone, permits a principal of acme.",
+  "credential": {
+    "tenant": "acme",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/api/orders"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

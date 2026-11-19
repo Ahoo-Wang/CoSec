@@ -36,6 +36,7 @@ const sidebar: DefaultTheme.SidebarItem[] = [
       { text: '使用空间的应用', link: '/zh/scenarios/spaces' },
       { text: '限定在一个空间的服务账号', link: '/zh/scenarios/service-account' },
       { text: '租户所有者', link: '/zh/scenarios/tenant-owner' },
+      { text: '多个租户', link: '/zh/scenarios/several-tenants' },
       { text: '外部事实源同步角色', link: '/zh/scenarios/external-source' },
       { text: '按业务动作授权', link: '/zh/scenarios/route-maps' },
       { text: '网关拓扑', link: '/zh/scenarios/gateway' },

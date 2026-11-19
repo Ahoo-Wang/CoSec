@@ -1,0 +1,18 @@
+{
+  "description": "The binding is in acme's document: a principal of initech, which has no such binding, is denied (implicit).",
+  "credential": {
+    "tenant": "initech",
+    "id": "ivan"
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/api/export"
+    }
+  },
+  "expect": {
+    "decision": "Deny",
+    "by": null
+  }
+}

@@ -339,7 +339,7 @@ tokens and decides in its own code). Tokens are issued for one app (`TokenSubjec
 - Blacklist: declare a `BlacklistSource` bean and the starter registers the blacklist provider; without one, startup
   logs an INFO line and nothing is blocked.
 - Extension beans (`AttributeProvider`, `MembershipProvider`, `DecisionListener`, `RateLimiter`, `Authenticator`): use
-  `$cosec-custom-matcher`. Register the same attribute providers on every instance and on the control-plane host.
+  `$cosec-extending`. Register the same attribute providers on every instance and on the control-plane host.
 - Policy tests: `cosec-testkit` (test scope) runs scenarios against your documents; use `$cosec-policy-author`.
 
 ## Verification
