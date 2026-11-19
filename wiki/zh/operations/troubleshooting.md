@@ -295,6 +295,16 @@ Redis may evict CoSec's policy snapshot: maxmemory-policy is {<node>=<policy>}, 
 
 这个指示器是告警：不要把它放进就绪组，就绪组只由 `cosecSnapshot` 承担。放进去的话，Redis 的一次改动会让所有实例同时退出轮转。
 
+## pod 内存耗尽 {#a-pod-runs-out-of-memory}
+
+先看是哪一块内存耗尽了；要调的旋钮不同：
+
+| 你看到的 | 原因 | 要改什么 |
+|---|---|---|
+| 日志里有 `java.lang.OutOfMemoryError: Java heap space`，`data/` 里有堆转储（镜像自己的选项会写它），pod 重启 | 编译后的文档加上网关自己的分配放不进堆 | 把 [`max-apps` 和 `max-tenants`](./configuration.md#snapshot) 降到堆能放下的数量（[能放下多少文档](./deployment.md#memory)），或把堆连同容器限制一起调大 |
+| `java.lang.OutOfMemoryError: Direct buffer memory` | 负载下 Netty 的缓冲区达到了 `-XX:MaxDirectMemorySize` | 连同限制一起调大直接内存；读取 `jvm_buffer_memory_used_bytes{id="direct"}` |
+| pod 被 `OOMKilled`（退出码 `137`），没有 Java 错误 | 容器限制低于堆加直接内存再加 JVM 原生部分约 250 MiB | 调大限制，或降低 `-Xmx` 和 `MaxDirectMemorySize`：限制是这三者之和，再加四分之一（[内存](./deployment.md#memory)） |
+
 ## 探针回答 401 或 503，或 pod 在第一次发布之前反复重启 {#probes-answer-401-or-503}
 
 就绪或存活探针得到 CoSec 的 `application/problem+json`：第一份平台文档安装之前是 `503` `unavailable`，之后是 `401` `unauthorized`；或者在新部署上，第一份文档发布之前 pod 不停重启。

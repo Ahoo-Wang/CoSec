@@ -395,6 +395,16 @@ timing out, or no node to ask) under `eviction-check=fail`: allow `INFO` (`+info
 The indicator is an alert: keep it out of the readiness group, which `cosecSnapshot` alone serves. In it, one change to
 Redis would take every instance out of rotation at once.
 
+## A pod runs out of memory {#a-pod-runs-out-of-memory}
+
+Read which memory ran out; the knob differs:
+
+| What you see | Cause | What to change |
+|---|---|---|
+| `java.lang.OutOfMemoryError: Java heap space` in the log, a heap dump in `data/` (the image's own options write it), and the pod restarts | The compiled documents and the gateway's own allocation do not fit the heap | Lower [`max-apps` and `max-tenants`](./configuration.md#snapshot) to what the heap holds ([How many documents fit](./deployment.md#memory)), or raise the heap together with the container's limit |
+| `java.lang.OutOfMemoryError: Direct buffer memory` | Netty's buffers reached `-XX:MaxDirectMemorySize` under load | Raise the direct memory with the limit; read `jvm_buffer_memory_used_bytes{id="direct"}` |
+| The pod is `OOMKilled` (exit code `137`) with no Java error | The container's limit is below the heap plus the direct memory plus about 250 MiB for the JVM's native part | Raise the limit, or lower `-Xmx` and `MaxDirectMemorySize`: the limit is the sum of the three, plus a quarter ([Memory](./deployment.md#memory)) |
+
 ## Probes answer 401 or 503, or pods restart before the first publish {#probes-answer-401-or-503}
 
 A readiness or liveness probe answers CoSec's `application/problem+json`: `503` `unavailable` before the first platform

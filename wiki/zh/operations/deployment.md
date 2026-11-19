@@ -105,6 +105,8 @@ cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it 
 
 ## 就绪 {#readiness}
 
+**预热什么。**平台文档总是在实例就绪之前加载。当某个应用或租户在启动后的第一个请求不能等待时，把应用列入 `prewarm-apps`，或把租户列入 `prewarm-tenants`：承载流量的应用和租户，以及文档大到加载并编译所需时间超过 [`cold-load-timeout`](./configuration.md#snapshot)（2 秒）的那些，因为等待更久的请求是 `503`。每个列出的文档都会推迟就绪，加载或编译不了的文档会让实例一直未就绪（[实例未就绪](./troubleshooting.md#instance-is-not-ready)），所以只列没有它就不应提供服务的文档，而不是每个租户。让 `cold-load-timeout` 小于 [`cosec.pipeline.timeout`](./configuration.md#pipeline)（5 秒），并给管道的其余部分留出余量：等满整个管道超时的请求是 `503`，原因为 `deadline`，不论加载自身的限制是多少。
+
 实例只有在安装了平台文档，以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 列出的每个文档
 （列表为空表示只有平台文档）之后才算就绪。在此之前它会对每个被路由的请求回答 `503`，所以 starter 把 Spring Boot 的
 就绪状态改为 `REFUSING_TRAFFIC`，文档安装后再改回 `ACCEPTING_TRAFFIC`。跟随 `/actuator/health/readiness` 的负载均衡器
@@ -215,6 +217,8 @@ management:
   固定的 `-Xmx` 也会覆盖 `-XX:MaxRAMPercentage`，所以要给出明确的大小。base 在 `JVM_MEMORY_OPTS` 中设置它们，production
   overlay 替换这个变量；修改时同时修改内存请求和限制。
 - **CPU。** JVM 按 CPU 限制确定 GC、JIT 和 Netty 的线程数，自动伸缩器按 CPU 请求计算。
+
+**能放下多少文档。**编译后的文档在堆上，CoSec 最多保留 `max-apps` 个应用文档和 `max-tenants` 个租户文档（默认各 1,024 个；在一阵冷加载期间，一个族可能短暂保留最多两倍），外加从不被丢弃的平台文档（[实例如何读取文档](./storage.md#how-instances-read-documents)）。一个文档占多少取决于它的策略、语句和绑定，CoSec 不报告这个数字。用你自己的文档测量：用平台文档和一个租户启动实例，依次请求需要每个租户文档的路径，在一次完整回收之后读取 `jvm_memory_used_bytes{area="heap"}`，或 `jcmd <pid> GC.heap_info`，取几个数量。然后把 `max-apps` 和 `max-tenants` 设为堆能放下的数量并留有余量，而不是你拥有的租户数：被丢弃的文档在下次需要时会重新加载。堆太小时见[pod 内存耗尽](./troubleshooting.md#a-pod-runs-out-of-memory)。
 
 原生部分在镜像中测得（8.0 预览版构建，`linux/arm64`，Docker，使用上述限制和只读根文件系统）：在没有发布平台文档、每个请求都回答
 `503` 的情况下，向一条路由和健康端点发送约 45,000 个请求后，容器占用 471 MiB（dev）和 1,277 MiB（production），没有进程因内存被杀。
