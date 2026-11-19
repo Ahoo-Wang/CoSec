@@ -18,6 +18,8 @@ spring:
           instances:
             behind:
               - uri: http://behind:8080
+            auth:
+              - uri: http://auth:8080
     gateway:
       server:
         webflux:
@@ -28,6 +30,11 @@ spring:
               uri: lb://behind
               predicates:
                 - Path=/behind/**
+            # The login host's sign-in, refresh and logout. The pair travels in the body; the host decides for itself.
+            - id: auth
+              uri: lb://auth
+              predicates:
+                - Path=/auth/**
             # The same service by its address, with no cosec-identity metadata: it receives no identity (IDN-7).
             - id: plain
               uri: http://behind:8080

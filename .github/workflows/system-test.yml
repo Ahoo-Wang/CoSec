@@ -54,9 +54,15 @@ jobs:
       ARTIFACT: system-test-${{ github.run_id }}-${{ github.run_attempt }}
       COMPOSE_FILE: test/system-test/compose.yaml
       COSEC_SYSTEM_BEHIND_IMAGE: cosec-system-behind:test
+      COSEC_SYSTEM_AUTH_IMAGE: cosec-system-auth:test
+      COSEC_SYSTEM_ENFORCER_IMAGE: cosec-system-enforcer:test
       # A throwaway HMAC secret for this run's gateways: not a secret, and never a deployment's.
       COSEC_SYSTEM_JWT_SECRET: system-test-only-not-a-secret-0123456789abcdef
       COSEC_SYSTEM_GATEWAY_URL: http://127.0.0.1:8080
+      COSEC_SYSTEM_GATEWAY2_URL: http://127.0.0.1:8081
+      COSEC_SYSTEM_AUTH_URL: http://127.0.0.1:8090
+      COSEC_SYSTEM_ENFORCER_URL: http://127.0.0.1:8091
+      COSEC_SYSTEM_ENFORCER_MANAGEMENT_URL: http://127.0.0.1:8092
       COSEC_SYSTEM_REDIS_URL: redis://127.0.0.1:6379
     steps:
       # Before anything is pulled: only CoSec's own published images may be tested in place of the built one.
@@ -89,7 +95,7 @@ jobs:
           cache-read-only: true
 
       - name: Build the distributions
-        run: ./gradlew :gateway-server:installDist :system-behind:installDist :migrate:installDist :system-test:testClasses
+        run: ./gradlew :gateway-server:installDist :system-behind:installDist :system-auth:installDist :system-enforcer:installDist :migrate:installDist :system-test:testClasses
 
       # The image as the Dockerfile ships it, its AOT cache trained, for the runner's platform only.
       - name: Build or pull the gateway image
@@ -103,7 +109,11 @@ jobs:
           fi
 
       - name: Build the services' images
-        run: docker build --file test/system-test/docker/app.Dockerfile --build-arg APP=system-behind --tag "$COSEC_SYSTEM_BEHIND_IMAGE" test/system-behind
+        run: |
+          for app in behind auth enforcer; do
+            docker build --file test/system-test/docker/app.Dockerfile --build-arg "APP=system-$app" \
+              --tag "cosec-system-$app:test" "test/system-$app"
+          done
 
       # Waits on each container's health check (liveness), never on a sleep.
       - name: Start the stack

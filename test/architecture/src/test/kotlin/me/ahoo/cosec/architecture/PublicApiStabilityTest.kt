@@ -35,6 +35,8 @@ class PublicApiStabilityTest {
             "client-host",
             "system-test",
             "system-behind",
+            "system-auth",
+            "system-enforcer",
             "code-coverage-report"
         )
 

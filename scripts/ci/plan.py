@@ -35,7 +35,7 @@ EXCLUDED = {"bom", "dependencies", "code-coverage-report", "gateway-server"}
 REDIS = {"cocache", "social", "spring-boot", "migrate", "e2e"}
 
 # Test-only projects (the root build's testOnlyProjects) apply no JaCoCo: their tests produce no coverage report.
-UNCOVERED = {"conformance", "architecture", "e2e", "client-host", "system-test", "system-behind"}
+UNCOVERED = {"conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer"}
 
 # Projects run in a job of their own instead of their group's, to even out the jobs' wall time.
 SPLIT = set()
