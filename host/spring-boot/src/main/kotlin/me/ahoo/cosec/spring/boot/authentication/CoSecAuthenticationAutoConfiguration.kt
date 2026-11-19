@@ -58,8 +58,13 @@ internal class CoSecAuthenticationAutoConfiguration {
         return authenticationProvider
     }
 
+    /**
+     * The one composite the login routes and [TokenCompositeAuthentication] use. Backs off for an application's own
+     * [CompositeAuthentication] (UB-15): with both, the starter's `@Primary` would make two primaries.
+     */
     @Bean
     @Primary
+    @ConditionalOnMissingBean
     fun compositeAuthentication(authenticationProvider: AuthenticationProvider): CompositeAuthentication {
         return CompositeAuthentication(authenticationProvider)
     }
