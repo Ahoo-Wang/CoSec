@@ -15,28 +15,35 @@
 
 package me.ahoo.cosec.webmvc
 
-import io.mockk.every
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
 
 internal class SecurityContextHolderTest {
-    private val anonymous = mockk<CoSecPrincipal>()
-
     @Test
     fun test() {
         SecurityContextHolder.context.assert().isNull()
-        SecurityContextHolder.setContext(
-            mockk<SecurityContext> { every { principal } returns anonymous }
-        )
-        SecurityContextHolder.context!!.principal.assert().isEqualTo(anonymous)
+        val context = PermittingPipeline.context()
+        SecurityContextHolder.setContext(context)
+        SecurityContextHolder.context.assert().isSameAs(context)
         SecurityContextHolder.remove()
         assertThrownBy<IllegalArgumentException> {
             SecurityContextHolder.requiredContext
+        }
+    }
+
+    /** `PIP-27`: a context the pipeline did not make reads as none, so it is never taken for a caller. */
+    @Test
+    fun `a context the pipeline did not make reads as none`() {
+        try {
+            SecurityContextHolder.setContext(mockk<SecurityContext>())
+            SecurityContextHolder.context.assert().isNull()
+            assertThrownBy<IllegalArgumentException> { SecurityContextHolder.requiredContext }
+        } finally {
+            SecurityContextHolder.remove()
         }
     }
 }

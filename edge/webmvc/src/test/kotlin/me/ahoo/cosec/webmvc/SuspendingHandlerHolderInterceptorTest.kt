@@ -14,7 +14,6 @@
 
 package me.ahoo.cosec.webmvc
 
-import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.test.asserts.assert
@@ -36,7 +35,7 @@ class SuspendingHandlerHolderInterceptorTest {
     private val interceptor = SuspendingHandlerHolderInterceptor()
 
     private fun handle(name: String): SecurityContext? {
-        SecurityContextHolder.setContext(mockk())
+        SecurityContextHolder.setContext(PermittingPipeline.context())
         val method = Handlers::class.java.methods.first { it.name == name }
         interceptor.preHandle(MockHttpServletRequest(), MockHttpServletResponse(), HandlerMethod(Handlers(), method))
             .assert().isTrue()
@@ -57,7 +56,7 @@ class SuspendingHandlerHolderInterceptorTest {
     @Test
     fun aBlockingHandlerKeepsTheHolder() {
         handle("blocking").assert().isNotNull()
-        SecurityContextHolder.setContext(mockk())
+        SecurityContextHolder.setContext(PermittingPipeline.context())
         interceptor.preHandle(MockHttpServletRequest(), MockHttpServletResponse(), Any()).assert().isTrue()
         SecurityContextHolder.context.assert().isNotNull()
     }

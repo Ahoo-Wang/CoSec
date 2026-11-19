@@ -24,6 +24,8 @@ classpath (`META-INF/spring-configuration-metadata.json`) declares it, or when i
 property. The message lists every unknown key and links
 [the table of removed and renamed keys](./upgrading.md#removed-and-renamed-properties). No property turns this check
 off: a key prefix a release replaced, had it been ignored, would leave token revocations where nothing reads them.
+The check runs before any bean is created, the application's own included, so a configuration that still sets
+removed keys hears of every one of them before any other startup failure, such as a missing token store.
 
 This check, and every other startup check of the starter (missing modules, exposed actuator endpoints on a gateway,
 Redis's eviction policy, replica reads, API keys without a `MembershipProvider`), runs with
@@ -216,7 +218,9 @@ How windows work: [Testing changes](../policies/testing.md).
 | `cosec.jwt.session.rotation-leeway` | duration | `30s` | How long after a refresh the pair it replaced is answered with a pair of the current generation instead of ending the session: the window a client has to retry a refresh whose response it lost, and in which two tabs refreshing at once both keep a pair. Cover your clients' timeout and one retry. A copy answered within it is caught at the next refresh after it. |
 
 With JWT enabled, startup fails unless revocations and sessions can be recorded and read: `cosec-cocache`, or a
-`TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own.
+`TokenStore`, a `RevocationReader` and a `TokenFamilyStore` bean of your own. A service that only verifies the tokens
+another service issues reads the issuer's revocations
+([A service that verifies tokens another service issues](../scenarios/resource-server.md)).
 
 ## API keys
 

@@ -13,13 +13,14 @@ needs the hooks of `@ahoo-wang/fetcher-react` 6.x. Moving from those:
 
 ```bash
 pnpm add react @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
-  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react
+  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
 ```
 
-Until CoSec 8.0 is released these are pre-releases, which npm does not install
-by default: use a dist-tag, `pnpm add @ahoo-wang/cosec-react@beta` (`@alpha`,
-`@rc`), or an exact version. They are published with each CoSec release, at the
-version of CoSec.
+Until CoSec 8.0 is released, the `latest` tag of both packages points at a `0.0.0`
+placeholder that is marked deprecated, so an install without a tag gets the
+placeholder and a deprecation notice, not the client. Install `@beta`, as above,
+or an exact version. After the release, drop `@beta`. They are published with each
+CoSec release, at the version of CoSec.
 
 Peer dependencies: `react` (19) and `@ahoo-wang/cosec-fetcher`; the fetcher
 packages are the client's (`cosec-fetcher`'s peers), and nothing else comes

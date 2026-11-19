@@ -23,7 +23,9 @@ import java.time.Instant
 /**
  * The read side of a [TokenStore] (RFC 0006 §5.3.2): whether a token, or every token of its principal, was revoked, as
  * suspend functions that never block the calling thread, which may be an event loop. The pipeline, refresh and
- * [TokenRevoker] all read it, through one judgement (`TokenRevocation` in `cosec-runtime`).
+ * [TokenRevoker] all read it, through one judgement, `TokenRevocation` of `cosec-runtime`: public, and a bean of the
+ * starter. Code that verifies a token outside the pipeline (an internal port, a WebSocket handshake, a message
+ * header) asks it too, after [TokenVerifier.verify], which does not check revocation.
  *
  * A reader reports what it knows and never decides what a failure means: when its store cannot be read it throws
  * [RevocationUnavailableException], never "not revoked". The caller decides: the pipeline's `TokenAuthenticator` lets the
@@ -47,7 +49,12 @@ interface RevocationReader {
     suspend fun subjectRevokedBefore(tenant: TenantId, principal: PrincipalId): Instant?
 
     companion object {
-        /** Nothing is ever revoked: for a host that verifies tokens no one revokes. */
+        /**
+         * Nothing is ever revoked. Only for tokens that no one, anywhere, revokes: not those of an issuer that logs
+         * users out or calls `revokeSubject`, whoever verifies them. A service that only verifies tokens another
+         * service issues must read that issuer's revocations, and with this reader it accepts every revoked token
+         * until it expires.
+         */
         val NONE: RevocationReader = object : RevocationReader {
             override suspend fun isRevoked(tokenId: String): Boolean = false
 

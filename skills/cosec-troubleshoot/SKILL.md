@@ -69,7 +69,7 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   suggest turning revalidation off.
 - **`CoSec does not read ... cosec.authorization.snapshot.key-prefix`** (or `cosec.authorization.cache.key-prefix`,
   `cosec.api-key.key-prefix`): one `cosec.key-prefix` replaced them (SNP-9), and they fail startup as unknown keys. Which
-  families move, from where to where, is at https://cosec.ahoo.me/operations/upgrading#from-8-0-0-alpha-2. Have the token
+  families move, from where to where, is at https://cosec.ahoo.me/operations/upgrading-previews#from-8-0-0-alpha-2. Have the token
   revocations and API keys copied to the new keys first (`COPY`, or `RENAME`, which keeps the expiry): a revocation
   left under the old prefix is no longer read, so the token it revoked would be accepted again. Then set
   `cosec.key-prefix` to the snapshot documents' prefix and remove the old properties; never suggest only renaming them.
@@ -161,9 +161,12 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   and connection factory of its own that is not the one CoSec injects (not `@Primary`). Never suggest replica reads
   for CoSec: Redis is its store of record, and a lagging replica can hand back a revoked API key.
   https://cosec.ahoo.me/operations/troubleshooting#startup-fails-because-redis-is-read-from-replicas
-- **`JWT is enabled, but no TokenStore records revoked tokens`** or **`Tokens are verified, but no revocation reader
-  is available`**: revocation is always on. Add `cosec-cocache` (Redis token store), or register a `TokenStore` and a
-  `RevocationReader` bean, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+- **`CoSec's tokens are on, but <stores> are missing`**: revocation is always on, and the message names every missing
+  store of the three (`TokenStore`, `RevocationReader`, `TokenFamilyStore`). Add `cosec-cocache` (all three on Redis),
+  or register a bean of each missing one, or set `cosec.jwt.enabled=false` on a service that does not verify tokens.
+  **`Tokens are verified against RevocationReader.NONE`** (`WARN`): revoked tokens are accepted until they expire;
+  right only where no one revokes a token. A service verifying an issuer's tokens reads the issuer's revocations
+  (`cosec-cocache` on the issuer's Redis, same `cosec.key-prefix`; https://cosec.ahoo.me/scenarios/resource-server).
 - **`Property [cosec.jwt.secret] must not be blank`**: set the secret (same algorithm and secret as the issuer).
   **`Property [cosec.jwt.secret] has <n> bytes, and HMAC256 needs at least 32`**: the secret must be at least 32, 48 or
   64 UTF-8 bytes for `hmac256`, `hmac384`, `hmac512` (RFC 7518 §3.2); set a longer one on the issuer and every verifier.
@@ -192,6 +195,15 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   share a listener name or an attribute path.
 
 ## Symptoms
+
+### A check in code is false though the documents permit it
+
+- `decide` answers `Deny(null)` before reading any document when the context's request has ended (`PIP-26`: kept
+  after the response was written; check within the request, which a streamed body or an async servlet request still
+  is), when the pipeline did not make the context (`PIP-27`: the readers return none for a hand-made or mocked one; in
+  tests use `PipelineFixture.securityContext` or `PermittedRequest`), or when the action has no `:` or names what
+  enforcement refuses (`PIP-15`).
+  https://cosec.ahoo.me/operations/troubleshooting#a-check-answers-false
 
 ### Every request is 503, or the instance is not ready
 

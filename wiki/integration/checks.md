@@ -22,6 +22,10 @@ Do not repeat the request's own check in the handler: the adapter has decided it
 limiting, and a second check can only disagree with it. A check is advice for the next step, not enforcement of the
 current one.
 
+A check is for **the request in progress**, with the `SecurityContext` of that request. It is not for a message
+consumer, a scheduler, or any work that runs after the request: see
+[Work that is not the request](#work-that-is-not-the-request).
+
 ## Checking a permission
 
 The starter registers an `AuthorizationChecker` bean (`me.ahoo.cosec.runtime`). It decides for the principal and
@@ -33,7 +37,8 @@ suspend fun check(security: SecurityContext, action: String, resource: String): 
 ```
 
 - `action` is `service:verb`, as the route map names it (`order:cancel`), or `http:<METHOD>` for an unmapped route.
-  A string without `:` is `false`.
+  A check applies no route map, so an `http:` action decides as it says, whether or not a route map maps that path
+  ([A check and a mapped route](#a-check-and-a-mapped-route)). A string without `:` is `false`.
 - `resource` is a typed resource, `type/id` (`order/42`), or a path starting with `/` (`/orders/42`), which is an
   `http` resource. It is read as the pipeline reads a request: its path parameters are removed, a path the pipeline
   [refuses with `400`](./web.md#the-request-path) is `false`, and so is any resource over a request path's length
@@ -108,8 +113,63 @@ decision:
 | Result | an HTTP status | `true` only on a Permit; `decide` answers the decision |
 
 A check fails closed: a `SecurityContext` the pipeline did not build (one you made yourself, or none) is `false`,
-whatever the documents say. There is therefore no check outside a request: a message consumer that acts for a user
-has no permitted request to check as, and must carry its own authorization.
+whatever the documents say. There is therefore no check outside a request.
+
+A check does not authenticate again. It decides with the principal, the memberships and the scope that were resolved
+when the request was permitted, and it reads the documents again. It checks no age and no revocation of the token, and
+it sees no change of roles since. So during the request, a check keeps permitting after the user logs out, after
+`revokeSubject` or after a role is removed, for as long as the documents permit; the request has been decided already.
+When the request ends the check stops (`PIP-26`, below), and a context no adapter bound is never ended. Do not store a
+context: authorize where the request arrives and carry the decision with the work.
+
+### A check and a mapped route
+
+A check applies no route map. `check(security, "http:POST", "/orders/42/cancel")` decides `http:POST` on
+`http:path:/orders/42/cancel`, as an unmapped request would be decided. When a route map maps that request, the request
+itself is decided as its `service:verb` on its typed resource, and a statement on `http:` never covers it
+([Route maps](./web.md#route-maps)). So the check and the request can decide differently for the same path: a
+policy that permits `order:cancel` and nothing on `http:` permits the request and denies the check, and an `http:*`
+ALLOW permits the check and not the request. To ask what a mapped route would be decided as, check its action and its
+typed resource, the ones the route map gives it (`order:cancel` on `order/42`).
+
+## Work that is not the request
+
+A message consumer, a scheduler, a retry, a job a request started: none of them has a request to check as. What to do
+instead:
+
+- **Authorize where the request arrives, and carry the decision with the message.** The adapter has decided the request
+  before your handler runs; add a check there for what the work will do next (`order:cancel` on `order/42`) while the
+  request is in progress. Publish the work only when it permits, and let the consumer act on that message without
+  asking CoSec again. The message carries the fact that the action was authorized, never the context: a consumer that
+  wants the user's identity reads it from the message's own fields (the principal id, the tenant). The consumer then
+  trusts what its own channel guarantees about the message, which CoSec does not.
+- **Run the pipeline on a port that does not have a filter, rather than verifying tokens by hand.** A service call on
+  an internal port, a WebSocket handshake or a message header that carries a token can be put through the same
+  `Pipeline.evaluate` a web adapter calls ([Extending](../architecture/extending.md#pipeline-outside-the-adapters)). If
+  you must verify a token yourself, do all of it: [Verifying a token outside the
+  pipeline](./authentication.md#verifying-a-token-outside-the-pipeline).
+- **Work the system starts itself** (a scheduler, a timer, a system command with no caller) is not decided by CoSec in
+  8.0. There is no principal to decide as, and a check without a context is `false`. Decide it in your own code, in a
+  way you can read: do not fall back to a default that permits everything because the check says `false`. A decision
+  as a principal for work outside a request, with an in-process entry for a named service principal, is planned for 8.1.
+
+A check belongs to its request, and the adapter that bound the request ends it when the request completes (`PIP-26`):
+
+- **While the request is in progress**, a check is answered as the table says, however long the request runs: during
+  a streamed or server-sent-events body, in an async servlet request, in code the handler awaits. It decides on the
+  principal, memberships and attributes the request began with, also once its token has expired meanwhile: the
+  pipeline authenticated the request when it began, and a check is not stricter than the request's own decision.
+- **Once the request has ended**, every check of its context is `false` (`decide` answers `Deny(null)`), whatever the
+  documents say: a context kept in a field, a cache or a message permits nothing afterwards. WebFlux and the gateway
+  end a request when its response has been written, failed, or the client went away; Spring MVC when the dispatch
+  returns, or, for an async request (`DeferredResult`, `StreamingResponseBody`, a `suspend` handler), when it
+  completes, fails or times out. Code on the async request's ASYNC dispatch (message converters, a
+  `ResponseBodyAdvice`, interceptors) is still within the request. The error page is not: Spring MVC renders it on an
+  ERROR dispatch, after the request has ended, so an error page or error controller reads the context but every check
+  of it there is `false`.
+- **A request no adapter bound** is never ended: one your own transport handed to `Pipeline.evaluate`, and the test
+  kit's (`PipelineFixture`, `PermittedRequest`). Checks of it behave as they always did, so do not keep its context
+  after the request either.
 
 ## Object-level rules
 
@@ -119,31 +179,34 @@ your handler has loaded anything, so an object-level rule is decided in two step
 1. **In the adapter**, the route is authorized on what the request carries, such as `order:cancel` on `order/42`.
 2. **In your code**, after loading the object, a check names a resource whose id carries the facts the rule needs.
 
-A check passes no resource attributes, only a type and an id. So write the facts into the id, and let a statement
-capture them. For example, check ownership as the resource `order-of/<owner>/<orderId>`, with this policy bound to
-anyone (`"subject": "*"`):
+A check passes no resource attributes, only a type and an id. So write the facts into the id, one segment each, and
+let a statement capture them. Here the resource `order-of/<owner>/<status>/<orderId>` carries the owner and the status
+of the order, and the policy below is bound to anyone (`"subject": "*"`):
 
-```json
-{
-  "id": "own-orders-only",
-  "statements": [
-    { "name": "not-the-owner", "effect": "deny", "action": "order:cancel", "resource": "order-of/{owner}/*",
-      "condition": { "not": { "eq": ["resource.var.owner", { "attr": "subject.id" }] } } }
-  ]
-}
-```
+<<< @/examples/checks/documents/platform.json [documents/platform.json]
 
 ```kotlin
 val order = orderRepository.findById(id)
-val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/$id")
+val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/${order.status}/$id")
 if (!allowed) throw AccessDeniedException()
 ```
 
-The DENY applies only to `order-of/...` resources, which no route produces, so the route itself is still decided by
-your other policies. The check is a separate decision: it is permitted only when an ALLOW also covers
-`order:cancel` on `order-of/...`, and it is denied for anyone but the owner. A captured value holds one segment and
-is compared exactly; ids are split on `/` and never decoded, so an owner id must not contain `/`. Resource patterns
-and conditions are described in [Policy language](../policies/language.md).
+The scenarios in [`wiki/examples/checks`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/checks/scenarios)
+run against this document on every build, with the [test kit](../policies/testing.md#testing-decisions):
+
+| Check | Caller | Decision |
+|---|---|---|
+| `order:cancel` on `order-of/alice/pending/42` | `alice` | Permit |
+| `order:cancel` on `order-of/alice/pending/42` | `bob` | Deny: `not-the-owner` |
+| `order:cancel` on `order-of/alice/shipped/42` | `alice` | Deny: `already-shipped` |
+
+`{owner}` and `{status}` each capture one segment, and a statement reads them as `resource.var.owner` and
+`resource.var.status` in its own condition. The DENYs apply only to `order-of/...` resources, which no route produces,
+so the route itself is still decided by your other policies. The check is a separate decision: it is permitted only
+when an ALLOW also covers `order:cancel` on `order-of/...` (`cancel-an-order`), and it is denied for anyone but the
+owner and for a shipped order. A captured value holds one segment and is compared exactly; ids are split on `/` and
+never decoded, so a value that may hold a `/` does not belong in the id. Resource patterns and conditions are described
+in [Policy language](../policies/language.md).
 
 The check must run in your code; a handler that skips it is not protected by the rule.
 

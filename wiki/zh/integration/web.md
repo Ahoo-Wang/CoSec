@@ -107,6 +107,8 @@ CoSec 授权的路径是应用内的请求路径：
 - 该配置项未设置时宿主不加载路由映射，除非 `classpath:cosec-routes.json` 存在：这时启动失败，直到配置项指明该文件，或设为空值以明确不使用路由映射。启动日志会写明加载的每份映射、它的服务和路由条数，或者没有映射。
 - 为空或含有 `/`（解码后的 `%2F`）的捕获值不能作为类型化资源 id 的一段：请求以 `400` `invalid-request` 拒绝，绝不会被当作另一个资源求值。
 
+代码中的检查（[代码中的权限检查](./checks.md)）不应用路由映射：它决策传给它的动作和资源，因此即使某条路由映射了该请求，`check(security, "http:POST", path)` 也按 `http:POST` 决策。要检查已映射的路由，用它的动作和类型化资源（[检查与已映射的路由](./checks.md#a-check-and-a-mapped-route)）。
+
 Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `http` 命名空间。
 
 使用 `cosec-openapi`、springdoc 和 Spring Boot Actuator 时，端点 `cosecServiceGenerator/routes` 根据 springdoc 扫描到的 OpenAPI 文档生成路由映射，`cosecServiceGenerator/app` 生成对应的、通过控制面发布的应用文档（[角色权限](../policies/role-permissions.md)）。
@@ -189,12 +191,12 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 | `principal.authenticated` | 主体是否由凭证证明。 |
 | `tenantId` | 作用域的租户：主体的租户，匿名调用方为 `(0)`。 |
 | `principal.attributes` | 凭证的属性（令牌的 `attributes` 声明；API key 则有 `apiKeyId`）。在网关之后：转发来的 `claims`。 |
-| `scope.appId`、`scope.spaceId`、`scope.roles` | `ScopeResolver` 校验后的作用域：应用、空间（默认空间为空）以及该空间中的角色。 |
+| `scope.appId`、`scope.spaceId`、`scope.roles` | `ScopeResolver` 校验后的作用域：应用、空间（默认空间为空）以及该空间中的角色，用裸名称表示（`editor`，而不是 `editor@team-a`）。主体在其他空间中的角色和附加给它的策略不在上下文中。 |
 | `forwardedIdentity` | 在网关后面时为网关的请求 id 和调用方凭证的 id；否则为 null。 |
 | `requestId` | CoSec 在审计记录、span 和 problem 响应中使用的请求 id：客户端发送了可接受的 `CoSec-Request-Id` 时就是它，否则是 CoSec 生成的 id，任何请求头里都没有。 |
 | `deviceId` | 客户端在 `CoSec-Device-Id` 中声明的设备，未声明时为空。由客户端声明：CoSec 只检查其形式（只能有一个值，否则 `400`），所以它不能证明是哪台设备。 |
 
-上下文是只读的：应用设置的任何内容都不会影响决策。
+上下文是只读的：应用设置的任何内容都不会影响决策。下面的每个读取入口都只返回 CoSec 管道构造的上下文（`PIP-27`）：应用的过滤器或某个库放在 exchange、Reactor 上下文或 Servlet 请求中 `SecurityContext.KEY` 下的其他任何东西，都读作没有上下文，绝不会被当作已认证的调用者。
 
 **WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。exchange 的 principal 也已设置，因此 `exchange.getPrincipal()` 返回 CoSec 主体。
 
@@ -236,7 +238,7 @@ val securityContext = SecurityContextHolder.requiredContext
 
 启动日志中以 `SecurityContextHolder in suspend handlers` 开头的一行说明宿主属于哪一种。异步处理器（`Callable`、`DeferredResult`）和你自己启动的线程看不到持有者，消息相同。在这些情况下，都请使用参数或请求。
 
-这个上下文正是 `AuthorizationChecker` 接受的上下文，用于询问同一主体能否做别的事（[代码中的权限检查](./checks.md)）。
+这个上下文正是 `AuthorizationChecker` 接受的上下文，用于在请求进行期间询问同一主体能否做别的事：适配器结束请求之后，对它的上下文的检查为 `false`（[代码中的权限检查](./checks.md#how-a-check-relates-to-the-request-pipeline)，`PIP-26`）。它是管道为该请求解析出的结果，从不会因吊销或角色变化而被重新检查，所以不要保存它，也不要把它交给请求之后运行的工作（[不是请求的工作](./checks.md#work-that-is-not-the-request)）。在 Spring MVC 上，过滤器只接管 REQUEST 分派：错误页在请求结束之后的 ERROR 分派中渲染，它仍读得到上下文，但在那里对它的每次检查都为 `false`。
 
 ## 代理后的客户端 IP {#client-ip-behind-proxies}
 

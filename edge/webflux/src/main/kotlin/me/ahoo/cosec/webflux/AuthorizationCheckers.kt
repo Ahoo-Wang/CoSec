@@ -25,6 +25,9 @@ import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.call.ResumeDispatcher
 import reactor.core.publisher.Mono
 
-/** [AuthorizationChecker.check] for reactive callers (RFC 0006 §7.6): resumes off the caller's I/O thread. */
+/**
+ * [AuthorizationChecker.check] for reactive callers (RFC 0006 §7.6): resumes off the caller's I/O thread. As there, for
+ * the request in progress and the `SecurityContext` of that request, never one kept past it.
+ */
 fun AuthorizationChecker.checkMono(security: SecurityContext, action: String, resource: String): Mono<Boolean> =
     mono(Dispatchers.Unconfined + ResumeDispatcher(Dispatchers.Default)) { check(security, action, resource) }

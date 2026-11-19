@@ -1,0 +1,51 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-18T08:00:00Z",
+  "policies": [
+    {
+      "id": "callers",
+      "statements": [
+        {
+          "name": "every-authenticated-request",
+          "effect": "allow",
+          "action": "http:*",
+          "resource": "http:path:/**",
+          "condition": {
+            "eq": ["subject.authenticated", true]
+          }
+        }
+      ]
+    },
+    {
+      "id": "probes",
+      "statements": [
+        {
+          "name": "probes",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": [
+            "http:path:/actuator/health/liveness",
+            "http:path:/actuator/health/readiness"
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "callers",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "callers"
+    },
+    {
+      "id": "probes",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "probes"
+    }
+  ]
+}

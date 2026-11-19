@@ -73,6 +73,8 @@ public final class me/ahoo/cosec/testkit/PipelineFixture$Companion {
 	public static synthetic fun load$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/nio/file/Path;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
 	public final fun of (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;)Lme/ahoo/cosec/testkit/PipelineFixture;
 	public static synthetic fun of$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public final fun unreadable (Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public static synthetic fun unreadable$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
 }
 
 public final class me/ahoo/cosec/testkit/PipelineFixture$Principal {

@@ -11,10 +11,10 @@
 
 ```bash
 pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
-  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher
+  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher@beta
 ```
 
-CoSec 8.0 发布之前它是预发布版本，npm 默认不会安装：用 dist-tag，`pnpm add @ahoo-wang/cosec-fetcher@beta`（`@alpha`、`@rc`），或写明确切版本。
+CoSec 8.0 发布之前，这个包的 `latest` 标签指向一个标为已弃用的 `0.0.0` 占位版本，所以不带标签安装得到的是占位版本和一条弃用提示，而不是客户端。像上面那样安装 `@beta`，或写明确切版本；正式发布之后去掉 `@beta`。
 它随每次 CoSec 发布而发布，版本与 CoSec 相同。
 
 Peer 依赖：`fetcher`、`fetcher-eventbus` 和 `fetcher-storage`。

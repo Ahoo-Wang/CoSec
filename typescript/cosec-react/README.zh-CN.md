@@ -9,10 +9,10 @@
 
 ```bash
 pnpm add react @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus \
-  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher @ahoo-wang/cosec-react
+  @ahoo-wang/fetcher-storage @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
 ```
 
-CoSec 8.0 发布之前它们是预发布版本，npm 默认不会安装：用 dist-tag，`pnpm add @ahoo-wang/cosec-react@beta`（`@alpha`、`@rc`），或写明确切版本。
+CoSec 8.0 发布之前，这两个包的 `latest` 标签指向一个标为已弃用的 `0.0.0` 占位版本，所以不带标签安装得到的是占位版本和一条弃用提示，而不是客户端。像上面那样安装 `@beta`，或写明确切版本；正式发布之后去掉 `@beta`。
 它们随每次 CoSec 发布而发布，版本与 CoSec 相同。
 
 对等依赖：`react`（19）和 `@ahoo-wang/cosec-fetcher`；fetcher 的各个包是客户端（`cosec-fetcher` 的对等依赖）的，除此之外它不带任何别的东西。特别是它不会带上

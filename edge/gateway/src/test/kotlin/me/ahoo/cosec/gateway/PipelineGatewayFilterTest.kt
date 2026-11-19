@@ -18,6 +18,7 @@ package me.ahoo.cosec.gateway
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditRequest
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.engine.CompiledDocument
 import me.ahoo.cosec.engine.Engine
@@ -36,6 +37,7 @@ import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
+import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.PipelineOptions
 import me.ahoo.cosec.runtime.identity.IdentityIssuer
@@ -47,6 +49,8 @@ import me.ahoo.cosec.spi.authn.Authenticator
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.MembershipSource
 import me.ahoo.cosec.spi.identity.Identity
+import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.checkMono
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.cloud.gateway.route.Route
@@ -389,6 +393,41 @@ class PipelineGatewayFilterTest {
             exchange.response.bodyAsString.block(Duration.ofSeconds(5)).assert()
                 .contains("\"type\":\"https://cosec.ahoo.me/problems/internal-error\"")
         }
+    }
+
+    /**
+     * `PIP-26`: the gateway shares the WebFlux bridge. A check while the route's response is still on its way is
+     * answered; once the chain completed, a check of the same context is denied.
+     */
+    @Test
+    fun aCheckAfterTheRoutedRequestCompletedIsDenied() {
+        val engine = object : Engine {
+            override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel) = Evaluation(
+                Decision.Permit(
+                    StatementRef.Policy(PolicyId("p"), 0, "s", BindingRef.Bound(BindingId("g"), DocumentKind.PLATFORM))
+                ),
+                null,
+            )
+        }
+        val pipeline = Pipeline.builder(Authenticator { AuthnResult.Anonymous }, SuspendingSnapshotSource(Views))
+            .engine(engine)
+            .build()
+        val checker = AuthorizationChecker(pipeline)
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders"))
+        exchange.attributes[GATEWAY_ROUTE_ATTR] =
+            Route.async().id("orders").uri(URI.create("http://orders")).predicate { true }.build()
+        var kept: SecurityContext? = null
+        var during: Boolean? = null
+        PipelineGatewayFilter(pipeline).filter(exchange) { next ->
+            kept = next.getSecurityContext()
+            // The backend answers later; the request is still in progress meanwhile.
+            Mono.delay(Duration.ofMillis(50))
+                .then(checker.checkMono(kept!!, "order:read", "order/1"))
+                .doOnNext { during = it }
+                .then()
+        }.block(Duration.ofSeconds(5))
+        during.assert().isEqualTo(true)
+        checker.checkMono(kept!!, "order:read", "order/1").block(Duration.ofSeconds(5)).assert().isEqualTo(false)
     }
 }
 

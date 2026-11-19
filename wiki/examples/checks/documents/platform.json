@@ -1,0 +1,47 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-18T08:00:00Z",
+  "policies": [
+    {
+      "id": "own-orders-only",
+      "statements": [
+        {
+          "name": "cancel-an-order",
+          "effect": "allow",
+          "action": "order:cancel",
+          "resource": "order-of/**"
+        },
+        {
+          "name": "not-the-owner",
+          "effect": "deny",
+          "action": "order:cancel",
+          "resource": "order-of/{owner}/{status}/*",
+          "condition": {
+            "not": {
+              "eq": ["resource.var.owner", { "attr": "subject.id" }]
+            }
+          }
+        },
+        {
+          "name": "already-shipped",
+          "effect": "deny",
+          "action": "order:cancel",
+          "resource": "order-of/{owner}/{status}/*",
+          "condition": {
+            "eq": ["resource.var.status", "shipped"]
+          }
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "own-orders-only",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "own-orders-only"
+    }
+  ]
+}

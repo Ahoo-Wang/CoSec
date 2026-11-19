@@ -1,0 +1,17 @@
+{
+  "description": "bob is not the owner the id names: the DENY wins over the ALLOW.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "bob"
+  },
+  "request": {
+    "action": "order:cancel",
+    "resource": {
+      "type": "order-of",
+      "id": "alice/pending/42"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

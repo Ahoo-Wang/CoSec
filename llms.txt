@@ -15,8 +15,8 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 
 - [Web Integration](https://cosec.ahoo.me/integration/web): choosing an adapter (WebFlux, MVC, Gateway), outcomes and HTTP statuses, problem+json bodies, `CoSec-*` parameters, the security context, client IP behind proxies, CORS
 - [Building a client](https://cosec.ahoo.me/integration/clients): what a client of a CoSec application can rely on: the endpoints that are the application's, what to do on each problem type, refresh under rotation, readable claims, the CoSec-* headers and CORS
-- [Authentication](https://cosec.ahoo.me/integration/authentication): JWT tokens and their membership claims, membership providers, login, refresh, logout and always-on revocation, API keys, authenticators, social login
-- [Checks in Code](https://cosec.ahoo.me/integration/checks): checking permissions from code (AuthorizationChecker), explaining a decision through the control plane
+- [Authentication](https://cosec.ahoo.me/integration/authentication): JWT tokens and their membership claims, membership providers, login, refresh, logout and always-on revocation, verifying a token outside the pipeline, API keys, authenticators, social login
+- [Checks in Code](https://cosec.ahoo.me/integration/checks): checking permissions from code for the request in progress (AuthorizationChecker) and what to do instead for work after the request, explaining a decision through the control plane
 
 ## Policies
 
@@ -30,8 +30,14 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 - [Configuration](https://cosec.ahoo.me/operations/configuration): every `cosec.*` property with its default
 - [Storage and Caching](https://cosec.ahoo.me/operations/storage): snapshot documents in Redis, the `noeviction` requirement, publishing (control plane, `cosec-migrate`), revisions and rollback, behavior when Redis is unavailable
 - [Upgrading](https://cosec.ahoo.me/operations/upgrading): breaking changes and migration steps per version, including 7.x to 8.0 with `cosec-migrate`
+- [Upgrading between 8.0 previews](https://cosec.ahoo.me/operations/upgrading-previews): what changed from each 8.0 alpha and beta to the next, for a deployment that already runs one
 - [Observability](https://cosec.ahoo.me/operations/observability): decision listeners, audit events, OpenTelemetry spans, Micrometer metrics, Kafka, logs
 - [Troubleshooting](https://cosec.ahoo.me/operations/troubleshooting): problem types, diagnosing 400/401/403/429/503, documents that do not compile, snapshot lag, startup failures, rate limits
+
+## Scenarios
+
+- [A Resource Server](https://cosec.ahoo.me/scenarios/resource-server): a service that verifies the tokens another service issues and decides in its own code: the document it publishes, and why it reads the issuer's revocations
+- [Simple Mode](https://cosec.ahoo.me/scenarios/simple-mode): one service, one tenant, no apps; the other worked examples are listed in the [Introduction](https://cosec.ahoo.me/guide/introduction#where-to-go-next)
 
 ## Architecture
 

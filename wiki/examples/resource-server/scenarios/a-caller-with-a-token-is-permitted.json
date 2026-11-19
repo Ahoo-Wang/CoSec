@@ -1,0 +1,14 @@
+{
+  "description": "A verified token is enough: the service's own code decides what its principal may do.",
+  "credential": { "tenant": "(0)", "id": "alice" },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/orders/1"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

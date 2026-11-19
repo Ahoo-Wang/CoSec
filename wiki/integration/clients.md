@@ -217,3 +217,30 @@ without it it is decided as `http:OPTIONS` for an anonymous caller), what `@Cros
 and the request headers to allow and the response headers to expose: `CoSec-Request-Id`, `RateLimit-Limit`,
 `RateLimit-Remaining`, `RateLimit-Reset` and `Retry-After`, which a client reads. A client that sees a network error where
 it expects a `401` is looking at a refusal without CORS headers.
+
+## Coming from `@ahoo-wang/fetcher-cosec`
+
+The client of a CoSec 8 application is `@ahoo-wang/cosec-fetcher`, and its React hooks are `@ahoo-wang/cosec-react`.
+They replace `@ahoo-wang/fetcher-cosec` and the CoSec hooks of `@ahoo-wang/fetcher-react`, are released with CoSec at its
+version, and speak the contract of this page. The old package speaks the contract of CoSec 7 and does not work against an 8.0
+server. Install them with their peer dependencies (the fetcher packages):
+
+```bash
+pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \
+  @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
+```
+
+Until 8.0 is released, the `latest` tag of both packages points at a `0.0.0` placeholder marked deprecated, so an install
+without `@beta` gets the placeholder and a deprecation notice, not the client; after the release, drop `@beta`. Change the package name in `package.json` and in every import, and the
+hooks' imports from `@ahoo-wang/fetcher-react` to `@ahoo-wang/cosec-react`. What behaves differently:
+
+| What the old package did | What `cosec-fetcher` does |
+|---|---|
+| Sent the token, `CoSec-Device-Id`, `CoSec-Request-Id` and `CoSec-Space-Id` to every absolute URL, and filled `{tenantId}` and `{ownerId}` in a URL from the token | Sends them only to the origin of an absolute `baseURL` and to the page's origin (`isTrusted`, default `sameOriginTrust`). A call to another origin that relied on the token now arrives without it: name that origin in your own `isTrusted` predicate. A call to another origin that gets a `401` starts no refresh and ends no session |
+| Sent `CoSec-App-Id`, from `appId` options | Has no `appId` option and sends no `CoSec-App-Id`: the server does not read it, and the app is the token's ([The app comes from the token](#the-app-comes-from-the-token)) |
+| Refreshed on a `401` | Reads the problem type of a `401`. `token-expired`, or a `401` without a body CoSec wrote, is refreshed once and the request retried. `unauthorized` is not refreshed. `token-revoked` and `token-invalid` are not refreshed either, and remove the stored pair |
+| Ended the session when a refresh failed, whatever the failure | Ends the session only when the refresh route answers `401`; a `400`, `403`, `404`, `429`, a `5xx` or a network failure keeps it. `isRefreshRejected` names a different refusal. The refresh request is cut short after 10 seconds |
+| Handed every `403` to `onForbidden` | Hands a `403 scope-rejected` to `onScopeRejected`, and to `onForbidden` when there is none. The callbacks receive the problem as their second argument |
+| Put the token pair on `RefreshTokenError` and `RefreshUnavailableError` | Puts no token on any error. An error still carries its `exchange`, whose request holds the `Authorization` header: scrub it before it goes to an error reporter |
+
+The package's own README lists the removed members one by one.

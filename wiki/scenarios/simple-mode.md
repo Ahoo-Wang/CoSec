@@ -76,6 +76,9 @@ is in [`wiki/examples/simple-roles`](https://github.com/Ahoo-Wang/CoSec/tree/mai
   all of them. Use the condition above, or the `(0)` document.
 - Role changes take effect when a user next logs in, as roles travel in the token
   ([Roles and spaces](../integration/authentication.md#roles-and-spaces)).
+- A service that does not decide with policies but verifies the tokens another service issues, and decides in its own
+  code, is a different case, and has one thing to get right about revocation:
+  [A service that verifies tokens another service issues](./resource-server.md).
 - Permissions are written as statements. If you want them listed in a console, or granted to roles by name, move to an
   app document: [An app without spaces](./app.md).
 

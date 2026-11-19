@@ -39,6 +39,9 @@ import reactor.kotlin.core.publisher.toMono
  * gateway's filter. It translates and never decides: it writes the [Outcome]'s status, headers and problem body, and
  * calls the chain only when the outcome proceeds.
  *
+ * The request's security is ended when the chain completes, fails or is cancelled (`PIP-26`): a context kept after
+ * that permits nothing.
+ *
  * The request starts on the event loop without a dispatch (`Dispatchers.Unconfined`) and, after a real suspension,
  * goes on on `Dispatchers.Default` ([ResumeDispatcher]), never on a client library's I/O thread. A client that goes
  * away cancels the subscription, and so the coroutine: no outcome exists, and nothing is written.
@@ -80,11 +83,13 @@ abstract class ReactivePipelineBridge(
             response.headers.contentLength = body.size.toLong()
             return response.writeWith(response.bufferFactory().wrap(body).toMono())
         }
-        val securityContext = checkNotNull(outcome.security) { "A proceeding outcome carries its security." }
-            .securityContext
+        val security = checkNotNull(outcome.security) { "A proceeding outcome carries its security." }
+        val securityContext = security.securityContext
         exchange.setSecurityContext(securityContext)
         val authorized = exchange.mutate().principal(securityContext.principal.toMono()).build()
-        return chain(authorized, outcome).writeSecurityContext(securityContext)
+        // The request ends when the chain's Mono terminates: after a streamed body's last element is written, on an
+        // error, or when the client goes away. From then on no check permits as it (PIP-26).
+        return chain(authorized, outcome).writeSecurityContext(securityContext).doFinally { security.end() }
     }
 
     private companion object {

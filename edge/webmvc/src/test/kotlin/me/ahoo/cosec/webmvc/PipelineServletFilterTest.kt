@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.webmvc
 
+import jakarta.servlet.AsyncEvent
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -44,6 +45,7 @@ import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
+import org.springframework.mock.web.MockAsyncContext
 import org.springframework.mock.web.MockHttpServletRequest
 import org.springframework.mock.web.MockHttpServletResponse
 import java.util.Collections
@@ -82,16 +84,23 @@ class PipelineServletFilterTest {
         val response = MockHttpServletResponse()
         var bound: SecurityContext? = null
         var fromRequest: SecurityContext? = null
+        var answers: List<Boolean>? = null
         PipelineServletFilter(pipeline, host = HostScope(AppId("order"))).doFilter(request, response) { req, _ ->
             bound = SecurityContextHolder.requiredContext
             fromRequest = (req as MockHttpServletRequest).getSecurityContext()
+            val checker = AuthorizationChecker(pipeline)
+            answers = listOf(
+                checker.checkBlocking(bound!!, "http:GET", "/orders/1"),
+                checker.checkBlocking(bound!!, "GET", "/orders/1"),
+            )
         }
         bound!!.scope.appId.assert().isEqualTo("order")
         fromRequest.assert().isSameAs(bound)
         SecurityContextHolder.context.assert().isNull()
         response.getHeader("CoSec-Request-Id").assert().isNotNull()
-        AuthorizationChecker(pipeline).checkBlocking(bound!!, "http:GET", "/orders/1").assert().isTrue()
-        AuthorizationChecker(pipeline).checkBlocking(bound!!, "GET", "/orders/1").assert().isFalse()
+        answers.assert().isEqualTo(listOf(true, false))
+        // PIP-26: the request has completed, and a check of its context is denied.
+        AuthorizationChecker(pipeline).checkBlocking(bound!!, "http:GET", "/orders/1").assert().isFalse()
         // Never on a non-blocking thread: there it would stall an event loop.
         val context = bound!!
         val onEventLoop = java.util.concurrent.CompletableFuture<Throwable?>()
@@ -105,6 +114,41 @@ class PipelineServletFilterTest {
             )
         }
         onEventLoop.get().assert().isInstanceOf(IllegalStateException::class.java)
+    }
+
+    /**
+     * `PIP-26`: an async request (`DeferredResult`, `StreamingResponseBody`, a `suspend` handler) is in progress until
+     * the container reports it complete, after the filter has returned; then a check of it is denied. So is one after a
+     * timeout or an error, and a new async cycle keeps it listening.
+     */
+    @Test
+    fun anAsyncRequestEndsWhenItCompletesNotWhenTheFilterReturns() {
+        val pipeline = pipeline(permit)
+        val checker = AuthorizationChecker(pipeline)
+        for (end in listOf("complete", "timeout", "error", "restarted")) {
+            val request = MockHttpServletRequest("GET", "/orders").apply { isAsyncSupported = true }
+            var bound: SecurityContext? = null
+            PipelineServletFilter(pipeline).doFilter(request, MockHttpServletResponse()) { req, _ ->
+                bound = (req as HttpServletRequest).getSecurityContext()
+                req.startAsync()
+            }
+            checker.checkBlocking(bound!!, "http:GET", "/orders/1").assert().isTrue()
+            val async = request.asyncContext as MockAsyncContext
+            val event = AsyncEvent(async)
+            when (end) {
+                "complete" -> async.complete()
+                "timeout" -> async.listeners.forEach { it.onTimeout(event) }
+                "error" -> async.listeners.forEach { it.onError(event) }
+                "restarted" -> {
+                    val listeners = async.listeners.toList()
+                    async.listeners.clear()
+                    listeners.forEach { it.onStartAsync(event) }
+                    checker.checkBlocking(bound!!, "http:GET", "/orders/1").assert().isTrue()
+                    async.complete()
+                }
+            }
+            checker.checkBlocking(bound!!, "http:GET", "/orders/1").assert().isFalse()
+        }
     }
 
     /** IDN-9, RC1-18: the handler of an enforcing host never sees a `CoSec-Identity` a client sent. */

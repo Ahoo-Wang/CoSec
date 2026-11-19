@@ -1,0 +1,17 @@
+{
+  "description": "The check names the owner and the status in the id: alice owns this order and it is pending.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "order:cancel",
+    "resource": {
+      "type": "order-of",
+      "id": "alice/pending/42"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

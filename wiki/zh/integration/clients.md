@@ -168,3 +168,25 @@ CoSec 不提供登录和租户切换：它们属于应用，用 CoSec 的类编�
 `addCorsMappings` 还剩什么作用，以及要允许的请求头和要暴露的响应头：客户端要读的
 `CoSec-Request-Id`、`RateLimit-Limit`、`RateLimit-Remaining`、`RateLimit-Reset` 和 `Retry-After`。客户端在应该看到 `401` 的地方看到网络错误，
 就是看到了一个没有 CORS 头的拒绝响应。
+
+## 从 `@ahoo-wang/fetcher-cosec` 迁移 {#coming-from-ahoo-wang-fetcher-cosec}
+
+CoSec 8 应用的客户端是 `@ahoo-wang/cosec-fetcher`，它的 React hooks 是 `@ahoo-wang/cosec-react`。它们取代 `@ahoo-wang/fetcher-cosec` 和 `@ahoo-wang/fetcher-react` 中的 CoSec hooks，随 CoSec 发布并使用 CoSec 的版本号，遵循本页的约定。旧包遵循的是 CoSec 7 的约定，不能用于 8.0 服务器。连同它们的对等依赖（fetcher 的各个包）一起安装：
+
+```bash
+pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-storage \
+  @ahoo-wang/cosec-fetcher@beta @ahoo-wang/cosec-react@beta
+```
+
+在 8.0 正式发布之前，这两个包的 `latest` 标签指向一个标为已弃用的 `0.0.0` 占位版本，所以不带 `@beta` 安装得到的是占位版本和一条弃用提示，而不是客户端；正式发布之后去掉 `@beta`。把 `package.json` 和每处 import 中的包名改掉，把 hooks 的 import 从 `@ahoo-wang/fetcher-react` 改为 `@ahoo-wang/cosec-react`。行为上的不同：
+
+| 旧包的做法 | `cosec-fetcher` 的做法 |
+|---|---|
+| 把令牌、`CoSec-Device-Id`、`CoSec-Request-Id` 和 `CoSec-Space-Id` 发给每一个绝对 URL，并用令牌填充 URL 里的 `{tenantId}` 和 `{ownerId}` | 只发给绝对 `baseURL` 的源和页面自己的源（`isTrusted`，默认 `sameOriginTrust`）。依赖令牌的、发往其他源的调用现在不再带它：在你自己的 `isTrusted` 谓词里写出那个源。发往其他源并得到 `401` 的调用不会启动刷新，也不会结束会话 |
+| 发送 `CoSec-App-Id`，来自 `appId` 选项 | 没有 `appId` 选项，也不发送 `CoSec-App-Id`：服务器不读取它，应用是令牌的（[应用来自令牌](#the-app-comes-from-the-token)） |
+| 遇到 `401` 就刷新 | 读取 `401` 的 problem 类型。`token-expired`，或不是 CoSec 写出的无正文 `401`，刷新一次并重试请求。`unauthorized` 不刷新。`token-revoked` 和 `token-invalid` 也不刷新，并删除已保存的令牌对 |
+| 刷新失败就结束会话，不论什么原因 | 只有刷新路由回答 `401` 才结束会话；`400`、`403`、`404`、`429`、`5xx` 或网络失败都保留会话。`isRefreshRejected` 可以指定别的拒绝方式。刷新请求 10 秒后被截断 |
+| 把每个 `403` 交给 `onForbidden` | 把 `403 scope-rejected` 交给 `onScopeRejected`，没有它时交给 `onForbidden`。回调的第二个参数是 problem |
+| 在 `RefreshTokenError` 和 `RefreshUnavailableError` 上带着令牌对 | 任何错误上都不带令牌。错误仍然带着它的 `exchange`，其请求持有 `Authorization` 头：发送给错误上报器之前先清理 |
+
+该包自己的 README 逐项列出被移除的成员。

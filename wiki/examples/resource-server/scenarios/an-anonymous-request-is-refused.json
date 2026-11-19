@@ -1,0 +1,14 @@
+{
+  "description": "No token, or a token that is expired, revoked or invalid, which is evaluated as anonymous (PIP-6): 401, never the service's code as an anonymous caller.",
+  "credential": { "anonymous": true },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/orders/1"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

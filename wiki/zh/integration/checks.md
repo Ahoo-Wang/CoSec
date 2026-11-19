@@ -16,6 +16,8 @@ description: "在自己的代码中向 CoSec 请求决策，落实对象级规�
 
 不要在处理器中重复请求本身的检查：适配器已经做出了决策，并完成了审计和限流，再检查一次只可能与它不一致。检查是为下一步提供的建议，而不是对当前请求的强制执行。
 
+检查针对的是**正在处理的请求**，使用该请求的 `SecurityContext`。它不适用于消息消费者、调度器或请求之后运行的任何工作：见[不是请求的工作](#work-that-is-not-the-request)。
+
 ## 检查一个权限 {#checking-a-permission}
 
 starter 会注册一个 `AuthorizationChecker` Bean（`me.ahoo.cosec.runtime`）。它针对管道已放行的请求的主体和作用域做决策，因此需要该请求的 `SecurityContext`（[访问安全上下文](./web.md#accessing-the-security-context)）：
@@ -24,7 +26,7 @@ starter 会注册一个 `AuthorizationChecker` Bean（`me.ahoo.cosec.runtime`）
 suspend fun check(security: SecurityContext, action: String, resource: String): Boolean
 ```
 
-- `action` 为 `service:verb`，与路由映射中的命名一致（`order:cancel`），未映射的路由则为 `http:<METHOD>`。不含 `:` 的字符串结果为 `false`。
+- `action` 为 `service:verb`，与路由映射中的命名一致（`order:cancel`），未映射的路由则为 `http:<METHOD>`。检查不应用路由映射，因此无论路由映射是否映射了该路径，`http:` 动作都按字面决策（[检查与已映射的路由](#a-check-and-a-mapped-route)）。不含 `:` 的字符串结果为 `false`。
 - `resource` 为类型化资源 `type/id`（`order/42`），或以 `/` 开头的路径（`/orders/42`），后者是一个 `http` 资源。它按管道读取请求的方式读取：去掉路径参数；管道会[以 `400` 拒绝](./web.md#the-request-path)的路径为 `false`，超过请求路径长度上限的资源也是 `false`。因此即使路径来自客户端输入，检查也不会放行任何请求都无法获准的路径。
 
 以 `cosec.pipeline.mode=gateway` 运行在网关之后的服务没有检查器：它不持有可用于决策的策略（[网关之后的服务](./web.md#services-behind-the-gateway)）。在这样的服务中，依靠网关的决策，或者以 `enforce` 模式运行该服务。
@@ -84,7 +86,27 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 | Deny、Indeterminate、错误 | 一个状态码 | `false`，出错时日志中有一条警告 |
 | 结果 | HTTP 状态码 | 只有 Permit 才为 `true`；`decide` 返回决策本身 |
 
-检查失败即拒绝：不是由管道构建的 `SecurityContext`（你自己构造的，或者根本没有）一律为 `false`，不论文档怎么写。因此请求之外不存在检查：代表用户执行操作的消息消费者没有可供检查的已放行请求，必须自己携带授权。
+检查失败即拒绝：不是由管道构建的 `SecurityContext`（你自己构造的，或者根本没有）一律为 `false`，不论文档怎么写。因此请求之外不存在检查。
+
+检查不会重新认证。它使用请求被放行时解析出的主体、成员关系和作用域做决策，并重新读取文档。它不检查令牌的年龄和吊销，也看不到之后角色的变化。因此在请求进行期间，检查会在用户登出、`revokeSubject` 或角色被移除之后继续放行，只要文档允许；请求本身已经决策过了。请求结束时检查随之停止（`PIP-26`，见下文），而没有适配器绑定的上下文永远不会结束。不要保存上下文：在请求到达处授权，把决策而不是上下文随工作一起传递。
+
+### 检查与已映射的路由 {#a-check-and-a-mapped-route}
+
+检查不应用路由映射。`check(security, "http:POST", "/orders/42/cancel")` 按 `http:POST` 作用于 `http:path:/orders/42/cancel` 决策，与未映射的请求一样。当路由映射映射了该请求时，请求本身按它的 `service:verb` 和类型化资源决策，而 `http:` 上的语句从不覆盖它（[路由映射](./web.md#route-maps)）。因此对同一路径，检查与请求可能做出不同的决策：一条放行 `order:cancel`、在 `http:` 上没有任何内容的策略会放行请求并拒绝检查，而一条 `http:*` 的 ALLOW 会放行检查而不放行请求。要问某条已映射的路由会被如何决策，就检查路由映射给它的动作和类型化资源（`order/42` 上的 `order:cancel`）。
+
+## 不是请求的工作 {#work-that-is-not-the-request}
+
+消息消费者、调度器、重试、请求启动的作业：它们都没有可以作为其检查对象的请求。应当这样做：
+
+- **在请求到达的地方授权，并把决策随消息带走。** 适配器在你的处理器运行之前已经决策了该请求；在请求仍在处理时，在那里为后续要做的事增加一次检查（`order:cancel` 作用于 `order/42`）。只有放行时才发布这项工作，让消费者据此消息行动，而不再询问 CoSec。消息携带的是该动作已获授权这一事实，而不是上下文：想知道用户身份的消费者，从消息自己的字段（主体 id、租户）读取。消费者因此信任的是它自己的通道对消息的保证，这一点 CoSec 不提供。
+- **在没有过滤器的端口上运行管道，而不是手工验证令牌。** 内部端口上的服务调用、WebSocket 握手，或携带令牌的消息头，都可以交给 Web 适配器所调用的同一个 `Pipeline.evaluate`（[管道在适配器之外](../architecture/extending.md#pipeline-outside-the-adapters)）。如果必须自己验证令牌，就做完整：[在管道之外验证令牌](./authentication.md#verifying-a-token-outside-the-pipeline)。
+- **系统自己启动的工作**（调度器、定时器、没有调用方的系统命令）在 8.0 中不由 CoSec 决策。没有可以作为其决策对象的主体，没有上下文的检查为 `false`。在你自己的代码中决策，并且让人读得明白：不要因为检查说 `false` 就退回到放行一切的默认值。以主体身份对请求之外的工作做决策，并提供针对具名服务主体的进程内入口，计划在 8.1 提供。
+
+检查属于它的请求，绑定该请求的适配器在请求完成时结束它（`PIP-26`）：
+
+- **请求仍在进行时**，检查按上表作答，无论请求持续多久：在流式或服务器发送事件（SSE）响应体写出期间、在异步 Servlet 请求中、在处理器等待的代码里都是如此。它按请求开始时的主体、成员关系和属性判定，即使令牌已在途中过期：管道在请求开始时认证了它，检查不比请求自己的决策更严。
+- **请求结束之后**，对它的上下文的每次检查都为 `false`（`decide` 返回 `Deny(null)`），不论文档怎么写：保存在字段、缓存或消息里的上下文之后不再放行任何操作。WebFlux 和网关在响应写完、失败或客户端离开时结束请求；Spring MVC 在分派返回时结束，异步请求（`DeferredResult`、`StreamingResponseBody`、`suspend` 处理器）则在它完成、失败或超时时结束。异步请求的 ASYNC 分派中的代码（消息转换器、`ResponseBodyAdvice`、拦截器）仍在请求之内。错误页不在：Spring MVC 在请求结束之后的 ERROR 分派中渲染它，所以错误页或错误控制器读得到上下文，但在那里对它的每次检查都为 `false`。
+- **没有适配器绑定的请求**永远不会结束：你自己的传输交给 `Pipeline.evaluate` 的请求，以及测试工具包的请求（`PipelineFixture`、`PermittedRequest`）。对它的检查行为与以往相同，所以也不要在请求之后保留它的上下文。
 
 ## 对象级规则 {#object-level-rules}
 
@@ -93,25 +115,25 @@ suspend fun decide(security: SecurityContext, action: String, resource: String):
 1. **在适配器中**，按请求本身携带的信息授权路由，例如 `order/42` 上的 `order:cancel`。
 2. **在你的代码中**，加载对象之后，检查一个其 id 携带了规则所需事实的资源。
 
-检查不传资源属性，只传类型和 id。因此把事实写进 id，再让语句捕获它们。例如，把所有权检查表示为资源 `order-of/<owner>/<orderId>`，并把下面这条策略绑定给任何人（`"subject": "*"`）：
+检查不传资源属性，只传类型和 id。因此把事实写进 id，每个事实占一段，再让语句捕获它们。这里的资源 `order-of/<owner>/<status>/<orderId>` 携带订单的所有者和状态，下面的策略绑定给任何人（`"subject": "*"`）：
 
-```json
-{
-  "id": "own-orders-only",
-  "statements": [
-    { "name": "not-the-owner", "effect": "deny", "action": "order:cancel", "resource": "order-of/{owner}/*",
-      "condition": { "not": { "eq": ["resource.var.owner", { "attr": "subject.id" }] } } }
-  ]
-}
-```
+<<< @/examples/checks/documents/platform.json [documents/platform.json]
 
 ```kotlin
 val order = orderRepository.findById(id)
-val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/$id")
+val allowed = checker.checkBlocking(security, "order:cancel", "order-of/${order.ownerId}/${order.status}/$id")
 if (!allowed) throw AccessDeniedException()
 ```
 
-这条 DENY 只作用于 `order-of/...` 资源，没有任何路由会产生这种资源，因此路由本身仍由你的其他策略决定。检查是一次独立的决策：只有另有 ALLOW 覆盖 `order-of/...` 上的 `order:cancel` 时才会放行，并且除所有者外一律拒绝。捕获的值只占一段且按原样比较；id 按 `/` 切分且从不解码，因此所有者 id 不能包含 `/`。资源模式和条件见[策略语言](../policies/language.md)。
+[`wiki/examples/checks`](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/checks/scenarios) 中的场景在每次构建时用[测试套件](../policies/testing.md#testing-decisions)针对这份文档运行：
+
+| 检查 | 调用方 | 决策 |
+|---|---|---|
+| `order-of/alice/pending/42` 上的 `order:cancel` | `alice` | Permit |
+| `order-of/alice/pending/42` 上的 `order:cancel` | `bob` | Deny：`not-the-owner` |
+| `order-of/alice/shipped/42` 上的 `order:cancel` | `alice` | Deny：`already-shipped` |
+
+`{owner}` 和 `{status}` 各捕获一段，语句在自己的条件中以 `resource.var.owner` 和 `resource.var.status` 读取它们。这两条 DENY 只作用于 `order-of/...` 资源，没有任何路由会产生这种资源，因此路由本身仍由你的其他策略决定。检查是一次独立的决策：只有另有 ALLOW 覆盖 `order-of/...` 上的 `order:cancel`（`cancel-an-order`）时才会放行，并且除所有者外一律拒绝，已发货的订单也一律拒绝。捕获的值只占一段且按原样比较；id 按 `/` 切分且从不解码，因此可能包含 `/` 的值不属于 id。资源模式和条件见[策略语言](../policies/language.md)。
 
 检查必须在你的代码中执行；跳过它的处理器不受该规则保护。
 
