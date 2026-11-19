@@ -22,6 +22,7 @@ import me.ahoo.cosec.document.identity.IdentityCodec
 import me.ahoo.cosec.model.decision.Decision
 import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.PipelineFixtures
+import me.ahoo.cosec.runtime.authn.ApiKeyAuthenticator
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -335,7 +336,7 @@ class IdentityForwardingTest {
                 app = null,
                 session = null,
             ),
-            "apikey",
+            ApiKeyAuthenticator.METHOD,
         )
         val outcome = evaluate(forever)
         outcome.status.assert().isEqualTo(500)

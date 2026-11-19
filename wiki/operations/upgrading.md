@@ -747,7 +747,7 @@ the revocation check reports is `503`, never an accepted token (`PIP-7`).
   delegation token was read as its `sub` and the actor got the subject's permissions. CoSec never issues such
   tokens; a verifier that accepts tokens from another issuer must not pass them on until delegation is supported
   ([Authentication](../integration/authentication.md#tokens)). A deny is audited with the reason code
-  `DELEGATION_UNSUPPORTED`; on a permit the audit records `ALLOW`, and the reason appears only in the decision event's
+  `DELEGATION_UNSUPPORTED`; on a permit the audit records `PERMIT`, and the reason appears only in the decision event's
   `subject.rejected`. Refreshing or revoking such a token fails too.
 - **A `tenantId` claim that is empty or not a string**, or an `attributes` claim that names `apiKeyId` (set by CoSec for
   API keys only), makes the token `token-invalid`; 7.x read such a tenant as none. **`cosec.jwt.secret`** must be at least
@@ -1203,8 +1203,9 @@ Two settings changed during the 8.0 previews:
   reads those fields changes with them.
 - **Metrics**: the `cosec.authorization` timer covers the whole pipeline too. Its `source` tag is now `binding`,
   `attachment`, `builtin`, `boundary`, `scope` or `none` (7.x: `global_policy`, `principal_policy`,
-  `role_permission`, `root`, `blacklist`, `none`, `unknown`); `result` adds `indeterminate`, `bad_request` and
-  `cancelled`; `cause` is new, on `indeterminate` only. New counters: `cosec.listener.dropped`,
+  `role_permission`, `root`, `blacklist`, `none`, `unknown`); `result` names what decided in the decision event's words (`permit`,
+  `explicit_deny` for a DENY statement only, `scope_rejected`, `boundary`, `invalid_request`, `indeterminate`,
+  `cancelled`; 7.x: `allow`, `explicit_deny` for every refusal); `cause` is new, on `indeterminate` only. New counters: `cosec.listener.dropped`,
   `cosec.listener.failures`, `cosec.audit.required.failures`. Update dashboards and alerts.
 - **Tracing**: the `cosec.authorize` span is created after the decision, from the decision event, so the I/O spans of
   an evaluation are no longer its children, and an audit event's `spanId` is the parent span's id.

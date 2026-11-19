@@ -36,7 +36,7 @@ description: "CoSec 如何读取凭证，以及如何签发、刷新和吊销令
 
 **刷新令牌不是访问令牌。** 带 `cosec.token` 声明的令牌（`JwtTokenConverter` 在每个刷新令牌上写 `refresh`）在所有需要访问令牌的路径上都是 `token-invalid`（`IDN-13`）：它即使签名有效且未过期也不会完成认证，因此永远不会成为它的 `sub` 所指的主体。其他签发者签发、未写该声明的令牌按访问令牌读取；只有 `TokenVerifier.refresh` 读取刷新令牌：[刷新](#refreshing-tokens)，以及用令牌对[登出](#logout-and-revocation)。
 
-**委托令牌会被拒绝。** 带 `act` 声明的令牌（[RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) 委托令牌：`sub` 是被代理方，`act` 是执行方）即使签名和有效期都有效，也按 `token-invalid` 拒绝（`IDN-4`）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时（例如匿名调用方可以访问的路径），审计记录 `ALLOW`，原因只出现在决策事件的 `subject.rejected` 中。如果按 `sub` 读取，这种令牌会让执行方获得主体能做的一切，而 8.0 不评估委托。CoSec 自己从不签发这种令牌。`may_act` 声明只说明谁可以代理主体，因此被忽略。
+**委托令牌会被拒绝。** 带 `act` 声明的令牌（[RFC 8693](https://www.rfc-editor.org/rfc/rfc8693) 委托令牌：`sub` 是被代理方，`act` 是执行方）即使签名和有效期都有效，也按 `token-invalid` 拒绝（`IDN-4`）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时（例如匿名调用方可以访问的路径），审计记录 `PERMIT`，原因只出现在决策事件的 `subject.rejected` 中。如果按 `sub` 读取，这种令牌会让执行方获得主体能做的一切，而 8.0 不评估委托。CoSec 自己从不签发这种令牌。`may_act` 声明只说明谁可以代理主体，因此被忽略。
 
 ## 认证器 {#authenticators}
 

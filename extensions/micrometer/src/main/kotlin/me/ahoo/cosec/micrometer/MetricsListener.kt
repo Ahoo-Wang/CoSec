@@ -37,7 +37,9 @@ import java.util.concurrent.TimeUnit
  * authorization (X4). BEST_EFFORT: it runs off the request path.
  *
  * Every tag is a small fixed enumeration, never a policy, app or tenant id, so the number of series stays bounded:
- * - [RESULT_TAG]: `allow`, `too_many_requests`, `explicit_deny`, `implicit_deny`, `indeterminate`, `bad_request`, `cancelled`, `error`;
+ * - [RESULT_TAG], what decided, in the words of the decision event's `outcome.reason` (UD-7): `permit`,
+ *   `too_many_requests`, `explicit_deny` (a DENY statement matched, and only that), `implicit_deny`, `scope_rejected`,
+ *   `boundary`, `invalid_request`, `indeterminate`, `cancelled`, `error`;
  * - [SOURCE_TAG]: how the deciding statement applied: `binding`, `attachment`, `builtin`, `boundary`, `scope` or `none`;
  * - [PROBLEM_TAG], what the client was told (UB-8): the slug of the problem type, `unauthorized` (a `401` without a
  *   token), `token-invalid`, `token-expired`, `token-revoked`, `forbidden`, `scope-rejected`, `too-many-requests`,
@@ -72,13 +74,20 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
             .record(event.elapsedNanos, TimeUnit.NANOSECONDS)
     }
 
-    private fun result(reason: Reason): String = when (reason) {
-        Reason.PERMIT -> "allow"
+    /**
+     * The event's reason in this tag's case (UD-7): one mapping, exhaustive, so a new Reason without a value does not
+     * compile. The two ways a request is indeterminate before the engine ran are `indeterminate`, and [CAUSE_TAG] says
+     * which.
+     */
+    internal fun result(reason: Reason): String = when (reason) {
+        Reason.PERMIT -> "permit"
         Reason.TOO_MANY_REQUESTS -> "too_many_requests"
-        Reason.EXPLICIT_DENY, Reason.SCOPE_REJECTED, Reason.BOUNDARY -> "explicit_deny"
+        Reason.EXPLICIT_DENY -> "explicit_deny"
         Reason.IMPLICIT_DENY -> "implicit_deny"
+        Reason.SCOPE_REJECTED -> "scope_rejected"
+        Reason.BOUNDARY -> "boundary"
+        Reason.INVALID_REQUEST -> "invalid_request"
         Reason.INDETERMINATE, Reason.AUTHENTICATOR_UNAVAILABLE, Reason.DEADLINE_EXCEEDED -> INDETERMINATE
-        Reason.INVALID_REQUEST -> "bad_request"
         Reason.CANCELLED -> "cancelled"
         Reason.ERROR -> "error"
     }
