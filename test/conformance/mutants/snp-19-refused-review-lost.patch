@@ -1,0 +1,16 @@
+# Rule: SNP-19
+# Mutant: a review housekeeping refused is never offered again: the installed revision is not reviewed, and nothing says so but the refusal count (UC-1)
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.InstallReviewTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+index 0c4e73d8..a522c1f6 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
+@@ -77,7 +77,6 @@ internal class KeyEffects<T : Any>(
+             is KeyEffect.Confirm -> {
+                 effect.entry.confirm(effect.at)
+                 // A review housekeeping refused is offered again once a read finds its revision still installed (UC-1).
+-                unreviewed?.takeIf { it === effect.entry }?.let(::review)
+             }
+             is KeyEffect.Install -> installed(effect)
+             is KeyEffect.Report -> report(effect.metric)

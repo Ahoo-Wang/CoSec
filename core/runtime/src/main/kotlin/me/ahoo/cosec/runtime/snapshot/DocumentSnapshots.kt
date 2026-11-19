@@ -44,6 +44,8 @@ object DocumentSnapshots {
         options: SnapshotOptions,
         clock: Clock,
         metrics: SnapshotMetrics,
+        /** Told of each installed document, off housekeeping (UC-1): the starter's route map review. */
+        reviews: List<InstallReview<T>> = emptyList(),
     ): SnapshotSource<T, T> =
         SnapshotSource(
             store,
@@ -56,6 +58,7 @@ object DocumentSnapshots {
             null,
             null,
             System::nanoTime,
+            reviews = reviews,
         )
 
     internal fun <T : Any> families(compiler: SnapshotCompiler<T>, options: SnapshotOptions): List<SnapshotFamily<T>> =

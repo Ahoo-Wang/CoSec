@@ -138,6 +138,7 @@ internal class KeyRunner<T : Any>(
         family.drop(family.spec.idOf(key), this)
         if (!claimed) context.families.move(family, this, installed, null)
         context.families.removed(key, installed)
+        context.reviewRemoved(key)
     }
 
     /** An offer to the key's current runner, not a call chain. */

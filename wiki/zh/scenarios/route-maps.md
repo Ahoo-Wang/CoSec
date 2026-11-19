@@ -67,6 +67,20 @@ description: "何时用路由映射给路由命名，以及映射过的路由会
 - 为不属于你的服务写平台 DENY 或限流？先问每个服务有没有映射，然后既写 `http` 形式，也写覆盖该路径的动作。
 - 请求的处理结果出乎意料？`explain` 和决策事件会显示请求被当作哪个动作和资源来决策（[解释决策](../integration/checks.md#explaining-a-decision)）。
 
+### CoSec 会警告什么 {#what-cosec-warns-about}
+
+有两处会把文档与路由映射比较，列出被已映射路由绕开的 `http:` DENY 语句和限流规则：语句对该路由未映射时的请求生效，映射后不再生效。
+
+- **每个配置了路由映射的宿主**，在安装文档时：文档的每个修订一条 `WARN`，在快照源的维护线程上写出，从不在请求的线程上。
+  `[<doc>] revision <n>: <count> mapped route(s) escape its http: statements, which do not apply to them: <statement>
+  escapes <METHOD> <path> (<action> on <resource>, <map>); …; and <m> more at DEBUG. Write each statement for the mapped
+  action too.` 这一行给出前五条；日志器 `me.ahoo.cosec.spring.boot.pipeline.RouteEscapeReview` 在 `DEBUG` 级别写出全部。
+  每个实例对一个修订只报告一次：同一修订的重新加载、重新编译或重新校验都不会再写。宿主只比较自己的映射，所以一个服务中最先安装该文档的宿主最先警告。
+- **控制面**，在变更发布之前，使用 [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane)
+  中给出的各服务映射：变更上的 `ROUTES` 警告（[测试策略](../policies/testing.md)）。
+
+两者都不读取条件：条件会放过该路由的语句也照样列出。两者都不改变决策。
+
 ## 由 OpenAPI 生成 {#generated-from-openapi}
 
 有了 `cosec-openapi`、springdoc 和 Spring Boot Actuator，`cosecServiceGenerator/routes` 会从 springdoc 扫描到的 OpenAPI 文档生成映射，`cosecServiceGenerator/app` 生成应用文档：简写权限的目录，每个动作一个，不需要手写策略，也没有角色。分组不是 `spaced`；应用使用空间时请把分组标为 `spaced`（[角色权限](../policies/role-permissions.md#generating-a-catalog-from-openapi)）。生成会映射*每一个*操作，所以每条生成的路由都会离开上面那些 `http` 语句。
