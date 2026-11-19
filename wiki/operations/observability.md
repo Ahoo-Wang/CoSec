@@ -23,6 +23,30 @@ except that a `REQUIRED` one that fails turns a permit into `503`.
 | `REQUIRED` | Before the response, together with the other `REQUIRED` listeners, each within [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners) (1 second) and within what is left of `cosec.pipeline.timeout`. It sees the outcome as decided so far. | A permit becomes `503` `unavailable`; the request does not proceed. Any other outcome keeps its status; the failure is logged at `ERROR` and counted. |
 | `BEST_EFFORT` (the default) | After the response is decided, off the request path. Each listener has its own queue of [`cosec.observability.listener.queue-capacity`](./configuration.md) events (1,024) and its own consumer, so a slow listener never costs another its events. It sees the final outcome. | Nothing for the request. A full queue drops the event and counts it, and the request never waits on a log line for it: a reporter logs `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.` at `WARN`, at most every 10 seconds, off the request's thread. A listener that throws is logged at `WARN` at most every 10 seconds, and counted. |
 
+### What decided, in every output {#what-decided-in-every-output}
+
+The decision event's `outcome.reason` names what decided, and every output uses its words (UD-7): the span's
+`cosec.authorize.result` as they are, the metrics' `result` tag in lower case, audit's `decision` in upper case. Only
+`explicit_deny` means a DENY statement refused the request.
+
+| `outcome.reason` / span | Metrics `result` | Audit `decision` | Counts | Before (8.0.0-beta.3: metrics / audit) |
+|---|---|---|---|---|
+| `PERMIT` | `permit` | `PERMIT` | permitted requests | `allow` / `ALLOW` |
+| `TOO_MANY_REQUESTS` | `too_many_requests` | `TOO_MANY_REQUESTS` | permits an exhausted rate limit stopped (`429`) | same |
+| `EXPLICIT_DENY` | `explicit_deny` | `EXPLICIT_DENY` | requests a DENY statement refused | the same words also counted the next three |
+| `IMPLICIT_DENY` | `implicit_deny` | `IMPLICIT_DENY` | requests nothing allowed | same |
+| `SCOPE_REJECTED` | `scope_rejected` | `SCOPE_REJECTED` | requests whose app or space the principal may not act in (`403` `scope-rejected`) | `explicit_deny` / `EXPLICIT_DENY` |
+| `BOUNDARY` | `boundary` | `BOUNDARY` | permits outside the tenant's platform boundary (`403` `forbidden`) | `explicit_deny` / `EXPLICIT_DENY` |
+| `INVALID_REQUEST` | `invalid_request` | `INVALID_REQUEST` | requests that could not be read without ambiguity (`400`) | `bad_request` / `EXPLICIT_DENY` |
+| `INDETERMINATE`, `AUTHENTICATOR_UNAVAILABLE`, `DEADLINE_EXCEEDED` | `indeterminate` (`cause` says which) | `INDETERMINATE` | requests no decision could be made for (`503`) | same |
+| `ERROR` | `error` | `ERROR` | defects (`500`) | same |
+| `CANCELLED` | `cancelled` | no audit record | callers that went away | same |
+
+The event's `subject.method` names how the principal authenticated in the words `CoSec-Identity` uses for the same
+credential: `jwt` for CoSec's own token, `api-key`, or the name another verifier's tokens are given (`token` by
+default); a principal with no credential is named by its authenticator. Through 8.0.0-beta.3 it was `token` for every
+token, CoSec's own included, and `apikey`.
+
 The listeners the starter registers:
 
 | Listener (`name`) | Delivery | Present when |
@@ -85,14 +109,14 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 
 | Outcome | `decision` | `reasonCode` |
 |---|---|---|
-| permit | `ALLOW` | `ALLOW` |
+| permit | `PERMIT` | `PERMIT` |
 | `429` | `TOO_MANY_REQUESTS` | `TOO_MANY_REQUESTS` |
 | a DENY matched | `EXPLICIT_DENY` | `EXPLICIT_DENY` |
-| scope rejected | `EXPLICIT_DENY` | `SCOPE_REJECTED` |
-| a permit outside the tenant's boundary | `EXPLICIT_DENY` | `BOUNDARY` |
+| scope rejected | `SCOPE_REJECTED` | `SCOPE_REJECTED` |
+| a permit outside the tenant's boundary | `BOUNDARY` | `BOUNDARY` |
 | nothing allowed | `IMPLICIT_DENY` | `IMPLICIT_DENY` |
-| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key); `DELEGATION_UNSUPPORTED` for a token with an `act` claim, which the response reports as `token-invalid`. A token not valid yet (its `iat` or `nbf` later than this instance's clock beyond the skew, `IDN-29`) is `TOKEN_INVALID` here; the decision event's `subject.rejected` names it `TOKEN_NOT_YET_VALID`. The principal stays anonymous; `authorization.reason` names whose credential was refused when that is known (a key that does not work, a principal the membership provider does not know or knows as deactivated), as the decision event's `subject.refused` does |
-| `400` | `EXPLICIT_DENY` | `EXPLICIT_DENY` (with `kind` `BAD_REQUEST`) |
+| any deny of a request whose credential was rejected | as above | `TOKEN_EXPIRED`, `TOKEN_REVOKED` or `TOKEN_INVALID` (also for an API key); `DELEGATION_UNSUPPORTED` for a token with an `act` claim, which the response reports as `token-invalid`. `TOKEN_NOT_YET_VALID` for a token whose `iat` or `nbf` is later than this instance's clock beyond the skew (`IDN-29`), which the response reports as `token-invalid` too. The principal stays anonymous; `authorization.reason` names whose credential was refused when that is known (a key that does not work, a principal the membership provider does not know or knows as deactivated), as the decision event's `subject.refused` does |
+| `400` | `INVALID_REQUEST` | `INVALID_REQUEST` (with `kind` `BAD_REQUEST`) |
 | `503`, a strict rate-limit rule that could not be counted | `INDETERMINATE` | `RATE_LIMITER_UNAVAILABLE` |
 | any other `503`, and a cancelled request | `INDETERMINATE` | `INDETERMINATE` |
 | `500` | `ERROR` | `ERROR` |
@@ -109,8 +133,8 @@ and implicit denies apart, why a credential was rejected, and why a request was 
 
 ### Audit log and Kafka
 
-The audit log listener writes each event as one JSON line to the logger `me.ahoo.cosec.audit`: `ALLOW` at `DEBUG`,
-denials, `TOO_MANY_REQUESTS` and `INDETERMINATE` at `WARN`, `ERROR` at `ERROR`. At the default `INFO` level, only
+The audit log listener writes each event as one JSON line to the logger `me.ahoo.cosec.audit`: `PERMIT` at `DEBUG`,
+denials (the deny kinds and `INVALID_REQUEST`), `TOO_MANY_REQUESTS` and `INDETERMINATE` at `WARN`, `ERROR` at `ERROR`. At the default `INFO` level, only
 denials, `503`s and errors appear.
 
 The Kafka audit listener writes the same JSON to [`cosec.audit.kafka.topic`](./configuration.md#audit)
@@ -164,7 +188,7 @@ number of time series stays bounded however many policies, apps and tenants ther
 
 | Tag | Values |
 |---|---|
-| `result` | `allow`, `too_many_requests`, `explicit_deny` (scope rejections and boundary denies included), `implicit_deny`, `indeterminate` (every `503`), `bad_request`, `cancelled`, `error` |
+| `result` | what decided ([every output's words](#what-decided-in-every-output)): `permit`, `too_many_requests`, `explicit_deny` (a DENY statement, and only that), `implicit_deny`, `scope_rejected`, `boundary`, `invalid_request` (`400`), `indeterminate` (every `503`), `cancelled`, `error` |
 | `source` | `binding`, `attachment`, `builtin`, `boundary`, `scope` (a scope rejection), `none` |
 | `problem` | what the client was told: `unauthorized` (`401`, anonymous), `token-invalid`, `token-expired`, `token-revoked` (`401`), `forbidden`, `scope-rejected` (`403`), `too-many-requests`, `invalid-request`, `unavailable`, `internal-error`, or `none` when the request proceeds or was cancelled |
 | `cause` | `none`, and on `indeterminate`: `source_unavailable`, `document_invalid`, `missing_policies`, `membership`, `attribute`, `matcher`, `authenticator`, `required_listener`, `boundary`, `rate_limiter`, `deadline`, `unknown` |
@@ -188,7 +212,7 @@ So are the tokens the pipeline accepted without a revocation check, the revocati
 |---|---|---|
 | `cosec.revocation.unchecked` | none | tokens accepted while their revocations could not be read; each such stretch also logs `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).` at `WARN`, at most every 10 seconds |
 
-Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny`, on `cosec.listener.dropped`, and on any
+Alert on the rate of `result=indeterminate` by `cause`, on `explicit_deny` (requests a DENY statement refused), on `cosec.listener.dropped`, and on any
 rise of `cosec.revocation.unchecked`: while it rises, a revoked token is accepted. A rise of
 `indeterminate` with `cause=source_unavailable` means documents cannot be read, and with `cause=document_invalid` that a
 stored document does not compile on this instance ([Troubleshooting](./troubleshooting.md#unavailable)). CoCache records its own meters for CoSec's caches in the same

@@ -538,7 +538,7 @@ composite。8.0 中 `*` 还匹配控制面的动作（`cosec:*`）和[代码中�
 - **6.x 签发的令牌**带有 6.1 的 `JwtTokenConverter` 所写的内容：`jti`、`sub`、`iat` 和 `exp`，以及主体拥有时的 `roles`（`role` 或 `role@space`）、`policies`、`attributes` 和字符串形式的 `tenantId`。只要持有相同的 `cosec.jwt.algorithm` 和 `cosec.jwt.secret`（长度不得短于下文要求），8.0 就能校验它们，并要求有 `jti`、`sub` 和 `exp`，6.x 总会设置它们。它们缺少的东西很要紧：**没有 `aud`**，所以请求没有应用（在没有 `cosec.authorization.scope.app-id` 的宿主上，`scope.appId` 为空，不读取任何应用文档；设置了它，每个这样的令牌都是 `403` `scope-rejected`，见[应用](../integration/authentication.md#apps)）；**没有会话声明**（`sid`、`auth_time`、`cosec.generation`），所以 8.0 的服务永远不会刷新 6.x 的令牌对：用户要在 8.0 的签发方重新登录。6.x 的签发方只有在 `cosec.jwt.token-revocation.enabled=true` 时才吊销，且按令牌 id 吊销；8.0 的校验方是否读取它写下的内容没有确定：不要指望 6.x 签发方的登出能到达 8.0 的校验方，在签发方升到 8.0 之前把访问令牌的有效期保持得短（[校验另一个服务所签发令牌的服务](../scenarios/resource-server.md)）。
 - **带 `act` 声明的令牌现在会被拒绝**，结果为 `token-invalid`（`IDN-4`）。7.x 忽略这个声明，因此 RFC 8693 委托令牌被当作它的 `sub`
   读取，执行方得到主体的权限。CoSec 自己从不签发这种令牌；接受其他签发方令牌的校验器在支持委托之前不得放行它们
-  （[认证](../integration/authentication.md#tokens)）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时审计记录 `ALLOW`，
+  （[认证](../integration/authentication.md#tokens)）。拒绝时审计记录原因码 `DELEGATION_UNSUPPORTED`；放行时审计记录 `PERMIT`，
   原因只出现在决策事件的 `subject.rejected` 中。刷新或吊销这种令牌同样失败。
 - **`tenantId` 声明为空或不是字符串**，或 `attributes` 声明中有 `apiKeyId`（CoSec 只为 API key 设置），令牌为 `token-invalid`；7.x 把这样的租户读作没有租户。
   **`cosec.jwt.secret`** 对 `hmac256`、`hmac384`、`hmac512` 分别至少 32、48、64 个 UTF-8 字节，否则启动失败。
@@ -860,8 +860,9 @@ Reactor `ContextView` 和 `HttpServletRequest` 上的 `getSecurityContext()`、`
   取代来源的 `type`、`policy` 和 `role`，`principal.policies` 和 `request.device.userAgent` 已删除（[审计事件](./observability.md#audit-events)）。
   `elapsedNanos` 现在覆盖整个 pipeline（认证、属性、限流），而不只是授权。`AuditEventSink` 仍然收到扁平记录；读取上述字段的实现需要随之修改。
 - **指标**：`cosec.authorization` 计时器同样覆盖整个 pipeline。它的 `source` 标签现在是 `binding`、`attachment`、`builtin`、`boundary`、
-  `scope` 或 `none`（7.x：`global_policy`、`principal_policy`、`role_permission`、`root`、`blacklist`、`none`、`unknown`）；`result` 新增
-  `indeterminate`、`bad_request` 和 `cancelled`；`cause` 是新标签，只出现在 `indeterminate` 上。新计数器：`cosec.listener.dropped`、
+  `scope` 或 `none`（7.x：`global_policy`、`principal_policy`、`role_permission`、`root`、`blacklist`、`none`、`unknown`）；`result` 用决策事件的词说明什么做出了决定（`permit`、
+  仅指 DENY 语句的 `explicit_deny`、`scope_rejected`、`boundary`、`invalid_request`、`indeterminate`、`cancelled`；7.x：
+  `allow`，每种拒绝都是 `explicit_deny`）；`cause` 是新标签，只出现在 `indeterminate` 上。新计数器：`cosec.listener.dropped`、
   `cosec.listener.failures`、`cosec.audit.required.failures`。请更新仪表盘和告警。
 - **追踪**：`cosec.authorize` span 在决策之后由决策事件生成，所以一次求值中的 I/O span 不再是它的子 span，审计事件的 `spanId` 是父 span 的 id。
 - **Kafka 审计**默认尽力投递，除非设置 `cosec.audit.kafka.delivery=required`；失败的 REQUIRED 监听器会把放行变为 `503`。

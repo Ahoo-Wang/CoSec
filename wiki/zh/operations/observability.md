@@ -20,6 +20,25 @@ description: "看清 CoSec 做出的每个决策以及文档的每次变更：�
 | `REQUIRED` | 在响应之前，与其他 `REQUIRED` 监听器一起运行，每个都在 [`cosec.observability.listener.required-timeout`](./configuration.md#decision-listeners)（1 秒）之内，并且在 `cosec.pipeline.timeout` 剩余的时间之内。它看到的是到此为止决定的结果。 | 放行变成 `503` `unavailable`，请求不会继续。其他结果保持原状态；失败以 `ERROR` 记录并计数。 |
 | `BEST_EFFORT`（默认） | 结果确定之后，在请求路径之外运行。每个监听器有自己容量为 [`cosec.observability.listener.queue-capacity`](./configuration.md)（1,024）个事件的队列和自己的消费者，所以慢的监听器绝不会让别的监听器丢事件。它看到的是最终结果。 | 对请求没有影响。队列满时丢弃事件并计数，请求从不等待与之相关的日志：由一个报告者在请求线程之外，最多每 10 秒以 `WARN` 记录一次 `Dropping decision events: the queue of listener [<name>] is full; <n> dropped since the last report.`。抛异常的监听器最多每 10 秒以 `WARN` 记录一次，并会计数。 |
 
+### 每个输出中的“什么做出了决定” {#what-decided-in-every-output}
+
+决策事件的 `outcome.reason` 说明什么做出了决定，每个输出都使用它的词（UD-7）：span 的 `cosec.authorize.result` 原样使用，指标的 `result` 标签用小写，审计的 `decision` 用大写。只有 `explicit_deny` 表示 DENY 语句拒绝了请求。
+
+| `outcome.reason` / span | 指标 `result` | 审计 `decision` | 计数的是 | 之前（8.0.0-beta.3：指标 / 审计） |
+|---|---|---|---|---|
+| `PERMIT` | `permit` | `PERMIT` | 被放行的请求 | `allow` / `ALLOW` |
+| `TOO_MANY_REQUESTS` | `too_many_requests` | `TOO_MANY_REQUESTS` | 被耗尽的限流规则拦下的放行（`429`） | 相同 |
+| `EXPLICIT_DENY` | `explicit_deny` | `EXPLICIT_DENY` | 被 DENY 语句拒绝的请求 | 同样的词还计入了下面三种 |
+| `IMPLICIT_DENY` | `implicit_deny` | `IMPLICIT_DENY` | 没有任何允许的请求 | 相同 |
+| `SCOPE_REJECTED` | `scope_rejected` | `SCOPE_REJECTED` | 主体不能在其应用或空间中操作的请求（`403` `scope-rejected`） | `explicit_deny` / `EXPLICIT_DENY` |
+| `BOUNDARY` | `boundary` | `BOUNDARY` | 超出租户平台边界的放行（`403` `forbidden`） | `explicit_deny` / `EXPLICIT_DENY` |
+| `INVALID_REQUEST` | `invalid_request` | `INVALID_REQUEST` | 无法无歧义读取的请求（`400`） | `bad_request` / `EXPLICIT_DENY` |
+| `INDETERMINATE`、`AUTHENTICATOR_UNAVAILABLE`、`DEADLINE_EXCEEDED` | `indeterminate`（`cause` 说明是哪种） | `INDETERMINATE` | 无法做出决定的请求（`503`） | 相同 |
+| `ERROR` | `error` | `ERROR` | 缺陷（`500`） | 相同 |
+| `CANCELLED` | `cancelled` | 没有审计记录 | 离开的调用方 | 相同 |
+
+事件的 `subject.method` 用 `CoSec-Identity` 对同一凭证使用的词说明主体如何认证：CoSec 自己的令牌为 `jwt`，`api-key`，或其他校验器的令牌被赋予的名字（默认 `token`）；没有凭证的主体用它的认证器命名。直到 8.0.0-beta.3，它对每个令牌（包括 CoSec 自己的）都是 `token`，API key 为 `apikey`。
+
 starter 注册的监听器：
 
 | 监听器（`name`） | 投递方式 | 存在条件 |
@@ -74,14 +93,14 @@ starter 注册的监听器：
 
 | 结果 | `decision` | `reasonCode` |
 |---|---|---|
-| 放行 | `ALLOW` | `ALLOW` |
+| 放行 | `PERMIT` | `PERMIT` |
 | `429` | `TOO_MANY_REQUESTS` | `TOO_MANY_REQUESTS` |
 | 匹配到 DENY | `EXPLICIT_DENY` | `EXPLICIT_DENY` |
-| 作用域被拒绝 | `EXPLICIT_DENY` | `SCOPE_REJECTED` |
-| 超出租户边界的放行 | `EXPLICIT_DENY` | `BOUNDARY` |
+| 作用域被拒绝 | `SCOPE_REJECTED` | `SCOPE_REJECTED` |
+| 超出租户边界的放行 | `BOUNDARY` | `BOUNDARY` |
 | 没有任何允许 | `IMPLICIT_DENY` | `IMPLICIT_DENY` |
-| 凭证被拒绝的请求的任何拒绝 | 同上 | `TOKEN_EXPIRED`、`TOKEN_REVOKED` 或 `TOKEN_INVALID`（API key 也是）；带 `act` 声明的令牌为 `DELEGATION_UNSUPPORTED`；尚未生效的令牌（其 `iat` 或 `nbf` 比本实例时钟晚、超出余量，`IDN-29`）在这里为 `TOKEN_INVALID`，决策事件的 `subject.rejected` 将其记为 `TOKEN_NOT_YET_VALID`，响应报告为 `token-invalid`。主体仍是匿名主体；已知时 `authorization.reason` 指明被拒绝的是谁的凭证（不能用的 key、成员关系提供者不认识或认为已停用的主体），与决策事件的 `subject.refused` 一致 |
-| `400` | `EXPLICIT_DENY` | `EXPLICIT_DENY`（`kind` 为 `BAD_REQUEST`） |
+| 凭证被拒绝的请求的任何拒绝 | 同上 | `TOKEN_EXPIRED`、`TOKEN_REVOKED` 或 `TOKEN_INVALID`（API key 也是）；带 `act` 声明的令牌为 `DELEGATION_UNSUPPORTED`；`iat` 或 `nbf` 比本实例时钟晚、超出余量的令牌为 `TOKEN_NOT_YET_VALID`（`IDN-29`），响应同样报告为 `token-invalid`。主体仍是匿名主体；已知时 `authorization.reason` 指明被拒绝的是谁的凭证（不能用的 key、成员关系提供者不认识或认为已停用的主体），与决策事件的 `subject.refused` 一致 |
+| `400` | `INVALID_REQUEST` | `INVALID_REQUEST`（`kind` 为 `BAD_REQUEST`） |
 | `503`，严格的限流规则无法计数 | `INDETERMINATE` | `RATE_LIMITER_UNAVAILABLE` |
 | 其他任何 `503`，以及被取消的请求 | `INDETERMINATE` | `INDETERMINATE` |
 | `500` | `ERROR` | `ERROR` |
@@ -98,7 +117,7 @@ starter 注册的监听器：
 
 ### 审计日志与 Kafka {#audit-log-and-kafka}
 
-审计日志监听器把每个事件写成一行 JSON，写到 logger `me.ahoo.cosec.audit`：`ALLOW` 用 `DEBUG`，拒绝、
+审计日志监听器把每个事件写成一行 JSON，写到 logger `me.ahoo.cosec.audit`：`PERMIT` 用 `DEBUG`，拒绝（各种拒绝和 `INVALID_REQUEST`）、
 `TOO_MANY_REQUESTS` 和 `INDETERMINATE` 用 `WARN`，`ERROR` 用 `ERROR`。在默认的 `INFO` 级别下，只出现拒绝、`503` 和
 错误。
 
@@ -141,7 +160,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 | 标签 | 取值 |
 |---|---|
-| `result` | `allow`、`too_many_requests`、`explicit_deny`（包括作用域拒绝和边界拒绝）、`implicit_deny`、`indeterminate`（每个 `503`）、`bad_request`、`cancelled`、`error` |
+| `result` | 什么做出了决定（[每个输出的词](#what-decided-in-every-output)）：`permit`、`too_many_requests`、`explicit_deny`（仅指 DENY 语句）、`implicit_deny`、`scope_rejected`、`boundary`、`invalid_request`（`400`）、`indeterminate`（每个 `503`）、`cancelled`、`error` |
 | `source` | `binding`、`attachment`、`builtin`、`boundary`、`scope`（作用域拒绝）、`none` |
 | `problem` | 客户端被告知的问题：`unauthorized`（`401`，匿名）、`token-invalid`、`token-expired`、`token-revoked`（`401`）、`forbidden`、`scope-rejected`（`403`）、`too-many-requests`、`invalid-request`、`unavailable`、`internal-error`，请求继续或被取消时为 `none` |
 | `cause` | `none`，以及在 `indeterminate` 时：`source_unavailable`、`document_invalid`、`missing_policies`、`membership`、`attribute`、`matcher`、`authenticator`、`required_listener`、`boundary`、`rate_limiter`、`deadline`、`unknown` |
@@ -162,7 +181,7 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 |---|---|---|
 | `cosec.revocation.unchecked` | 无 | 吊销无法读取时被接受的令牌；每段这样的时间还会以 `WARN` 记录 `Token revocations cannot be read: tokens are accepted without a revocation check (<n> so far).`，最多每 10 秒一次 |
 
-按 `cause` 对 `result=indeterminate` 的速率、对 `explicit_deny`、对 `cosec.listener.dropped` 设置告警，并对 `cosec.revocation.unchecked` 的任何上升告警：它上升期间，被吊销的令牌会被接受。
+按 `cause` 对 `result=indeterminate` 的速率、对 `explicit_deny`（被 DENY 语句拒绝的请求）、对 `cosec.listener.dropped` 设置告警，并对 `cosec.revocation.unchecked` 的任何上升告警：它上升期间，被吊销的令牌会被接受。
 `indeterminate` 伴随 `cause=source_unavailable` 上升，说明文档读不到；伴随 `cause=document_invalid` 上升，说明某个已存储的文档在本实例上无法编译（[故障排查](./troubleshooting.md#unavailable)）。
 CoCache 会在同一个 registry 中为 CoSec 的缓存记录它自己的指标（[CoCache 文档](https://cocache.ahoo.me)）。
 
