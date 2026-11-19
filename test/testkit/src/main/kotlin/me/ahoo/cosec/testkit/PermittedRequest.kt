@@ -59,7 +59,8 @@ import java.util.concurrent.CompletableFuture
 @ExperimentalCoSecApi
 object PermittedRequest {
     /**
-     * The context of the request [token] makes, verified by [verifier] over [revocations].
+     * The context of the request [token] makes, verified by [verifier] over [revocations]: name
+     * [RevocationReader.NONE] for a test in which nothing is revoked.
      *
      * [headers] are the request's other headers, such as `CoSec-Device-Id`; names are case-insensitive. The token is the
      * request's credential and no header can replace it: `Authorization`, `X-API-Key` and `CoSec-Identity` are refused.
@@ -72,7 +73,7 @@ object PermittedRequest {
     fun withToken(
         token: String,
         verifier: TokenVerifier,
-        revocations: RevocationReader = RevocationReader.NONE,
+        revocations: RevocationReader,
         headers: Map<String, List<String>> = emptyMap(),
     ): SecurityContext {
         headers.keys.firstOrNull { name -> CREDENTIAL_HEADERS.any { it.equals(name, ignoreCase = true) } }?.let {

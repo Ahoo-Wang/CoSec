@@ -25,6 +25,7 @@ import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.cosec.spi.authn.Credentials
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.token.DelegationUnsupportedException
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenExpiredException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
@@ -254,7 +255,8 @@ class JwtTokenVerifierTest {
     fun onlyThisVerifiersTokensMayUseBreakGlass() {
         val token = signed {}
         fun authenticate(verifier: TokenVerifier) = runBlocking {
-            (TokenAuthenticator(verifier).authenticate(Credentials(token, null)) as AuthnResult.Authenticated).principal
+            val result = TokenAuthenticator(verifier, RevocationReader.NONE).authenticate(Credentials(token, null))
+            (result as AuthnResult.Authenticated).principal
         }
         val principal = authenticate(jwtTokenVerifier)
         principal.breakGlass.assert().isTrue()
@@ -287,7 +289,8 @@ class JwtTokenVerifierTest {
         for (claim in claims) {
             val token = crafted("{$claim,\"exp\":$exp}")
             assertThrows(TokenVerificationException::class.java) { jwtTokenVerifier.verify(token) }
-            val result = runBlocking { TokenAuthenticator(jwtTokenVerifier).authenticate(Credentials(token, null)) }
+            val authenticator = TokenAuthenticator(jwtTokenVerifier, RevocationReader.NONE)
+            val result = runBlocking { authenticator.authenticate(Credentials(token, null)) }
             (result as AuthnResult.Rejected).reason.assert().describedAs(
                 claim
             ).isEqualTo(AuthnResult.RejectReason.TOKEN_INVALID)

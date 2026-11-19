@@ -140,7 +140,12 @@ class LoginRoutesTest {
     fun `the pair is written as CompositeTokenJsonTest pins it, whatever the tokens hold`() {
         val odd = CompositeToken("a\"b\\c</script>", "r\",\"x\":\"y")
         val route = RefreshRoute(
-            RefreshTokenAuthentication(verifier, TokenRevocation(RevocationReader.NONE), families),
+            RefreshTokenAuthentication(
+                verifier,
+                TokenRevocation(RevocationReader.NONE),
+                families,
+                MembershipRefresh.CLAIMS,
+            ),
             object : TokenConverter {
                 override fun toToken(subject: TokenSubject) = odd
 
@@ -155,7 +160,12 @@ class LoginRoutesTest {
         String(
             runBlocking {
                 RefreshRoute(
-                    RefreshTokenAuthentication(verifier, TokenRevocation(RevocationReader.NONE), families),
+                    RefreshTokenAuthentication(
+                        verifier,
+                        TokenRevocation(RevocationReader.NONE),
+                        families,
+                        MembershipRefresh.CLAIMS,
+                    ),
                     converter,
                 ).answer("application/json", body(login()), REQUEST_ID).body
             }
