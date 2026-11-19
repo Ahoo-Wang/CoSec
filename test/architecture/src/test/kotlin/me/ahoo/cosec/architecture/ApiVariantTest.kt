@@ -35,7 +35,7 @@ class ApiVariantTest {
         val LIBRARIES: Set<String> = ProjectListTest.GROUPS.filterKeys { it !in setOf("bom", "platform") }.values
             .flatten()
             .filterNot {
-                it in setOf("conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "code-coverage-report", "migrate", "spring-boot")
+                it in setOf("conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "system-auth", "system-enforcer", "code-coverage-report", "migrate", "spring-boot")
             }
             .toSet()
     }

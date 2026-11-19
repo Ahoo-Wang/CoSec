@@ -35,4 +35,17 @@ object Bounds {
         Duration.ofSeconds(15),
         "revalidate-interval 10 s (SNP-6) + cold-load-timeout 2 s + 3 s margin",
     )
+
+    /**
+     * A staged change's shadow window closes on the control plane: no earlier than `cosec.control.shadow.min-duration`
+     * (5 s), looked at every `check-interval` (1 s), from reports each instance writes every
+     * `cosec.authorization.shadow.report-interval` (1 s), all three test values of `profile/shortened-bounds.yaml`
+     * (defaults 15 min, 1 min, 10 s; CTL-10), once every instance has the staged candidate, which reaches it as a document
+     * does ([SNAPSHOT_PROPAGATION]).
+     */
+    val SHADOW_CLOSE = Bound(
+        "SHADOW_CLOSE",
+        Duration.ofSeconds(22),
+        "min-duration 5 s + check-interval 1 s + report-interval 1 s (shortened-bounds.yaml, CTL-10) + SNAPSHOT_PROPAGATION 15 s",
+    )
 }

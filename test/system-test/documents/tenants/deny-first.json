@@ -1,0 +1,51 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-18T00:00:00Z",
+  "policies": [
+    {
+      "id": "its-own-pages",
+      "statements": [
+        {
+          "name": "its-own-pages",
+          "effect": "allow",
+          "action": "http:*",
+          "resource": [
+            "http:path:/behind/deny-first/**",
+            "http:path:/deny-first/**"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "what-the-platform-denies",
+      "statements": [
+        {
+          "name": "what-the-platform-denies",
+          "effect": "allow",
+          "action": "http:*",
+          "resource": [
+            "http:path:/behind/denied/**",
+            "http:path:/denied/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "its-own-pages",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "its-own-pages"
+    },
+    {
+      "id": "what-the-platform-denies",
+      "subject": "*",
+      "app": "*",
+      "space": "*",
+      "policy": "what-the-platform-denies"
+    }
+  ]
+}

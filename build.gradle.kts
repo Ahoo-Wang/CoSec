@@ -45,6 +45,8 @@ val testOnlyProjects = setOf(
     project(":client-host"),
     project(":system-test"),
     project(":system-behind"),
+    project(":system-auth"),
+    project(":system-enforcer"),
 )
 val publishProjects = subprojects - serverProjects - codeCoverageReportProject - testOnlyProjects - dependenciesProject
 val libraryProjects = publishProjects - bomProject

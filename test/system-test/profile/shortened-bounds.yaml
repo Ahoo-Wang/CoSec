@@ -1,0 +1,20 @@
+# TEST CONFIGURATION ONLY: never copy any of this into a deployment.
+#
+# The bounds the system test shortens so that a scenario finishes in seconds, every one in this file and nowhere else,
+# each with the default it replaces. compose.yaml gives the file to every CoSec process (spring.config.additional-location);
+# the harness's bounds (test/system-test/src/test/kotlin/me/ahoo/cosec/system/Bound.kt) are derived from these values.
+cosec:
+  authorization:
+    shadow:
+      # Default 0.1: every request is evaluated again on a staged candidate, so a window fills from a few requests.
+      sample-rate: 1.0
+      # Default 10s: an instance writes its window report every second.
+      report-interval: 1s
+  control:
+    shadow:
+      # Default 15m: a window may close after 5 seconds...
+      min-duration: 5s
+      # Default 1000: ...once the instances have reported 20 compared samples.
+      min-samples: 20
+      # Default 1m: the open windows are looked at every second.
+      check-interval: 1s

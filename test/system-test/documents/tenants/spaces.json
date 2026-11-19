@@ -1,0 +1,32 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-18T00:00:00Z",
+  "policies": [
+    {
+      "id": "editors",
+      "statements": [
+        {
+          "name": "editors",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": [
+            "http:path:/behind/spaces/**",
+            "http:path:/spaces/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "editors-in-s1",
+      "subject": {
+        "role": "editor"
+      },
+      "app": "*",
+      "space": "s1",
+      "policy": "editors"
+    }
+  ]
+}
