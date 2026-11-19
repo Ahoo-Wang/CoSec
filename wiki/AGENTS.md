@@ -110,8 +110,8 @@ Outside the wiki: contribution workflow and releases in `CONTRIBUTING.md`, agent
   (for example "7.x matchers have no 8.0 equivalent") is a file-and-term entry with a reason in the script's
   `ALLOWED` list; there is no inline escape, and an entry that matches nothing fails, so delete it with the text.
 
-- **Reader paths.** [Where to go next](guide/introduction.md#where-to-go-next) defines six reading paths
-  (evaluator, developer, policy author, worked example, operator, contributor). Every page on a path ends with one
+- **Reader paths.** [Where to go next](guide/introduction.md#where-to-go-next) defines seven reading paths
+  (evaluator, developer, policy author, worked example, operator, client builder, contributor). Every page on a path ends with one
   `**Next:**` line (`**下一步：**` in `zh/`) linking to the following page. Adding, removing or reordering a page
   on a path means updating that table and the `**Next:**` lines around it, in both languages.
 

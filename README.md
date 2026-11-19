@@ -124,7 +124,7 @@ Continue with the [Quick Start](https://cosec.ahoo.me/guide/quick-start) to issu
 
 `cosec-spring-boot` brings the request pipeline, login, JWT support and auto-configuration; each integration
 (WebFlux, MVC, Gateway, Redis, control plane, OAuth, OpenTelemetry, Micrometer, OpenAPI, ip2region, Kafka) is a module
-you add next to it, and the starter wires what it finds on the classpath. `cosec-migrate` converts 7.x data and publishes documents. See
+you add next to it, and the starter wires what it finds on the classpath. `cosec-migrate` converts 7.x data and publishes documents. A browser or Node client is the npm packages `@ahoo-wang/cosec-fetcher` and `@ahoo-wang/cosec-react`, released with CoSec ([Building a client](https://cosec.ahoo.me/integration/clients)). See
 [Modules](https://cosec.ahoo.me/guide/introduction#modules) for the full list. A ready-to-run gateway is
 published as the container image `ahoowang/cosec-gateway`.
 
