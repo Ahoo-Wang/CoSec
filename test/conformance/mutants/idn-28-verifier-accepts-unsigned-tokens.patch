@@ -3,17 +3,14 @@
 # Tests: :jwt:test --tests me.ahoo.cosec.jwt.UnsignedAlgorithmTest
 
 diff --git a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-index 4a940d39..efa7a555 100644
+index ed13ba4a..004e1f2d 100644
 --- a/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
 +++ b/extensions/jwt/src/main/kotlin/me/ahoo/cosec/jwt/JwtTokenVerifier.kt
-@@ -43,10 +43,6 @@ import me.ahoo.cosec.spi.token.VerifiedToken
- class JwtTokenVerifier(
-     private val algorithm: Algorithm
+@@ -60,7 +60,6 @@ class JwtTokenVerifier @JvmOverloads constructor(
+     issuerSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
  ) : CoSecTokenVerifier {
--    init {
+     init {
 -        Jwts.requireSigning(algorithm)
--    }
--
-     private val jwtVerifier: JWTVerifier = JWT.require(algorithm)
-         .withClaimPresence("exp")
-         .build()
+         require(!issuerSkew.isNegative) { "The issuer skew must not be negative, not $issuerSkew." }
+     }
+ 

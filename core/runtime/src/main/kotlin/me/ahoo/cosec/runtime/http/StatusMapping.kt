@@ -119,6 +119,7 @@ internal object StatusMapping {
             AuthnResult.RejectReason.TOKEN_INVALID,
             AuthnResult.RejectReason.API_KEY_INVALID,
             AuthnResult.RejectReason.DELEGATION_UNSUPPORTED,
+            AuthnResult.RejectReason.TOKEN_NOT_YET_VALID,
             -> ProblemType.TOKEN_INVALID
         }
 

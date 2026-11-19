@@ -207,6 +207,9 @@ class AuditEventsTest {
         val delegated = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.DELEGATION_UNSUPPORTED))
         audit(Decision.Deny(null), delegated).authorization.reasonCode
             .assert().isEqualTo(AuditReasonCode.DELEGATION_UNSUPPORTED)
+        // IDN-29: a token not valid yet is token-invalid to audit's fixed codes; the decision event names it.
+        val early = authenticator(AuthnResult.Rejected(AuthnResult.RejectReason.TOKEN_NOT_YET_VALID))
+        audit(Decision.Deny(null), early).authorization.reasonCode.assert().isEqualTo(AuditReasonCode.TOKEN_INVALID)
     }
 
     /** #1237: a boundary refusal is recorded as the boundary, not as "no statement decided". */

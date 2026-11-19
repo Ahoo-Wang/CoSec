@@ -72,6 +72,16 @@ deployment needs none of it: [Upgrading](./upgrading.md) is the whole upgrade. T
   Redis key. Now a value shaped like a token (a JOSE compact serialization, with or without `Bearer `) throws
   `IllegalArgumentException`, which names `TokenRevoker`; no token id CoSec or another issuer gives is refused.
   Affected: a logout written against `TokenStore`, which never worked. Call `TokenRevoker.revoke(accessToken)`.
+- **Fixed: a token from an issuer whose clock runs ahead is accepted** (#1666, `IDN-29`). Through beta.3,
+  `JwtTokenVerifier` allowed no room for clocks: a token whose `iat` was even milliseconds later than the verifier's
+  clock was `401 token-invalid`, so a deployment whose issuer and gateway do not share a clock saw intermittent `401`s
+  in the last milliseconds of a second. A token's `iat` and `nbf` may now be up to
+  `cosec.authentication.revocation.skew` (5 seconds) ahead; `exp` stays strict. A token beyond the skew is still
+  `token-invalid` to the client, and the decision event names it `TOKEN_NOT_YET_VALID` (a new member of
+  `AuthnResult.RejectReason`, a set that grows; a `when` over it already has an `else`); the log says
+  `Token refused as not valid yet`. `JwtTokenVerifier(algorithm, issuerSkew)` takes the skew, the starter passes
+  `cosec.authentication.revocation.skew`; a verifier you build yourself defaults to 5 seconds, so pass the value your
+  `TokenAuthenticator`'s `revocationSkew` uses if you changed it. Nothing breaks.
 
 ## From 8.0.0-beta.2 {#from-8-0-0-beta-2}
 

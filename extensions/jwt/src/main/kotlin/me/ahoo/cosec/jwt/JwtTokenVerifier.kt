@@ -16,7 +16,9 @@
 package me.ahoo.cosec.jwt
 
 import com.auth0.jwt.JWT
+import com.auth0.jwt.RegisteredClaims
 import com.auth0.jwt.algorithms.Algorithm
+import com.auth0.jwt.exceptions.IncorrectClaimException
 import com.auth0.jwt.exceptions.TokenExpiredException
 import com.auth0.jwt.interfaces.DecodedJWT
 import com.auth0.jwt.interfaces.JWTVerifier
@@ -25,9 +27,13 @@ import me.ahoo.cosec.api.token.CompositeToken
 import me.ahoo.cosec.jwt.Jwts.removeBearerPrefix
 import me.ahoo.cosec.login.token.RefreshTokenMismatchException
 import me.ahoo.cosec.runtime.token.CoSecTokenVerifier
+import me.ahoo.cosec.runtime.token.TokenRevocation
+import me.ahoo.cosec.spi.token.SubjectRevocation
+import me.ahoo.cosec.spi.token.TokenNotYetValidException
 import me.ahoo.cosec.spi.token.TokenVerificationException
 import me.ahoo.cosec.spi.token.TokenVerifier
 import me.ahoo.cosec.spi.token.VerifiedToken
+import java.time.Duration
 
 /**
  * JWT-based token verifier.
@@ -36,31 +42,57 @@ import me.ahoo.cosec.spi.token.VerifiedToken
  * and read what they say. It is CoSec's own verifier ([CoSecTokenVerifier]): only the tokens it
  * verifies may use break-glass (RC1-26).
  *
+ * A token's issue time (`iat`) and not-before time (`nbf`) may be up to [issuerSkew] later than this verifier's clock:
+ * an issuer whose clock runs ahead (`IDN-29`). Its expiry (`exp`) is strict: no skew lengthens a token's life. A token
+ * outside the skew is [TokenNotYetValidException].
+ *
  * @param algorithm The algorithm used to verify JWT signatures
+ * @param issuerSkew how far ahead of this verifier's clock an issuer's may run, whole seconds rounded up: the same
+ * quantity as `cosec.authentication.revocation.skew`, which the starter passes. A subject revocation revokes the tokens
+ * issued up to that long after it, so a token this accepts early is still judged by it ([TokenRevocation] with the
+ * same skew). The default is that setting's default: it only accepts a token from a fast issuer a few seconds sooner,
+ * and loosens neither expiry nor revocation.
  * @see TokenVerifier
  * @see JwtTokenConverter
  */
-class JwtTokenVerifier(
-    private val algorithm: Algorithm
+class JwtTokenVerifier @JvmOverloads constructor(
+    private val algorithm: Algorithm,
+    issuerSkew: Duration = SubjectRevocation.DEFAULT_SKEW,
 ) : CoSecTokenVerifier {
     init {
         Jwts.requireSigning(algorithm)
+        require(!issuerSkew.isNegative) { "The issuer skew must not be negative, not $issuerSkew." }
     }
 
+    /** java-jwt counts leeway in whole seconds: rounded up, so a skew of 1.5 s tolerates 2 s, never 1. */
+    private val skewSeconds: Long = issuerSkew.plusNanos(NANOS_PER_SECOND - 1).seconds
+
+    // acceptIssuedAt and acceptNotBefore loosen only `iat` and `nbf`; acceptLeeway would loosen `exp` too.
     private val jwtVerifier: JWTVerifier = JWT.require(algorithm)
         .withClaimPresence("exp")
+        .acceptIssuedAt(skewSeconds)
+        .acceptNotBefore(skewSeconds)
         .build()
 
     @Suppress("TooGenericExceptionCaught")
-    private fun decodeVerified(token: String): DecodedJWT {
-        try {
-            return jwtVerifier.verify(token)
-        } catch (expired: TokenExpiredException) {
-            throw me.ahoo.cosec.spi.token
-                .TokenExpiredException(expired.message ?: "The token has expired.", expired)
-        } catch (exception: Exception) {
-            throw TokenVerificationException(exception.message ?: "The token is invalid.", exception)
-        }
+    private fun decodeVerified(token: String): DecodedJWT = try {
+        jwtVerifier.verify(token)
+    } catch (exception: Exception) {
+        throw translated(exception)
+    }
+
+    /** What java-jwt's refusal is in CoSec's terms: expired, not valid yet (`IDN-29`), or invalid. */
+    private fun translated(exception: Exception): TokenVerificationException = when {
+        exception is TokenExpiredException ->
+            me.ahoo.cosec.spi.token.TokenExpiredException(exception.message ?: "The token has expired.", exception)
+
+        exception is IncorrectClaimException && exception.claimName in TIME_CLAIMS -> TokenNotYetValidException(
+            "The token's ${exception.claimName} is later than this instance's clock by more than ${skewSeconds}s: " +
+                "is the issuer's clock ahead?",
+            exception,
+        )
+
+        else -> TokenVerificationException(exception.message ?: "The token is invalid.", exception)
     }
 
     override fun verify(accessToken: String): VerifiedToken =
@@ -87,6 +119,13 @@ class JwtTokenVerifier(
             throw RefreshTokenMismatchException()
         }
         return Jwts.toVerifiedToken(decodedAccessToken)
+    }
+
+    private companion object {
+        const val NANOS_PER_SECOND = 1_000_000_000L
+
+        /** The claims a skew applies to: a refusal of one of them means the token is not valid yet. */
+        val TIME_CLAIMS = setOf(RegisteredClaims.ISSUED_AT, RegisteredClaims.NOT_BEFORE)
     }
 
     @Suppress("TooGenericExceptionCaught")

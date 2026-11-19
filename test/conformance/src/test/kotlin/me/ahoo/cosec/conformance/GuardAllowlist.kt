@@ -24,6 +24,11 @@ package me.ahoo.cosec.conformance
 object GuardAllowlist {
     val GUARDS: Map<String, Set<String>> = mapOf(
         "build" to setOf(
+            // IDN-29: an issuer's clock ahead by the skew, never an expiry.
+            "jwt:IssuerSkewTest#an issue time within the skew ahead is accepted, beyond it refused as not valid yet",
+            "jwt:IssuerSkewTest#a not-before time within the skew ahead is accepted, beyond it refused as not valid yet",
+            "jwt:IssuerSkewTest#an expiry has no skew",
+            "jwt:IssuerSkewTest#a token accepted early is still revoked by a revocation it follows within the skew",
             // IDN-27: no public default reads revocations or memberships.
             "architecture:SafeDefaultsTest#no public parameter that reads revocations or memberships has a default",
             "architecture:SafeDefaultsTest#the scan reads the token API",
