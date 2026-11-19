@@ -70,12 +70,21 @@ class PipelineProperties {
 
         /** A larger header is refused: 400 `invalid-request`. */
         var maxSize: DataSize = DataSize.ofBytes(IdentityCodec.DEFAULT_MAX_BYTES.toLong())
+
+        /**
+         * The statement that only the gateway can reach this service (`STA-7`). A service in `gateway` mode believes any
+         * `CoSec-Identity` it receives, a header with no signature, so whoever else can reach it is whoever they claim to
+         * be. No default: the mode does not start until this is `true`, written by an operator who has made it so (a
+         * NetworkPolicy that admits the gateway's pods only, mutual TLS, a private network).
+         */
+        var onlyGatewayCanReach: Boolean = false
     }
 
     @InternalCoSecApi
     companion object {
         const val PREFIX = CoSecProperties.PREFIX + ".pipeline"
         const val MODE_KEY = "$PREFIX.mode"
+        const val ONLY_GATEWAY_CAN_REACH_KEY = "$PREFIX.identity.only-gateway-can-reach"
         const val API_KEY_HEADER_KEY = "$PREFIX.api-key-header"
         const val DEFAULT_API_KEY_HEADER = "X-API-Key"
     }

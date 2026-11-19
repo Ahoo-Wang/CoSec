@@ -371,6 +371,22 @@ Spring 把它们读作 `cosec.*` key。从 8.0.0-alpha.2 起，检查只在进�
 - `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`：网关总是用策略决策。从网关上去掉这个配置项；在其后的服务上设置它。
 - `cosec.pipeline.mode` 绑定失败：值既不是 `enforce` 也不是 `gateway`。
 
+### 网络边界未声明导致启动失败 {#startup-fails-because-the-network-boundary-is-not-stated}
+
+```text
+cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and the header carries no signature, so whoever can reach this service is whoever they claim to be ... State it once it is true: cosec.pipeline.identity.only-gateway-can-reach=true (the environment variable COSEC_PIPELINE_IDENTITY_ONLY_GATEWAY_CAN_REACH=true). It is not set (STA-7, ...).
+```
+
+`cosec.pipeline.mode=gateway` 的服务信任网络（`STA-7`）。先让它成真，再写下这一行：只放行网关 pod 的 `NetworkPolicy`（[`k8s/examples/gateway-mode-service-networkpolicy.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/k8s/examples/gateway-mode-service-networkpolicy.yaml)）、双向 TLS，或只有网关所在的私有网络。`It is [false]`（或 `1`、`on`、空值）表示这个配置项写成了不是 `true` 的值。不要在网络还没有保证之前，为了绕过这条信息而写它。之后启动日志记录一行 `INFO`。
+
+### 网关之后的 hidden-method 过滤器导致启动失败 {#startup-fails-on-a-hidden-method-filter-behind-a-gateway}
+
+```text
+cosec.pipeline.mode=gateway: spring.mvc.hiddenmethod.filter.enabled=true. The gateway decided the method of the request line, but this service would run a POST as the method a form field `_method` names ... (STA-6).
+```
+
+移除 `spring.mvc.hiddenmethod.filter.enabled`、`spring.webflux.hiddenmethod.filter.enabled` 以及应用的任何 `HiddenHttpMethodFilter` bean（`a HiddenHttpMethodFilter bean, [name]`）：网关无法从表单请求体里移除 `_method` 字段，所以 `http:DELETE` 上的 `DENY` 会被绕过。`enforce` 模式的宿主不受影响。
+
 ### 开关无法读取导致启动失败 {#startup-fails-on-an-unreadable-switch}
 
 ```text

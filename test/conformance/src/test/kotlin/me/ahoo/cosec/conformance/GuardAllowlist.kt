@@ -241,6 +241,12 @@ object GuardAllowlist {
             "social:RedisAuthStateCacheTest#aStateIsTakenOnce",
         ),
         "startup" to setOf(
+            // STA-6, STA-7: a service behind a gateway states its network boundary and runs no hidden-method filter.
+            "spring-boot:GatewayModeTrustTest#a service in gateway mode does not start until the operator states the boundary, and the message says what to write",
+            "spring-boot:GatewayModeTrustTest#false and every value but true fail like an absent one, and say what was written",
+            "spring-boot:GatewayModeTrustTest#with the statement the service starts, in any letter case of true, and an enforcing host needs none",
+            "spring-boot:GatewayModeTrustTest#a hidden-method filter in a service behind a gateway fails startup, by property and by bean",
+            "spring-boot:GatewayModeTrustTest#a reactive service is held to the same two statements",
             // IDN-28: CoSec's tokens are signed.
             "jwt:UnsignedAlgorithmTest#the verifier refuses Algorithm none",
             "jwt:UnsignedAlgorithmTest#the converter refuses Algorithm none",

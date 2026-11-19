@@ -8,6 +8,10 @@ spring:
 cosec:
   pipeline:
     mode: gateway
+    identity:
+      # STA-7: true here, and only here: the compose network gives this service to the gateways alone, and no port of it is
+      # published to the runner.
+      only-gateway-can-reach: true
 management:
   endpoint:
     health:

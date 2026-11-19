@@ -28,6 +28,7 @@ import me.ahoo.cosec.spring.boot.ConditionalOnCoSecEnabled
 import me.ahoo.cosec.spring.boot.StartupTask
 import me.ahoo.cosec.spring.boot.StartupTaskExclusion
 import me.ahoo.cosec.spring.boot.micrometer.MetricsProperties
+import org.springframework.beans.factory.ListableBeanFactory
 import org.springframework.beans.factory.ObjectProvider
 import org.springframework.boot.autoconfigure.AutoConfiguration
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean
@@ -38,6 +39,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
+import org.springframework.core.env.Environment
 
 private val log = KotlinLogging.logger {}
 
@@ -66,6 +68,25 @@ private val log = KotlinLogging.logger {}
 )
 @Import(StartupTaskExclusion::class)
 internal class CoSecGatewayModeAutoConfiguration {
+    /**
+     * `STA-7`: the mode starts only when the operator states that nothing but the gateway can reach the service, and says
+     * so once, at INFO, when they have. A check of its own, so an application's own [IdentityGate] does not skip it.
+     */
+    @Bean
+    fun cosecGatewayModeBoundaryCheck(environment: Environment): StartupTask = StartupTask.OnCreation {
+        GatewayModeTrust.requireBoundaryStated(environment)
+        log.info {
+            "cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives, and " +
+                "${PipelineProperties.ONLY_GATEWAY_CAN_REACH_KEY}=true states that only the CoSec gateway, which strips " +
+                "the clients' own, can reach it (STA-7)."
+        }
+    }
+
+    /** `STA-6`: no hidden-method filter in a service behind a gateway; after every singleton, for the beans of the host. */
+    @Bean
+    fun cosecGatewayModeHiddenMethodCheck(environment: Environment, beans: ListableBeanFactory): StartupTask =
+        StartupTask.AfterSingletons { GatewayModeTrust.requireNoHiddenMethod(environment, beans) }
+
     @Bean
     @ConditionalOnMissingBean
     fun cosecIdentityGate(
@@ -74,10 +95,6 @@ internal class CoSecGatewayModeAutoConfiguration {
         idGenerator: ObjectProvider<IdGenerator>,
         refusals: IdentityRefusals,
     ): IdentityGate {
-        log.warn {
-            "cosec.pipeline.mode=gateway: this service believes any CoSec-Identity header it receives. Only the CoSec " +
-                "gateway, which strips the clients' own, may be able to reach it: anyone else who can is whoever they claim."
-        }
         return IdentityGate(
             maxBytes = pipeline.identity.maxSize.toBytes().toInt(),
             maxAge = pipeline.identity.maxAge,
