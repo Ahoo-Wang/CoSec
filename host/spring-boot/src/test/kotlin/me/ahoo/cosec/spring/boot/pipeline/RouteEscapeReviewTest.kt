@@ -91,6 +91,23 @@ class RouteEscapeReviewTest {
         }
     }
 
+    /** `DOC-12` (R1B-3): a tenant administrator's policy id does not forge a line on every host with a route map. */
+    @Test
+    fun `an id that would forge a line is logged escaped`() {
+        val review = RouteEscapeReview(routes, capacity = 8)
+        val forged = """[{"id":"x\n2026-11-19 ERROR forged\u001b[31m","statements":[{"effect":"deny","action":"http:*",""" +
+            """"resource":"http:path:/admin/**"}]}]"""
+        logged { appender ->
+            review.installed(SnapshotKey.Platform, 1, compile(SnapshotKey.Platform, 1, forged))
+            appender.list.assert().hasSize(2)
+            appender.list.forEach { event ->
+                event.formattedMessage.none { it.isISOControl() }.assert().describedAs(event.formattedMessage).isTrue()
+            }
+            appender.at(Level.WARN).single().formattedMessage.assert()
+                .contains("DENY x\\u000A2026-11-19 ERROR forged\\u001B[31m#0 escapes DELETE")
+        }
+    }
+
     @Test
     fun `a document whose http statements no route escapes, or with none, logs nothing`() {
         val review = RouteEscapeReview(routes, capacity = 8)

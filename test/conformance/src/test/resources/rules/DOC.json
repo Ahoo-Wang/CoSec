@@ -118,6 +118,18 @@
         "document:PolicyDocumentCompilerTest#no principal binding names a reserved id"
       ],
       "pending": null
+    },
+    {
+      "id": "DOC-12",
+      "source": "RC1-15 (RFC 0004 §4.6); review round 1 of beta.4 (R1B-3)",
+      "statement": "An id a document defines that a route escape names (a policy id, a rate limit rule id) reaches a host's log line and the control plane's ROUTES finding only escaped: a control character or an unpaired surrogate is written as its \\uXXXX escape (Identifiers.printable), and each part longer than 128 characters is cut, never inside a surrogate pair, saying how long it was. No document forges a log line on the hosts that install it.",
+      "level": "build",
+      "guards": [
+        "document:RouteEscapesTest#an id that would forge a line is shown escaped, and a long one cut",
+        "control:RouteFindingsTest#an id that would forge a line is shown escaped",
+        "spring-boot:RouteEscapeReviewTest#an id that would forge a line is logged escaped"
+      ],
+      "pending": null
     }
   ]
 }
