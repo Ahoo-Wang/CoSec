@@ -345,6 +345,21 @@ read as anonymous:
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
 | `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. In a test without a gateway, a header made once and reused: make one per request ([`IdentityHeader`](../integration/web.md#services-behind-the-gateway)). |
 
+The response says only the problem, never why, in every environment. The reason is in the service's log, from the
+logger `me.ahoo.cosec.runtime.identity.IdentityGate`:
+
+```text
+Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>.
+```
+
+at `WARN`, at most once a minute for each problem type so a flood of bad headers does not flood the log, and every one
+at `DEBUG`. `<reason>` is the field that failed, such as `The identity header is malformed:
+$.rid is empty.`, or the time that is out of bounds. Text of the header in it, such as a claim or member name, is
+[escaped as ids are](#a-log-line-names-an-id-with-u-escapes) and cut to 64 characters, and at most three names are
+listed; a header that is not JSON is named by the line and column where it fails, never by what it holds. A service in gateway mode records no decision events and no
+audit, but it counts every refusal, also those the log does not print, in
+[`cosec.identity.refused{problem}`](./observability.md#metrics): a rise names the problem, and the log says why.
+
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
 
 **Every request is anonymous.** The gateway forwards the identity only to a route that receives it: a route to a
