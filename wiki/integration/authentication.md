@@ -356,8 +356,12 @@ spent unless the store failed while recording the rotation itself, which a retry
 is an error: the served route answers it `500`, as the pipeline answers an unmodelled error. Neither ends a client's
 session.
 
-By default a refresh does not re-read the user: the new token carries the claims of the old one. To pick up changed
-roles on refresh, give `RefreshTokenAuthentication` a `MembershipRefresh`. It answers what the user holds now, looked up
+`MembershipRefresh.CLAIMS`, in the example above and on the starter's refresh route unless you declare a
+`MembershipRefresh` bean, does not re-read the user: the new token carries the claims of the old one, so a role you
+remove from a user stays in every refreshed token of its session until the user signs in again, or until you
+[revoke the principal's tokens](#revoking-every-token-of-a-principal). `RefreshTokenAuthentication` has no default for
+it: keeping the claims is written. To pick up changed roles on refresh, give `RefreshTokenAuthentication` a
+`MembershipRefresh` of your own. It answers what the user holds now, looked up
 again. It refuses, when the user may no longer sign in, by throwing a `TokenVerificationException` (`TokenRevokedException`
 when the membership is gone), which is a `401`; any other exception is an error, not a refusal:
 

@@ -62,7 +62,9 @@ class CoCacheTokenStoreTest {
             "$HEADER..iv.ciphertext.tag",
         )
         tokens.forEach { token ->
-            assertThrownBy<IllegalArgumentException> { runBlocking { tokenStore.revoke(token, Duration.ofMinutes(10)) } }
+            assertThrownBy<IllegalArgumentException> {
+                runBlocking { tokenStore.revoke(token, Duration.ofMinutes(10)) }
+            }
                 .hasMessageContaining("TokenRevoker.revoke(accessToken)")
                 .hasMessageNotContaining(HEADER)
         }

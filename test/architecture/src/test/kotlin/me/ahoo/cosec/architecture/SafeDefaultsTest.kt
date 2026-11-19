@@ -62,9 +62,7 @@ class SafeDefaultsTest {
         val metadata = type.getAnnotation(Metadata::class.java) ?: return emptyList()
         val callables: List<KCallable<*>> = when (metadata.kind) {
             CLASS -> if (api.visible(type)) type.kotlin.let { it.members + it.constructors } else emptyList()
-            FILE, MULTIFILE_PART -> type.declaredMethods
-                .filter { Modifier.isPublic(it.modifiers) && !it.isSynthetic && !it.isBridge }
-                .mapNotNull { api.reading(null) { it.kotlinFunction } }
+            FILE, MULTIFILE_PART -> topLevel(type)
             else -> emptyList()
         }
         return callables.filter { api.exposed(it, opted) }.flatMap { callable ->
@@ -72,6 +70,10 @@ class SafeDefaultsTest {
                 .map { "$name.${callable.name}(${it.name})" }
         }
     }
+
+    private fun topLevel(type: Class<*>): List<KCallable<*>> = type.declaredMethods
+        .filter { Modifier.isPublic(it.modifiers) && !it.isSynthetic && !it.isBridge }
+        .mapNotNull { api.reading(null) { it.kotlinFunction } }
 
     private companion object {
         val DECISIVE: Set<KClass<*>> = setOf(RevocationReader::class, TokenRevocation::class, MembershipRefresh::class)

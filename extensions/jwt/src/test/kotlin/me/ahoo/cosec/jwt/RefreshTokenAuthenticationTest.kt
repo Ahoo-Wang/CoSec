@@ -90,7 +90,12 @@ class RefreshTokenAuthenticationTest {
         subject.attributes.assert().isEqualTo(mapOf("department" to "audit"))
         subject.session.assert().isNotNull()
         // Without an answer, the token's claims are kept.
-        val kept = RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families, MembershipRefresh.CLAIMS)
+        val kept = RefreshTokenAuthentication(
+            jwtTokenVerifier,
+            TokenRevocation(RevocationReader.NONE),
+            families,
+            MembershipRefresh.CLAIMS,
+        )
             .authenticate(credentials(jwtTokenConverter.toToken(subject)))
         kept.roles.assert().containsExactly("auditor")
     }
@@ -160,8 +165,12 @@ class RefreshTokenAuthenticationTest {
 
     @Test
     fun `a refresh token of another token is refused`(): Unit = runBlocking {
-        val authentication =
-            RefreshTokenAuthentication(jwtTokenVerifier, TokenRevocation(RevocationReader.NONE), families, MembershipRefresh.CLAIMS)
+        val authentication = RefreshTokenAuthentication(
+            jwtTokenVerifier,
+            TokenRevocation(RevocationReader.NONE),
+            families,
+            MembershipRefresh.CLAIMS,
+        )
         val alice = issue(TokenSubject("alice", null))
         val bob = issue(TokenSubject("bob", null))
 

@@ -115,8 +115,12 @@ internal object ScenarioRefresh {
         val clock = Clock.fixed(NOW, ZoneOffset.UTC)
         val store = familyStore(families)
         val tokenFamilies = TokenFamilies(store, LIFETIME, LEEWAY, clock = clock)
-        val authentication =
-            RefreshTokenAuthentication(ScenarioJwt.VERIFIER, TokenRevocation(revocations), tokenFamilies, MembershipRefresh.CLAIMS)
+        val authentication = RefreshTokenAuthentication(
+            ScenarioJwt.VERIFIER,
+            TokenRevocation(revocations),
+            tokenFamilies,
+            MembershipRefresh.CLAIMS,
+        )
         val route = RefreshRoute(authentication, ScenarioJwt.CONVERTER)
         node.only("access", "refresh", "pairs", "logout")
         val attempts = node.get("pairs")?.values()?.toList()?.onEach { it.only("access", "refresh") }

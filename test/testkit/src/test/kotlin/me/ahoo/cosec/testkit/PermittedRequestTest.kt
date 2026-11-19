@@ -190,7 +190,12 @@ class PermittedRequestTest {
         listOf("Authorization", "authorization", "X-API-Key", "x-api-key", "CoSec-Identity", "COSEC-IDENTITY")
             .forEach { name ->
                 val error = assertThrows<IllegalArgumentException> {
-                    PermittedRequest.withToken(token, verifier, RevocationReader.NONE, headers = mapOf(name to listOf("anything")))
+                    PermittedRequest.withToken(
+                        token,
+                        verifier,
+                        RevocationReader.NONE,
+                        headers = mapOf(name to listOf("anything")),
+                    )
                 }
                 error.message.assert().contains("[$name]").contains("pass the token as [token]")
             }

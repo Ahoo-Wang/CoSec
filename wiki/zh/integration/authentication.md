@@ -194,7 +194,7 @@ suspend fun refresh(@RequestBody credentials: RefreshCredentials): CompositeToke
 
 会话已结束（登出，或因为出示了更早的一代）时刷新以 `token-revoked` 被拒绝；会话的有效期已过或刷新令牌已过期时为 `token-expired`；这对令牌不属于任何会话（会话出现之前签发的，或在会话之外签发的）时为 `token-invalid`。吊销记录或会话存储无法应答时，它抛出 `RevocationUnavailableException` 或 `SessionStoreUnavailableException`：请应答 `503`：此时没有签发任何东西；除非存储恰在记录轮换本身时失败，否则也没有消耗任何东西，而那种情况由宽限期内的重试覆盖。其他任何异常都是错误：提供的路由以 `500` 应答，与流水线应答未建模错误的方式相同。两者都不会结束客户端的会话。
 
-默认情况下，刷新不会重新读取用户：新令牌携带旧令牌的声明。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个 `MembershipRefresh`。它回答用户现在拥有什么（重新查询）。用户不能再登录时，它通过抛出 `TokenVerificationException`（成员关系已不存在时用 `TokenRevokedException`）来拒绝，这是一个 `401`；其他任何异常都是错误，而不是拒绝：
+`MembershipRefresh.CLAIMS`（上面的示例，以及未声明 `MembershipRefresh` Bean 时 starter 的刷新路由）不会重新读取用户：新令牌携带旧令牌的声明，所以从用户移除的角色会留在其会话每个刷新出的令牌里，直到用户重新登录，或直到你[吊销主体的全部令牌](#revoking-every-token-of-a-principal)。`RefreshTokenAuthentication` 对它没有默认值：保留声明要写出来。要在刷新时拿到变更后的角色，给 `RefreshTokenAuthentication` 一个你自己的 `MembershipRefresh`。它回答用户现在拥有什么（重新查询）。用户不能再登录时，它通过抛出 `TokenVerificationException`（成员关系已不存在时用 `TokenRevokedException`）来拒绝，这是一个 `401`；其他任何异常都是错误，而不是拒绝：
 
 ```kotlin
 @Bean

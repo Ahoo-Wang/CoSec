@@ -69,7 +69,8 @@ class OneSegmentIdPipelineTest {
         for (token in tokens) {
             val views = RecordingViews()
             val engine = StubEngine(IMPLICIT_DENY)
-            val outcome = pipeline(TokenAuthenticator(Verifier(token), RevocationReader.NONE), engine, views).evaluate(withToken)
+            val authenticator = TokenAuthenticator(Verifier(token), RevocationReader.NONE)
+            val outcome = pipeline(authenticator, engine, views).evaluate(withToken)
 
             outcome.status.assert().isEqualTo(ProblemType.TOKEN_INVALID.status)
             outcome.problem!!.type.assert().isEqualTo(ProblemType.TOKEN_INVALID)

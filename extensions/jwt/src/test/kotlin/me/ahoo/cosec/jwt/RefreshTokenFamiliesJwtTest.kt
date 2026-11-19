@@ -68,7 +68,8 @@ class RefreshTokenFamiliesJwtTest {
     private val revoked = Revoked()
     private val converter = JwtTokenConverter(JwtFixture.IDS, JwtFixture.ALGORITHM)
     private val verifier = JwtTokenVerifier(JwtFixture.ALGORITHM)
-    private val refresh = RefreshTokenAuthentication(verifier, TokenRevocation(revoked), families, MembershipRefresh.CLAIMS)
+    private val refresh =
+        RefreshTokenAuthentication(verifier, TokenRevocation(revoked), families, MembershipRefresh.CLAIMS)
     private val revoker = StoreTokenRevoker(verifier, revoked, TokenRevocation(revoked), families, Duration.ofDays(7))
     private val tokens = TokenCompositeAuthentication(
         CompositeAuthentication(DefaultAuthenticationProvider().apply { register(refresh) }),
