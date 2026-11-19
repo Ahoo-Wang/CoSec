@@ -31,9 +31,11 @@ import java.time.Instant
 interface TokenRevoker {
 
     /**
-     * Logs out: revokes the access token and its session (RFC 0009), so no pair of the session refreshes any more, the
-     * pairs it was refreshed from included. Other sessions of the principal are untouched; [revokeSubject] ends them all.
-     * An older generation's access token stays valid until it expires, as every access token does.
+     * Logs out: what an application's logout endpoint calls, with the access token the client presented, not
+     * [TokenStore.revoke], which takes a token's id and is CoSec's to call. Revokes the access token and its session
+     * (RFC 0009), so no pair of the session refreshes any more, the pairs it was refreshed from included. Other sessions
+     * of the principal are untouched; [revokeSubject] ends them all. An older generation's access token stays valid until
+     * it expires, as every access token does.
      *
      * @param accessToken the access token to revoke, valid and unexpired
      * @return what the revoked token said

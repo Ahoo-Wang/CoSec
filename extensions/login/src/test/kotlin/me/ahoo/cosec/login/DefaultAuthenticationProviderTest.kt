@@ -17,6 +17,7 @@ package me.ahoo.cosec.login
 
 import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.login.token.MembershipRefresh
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.TokenFamilies
@@ -41,6 +42,7 @@ internal class DefaultAuthenticationProviderTest {
             mockk(),
             TokenRevocation(RevocationReader.NONE),
             TokenFamilies(InMemoryTokenFamilyStore()),
+            MembershipRefresh.CLAIMS,
         )
         authenticationProvider.register(refreshTokenAuthentication)
         (
@@ -63,7 +65,8 @@ internal class DefaultAuthenticationProviderTest {
             RefreshTokenAuthentication(
                 mockk(),
                 TokenRevocation(RevocationReader.NONE),
-                TokenFamilies(InMemoryTokenFamilyStore())
+                TokenFamilies(InMemoryTokenFamilyStore()),
+                MembershipRefresh.CLAIMS,
             )
         )
 
@@ -81,6 +84,7 @@ internal class DefaultAuthenticationProviderTest {
             mockk(),
             TokenRevocation(RevocationReader.NONE),
             TokenFamilies(InMemoryTokenFamilyStore()),
+            MembershipRefresh.CLAIMS,
         )
         val social = object : Authentication<OtherCredentials> {
             override val credentialsType: Class<OtherCredentials> = OtherCredentials::class.java
