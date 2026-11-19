@@ -26,7 +26,7 @@ val groups = linkedMapOf(
     "extensions" to listOf("jwt", "social", "login", "ip2region", "micrometer", "opentelemetry", "cosid", "kafka"),
     "host" to listOf("spring-boot"),
     "migration" to listOf("migrate"),
-    "test" to listOf("testkit", "conformance", "architecture", "e2e", "client-host", "code-coverage-report"),
+    "test" to listOf("testkit", "conformance", "architecture", "e2e", "client-host", "system-test", "system-behind", "code-coverage-report"),
     "bom" to listOf("bom", "dependencies"),
     "platform" to listOf("gateway-server"),
 )
