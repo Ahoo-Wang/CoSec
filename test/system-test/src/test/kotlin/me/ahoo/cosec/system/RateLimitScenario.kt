@@ -35,6 +35,14 @@ class RateLimitScenario {
     fun `a denied request spends no permit, and the sixth permitted one is a 429 with its headers, whichever replica`() {
         Control(SignIn.root()).seed("tenant:rate", "tenants/rate.json")
         val caller = SignIn.of("rita", "rate", app = "orders")
+        // The tenant's document reaches each replica on its own: wait for both with a principal whose bucket is not rita's,
+        // so what the count below starts from is untouched.
+        val warm = SignIn.of("rita-warm", "rate", app = "orders")
+        for (gateway in SystemTopology.gateways) {
+            eventually(Bounds.SNAPSHOT_PROPAGATION, "the rate limit rule counting at $gateway", {
+                Http.get(gateway.resolve("/behind/limited/1"), warm.bearer)
+            }) { it.header("RateLimit-Limit") != null }
+        }
         val first = { Http.get(SystemTopology.gateway.resolve("/behind/limited/1"), caller.bearer) }
         // The tenant's document is installed once its rule counts: the first permitted request carries the headers.
         eventually(Bounds.SNAPSHOT_PROPAGATION, "the rate limit rule counting", first) {
