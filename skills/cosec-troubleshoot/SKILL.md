@@ -112,6 +112,16 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`cosec.audit.kafka.delivery=required, but no Kafka audit listener was created`** (STA-1): `cosec-kafka` is there,
   but the listener is not: add a `KafkaOperations` bean (`spring-boot-starter-kafka` with `spring.kafka.*`), and keep
   `cosec.audit.enabled` and `cosec.audit.kafka.enabled` on; or use `best-effort`.
+- **`STA-5: <n> CorsConfigurationSource beans of the application`**: the starter's CORS filter takes one source. Keep one,
+  or declare a `CorsFilter` bean of your own.
+- **`cosec.authorization.shadow.report-interval is at least one millisecond, not <d>.`**: set it to 1ms or more (default
+  `10s`). **`cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.`**: write one of the two.
+- **A message that names `server.forward-headers-strategy`, `RemoteIpValve` or `max-trusted-index`**: the host cannot say
+  which party writes the client address. `framework`, or a `ForwardedHeaderFilter` bean that rewrites the request: use
+  `native` and configure the proxies on the server, or `none` and set `cosec.authorization.remote-ip.max-trusted-index`;
+  Tomcat with `native`: remove `max-trusted-index`; Reactor Netty or Jetty with `native` and index `0`: set the number of
+  proxies, or `none`.
+  https://cosec.ahoo.me/operations/troubleshooting#startup-fails-on-the-client-address
 - **`cosec-cocache needs a ReactiveStringRedisTemplate bean`** (STA-1): add `spring-boot-data-redis` and configure
   Redis; without it no snapshot is read and rate limits would count per instance.
 - **`cosec.pipeline.mode=gateway on a Spring Cloud Gateway host`**: a gateway always runs `enforce`; set `gateway` on

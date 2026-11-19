@@ -854,6 +854,9 @@ random one.
 
 | Message | Fix |
 |---|---|
+| `STA-5: <n> CorsConfigurationSource beans of the application: the CORS filter before CoSec takes one.` | Keep one `CorsConfigurationSource`, or declare a `CorsFilter` bean of your own, which the starter then leaves in place ([CORS](../integration/web.md#cors)). |
+| `cosec.authorization.shadow.report-interval is at least one millisecond, not <d>.` | Set [`report-interval`](./configuration.md#shadow-windows) to one millisecond or more (default `10s`). |
+| `cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.` | Write `required` or `best-effort` ([`delivery`](./configuration.md#audit)); case, spaces and `-` for `_` do not matter. |
 | `Decision listener <name> is registered twice.` | Give each `DecisionListener` its own `name`. |
 | `CoSec's <CacheName> is the store of record: a Store.` | Something replaced the spec of one of CoSec's caches; CoSec creates them itself. |
 | `lagWarn must not exceed lagEscalate.` and the other snapshot option checks | Fix [`cosec.authorization.snapshot.*`](./configuration.md#snapshot). |

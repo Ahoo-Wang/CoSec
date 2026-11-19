@@ -658,6 +658,9 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 
 | 消息 | 修复 |
 |---|---|
+| `STA-5: <n> CorsConfigurationSource beans of the application: the CORS filter before CoSec takes one.` | 只保留一个 `CorsConfigurationSource`，或自己声明一个 `CorsFilter` bean，starter 就不再注册（[CORS](../integration/web.md#cors)）。 |
+| `cosec.authorization.shadow.report-interval is at least one millisecond, not <d>.` | 把 [`report-interval`](./configuration.md#shadow-windows) 设为一毫秒或更大（默认 `10s`）。 |
+| `cosec.audit.kafka.delivery=[<value>] is neither required nor best-effort.` | 写 `required` 或 `best-effort`（[`delivery`](./configuration.md#audit)）；大小写、空格以及用 `-` 代替 `_` 都无所谓。 |
 | `Decision listener <name> is registered twice.` | 给每个 `DecisionListener` 一个独立的 `name`。 |
 | `CoSec's <CacheName> is the store of record: a Store.` | 有东西替换了某个 CoSec 缓存的定义；CoSec 自己创建这些缓存。 |
 | `lagWarn must not exceed lagEscalate.` 以及其他快照选项检查 | 修正 [`cosec.authorization.snapshot.*`](./configuration.md#snapshot)。 |
