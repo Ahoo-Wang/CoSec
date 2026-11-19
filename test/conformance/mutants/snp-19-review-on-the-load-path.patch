@@ -3,15 +3,15 @@
 # Tests: :runtime:test --tests me.ahoo.cosec.runtime.snapshot.InstallReviewTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-index 9dbe5383..9217e38d 100644
+index 0c4e73d8..c082496b 100644
 --- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
 +++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/snapshot/KeyEffects.kt
-@@ -236,7 +236,7 @@ internal class KeyEffects<T : Any>(
+@@ -240,7 +240,7 @@ internal class KeyEffects<T : Any>(
                  }
              }
          }
 -        val offered = context.threads.offHousekeeping(HousekeepingTask.INSTALL_REVIEW, key, task)
 +        val offered = true.also { task() }
-         // Only a refused offer waits for the key's next read; an offer taken, this one's or a newer install's, is the
+         // Only a refused offer waits for a read that confirms it; an offer taken, this one's or a newer install's, is the
          // review of what is installed.
          unreviewed = entry.takeUnless { offered }
