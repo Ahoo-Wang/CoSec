@@ -24,9 +24,9 @@ Four things cross a process boundary, and each is read strictly:
 
 | What crosses | Who writes, who reads | What an instance that does not know the content does |
 |---|---|---|
-| The `CoSec-Identity` header, format `v: 1` | the gateway writes, each service in `gateway` mode reads | refuses it with `400` `invalid-request`: another version, a member it does not know, a repeated role, or a value out of range ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)) |
-| A policy document, `schema: 2` | the control plane and `cosec-migrate` write, every instance reads | refuses a document of another `schema` when it reads it, and does not install one it cannot compile (an unknown member, a repeated key, a wrong type): the requests that need it fail closed (`503`, `DocumentInvalid` or `SourceUnavailable` in the decision event, [Troubleshooting](./troubleshooting.md)) |
-| A value in Redis (revocations, sessions, API keys, memberships, control-plane records) | the instance that wrote it, and every other that reads | a value it cannot decode fails the read and stays in Redis: it is never deleted. A revocation or a stored record it cannot read makes the request `503`, never "not revoked" and never "no document" ([Redis is the store of record](./storage.md#redis-is-the-store-of-record)) |
+| The `CoSec-Identity` header, format `v: 1` | the gateway writes, each service in `gateway` mode reads | refuses it, and the status says why: `400` `invalid-request` for a member it does not know, a wrong type, a duplicate member, a repeated role, a value out of range, a header over the size limit or sent more than once; `401` `token-invalid` for a format version it does not read, a credential with no expiry, or an issue time in the future; `401` `token-expired` for a credential or an identity that is too old. The members are checked before the version, so an identity that raises `v` and adds a member is `400`, and one that only raises `v` is `401` ([Services behind the gateway](../integration/web.md#services-behind-the-gateway)) |
+| A policy document, `schema: 2` | the control plane and `cosec-migrate` write, every instance reads | refuses a document of another `schema` when it reads it, and does not install one it cannot compile (an unknown member, a repeated key, a wrong type): the requests that need it fail closed (`503`, `DocumentInvalid` or `SourceUnavailable` in the decision event, unless a DENY matches first; [Troubleshooting](./troubleshooting.md)) |
+| A value in Redis (revocations, sessions, API keys, memberships, control-plane records) | the instance that wrote it, and every other that reads | a value it cannot decode fails the read and stays in Redis: it is never deleted. A revocation entry it cannot decode makes the request `503`, never "not revoked"; a document record it cannot decode is never "no document", so the requests that need it are `503` unless a DENY matches first; a control-plane record it cannot decode is `500` on the control API ([Redis is the store of record](./storage.md#redis-is-the-store-of-record)) |
 | A token | the issuer signs, every verifier reads | reads the claims it knows ([the claims a client may read](../integration/clients.md#the-claims-a-client-may-read)) and ignores the rest; refuses a token with an `act` claim, a refresh token where an access token belongs, or incomplete session claims |
 
 **Order of an upgrade.**
@@ -36,7 +36,7 @@ Four things cross a process boundary, and each is read strictly:
    window that has such an instance reports `CANDIDATE_ERROR` and never closes clean, so the change is not published
    through it ([Testing policies](../policies/testing.md#trying-changes-in-shadow-mode)).
 2. **Services behind a gateway before the gateway.** A service reads the identity strictly, so one older than its
-   gateway refuses what the gateway added (`400`).
+   gateway refuses a member the gateway added with `400` `invalid-request`; a gateway that raises the identity's format version `v` makes it `401` `token-invalid`, or `400` if it also adds a member.
 3. **Then the control plane, and `cosec-migrate`**, and, once every control-plane instance and every `cosec-migrate`
    that writes to this Redis runs the new version, `cosec-migrate repair-references` once
    ([Repair the back-reference index](#repair-the-back-reference-index)) and `verify-chain` ([Verify the revision chains](#verify-the-revision-chains)).
@@ -49,7 +49,7 @@ change that is checked like any other ([Revisions, history and rollback](./stora
 After a downgrade of the control plane or of `cosec-migrate`, run `repair-references` and `verify-chain` again.
 
 **The signature of a mixed fleet** is `503` for the requests that need a document an older instance cannot compile
-(`DocumentInvalid`), `400` from a service that refuses a newer gateway's identity, and `401` `token-invalid` from an
+(`DocumentInvalid`), `400` `invalid-request` from a service that refuses a member a newer gateway added, `401` `token-invalid` from one that only meets a higher identity format version, and `401` `token-invalid` from an
 instance that holds another signing secret. Each ends when the last instance runs one version.
 
 **What is not promised.** That two versions interoperate on any of the four formats above: while an 8.0 pre-release is
