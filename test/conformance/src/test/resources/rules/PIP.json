@@ -350,7 +350,7 @@
     {
       "id": "PIP-27",
       "source": "RFC 0006 §7.3; drill 2 (Wow), finding 4 (2026-11-18)",
-      "statement": "The adapters' readers of the security context answer only a context CoSec's pipeline made: `ServerWebExchanges.getSecurityContext`, `ContextView.getSecurityContextOrEmpty` and `getSecurityContext` (WebFlux and the gateway), `ServletRequests.getSecurityContext`, the `SecurityContext` handler parameter and `SecurityContextHolder` (Spring MVC). Anything else under `SecurityContext.KEY`, which an application filter or a library may have put there, reads as no context: null, or the failure an unbound context is.",
+      "statement": "The adapters' readers of the security context answer only a context CoSec's pipeline made: `requireSecurityContext` and `securityContextOrNull` on an exchange and a Reactor `ContextView` (WebFlux and the gateway), on a servlet request and `SecurityContextHolder`, and the `SecurityContext` handler parameter (Spring MVC). Anything else under `SecurityContext.KEY`, which an application filter or a library may have put there, reads as no context: null, or the failure an unbound context is.",
       "level": "build",
       "guards": [
         "webflux:RequestEndTest#a context the pipeline did not make reads as none",
@@ -377,13 +377,13 @@
     {
       "id": "PIP-29",
       "source": "RFC 0006 §7.6; issue #1679 (2026-11-19)",
-      "statement": "The kit's contexts are made by the pipeline: `PermittedRequest.forSubject` as the fixture's (an enforce-mode host's context, no credential, no forwarded identity), `withIdentity` by the identity gate from a `CoSec-Identity` header. A test binder (`CoSecTestBindings` of `cosec-webflux` and `cosec-webmvc`) binds only a context CoSec's pipeline made and refuses any other with an error naming what to use instead, so a test never runs as anonymous without saying so; its `filter` is the adapter itself and answers as the adapter does. A bound context whose request has ended is denied (`PIP-26`).",
+      "statement": "The kit's contexts are made by the pipeline: `PermittedRequest.forSubject` as the fixture's (an enforce-mode host's context, no credential, no forwarded identity), `withIdentity` by the identity gate from a `CoSec-Identity` header. A test binder (`CoSecTestBindings` of `cosec-testkit`, `me.ahoo.cosec.testkit.webflux` and `.webmvc`) binds only a context CoSec's pipeline made and refuses any other with an error naming what to use instead, so a test never runs as anonymous without saying so; its `filter` is the adapter itself and answers as the adapter does. A bound context whose request has ended is denied (`PIP-26`).",
       "level": "build",
       "pending": null,
       "guards": [
-        "webmvc:TestingYourApplicationTest#a context made by hand is refused, never bound as anonymous",
-        "webmvc:TestingYourApplicationTest#a function that reads the holder, with a context the kit made",
-        "webflux:TestingYourApplicationTest#a context made by hand is refused, never bound as anonymous",
+        "testkit:TestingYourWebMvcApplicationTest#a context made by hand is refused, never bound as anonymous",
+        "testkit:TestingYourWebMvcApplicationTest#a function that reads the holder, with a context the kit made",
+        "testkit:TestingYourWebFluxApplicationTest#a context made by hand is refused, never bound as anonymous",
         "testkit:TokenlessContextTest#forSubject is the fixture's context for the same principal, with no identity",
         "testkit:TokenlessContextTest#withIdentity is what a service behind a gateway reads, the forwarded identity included",
         "spring-boot:WebAdapterParityTest#the test entries answer as the adapters do"

@@ -144,14 +144,15 @@ class StartupSummaryResolutionTest {
 
     @Test
     fun `API keys name the reader a request meets, the application's or the in-memory store`() {
+        // A pipeline that answers API keys has a membership provider (UA-12).
         val keys = withTokens.withBean(RevocationReader::class.java, { RevocationReader.NONE })
             .withPropertyValues("cosec.api-key.enabled=true")
+            .withBean(MembershipProvider::class.java, { MembershipProvider { _, _ -> MembershipAnswer.Unknown } })
         keys.withBean(ApiKeyReader::class.java, { OwnApiKeys() }).run { context ->
             context.startupFailure.assert().isNull()
             line(context).assert().contains("api-keys=on (bean OwnApiKeys)")
         }
         keys.withConfiguration(AutoConfigurations.of(CoSecApiKeyAutoConfiguration::class.java))
-            .withBean(MembershipProvider::class.java, { MembershipProvider { _, _ -> MembershipAnswer.Unknown } })
             .run { context ->
                 context.startupFailure.assert().isNull()
                 line(context).assert().contains("api-keys=on (the in-memory store)")

@@ -16,9 +16,10 @@ package me.ahoo.cosec.control.change
 import me.ahoo.cosec.control.change.ChangeJson.actor
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeJson.factory
-import me.ahoo.cosec.control.change.ChangeJson.malformed
+import me.ahoo.cosec.control.change.ChangeJson.format
 import me.ahoo.cosec.control.change.ChangeJson.need
 import me.ahoo.cosec.control.change.ChangeJson.only
+import me.ahoo.cosec.control.change.ChangeJson.shown
 import me.ahoo.cosec.control.change.ChangeJson.text
 import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.PolicyId
@@ -138,9 +139,9 @@ internal object ApprovalCodec {
         )
     }
 
-    private fun JsonNode.members() = if (isObject) properties() else malformed("$this is not an object")
+    private fun JsonNode.members() = if (isObject) properties() else throw format("$shown is not an object")
 
-    private fun JsonNode.flag(): Boolean = if (isBoolean) booleanValue() else malformed("$this is not a boolean")
+    private fun JsonNode.flag(): Boolean = if (isBoolean) booleanValue() else throw format("$shown is not a boolean")
 
     private fun JsonNode.textOrNull(): String? = if (isNull) null else text()
 }

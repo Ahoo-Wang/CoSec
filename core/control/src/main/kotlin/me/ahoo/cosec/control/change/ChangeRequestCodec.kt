@@ -20,10 +20,11 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeJson.actor
 import me.ahoo.cosec.control.change.ChangeJson.actorTree
 import me.ahoo.cosec.control.change.ChangeJson.factory
+import me.ahoo.cosec.control.change.ChangeJson.format
 import me.ahoo.cosec.control.change.ChangeJson.malformed
 import me.ahoo.cosec.control.change.ChangeJson.need
 import me.ahoo.cosec.control.change.ChangeJson.only
-import me.ahoo.cosec.control.change.ChangeJson.printable
+import me.ahoo.cosec.control.change.ChangeJson.quoted
 import me.ahoo.cosec.control.change.ChangeJson.text
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.document.ProvenanceKind
@@ -32,6 +33,7 @@ import me.ahoo.cosec.model.PolicyId
 import me.ahoo.cosec.spi.snapshot.SnapshotDigest
 import me.ahoo.cosec.spi.snapshot.SnapshotFormatException
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.snapshot.SnapshotKeyText
 import tools.jackson.core.JacksonException
 import tools.jackson.core.StreamReadFeature
 import tools.jackson.databind.JsonNode
@@ -204,28 +206,41 @@ object ChangeRequestCodec {
         text == "platform" -> SnapshotKey.Platform
         text.startsWith("app:") -> SnapshotKey.App(text.removePrefix("app:"))
         text.startsWith("tenant:") -> SnapshotKey.Tenant(text.removePrefix("tenant:"))
-        else -> malformed("[$text] is not a document key")
+        else -> throw format("[${quoted(text)}] is not a document key")
     }
 
     private fun digest(text: String): SnapshotDigest {
-        if (!SnapshotDigest.isDigest(text)) malformed("[$text] is not a digest")
+        if (!SnapshotDigest.isDigest(text)) throw format("[${quoted(text)}] is not a digest")
         return SnapshotDigest.parse(text)
     }
 
+    // stays: Jackson's exception quotes the stored bytes; only where it failed is kept.
+    @Suppress("SwallowedException")
     private fun read(bytes: ByteArray): JsonNode = try {
         reader.readTree(bytes) ?: malformed("empty")
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A change request is not JSON: ${printable(error.originalMessage)}", error)
+        // Where, never what: Jackson's message and the exception quote the stored bytes, which a log line would carry.
+        throw SnapshotFormatException("A change request is not JSON${error.at}.")
     }
 
     /** Model and codec errors are format errors: a stored value this instance cannot read is never read as absent. */
+    // stays: a cause's message quotes the stored bytes, and whoever reads the value logs the exception with its causes.
+    @Suppress("SwallowedException")
     private inline fun <T> guarded(block: () -> T): T = try {
         block()
     } catch (error: SnapshotFormatException) {
-        throw error
+        // The document format's codecs, which read a change's entries, quote what they read as they found it.
+        throw SnapshotFormatException(SnapshotKeyText.message(error.message.orEmpty()))
     } catch (error: JacksonException) {
-        throw SnapshotFormatException("A change request is malformed: ${printable(error.originalMessage)}", error)
+        throw SnapshotFormatException("A change request is malformed${error.at}.")
     } catch (error: IllegalArgumentException) {
-        throw SnapshotFormatException("A change request is malformed: ${printable(error.message)}", error)
+        throw SnapshotFormatException("A change request is malformed: ${quoted(error.message)}.")
+    } catch (error: java.time.format.DateTimeParseException) {
+        // A stored time that does not parse is a format error like any other, never an unexpected failure.
+        throw SnapshotFormatException("A change request is malformed: ${quoted(error.message)}.")
     }
+
+    /** Where Jackson failed, never what it read. */
+    private val JacksonException.at: String
+        get() = location?.let { " at line ${it.lineNr}, column ${it.columnNr}" }.orEmpty()
 }

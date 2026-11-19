@@ -105,8 +105,10 @@ class PipelineGatewayFilter @InternalCoSecApi constructor(
         return filterInternal(stripped) { authorized, outcome ->
             val request = authorized.request
             val route = authorized.getAttribute<Route>(GATEWAY_ROUTE_ATTR)
-            // The caller's credentials go only where its identity may go, and only when asked for (RC1-5, RC1-49).
-            val credentials = forwardAuthorization && route != null && receivesIdentity(route)
+            // The caller's credentials go only where its identity may go, only when asked for (RC1-5, RC1-49), and only
+            // when the pipeline accepted them: a refused one, on a route anyone may use, stays here (R1A-7).
+            val credentials = forwardAuthorization && outcome.security?.principal != null &&
+                route != null && receivesIdentity(route)
             // Read before the builder's lambda: one it writes would be boxed, an allocation on every request.
             val cookies = if (credentials) null else withoutCookieTokens(request.headers)
             val downstream = request.mutate()

@@ -57,7 +57,7 @@ class SuspendingHandlerContextTest {
         val entered = CountDownLatch(1)
         val gate = CompletableDeferred<Unit>()
 
-        private fun holder(): String = runCatching { SecurityContextHolder.requiredContext.principal.id }
+        private fun holder(): String = runCatching { SecurityContextHolder.requireSecurityContext().principal.id }
             .getOrElse { if (it.message.orEmpty().startsWith(UNBOUND)) "unbound" else throw it }
 
         /** Alice's: reads the holder before it suspends and after it is resumed. */

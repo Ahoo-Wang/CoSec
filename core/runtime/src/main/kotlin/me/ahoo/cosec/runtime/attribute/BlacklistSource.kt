@@ -21,7 +21,8 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 /**
  * Where the blacklist comes from (RFC 0006 §5.4.4): whether [value] of [kind] is blocked. A failed lookup throws; it
  * is never "not blocked", so the request is a 503 unless a DENY matches. Like every SPI of the pipeline, it must not
- * block the calling thread.
+ * block the calling thread. An address ([BlacklistKind.IP]) is asked for in its canonical form: a source keeps the
+ * addresses it blocks in that form too.
  */
 @CoSecSpi
 fun interface BlacklistSource {
@@ -32,7 +33,10 @@ enum class BlacklistKind(val attribute: String) {
     /** An authenticated principal, by `<tenant>:<principal id>`: principal ids are unique only within a tenant. */
     PRINCIPAL(BlacklistAttributeProvider.PRINCIPAL),
 
-    /** The client address, as the adapter reports it. */
+    /**
+     * The client address, canonical (R1A-4): RFC 5952 for IPv6 (lower case, the longest run of zero groups as `::`), an
+     * IPv4-mapped IPv6 address as its IPv4 address, dotted decimal for IPv4: `2001:db8::1`, `192.0.2.1`.
+     */
     IP(BlacklistAttributeProvider.IP),
 
     /** The `CoSec-Device-Id` of the request. */

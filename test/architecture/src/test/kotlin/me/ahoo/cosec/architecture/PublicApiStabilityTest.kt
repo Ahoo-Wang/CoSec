@@ -83,7 +83,8 @@ class PublicApiStabilityTest {
                 "model.decision.Decision\$Deny" to decision,
                 "model.decision.Decision\$Indeterminate" to decision,
             ) + listOf(
-                "AmbiguousPolicy", "AttributeUnavailable", "BoundaryUnavailable", "MatcherFailed", "MembershipUnavailable",
+                "AmbiguousPolicy", "AttributeUnavailable", "BoundaryUnavailable", "CheckFailed", "MatcherFailed",
+                "MembershipUnavailable",
                 "MissingPolicies", "NotLoaded", "RateLimiterUnavailable", "RequiredListenerFailed", "SourceUnavailable",
                 "DocumentInvalid",
             ).map { "model.decision.Cause\$$it" to decision } + listOf(

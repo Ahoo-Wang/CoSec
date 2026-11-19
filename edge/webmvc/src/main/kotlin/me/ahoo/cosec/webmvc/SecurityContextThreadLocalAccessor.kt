@@ -28,7 +28,7 @@ import me.ahoo.cosec.api.context.SecurityContext
 internal class SecurityContextThreadLocalAccessor : ThreadLocalAccessor<SecurityContext> {
     override fun key(): Any = KEY
 
-    override fun getValue(): SecurityContext? = SecurityContextHolder.context
+    override fun getValue(): SecurityContext? = SecurityContextHolder.securityContextOrNull()
 
     override fun setValue(value: SecurityContext) = SecurityContextHolder.setContext(value)
 

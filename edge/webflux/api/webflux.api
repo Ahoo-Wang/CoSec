@@ -25,19 +25,13 @@ public final class me/ahoo/cosec/webflux/PipelineWebFilter$Companion {
 
 public final class me/ahoo/cosec/webflux/ReactiveSecurityContexts {
 	public static final field INSTANCE Lme/ahoo/cosec/webflux/ReactiveSecurityContexts;
-	public final fun getSecurityContext (Lreactor/util/context/ContextView;)Lme/ahoo/cosec/api/context/SecurityContext;
-	public final fun getSecurityContextOrEmpty (Lreactor/util/context/ContextView;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun requireSecurityContext (Lreactor/util/context/ContextView;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun securityContextOrNull (Lreactor/util/context/ContextView;)Lme/ahoo/cosec/api/context/SecurityContext;
 }
 
 public final class me/ahoo/cosec/webflux/ServerWebExchanges {
 	public static final field INSTANCE Lme/ahoo/cosec/webflux/ServerWebExchanges;
-	public static final fun getSecurityContext (Lorg/springframework/web/server/ServerWebExchange;)Lme/ahoo/cosec/api/context/SecurityContext;
-}
-
-public final class me/ahoo/cosec/webflux/testing/CoSecTestBindings {
-	public static final field INSTANCE Lme/ahoo/cosec/webflux/testing/CoSecTestBindings;
-	public static final fun bind (Lorg/springframework/web/server/ServerWebExchange;Lme/ahoo/cosec/api/context/SecurityContext;)V
-	public static final fun filter (Lme/ahoo/cosec/runtime/http/RequestGate;)Lorg/springframework/web/server/WebFilter;
-	public static final fun withSecurityContext (Lreactor/core/publisher/Mono;Lme/ahoo/cosec/api/context/SecurityContext;)Lreactor/core/publisher/Mono;
+	public static final fun requireSecurityContext (Lorg/springframework/web/server/ServerWebExchange;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun securityContextOrNull (Lorg/springframework/web/server/ServerWebExchange;)Lme/ahoo/cosec/api/context/SecurityContext;
 }
 

@@ -208,17 +208,17 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 在把 CoSec 与 Spring Security 或容器登录一起使用的主机上，CoSec 视为匿名的请求上的 principal 是另一层的用户，不是 CoSec 的：CoSec 对调用方所知道的是 `SecurityContext`，应读取的就是它（`principal.authenticated`、`principal.id`）。在 Spring MVC 上，对 CoSec 认证了的请求，`isUserInRole` 返回 `false`，`getAuthType()` 返回 `null`：CoSec 的角色按空间划分，不是容器的角色，而容器的角色会是另一个用户的。通过 `SecurityContext` 和检查向 CoSec 询问角色（[代码中的权限检查](./checks.md)），而不是通过 `isUserInRole`。异步请求的 ASYNC 分派上同样有这个主体；容器在请求结束之后渲染的错误页不携带 CoSec 的主体。
 
 ```kotlin
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.requireSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 
 fun currentUser(): Mono<String> =
-    Mono.deferContextual { context -> Mono.just(context.getSecurityContext().principal.id) }
+    Mono.deferContextual { context -> Mono.just(context.requireSecurityContext().principal.id) }
 
 // 手头有 exchange 时；CoSec 没有处理该请求时为 null
-val securityContext = exchange.getSecurityContext()
+val securityContext = exchange.securityContextOrNull()
 ```
 
-CoSec 没有处理该请求时，三个访问器的回答不同：`ContextView.getSecurityContext()` 抛出 `IllegalStateException`，`ContextView.getSecurityContextOrEmpty()` 和 `exchange.getSecurityContext()` 返回 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。
+两个栈上的每个读取入口都有两种形式，名字说明是哪一种（UA-7）：`requireSecurityContext()` 在 CoSec 没有处理该请求时抛出 `IllegalStateException`，说明该怎么做（注册过滤器）以及还能从哪里读取上下文；`securityContextOrNull()` 返回 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。读取入口是 `ReactiveSecurityContexts`（Reactor `ContextView`）、`ServerWebExchanges`（exchange）、`ServletRequests`（Servlet 请求）和 `SecurityContextHolder`（请求线程），都带 `@JvmStatic`，供 Java 调用：`ServletRequests.requireSecurityContext(request)`。
 
 **Spring MVC**：在处理器中声明一个 `SecurityContext` 参数。starter 注册了它的解析器（`SecurityContextArgumentResolver`），它从请求中读取上下文，所以在各种处理器中（阻塞的、`suspend` 的、异步的），这个参数都是处理器自己那个请求的上下文。CoSec 没有处理该请求时，可空的参数为 null。参数的类型就是 `SecurityContext` 本身：你自己的子类型的参数交给你自己的解析器。
 
@@ -231,17 +231,17 @@ suspend fun order(@PathVariable id: String, security: SecurityContext): Order = 
 
 ```kotlin
 import me.ahoo.cosec.webmvc.SecurityContextHolder
-import me.ahoo.cosec.webmvc.ServletRequests.getSecurityContext
+import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 
-val securityContext = httpServletRequest.getSecurityContext()
+val securityContext = httpServletRequest.securityContextOrNull()
 // 仅限请求线程上的阻塞代码
-val securityContext = SecurityContextHolder.requiredContext
+val securityContext = SecurityContextHolder.requireSecurityContext()
 ```
 
 持有者是一个 thread-local，过滤器为请求所在的线程绑定它，并在请求完成时清除。`suspend` 处理器不是阻塞代码：Spring 在 `Dispatchers.Unconfined` 上运行它，所以挂起之后，由哪个线程恢复它，它就在哪个线程上继续，而那个线程可能正在服务另一个请求（共享的 `Mutex`、`Channel` 或延迟值，单飞的缓存加载）。因此持有者是：
 
 - **被恢复的**：classpath 上有 Micrometer 的 `io.micrometer:context-propagation` 并设置了 `spring.reactor.context-propagation=auto` 时，Spring 每次恢复都会连同它的其他 thread-local 一起恢复持有者；
-- **未绑定的**：其他情况下，处理器运行之前就解绑（`PIP-22`）：`requiredContext` 会立即失败，不论在挂起之前还是之后，消息会指出应使用参数；`context` 为 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。处理器之后在该请求的线程上运行的代码同样看不到它：其他拦截器的 `postHandle` 和 `afterCompletion`，以及过滤器链返回之后的过滤器。还剩一种情况：在一个处理器是阻塞的请求的线程上恢复的 `suspend` 处理器，会在那里看到**那个请求的**上下文，所以只在这样的恢复之后、从不在挂起之前读取持有者的代码，会读到另一个请求的主体。
+- **未绑定的**：其他情况下，处理器运行之前就解绑（`PIP-22`）：`requireSecurityContext()` 会立即失败，不论在挂起之前还是之后，消息会指出应使用参数；`securityContextOrNull()` 为 `null`，调用方必须把它当作“没有上下文”，绝不能当作“没有限制”。处理器之后在该请求的线程上运行的代码同样看不到它：其他拦截器的 `postHandle` 和 `afterCompletion`，以及过滤器链返回之后的过滤器。还剩一种情况：在一个处理器是阻塞的请求的线程上恢复的 `suspend` 处理器，会在那里看到**那个请求的**上下文，所以只在这样的恢复之后、从不在挂起之前读取持有者的代码，会读到另一个请求的主体。
 
 启动日志中以 `SecurityContextHolder in suspend handlers` 开头的一行说明宿主属于哪一种。异步处理器（`Callable`、`DeferredResult`）和你自己启动的线程看不到持有者，消息相同。在这些情况下，都请使用参数或请求。
 
@@ -466,7 +466,7 @@ spring:
 
 **失败即拒绝。** 以下情况请求返回 `500` `internal-error` 并记录日志，不做任何截断：身份大于 `cosec.gateway.identity.max-size`（8 KB）；列出的某个声明不是字符串、布尔值或上述数字（头不能精确表示的数字、`NaN` 和无穷大都算），或长于 1024 个字符；凭证永不过期（例如没有 `expires-at` 的 [API key](./authentication.md#api-keys)）：服务无法为这样的身份设定边界。
 
-**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及（无论网关自己是否读取它，见 `cosec.pipeline.allow-cookie-token`）每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。结果开头的空白会去掉，因为字段值不能以空白开头。开头的 `$Version` 键值对用 `,` 藏了令牌的头，或保留下来的 `$Version` 键值对会被挪到开头的头，整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由。
+**凭证。** 网关不转发客户端的任何凭证，无论在请求头、查询参数还是 cookie 中：它从转发的每个请求中移除 `Authorization` 请求头、API key 请求头（`cosec.pipeline.api-key-header`，无论它把名称设成什么）、`authorization` 查询参数，以及（无论网关自己是否读取它，见 `cosec.pipeline.allow-cookie-token`）每个 `Cookie` 头中的 `authorization` cookie（名称比较不区分大小写；不再剩下任何 cookie 的头不发送），也从后续过滤器或 `forward:` 路由的处理器读取的 cookie 中移除它。因此被攻破的服务永远看不到可以拿回网关重放的令牌或 key。其他 cookie 原样转发，每个键值对逐字节不变；令牌的键值对连同一个 `;` 一起移除，因此不会留下空的键值对，只剩空键值对的头不发送。结果开头的空白会去掉，因为字段值不能以空白开头。开头的 `$Version` 键值对用 `,` 藏了令牌的头，或保留下来的 `$Version` 键值对会被挪到开头的头，整个移除，连同从它读出的 cookie，因为它的其他键值对会被读成别的样子。只有当后面的服务要再次校验令牌，或要代表用户调用其他 API 时，才设置 `cosec.gateway.identity.forward-authorization=true`：这时凭证发往本会接收身份的路由（`lb://` 路由，或标为 `cosec-identity: true` 的路由），无论 `cosec.gateway.identity.enabled` 是否转发身份，不发往其他路由，并且只在管道接受了它们时：被拒绝的令牌（过期、吊销、无效）即使公开路由以匿名身份放行请求，也留在网关，所以再次校验令牌的服务永远看不到网关拒绝过的令牌。
 
 ### 网关之后的服务 {#services-behind-the-gateway}
 

@@ -76,6 +76,8 @@ class PipelineFixture private constructor(
     val pipeline: Pipeline,
     private val principals: MutableMap<String, Principal>,
     private val close: () -> Unit,
+    /** False when the application's own authenticator decides who a request is: the fixture then issues no token. */
+    private val issuesTokens: Boolean = true,
 ) : AutoCloseable {
     private val tokens = AtomicLong()
 
@@ -84,7 +86,7 @@ class PipelineFixture private constructor(
      * `role@space`, the [policies] attached to it, the [app] its credential declares, and signed [attributes].
      * Equivalent to what a token would carry; not an API key, so a break-glass or API key cap does not apply.
      */
-    class Principal(
+    class Principal @JvmOverloads constructor(
         val id: String,
         val tenant: String? = null,
         val roles: Set<String> = emptySet(),
@@ -108,6 +110,7 @@ class PipelineFixture private constructor(
      * A request as an adapter would hand it to the pipeline. With a [principal] it carries a credential for it, without
      * one it is anonymous; [hostApp] is the app of the host (`cosec.authorization.scope.app-id`), none by default.
      */
+    @JvmOverloads
     fun request(
         method: String,
         path: String,
@@ -118,6 +121,7 @@ class PipelineFixture private constructor(
     ): HttpFacts {
         val all = headers.mapValues { listOf(it.value) }.toMutableMap()
         principal?.let {
+            check(issuesTokens) { OWN_AUTHENTICATOR }
             val token = "fixture-${tokens.incrementAndGet()}"
             principals[token] = it
             all["Authorization"] = listOf(BEARER + token)
@@ -139,6 +143,7 @@ class PipelineFixture private constructor(
      * builds one for [evaluate].
      */
     fun authorization(principal: Principal): String {
+        check(issuesTokens) { OWN_AUTHENTICATOR }
         val token = "fixture-${tokens.incrementAndGet()}"
         principals[token] = principal
         return BEARER + token
@@ -173,6 +178,9 @@ class PipelineFixture private constructor(
     override fun close() = close.invoke()
 
     companion object {
+        private const val OWN_AUTHENTICATOR = "This fixture decides who a request is with the application's own " +
+            "authenticator (PipelineFixture.of(authenticator = ...)): it issues no token for a Principal. Send that " +
+            "authenticator's credentials in the request's headers instead."
         private const val BEARER = "Bearer "
         private const val REMOTE_ADDRESS = "10.0.0.1"
         private val PREWARM_TIMEOUT = 30.seconds
@@ -182,19 +190,28 @@ class PipelineFixture private constructor(
          * decision [listeners]. Throws [DocumentException] when a document does not compile. Rate limit rules count
          * their permits in [rateLimiter], a [LocalRateLimiter] of the fixture's own as the starter's default is, so a
          * request over a rule's limit answers `429`; pass one with a clock of the test's to cross a window.
+         *
+         * [authenticator], when given, decides who a request is, in place of the fixture's tokens: a suite with its own
+         * token convention, or one whose requests already carry real credentials, adopts the fixture as it is. The
+         * fixture then issues no token, so [request] with a principal and [authorization] throw.
          */
+        @JvmStatic
+        @JvmOverloads
         fun load(
             directory: Path,
             routes: RouteMap = RouteMap.EMPTY,
             listeners: List<DecisionListener> = emptyList(),
             rateLimiter: RateLimiter = LocalRateLimiter(),
-        ): PipelineFixture = assemble(PolicyTestKit.documents(directory), routes, listeners, rateLimiter)
+            authenticator: Authenticator? = null,
+        ): PipelineFixture = assemble(PolicyTestKit.documents(directory), routes, listeners, rateLimiter, authenticator)
 
         /**
          * The documents as JSON text: [apps] and [tenants] by id, with the route map [routes] and the decision
-         * [listeners]. Throws [DocumentException] when one does not compile. Rate limits count in [rateLimiter], as
-         * [load]'s do.
+         * [listeners]. Throws [DocumentException] when one does not compile. Rate limits count in [rateLimiter], and
+         * [authenticator] decides who a request is, as [load]'s do.
          */
+        @JvmStatic
+        @JvmOverloads
         fun of(
             platform: String? = null,
             apps: Map<String, String> = emptyMap(),
@@ -202,6 +219,7 @@ class PipelineFixture private constructor(
             routes: RouteMap = RouteMap.EMPTY,
             listeners: List<DecisionListener> = emptyList(),
             rateLimiter: RateLimiter = LocalRateLimiter(),
+            authenticator: Authenticator? = null,
         ): PipelineFixture = assemble(
             ScenarioDocuments(
                 platform?.let(ScenarioJson::parse),
@@ -211,6 +229,7 @@ class PipelineFixture private constructor(
             routes,
             listeners,
             rateLimiter,
+            authenticator,
         )
 
         /**
@@ -219,6 +238,8 @@ class PipelineFixture private constructor(
          * a permit, whoever the principal. For a test that proves an application's routes fail closed. With the route
          * map [routes] and the decision [listeners], as [of].
          */
+        @JvmStatic
+        @JvmOverloads
         fun unreadable(
             routes: RouteMap = RouteMap.EMPTY,
             listeners: List<DecisionListener> = emptyList(),
@@ -236,6 +257,7 @@ class PipelineFixture private constructor(
             routes: RouteMap,
             listeners: List<DecisionListener>,
             rateLimiter: RateLimiter,
+            authenticator: Authenticator?,
         ): PipelineFixture {
             // Compiled here first, so that a document that cannot compile fails the test, not its first request.
             DocumentSnapshotCompiler.stored.compile(documents)
@@ -245,7 +267,7 @@ class PipelineFixture private constructor(
             documents.tenants.forEach { (id, body) -> store.put(SnapshotKey.Tenant(id), published(body)) }
 
             val principals = ConcurrentHashMap<String, Principal>()
-            val pipeline = Pipeline.builder(fixtureAuthenticator(principals), store)
+            val pipeline = Pipeline.builder(authenticator ?: fixtureAuthenticator(principals), store)
                 .snapshots {
                     prewarmApps = documents.apps.keys
                     prewarmTenants = documents.tenants.keys
@@ -265,7 +287,7 @@ class PipelineFixture private constructor(
                 pipeline.close()
                 error("The scenario documents $missing cannot be installed: see the log for why.")
             }
-            return PipelineFixture(pipeline, principals, pipeline::close)
+            return PipelineFixture(pipeline, principals, pipeline::close, issuesTokens = authenticator == null)
         }
 
         /** Answers the token a [request] wrote; a request with any other token is anonymous, never authenticated. */

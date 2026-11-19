@@ -259,6 +259,7 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         val listeners = listeners(node.get("listeners"), node.get("options") ?: EMPTY)
         val authentication = node.get("authentication") ?: EMPTY
         val provider = node.get("membershipProvider")?.let { provider(authentication, it) { reach("memberships") } }
+            ?: keysWithoutProvider(authentication)
         val pipeline = Pipeline.builder(
             authenticator(authentication, node.get("revocations")) { reach("authentication") },
             SuspendingSnapshotSource(
@@ -1033,3 +1034,14 @@ class PipelineRunner(private val compiler: SnapshotCompiler = DocumentSnapshotCo
         }
     }
 }
+
+/**
+ * A pipeline that answers API keys is built with a membership provider (UA-12). A scenario of the composite
+ * authenticator that names none never reaches memberships; if it did, this one fails as a missing one would (503).
+ */
+private fun keysWithoutProvider(authentication: JsonNode): MembershipProvider? =
+    if (authentication.get("result")?.text() != "composite") {
+        null
+    } else {
+        MembershipProvider { _, _ -> throw IllegalStateException("The scenario names no membershipProvider.") }
+    }

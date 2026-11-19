@@ -14,7 +14,7 @@
 package me.ahoo.cosec.system.behind
 
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.webflux.ServerWebExchanges.getSecurityContext
+import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RestController
 import org.springframework.web.server.ServerWebExchange
@@ -37,7 +37,7 @@ class Echo {
             "query" to request.queryParams.keys.sorted(),
             "headers" to headers,
             "cookies" to request.cookies.keys.sorted(),
-            "security" to exchange.getSecurityContext()?.let(::describe),
+            "security" to exchange.securityContextOrNull()?.let(::describe),
         )
     }
 

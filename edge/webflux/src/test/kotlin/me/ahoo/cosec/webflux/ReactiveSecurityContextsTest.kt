@@ -20,8 +20,8 @@ import io.mockk.mockk
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.api.principal.CoSecPrincipal
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
-import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContextOrEmpty
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.requireSecurityContext
+import me.ahoo.cosec.webflux.ReactiveSecurityContexts.securityContextOrNull
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.writeSecurityContext
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Assertions
@@ -44,7 +44,7 @@ class ReactiveSecurityContextsTest {
             .assertThat {
                 // Written under the key; read back only when the pipeline made it (PIP-27, RequestEndTest).
                 it.get<SecurityContext>(SecurityContext.KEY).principal.assert().isEqualTo(anonymous)
-                it.getSecurityContextOrEmpty().assert().isNull()
+                it.securityContextOrNull().assert().isNull()
             }
             .hasKey(SecurityContext.KEY)
             .then()
@@ -54,12 +54,12 @@ class ReactiveSecurityContextsTest {
     @Test
     fun getEmpty() {
         Context.empty()
-            .getSecurityContextOrEmpty()
+            .securityContextOrNull()
             .let {
                 it.assert().isNull()
             }
         Assertions.assertThrows(IllegalStateException::class.java) {
-            Context.empty().getSecurityContext()
+            Context.empty().requireSecurityContext()
         }
     }
 }

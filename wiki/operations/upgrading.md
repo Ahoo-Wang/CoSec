@@ -1095,8 +1095,8 @@ Code that uses any of these no longer compiles or is no longer called.
 | `SocialUserConverter` (`cosec-social`) | None: it is internal to `cosec-social`. Turn a provider's user into your principal with a `SocialUserPrincipalConverter` bean ([Social login](../integration/authentication.md#social-login)). |
 
 Still available: `SecurityContext` (now with `scope`, the validated app, space and roles; read it rather than the
-`CoSec-*` headers, which are what the client declared), `getSecurityContext()` on `ServerWebExchange`, Reactor
-`ContextView` and `HttpServletRequest`, `AuditEventSink`, `TokenStore`, and the `cosec-api` audit types, some of them
+`CoSec-*` headers, which are what the client declared), the readers on `ServerWebExchange`, Reactor `ContextView` and
+`HttpServletRequest`, now named `requireSecurityContext()` (throws) and `securityContextOrNull()` ([Web](../integration/web.md)), `AuditEventSink`, `TokenStore`, and the `cosec-api` audit types, some of them
 in new packages ([Modules, artifacts and packages](#modules-artifacts-and-packages)).
 
 During the 8.0 previews an application could replace, with beans of its own, the parts that enforce the control plane's

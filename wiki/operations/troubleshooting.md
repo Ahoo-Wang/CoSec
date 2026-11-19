@@ -291,8 +291,9 @@ would be permitted. A check is refused before any document is read when:
   during a streamed body or an async servlet request is still within it; one in a Spring MVC error page (the ERROR
   dispatch) is not.
 - **The pipeline did not make the context**: one built by hand, or a mock. The adapters' readers do not even return
-  such a context (`PIP-27`): `exchange.getSecurityContext()` and `request.getSecurityContext()` are `null`, a required
-  `SecurityContext` handler parameter fails. In a test, take the context of a request the pipeline permitted
+  such a context (`PIP-27`): `exchange.securityContextOrNull()` and `request.securityContextOrNull()` are `null`, a required
+  `SecurityContext` handler parameter fails, and the log says `A SecurityContext is bound … that CoSec's pipeline did
+  not make, and it is ignored` at `WARN`, at most once a minute for each reader. In a test, take the context of a request the pipeline permitted
   (`PipelineFixture.securityContext`, `PermittedRequest`).
 - **The action has no `:`**, or names what enforcement refuses (an `http` verb with a lower-case letter, a path a
   request would get `400` for: `PIP-15`).

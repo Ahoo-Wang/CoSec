@@ -15,19 +15,13 @@ public final class me/ahoo/cosec/webmvc/SecurityContextArgumentResolver : org/sp
 
 public final class me/ahoo/cosec/webmvc/SecurityContextHolder {
 	public static final field INSTANCE Lme/ahoo/cosec/webmvc/SecurityContextHolder;
-	public static final fun getContext ()Lme/ahoo/cosec/api/context/SecurityContext;
-	public static final fun getRequiredContext ()Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun requireSecurityContext ()Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun securityContextOrNull ()Lme/ahoo/cosec/api/context/SecurityContext;
 }
 
 public final class me/ahoo/cosec/webmvc/ServletRequests {
 	public static final field INSTANCE Lme/ahoo/cosec/webmvc/ServletRequests;
-	public final fun getSecurityContext (Ljakarta/servlet/http/HttpServletRequest;)Lme/ahoo/cosec/api/context/SecurityContext;
-}
-
-public final class me/ahoo/cosec/webmvc/testing/CoSecTestBindings {
-	public static final field INSTANCE Lme/ahoo/cosec/webmvc/testing/CoSecTestBindings;
-	public static final fun bind (Ljakarta/servlet/http/HttpServletRequest;Lme/ahoo/cosec/api/context/SecurityContext;)V
-	public static final fun filter (Lme/ahoo/cosec/runtime/http/RequestGate;)Ljakarta/servlet/Filter;
-	public static final fun withSecurityContext (Lme/ahoo/cosec/api/context/SecurityContext;Lkotlin/jvm/functions/Function0;)Ljava/lang/Object;
+	public static final fun requireSecurityContext (Ljakarta/servlet/http/HttpServletRequest;)Lme/ahoo/cosec/api/context/SecurityContext;
+	public static final fun securityContextOrNull (Ljakarta/servlet/http/HttpServletRequest;)Lme/ahoo/cosec/api/context/SecurityContext;
 }
 

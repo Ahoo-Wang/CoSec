@@ -410,7 +410,9 @@ the principal has no role in, another app than the host's) throws: no stage-B pr
 **The blacklist** is a stage-A provider: `BlacklistAttributeProvider(source)` declares `ext.blacklist.principal`,
 `ext.blacklist.ip` and `ext.blacklist.device`, and a request one of them blocks meets the built-in DENY
 `cosec:blacklist`. Implement `BlacklistSource.contains(kind, value)` over your store (principals are
-`<tenant>:<principal id>`), or use `InMemoryBlacklistSource`, and declare the source as a bean: the starter wraps it in
+`<tenant>:<principal id>`; an address is asked for in its canonical form, `2001:db8::1` for any spelling of it and
+`192.0.2.1` for `::ffff:192.0.2.1`, so keep blocked addresses in that form), or use `InMemoryBlacklistSource`, which
+keeps them so, and declare the source as a bean: the starter wraps it in
 a `BlacklistAttributeProvider`. Without one, startup logs
 `No BlacklistSource bean: requests are not checked against a blacklist (ext.blacklist.*).` at `INFO`. A source that
 fails never means "not blocked": the request is `503` unless a DENY matches.

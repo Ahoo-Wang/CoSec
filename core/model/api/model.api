@@ -285,6 +285,17 @@ public final class me/ahoo/cosec/model/decision/Cause$BoundaryUnavailable : me/a
 	public fun toString ()Ljava/lang/String;
 }
 
+public final class me/ahoo/cosec/model/decision/Cause$CheckFailed : me/ahoo/cosec/model/decision/Cause {
+	public fun <init> (Ljava/lang/Throwable;)V
+	public final fun component1 ()Ljava/lang/Throwable;
+	public final fun copy (Ljava/lang/Throwable;)Lme/ahoo/cosec/model/decision/Cause$CheckFailed;
+	public static synthetic fun copy$default (Lme/ahoo/cosec/model/decision/Cause$CheckFailed;Ljava/lang/Throwable;ILjava/lang/Object;)Lme/ahoo/cosec/model/decision/Cause$CheckFailed;
+	public fun equals (Ljava/lang/Object;)Z
+	public final fun getError ()Ljava/lang/Throwable;
+	public fun hashCode ()I
+	public fun toString ()Ljava/lang/String;
+}
+
 public final class me/ahoo/cosec/model/decision/Cause$DocumentInvalid : me/ahoo/cosec/model/decision/Cause {
 	public fun <init> (Lme/ahoo/cosec/model/decision/DocumentKind;JLjava/lang/Throwable;)V
 	public final fun component1 ()Lme/ahoo/cosec/model/decision/DocumentKind;

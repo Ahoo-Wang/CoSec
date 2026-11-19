@@ -85,6 +85,14 @@ const TERMS = [
   { term: 'CoSec.COSEC', hint: 'removed in 8.0 (A3): the property prefix is `cosec`, the default key prefix `cosec` (`cosec.key-prefix`)' },
   { term: 'CoSec.COSEC_PREFIX', hint: 'removed in 8.0 (A3): write the `cosec.` prefix of a property or attribute out' },
   { term: 'CoSec.DEFAULT', hint: 'removed in 8.0 (A3): `CoSecPrincipal.ANONYMOUS_ID` or `TenantId.DEFAULT`, two ids spelled `(0)`' },
+  { term: 'me.ahoo.cosec.webflux.testing', hint: 'moved in 8.0.0-beta.5: the test bindings are in cosec-testkit, `me.ahoo.cosec.testkit.webflux` and `.webmvc` (policies/testing.md)' },
+  { term: 'me.ahoo.cosec.webmvc.testing', hint: 'moved in 8.0.0-beta.5: the test bindings are in cosec-testkit, `me.ahoo.cosec.testkit.webflux` and `.webmvc` (policies/testing.md)' },
+  { term: 'getSecurityContext', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
+  { term: 'getSecurityContextOrEmpty', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
+  { term: 'requiredContext', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
+  { term: 'getRequiredContext', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
+  { term: 'SecurityContextHolder.context', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
+  { term: 'SecurityContextHolder.getContext', hint: 'renamed in 8.0.0-beta.5 (UA-7): `requireSecurityContext()` throws, `securityContextOrNull()` answers null, on every reader (integration/web.md)' },
 ]
 
 const EXEMPT_SECTIONS = [
@@ -150,6 +158,19 @@ const ALLOWED = [
     files: ['wiki/guide/roadmap.md', 'wiki/zh/guide/roadmap.md'],
     terms: ['ognl', 'spel'],
     reason: 'the roadmap names what the typed condition AST replaced',
+  },
+  {
+    files: ['wiki/operations/upgrading-previews.md', 'wiki/zh/operations/upgrading-previews.md'],
+    terms: [
+      'getSecurityContext', 'getSecurityContextOrEmpty', 'requiredContext', 'getRequiredContext',
+      'SecurityContextHolder.context',
+    ],
+    reason: 'the earlier preview entries name the readers as they were, and the beta.4 entry that renames them (UA-7)',
+  },
+  {
+    files: ['wiki/operations/upgrading-previews.md', 'wiki/zh/operations/upgrading-previews.md'],
+    terms: ['me.ahoo.cosec.webflux.testing', 'me.ahoo.cosec.webmvc.testing'],
+    reason: 'the beta.4 entry that moves the test bindings to cosec-testkit names the old packages',
   },
 ]
 
