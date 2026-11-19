@@ -65,7 +65,8 @@ internal class CoSecApiKeyAutoConfiguration {
     fun cosecApiKeyMembershipProviderCheck(context: ApplicationContext): StartupTask = StartupTask.OnCreation {
         check(context.getBeanNamesForType(MembershipProvider::class.java).isNotEmpty()) {
             "${ApiKeyProperties.ENABLED_KEY}=true needs a MembershipProvider bean: an API key's memberships are its " +
-                "principal's (RFC 0009 §4.2). Add cosec-cocache and a MembershipLoader bean, which configures " +
+                "principal's (RFC 0009 §4.2, IDN-6), so every key would be answered 503. Add cosec-cocache and a " +
+                "MembershipLoader bean, which configures " +
                 "CoCacheMembershipProvider, or declare a MembershipProvider of your own (IDN-6). The cosec-gateway-server " +
                 "image ships none, so as shipped it cannot use API keys: an image derived from it, with a " +
                 "MembershipProvider bean, can."
