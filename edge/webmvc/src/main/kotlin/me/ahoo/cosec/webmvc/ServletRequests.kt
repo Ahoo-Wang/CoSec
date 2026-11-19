@@ -19,7 +19,6 @@ import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.runtime.http.RequestSecurity
 
 /**
  * ServletRequests .
@@ -40,7 +39,7 @@ object ServletRequests {
      */
     @JvmStatic
     fun HttpServletRequest.securityContextOrNull(): SecurityContext? =
-        (getAttribute(SecurityContext.KEY) as? SecurityContext)?.takeIf { RequestSecurity.of(it) != null }
+        Unbound.orNull(getAttribute(SecurityContext.KEY), Unbound.Receiver.REQUEST)
 
     /**
      * The security context the adapter bound to this request; [IllegalStateException] where there is none, saying what
@@ -48,5 +47,5 @@ object ServletRequests {
      */
     @JvmStatic
     fun HttpServletRequest.requireSecurityContext(): SecurityContext =
-        securityContextOrNull() ?: throw IllegalStateException(Unbound.ON_REQUEST)
+        Unbound.required(getAttribute(SecurityContext.KEY), Unbound.Receiver.REQUEST)
 }

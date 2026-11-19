@@ -54,6 +54,13 @@ section above it:
 
   A handler's `SecurityContext` parameter is unchanged, and its message is now the request reader's
   ([Web](../integration/web.md)).
+
+  A context bound that CoSec's pipeline did not make (one built by hand, or a mock) is still ignored (`PIP-27`), but
+  no longer silently: `requireSecurityContext()` says so ("A SecurityContext is bound … that CoSec's pipeline did not
+  make, and it is ignored"), and `securityContextOrNull()` logs that sentence at `WARN`, at most once a minute for each
+  reader. A test that binds such a context sees a missing or anonymous caller, or a permit where its code lets an absent
+  context through. Grep the tests for `SecurityContext.KEY`, `mockk<SecurityContext>` and your own implementations of
+  `SecurityContext`, and bind a context the pipeline made instead ([Testing your application](../policies/testing.md#testing-your-application)).
 - **A check that throws reports its own cause** (UA-16). Affected: code that reads the cause of a check's
   `Indeterminate` decision (`AuthorizationChecker.decide`). It is `Cause.CheckFailed(error)`, where through beta.4 it
   was `Cause.SourceUnavailable(PLATFORM, error)` whatever failed. A document the check could not read is still

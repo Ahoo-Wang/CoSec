@@ -13,11 +13,18 @@
 
 package me.ahoo.cosec.webmvc
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
+import io.mockk.mockk
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.webmvc.ServletRequests.requireSecurityContext
 import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.slf4j.LoggerFactory
 import org.springframework.mock.web.MockHttpServletRequest
 
 /**
@@ -30,7 +37,7 @@ class UnboundReadersTest {
         val request = MockHttpServletRequest()
         request.securityContextOrNull().assert().isNull()
         val message = assertThrows<IllegalStateException> { request.requireSecurityContext() }.message
-        message.assert().isEqualTo(Unbound.ON_REQUEST)
+        message.assert().isEqualTo(Unbound.Receiver.REQUEST.missing)
             .contains("Register CoSec's filter").contains("handler parameter")
             .contains("SecurityContextHolder.requireSecurityContext()")
     }
@@ -39,7 +46,37 @@ class UnboundReadersTest {
     fun `the holder throws IllegalStateException naming the request's reader`() {
         SecurityContextHolder.securityContextOrNull().assert().isNull()
         val message = assertThrows<IllegalStateException> { SecurityContextHolder.requireSecurityContext() }.message
-        message.assert().isEqualTo(Unbound.ON_THREAD)
+        message.assert().isEqualTo(Unbound.Receiver.THREAD.missing)
             .contains("handler parameter").contains("ServletRequests.requireSecurityContext(request)")
+    }
+
+    /** PIP-27 with the drill's finding: a context the pipeline did not make is ignored, and says so. */
+    @Test
+    @OptIn(InternalCoSecApi::class)
+    fun `a context the pipeline did not make is ignored, the throwing reader says so, and null warns once`() {
+        val foreign = mockk<SecurityContext>()
+        val request = MockHttpServletRequest().apply { setAttribute(SecurityContext.KEY, foreign) }
+        val lines = ListAppender<ILoggingEvent>().apply { start() }
+        val logger = LoggerFactory.getLogger(SecurityContextHolder::class.java) as Logger
+        logger.addAppender(lines)
+        SecurityContextHolder.setContext(foreign)
+        try {
+            Unbound.resetWarnings()
+            repeat(2) {
+                request.securityContextOrNull().assert().isNull()
+                SecurityContextHolder.securityContextOrNull().assert().isNull()
+            }
+            lines.list.map { it.formattedMessage }.assert().containsExactly(
+                Unbound.foreign(Unbound.Receiver.REQUEST),
+                Unbound.foreign(Unbound.Receiver.THREAD),
+            )
+            assertThrows<IllegalStateException> { request.requireSecurityContext() }.message.assert()
+                .isEqualTo(Unbound.foreign(Unbound.Receiver.REQUEST)).contains("did not make").contains("PIP-27")
+            assertThrows<IllegalStateException> { SecurityContextHolder.requireSecurityContext() }.message.assert()
+                .isEqualTo(Unbound.foreign(Unbound.Receiver.THREAD))
+        } finally {
+            logger.detachAppender(lines)
+            SecurityContextHolder.remove()
+        }
     }
 }

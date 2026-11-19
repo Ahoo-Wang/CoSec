@@ -14,7 +14,6 @@ package me.ahoo.cosec.webmvc
 
 import jakarta.servlet.http.HttpServletRequest
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.webmvc.ServletRequests.securityContextOrNull
 import org.springframework.core.MethodParameter
 import org.springframework.web.bind.support.WebDataBinderFactory
 import org.springframework.web.context.request.NativeWebRequest
@@ -42,9 +41,11 @@ class SecurityContextArgumentResolver : HandlerMethodArgumentResolver {
         webRequest: NativeWebRequest,
         binderFactory: WebDataBinderFactory?,
     ): SecurityContext? {
-        val context = webRequest.getNativeRequest(HttpServletRequest::class.java)?.securityContextOrNull()
+        val bound = webRequest.getNativeRequest(HttpServletRequest::class.java)?.getAttribute(SecurityContext.KEY)
+        val context = Unbound.orNull(bound, Unbound.Receiver.REQUEST)
         check(context != null || parameter.isOptional) {
-            "Parameter [${parameter.parameterName}] of ${parameter.method}: ${Unbound.ON_REQUEST}"
+            val why = Unbound.why(bound, Unbound.Receiver.REQUEST)
+            "Parameter [${parameter.parameterName}] of ${parameter.method}: $why"
         }
         return context
     }

@@ -18,7 +18,6 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.runtime.http.RequestSecurity
 import org.springframework.web.server.ServerWebExchange
 
 /**
@@ -41,7 +40,7 @@ object ServerWebExchanges {
      */
     @JvmStatic
     fun ServerWebExchange.securityContextOrNull(): SecurityContext? =
-        (attributes[SecurityContext.KEY] as? SecurityContext)?.takeIf { RequestSecurity.of(it) != null }
+        Unbound.orNull(attributes[SecurityContext.KEY], Unbound.Receiver.EXCHANGE)
 
     /**
      * The security context the adapter bound to this exchange; [IllegalStateException] where there is none, saying what
@@ -49,5 +48,5 @@ object ServerWebExchanges {
      */
     @JvmStatic
     fun ServerWebExchange.requireSecurityContext(): SecurityContext =
-        securityContextOrNull() ?: throw IllegalStateException(Unbound.ON_EXCHANGE)
+        Unbound.required(attributes[SecurityContext.KEY], Unbound.Receiver.EXCHANGE)
 }

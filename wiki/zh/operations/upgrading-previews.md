@@ -38,6 +38,8 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   | `SecurityContextHolder.requiredContext`（Java：`getRequiredContext()`），抛出 `IllegalArgumentException` | `SecurityContextHolder.requireSecurityContext()`，抛出 `IllegalStateException`：捕获原来那种异常的代码不再捕获它 |
 
   处理器的 `SecurityContext` 参数不变，它的消息现在与请求读取入口的消息相同（[Web](../integration/web.md)）。
+
+  不是 CoSec 管道构造的已绑定上下文（手工构造的或 mock）仍然被忽略（`PIP-27`），但不再无声无息：`requireSecurityContext()` 会说明这一点（"A SecurityContext is bound … that CoSec's pipeline did not make, and it is ignored"），`securityContextOrNull()` 以 `WARN` 记录这句话，每个读取入口每分钟最多一次。绑定这种上下文的测试会看到调用方缺失或是匿名的，或者在代码放行缺失上下文的地方看到放行。在测试中搜索 `SecurityContext.KEY`、`mockk<SecurityContext>` 以及你自己对 `SecurityContext` 的实现，改为绑定管道构造的上下文（[测试你的应用](../policies/testing.md#testing-your-application)）。
 - **抛出异常的检查报告它自己的原因**（UA-16）。受影响的是读取检查（`AuthorizationChecker.decide`）的 `Indeterminate` 决策原因的代码。现在是 `Cause.CheckFailed(error)`；直到 beta.4，无论什么出错都是 `Cause.SourceUnavailable(PLATFORM, error)`。检查读不到某个文档时仍是 `SourceUnavailable`。检查不经过任何决策监听器，所以事件、审计、指标和 span 都不变（[代码中的权限检查](../integration/checks.md)）。
 - **接受 API key 的管道在构建时就需要成员关系提供者**（UA-12）。受影响的是用 `ApiKeyAuthenticator`（单独或在 `CompositeAuthenticator` 中）构建管道却没有 `memberships(...)` 的应用。`build()` 以 `IllegalStateException` 失败，说明要添加一个。直到 beta.4，它能构建，然后对每个 key 回答 `503`。starter 在启动时就已经拒绝这样的宿主（`IDN-6`）。
 - **测试工具的入口对 Java 是静态的**（UA-13）。受影响的是针对 beta.4 编译、调用 `PermittedRequest` 或 `IdentityHeader` 的代码。它们的函数现在带 `@JvmStatic`，所以 `INSTANCE` 上的方法没有了：请重新编译。Kotlin 源码不变；Java 去掉 `INSTANCE`（`PermittedRequest.withToken(...)`）。`PipelineFixture` 的伴生对象（`load`、`of`、`unreadable`）、`PipelineFixture.request`、`PipelineFixture.Principal` 和 `TokenSubject` 的构造函数，以及 `TokenSubject.of` 增加了 `@JvmOverloads` 和 `@JvmStatic`，这只是新增。

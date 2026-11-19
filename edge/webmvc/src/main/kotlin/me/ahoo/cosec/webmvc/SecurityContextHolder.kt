@@ -18,7 +18,6 @@ package me.ahoo.cosec.webmvc
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.runtime.http.RequestSecurity
 
 /**
  * The security context of the request the current thread serves, for blocking code on that thread: the servlet filter
@@ -61,7 +60,7 @@ object SecurityContextHolder {
      */
     @JvmStatic
     fun securityContextOrNull(): SecurityContext? =
-        SECURITY_CONTEXT_THREAD_LOCAL.get()?.takeIf { RequestSecurity.of(it) != null }
+        Unbound.orNull(SECURITY_CONTEXT_THREAD_LOCAL.get(), Unbound.Receiver.THREAD)
 
     /**
      * The security context bound to the current thread; [IllegalStateException] where there is none, saying where to
@@ -69,7 +68,7 @@ object SecurityContextHolder {
      */
     @JvmStatic
     fun requireSecurityContext(): SecurityContext =
-        securityContextOrNull() ?: throw IllegalStateException(Unbound.ON_THREAD)
+        Unbound.required(SECURITY_CONTEXT_THREAD_LOCAL.get(), Unbound.Receiver.THREAD)
 
     @InternalCoSecApi
     @JvmStatic

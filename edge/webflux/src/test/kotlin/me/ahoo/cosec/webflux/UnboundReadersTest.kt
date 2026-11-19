@@ -13,6 +13,11 @@
 
 package me.ahoo.cosec.webflux
 
+import ch.qos.logback.classic.Logger
+import ch.qos.logback.classic.spi.ILoggingEvent
+import ch.qos.logback.core.read.ListAppender
+import io.mockk.mockk
+import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.requireSecurityContext
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.securityContextOrNull
 import me.ahoo.cosec.webflux.ServerWebExchanges.requireSecurityContext
@@ -20,6 +25,7 @@ import me.ahoo.cosec.webflux.ServerWebExchanges.securityContextOrNull
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
+import org.slf4j.LoggerFactory
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest
 import org.springframework.mock.web.server.MockServerWebExchange
 import reactor.util.context.Context
@@ -33,7 +39,7 @@ class UnboundReadersTest {
     fun `the Reactor context's reader throws IllegalStateException naming the exchange's`() {
         Context.empty().securityContextOrNull().assert().isNull()
         val message = assertThrows<IllegalStateException> { Context.empty().requireSecurityContext() }.message
-        message.assert().isEqualTo(Unbound.IN_REACTOR_CONTEXT)
+        message.assert().isEqualTo(Unbound.missing(Unbound.Receiver.REACTOR_CONTEXT))
             .contains("Register CoSec's WebFilter").contains("ServerWebExchanges.securityContextOrNull(exchange)")
     }
 
@@ -42,7 +48,36 @@ class UnboundReadersTest {
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/"))
         exchange.securityContextOrNull().assert().isNull()
         val message = assertThrows<IllegalStateException> { exchange.requireSecurityContext() }.message
-        message.assert().isEqualTo(Unbound.ON_EXCHANGE).contains("Register CoSec's WebFilter")
+        message.assert().isEqualTo(Unbound.missing(Unbound.Receiver.EXCHANGE)).contains("Register CoSec's WebFilter")
         message.assert().contains("requireSecurityContext()").contains("ReactiveSecurityContexts")
+    }
+
+    /** PIP-27 with the drill's finding: a context the pipeline did not make is ignored, and says so. */
+    @Test
+    fun `a context the pipeline did not make is ignored, the throwing reader says so, and null warns once`() {
+        val foreign = mockk<SecurityContext>()
+        val reactor = Context.of(SecurityContext.KEY, foreign)
+        val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/"))
+        exchange.attributes[SecurityContext.KEY] = foreign
+        val lines = ListAppender<ILoggingEvent>().apply { start() }
+        val logger = LoggerFactory.getLogger(ReactiveSecurityContexts::class.java) as Logger
+        logger.addAppender(lines)
+        try {
+            Unbound.resetWarnings()
+            repeat(2) {
+                reactor.securityContextOrNull().assert().isNull()
+                exchange.securityContextOrNull().assert().isNull()
+            }
+            lines.list.map { it.formattedMessage }.assert().containsExactly(
+                Unbound.foreign(Unbound.Receiver.REACTOR_CONTEXT),
+                Unbound.foreign(Unbound.Receiver.EXCHANGE),
+            )
+        } finally {
+            logger.detachAppender(lines)
+        }
+        assertThrows<IllegalStateException> { reactor.requireSecurityContext() }.message.assert()
+            .isEqualTo(Unbound.foreign(Unbound.Receiver.REACTOR_CONTEXT)).contains("did not make").contains("PIP-27")
+        assertThrows<IllegalStateException> { exchange.requireSecurityContext() }.message.assert()
+            .isEqualTo(Unbound.foreign(Unbound.Receiver.EXCHANGE))
     }
 }

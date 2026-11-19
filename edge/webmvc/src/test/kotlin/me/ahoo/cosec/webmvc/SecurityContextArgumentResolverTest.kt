@@ -80,7 +80,7 @@ class SecurityContextArgumentResolverTest {
         resolver.resolveArgument(parameter(1), null, request, null).assert().isNull()
         // UA-7: the resolver says what the request's reader says.
         assertThrownBy<IllegalStateException> { resolver.resolveArgument(parameter(0), null, request, null) }
-            .hasMessageEndingWith(Unbound.ON_REQUEST)
+            .hasMessageEndingWith(Unbound.Receiver.REQUEST.missing)
     }
 
     /** `PIP-27`: a context an application filter put on the request is none: never taken for a caller. */

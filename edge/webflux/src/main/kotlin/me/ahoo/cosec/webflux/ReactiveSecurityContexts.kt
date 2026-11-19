@@ -18,7 +18,6 @@ package me.ahoo.cosec.webflux
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.runtime.http.RequestSecurity
 import reactor.core.publisher.Mono
 import reactor.util.context.Context
 import reactor.util.context.ContextView
@@ -31,7 +30,7 @@ object ReactiveSecurityContexts {
      */
     @JvmStatic
     fun ContextView.requireSecurityContext(): SecurityContext =
-        securityContextOrNull() ?: throw IllegalStateException(Unbound.IN_REACTOR_CONTEXT)
+        Unbound.required(getOrEmpty<Any>(SecurityContext.KEY).orElse(null), Unbound.Receiver.REACTOR_CONTEXT)
 
     /**
      * The security context the adapter wrote into this Reactor context; null when there is none, and for anything else
@@ -39,8 +38,7 @@ object ReactiveSecurityContexts {
      */
     @JvmStatic
     fun ContextView.securityContextOrNull(): SecurityContext? =
-        (getOrEmpty<Any>(SecurityContext.KEY).orElse(null) as? SecurityContext)
-            ?.takeIf { RequestSecurity.of(it) != null }
+        Unbound.orNull(getOrEmpty<Any>(SecurityContext.KEY).orElse(null), Unbound.Receiver.REACTOR_CONTEXT)
 
     /** Only the adapter binds it (round 2 L5): applications read it with [requireSecurityContext] or [securityContextOrNull]. */
     @InternalCoSecApi
