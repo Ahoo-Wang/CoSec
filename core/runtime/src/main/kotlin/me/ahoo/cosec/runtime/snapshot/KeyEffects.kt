@@ -69,13 +69,13 @@ internal class KeyEffects<T : Any>(
     @Suppress("CyclomaticComplexMethod", "UNCHECKED_CAST")
     fun execute(effect: KeyEffect<T>) {
         when (effect) {
-            is KeyEffect.StartPassRead -> {
-                effect.ticket.read = effect.ticket.pass.startRead()
-                // A review housekeeping refused is offered again when a pass visits the key (UC-1).
-                unreviewed?.let(::review)
-            }
+            is KeyEffect.StartPassRead -> effect.ticket.read = effect.ticket.pass.startRead()
             is KeyEffect.EndPassRead -> effect.ticket.read?.end()
-            is KeyEffect.StartRead -> startRead(effect)
+            is KeyEffect.StartRead -> {
+                // A review housekeeping refused is offered again when the key is next read (UC-1): a pass or a reload.
+                unreviewed?.let(::review)
+                startRead(effect)
+            }
             is KeyEffect.CancelReadTimeout -> readTimeouts?.remove(effect.loadId)?.cancel(false)
             is KeyEffect.Compile -> compile(effect.loadId, effect.read)
             is KeyEffect.RecordSeen -> recordSeen(effect)

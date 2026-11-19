@@ -31,7 +31,7 @@ enum class HousekeepingTask(val tag: String, val runsInPlace: Boolean = false) {
     /** A revision that does not compile, with its cause, or one that compiles again. */
     COMPILE_LOG("compile-log"),
 
-    /** A review of an installed document (UC-1, [InstallReview]); refused, it is offered again on the key's next pass. */
+    /** A review of an installed document (UC-1, [InstallReview]); refused, it is offered again when the key is next read. */
     INSTALL_REVIEW("install-review"),
 
     /** An effect that failed, after its load finished or while a failed effect was handled. */

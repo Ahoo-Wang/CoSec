@@ -18,9 +18,12 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 
 /**
  * Told of each compiled document a [SnapshotSource] installs (UC-1): after the install has been handed over, on the
- * housekeeping thread, never on a load's path. A review that housekeeping refuses (its queue full, `SNP-19`) is counted
- * as refused and offered again when a revalidation pass next visits the key, so a review is late at worst, never lost
- * while the document stays installed. What a review throws is caught and logged; it never touches the install.
+ * housekeeping thread, never on a load's path. Each install is offered, a forced reload or a recompile of the same
+ * revision included; a revalidation that confirms what is installed installs nothing. A reviewer that wants one review
+ * per revision remembers what it reviewed. A review that housekeeping refuses (its queue full, `SNP-19`) is counted as
+ * refused and offered again when the key is next read from the store (a revalidation pass, a reload), so a review is
+ * late at worst, never lost while the document stays installed. What a review throws is caught and logged; it never
+ * touches the install.
  */
 @InternalCoSecApi
 fun interface InstallReview<in T : Any> {
