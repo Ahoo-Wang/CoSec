@@ -213,6 +213,28 @@ class PipelineGatewayFilterTest {
             .assert().isNull()
     }
 
+    /** `PIP-30`: the method decided is the one the backend runs, so no override header goes on, on any route. */
+    @Test
+    fun `a method override header never reaches a backend, in any letter case, on any route`() {
+        val filter = PipelineGatewayFilter(pipeline(alice, IdentityIssuer()))
+        val overriding = {
+            MockServerHttpRequest.post("/orders")
+                .header("X-HTTP-Method-Override", "DELETE")
+                .header("x-http-method", "DELETE")
+                .header("X-METHOD-OVERRIDE", "DELETE")
+                .header("X-Other", "kept")
+        }
+        for (route in listOf(route("lb://orders"), route("https://partner.example"), route("lb://orders", identity = false))) {
+            val headers = forwarded(filter, overriding(), route)
+            headers["X-HTTP-Method-Override"].assert().isNull()
+            headers["X-HTTP-Method"].assert().isNull()
+            headers["X-Method-Override"].assert().isNull()
+            headers.getFirst("X-Other").assert().isEqualTo("kept")
+        }
+        // A request that carries none is forwarded as it is, the method of its request line included.
+        sent(filter, MockServerHttpRequest.post("/orders").header("X-Other", "kept")).method.assert().isEqualTo(HttpMethod.POST)
+    }
+
     /** IDN-7, RC1-49: opt-in by scheme; metadata `true` opts any route in, `false` (or anything else) opts out. */
     @Test
     fun `only a load-balanced route, or one marked true, receives the identity`() {
