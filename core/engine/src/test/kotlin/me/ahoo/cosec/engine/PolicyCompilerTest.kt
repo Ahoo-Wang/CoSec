@@ -26,6 +26,8 @@ import me.ahoo.cosec.model.condition.ConditionChecker
 import me.ahoo.cosec.model.condition.ConditionLimits
 import me.ahoo.cosec.model.condition.IndexKeys
 import me.ahoo.cosec.model.condition.Literal
+import me.ahoo.cosec.model.decision.DocumentKind
+import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -257,5 +259,54 @@ class PolicyCompilerTest {
             0,
             StatementSource("live", Effect.DENY, listOf("http:*", "http:GET", "order:head", "*"), emptyList(), null),
         ).actionPatterns.size.assert().isEqualTo(4)
+    }
+
+    private fun rateLimitErrors(statement: StatementSource, key: String?): List<CompileError> =
+        try {
+            compiler.rateLimit(DocumentKind.PLATFORM, "", RateLimitSource("r", statement, key, RateLimitSpec(1.0)))
+            throw AssertionError("compiled")
+        } catch (e: CompileException) {
+            e.errors
+        }
+
+    private val umlaut = Condition.Eq("subject.attributes.dept", Literal.Str("Ärzte"), ignoreCase = true)
+
+    /** `DOC-9`: the ASCII fold misses `ärzte`; where that lets a request through, the statement does not compile. */
+    @Test
+    fun `ignoreCase beyond ASCII does not compile in the DENY direction`() {
+        val deny = errors(null, StatementSource("d", Effect.DENY, listOf("*"), emptyList(), umlaut)).single()
+        deny.path.assert().isEqualTo("$.statements[0].condition.eq[1]")
+        deny.message.assert().contains("[ärzte]").contains("DOC-9")
+        errors(null, StatementSource("a", Effect.ALLOW, listOf("*"), emptyList(), Condition.Not(umlaut))).single()
+            .path.assert().isEqualTo("$.statements[0].condition.not.eq[1]")
+        // A policy condition guarding a DENY.
+        errors(umlaut, StatementSource("d", Effect.DENY, listOf("*")), StatementSource("a", Effect.ALLOW, listOf("*")))
+            .single().path.assert().isEqualTo("$.condition.eq[1]")
+        assertThrownBy<CompileException> { compiler.condition(id, Condition.Not(umlaut)) }
+        // A rate limit rule's condition, which matches as a DENY does.
+        rateLimitErrors(StatementSource("r", Effect.ALLOW, listOf("*"), emptyList(), umlaut), null)
+            .single().path.assert().isEqualTo("$.condition.eq[1]")
+        // Where the miss only narrows, it compiles: the control plane warns.
+        compiler.compile(id, umlaut, listOf(StatementSource("a", Effect.ALLOW, listOf("*"), emptyList(), umlaut)))
+        compiler.statement(id, 0, StatementSource("d", Effect.DENY, listOf("*"), emptyList(), Condition.Not(umlaut)))
+    }
+
+    /** `DOC-10`: nothing gives a resource attributes, in a condition or a rate limit key. */
+    @Test
+    fun `resource attributes do not compile`() {
+        errors(null, StatementSource("d", Effect.DENY, listOf("*"), emptyList(), eq("resource.attributes.x", "secret")))
+            .single().message.assert().contains("DOC-10")
+        rateLimitErrors(StatementSource("r", Effect.DENY, listOf("*")), "resource.attributes.x")
+            .single().path.assert().isEqualTo("$.key")
+    }
+
+    /** `DOC-11`: the anonymous principal has no subject.id in a document, and no signed-in one a reserved id. */
+    @Test
+    fun `a reserved subject id literal does not compile`() {
+        val anonymous = eq("subject.id", "(0)")
+        errors(null, StatementSource("a", Effect.ALLOW, listOf("*"), emptyList(), Condition.Not(anonymous))).single()
+            .message.assert().contains("subject.authenticated").contains("DOC-11")
+        errors(anonymous, StatementSource("d", Effect.DENY, listOf("*"))).single().path.assert().isEqualTo("$.condition.eq[1]")
+        compiler.statement(id, 0, StatementSource("a", Effect.ALLOW, listOf("*"), emptyList(), eq("subject.tenant", "(0)")))
     }
 }
