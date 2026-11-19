@@ -39,7 +39,12 @@ class RouteFindingsTest {
     private val adminDeny = """[{"id":"deny-admin","statements":[{"effect":"deny","action":"http:*","resource":"http:path:/admin/**"}]}]"""
 
     private fun routes(count: Int) = RouteMap.of(
-        (1..count).map { RouteMap.Located(Route("DELETE", "/admin/r$it/{id}", "wms:r$it.purge", "r$it/{id}"), "wms.json") },
+        (1..count).map {
+            RouteMap.Located(
+                Route("DELETE", "/admin/r$it/{id}", "wms:r$it.purge", "r$it/{id}"),
+                "wms.json"
+            )
+        },
     )
 
     private fun findings(policies: String, routes: RouteMap?) =
@@ -50,7 +55,9 @@ class RouteFindingsTest {
         val found = findings(adminDeny, routes(7)).single()
         found.check.assert().isEqualTo("ROUTES")
         found.severity.assert().isEqualTo(Severity.WARNING)
-        found.message.assert().startsWith("7 mapped route(s) escape http: statements").contains("DENY deny-admin#0 escapes DELETE /admin/r1/{id}")
+        found.message.assert().startsWith(
+            "7 mapped route(s) escape http: statements"
+        ).contains("DENY deny-admin#0 escapes DELETE /admin/r1/{id}")
             .contains("and 2 more").contains("Write each statement for the mapped action too")
         findings(adminDeny, routes(1)).single().message.assert().doesNotContain("more")
     }
@@ -59,7 +66,10 @@ class RouteFindingsTest {
     fun `without route maps it says so, and nothing to compare says nothing`() {
         findings(adminDeny, null).single().message.assert().contains("no route maps were given")
         findings("""[{"id":"freeze","statements":[{"effect":"deny","action":"*"}]}]""", null).assert().isEmpty()
-        findings("""[{"id":"d","statements":[{"effect":"deny","action":"http:*","resource":"http:path:/billing/**"}]}]""", routes(2))
+        findings(
+            """[{"id":"d","statements":[{"effect":"deny","action":"http:*","resource":"http:path:/billing/**"}]}]""",
+            routes(2)
+        )
             .assert().isEmpty()
     }
 }

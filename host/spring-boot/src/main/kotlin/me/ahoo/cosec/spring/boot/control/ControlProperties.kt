@@ -52,6 +52,7 @@ class ControlProperties {
         var routeMaps: String? = null
     }
 
+    @InternalCoSecApi
     class Http {
         /** Where the control API is served (RFC 0007 §10.2): its routes are under `{base-path}/v1`. */
         var basePath: String = "/cosec/control"
