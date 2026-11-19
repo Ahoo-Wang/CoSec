@@ -1,0 +1,146 @@
+{
+  "rules": [
+    "CTL-38"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "The near miss: walt's change keeps the control API's path open and walt's cosec:* grant. Nothing keeps walt out: no warning, and it publishes without an acknowledgement.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "control-api",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "http:*",
+              "resource": "http:path:/cosec/control/v1/**"
+            }
+          ]
+        },
+        {
+          "id": "admin",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "cosec:*"
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "control-api",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "control-api"
+        },
+        {
+          "id": "walt",
+          "subject": {
+            "principal": "walt",
+            "tenant": "(platform)"
+          },
+          "app": "*",
+          "space": "*",
+          "policy": "admin"
+        }
+      ]
+    }
+  },
+  "operators": {
+    "walt": {
+      "tenant": "(platform)"
+    }
+  },
+  "options": {
+    "lockout": true
+  },
+  "steps": [
+    {
+      "apply": {
+        "change": "c1",
+        "by": "walt",
+        "document": "platform",
+        "mode": "REPLACE",
+        "desired": {
+          "policies": [
+            {
+              "id": "control-api",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "http:*",
+                  "resource": "http:path:/cosec/control/v1/**"
+                }
+              ]
+            },
+            {
+              "id": "admin",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "cosec:*"
+                }
+              ]
+            },
+            {
+              "id": "more",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          ],
+          "bindings": [
+            {
+              "id": "control-api",
+              "subject": "*",
+              "app": "*",
+              "space": "*",
+              "policy": "control-api"
+            },
+            {
+              "id": "walt",
+              "subject": {
+                "principal": "walt",
+                "tenant": "(platform)"
+              },
+              "app": "*",
+              "space": "*",
+              "policy": "admin"
+            }
+          ]
+        }
+      }
+    },
+    {
+      "skipShadow": {
+        "change": "c1",
+        "by": "walt"
+      }
+    },
+    {
+      "publish": {
+        "change": "c1",
+        "by": "walt"
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED"
+    ],
+    "errors": {
+      "c1": []
+    },
+    "heads": {
+      "platform": 2
+    }
+  }
+}

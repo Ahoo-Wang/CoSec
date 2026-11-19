@@ -486,6 +486,18 @@
         "control:ChangesTest#apply merges or replaces, guarded by what it read"
       ],
       "pending": null
+    },
+    {
+      "id": "CTL-38",
+      "source": "RFC 0007 §6.2 (usability review before RC1, UC-6)",
+      "statement": "A change to the platform document, the platform tenant's document or the control app's document is checked for whether its operator could still reach the control plane once its candidate is in place, decided by the engine on the candidate: the request in progress as the pipeline decided it, and cosec:publish on the document in the control app. A change that would keep its operator out carries a V4 WARNING finding at proposal; at publish, checked for the publisher, it is refused with 422 unless the publisher acknowledges it (\"lockout\": true), and the message says how to acknowledge and that the way back is cosec-migrate restore. An acknowledged lock-out stays on the published change with who acknowledged it. Only the operator's own way back is checked, with the facts of the request in progress.",
+      "level": "control",
+      "guards": [
+        "control:ControlLockoutTest#a platform that no longer opens the control API's path locks its publisher out",
+        "control:ControlLockoutTest#a platform that no longer grants cosec publish locks its publisher out",
+        "control:ControlLockoutTest#a lock-out is a warning at proposal and publishes only acknowledged"
+      ],
+      "pending": null
     }
   ]
 }

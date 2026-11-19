@@ -25,6 +25,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlHttpRequest
+import me.ahoo.cosec.control.api.ControlLockout
 import me.ahoo.cosec.control.api.DecisionView
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.EntryChanges
@@ -49,6 +50,7 @@ import me.ahoo.cosec.control.change.ownerOf
 import me.ahoo.cosec.control.lifecycle.ChangeAuthority
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.ShadowOptions
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
@@ -95,7 +97,6 @@ import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 import java.time.Duration
 import java.time.Instant
-import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * The `control` runner for the change flow (RFC 0007 §6.1–§6.3, §7.2–§7.5): steps over an in-memory control plane,
@@ -111,7 +112,7 @@ import me.ahoo.cosec.control.lifecycle.LockoutCheck
  *                "nia":  { "tenant": "(platform)", "credential": "none" },  // a credential without an id; by default,
  *                                                                           // token "token-<name>", issued at no time
  *                "dave": { "tenant": "acme", "roles": ["approver"], "provider": true } },  // the provider says its roles
- * "options":   { "fourEyes": true, "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
+ * "options":   { "fourEyes": true, "lockout": true (the UC-6 check, off by default), "shadow": { "minDuration": "PT15M", "minSamples": 3, "maxDuration": "PT1H" },
  *                "providers": [ { "path": "ext.geo.country", "type": "string" } ] },   // the host's AttributeProviders
  * "steps": [ { "propose": { "change": "c1", "by": "alice", "document": "tenant:acme", "kind": "BREAK_GLASS",
  *                           "operations": [ { "putPolicy": { ...the document format's policy... } },
@@ -123,6 +124,7 @@ import me.ahoo.cosec.control.lifecycle.LockoutCheck
  *            { "reject": { "change": "c1", "by": "bob" } }, { "advance": "PT73H" },
  *            { "report": { "change": "c1", "instance": "i1", "counts": { "NARROWED": 2 } } },
  *            { "publish": { "change": "c1", "ack": "summary" | { "NARROWED": 1 } } },
+ *            { "publish": { "change": "c1", "by": "walt", "lockout": true } },   // acknowledges a lock-out (UC-6)
  *            { "rollback": { "change": "c2", "by": "walt", "document": "platform", "revision": 1 } },
  *            { "outage": true },   // every check is indeterminate until { "outage": false }
  *            { "vanish": "i1" },   // i1 is taken off the reporters of every window, its report left
@@ -279,7 +281,14 @@ object ChangeRunner : ScenarioRunner {
             listeners = listeners,
             revocations = revocations,
             authority = ChangeAuthority(authorizer, options, revocations = revocations, revocationSkew = Duration.ZERO),
-            lockout = LockoutCheck.UNCHECKED,
+            // UC-6: the lock-out check, as a host wires it, when the scenario asks for it.
+            lockout = if (node.get("options")?.get("lockout")?.bool() == true) {
+                ControlLockout(
+                    revisions
+                )
+            } else {
+                LockoutCheck.UNCHECKED
+            },
         )
 
         private var changes = changes()
@@ -296,7 +305,7 @@ object ChangeRunner : ScenarioRunner {
 
         /** A window closes as soon as it is looked at, unless the scenario sets `options.shadow`. */
         private fun shadowOptions(): ShadowOptions {
-            node.get("options")?.only("fourEyes", "shadow", "providers")
+            node.get("options")?.only("fourEyes", "shadow", "providers", "lockout")
             val shadow = node.get("options")?.get("shadow") ?: return ShadowOptions(Duration.ZERO, 0, Duration.ZERO)
             shadow.only("minDuration", "minSamples", "maxDuration")
             return ShadowOptions(
@@ -483,11 +492,16 @@ object ChangeRunner : ScenarioRunner {
         }
 
         private suspend fun transition(action: String, argument: JsonNode): ChangeRequest {
-            val (id, op) = if (action == "publish") target(argument, "ack") else target(argument)
+            val (id, op) = if (action == "publish") target(argument, "ack", "lockout") else target(argument)
             return when (action) {
                 "skipShadow" -> changes.skipShadow(op, id, "scenario")
                 "stage" -> changes.stage(op, id)
-                "publish" -> changes.publish(op, id, ack(id, argument))
+                "publish" -> changes.publish(
+                    op,
+                    id,
+                    ack(id, argument),
+                    lockout = argument.get("lockout")?.bool() == true
+                )
                 "abandon" -> changes.abandon(op, id)
                 "rebase" -> changes.rebase(op, id)
                 "reject" -> changes.reject(op, id, "scenario")
