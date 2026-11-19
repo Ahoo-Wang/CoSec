@@ -165,29 +165,23 @@ class SnapshotSource<P : Any, A : Any> internal constructor(
 
     /**
      * The installed shared document and the documents of [keys], each a key of one of this source's families, or null
-     * when one of them is not installed or this source is closed. Like [peek]: no I/O, no executor, the caller's thread.
+     * when one of them is not installed or this source is closed. Like [peek]: no I/O, no executor, the caller's thread,
+     * and indexed loops, so it allocates only what its result holds, whatever escape analysis removes.
      *
-     * @throws IllegalArgumentException when a key belongs to no family of this source.
+     * @throws IllegalArgumentException when a key belongs to no family of this source, even when it is closed.
      */
     internal fun peekAll(keys: List<SnapshotKey>): SnapshotSet<P, A>? {
-        // Indexed loops and an array read per family: nothing here waits on escape analysis to avoid allocating, but
-        // the entries the result holds. Every key is checked first, so a foreign one throws even when closed.
-        for (i in keys.indices) {
-            familyOf(keys[i])
-        }
+        for (i in keys.indices) familyOf(keys[i])
         if (context.closed.get()) {
             return null
         }
         val sharedEntry = shared.installed ?: return null
         val entries = ArrayList<SnapshotEntry<A>>(keys.size)
         for (i in keys.indices) {
-            val family = familyOf(keys[i])
-            entries += peekScoped(family, family.spec.idOf(keys[i])) ?: return null
+            entries += familyOf(keys[i]).let { peekScoped(it, it.spec.idOf(keys[i])) } ?: return null
         }
         metrics.onLoad(sharedKey.kind, LoadOutcome.HIT)
-        for (i in keys.indices) {
-            metrics.onLoad(keys[i].kind, LoadOutcome.HIT)
-        }
+        for (i in keys.indices) metrics.onLoad(keys[i].kind, LoadOutcome.HIT)
         return SnapshotSet(sharedEntry, entries)
     }
 
