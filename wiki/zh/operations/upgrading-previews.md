@@ -51,7 +51,7 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
   | `me.ahoo.cosec.webflux.testing.CoSecTestBindings`（`cosec-webflux`） | `me.ahoo.cosec.testkit.webflux.CoSecTestBindings`（`cosec-testkit`） |
   | `me.ahoo.cosec.webmvc.testing.CoSecTestBindings`（`cosec-webmvc`） | `me.ahoo.cosec.testkit.webmvc.CoSecTestBindings`（`cosec-testkit`） |
 
-  修改导入；构建里没有 `cosec-testkit` 时把它加为测试依赖。函数不变。WebFlux 的增加了挂起的 `withSecurityContext(context) { ... }`，用于被测的协程代码；`PipelineFixture.of` 和 `load` 接受应用自己的 `authenticator`（[测试你的应用](../policies/testing.md#testing-your-application)）。工具包在运行时不带来任何适配器；测试处理器时本来就有它的适配器。
+  修改导入；构建里没有 `cosec-testkit` 时把它加为测试依赖。函数不变。WebFlux 的增加了挂起的 `withSecurityContext(context) { ... }`，用于被测的协程代码；`PipelineFixture.of` 和 `load` 接受应用自己的 `authenticator`（[测试你的应用](../policies/testing.md#testing-your-application)）。工具包不带来任何适配器；绑定需要测试的 classpath 上有你的 Web 栈的适配器，测试这种处理器时本来就有。
 
 ## 从 8.0.0-beta.3 升级 {#from-8-0-0-beta-3}
 

@@ -780,8 +780,8 @@ The kit puts the context where your code reads it with `CoSecTestBindings`, one 
 `me.ahoo.cosec.testkit.webflux` and `me.ahoo.cosec.testkit.webmvc`. They are for tests only, in `cosec-testkit`: in
 production the adapter binds every context and nothing else does. Every binder refuses a context the pipeline did not
 make, so a test never runs as anonymous without saying so, and a context whose request has ended is denied there too
-(`PIP-29`). A binding needs its stack's adapter on the test's classpath, which a test of such a handler has already; the
-kit itself brings neither adapter at run time:
+(`PIP-29`). The bindings need the adapter of your web stack on the test's classpath, which a test of such a handler
+has; the kit brings neither:
 
 ```kotlin
 dependencies {

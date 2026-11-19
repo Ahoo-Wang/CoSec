@@ -91,8 +91,8 @@ section above it:
   Change the import and add `cosec-testkit` as a test dependency if the build lacks it. Its functions are the same.
   The WebFlux one adds a suspending `withSecurityContext(context) { ... }` for coroutine code under test, and
   `PipelineFixture.of` and `load` take an `authenticator` of the application's own
-  ([Testing your application](../policies/testing.md#testing-your-application)). The kit brings neither adapter at run
-  time; a test of a handler has its adapter already.
+  ([Testing your application](../policies/testing.md#testing-your-application)). The kit brings neither adapter; the
+  bindings need the one of your web stack on the test's classpath, which a test of such a handler has.
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 

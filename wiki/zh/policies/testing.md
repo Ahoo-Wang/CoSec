@@ -466,7 +466,7 @@ class OrderPermissionsTest {
 | `PermittedRequest.withIdentity(header)` | 网关后面的服务（`gateway` 模式），使用 `IdentityHeader` 生成的头 | 身份网关从该头构造的内容：`forwardedIdentity` 是转发的身份 |
 | `PermittedRequest.withToken(token, verifier, revocations)` | 需要真实令牌会话的代码（租户切换） | `TokenAuthenticator` 从该令牌构造的内容 |
 
-工具包用 `CoSecTestBindings` 把上下文放到你的代码读取的地方，每个栈一个：`me.ahoo.cosec.testkit.webflux` 和 `me.ahoo.cosec.testkit.webmvc`。它们只用于测试，在 `cosec-testkit` 中：在生产中，每个上下文都由适配器绑定，别的东西都不绑定。每个绑定方法都拒绝管道没有构造的上下文，所以测试永远不会在不声明的情况下以匿名身份运行；请求已结束的上下文在那里同样被拒绝（`PIP-29`）。绑定需要测试的 classpath 上有对应栈的适配器，测试这种处理器时本来就有；工具包本身在运行时不带来任何适配器：
+工具包用 `CoSecTestBindings` 把上下文放到你的代码读取的地方，每个栈一个：`me.ahoo.cosec.testkit.webflux` 和 `me.ahoo.cosec.testkit.webmvc`。它们只用于测试，在 `cosec-testkit` 中：在生产中，每个上下文都由适配器绑定，别的东西都不绑定。每个绑定方法都拒绝管道没有构造的上下文，所以测试永远不会在不声明的情况下以匿名身份运行；请求已结束的上下文在那里同样被拒绝（`PIP-29`）。绑定需要测试的 classpath 上有你的 Web 栈的适配器，测试这种处理器时本来就有；工具包不带来任何适配器：
 
 ```kotlin
 dependencies {
