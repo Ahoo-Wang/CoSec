@@ -23,7 +23,6 @@ import me.ahoo.cosec.cocache.shadow.CoCacheShadowReports
 import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlHttp
-import me.ahoo.cosec.control.api.ControlLockout
 import me.ahoo.cosec.control.api.ControlPlane
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.Simulator
@@ -82,6 +81,7 @@ import org.springframework.context.annotation.Conditional
 import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.Environment
+import org.springframework.core.io.ResourceLoader
 import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
 import kotlin.time.toKotlinDuration
@@ -273,24 +273,22 @@ internal class CoSecControlAutoConfiguration {
         revocationReader: ObjectProvider<RevocationReader>,
         tokenStore: ObjectProvider<TokenStore>,
         controlProperties: ControlProperties,
+        resourceLoader: ResourceLoader,
     ): Changes {
         val ids = idGenerator.getIfAvailable { RandomIdGenerator }
-        val simulator = Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment))
         return Changes(
             store,
             revisions,
             { ChangeId(ids.generate()) },
             authorizer,
             options = options,
-            // Candidates compile against the host's providers and credential headers, as enforcement compiles them.
-            attributes = attributes.catalog,
-            credentialHeaders = credentialHeaders(environment),
+            compile = ControlChangeInputs.compile(attributes, environment, controlProperties, resourceLoader),
             revocations = revocations(revocationReader, tokenStore),
             authority = authority,
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
-            lockout = ControlLockout(revisions, simulator, AppId(controlProperties.appId)),
+            lockout = ControlChangeInputs.lockout(revisions, attributes, environment, controlProperties),
         )
     }
 

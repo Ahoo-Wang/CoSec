@@ -271,6 +271,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | 配置项 | 类型 | 默认值 | 作用 |
 |---|---|---|---|
 | `cosec.control.enabled` | boolean | `true` | 当 `cosec-control` 和 `cosec-cocache` 在 classpath 上时，本实例是否运行控制面。`false` 去掉它的一切（它的存储、它自己的快照源、它的变更监听器、维护任务和路由），实例以只读方式读取策略文档和候选，所以它的 Redis 用户对它们只需要读权限（[谁可以写哪些 key](./storage.md#who-may-write-which-keys)）；它在启动时记录 `Control plane off on this instance`。两种角色共用一个镜像的部署在数据面角色上设置它，通常写作 `COSEC_CONTROL_ENABLED=false`。关闭时，对控制面路由的请求由管道像应用不提供的任何路径一样判定（`401`、`403`）；只有某个文档允许该路径时，才会得到框架的 `404`。关闭期间不会拒绝其他 `cosec.control.*` 键。只能是 `true` 或 `false`：其他值会使启动失败；在没有 `cosec-control` 或 `cosec-cocache` 时写明 `true` 也会使启动失败，并指出缺少的制品（STA-1）。 |
+| `cosec.control.analysis.route-maps` | string | 未设置 | 各服务的路由映射，逗号分隔的资源位置，读取与拒绝方式和 `cosec.authorization.routes.location` 相同。设置后，变更会带有 `ROUTES` 警告，列出候选中被已映射路由绕开的 `http:` DENY 语句与限流规则（[路由映射](../scenarios/route-maps.md)）。未设置时不做比较，含有这类语句的变更会说明这一点。每个宿主在安装文档时给出的警告只需要它自己的路由映射，不需要这个属性。 |
 | `cosec.control.app-id` | string | `cosec-control` | 控制面动作在哪个应用中授权。 |
 | `cosec.control.http.base-path` | string | `/cosec/control` | 控制 API 的路径。路由位于 `{base-path}/v1` 之下，因此移动 API 时版本不会丢失。 |
 | `cosec.control.http.max-body-size` | data size | `16MB` | WebMvc 宿主上控制 API 读取的最大请求体。更大的请求体不被读取，得到 `400` `invalid-request`。WebFlux 上由 `spring.codec.max-in-memory-size`（默认 256 KB）限定请求体。两种栈上，没有已放行主体的请求都根本不读请求体（`401`）。 |

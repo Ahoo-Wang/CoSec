@@ -40,8 +40,18 @@ class ControlProperties {
     val breakGlass = BreakGlass()
     val shadow = Shadow()
     val audit = Audit()
+    val analysis = Analysis()
 
     @InternalCoSecApi
+    class Analysis {
+        /**
+         * The services' route maps, comma-separated resource locations (UC-1): the control plane lists, for a change,
+         * the `http:` DENY statements and rate limit rules a mapped route escapes. Unset, nothing is compared, and the
+         * change says so. Each host's own WARN needs only its own route map, not this.
+         */
+        var routeMaps: String? = null
+    }
+
     class Http {
         /** Where the control API is served (RFC 0007 §10.2): its routes are under `{base-path}/v1`. */
         var basePath: String = "/cosec/control"
