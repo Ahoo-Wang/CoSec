@@ -78,6 +78,7 @@ description: "从症状出发，找出请求为什么被拒绝、被放行、被
 - **含 `/` 的租户或应用 id：** 令牌的 `tenantId` 或 `aud` 含 `/`，例如 `acme/west`，7.x 或预览版的签发方可能签出过这样的令牌（`SCP-13`）。
   租户 id 和应用 id 都是一个路径段，所以这个令牌既不指租户 `acme/west`，也不指 `acme`。请在保存该 id 的地方给租户或应用改名，然后让主体重新登录
   （[升级](./upgrading.md#tenant-and-app-ids-hold-no-slash)）。
+- **偶发，在整秒边界：** 少数请求以 `token-invalid` 失败，每次都在某一秒的最后几毫秒，日志写着 `Token refused as not valid yet: The token's iat is later than this instance's clock`。签发方的时钟比本实例快，超过了 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)（5 秒；直到 beta.3 完全没有余量，`IDN-29`），按签发方下一秒签发的令牌到达了仍在上一秒的主机。决策事件的 `subject.rejected` 为 `TOKEN_NOT_YET_VALID`。请同步时钟（NTP）；只有对已知且有界的偏差才调大这个余量，因为它也会扩大主体吊销覆盖的范围。
 - **委托令牌：** 令牌带有 `act` 声明，无论其他方面是否有效 CoSec 都会拒绝；审计事件的 `reasonCode` 为
   `DELEGATION_UNSUPPORTED`（`IDN-4`）。让调用方使用它自己的令牌，而不是代理他人的令牌（[认证](../integration/authentication.md#tokens)）。
 - **API key：** 没有存储该 key 的 SHA-256，或者 key 已停用或过期（[API key](../integration/authentication.md#api-keys)）。携带
@@ -248,7 +249,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 在平台文档以及 [`prewarm-apps` 和 `prewarm-tenants`](./configuration.md#snapshot) 中的每个文档都装入之前，就绪状态拒绝流量；存活状态不受
 影响。实例一直不就绪时：
 
-- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。
+- **没有发布平台文档。** 用 `cosec-migrate publish` 发布一个。实例会在启动时记录这一点，之后在持续期间每隔 `lag-warn` 记录一次：`No platform document under [cosec:snapshot:platform] in Redis <host:port/db>: this instance is not ready ...`。这一行指明读取的 key、key 前缀和所读的 Redis，从不包含凭据：常见原因是首次部署还没有发布任何文档、`cosec.key-prefix` 写错（发布方的必须相同）或 Redis 数据库错了。文档装入时会有一行 INFO。
 - **某个预热文档无法加载或编译。** 日志会指明它（`Loading snapshot document [<doc>] failed.`）。修正或发布该文档，或把它从预热列表中去掉。
 
 `cosecSnapshot` 健康指示器显示状态：`platform`（`installed`、`invalid`、`failed`、`absent` 或 `loading`；`invalid` 是已存储但无法编译的文档）和 `prewarmed`。把它加入 readiness 组即可在
@@ -331,6 +332,25 @@ Spring 把它们读作 `cosec.*` key。从 8.0.0-alpha.2 起，检查只在进�
 - `cosec.pipeline.mode=gateway on a Spring Cloud Gateway host: ...`：网关总是用策略决策。从网关上去掉这个配置项；在其后的服务上设置它。
 - `cosec.pipeline.mode` 绑定失败：值既不是 `enforce` 也不是 `gateway`。
 
+### 开关无法读取导致启动失败 {#startup-fails-on-an-unreadable-switch}
+
+```text
+CoSec cannot read 2 cosec.* switches; a value it cannot read would switch the feature off without a word:
+  cosec.enabled=[1]: write true or false
+  cosec.pipeline.mode=[]: write enforce or gateway
+Set each to one of its values, or remove it to take its default: https://cosec.ahoo.me/operations/configuration
+```
+
+某个 `cosec.*` 开关（`cosec.enabled`、`cosec.jwt.enabled`、其他 `*.enabled`、`cosec.pipeline.mode`、`cosec.api-key.store`）写成了 CoSec 不读取的值：`1`、`on`、`yes`、空字符串（模板留空的环境变量，YAML 里没有值的 `mode:`），或者两侧带空格的 `true`。写成 `true` 或 `false`（`enforce` 或 `gateway`，`memory` 或 `redis`），或者删掉这个 key。信息一次列出所有这样的 key。写成 `false` 的开关是合法的：它的功能保持关闭，启动摘要会列出它（[启动摘要](./observability.md#startup-summary)）。
+
+### 日志说 CoSec 已关闭 {#the-log-says-cosec-is-off}
+
+`CoSec is off: cosec.enabled=false. This application authorizes no request and nothing is protected by CoSec.` 是应用启动后记录的一条 WARN。CoSec 装配的一切都不起作用：没有管道、没有令牌校验、没有快照。除非你本就这样打算，否则删掉该配置项或设为 `cosec.enabled=true`；网关仍会剥掉客户端的 `CoSec-Identity`。
+
+### 日志说网关自己的处理器不被决策 {#the-log-says-the-gateways-own-handlers-are-not-decided}
+
+`This is a Spring Cloud Gateway host: CoSec decides the requests of gateway routes only. n handler(s) of the application itself ... are answered with no CoSec decision: ...` 指明应用自己的控制器或函数式路由。它们映射在所有网关路由之前，所以 CoSec 看不到对它们的请求（[网关自己的处理器](../integration/web.md#the-gateways-own-handlers)）。把它们移到网关之后的服务中，或在应用内自行保护。
+
 ### 缺少模块时启动失败 {#startup-fails-on-a-missing-module}
 
 ```text
@@ -396,6 +416,8 @@ CoSec 只读取一次客户端地址，且只从它信任的一方读取（`PIP-
 - CoSec 无法判断的服务器，例如部署在外部容器中的 war：设置 `server.forward-headers-strategy=none` 和该索引。
 
 对照表见[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)。
+
+没有设置 `cosec.authorization.remote-ip.max-trusted-index` 且默认值 `1` 生效时，说明读取方式的启动日志会指出这一点及其风险：客户端直接访问的宿主上，如果前面没有写 `X-Forwarded-For` 的代理，客户端可以自选地址。把该索引设为宿主前面的代理数量，没有代理时设为 `0`。
 
 ### 驱逐检查导致启动失败 {#startup-fails-on-the-eviction-check}
 

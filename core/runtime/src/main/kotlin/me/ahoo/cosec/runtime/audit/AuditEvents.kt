@@ -110,7 +110,11 @@ object AuditEvents {
     private fun rejected(reason: AuthnResult.RejectReason?): AuditReasonCode? = when (reason) {
         AuthnResult.RejectReason.TOKEN_EXPIRED -> AuditReasonCode.TOKEN_EXPIRED
         AuthnResult.RejectReason.TOKEN_REVOKED -> AuditReasonCode.TOKEN_REVOKED
-        AuthnResult.RejectReason.TOKEN_INVALID, AuthnResult.RejectReason.API_KEY_INVALID -> AuditReasonCode.TOKEN_INVALID
+        // A token not valid yet is invalid to audit's fixed codes too; the decision event names it (`IDN-29`).
+        AuthnResult.RejectReason.TOKEN_INVALID,
+        AuthnResult.RejectReason.API_KEY_INVALID,
+        AuthnResult.RejectReason.TOKEN_NOT_YET_VALID,
+        -> AuditReasonCode.TOKEN_INVALID
         AuthnResult.RejectReason.DELEGATION_UNSUPPORTED -> AuditReasonCode.DELEGATION_UNSUPPORTED
         null -> null
     }

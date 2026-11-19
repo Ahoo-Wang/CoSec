@@ -75,7 +75,11 @@ The pipeline reads the request's credentials, then asks one `Authenticator` who 
 
 - **`TokenAuthenticator`** verifies the token with the `TokenVerifier` bean, CoSec's `JwtTokenVerifier` unless the
   application declares its own (refresh and logout verify with the same one, `IDN-25`), then asks the revocation reader whether the
-  token, or every token of its principal, was revoked. Only `TokenVerifier.verify` (and `refresh`) turns a token into
+  token, or every token of its principal, was revoked. `JwtTokenVerifier` accepts a token whose issue time (`iat`) or
+  not-before time (`nbf`) is up to `cosec.authentication.revocation.skew` (5 seconds) later than this instance's clock,
+  for an issuer whose clock runs ahead, and refuses one beyond that as not valid yet (`token-invalid`, `IDN-29`); a
+  token's expiry gets no such room. A verifier you build yourself takes the same value:
+  `JwtTokenVerifier(algorithm, skew)`. Only `TokenVerifier.verify` (and `refresh`) turns a token into
   a principal: CoSec has no API that reads a token's claims without checking its signature. Without JWT
   (`cosec.jwt.enabled=false`), a request with a token is rejected as `token-invalid`. Only a token CoSec's own
   `JwtTokenVerifier` verified may use [break-glass](../guide/security-model.md#break-glass): a `TokenAuthenticator`

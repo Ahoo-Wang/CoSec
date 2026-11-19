@@ -80,7 +80,7 @@ starter 注册的监听器：
 | 作用域被拒绝 | `EXPLICIT_DENY` | `SCOPE_REJECTED` |
 | 超出租户边界的放行 | `EXPLICIT_DENY` | `BOUNDARY` |
 | 没有任何允许 | `IMPLICIT_DENY` | `IMPLICIT_DENY` |
-| 凭证被拒绝的请求的任何拒绝 | 同上 | `TOKEN_EXPIRED`、`TOKEN_REVOKED` 或 `TOKEN_INVALID`（API key 也是）；带 `act` 声明的令牌为 `DELEGATION_UNSUPPORTED`，响应报告为 `token-invalid`。主体仍是匿名主体；已知时 `authorization.reason` 指明被拒绝的是谁的凭证（不能用的 key、成员关系提供者不认识或认为已停用的主体），与决策事件的 `subject.refused` 一致 |
+| 凭证被拒绝的请求的任何拒绝 | 同上 | `TOKEN_EXPIRED`、`TOKEN_REVOKED` 或 `TOKEN_INVALID`（API key 也是）；带 `act` 声明的令牌为 `DELEGATION_UNSUPPORTED`；尚未生效的令牌（其 `iat` 或 `nbf` 比本实例时钟晚、超出余量，`IDN-29`）在这里为 `TOKEN_INVALID`，决策事件的 `subject.rejected` 将其记为 `TOKEN_NOT_YET_VALID`，响应报告为 `token-invalid`。主体仍是匿名主体；已知时 `authorization.reason` 指明被拒绝的是谁的凭证（不能用的 key、成员关系提供者不认识或认为已停用的主体），与决策事件的 `subject.refused` 一致 |
 | `400` | `EXPLICIT_DENY` | `EXPLICIT_DENY`（`kind` 为 `BAD_REQUEST`） |
 | `503`，严格的限流规则无法计数 | `INDETERMINATE` | `RATE_LIMITER_UNAVAILABLE` |
 | 其他任何 `503`，以及被取消的请求 | `INDETERMINATE` | `INDETERMINATE` |
@@ -129,6 +129,10 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 
 `500` 会把 span 的状态设为 `ERROR`。审计事件和 problem 响应体带有请求 span 的 trace id，把一个响应和它的追踪联系起来。
 
+## 启动摘要 {#startup-summary}
+
+所有 bean 创建完毕后，starter 记录一行 INFO，说明 CoSec 被配置成什么样，例如 `CoSec 8.0.0-beta.4: mode=enforce, web=servlet-filter, jwt=on (JwtTokenVerifier), revocation-reader=the CoCache token store's (CoCacheRevocationReader), login=on, api-keys=off, rate-limiter=ReactiveRedisRateLimiter, listeners=[tracing, logging-audit], route-map=12 routes`。每一项都是请求实际遇到的东西，按认证器解析的方式得出：吊销读取器是应用的 bean、CoCache 令牌存储的读取器，或 `RevocationReader.NONE`（这一行会明确写出，因为此时被吊销的令牌在过期前都会被接受）；没有令牌校验（`jwt=off`）时没有读取器可写。写成 `false` 的开关会以 `switched-off-by-configuration=[...]` 追加。名为 `LocalRateLimiter` 的限流器按实例计数：有多个实例时，限额按实例数倍增。`cosec.enabled=false` 时这一行换成一条 WARN：`CoSec is off ... nothing is protected by CoSec`（[故障排查](./troubleshooting.md#the-log-says-cosec-is-off)）。
+
 ## 指标 {#metrics}
 
 有 `cosec-micrometer` 和一个 `MeterRegistry`（例如来自 Spring Boot Actuator）时，每个决策事件都由计时器
@@ -139,7 +143,8 @@ kind 为 `INTERNAL`）。span 在决策之后根据请求的开始时间和管�
 |---|---|
 | `result` | `allow`、`too_many_requests`、`explicit_deny`（包括作用域拒绝和边界拒绝）、`implicit_deny`、`indeterminate`（每个 `503`）、`bad_request`、`cancelled`、`error` |
 | `source` | `binding`、`attachment`、`builtin`、`boundary`、`scope`（作用域拒绝）、`none` |
-| `cause` | 仅用于 `indeterminate`：`source_unavailable`、`document_invalid`、`missing_policies`、`membership`、`attribute`、`matcher`、`authenticator`、`required_listener`、`boundary`、`rate_limiter`、`deadline`、`unknown` |
+| `problem` | 客户端被告知的问题：`unauthorized`（`401`，匿名）、`token-invalid`、`token-expired`、`token-revoked`（`401`）、`forbidden`、`scope-rejected`（`403`）、`too-many-requests`、`invalid-request`、`unavailable`、`internal-error`，请求继续或被取消时为 `none` |
+| `cause` | `none`，以及在 `indeterminate` 时：`source_unavailable`、`document_invalid`、`missing_policies`、`membership`、`attribute`、`matcher`、`authenticator`、`required_listener`、`boundary`、`rate_limiter`、`deadline`、`unknown` |
 
 监听器本身也被计数：
 

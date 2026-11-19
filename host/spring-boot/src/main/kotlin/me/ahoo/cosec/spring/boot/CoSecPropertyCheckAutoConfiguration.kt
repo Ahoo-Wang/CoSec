@@ -17,6 +17,7 @@ package me.ahoo.cosec.spring.boot
 
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import org.springframework.boot.autoconfigure.AutoConfiguration
+import org.springframework.context.ApplicationContext
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Import
 import org.springframework.core.env.ConfigurableEnvironment
@@ -32,6 +33,12 @@ import org.springframework.core.env.ConfigurableEnvironment
 // A class, not an object: Spring instantiates an auto-configuration.
 @Suppress("UtilityClassWithPublicConstructor")
 internal class CoSecPropertyCheckAutoConfiguration {
+    /** UB-5: what CoSec is configured as, once every singleton exists; one WARN when `cosec.enabled=false`. */
+    @Bean
+    fun cosecStartupSummary(context: ApplicationContext): StartupTask = StartupTask.AfterSingletons {
+        StartupSummary.log(StartupSummary.report(context, context.environment))
+    }
+
     companion object {
         /** Static, so Spring runs it with the post-processors, before it instantiates any configuration or bean. */
         @JvmStatic
@@ -39,6 +46,7 @@ internal class CoSecPropertyCheckAutoConfiguration {
         fun cosecUnknownPropertiesCheck(environment: ConfigurableEnvironment): StartupTask.BeforeBeans =
             StartupTask.BeforeBeans {
                 UnknownProperties.load(CoSecPropertyCheckAutoConfiguration::class.java.classLoader).check(environment)
+                CoSecSwitches.check(environment)
             }
     }
 }
