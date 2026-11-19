@@ -91,6 +91,7 @@ the HTTP `status` it stands for and a `severity`:
 | `OPERATION` | 422 | An operation removes what is not there, or sets a section the document does not have. |
 | `IF_MATCH` | 412 | An entry is no longer what the operation's `ifMatch` says. |
 | `V3` (warning) | | The platform's `limits` or `attributes` change: other documents are compiled again on every instance, and one that no longer compiles fails closed. |
+| `ROUTES` (warning) | | The candidate holds `http:` DENY statements or rate limit rules that a mapped route of the services escapes: the route's requests are decided as its `service:verb` and do not meet them ([Route maps](../scenarios/route-maps.md)). One finding with the count and the first five. Only with [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane); without it, a candidate with such statements says that no route maps were given. |
 
 A change with any error stays `DRAFT` and cannot be staged or published; fix it by proposing a new change. A clean
 change is `CHECKED`. Nothing a change does reaches enforcement before it is published, and publishing compiles the

@@ -56,6 +56,7 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `OPERATION` | 422 | 操作删除了不存在的内容，或设置了该文档没有的字段。 |
 | `IF_MATCH` | 412 | 条目已不再是操作的 `ifMatch` 所说的样子。 |
 | `V3`（警告） | | 平台的 `limits` 或 `attributes` 有变化：其他文档会在每个实例上重新编译，不再能编译的文档失败即拒绝。 |
+| `ROUTES`（警告） | | 候选中含有被各服务已映射路由绕开的 `http:` DENY 语句或限流规则：这些路由的请求按其 `service:verb` 判定，不会遇到它们（[路由映射](../scenarios/route-maps.md)）。一个检查结果，给出数量和前五条。只有设置了 [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane) 才会比较；未设置时，含有这类语句的候选会说明没有给出路由映射。 |
 
 有任何错误的变更停留在 `DRAFT`，不能暂存或发布；请提议一个新变更来修正。干净的变更为 `CHECKED`。变更在发布之前不会影响执行，而发布时会针对当时的文档重新编译候选。
 
