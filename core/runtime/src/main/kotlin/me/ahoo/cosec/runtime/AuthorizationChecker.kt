@@ -27,7 +27,6 @@ import me.ahoo.cosec.model.Memberships
 import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.runtime.http.Enforceable
 import me.ahoo.cosec.runtime.http.PipelineSecurityContext
 import me.ahoo.cosec.runtime.http.RequestSecurity
@@ -78,9 +77,9 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline, 
      * `http:GET`) is an implicit deny (`Deny(null)`); a permit only break-glass gives is indeterminate, since a check writes no audit. The obligations
      * of a permit, rate limits, did not run.
      *
-     * An error thrown by the check is `Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, error))`. That cause
-     * stands for any failure of the check, not only a platform document that could not be read: [Cause] has no case for
-     * the check itself failing. Read `error` for what failed; the failure is logged as a warning too.
+     * An error thrown by the check is `Indeterminate(Cause.CheckFailed(error))` (UA-16): read `error` for what failed;
+     * the failure is logged as a warning too. A document the check could not read is `SourceUnavailable`, as on a
+     * request.
      */
     suspend fun decide(security: SecurityContext, action: String, resource: String): Decision {
         val request = (security as? PipelineSecurityContext)?.security
@@ -143,10 +142,10 @@ class AuthorizationChecker internal constructor(private val pipeline: Pipeline, 
             throw e
         }
         log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
-        Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
+        Decision.Indeterminate(Cause.CheckFailed(e))
     } catch (e: Exception) {
         log.warn(e) { "Check of [${action.namespace}:${action.verb} ${resource.id}] failed - indeterminate." }
-        Decision.Indeterminate(Cause.SourceUnavailable(DocumentKind.PLATFORM, e))
+        Decision.Indeterminate(Cause.CheckFailed(e))
     }
 
     /**

@@ -140,7 +140,7 @@ object EngineExpectations {
             is Cause.MissingPolicies -> set("policies", policies(cause.policyIds))
             is Cause.AmbiguousPolicy -> set("policies", policies(cause.policyIds))
             is Cause.SourceUnavailable, is Cause.NotLoaded, is Cause.DocumentInvalid -> document(this, cause)
-            is Cause.MembershipUnavailable -> Unit
+            is Cause.MembershipUnavailable, is Cause.CheckFailed -> Unit
             is Cause.BoundaryUnavailable -> put("boundary", cause.boundary.value)
             is Cause.RateLimiterUnavailable -> put("rule", cause.ruleId)
             is Cause.RequiredListenerFailed ->

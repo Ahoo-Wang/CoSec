@@ -117,6 +117,8 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
             is Cause.RequiredListenerFailed -> "required_listener"
             is Cause.BoundaryUnavailable -> "boundary"
             is Cause.RateLimiterUnavailable -> "rate_limiter"
+            // Only a check answers it, and a check reaches no listener: never on the timer.
+            is Cause.CheckFailed -> "check"
             null -> "unknown"
         }
     }
