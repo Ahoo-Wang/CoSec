@@ -82,8 +82,7 @@ internal class DocumentReads(
                 before.roles.associate { it.id.value to EntryDigest.of(it) },
                 after.roles.associate { it.id.value to EntryDigest.of(it) },
             ),
-            sections.filter { (_, only) -> CandidateDigest.of(only(before)) != CandidateDigest.of(only(after)) }
-                .map { (name) -> name },
+            SECTIONS.filter { CandidateDigest.of(it.alone(before)) != CandidateDigest.of(it.alone(after)) }.map { it.name },
         )
     }
 
@@ -98,30 +97,49 @@ internal class DocumentReads(
         after.keys.filter { it in before && before[it] != after[it] }.sorted(),
     )
 
-    /** [document] with its header fixed and nothing in it: what one section is compared in. */
-    private fun bare(document: PolicyDocument): PolicyDocument = document.copy(
-        revision = 1,
-        publishedAt = Instant.EPOCH,
-        policies = emptyList(),
-        bindings = emptyList(),
-        catalog = null,
-        boundary = null,
-        provenance = null,
-        limits = null,
-        attributes = null,
-        rateLimits = emptyList(),
-        roles = emptyList(),
-    )
+    internal companion object {
+        /** The members that say which document and revision it is, and how it came to be: never compared. */
+        val HEADER: Set<String> = setOf("kind", "owner", "revision", "publishedAt", "provenance")
 
-    /**
-     * The sections besides the policies, bindings and roles, by their names in the document format, in its order: each
-     * compared by its whole content, encoded alone (#1205).
-     */
-    private val sections: List<Pair<String, (PolicyDocument) -> PolicyDocument>> = listOf(
-        "catalog" to { bare(it).copy(catalog = it.catalog) },
-        "boundary" to { bare(it).copy(boundary = it.boundary) },
-        "limits" to { bare(it).copy(limits = it.limits) },
-        "attributes" to { bare(it).copy(attributes = it.attributes) },
-        "rateLimits" to { bare(it).copy(rateLimits = it.rateLimits) },
-    )
+        /** The members the diff lists entry by entry. */
+        val ENTRIES: Set<String> = setOf("policies", "bindings", "roles")
+
+        /**
+         * Every other member of [PolicyDocument], each a section the diff names when it differs, in the document
+         * format's order, each compared by its whole content encoded alone (#1205). A member of a document is in
+         * exactly one of [HEADER], [ENTRIES] and these (`DiffMembersTest`), so one added later is never left uncompared.
+         */
+        val SECTIONS: List<Section> = listOf(
+            Section("catalog", { it.copy(catalog = null) }) { bare, of -> bare.copy(catalog = of.catalog) },
+            Section("boundary", { it.copy(boundary = null) }) { bare, of -> bare.copy(boundary = of.boundary) },
+            Section("limits", { it.copy(limits = null) }) { bare, of -> bare.copy(limits = of.limits) },
+            Section("attributes", { it.copy(attributes = null) }) { bare, of -> bare.copy(attributes = of.attributes) },
+            Section(
+                "rateLimits",
+                { it.copy(rateLimits = emptyList()) }
+            ) { bare, of -> bare.copy(rateLimits = of.rateLimits) },
+        )
+
+        /** [document] with its header fixed and nothing in it: no entries, and every section cleared. */
+        private fun bare(document: PolicyDocument): PolicyDocument = SECTIONS.fold(
+            document.copy(
+                revision = 1,
+                publishedAt = Instant.EPOCH,
+                policies = emptyList(),
+                bindings = emptyList(),
+                provenance = null,
+                roles = emptyList(),
+            )
+        ) { bare, section -> section.clear(bare) }
+    }
+
+    /** A section of a document: [clear] takes it out of one, [take] puts [name]'s content of another into a bare one. */
+    internal class Section(
+        val name: String,
+        val clear: (PolicyDocument) -> PolicyDocument,
+        private val take: (PolicyDocument, PolicyDocument) -> PolicyDocument,
+    ) {
+        /** [document] with this section alone. */
+        fun alone(document: PolicyDocument): PolicyDocument = take(bare(document), document)
+    }
 }
