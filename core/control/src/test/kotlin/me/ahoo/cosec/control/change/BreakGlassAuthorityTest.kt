@@ -183,6 +183,20 @@ class BreakGlassAuthorityTest {
         refused { changes.publish(vera, change.id) }.assert().isEqualTo(403)
     }
 
+    /** `CTL-13`: a change exempt from the window is skipped only by who may publish it. */
+    @Test
+    fun `skipping a change exempt from the window still needs the right to publish it`() = runBlocking<Unit> {
+        published(inHours(2))
+        val head = revisions.head(SnapshotKey.Platform)!!.revision
+        val revoke =
+            changes.propose(plato, SnapshotKey.Platform, head, listOf(Operation.RemoveBinding(glass()!!.id)), "end")
+        revoke.state.assert().isEqualTo(ChangeState.CHECKED)
+        // vera holds cosec:breakglass and cosec:read, not cosec:publish, which this change (not a request) needs.
+        refused { changes.skipShadow(vera, revoke.id, "hurry") }.assert().isEqualTo(403)
+        changes.get(revoke.id).state.assert().isEqualTo(ChangeState.CHECKED)
+        changes.get(revoke.id).skipShadow.assert().isNull()
+    }
+
     @Test
     fun `a refused request tells nothing of the bindings there are`() = runBlocking<Unit> {
         val expiresAt = inHours(2)
