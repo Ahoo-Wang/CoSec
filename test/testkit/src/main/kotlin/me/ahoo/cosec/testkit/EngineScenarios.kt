@@ -317,7 +317,8 @@ class EngineScenarios(
      */
     private fun absent(kind: DocumentKind, id: String, without: Set<DocumentKind>, none: Boolean) {
         val defaultTenant = kind == DocumentKind.TENANT && id == TenantId.DEFAULT.value
-        if (!strictDocuments || none || kind in without || defaultTenant) {
+        val allowed = none || kind in without || defaultTenant
+        if (!strictDocuments || allowed) {
             return
         }
         val (name, directory) = if (kind == DocumentKind.TENANT) "tenant" to "tenants" else "app" to "apps"

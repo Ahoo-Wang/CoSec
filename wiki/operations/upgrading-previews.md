@@ -23,6 +23,14 @@ section above it:
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
+- **The policy test kit refuses a run that could pass for the wrong reason** (`PolicyTestKit`, experimental; UC-7).
+  `load` fails without a `platform.json` (write an empty document there to test without one) and when the directory
+  holds a file or directory the kit would not read. A scenario names its `credential` (`tenant` and `id`, or
+  `"anonymous": true`) and its request's `action` and `resource`: the example defaults (`acme`, `alice`,
+  `order:read`, `order/1`) are gone. Among tenant documents, a scenario decided in a tenant without one fails, and among
+  app documents one in an app without one, unless it says `"withoutDocument": ["tenant"]` or `["app"]`
+  ([Testing decisions](../policies/testing.md#testing-decisions)). Affected: scenarios that relied on the defaults or
+  on a misplaced document; `PipelineFixture.load` reads a directory by the same rules. Name the fields, move the files.
 - **A `cosec.*` switch whose value CoSec cannot read fails startup** (`UB-1`). Through beta.3 a value such as
   `cosec.enabled=1`, `on`, an empty string or ` true ` was true to Spring's binder and "off" to the condition that wires
   the beans, so CoSec, or the feature, was switched off without a word; an empty `cosec.pipeline.mode` wired no pipeline,
