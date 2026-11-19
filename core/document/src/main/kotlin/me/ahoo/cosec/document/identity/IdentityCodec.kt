@@ -86,8 +86,9 @@ object IdentityCodec {
     private val decoder = Base64.getUrlDecoder()
 
     /**
-     * The header value of [identity]; [IdentityOverflowException] when it is longer than [maxBytes] or a claim is, or
-     * when [decode] would refuse what it wrote, with [decode]'s message (#1690): a header written is a header read.
+     * The header value of [identity]; [IdentityOverflowException] when it is longer than [maxBytes] or a claim is, and
+     * [IdentityFormatException] when [decode] would refuse what it wrote, as [decode] refuses it (#1690): a header written
+     * is a header read.
      */
     fun encode(identity: Identity, maxBytes: Int = DEFAULT_MAX_BYTES): String {
         WrittenIdentity.check(identity)

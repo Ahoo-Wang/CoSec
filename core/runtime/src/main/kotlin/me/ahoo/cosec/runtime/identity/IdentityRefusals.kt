@@ -28,16 +28,29 @@ import java.util.concurrent.atomic.AtomicLong
  * not come through the gateway. The response says only the problem; the reason is logged here: at `WARN` at most once
  * per [interval] for each problem type, so a flood of bad headers never floods the log, and at `DEBUG` every time. The
  * message is built only when it is logged.
+ *
+ * Every refusal is counted by its problem type ([count]; the meter `cosec.identity.refused` with `cosec-micrometer`),
+ * the ones the bounded log leaves out included (`OBS-7`). In gateway mode there are no decision events, so this count is
+ * the only metric of a forged or broken forwarded identity: any non-zero rate is a hop to look at.
  */
-internal class IdentityRefusals(
+@InternalCoSecApi
+class IdentityRefusals(
     private val interval: Duration = DEFAULT_INTERVAL,
     private val nanoTime: () -> Long = System::nanoTime,
 ) {
     private val lastWarnings = EnumMap<ProblemType, AtomicLong>(ProblemType::class.java).apply {
-        ProblemType.entries.forEach { put(it, AtomicLong(NEVER)) }
+        TYPES.forEach { put(it, AtomicLong(NEVER)) }
     }
 
-    fun record(requestId: String, type: ProblemType, reason: String) {
+    private val counts = EnumMap<ProblemType, AtomicLong>(ProblemType::class.java).apply {
+        TYPES.forEach { put(it, AtomicLong()) }
+    }
+
+    /** How many forwarded identities were refused with [type] since this instance started; 0 for a type not in [TYPES]. */
+    fun count(type: ProblemType): Long = counts[type]?.get() ?: 0
+
+    internal fun record(requestId: String, type: ProblemType, reason: String) {
+        counts.getValue(type).incrementAndGet()
         if (warns(type)) {
             log.warn { message(requestId, type, reason) }
         } else if (log.isDebugEnabled()) {
@@ -61,6 +74,9 @@ internal class IdentityRefusals(
     }
 
     companion object {
+        /** The problems the gate refuses an identity with: the closed set of the meter's `problem` tag. */
+        val TYPES: Set<ProblemType> = setOf(ProblemType.INVALID_REQUEST, ProblemType.TOKEN_INVALID, ProblemType.TOKEN_EXPIRED)
+
         val DEFAULT_INTERVAL: Duration = Duration.ofMinutes(1)
         const val PAGE = "https://cosec.ahoo.me/operations/troubleshooting#a-service-behind-the-gateway-refuses-requests"
         private const val NEVER = Long.MIN_VALUE

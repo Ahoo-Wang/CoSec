@@ -76,6 +76,8 @@ object IdentityHeader {
             IdentityCodec.encode(identity)
         } catch (e: IdentityOverflowException) {
             throw IllegalArgumentException("The identity cannot be written: ${e.message}", e)
+        } catch (e: IdentityFormatException) {
+            throw IllegalArgumentException("The identity cannot be written: ${e.message}", e)
         }
         return readBack(header)
     }

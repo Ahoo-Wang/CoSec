@@ -349,8 +349,9 @@ The response says only the problem, never why, in every environment. The reason 
 logger `me.ahoo.cosec.runtime.identity.IdentityGate`: `Request [<id>]: the forwarded identity is refused (<status>
 <problem>), <reason>.` at `WARN`, at most once a minute for each problem type so a flood of bad headers does not flood
 the log, and every one at `DEBUG`. `<reason>` is the field that failed, such as `The identity header is malformed:
-$.rid is empty.`, or the time that is out of bounds. A service in gateway mode records no decision events, so these
-refusals appear in no metrics or audit of its own: the log is where they are.
+$.rid is empty.`, or the time that is out of bounds. A service in gateway mode records no decision events and no
+audit, but it counts every refusal, also those the log does not print, in
+[`cosec.identity.refused{problem}`](./observability.md#metrics): a rise names the problem, and the log says why.
 
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
 

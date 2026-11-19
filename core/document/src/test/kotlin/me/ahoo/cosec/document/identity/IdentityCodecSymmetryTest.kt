@@ -18,7 +18,6 @@ package me.ahoo.cosec.document.identity
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.spi.identity.Identity
 import me.ahoo.cosec.spi.identity.IdentityFormatException
-import me.ahoo.cosec.spi.identity.IdentityOverflowException
 import me.ahoo.cosec.spi.token.TokenSession
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
@@ -51,8 +50,11 @@ class IdentityCodecSymmetryTest {
         IdentityCodec.decode(Base64.getUrlEncoder().withoutPadding().encodeToString(json.encodeToByteArray()))
     }.message!!
 
-    private fun encodeSays(identity: Identity): String =
-        assertThrows<IdentityOverflowException> { IdentityCodec.encode(identity) }.message!!
+    private fun encodeSays(identity: Identity): String {
+        val refused = assertThrows<IdentityFormatException> { IdentityCodec.encode(identity) }
+        refused.reason.assert().isEqualTo(IdentityFormatException.Reason.MALFORMED)
+        return refused.message!!
+    }
 
     @Suppress("LongParameterList")
     private fun json(
@@ -118,7 +120,7 @@ class IdentityCodecSymmetryTest {
             }
             val header = try {
                 IdentityCodec.encode(identity)
-            } catch (refused: IdentityOverflowException) {
+            } catch (refused: IdentityFormatException) {
                 refused.message!!.assert().startsWith("The identity header is malformed: ")
                 return@repeat
             }

@@ -25,6 +25,7 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
+import me.ahoo.cosec.runtime.identity.IdentityRefusals
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
@@ -130,6 +131,7 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
         const val CAUSE_TAG = "cause"
         const val LISTENER_TAG = "listener"
         const val UNCHECKED_REVOCATIONS = "cosec.revocation.unchecked"
+        const val IDENTITY_REFUSED = "cosec.identity.refused"
         private const val INDETERMINATE = "indeterminate"
         private const val NONE = "none"
 
@@ -164,6 +166,21 @@ class MetricsListener(private val registry: MeterRegistry) : DecisionListener {
             FunctionCounter.builder(UNCHECKED_REVOCATIONS, unchecked) { it.count.toDouble() }
                 .description("Tokens accepted without a revocation check, the revocation store unreadable")
                 .register(registry)
+        }
+
+        /**
+         * Registers `cosec.identity.refused`, one series per problem type the gate refuses with (`OBS-7`): the forwarded
+         * identities a service in gateway mode refused. The tag's values are that closed set, never anything a request
+         * carries. Any non-zero rate is a hop that is misconfigured or a request that did not come through the gateway.
+         */
+        @InternalCoSecApi
+        fun bind(registry: MeterRegistry, refusals: IdentityRefusals) {
+            IdentityRefusals.TYPES.forEach { type ->
+                FunctionCounter.builder(IDENTITY_REFUSED, refusals) { it.count(type).toDouble() }
+                    .tag(PROBLEM_TAG, type.slug)
+                    .description("Forwarded identities a service in gateway mode refused, by problem")
+                    .register(registry)
+            }
         }
     }
 }

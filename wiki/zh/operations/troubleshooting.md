@@ -260,7 +260,7 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
 | `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。在没有网关的测试中，头只生成一次并被重复使用：每个请求生成一个（[`IdentityHeader`](../integration/web.md#services-behind-the-gateway)）。 |
 
-在任何环境中，响应都只说明问题，从不说明原因。原因在服务的日志里，来自 logger `me.ahoo.cosec.runtime.identity.IdentityGate`：`Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>.`，级别为 `WARN`，每种问题类型最多每分钟一次，所以大量错误的头不会刷屏；每一次都记录在 `DEBUG`。`<reason>` 是出错的字段，例如 `The identity header is malformed: $.rid is empty.`，或超出范围的时间。网关模式的服务不记录决策事件，所以这些拒绝不会出现在它自己的指标或审计中：日志就是它们所在的地方。
+在任何环境中，响应都只说明问题，从不说明原因。原因在服务的日志里，来自 logger `me.ahoo.cosec.runtime.identity.IdentityGate`：`Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>.`，级别为 `WARN`，每种问题类型最多每分钟一次，所以大量错误的头不会刷屏；每一次都记录在 `DEBUG`。`<reason>` 是出错的字段，例如 `The identity header is malformed: $.rid is empty.`，或超出范围的时间。网关模式的服务不记录决策事件和审计，但它会在 [`cosec.identity.refused{problem}`](./observability.md#metrics) 中对每次拒绝计数，日志没有打印的那些也计入：上升的序列指明问题，日志说明原因。
 
 只有网关可以访问到这样的服务：它相信收到的任何该头。启动时以 `WARN` 记录这一点。
 

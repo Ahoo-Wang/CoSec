@@ -18,7 +18,7 @@ package me.ahoo.cosec.document.identity
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.model.Identifiers
 import me.ahoo.cosec.spi.identity.Identity
-import me.ahoo.cosec.spi.identity.IdentityOverflowException
+import me.ahoo.cosec.spi.identity.IdentityFormatException
 import java.time.Instant
 
 /**
@@ -59,6 +59,7 @@ internal object WrittenIdentity {
         }
     }
 
-    /** What the decoder's `malformed` would say reading it back, as a refusal to write it. */
-    private fun unwritable(reason: String) = IdentityOverflowException("The identity header is malformed: $reason.")
+    /** What the decoder says reading it back, refused before it is written: the same exception, reason and words. */
+    private fun unwritable(reason: String) =
+        IdentityFormatException(IdentityFormatException.Reason.MALFORMED, "The identity header is malformed: $reason.")
 }

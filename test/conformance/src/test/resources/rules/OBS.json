@@ -74,6 +74,22 @@
         "micrometer:ResultVocabularyTest#every reason has the result of its own name",
         "runtime:SubjectMethodTest#the event names the credential as the identity header does"
       ]
+    },
+    {
+      "id": "OBS-7",
+      "source": "RFC 0009 §5; #1690 (maintainer's decision, 2026-11-19)",
+      "statement": "A service in gateway mode counts every refusal of a forwarded identity by problem type (`cosec.identity.refused{problem}`, whose values are the closed set of problems the gate answers, registered with cosec-micrometer and a MeterRegistry and kept without them), including those its log does not print, and logs the refusal's reason at WARN, at most once per interval for each problem type; the response carries the problem only, never the reason.",
+      "level": "build",
+      "pending": null,
+      "guards": [
+        "runtime:IdentityRefusalsTest#every refusal is counted by problem type, also those the bounded warning does not print",
+        "runtime:IdentityRefusalsTest#a request the gate lets through counts nothing, and no other problem is counted",
+        "runtime:IdentityRefusalsTest#the gate warns once for a flood of bad headers, and the response says only the problem",
+        "runtime:IdentityRefusalsTest#each problem type warns again once its interval has passed",
+        "micrometer:IdentityRefusedMetricTest#each refusal counts in the series of its problem, and the series are the gate's problems only",
+        "spring-boot:GatewayModeMetricsTest#the gate's refusals are counted in the registry by problem",
+        "spring-boot:GatewayModeMetricsTest#without cosec-micrometer or a registry the gate still counts, and nothing fails"
+      ]
     }
   ]
 }

@@ -82,12 +82,11 @@ class IdentityGate(
     private val clock: Clock = Clock.systemUTC(),
     /** The ids of requests without a plain `CoSec-Request-Id` header. */
     idGenerator: IdGenerator = RandomIdGenerator,
+    /** Where each refusal is counted and its reason logged, bounded (`OBS-7`): the response never carries it. */
+    private val refusals: IdentityRefusals = IdentityRefusals(),
 ) : RequestGate {
     /** [idGenerator], falling back to a random id when it throws (round 2 M6). */
     private val ids = FallbackIds(idGenerator)
-
-    /** Where a refusal's reason is told, bounded (#1690): the response never carries it. */
-    internal val refusals = IdentityRefusals()
 
     init {
         require(maxBytes > 0) { "The identity size limit must be positive, not $maxBytes." }

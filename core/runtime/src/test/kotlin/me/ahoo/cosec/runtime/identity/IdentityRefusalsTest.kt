@@ -37,8 +37,8 @@ import org.slf4j.LoggerFactory
 import java.time.Duration
 
 /**
- * #1690: a refused forwarded identity says why in the log without DEBUG, at most once a minute per problem type, and
- * never in the response.
+ * #1690, `OBS-7`: a refused forwarded identity is counted by problem type, every time, and says why in the log without
+ * DEBUG, at most once a minute per problem type, and never in the response.
  */
 class IdentityRefusalsTest {
     private val lines = ListAppender<ILoggingEvent>()
@@ -100,5 +100,28 @@ class IdentityRefusalsTest {
         now += Duration.ofSeconds(1).toNanos()
         refusals.record("r4", ProblemType.TOKEN_EXPIRED, "again")
         warnings().map { it.substringBefore(']') }.assert().containsExactly("Request [r1", "Request [r2", "Request [r4")
+    }
+
+    @Test
+    fun `every refusal is counted by problem type, also those the bounded warning does not print`() {
+        val refusals = IdentityRefusals()
+        val gate = IdentityGate(refusals = refusals)
+        repeat(3) { refused(gate, "not base64!") }
+        warnings().assert().hasSize(1)
+        refusals.count(ProblemType.INVALID_REQUEST).assert().isEqualTo(3L)
+        refusals.count(ProblemType.TOKEN_INVALID).assert().isEqualTo(0L)
+        refusals.count(ProblemType.TOKEN_EXPIRED).assert().isEqualTo(0L)
+    }
+
+    @Test
+    fun `a request the gate lets through counts nothing, and no other problem is counted`() {
+        val refusals = IdentityRefusals()
+        val gate = IdentityGate(refusals = refusals)
+        val anonymous = runBlocking {
+            gate.evaluate(HttpFacts("GET", "/orders", null, Headers.EMPTY, Cookies.EMPTY, "10.0.0.1", HostScope(null)))
+        }
+        anonymous.proceed.assert().isTrue()
+        IdentityRefusals.TYPES.forEach { refusals.count(it).assert().isEqualTo(0L) }
+        refusals.count(ProblemType.FORBIDDEN).assert().isEqualTo(0L)
     }
 }
