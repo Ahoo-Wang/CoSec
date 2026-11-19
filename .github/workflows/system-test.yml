@@ -52,7 +52,8 @@ jobs:
       # Inputs reach the scripts through the environment only, never interpolated into a command.
       GATEWAY_IMAGE_INPUT: ${{ inputs.image }}
       ARTIFACT: system-test-${{ github.run_id }}-${{ github.run_attempt }}
-      COMPOSE_FILE: test/system-test/compose.yaml
+      # Absolute: the scenarios' JVM runs in the module directory, and starts docker compose itself.
+      COMPOSE_FILE: ${{ github.workspace }}/test/system-test/compose.yaml
       COSEC_SYSTEM_BEHIND_IMAGE: cosec-system-behind:test
       COSEC_SYSTEM_AUTH_IMAGE: cosec-system-auth:test
       COSEC_SYSTEM_ENFORCER_IMAGE: cosec-system-enforcer:test
