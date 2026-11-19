@@ -1,0 +1,17 @@
+{
+  "description": "Only GET is permitted: a POST under /api is the implicit deny.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:POST",
+    "resource": {
+      "type": "http",
+      "id": "/api/orders"
+    }
+  },
+  "expect": {
+    "decision": "Deny"
+  }
+}

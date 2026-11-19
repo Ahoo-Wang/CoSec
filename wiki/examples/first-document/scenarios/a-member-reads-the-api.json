@@ -1,0 +1,17 @@
+{
+  "description": "A signed-in caller of any tenant reads under /api.",
+  "credential": {
+    "tenant": "(0)",
+    "id": "alice"
+  },
+  "request": {
+    "action": "http:GET",
+    "resource": {
+      "type": "http",
+      "id": "/api/orders"
+    }
+  },
+  "expect": {
+    "decision": "Permit"
+  }
+}

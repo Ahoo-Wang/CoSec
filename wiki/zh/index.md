@@ -17,7 +17,7 @@ hero:
 features:
   - icon: 🛡️
     title: 策略即数据
-    details: 平台、每个应用、每个租户各有一份 JSON 文档。无论来自哪里，拒绝都优先于允许；未匹配的请求一律拒绝；读不到的数据永远不会带来放行。
+    details: 平台、每个应用、每个租户各有一份 JSON 文档。无论来自哪里，拒绝都优先于允许；未匹配的请求一律拒绝；读不到的数据永远不会带来放行，但有两个已写明的例外（[吊销存储不可读时，以及快照滞后](/zh/guide/security-model#the-two-documented-exceptions)）。
     link: /zh/policies/language
   - icon: 🏢
     title: 多租户与角色权限
@@ -37,7 +37,7 @@ features:
     link: /zh/integration/web
   - icon: 🔑
     title: JWT 与社交登录
-    details: 支持签发、刷新令牌，吊销检查始终开启；为机器客户端提供 API key；并通过 JustAuth 支持 OAuth 登录。
+    details: 支持签发、刷新令牌，每个请求都检查吊销（吊销存储不可读时，除非设置 `fail-closed`，令牌会被接受）；为机器客户端提供 API key；并通过 JustAuth 支持 OAuth 登录。
     link: /zh/integration/authentication
   - icon: 📊
     title: 可审计

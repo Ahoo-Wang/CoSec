@@ -35,7 +35,7 @@ other CoSec module it finds on the classpath. Add each integration as a dependen
 | Ids from CosId 5 | `cosec-cosid` | `me.ahoo.cosid:cosid-spring-boot-starter` 5.x |
 | OpenTelemetry spans | `cosec-opentelemetry` | |
 | Micrometer metrics | `cosec-micrometer` | |
-| OpenAPI route map and app document generation | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-common` |
+| OpenAPI route map and app document generation | `cosec-openapi` | `org.springframework.boot:spring-boot-starter-actuator`, `org.springdoc:springdoc-openapi-starter-webflux-api` or `-webmvc-api` |
 | Kafka audit | `cosec-kafka` | `org.springframework.boot:spring-boot-starter-kafka` |
 
 ```kotlin
@@ -59,16 +59,17 @@ adapter is missing (MVC, WebFlux, or Gateway even with `cosec.enabled=false`), w
 ```yaml
 cosec:
   jwt:
-    algorithm: hmac256          # hmac256 | hmac384 | hmac512
-    secret: ${COSEC_JWT_SECRET} # blank fails startup while JWT is enabled
-  authorization:
-    scope:
-      app-id: order-service     # the app this host serves: only credentials declaring it are served
-    remote-ip:
-      max-trusted-index: 1      # trusted X-Forwarded-For hops; 0 ignores the header
-    routes:
-      location: classpath:cosec-routes.json   # names the route map; unset, the host loads none
+    secret: ${COSEC_JWT_SECRET} # HMAC key; blank fails startup while JWT is enabled
 ```
+
+Everything else has a default. Add a setting only for the need it serves, and know its consequence:
+
+| Add | When | Consequence |
+|---|---|---|
+| `cosec.authorization.scope.app-id: order-service` | the host serves one app | Only credentials declaring that app are served: a token issued with `TokenSubject(app = null)`, as the Quick Start's demo issues, is `403` `scope-rejected` on every request |
+| `cosec.authorization.routes.location: classpath:cosec-routes.json` | actions come from a route map | The file must exist and hold routes, or startup fails; unset, the host loads none and a request is `http:<METHOD>` |
+| `cosec.authorization.remote-ip.max-trusted-index: 0` | clients reach the host directly | The default `1` trusts one `X-Forwarded-For` hop, which a directly exposed host's clients can forge; `0` ignores the header |
+| `cosec.authentication.revocation.fail-closed: true` | a Redis outage must not accept tokens whose revocation cannot be read | Every authenticated request is `503` while revocations cannot be read |
 
 Startup fails, on purpose, when:
 

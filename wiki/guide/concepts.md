@@ -18,10 +18,13 @@ flowchart LR
     CRED[Credential] -->|verified into| PR[Principal]
     PR -->|belongs to| T[Tenant]
     PR -->|has| MEM[Memberships<br>roles per space, attachments]
-    REQ[Request] -->|names| APPSP[App and space]
+    REQ[Request] -->|asks for| APPSP[Space]
+    CRED -->|names| APP[App]
+    HOST[Host] -->|may bind| APP
     PR --> SC[Scope<br>tenant, app, space, roles]
     MEM --> SC
     APPSP --> SC
+    APP --> SC
     DOC[Documents<br>platform, app, tenant] --> POL[Policies]
     DOC --> BND[Bindings]
     BND -->|apply| POL
@@ -32,7 +35,7 @@ flowchart LR
 ```
 
 The principal and its memberships come from the verified credential (or your membership provider). The request side
-(method, path, headers, the app and space it names) comes from the client and is checked before it is trusted.
+(method, path, headers, the space it asks for) comes from the client and is checked before it is trusted.
 
 ## Principal and tenant
 
@@ -58,15 +61,17 @@ far tenants are isolated is in the [security model](./security-model.md).
 
 ## Request
 
-The transport-neutral facts of the HTTP request: method, path, query, headers, client IP, the device id, and the app and
-space the client names in `CoSec-*` parameters (see [Web integration](../integration/web.md)). All of it is chosen by
-the client.
+The transport-neutral facts of the HTTP request: method, path, query, headers, client IP, the device id, and the space the
+client asks for in the `CoSec-Space-Id` parameter (see [Web integration](../integration/web.md)). All of it is chosen
+by the client. The client never names the app.
 
 ### App
 
 The application a request belongs to. Each app has its own document: its permission catalog, its permission policies
-and the role bindings that grant them. A service can be bound to one app, in which case the app a request names must
-match it.
+and the role bindings that grant them. The app comes from the host and the credential, never from the client: a service can be bound to one app
+(`cosec.authorization.scope.app-id`), and then serves only credentials issued for it; a service without an app decides
+in the app its credential names, and a credential without one reads no app document
+([Apps](../integration/authentication.md#apps)).
 
 ### Space
 
@@ -77,7 +82,7 @@ applies in `team-a` only. A request can name a space other than the default only
 ### Scope
 
 The checked context of one request: its tenant (always the principal's), its app, its space, and the principal's roles
-in that space. `ScopeResolver` builds it from the principal and the app and space the request names, or rejects the
+in that space. `ScopeResolver` builds it from the principal, the host's app and the space the request asks for, or rejects the
 request; nothing else can construct one. Where these checks draw the line is in
 [Trust boundaries](./security-model.md#trust-boundaries).
 

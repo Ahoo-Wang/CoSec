@@ -1,8 +1,8 @@
 # CoSec
 
-> Multi-tenant, non-blocking authorization framework for Spring Boot (WebFlux, MVC, Spring Cloud Gateway). Policies are JSON documents (platform, app and tenant) with bindings, compiled into a snapshot every instance reads from Redis; decisions are deny-first and fail closed. JWT and API key authentication with always-on token revocation, rate limits as document rules, and a control plane for reviewed changes, simulation and rollback. Kotlin, Java 21, Spring Boot 4.
+> Multi-tenant, non-blocking authorization framework for Spring Boot (WebFlux, MVC, Spring Cloud Gateway). Policies are JSON documents (platform, app and tenant) with bindings, compiled into a snapshot every instance reads from Redis; decisions are deny-first and fail closed, with two documented exceptions (see Security Model). JWT and API key authentication with token revocation checked on every request, rate limits as document rules, and a control plane for reviewed changes, simulation and rollback. Kotlin, Java 21, Spring Boot 4.
 
-Key facts: any matching DENY overrides every ALLOW; a request nothing allows is denied; a request that cannot be decided (a document that does not compile or cannot be read, an unavailable attribute or membership source) is answered 503. Denied anonymous callers get 401, authenticated ones 403, exceeded rate limit rules 429; every error body is `application/problem+json`. Statements use `service:verb` actions (from a route map) or `http:<METHOD>`, typed or `http:path:` resources, and condition ASTs such as `{"eq": ["subject.authenticated", true]}`.
+Key facts: any matching DENY overrides every ALLOW; a request nothing allows is denied; a request that cannot be decided (a document that does not compile or cannot be read, an unavailable attribute or membership source) is answered 503, with two documented exceptions: while the revocation store cannot be read a request's token is accepted unless `cosec.authentication.revocation.fail-closed` is `true`, and past the bounded snapshot lag only the tenants in `cosec.authorization.snapshot.fail-closed.tenants` answer `503`. Denied anonymous callers get 401, authenticated ones 403, exceeded rate limit rules 429; every error body is `application/problem+json`. Statements use `service:verb` actions (from a route map) or `http:<METHOD>`, typed or `http:path:` resources, and condition ASTs such as `{"eq": ["subject.authenticated", true]}`.
 
 ## Getting started
 
@@ -15,7 +15,7 @@ Key facts: any matching DENY overrides every ALLOW; a request nothing allows is 
 
 - [Web Integration](https://cosec.ahoo.me/integration/web): choosing an adapter (WebFlux, MVC, Gateway), outcomes and HTTP statuses, problem+json bodies, `CoSec-*` parameters, the security context, client IP behind proxies, CORS
 - [Building a client](https://cosec.ahoo.me/integration/clients): what a client of a CoSec application can rely on: the endpoints that are the application's, what to do on each problem type, refresh under rotation, readable claims, the CoSec-* headers and CORS
-- [Authentication](https://cosec.ahoo.me/integration/authentication): JWT tokens and their membership claims, membership providers, login, refresh, logout and always-on revocation, verifying a token outside the pipeline, API keys, authenticators, social login
+- [Authentication](https://cosec.ahoo.me/integration/authentication): JWT tokens and their membership claims, membership providers, login, refresh, logout and revocation (accepted while the store is unreadable unless `fail-closed`), verifying a token outside the pipeline, API keys, authenticators, social login
 - [Checks in Code](https://cosec.ahoo.me/integration/checks): checking permissions from code for the request in progress (AuthorizationChecker) and what to do instead for work after the request, explaining a decision through the control plane
 
 ## Policies

@@ -40,7 +40,8 @@ flowchart LR
     P --> ST[Statement<br>action and resource]
 ```
 
-A role belongs to one app, and may be tied to one space. That is the only place where an app and a space meet, so
+A role is defined in one app, and may be tied to one space. A role's *id* is one namespace across apps wherever a
+membership does not come from the token's own claims ([Apps](../integration/authentication.md#apps)). That is the only place where an app and a space meet, so
 "one app with several spaces" and "one space shared by several apps" need no further rule; see
 [Apps and spaces](#apps-and-spaces).
 
@@ -185,8 +186,9 @@ When an app does use spaces, the role says where it applies:
 | One space shared by several apps | Each app's own roles, held in the same space id | The same space, with each app's permissions granted by its own roles |
 | A system role | A role in the app document | It applies in any space a member holds it in, in every tenant |
 
-Only roles held in the request's space count, and a token is issued for one app, so a space id never carries a grant
-from one app to another. Scenarios: [An app without spaces](../scenarios/app.md) and
+Only roles held in the request's space count. A token's claims are issued for one app, so a space id does not carry
+a grant from one app to another there; a membership provider's answer is not per app, so there it does: give roles
+that share principals and a provider distinct ids (`wms.admin`, `pos.admin`). Scenarios: [An app without spaces](../scenarios/app.md) and
 [Apps with spaces](../scenarios/spaces.md).
 
 ## What stays outside CoSec

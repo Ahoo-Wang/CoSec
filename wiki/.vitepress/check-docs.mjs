@@ -6,6 +6,9 @@
 //   points to an existing page, and every page except the home pages is in the sidebar.
 // - every https://cosec.ahoo.me/... link of llms.txt, the skills and the READMEs names a page and an anchor that exist,
 //   and the site build publishes llms.txt (config/index.ts copies it from the repository root).
+// - a JSON block that README*.md or a skill copies from an example carries the marker
+//   `<!-- sample: wiki/examples/<dir>/documents/<file>.json -->` on the line before its fence, and must equal that file
+//   (the example is compiled and run by DocumentationExamplesTest, so the copy cannot drift from what CoSec accepts).
 // AGENTS.md is skipped.
 // Usage: node .vitepress/check-docs.mjs   (from the wiki directory or via its path)
 import { readFileSync, readdirSync, statSync, existsSync } from 'fs'
@@ -114,6 +117,29 @@ for (const file of outside) {
     if (!existsSync(page)) problems.push(`${relative_}: link ${m[0]} has no page`)
     else if (fragment && !anchors(page).has(fragment)) problems.push(`${relative_}: missing anchor #${fragment} in ${rel(page)}`)
   }
+}
+const samplePattern = /<!--\s*sample:\s*(\S+)\s*-->\s*\n```json\n([\s\S]*?)\n```/g
+for (const file of outside) {
+  const relative_ = relative(repoRoot, file)
+  for (const m of readFileSync(file, 'utf-8').matchAll(samplePattern)) {
+    checked++
+    const source = join(repoRoot, m[1])
+    if (!existsSync(source)) {
+      problems.push(`${relative_}: sample ${m[1]} does not exist`)
+      continue
+    }
+    try {
+      const same = JSON.stringify(sortKeys(JSON.parse(m[2]))) === JSON.stringify(sortKeys(JSON.parse(readFileSync(source, 'utf-8'))))
+      if (!same) problems.push(`${relative_}: the JSON block marked sample ${m[1]} differs from that file`)
+    } catch (e) {
+      problems.push(`${relative_}: the JSON block marked sample ${m[1]} does not parse (${e.message})`)
+    }
+  }
+}
+function sortKeys(value) {
+  if (Array.isArray(value)) return value.map(sortKeys)
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map((k) => [k, sortKeys(value[k])]))
+  return value
 }
 if (!/llms\.txt/.test(readFileSync(join(wikiDir, '.vitepress/config/index.ts'), 'utf-8'))) {
   problems.push('config/index.ts: the build does not publish llms.txt (copy it in buildEnd)')

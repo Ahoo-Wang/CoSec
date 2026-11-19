@@ -18,7 +18,7 @@ decide(principal, scope, action, resource, environment) -> decision
 | Input | In CoSec | Comes from |
 |---|---|---|
 | principal | who is calling: id, tenant, roles in each space, attached policies | the verified token or API key; the roles from the token, or from your membership provider (always for an API key, which only narrows them) |
-| scope | the tenant, app and space the request acts in, and the principal's roles there | the principal's tenant, the service's app or the request, checked against the principal's roles |
+| scope | the tenant, app and space the request acts in, and the principal's roles there | the principal's tenant, the service's app or else the credential's, and the space the request asks for, checked against the principal's roles |
 | action and resource | `http:GET` on `http:path:/orders/42`, or, with a route map, `order:read` on `order/42` | the request |
 | environment | client IP, time, device and external attributes such as a region or a blacklist entry | the request, the clock and your attribute providers |
 | decision | `Permit` (possibly with rate limit obligations), `Deny`, or `Indeterminate` | |
@@ -32,7 +32,10 @@ Around that function, CoSec provides what it takes to use it in production:
 - **Tenants, apps and spaces.** Principals belong to tenants, and roles apply per space (a team, a project) inside an
   app, so one user can be an admin in one space and a reader in another.
 - **Safe defaults.** Nothing is allowed unless a rule allows it, a deny always beats an allow, and data that cannot be
-  read denies.
+  read denies, with two documented exceptions: while the revocation store cannot be read, a request's token is
+  accepted unless `cosec.authentication.revocation.fail-closed` is `true`, and past the bounded snapshot lag only the
+  tenants in `cosec.authorization.snapshot.fail-closed.tenants` answer `503`
+  ([Security model](./security-model.md#the-two-documented-exceptions)).
 - **Tokens.** JWT issuing and verification, refresh, logout and revocation, and API keys for machine clients.
 - **Operations.** Rate limiting, decision events for audit, metrics and tracing, and an explanation of why any request
   was decided the way it was.
@@ -48,9 +51,10 @@ The terms are defined in [Concepts](./concepts.md), and the rules the function f
 - **It does not filter data.** CoSec decides whether a request may reach a handler. Which rows and fields the
   handler returns stays in your code. A policy can tie a resource to the principal (a resource variable compared with
   `subject.id`), but it cannot look up who owns a database record unless an attribute provider fetches that for it.
-- **It does not verify the app a client names unless you bind it.** A service bound to one app
-  (`cosec.authorization.scope.app-id`) rejects a request that names another; a service that is not bound accepts the
-  app the request names. The space is checked: a request can name a space other than
+- **It does not choose the app for a service you leave unbound.** A client never names the app. A service bound to one
+  app (`cosec.authorization.scope.app-id`) serves only credentials issued for that app; a service that is not bound
+  decides in the app its credential names, so a token issued for app A is decided in A on a service of app B, and a token
+  without an app (`aud`) reads no app document. The space is checked: a request can name a space other than
   the default only if the principal has a role there. See [Trust boundaries](./security-model.md#trust-boundaries).
 - **It has no administration UI.** Documents are published through the control plane's HTTP API, or with
   `cosec-migrate`.
