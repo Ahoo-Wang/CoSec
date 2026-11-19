@@ -71,4 +71,4 @@ internal fun SnapshotSource<*, *>.quiescent(): Boolean =
     shared.quiescent() && families.all { it.slots.values.all(KeyRunner<*>::quiescent) } && threads.housekeepingIdle
 
 private fun SnapshotSource<*, *>.familyOfKind(kind: SnapshotKind): SnapshotFamilies.Family<*> =
-    checkNotNull(families.of(kind)) { "This source has no $kind documents." }
+    families.of(kind) ?: throw NoSuchElementException("This source has no $kind documents.")

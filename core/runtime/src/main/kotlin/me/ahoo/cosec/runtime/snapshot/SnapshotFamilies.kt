@@ -48,7 +48,11 @@ internal class SnapshotFamilies<A : Any>(
         require(this.families.none { it.spec.kind == sharedKind }) { "The shared key cannot be a family's." }
     }
 
-    /** Each family at its kind's ordinal, so finding one is an array read: `peek` allocates no iterator for it. */
+    /**
+     * Each family at its kind's ordinal, so finding one is an array read: `peek` allocates no iterator for it. Sized by
+     * [SnapshotKind.entries], so every kind, one added later included, has a slot: a kind with no family reads null,
+     * what the search by kind answered, and no read can fall outside the array.
+     */
     private val byKind: Array<Family<A>?> = arrayOfNulls<Family<A>>(SnapshotKind.entries.size).also { byKind ->
         families.forEach { byKind[it.spec.kind.ordinal] = it }
     }
@@ -111,8 +115,11 @@ internal class SnapshotFamilies<A : Any>(
     }
 
     /** The slot the family of [key] holds for it now, made if it holds none; for [KeyContext.current]. */
-    fun slotFor(key: SnapshotKey, context: KeyContext): KeyRunner<*> =
-        checkNotNull(of(key.kind)) { "This source has no ${key.kind} documents." }.slotFor(key, context)
+    fun slotFor(key: SnapshotKey, context: KeyContext): KeyRunner<*> {
+        // NoSuchElementException, as the search by kind threw before.
+        val family = of(key.kind) ?: throw NoSuchElementException("This source has no ${key.kind} documents.")
+        return family.slotFor(key, context)
+    }
 
     /** The [wanted] least recently used idle slots holding an entry of the kind [absent] names, in one scan. */
     internal inline fun victims(

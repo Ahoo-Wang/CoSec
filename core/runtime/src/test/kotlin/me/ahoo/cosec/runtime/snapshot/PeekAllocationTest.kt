@@ -26,8 +26,14 @@ import java.util.concurrent.atomic.AtomicLong
 
 /**
  * `SnapshotSource.peek` finds a family by an array read, so a warm peek of an app allocates the `Snapshot` it returns
- * and nothing else, whether or not the JIT's escape analysis would have removed an iterator: measured from the first
- * calls on, before C2 has compiled anything that could scalar-replace one (#1684 saw a fork allocate it).
+ * and nothing else, whether or not the JIT's escape analysis would have removed an iterator (#1684 saw a fork allocate
+ * it).
+ *
+ * Why it is not flaky: the source and its class are this test's own, and the calls are measured from the first on, so
+ * they run interpreted and in C1 code, which eliminates no allocation. The bound, 48 B per call, is twice the 24 B the
+ * snapshot takes (32 B without compressed pointers). Code with the iterator measures 56 B per call. A JIT that had
+ * already compiled `peek` with escape analysis could only allocate less, so another test warming it first never makes
+ * this one fail; it can only hide a regression, which the `-XX:-DoEscapeAnalysis` benchmark run shows instead.
  */
 class PeekAllocationTest {
     @Test
