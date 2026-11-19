@@ -92,9 +92,9 @@ open class CheckerBenchmark {
         const val PLATFORM = ""","policies":[{"id":"public","statements":[{"effect":"allow",""" +
             """"action":"http:GET","resource":"http:path:/public/**"}]}],""" +
             """"bindings":[{"id":"g:public","subject":"*","app":"*","space":"*","policy":"public"}]"""
-        val APP = ""","policies":[{"id":"orders","statements":[""" +
+        val APP = ""","policies":[{"id":"perm:app/orders","statements":[""" +
             (1..10).joinToString(",") { """{"effect":"allow","action":"http:*","resource":"http:path:/orders/op$it/**"}""" } +
             """,{"effect":"deny","action":"http:*","resource":"http:path:/orders/internal/**"}]}],""" +
-            """"bindings":[{"id":"admin","subject":{"role":"admin"},"app":"app","space":"*","policy":"orders"}]"""
+            """"bindings":[{"id":"admin","subject":{"role":"admin"},"app":"app","space":"*","policy":"perm:app/orders"}]"""
     }
 }
