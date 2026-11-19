@@ -183,7 +183,7 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 ## 访问安全上下文 {#accessing-the-security-context}
 
-对继续处理的请求，适配器绑定一个根据管道结果构建的 `SecurityContext`（`me.ahoo.cosec.api.context`）。被拒绝的请求永远不会到达你的处理器。它的 `principal` 是 `CoSecPrincipal`（`me.ahoo.cosec.api.principal`），`scope` 是 `SecurityScope`（`me.ahoo.cosec.api.context`）。
+对继续处理的请求，适配器绑定一个根据管道结果构建的 `SecurityContext`（`me.ahoo.cosec.api.context`）。被拒绝的请求永远不会到达你的处理器。它的 `principal` 是 `CoSecPrincipal`（`me.ahoo.cosec.api.principal`），`scope` 是 `SecurityScope`（`me.ahoo.cosec.api.context`）。要让被测处理器拿到这样的上下文，见[测试你的应用](../policies/testing.md#testing-your-application)。
 
 | 成员 | 内容 |
 |---|---|

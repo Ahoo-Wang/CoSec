@@ -443,3 +443,50 @@ class OrderPermissionsTest {
 `IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。一个头生成一分钟后就会被拒绝，所以每个请求生成一个（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。
 
 **下一步：** 把测试过的策略发布到存储中，见[存储](../operations/storage.md)。
+
+### 测试你的应用 {#testing-your-application}
+
+测试处理器或读取调用方的函数，需要一个由 CoSec 管道构造的 `SecurityContext`：自 `PIP-27` 起，读取入口只返回这种上下文，手工构造的上下文读作根本没有上下文。工具包提供三种，都是 `@ExperimentalCoSecApi`：
+
+| 形式 | 用途 | 上下文携带什么 |
+|---|---|---|
+| `PermittedRequest.forSubject(subject, tenant, app, space, roles)` | 用策略做决定的主机（`enforce`）上已登录的调用方 | 与 `PipelineFixture.securityContext` 对同一主体给出的上下文相同：没有凭证（`subject.method` 为 `testkit`），没有会话，`forwardedIdentity` 为 null |
+| `PermittedRequest.withIdentity(header)` | 网关后面的服务（`gateway` 模式），使用 `IdentityHeader` 生成的头 | 身份网关从该头构造的内容：`forwardedIdentity` 是转发的身份 |
+| `PermittedRequest.withToken(token, verifier, revocations)` | 需要真实令牌会话的代码（租户切换） | `TokenAuthenticator` 从该令牌构造的内容 |
+
+适配器用 `CoSecTestBindings` 把上下文放到你的代码读取的地方：`cosec-webflux` 的（`me.ahoo.cosec.webflux.testing`）和 `cosec-webmvc` 的（`me.ahoo.cosec.webmvc.testing`）。它们只用于测试：在生产中，每个上下文都由适配器绑定，别的东西都不绑定。每个绑定方法都拒绝管道没有构造的上下文，所以测试永远不会在不声明的情况下以匿名身份运行；请求已结束的上下文在那里同样被拒绝（`PIP-29`）。
+
+**在 CoSec 自己的过滤器后面测试处理器。** `filter(gate)` 就是 starter 注册的过滤器，运行在测试管道之上。切片测试不需要 CoSec 的自动配置：它需要的是过滤器。在 `@WebFluxTest` 或 `@WebMvcTest` 的测试配置中把它声明为 Bean（Spring MVC 上为 `SecurityContext` 参数加上 `SecurityContextArgumentResolver`），或者像下面这样把它交给 `WebTestClient` 和 `MockMvc`。这些示例就是 `cosec-webflux` 和 `cosec-webmvc` 的测试 `TestingYourApplicationTest`：
+
+```kotlin
+// WebFlux：工具包的文档和主体，位于真实的过滤器之后
+PipelineFixture.of(tenants = mapOf("acme" to documents)).use { fixture ->
+    val client = WebTestClient.bindToRouterFunction(routes)
+        .webFilter<WebTestClient.RouterFunctionSpec>(CoSecTestBindings.filter(fixture.pipeline))
+        .build()
+    val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
+    client.get().uri("/orders/1").header("Authorization", fixture.authorization(alice)).exchange()
+        .expectStatus().isOk
+    client.get().uri("/orders/1").exchange().expectStatus().isUnauthorized
+}
+
+// Spring MVC，网关后面的服务：身份网关，以及网关转发的头
+val mvc = MockMvcBuilders.standaloneSetup(Orders())
+    .addFilters<StandaloneMockMvcBuilder>(CoSecTestBindings.filter(Pipeline.behindGateway()))
+    .setCustomArgumentResolvers(SecurityContextArgumentResolver())
+    .build()
+mvc.get("/orders/1") { header(IdentityHeader.NAME, IdentityHeader.forSubject("alice", "acme")) }
+    .andExpect { status { isOk() } }
+```
+
+**读取调用方的函数**，手工绑定：
+
+```kotlin
+val alice = PermittedRequest.forSubject("alice", tenant = "acme", roles = setOf("reader"))
+// WebFlux：Reactor 上下文，或者 exchange
+StepVerifier.create(CoSecTestBindings.withSecurityContext(currentUser(), alice)).expectNext("alice").verifyComplete()
+CoSecTestBindings.bind(exchange, alice)
+// Spring MVC：SecurityContextHolder，之后恢复原样；或者请求
+CoSecTestBindings.withSecurityContext(alice) { currentUser() }
+CoSecTestBindings.bind(request, alice)
+```

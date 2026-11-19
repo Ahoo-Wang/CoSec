@@ -18,11 +18,11 @@ package me.ahoo.cosec.testkit
 import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
+import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.cosec.runtime.AuthorizationChecker
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.model.scope.HostScope
 import me.ahoo.test.asserts.assert
 import me.ahoo.test.asserts.assertThrownBy
 import org.junit.jupiter.api.Test
@@ -49,10 +49,22 @@ class TokenlessContextTest {
 
     @Test
     fun `forSubject is the fixture's context for the same principal, with no identity`() {
-        val made = PermittedRequest.forSubject("alice", tenant = "acme", app = "orders", space = "team", roles = setOf("clerk"))
+        val made = PermittedRequest.forSubject(
+            "alice",
+            tenant = "acme",
+            app = "orders",
+            space = "team",
+            roles = setOf("clerk"),
+        )
         PipelineFixture.of(platform = everything, tenants = mapOf("acme" to "{}")).use { fixture ->
-            val principal = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("clerk@team"), app = "orders")
-            val request = fixture.request("GET", "/x", principal, headers = mapOf("CoSec-Space-Id" to "team"), hostApp = "orders")
+            val principal = PipelineFixture.Principal(
+                "alice",
+                tenant = "acme",
+                roles = setOf("clerk@team"),
+                app = "orders",
+            )
+            val space = mapOf("CoSec-Space-Id" to "team")
+            val request = fixture.request("GET", "/x", principal, headers = space, hostApp = "orders")
             val fixtures = runBlocking { fixture.securityContext(request) }
             shape(made).assert().isEqualTo(shape(fixtures))
         }
@@ -94,10 +106,8 @@ class TokenlessContextTest {
     fun `a fixture principal's authorization header is a request's credential`() = runBlocking<Unit> {
         PipelineFixture.of(platform = everything).use { fixture ->
             val alice = PipelineFixture.Principal("alice", tenant = "acme")
-            val facts = HttpFacts(
-                "GET", "/x", null, Headers.of(mapOf("Authorization" to listOf(fixture.authorization(alice)))),
-                Cookies.EMPTY, "10.0.0.1", HostScope(null),
-            )
+            val headers = Headers.of(mapOf("Authorization" to listOf(fixture.authorization(alice))))
+            val facts = HttpFacts("GET", "/x", null, headers, Cookies.EMPTY, "10.0.0.1", HostScope(null))
             fixture.securityContext(facts).principal.id.assert().isEqualTo("alice")
         }
     }

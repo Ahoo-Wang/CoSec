@@ -61,7 +61,10 @@ class TestingYourApplicationTest {
             val mvc = mvc(fixture.pipeline)
             val alice = PipelineFixture.Principal("alice", tenant = "acme", roles = setOf("reader"))
             mvc.get("/orders/1") { header("Authorization", fixture.authorization(alice)) }
-                .andExpect { status { isOk() }; content { string("alice") } }
+                .andExpect {
+                    status { isOk() }
+                    content { string("alice") }
+                }
             mvc.get("/orders/1").andExpect { status { isUnauthorized() } }
         }
     }
@@ -70,7 +73,10 @@ class TestingYourApplicationTest {
     fun `a service behind a gateway, with the header a gateway forwards`() {
         mvc(Pipeline.behindGateway()).get("/orders/1") {
             header(IdentityHeader.NAME, IdentityHeader.forSubject("alice", "acme"))
-        }.andExpect { status { isOk() }; content { string("alice") } }
+        }.andExpect {
+            status { isOk() }
+            content { string("alice") }
+        }
     }
 
     /** A function under test that reads the caller from the holder. */

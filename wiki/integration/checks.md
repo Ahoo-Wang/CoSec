@@ -30,7 +30,8 @@ consumer, a scheduler, or any work that runs after the request: see
 
 The starter registers an `AuthorizationChecker` bean (`me.ahoo.cosec.runtime`). It decides for the principal and
 scope of a request the pipeline permitted, so it needs that request's `SecurityContext`
-([Accessing the security context](./web.md#accessing-the-security-context)):
+([Accessing the security context](./web.md#accessing-the-security-context); in a test, one the kit made:
+[Testing your application](../policies/testing.md#testing-your-application)):
 
 ```kotlin
 suspend fun check(security: SecurityContext, action: String, resource: String): Boolean
