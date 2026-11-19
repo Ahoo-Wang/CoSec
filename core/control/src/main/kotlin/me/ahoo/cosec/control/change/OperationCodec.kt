@@ -19,6 +19,7 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.change.ChangeJson.factory
 import me.ahoo.cosec.control.change.ChangeJson.malformed
 import me.ahoo.cosec.control.change.ChangeJson.need
+import me.ahoo.cosec.control.change.ChangeJson.quoted
 import me.ahoo.cosec.control.change.ChangeJson.text
 import me.ahoo.cosec.document.PolicyDocumentCodec
 import me.ahoo.cosec.model.BindingId
@@ -142,7 +143,7 @@ internal object OperationCodec {
                 node.get("attributes")?.let { PolicyDocumentCodec.decodeAttributes(it, "\$.attributes") }
             )
 
-            else -> malformed("unknown operation [$op]")
+            else -> malformed("unknown operation [${quoted(op)}]")
         }
     }
 

@@ -27,4 +27,29 @@ object SnapshotKeyText {
      * and an unpaired surrogate too, which a UTF-8 log would write as `?`, naming another id (RC1-52).
      */
     fun printable(text: String): String = Identifiers.printable(text)
+
+    /** The most characters of one stored value a message quotes. */
+    const val MAX_QUOTED = 64
+
+    /** The most names a message lists. */
+    const val MAX_NAMES = 3
+
+    /**
+     * [text], a stored value quoted in a message a host logs: [printable], and at most [MAX_QUOTED] characters, never cut
+     * inside a surrogate pair, saying how long it was. A value that does not decode is a log line's, which it neither
+     * forges nor makes long (#1691's rule for the identity header, here for stored values).
+     */
+    fun quoted(text: String): String {
+        if (text.length <= MAX_QUOTED) {
+            return printable(text)
+        }
+        val end = if (text[MAX_QUOTED - 1].isHighSurrogate()) MAX_QUOTED - 1 else MAX_QUOTED
+        return "${printable(text.substring(0, end))}… (${text.length} characters)"
+    }
+
+    /** [names], each [quoted], at most [MAX_NAMES] of them and how many more. */
+    fun names(names: Collection<String>): String {
+        val listed = names.take(MAX_NAMES).joinToString(", ", "[", "]") { quoted(it) }
+        return if (names.size > MAX_NAMES) "$listed and ${names.size - MAX_NAMES} more" else listed
+    }
 }
