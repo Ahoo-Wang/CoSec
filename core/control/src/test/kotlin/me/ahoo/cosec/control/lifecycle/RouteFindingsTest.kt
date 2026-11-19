@@ -62,6 +62,16 @@ class RouteFindingsTest {
         findings(adminDeny, routes(1)).single().message.assert().doesNotContain("more")
     }
 
+    /** `DOC-12` (R1B-3): the finding shows a policy id escaped, as the host's line does. */
+    @Test
+    fun `an id that would forge a line is shown escaped`() {
+        val forged = """[{"id":"x\n2026-11-19 ERROR forged","statements":[{"effect":"deny","action":"http:*",""" +
+            """"resource":"http:path:/admin/**"}]}]"""
+        val message = findings(forged, routes(1)).single().message
+        message.none { it.isISOControl() }.assert().describedAs(message).isTrue()
+        message.assert().contains("DENY x\\u000A2026-11-19 ERROR forged#0 escapes DELETE")
+    }
+
     @Test
     fun `without route maps it says so, and nothing to compare says nothing`() {
         findings(adminDeny, null).single().message.assert().contains("no route maps were given")
