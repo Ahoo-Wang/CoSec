@@ -1,0 +1,16 @@
+# Rule: OBS-1
+# Mutant: a BEST_EFFORT listener whose queue is full fails the request that offers it an event, instead of dropping the event
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ListenerIsolationTest
+
+diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+index 738d6686..d701154a 100644
+--- a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
++++ b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
+@@ -236,6 +236,7 @@ class DecisionListeners(
+             if (closed || size > queued.capacity) {
+                 queued.size.decrementAndGet()
+                 dropped(queued, closed)
++                check(closed) { "BEST_EFFORT queue full" }
+                 continue
+             }
+             beforeOffer?.invoke()

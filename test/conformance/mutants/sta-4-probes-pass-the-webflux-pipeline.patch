@@ -1,0 +1,17 @@
+# Rule: STA-4
+# Mutant: the WebFlux pipeline lets every /actuator/ path through without deciding it: on one port and on WebFlux's management port, actuator answers without passing CoSec
+# Tests: :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.ManagementPortTest
+
+diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
+index 2439c930..2ccf8709 100644
+--- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
++++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/PipelineWebFilter.kt
+@@ -63,7 +63,7 @@ class PipelineWebFilter @InternalCoSecApi constructor(
+     WebFilter,
+     Ordered {
+     override fun filter(exchange: ServerWebExchange, chain: WebFilterChain): Mono<Void> =
+-        filterInternal(exchange) { authorized, outcome -> chain.filter(forwarded(authorized, outcome)) }
++        if (exchange.request.path.value().startsWith("/actuator/")) chain.filter(exchange) else filterInternal(exchange) { authorized, outcome -> chain.filter(forwarded(authorized, outcome)) }
+ 
+     override fun getOrder(): Int = REACTIVE_AUTHORIZATION_FILTER_ORDER
+ 
