@@ -86,6 +86,26 @@ for the action, or for both.
 - Seeing a request treated unexpectedly? `explain` and the decision event show the action and resource the request was
   decided as ([Explaining a decision](../integration/checks.md#explaining-a-decision)).
 
+### What CoSec warns about
+
+Two places compare documents with route maps and list the `http:` DENY statements and rate limit rules that a mapped
+route escapes: the statement applies to the route's requests unmapped and not to them mapped.
+
+- **Each host with a route map**, when it installs a document: one `WARN` per revision of the document, on the
+  snapshot source's housekeeping thread, never on a request's.
+  `[<doc>] revision <n>: <count> mapped route(s) escape its http: statements, which do not apply to them: <statement>
+  escapes <METHOD> <path> (<action> on <resource>, <map>); …; and <m> more at DEBUG. Write each statement for the mapped
+  action too.` The first five are in the line; the logger `me.ahoo.cosec.spring.boot.pipeline.RouteEscapeReview` at
+  `DEBUG` writes them all. A revision is reported once per instance: a reload, a recompile or a revalidation of the same
+  revision writes nothing again. A host compares only its own map, so the first host of a service to install the
+  document is the first to warn.
+- **The control plane**, before a change publishes, with the maps of every service given in
+  [`cosec.control.analysis.route-maps`](../operations/configuration.md#control-plane): a `ROUTES` warning on the change
+  ([Testing policies](../policies/testing.md)).
+
+Neither reads conditions: a statement whose condition spares the route is listed all the same. Neither changes a
+decision.
+
 ## Generated from OpenAPI
 
 With `cosec-openapi`, springdoc and Spring Boot Actuator, `cosecServiceGenerator/routes` generates the map from the

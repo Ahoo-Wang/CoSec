@@ -201,6 +201,9 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 4. **break-glass。** `breakGlass: true` 且 `source.policy` 为 `cosec:root`，表示 `cosec:root` 的 break-glass 绑定放行了请求；这类
    绑定会自行过期，也可以通过控制面吊销。
 5. **旧的修订。** `snapshotVersion` 指明决策读取的修订。如果它们比已发布的旧，见[决策使用了旧的修订](#decisions-use-an-old-revision)。
+6. **已映射的路由。** 写在 `http:*` 上的平台 DENY 或限流规则，在路由映射映射了某路径之后就不再对它生效。配置了路由映射的宿主在安装这样的文档时，
+   以 `WARN` 记录 `[<doc>] revision <n>: <count> mapped route(s) escape its http: statements …`；把它列出的每条语句也为映射后的动作写一份
+   （[CoSec 会警告什么](../scenarios/route-maps.md#what-cosec-warns-about)）。
 
 ## 代码中的检查为 false，尽管文档允许 {#a-check-answers-false}
 

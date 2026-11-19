@@ -260,6 +260,10 @@ is a <type>, not a string: ...`: quote the value, and give one app.
    the request; such bindings expire on their own and can be revoked through the control plane.
 5. **An old revision.** `snapshotVersion` names the revisions the decision read. If they are older than what was
    published, see [Decisions use an old revision](#decisions-use-an-old-revision).
+6. **A mapped route.** A platform DENY or rate limit rule on `http:*` stops applying to a path once a route map maps
+   it. A host with a route map logs `[<doc>] revision <n>: <count> mapped route(s) escape its http: statements …` at
+   `WARN` when it installs such a document; write each statement it names for the mapped action too
+   ([What CoSec warns about](../scenarios/route-maps.md#what-cosec-warns-about)).
 
 ## A check in code answers false though the documents permit it {#a-check-answers-false}
 

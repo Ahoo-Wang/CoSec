@@ -364,7 +364,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 
 - Find the deciding statement in the audit event or with `explain`. Any matching DENY would have won, so the expected
   DENY did not match: check its action namespace (`http:*` vs mapped `service:verb`: a platform DENY on `http:*` stops
-  covering a path the moment a route map maps it, https://cosec.ahoo.me/scenarios/route-maps), resource pattern, condition
+  covering a path the moment a route map maps it, and a host with a route map logs `... mapped route(s) escape its
+  http: statements ...` at WARN for such a document, https://cosec.ahoo.me/scenarios/route-maps), resource pattern, condition
   (an absent attribute makes `eq`/`in`/`prefix`/`cidr` false), binding scope, and `onMissing: nomatch` (lapses
   while its provider fails).
 - Is the instance on the expected revision? Compare the audit event's snapshot versions with the published head.
