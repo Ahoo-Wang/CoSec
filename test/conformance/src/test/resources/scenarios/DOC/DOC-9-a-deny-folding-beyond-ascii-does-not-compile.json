@@ -1,0 +1,59 @@
+{
+  "rules": [
+    "DOC-9"
+  ],
+  "polarity": "positive",
+  "level": "engine",
+  "description": "A DENY with ignoreCase on Ärzte: the fold is ASCII only, so ärzte would pass the DENY its author believes closed. The document does not compile, and the message names a spelling the fold misses.",
+  "documents": {
+    "platform": {
+      "policies": [
+        {
+          "id": "members",
+          "statements": [
+            {
+              "effect": "allow",
+              "action": "*"
+            }
+          ]
+        },
+        {
+          "id": "no-doctors",
+          "statements": [
+            {
+              "effect": "deny",
+              "action": "*",
+              "condition": {
+                "eq": [
+                  "subject.attributes.dept",
+                  "Ärzte"
+                ],
+                "ignoreCase": true
+              }
+            }
+          ]
+        }
+      ],
+      "bindings": [
+        {
+          "id": "members",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "members"
+        },
+        {
+          "id": "no-doctors",
+          "subject": "*",
+          "app": "*",
+          "space": "*",
+          "policy": "no-doctors"
+        }
+      ]
+    }
+  },
+  "expect": {
+    "decision": "NotCompiled",
+    "error": "does not match [ärzte]"
+  }
+}

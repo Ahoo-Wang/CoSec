@@ -44,6 +44,30 @@ class PublishCompileTest {
         return changes.publish(operatorFor(key), change.id).also { it.state.assert().isEqualTo(ChangeState.PUBLISHED) }
     }
 
+    /** DOC-9: a fold beyond ASCII that only narrows compiles with a warning; one that would let a request through does not. */
+    @Test
+    fun `ignoreCase beyond ASCII is a warning where it narrows and a compile error where it admits`() = runBlocking<Unit> {
+        val umlaut = Condition.Eq("subject.attributes.dept", Literal.Str("Ärzte"), ignoreCase = true)
+        val narrowing = changes.propose(
+            ALICE_OP,
+            ACME,
+            0,
+            listOf(Operation.PutPolicy(allow("doctors", condition = umlaut))),
+            "narrows"
+        )
+        narrowing.state.assert().describedAs("${narrowing.findings}").isEqualTo(ChangeState.CHECKED)
+        val warning = narrowing.findings.single()
+        warning.severity.assert().isEqualTo(Severity.WARNING)
+        warning.check.assert().isEqualTo("COMPILE")
+        warning.path.assert().isEqualTo("$.policies[0].statements[0].condition.eq[1]")
+        warning.message.assert().contains("only narrows").contains("DOC-9")
+        val admitting = allow("not-doctors", condition = Condition.Not(umlaut))
+        val refused = changes.propose(ALICE_OP, ACME, 0, listOf(Operation.PutPolicy(admitting)), "admits")
+        refused.state.assert().isEqualTo(ChangeState.DRAFT)
+        refused.errors.single().path.assert().isEqualTo("$.policies[0].statements[0].condition.not.eq[1]")
+        refused.findings.none { it.severity == Severity.WARNING }.assert().isTrue()
+    }
+
     @Test
     fun `a candidate with a broken entry stays a draft and never reaches the head`() = runBlocking<Unit> {
         published(ACME, Operation.PutPolicy(allow("ok")))

@@ -1,0 +1,17 @@
+# Rule: DOC-9
+# Mutant: ignoreCase on a letter beyond ASCII compiles in the DENY direction too, so a DENY on Ärzte lets ärzte through
+# Tests: :model:test --tests me.ahoo.cosec.model.condition.ConditionLintsTest :engine:test --tests me.ahoo.cosec.engine.PolicyCompilerTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
+index 6bacbfa7..de4885de 100644
+--- a/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
++++ b/core/model/src/main/kotlin/me/ahoo/cosec/model/condition/ConditionLints.kt
+@@ -94,7 +94,7 @@ object ConditionLints {
+         if (!foldsBeyondAscii(value)) {
+             return null
+         }
+-        return if (admits) {
++        return if (false && admits) {
+             Finding(path, foldMessage(operator, value), refuses = true)
+         } else {
+             val message = "ignoreCase folds ASCII letters only, and [$value] holds letters beyond ASCII, so this $operator " +

@@ -1,0 +1,17 @@
+# Rule: DOC-10
+# Mutant: the policy test kit fills resource attributes from a scenario again, so a test of a rule no host applies passes
+# Tests: :testkit:test --tests me.ahoo.cosec.testkit.StrictInputTest
+
+diff --git a/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/EngineScenarios.kt b/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/EngineScenarios.kt
+index 3803dc95..0c5c575f 100644
+--- a/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/EngineScenarios.kt
++++ b/test/testkit/src/main/kotlin/me/ahoo/cosec/testkit/EngineScenarios.kt
+@@ -262,7 +262,7 @@ class EngineScenarios(
+      */
+     private fun resource(node: JsonNode?): Resource {
+         if (node == null) return Resource("order", "1", emptyMap())
+-        if (node.has("attributes")) {
++        if (false && node.has("attributes")) {
+             throw ScenarioFormatException(
+                 "request.resource.attributes: no request, check, simulate or explain gives a resource attributes, so " +
+                     "a scenario that sets them tests a request no host makes. Put facts about a resource in its id and " +

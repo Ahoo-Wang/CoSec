@@ -246,11 +246,11 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 | 运算符 | 形式 | 为真当 | 属性类型 |
 |---|---|---|---|
-| `eq` | `[attribute, literal]` | 值等于该字面量。加 `"ignoreCase": true`（仅 String）时忽略 ASCII 大小写。Ip 属性与地址比较。 | String、Bool、Ip |
+| `eq` | `[attribute, literal]` | 值等于该字面量。加 `"ignoreCase": true`（仅 String）时忽略 ASCII 大小写（[大小写折叠](#case-folding)）。Ip 属性与地址比较。 | String、Bool、Ip |
 | `eq` | `[attribute, {"attr": attribute}]` | 两个值都存在且相等；两个属性类型相同 | String、Bool、Ip |
 | `in` | `[attribute, [literals]]` | 值是其中某个字面量：1 到 `maxInValues` 个 | String、Bool、Ip |
 | `in` | `[literal, attribute]` | 集合包含该字符串字面量 | Set |
-| `prefix` | `[attribute, "text"]` | 值以该文本开头；可加 `ignoreCase`。对 Labels 属性按完整标签匹配：`com.example` 匹配 `example.com` 和 `api.example.com`，不匹配 `badexample.com`。 | String、Labels |
+| `prefix` | `[attribute, "text"]` | 值以该文本开头；可加 `ignoreCase`（[大小写折叠](#case-folding)）。对 Labels 属性按完整标签匹配：`com.example` 匹配 `example.com` 和 `api.example.com`，不匹配 `badexample.com`。 | String、Labels |
 | `cidr` | `[attribute, ["block", ...]]` | 地址落在某个 IPv4 或 IPv6 网段中：1 到 `maxCidrBlocks` 个 | Ip |
 | `time` | `{...}` | 请求时间在时间窗口内（[时间条件](#time-conditions)） | |
 | `exists` | `"attribute"` | 属性存在（Labels 属性看其主机） | 任意 |
@@ -260,11 +260,22 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 
 字面量是 JSON 字符串或布尔值，从不是数字；字符串永远不会被当作布尔值。没有 `true` 或 `false` 条件：不需要条件时省略 `condition`。
 
+### 大小写折叠 {#case-folding}
+
+`ignoreCase` 只折叠 ASCII 字母 `A` 到 `Z`：`Ärzte` 不匹配 `ärzte`。所以字面量含有 ASCII 以外的字母时，这个比较匹配的写法比它字面上的少。在漏掉一种写法就会放过请求的地方，文档无法编译（`DOC-9`）：
+
+- DENY 语句的条件，不在 `not` 之下（或在两层之下）；
+- ALLOW 语句的条件在 `not` 之下，漏掉一种写法会让 ALLOW 匹配得更多；
+- 限流规则的条件，它与 DENY 的条件同样匹配；
+- 策略条件，按它所守护的每条语句的方向：策略含 DENY 时在 `not` 之外，含 ALLOW 时在 `not` 之下。
+
+错误消息会给出一种折叠漏掉的写法。改为在不带 `ignoreCase` 的 `in` 里列出每种写法（`prefix` 则写成每种写法一个 `prefix` 的 `or`）。另一个方向上，匹配写法更少的 ALLOW 只会授予得更少：它能编译，控制面的校验给出警告。只含 ASCII 字母的字面量会折叠它字面上的每一种 ASCII 写法，在任何地方加 `ignoreCase` 都能编译。折叠不覆盖那些在别的大小写规则下会折叠成 ASCII 字母的非 ASCII 字符：U+212A KELVIN SIGN（`K`）不是 `k`，U+017F LATIN SMALL LETTER LONG S（`ſ`）不是 `s`。含有它们的值，无论加不加 `ignoreCase`，都不匹配只含 ASCII 字母的字面量。
+
 ### 属性 {#attributes}
 
 | 属性 | 类型 | 值 |
 |---|---|---|
-| `subject.id` | String | 主体 id；匿名主体时缺失。 |
+| `subject.id` | String | 主体 id；匿名主体时缺失，匿名主体在文档里没有 id。与它比较的字面量不以 `(` 开头（`DOC-11`）：要区分匿名请求与已登录请求，用 `subject.authenticated`。 |
 | `subject.tenant` | String | 请求的租户：主体的租户，匿名时为 `(0)`。 |
 | `subject.authenticated` | Bool | 凭证是否被接受。 |
 | `subject.roles` | Set | 主体在任意空间中的角色 id。 |
@@ -276,7 +287,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `scope.roles` | Set | 主体在请求空间中的角色。 |
 | `action.service`、`action.verb` | String | 动作的两部分。 |
 | `resource.type`、`resource.id` | String | 资源的两部分。 |
-| `resource.attributes.<name>` | String | 资源的属性。请求管道和文档中列出的检查都不设置；对象级规则把事实写进资源 id（[对象级规则](../integration/checks.md#object-level-rules)）。 |
+| `resource.attributes.<name>` | String | 无法编译（`DOC-10`）：请求路径、代码中的检查、控制面的 `simulate` 与 `explain` 都不给资源设置属性，对它的 DENY 什么也拒绝不了。把事实写进资源 id，用 `resource.var.<name>` 读取（[对象级规则](../integration/checks.md#object-level-rules)）。 |
 | `resource.var.<name>` | String | [路径变量](#path-variables)。 |
 | `environment.ip` | Ip | 客户端地址（[代理后的客户端 IP](../integration/web.md#client-ip-behind-proxies)）。宿主没有报告地址时缺失（absent）。报告的内容不是地址时（代理写了 `unknown`），它是“取不到”（unavailable），而不是缺失：读取它的语句按 `onMissing: indeterminate` 下外部属性取不到的情形判定，所以针对它的 DENY 是 `503`（`PIP-17`）。 |
 | `environment.time` | Instant | 请求时间；只有 `time` 读取它。 |
@@ -318,6 +329,8 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 ### 缺失值 {#absent-values}
 
 请求没有某属性的值时，该属性缺失，例如匿名主体的 `subject.id`，或没有应用的请求的 `scope.app`。
+
+匿名主体的 id 在安全上下文与决定事件里是 `(0)`，文档却看不到它：`{"eq": ["subject.id", "(0)"]}` 永远不匹配，`{"not": {"eq": ["subject.id", "(0)"]}}` 匹配每一个匿名请求。两者都无法编译（`DOC-11`）；匿名请求写 `{"eq": ["subject.authenticated", false]}`，已登录请求写 `true`。
 
 - 对缺失值，`eq`、`in`、`prefix`、`cidr` 和 `time` 为假；`exists` 为假。
 - 缺失值不等于任何值：不等于 `""`，也不等于另一个缺失值。
@@ -389,7 +402,7 @@ id 按 `/` 切分并按原样比较：从不解码，从不去除空白。类型
 | `{"principal": "<id>", "tenant": "<tenant>"}` | 是，`tenant` 必填 | | 是，`tenant` 可省略（本租户） |
 | `{"role": "<id>"}`，可选 `"tenant"` | | 是；无 `tenant`：任意租户 | 是；无 `tenant`：本租户 |
 
-租户文档中指向其他租户的绑定、限定到其他应用的应用文档绑定，以及平台文档中的角色绑定都无法编译：它们永远不可能适用，DENY 会悄悄丢失。
+租户文档中指向其他租户的绑定、限定到其他应用的应用文档绑定，以及平台文档中的角色绑定都无法编译：它们永远不可能适用，DENY 会悄悄丢失。主体 id 以 `(` 开头的主体绑定同样无法编译（`DOC-11`）：没有哪个已登录主体有保留 id，匿名主体也不匹配任何主体绑定。要覆盖匿名请求，绑定 `"*"` 并判断 `subject.authenticated`。
 
 `policy` 可以指向：
 
