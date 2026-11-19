@@ -25,12 +25,12 @@ import me.ahoo.cosec.model.decision.BindingRef
 import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.runtime.authn.UncheckedRevocations
-import me.ahoo.cosec.runtime.identity.IdentityRefusals
 import me.ahoo.cosec.runtime.event.DecisionEvent
 import me.ahoo.cosec.runtime.event.DecisionListener
 import me.ahoo.cosec.runtime.event.DecisionListeners
 import me.ahoo.cosec.runtime.event.Delivery
 import me.ahoo.cosec.runtime.event.OutcomeSummary.Reason
+import me.ahoo.cosec.runtime.identity.IdentityRefusals
 import java.util.concurrent.TimeUnit
 
 /**

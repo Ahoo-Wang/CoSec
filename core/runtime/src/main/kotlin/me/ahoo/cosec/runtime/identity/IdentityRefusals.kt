@@ -73,9 +73,11 @@ class IdentityRefusals(
         return last.compareAndSet(previous, now)
     }
 
+    @InternalCoSecApi
     companion object {
         /** The problems the gate refuses an identity with: the closed set of the meter's `problem` tag. */
-        val TYPES: Set<ProblemType> = setOf(ProblemType.INVALID_REQUEST, ProblemType.TOKEN_INVALID, ProblemType.TOKEN_EXPIRED)
+        val TYPES: Set<ProblemType> =
+            setOf(ProblemType.INVALID_REQUEST, ProblemType.TOKEN_INVALID, ProblemType.TOKEN_EXPIRED)
 
         val DEFAULT_INTERVAL: Duration = Duration.ofMinutes(1)
         const val PAGE = "https://cosec.ahoo.me/operations/troubleshooting#a-service-behind-the-gateway-refuses-requests"
