@@ -266,7 +266,7 @@ CoSec 自己的拒绝很容易区分：它们总是 `application/problem+json`�
 Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>.
 ```
 
-级别为 `WARN`，每种问题类型最多每分钟一次，所以大量错误的头不会刷屏；每一次都记录在 `DEBUG`。`<reason>` 是出错的字段，例如 `The identity header is malformed: $.rid is empty.`，或超出范围的时间。网关模式的服务不记录决策事件和审计，但它会在 [`cosec.identity.refused{problem}`](./observability.md#metrics) 中对每次拒绝计数，日志没有打印的那些也计入：上升的序列指明问题，日志说明原因。
+级别为 `WARN`，每种问题类型最多每分钟一次，所以大量错误的头不会刷屏；每一次都记录在 `DEBUG`。`<reason>` 是出错的字段，例如 `The identity header is malformed: $.rid is empty.`，或超出范围的时间。其中来自该头的文本（例如声明名或成员名）[像 id 一样转义](#a-log-line-names-an-id-with-u-escapes)，并截断到 64 个字符，最多列出三个名字；不是 JSON 的头只按出错的行和列指明，从不引用它的内容。网关模式的服务不记录决策事件和审计，但它会在 [`cosec.identity.refused{problem}`](./observability.md#metrics) 中对每次拒绝计数，日志没有打印的那些也计入：上升的序列指明问题，日志说明原因。
 
 只有网关可以访问到这样的服务：它相信收到的任何该头。启动时以 `WARN` 记录这一点。
 

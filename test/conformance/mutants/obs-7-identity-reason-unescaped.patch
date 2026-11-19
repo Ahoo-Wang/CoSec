@@ -1,0 +1,20 @@
+# Rule: OBS-7
+# Mutant: a refused identity header's message quotes the header's names as they are, so a caller around the gateway writes a log line of its own into the service's WARN
+# Tests: :document:test --tests me.ahoo.cosec.document.identity.IdentityCodecMessageTest :runtime:test --tests me.ahoo.cosec.runtime.identity.IdentityRefusalsTest
+
+diff --git a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/QuotedText.kt b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/QuotedText.kt
+index 65bd7648..f8a7c954 100644
+--- a/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/QuotedText.kt
++++ b/core/document/src/main/kotlin/me/ahoo/cosec/document/identity/QuotedText.kt
+@@ -28,10 +28,7 @@ internal object QuotedText {
+     /** The most names a message lists. */
+     const val MAX_NAMES = 3
+ 
+-    fun of(text: String): String {
+-        if (text.length <= MAX_LENGTH) return Identifiers.printable(text)
+-        return Identifiers.printable(text.substring(0, MAX_LENGTH)) + "… (${text.length} characters)"
+-    }
++    fun of(text: String): String = text
+ 
+     fun names(names: List<String>): String {
+         val listed = names.take(MAX_NAMES).joinToString(", ", "[", "]") { of(it) }

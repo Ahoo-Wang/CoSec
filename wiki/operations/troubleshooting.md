@@ -354,7 +354,9 @@ Request [<id>]: the forwarded identity is refused (<status> <problem>), <reason>
 
 at `WARN`, at most once a minute for each problem type so a flood of bad headers does not flood the log, and every one
 at `DEBUG`. `<reason>` is the field that failed, such as `The identity header is malformed:
-$.rid is empty.`, or the time that is out of bounds. A service in gateway mode records no decision events and no
+$.rid is empty.`, or the time that is out of bounds. Text of the header in it, such as a claim or member name, is
+[escaped as ids are](#a-log-line-names-an-id-with-u-escapes) and cut to 64 characters, and at most three names are
+listed; a header that is not JSON is named by the line and column where it fails, never by what it holds. A service in gateway mode records no decision events and no
 audit, but it counts every refusal, also those the log does not print, in
 [`cosec.identity.refused{problem}`](./observability.md#metrics): a rise names the problem, and the log says why.
 
