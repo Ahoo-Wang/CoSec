@@ -18,6 +18,7 @@ package me.ahoo.cosec.runtime.audit
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.audit.AuditDecision
 import me.ahoo.cosec.api.audit.AuditReasonCode
+import me.ahoo.cosec.model.decision.Cause
 import me.ahoo.cosec.runtime.event.OutcomeSummary.Reason
 import me.ahoo.cosec.spi.authn.AuthnResult
 import me.ahoo.test.asserts.assert
@@ -47,5 +48,11 @@ class AuditVocabularyTest {
             .assert().isEqualTo(AuditDecision.IMPLICIT_DENY to AuditReasonCode.TOKEN_NOT_YET_VALID)
         AuditEvents.decision(Reason.IMPLICIT_DENY, AuthnResult.RejectReason.API_KEY_INVALID, null)
             .assert().isEqualTo(AuditDecision.IMPLICIT_DENY to AuditReasonCode.TOKEN_INVALID)
+    }
+
+    @Test
+    fun `a strict rate limit that could not be counted is named as such`() {
+        AuditEvents.decision(Reason.INDETERMINATE, null, Cause.RateLimiterUnavailable("platform/strict"))
+            .assert().isEqualTo(AuditDecision.INDETERMINATE to AuditReasonCode.RATE_LIMITER_UNAVAILABLE)
     }
 }
