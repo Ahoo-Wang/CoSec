@@ -133,7 +133,10 @@
       "statement": "Publishing checks the publisher again on the current heads: their authorization of every target and the grant analysis. What they cannot publish alone waits for approval, and nothing is written.",
       "level": "control",
       "guards": [
-        "control:ControlAuthorizationTest#publishing checks the publisher again on the current heads"
+        "control:ControlAuthorizationTest#publishing checks the publisher again on the current heads",
+        "control:ControlAuthorizationTest#a publisher without the rights the change needs cannot publish another's change",
+        "control:ControlAuthorizationTest#an author who lost cosec grant after proposing cannot publish",
+        "control:ControlAuthorizationTest#an author who lost cosec publish after staging cannot publish"
       ],
       "pending": null
     },
@@ -174,7 +177,9 @@
       "statement": "Creating or revoking a break-glass binding has no shadow window; any other change skips its window only with cosec:skip-shadow and a recorded reason.",
       "level": "control",
       "guards": [
-        "control:ShadowWindowTest#break-glass has no window, and skipping one needs a reason that is recorded"
+        "control:ShadowWindowTest#break-glass has no window, and skipping one needs a reason that is recorded",
+        "control:ControlAuthorizationTest#an operator who may publish but not skip cannot skip the window",
+        "control:BreakGlassAuthorityTest#skipping a change exempt from the window still needs the right to publish it"
       ],
       "pending": null
     },
