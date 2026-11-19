@@ -59,7 +59,8 @@ class PipelineModeTest {
         WebApplicationContextRunner()
             .withConfiguration(configurations)
             .withPropertyValues(
-                "cosec.pipeline.mode=gateway", "cosec.pipeline.identity.only-gateway-can-reach=true",
+                "cosec.pipeline.mode=gateway",
+                "cosec.pipeline.identity.only-gateway-can-reach=true",
                 "cosec.pipeline.identity.max-age=30s",
             )
             .run { context ->

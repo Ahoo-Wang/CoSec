@@ -20,7 +20,6 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.springframework.boot.autoconfigure.AutoConfigurations
-import org.springframework.boot.test.context.runner.ApplicationContextRunner
 import org.springframework.boot.test.context.runner.ReactiveWebApplicationContextRunner
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner
 import org.springframework.web.filter.HiddenHttpMethodFilter
@@ -89,18 +88,25 @@ class GatewayModeTrustTest {
     @Test
     fun `a hidden-method filter in a service behind a gateway fails startup, by property and by bean`() {
         val stated = gateway.withPropertyValues("$statement=true")
-        for (property in listOf("spring.mvc.hiddenmethod.filter.enabled", "spring.webflux.hiddenmethod.filter.enabled")) {
+        for (property in listOf(
+            "spring.mvc.hiddenmethod.filter.enabled",
+            "spring.webflux.hiddenmethod.filter.enabled"
+        )) {
             failure(stated.withPropertyValues("$property=true")).assert()
                 .contains("$property=true")
                 .contains("_method")
                 .contains("http:DELETE")
                 .contains("STA-6")
         }
-        failure(stated.withBean("methodFilter", HiddenHttpMethodFilter::class.java, { HiddenHttpMethodFilter() })).assert()
+        failure(
+            stated.withBean("methodFilter", HiddenHttpMethodFilter::class.java, { HiddenHttpMethodFilter() })
+        ).assert()
             .contains("a HiddenHttpMethodFilter bean, [methodFilter]")
         // The default, and an explicit false, are no filter.
         stated.run { it.startupFailure.assert().isNull() }
-        stated.withPropertyValues("spring.mvc.hiddenmethod.filter.enabled=false").run { it.startupFailure.assert().isNull() }
+        stated.withPropertyValues(
+            "spring.mvc.hiddenmethod.filter.enabled=false"
+        ).run { it.startupFailure.assert().isNull() }
     }
 
     @Test
@@ -115,7 +121,10 @@ class GatewayModeTrustTest {
             )
             .withPropertyValues("cosec.pipeline.mode=gateway", "cosec.jwt.enabled=false")
         reactive.run { it.startupFailure.assert().isNotNull() }
-        reactive.withPropertyValues("$statement=true", "spring.webflux.hiddenmethod.filter.enabled=true").run { context ->
+        reactive.withPropertyValues(
+            "$statement=true",
+            "spring.webflux.hiddenmethod.filter.enabled=true"
+        ).run { context ->
             generateSequence<Throwable>(context.startupFailure) { it.cause }.joinToString { it.message.orEmpty() }
                 .assert().contains("spring.webflux.hiddenmethod.filter.enabled=true")
         }
