@@ -161,8 +161,9 @@ A check belongs to its request, and the adapter that bound the request ends it w
   pipeline authenticated the request when it began, and a check is not stricter than the request's own decision.
 - **Once the request has ended**, every check of its context is `false` (`decide` answers `Deny(null)`), whatever the
   documents say: a context kept in a field, a cache or a message permits nothing afterwards. WebFlux and the gateway
-  end a request when its response has been written, failed, or the client went away; Spring MVC when the dispatch
-  returns, or, for an async request (`DeferredResult`, `StreamingResponseBody`, a `suspend` handler), when it
+  end a request when its response has been written, failed, or the client went away, before they pass the completion
+  on, so code that sees the request complete sees it ended; Spring MVC when the dispatch returns, or, for an async
+  request (`DeferredResult`, `StreamingResponseBody`, a `suspend` handler), when it
   completes, fails or times out. Code on the async request's ASYNC dispatch (message converters, a
   `ResponseBodyAdvice`, interceptors) is still within the request. The error page is not: Spring MVC renders it on an
   ERROR dispatch, after the request has ended, so an error page or error controller reads the context but every check

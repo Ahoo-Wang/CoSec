@@ -17,6 +17,7 @@ package me.ahoo.cosec.webflux
 
 import io.mockk.mockk
 import kotlinx.coroutines.reactor.mono
+import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
@@ -96,6 +97,7 @@ class RequestEndTest {
         val exchange = MockServerWebExchange.from(MockServerHttpRequest.get("/orders/stream"))
         val kept = AtomicReference<SecurityContext>()
         val during = CopyOnWriteArrayList<Boolean>()
+        val onCompletion = AtomicReference<Boolean>()
         filter.filter(exchange) { authorized ->
             Mono.deferContextual { reactor ->
                 val context = reactor.getSecurityContext()
@@ -106,8 +108,12 @@ class RequestEndTest {
                     .map { authorized.response.bufferFactory().wrap("data: $it\n\n".toByteArray()) }
                 authorized.response.writeWith(body)
             }
-        }.block(Duration.ofSeconds(5))
+        }.doOnSuccess { onCompletion.set(runBlocking { checker.check(kept.get(), "order:read", "order/1") }) }
+            .block(Duration.ofSeconds(5))
         during.assert().containsExactly(true, true, true)
+        // Made as the completion reaches the filter's subscriber, on the thread that completed the body: the bridge
+        // ended the request before passing the completion on, so no one sees the chain complete with it in progress.
+        onCompletion.get().assert().isEqualTo(false)
         check(kept.get()).assert().isFalse()
         mono { checker.decide(kept.get(), "order:read", "order/1") }.block().assert().isEqualTo(Decision.Deny(null))
     }

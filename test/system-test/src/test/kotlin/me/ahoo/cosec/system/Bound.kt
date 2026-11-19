@@ -48,4 +48,25 @@ object Bounds {
         Duration.ofSeconds(22),
         "min-duration 5 s + check-interval 1 s + report-interval 1 s (shortened-bounds.yaml, CTL-10) + SNAPSHOT_PROPAGATION 15 s",
     )
+
+    /**
+     * A revocation reaches every process: at once through the invalidation message CoCache sends, and at the latest when a
+     * local "not revoked" answer ages out, `cosec.authentication.revocation.cache.local-max-age` (30 s, IDN-26), plus 3 s.
+     */
+    val REVOCATION_PROPAGATION = Bound(
+        "REVOCATION_PROPAGATION",
+        Duration.ofSeconds(33),
+        "revocation cache local-max-age 30 s (IDN-26) + 3 s margin",
+    )
+
+    /**
+     * A principal whose tokens were revoked signs in again and is accepted: requests also reject tokens issued up to
+     * `cosec.authentication.revocation.skew` (5 s) after the revocation (MEM-4), and `iat` has whole seconds, so up to 6 s,
+     * plus 3 s.
+     */
+    val REVOCATION_SKEW = Bound(
+        "REVOCATION_SKEW",
+        Duration.ofSeconds(9),
+        "revocation skew 5 s + iat granularity 1 s (MEM-4) + 3 s margin",
+    )
 }
