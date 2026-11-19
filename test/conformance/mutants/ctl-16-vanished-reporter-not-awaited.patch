@@ -1,6 +1,6 @@
 # Rule: CTL-16
 # Mutant: an instance seen reporting on a window that has no report now no longer keeps the window open: the window closes on what the others report, without the instance that may have seen the errors
-# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 index b31b37af..f135bc78 100644

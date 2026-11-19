@@ -1,0 +1,16 @@
+# Rule: APR-1
+# Mutant: publishing no longer checks that the approval is of the candidate it publishes: an approval of one candidate publishes another
+# Tests: :control:test --tests me.ahoo.cosec.control.authz.ControlAuthorizationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+index f162ed6b..733b8dc7 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ApprovalRules.kt
+@@ -143,7 +143,6 @@ internal class ApprovalRules(
+         }
+         val approval = change.approval ?: return "it needs an approval"
+         return when {
+-            approval.candidate != change.candidate -> "the approval is for another candidate"
+             now.isAfter(approval.at.plus(options.approvalExpireAfter)) -> "the approval expired"
+             approval.approver == change.author || approval.approver == publisher.actor ->
+                 "the approval is the author's or the publisher's own"

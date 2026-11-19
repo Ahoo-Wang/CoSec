@@ -1,6 +1,6 @@
 # Rule: OBS-1
 # Mutant: a BEST_EFFORT listener whose queue is full fails the request that offers it an event, instead of dropping the event
-# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ListenerIsolationTest
+# Tests: :runtime:test --tests me.ahoo.cosec.runtime.event.ListenerIsolationTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt b/core/runtime/src/main/kotlin/me/ahoo/cosec/runtime/event/DecisionListeners.kt
 index 738d6686..d701154a 100644

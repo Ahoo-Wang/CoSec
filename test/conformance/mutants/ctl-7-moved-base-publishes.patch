@@ -1,6 +1,6 @@
 # Rule: CTL-7
 # Mutant: publishing no longer conflicts when the change's base moved: it checks again on the new head and publishes over it, a rebase nobody asked for
-# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlFailClosedTest --tests me.ahoo.cosec.control.store.RevisionsTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlFailClosedTest --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Publishing.kt
 index 7ca9ffb2..3ba77713 100644

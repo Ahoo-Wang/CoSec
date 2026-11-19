@@ -1,6 +1,6 @@
 # Rule: CTL-17
 # Mutant: when whether the caller may read a change cannot be decided, the step answers 404, as for a change that does not exist, instead of 503
-# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
 index 2f534317..24c832ef 100644

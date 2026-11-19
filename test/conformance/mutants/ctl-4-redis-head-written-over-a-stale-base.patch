@@ -1,6 +1,6 @@
 # Rule: CTL-4
 # Mutant: the Redis control store writes a head over whatever it holds now, not over the expected digest: two instances publishing on one base both write
-# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.RevisionChainTest
+# Tests: :cocache:test --tests me.ahoo.cosec.cocache.control.RevisionChainTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt b/backends/cocache/src/main/kotlin/me/ahoo/cosec/cocache/control/CoCacheControlStore.kt
 index 89ab572d..dba6ddbc 100644

@@ -1,6 +1,6 @@
 # Rule: CTL-1
 # Mutant: a candidate's compile errors are no longer findings: a candidate holding a Broken entry checks clean and publishes
-# Tests: :control:test --tests me.ahoo.cosec.control.change.PublishCompileTest --tests me.ahoo.cosec.control.change.ControlFailClosedTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.PublishCompileTest --tests me.ahoo.cosec.control.change.ControlFailClosedTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeChecks.kt
 index d7abdc1c..a257f657 100644

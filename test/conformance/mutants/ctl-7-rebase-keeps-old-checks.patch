@@ -1,6 +1,6 @@
 # Rule: CTL-7
 # Mutant: a rebase moves the change onto the new head without running its checks there: what was checked on the old base stands as CHECKED
-# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlFailClosedTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlFailClosedTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
 index b8e29bcd..4fc040a5 100644

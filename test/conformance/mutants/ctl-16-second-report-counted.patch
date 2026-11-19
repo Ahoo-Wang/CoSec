@@ -1,6 +1,6 @@
 # Rule: CTL-16
 # Mutant: two reports of one instance on a window are both counted instead of keeping the window open: an instance's samples count twice
-# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ShadowWindows.kt
 index b31b37af..2aef8d58 100644

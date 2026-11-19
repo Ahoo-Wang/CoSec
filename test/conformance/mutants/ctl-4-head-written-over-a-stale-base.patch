@@ -1,6 +1,6 @@
 # Rule: CTL-4
 # Mutant: the in-memory control store writes a head whatever digest it holds: a publish over a stale base overwrites the head
-# Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest
+# Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/InMemoryControlStore.kt
 index 16ac678e..16657f32 100644

@@ -1,6 +1,6 @@
 # Rule: CTL-15
 # Mutant: a change the caller may not read is no longer the 404 of a missing one: every step goes on to the change's state and its own checks, which tell that it exists
-# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlReviewFixesTest --tests me.ahoo.cosec.control.api.ControlHttpTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlReviewFixesTest --tests me.ahoo.cosec.control.api.ControlHttpTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/ChangeLifecycle.kt
 index 2f534317..0b4621dd 100644

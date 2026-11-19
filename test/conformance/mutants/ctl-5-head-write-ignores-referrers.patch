@@ -1,6 +1,6 @@
 # Rule: CTL-5
 # Mutant: the head write no longer refuses a candidate that removes a policy another document's binding refers to
-# Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest
+# Tests: :control:test --tests me.ahoo.cosec.control.store.RevisionsTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/store/Revisions.kt
 index 31727d21..0e0612cc 100644

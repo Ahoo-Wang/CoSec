@@ -1,6 +1,6 @@
 # Rule: CTL-18
 # Mutant: a rollback no longer needs cosec:read first: it tells a caller who may not read the document which revisions it keeps, before any check of what the caller may write
-# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ControlRoundTwoFixesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/Proposals.kt
 index b8e29bcd..317367b7 100644

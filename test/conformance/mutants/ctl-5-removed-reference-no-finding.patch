@@ -1,6 +1,6 @@
 # Rule: CTL-5
 # Mutant: checking a candidate no longer reports a policy it removes that another document refers to: the change checks clean, and only the head write is left to refuse it
-# Tests: :control:test
+# Tests: :control:test :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
 
 diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/RemovedReferences.kt
 index 4b789c25..c0989f81 100644
