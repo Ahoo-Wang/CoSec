@@ -700,4 +700,9 @@ returns, a `BEST_EFFORT` one by the time the fixture is closed. That is how a `D
 fails, so every request is `503 unavailable` and none is permitted. Run your routes against it to prove they fail closed
 when the store is down.
 
+`IdentityHeader` writes the `CoSec-Identity` header a gateway forwards, for testing a service that runs behind a
+gateway (`cosec.pipeline.mode=gateway`) without one in front. It covers a subject, any `Identity`, or what a gateway
+forwards for a real token. A header is refused a minute after it was made, so make one per request
+([Services behind the gateway](../integration/web.md#services-behind-the-gateway)).
+
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).

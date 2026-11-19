@@ -726,6 +726,29 @@ before the gateway.
 The forwarded identity is the credential here, and its app is what it declares: on a service with an app, an identity
 that names another app, or none, is refused (`400` `invalid-request`).
 
+**Testing such a service** without a gateway in front, or calling it from a local client during development, needs
+the header a gateway would send. `IdentityHeader` in `cosec-testkit` (experimental) writes it with CoSec's own encoder,
+and reads it back as a service does before returning it. Malformed input throws and names the member at fault:
+
+```kotlin
+// What a gateway forwards for CoSec's own token: jti, auth.iat, iat, rid and a session filled in by CoSec.
+val header = IdentityHeader.forSubject("alice", tenant = "acme", app = "order", roles = setOf("clerk"))
+webTestClient.get().uri("/orders/1").header(IdentityHeader.NAME, header).exchange()
+```
+
+- `IdentityHeader.of(identity)` writes any `Identity` (`cosec-spi`): an API key's, a capped one, with claims.
+- `IdentityHeader.withToken(token, verifier, revocations, claims)` writes what a gateway forwards for a real token,
+  through CoSec's own authenticator and identity issuer. The session `forSubject` writes is made up (random ids,
+  generation 1). When the service issues from the session, as a tenant switch does, use `withToken` with a token CoSec
+  issued.
+- **A header is good for a minute.** The service refuses an identity issued longer ago than
+  `cosec.pipeline.identity.max-age` (60 seconds, plus the 5-second skew), whatever the credential's validity
+  (`validFor`). Make a header per request; one header built once for a whole test class starts failing with `401`
+  `token-expired`.
+
+It is a test and development tool, not a gateway: a service in `gateway` mode believes whoever sends the header. Keep
+`cosec-testkit` off production classpaths, and let only the gateway reach the service.
+
 ## Control-plane routes
 
 With `cosec-control` (and `cosec-cocache`), the starter serves the control plane's HTTP API under

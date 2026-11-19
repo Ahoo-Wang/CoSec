@@ -495,6 +495,20 @@ CoSec 令牌的会话和签发时间（`auth.session`、`auth.iat`）在这里�
 
 转发的身份在这里就是凭证，它的应用就是它声明的应用：配置了应用的服务会拒绝声明其他应用或未声明应用的身份（`400` `invalid-request`）。
 
+**测试这样的服务**时没有网关在前，或在开发中从本地客户端调用它，都需要网关会发送的那个头。`cosec-testkit` 中的 `IdentityHeader`（实验性）用 CoSec 自己的编码器写出它，并在返回前像服务那样把它读回一遍。输入有误时会抛出异常，并指出是哪个成员有误：
+
+```kotlin
+// 网关为 CoSec 自己的令牌转发的内容：jti、auth.iat、iat、rid 和会话由 CoSec 填写。
+val header = IdentityHeader.forSubject("alice", tenant = "acme", app = "order", roles = setOf("clerk"))
+webTestClient.get().uri("/orders/1").header(IdentityHeader.NAME, header).exchange()
+```
+
+- `IdentityHeader.of(identity)` 写出任意一个 `Identity`（`cosec-spi`）：API Key 的、带角色上限的、带声明的。
+- `IdentityHeader.withToken(token, verifier, revocations, claims)` 写出网关为一个真实令牌转发的内容，经由 CoSec 自己的认证器和身份签发器。`forSubject` 写出的会话是编造的（随机 id，代数为 1）。当服务要从会话签发时（例如租户切换），请用 `withToken` 并传入 CoSec 签发的令牌。
+- **一个头只在一分钟内有效。** 服务拒绝签发时间早于 `cosec.pipeline.identity.max-age`（60 秒，另加 5 秒时钟偏差）的身份，不论凭证的有效期（`validFor`）有多长。每个请求生成一个头；为整个测试类只生成一次的头会开始以 `401` `token-expired` 失败。
+
+它是测试与开发工具，不是网关：`gateway` 模式的服务相信任何发来这个头的人。不要把 `cosec-testkit` 放进生产类路径，并且只让网关能访问这个服务。
+
 ## 控制面路由 {#control-plane-routes}
 
 启用 `cosec-control`（以及 `cosec-cocache`）时，starter 在 WebFlux 或 WebMvc 宿主上以函数式路由在 `{cosec.control.http.base-path}/v1`（默认 `/cosec/control/v1`）下提供控制面的 HTTP API。API 的功能见[策略测试](../policies/testing.md)和[解释一个决策](./checks.md#explaining-a-decision)；它的请求按以下方式处理：
