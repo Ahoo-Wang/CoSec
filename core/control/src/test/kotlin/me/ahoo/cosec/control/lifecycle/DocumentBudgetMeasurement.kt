@@ -216,15 +216,19 @@ class DocumentBudgetMeasurement {
     @Test
     fun measure() {
         row(200) // warm-up
-        val rows = listOf(1_000, 10_000, 100_000).map(::row)
         println(
-            (
-                listOf(
-                    "| policies | statements | bindings | stored | compile ms | propose (root) ms | propose (tenant admin) ms | " +
-                        "rebase ms | publish ms | state |",
-                    "|---|---|---|---|---|---|---|---|---|---|",
-                ) + rows
-                ).joinToString("\n")
+            "| policies | statements | bindings | stored | compile ms | propose (root) ms | propose (tenant admin) ms | " +
+                "rebase ms | publish ms | state |\n|---|---|---|---|---|---|---|---|---|---|",
         )
+        // Each row as soon as it is measured: the largest may not fit the test heap (2 GB), which is itself the answer.
+        for (n in listOf(1_000, 10_000, 30_000, 100_000)) {
+            val line = try {
+                row(n)
+            } catch (error: OutOfMemoryError) {
+                "| $n | ${2 * n} | $n | out of memory with a ${Runtime.getRuntime().maxMemory() shr 20} MB heap: $error |"
+            }
+            println(line)
+            System.out.flush()
+        }
     }
 }
