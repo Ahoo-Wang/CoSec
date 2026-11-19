@@ -231,7 +231,7 @@ pnpm add @ahoo-wang/fetcher @ahoo-wang/fetcher-eventbus @ahoo-wang/fetcher-stora
 ```
 
 Until 8.0 is released, the `latest` tag of both packages points at a `0.0.0` placeholder marked deprecated, so an install
-without `@beta` gets the placeholder and a deprecation notice, not the client; after the release, drop `@beta`. Change the package name in `package.json` and in every import, and the
+without a tag gets the placeholder and a deprecation notice, not the client. Install the tag of the CoSec release you run: `@beta` for `8.0.0-beta.n` (as above), `@rc` for a release candidate, no tag once 8.0 is released; or an exact version, which stays right through all of them. A tag does not move past its line: once release candidates are out, `@beta` is still the last beta, which does not match an RC server. Change the package name in `package.json` and in every import, and the
 hooks' imports from `@ahoo-wang/fetcher-react` to `@ahoo-wang/cosec-react`. What behaves differently:
 
 | What the old package did | What `cosec-fetcher` does |

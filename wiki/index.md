@@ -17,7 +17,7 @@ hero:
 features:
   - icon: 🛡️
     title: Policies as data
-    details: JSON documents for the platform, each app and each tenant. A deny wins wherever it comes from, anything unmatched is denied, and data that cannot be read never permits.
+    details: JSON documents for the platform, each app and each tenant. A deny wins wherever it comes from, anything unmatched is denied, and data that cannot be read never permits, with two documented exceptions ([revocation while its store is down, and snapshot lag](/guide/security-model#the-two-documented-exceptions)).
     link: /policies/language
   - icon: 🏢
     title: Multi-tenant, role-based
@@ -37,7 +37,7 @@ features:
     link: /integration/web
   - icon: 🔑
     title: JWT and social login
-    details: Token issuing, refresh and revocation that is always checked, API keys for machines, and OAuth login through JustAuth.
+    details: Token issuing, refresh and revocation checked on every request (while its store is unreadable a token is accepted unless you set `fail-closed`), API keys for machines, and OAuth login through JustAuth.
     link: /integration/authentication
   - icon: 📊
     title: Auditable

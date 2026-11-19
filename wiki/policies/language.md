@@ -25,8 +25,9 @@ fails closed: `503` unless a DENY matches ([fail closed](../guide/security-model
 The key is how the [control plane](./testing.md) names a document. Every request reads the platform document and the
 document of its tenant (anonymous requests: tenant `(0)`). It reads the app document of its app only when the principal
 holds at least one role in the request's space, or when the tenant document binds one of the app's permission policies
-to anyone or to a principal; a request the blacklist blocks reads only the platform document. A document nobody
-published reads as empty. Which candidates apply, and in which order, is in the
+to anyone or to a principal; a request the blacklist blocks reads only the platform document. An app or tenant
+document nobody published reads as empty. An absent platform document does not: every request is `503` until one is
+published ([Fail closed](../guide/security-model.md#fail-closed)). Which candidates apply, and in which order, is in the
 [security model](../guide/security-model.md).
 
 A tenant id or an app id is one path segment. It is not blank or `*`, holds at most 128 characters, and holds no `:`,
@@ -127,7 +128,7 @@ matches the resource, its condition is true, and its policy's condition is true.
 | `name` | string | `""` | Reported in decisions, traces and `explain`. |
 | `effect` | `"allow"` or `"deny"` | required | |
 | `action` | [action pattern](#actions), or a non-empty array of them | required | Write `"*"` for every action. |
-| `resource` | [resource pattern](#resources) or pattern object, or a non-empty array of them | any resource | |
+| `resource` | [resource pattern](#resources) or pattern object, or a non-empty array of them | **every resource of every service** | There is no spelling for "any resource" but leaving the field out, so a slip reads like intent: an ALLOW `{"action": "http:GET"}` bound to `"*"` in the platform document permits every `GET` of every service, in every tenant, to anonymous callers too ([scenario](https://github.com/Ahoo-Wang/CoSec/tree/main/wiki/examples/no-resource)). Write the resource of every ALLOW. |
 | `condition` | [condition](#conditions) | always true | |
 | `onMissing` | `"indeterminate"` or `"nomatch"` | `"indeterminate"` | What an external attribute that cannot be fetched means ([External attributes](#external-attributes-and-onmissing)). Only for a condition that reads one. |
 | `onMissingConfirmed` | object | none | Who confirmed a DENY with `onMissing: "nomatch"`, and in which change: `{"by": {"tenant", "principal"}, "change"}`. Only the control plane writes it. |

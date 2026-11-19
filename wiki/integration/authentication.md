@@ -769,9 +769,17 @@ serves (`cosec.authorization.scope.app-id`, or on a gateway the route's `cosec-a
 | none | `order` | The request is in `order` |
 | none | none | No app: no app document is read |
 
-An anonymous request has no credential: its app is the host's. So a token issued for one app is worth nothing to a
-service of another, even with the same signing key and a role of the same name, and a login that serves several apps
-issues one token per app, with the roles of that app. A token that operates the control plane is issued for the control
+An anonymous request has no credential: its app is the host's. So, on a service that has an app, a token issued for one
+app is worth nothing to a service of another, even with the same signing key and a role of the same name. A service
+without an app decides in the app the credential names, and a token without `aud` reads no app document. A login that
+serves several apps issues one token per app, with the roles of that app.
+
+**Role ids are one namespace across apps wherever memberships do not come from the token's claims.** A
+`MembershipProvider` is asked for a tenant and a principal only, never an app, so the roles it answers apply in every
+app the principal holds a credential for; every API key takes its roles from the provider too (`IDN-6`). A role `admin`
+the provider gives a principal for app A is `admin` in app B as soon as B's document has a role `admin`. When apps share
+principals and a provider, give their roles distinct ids (`wms.admin`, `pos.admin`). Roles in a token's claims do not
+have this problem when the issuer filters them per app, as the login sample does. A token that operates the control plane is issued for the control
 plane's app, `cosec.control.app-id`.
 
 Whoever issues the token says which app it is for, in `TokenSubject.app`. Left out, it is null, as on a host without
