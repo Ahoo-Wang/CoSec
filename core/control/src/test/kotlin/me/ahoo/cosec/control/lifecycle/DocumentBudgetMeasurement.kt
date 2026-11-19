@@ -138,7 +138,8 @@ class DocumentBudgetMeasurement {
             { ChangeId("c${ids.incrementAndGet()}") },
             engine.authorizer,
             clock,
-            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            // Above the default 8 MB (V2), which this document shape reaches at about 28k entries: the cost is the question.
+            ChangeOptions(shadow = IMMEDIATE_WINDOW, maxDocumentBytes = 256 * 1024 * 1024),
             revocations = RevocationReader.NONE,
             lockout = LockoutCheck.UNCHECKED,
         )
