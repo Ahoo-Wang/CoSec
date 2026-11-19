@@ -64,6 +64,7 @@ public final class me/ahoo/cosec/testkit/IdentityHeader {
 
 public final class me/ahoo/cosec/testkit/PermittedRequest {
 	public static final field INSTANCE Lme/ahoo/cosec/testkit/PermittedRequest;
+	public final fun end (Lme/ahoo/cosec/api/context/SecurityContext;)V
 	public final fun withToken (Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/util/Map;)Lme/ahoo/cosec/api/context/SecurityContext;
 	public static synthetic fun withToken$default (Lme/ahoo/cosec/testkit/PermittedRequest;Ljava/lang/String;Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/spi/token/RevocationReader;Ljava/util/Map;ILjava/lang/Object;)Lme/ahoo/cosec/api/context/SecurityContext;
 }
@@ -71,6 +72,7 @@ public final class me/ahoo/cosec/testkit/PermittedRequest {
 public final class me/ahoo/cosec/testkit/PipelineFixture : java/lang/AutoCloseable {
 	public static final field Companion Lme/ahoo/cosec/testkit/PipelineFixture$Companion;
 	public fun close ()V
+	public final fun end (Lme/ahoo/cosec/api/context/SecurityContext;)V
 	public final fun evaluate (Lme/ahoo/cosec/runtime/http/HttpFacts;Lkotlin/coroutines/Continuation;)Ljava/lang/Object;
 	public final fun getPipeline ()Lme/ahoo/cosec/runtime/Pipeline;
 	public final fun request (Ljava/lang/String;Ljava/lang/String;Lme/ahoo/cosec/testkit/PipelineFixture$Principal;Ljava/lang/String;Ljava/util/Map;Ljava/lang/String;)Lme/ahoo/cosec/runtime/http/HttpFacts;
@@ -79,10 +81,10 @@ public final class me/ahoo/cosec/testkit/PipelineFixture : java/lang/AutoCloseab
 }
 
 public final class me/ahoo/cosec/testkit/PipelineFixture$Companion {
-	public final fun load (Ljava/nio/file/Path;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;)Lme/ahoo/cosec/testkit/PipelineFixture;
-	public static synthetic fun load$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/nio/file/Path;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
-	public final fun of (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;)Lme/ahoo/cosec/testkit/PipelineFixture;
-	public static synthetic fun of$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public final fun load (Ljava/nio/file/Path;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public static synthetic fun load$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/nio/file/Path;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public final fun of (Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;)Lme/ahoo/cosec/testkit/PipelineFixture;
+	public static synthetic fun of$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Ljava/lang/String;Ljava/util/Map;Ljava/util/Map;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;Lme/ahoo/cosec/spi/ratelimit/RateLimiter;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
 	public final fun unreadable (Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;)Lme/ahoo/cosec/testkit/PipelineFixture;
 	public static synthetic fun unreadable$default (Lme/ahoo/cosec/testkit/PipelineFixture$Companion;Lme/ahoo/cosec/document/route/RouteMap;Ljava/util/List;ILjava/lang/Object;)Lme/ahoo/cosec/testkit/PipelineFixture;
 }

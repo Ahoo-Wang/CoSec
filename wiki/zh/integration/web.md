@@ -198,7 +198,14 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 上下文是只读的：应用设置的任何内容都不会影响决策。下面的每个读取入口都只返回 CoSec 管道构造的上下文（`PIP-27`）：应用的过滤器或某个库放在 exchange、Reactor 上下文或 Servlet 请求中 `SecurityContext.KEY` 下的其他任何东西，都读作没有上下文，绝不会被当作已认证的调用者。
 
-**WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。exchange 的 principal 也已设置，因此 `exchange.getPrincipal()` 返回 CoSec 主体。
+**WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。
+
+**请求的 `java.security.Principal`** 在三个栈上都是：当且仅当 CoSec 认证了请求时，它才是 CoSec 的（`PIP-28`）：
+
+- **CoSec 认证了的请求**携带 CoSec 的主体，与上下文的 `principal` 是同一个对象：WebFlux 和网关上是 `exchange.getPrincipal()`，Spring MVC 上是 `getUserPrincipal()`（`getRemoteUser()` 是它的 id），两者上都可以用 `java.security.Principal` 处理器参数。它替换容器或前面的过滤器已设置的任何东西，因为是 CoSec 决策了这个请求。
+- **CoSec 视为匿名的请求**不携带 CoSec 的主体：请求原有的保持原样。
+
+在把 CoSec 与 Spring Security 或容器登录一起使用的主机上，CoSec 视为匿名的请求上的 principal 是另一层的用户，不是 CoSec 的：CoSec 对调用方所知道的是 `SecurityContext`，应读取的就是它（`principal.authenticated`、`principal.id`）。在 Spring MVC 上，对 CoSec 认证了的请求，`isUserInRole` 返回 `false`，`getAuthType()` 返回 `null`：CoSec 的角色按空间划分，不是容器的角色，而容器的角色会是另一个用户的。通过 `SecurityContext` 和检查向 CoSec 询问角色（[代码中的权限检查](./checks.md)），而不是通过 `isUserInRole`。异步请求的 ASYNC 分派上同样有这个主体；容器在请求结束之后渲染的错误页不携带 CoSec 的主体。
 
 ```kotlin
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext

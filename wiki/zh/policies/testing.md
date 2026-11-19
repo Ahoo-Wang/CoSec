@@ -434,7 +434,7 @@ class OrderPermissionsTest {
 
 `PipelineFixture.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。文档无法编译时，构建夹具就会失败。`Principal` 说明请求是谁，如同令牌一样：`tenant`、`roles`（`role` 或 `role@space`）、`policies`、`app` 和 `attributes`；不提供时请求是匿名的。它只替换凭证检查：状态码、`SecurityContext` 和决策都来自管道。用完关闭夹具，通常一个测试类一个。
 
-`of` 和 `load` 还接受 `routes` 与 `listeners`。有路由映射（`RouteMapCodec.load`）时，请求带有你的服务的动作和资源，与配置了 `cosec.authorization.routes.location` 的宿主一样；没有时，它的动作是其路径上的 `http:<METHOD>`。监听器收到管道产生的事件：`REQUIRED` 监听器在 `evaluate` 返回前收到，`BEST_EFFORT` 监听器在夹具关闭时收到。你自己的 `DecisionListener` 就这样测试（[决策监听器](../architecture/extending.md#decision-listeners)）。
+`of` 和 `load` 还接受 `routes`、`listeners` 与 `rateLimiter`。限流规则默认在夹具自己的 `LocalRateLimiter` 中计数，与 starter 一样，所以超出限制的请求为 `429`；在测试中传入 `LocalRateLimiter(clock = { now })` 可以跨越窗口。`securityContext` 给出的上下文在 `end(context)` 结束它之前一直处于进行中，就像主机在响应完成时结束它那样；测试在响应之后检查的代码时，先结束它（[代码中的权限检查](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)）。有路由映射（`RouteMapCodec.load`）时，请求带有你的服务的动作和资源，与配置了 `cosec.authorization.routes.location` 的宿主一样；没有时，它的动作是其路径上的 `http:<METHOD>`。监听器收到管道产生的事件：`REQUIRED` 监听器在 `evaluate` 返回前收到，`BEST_EFFORT` 监听器在夹具关闭时收到。你自己的 `DecisionListener` 就这样测试（[决策监听器](../architecture/extending.md#decision-listeners)）。
 
 `PipelineFixture.unreadable(routes, listeners)` 是一个无法读取文档的宿主：对存储的每次读取都失败，因此每个请求都是 `503 unavailable`，没有请求被允许。让你的路由在它上面运行，证明存储不可用时它们失败关闭。
 
