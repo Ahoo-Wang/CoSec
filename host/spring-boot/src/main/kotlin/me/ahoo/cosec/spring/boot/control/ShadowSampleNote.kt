@@ -15,6 +15,7 @@
 
 package me.ahoo.cosec.spring.boot.control
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cosec.annotations.InternalCoSecApi
 
 /**
@@ -24,6 +25,13 @@ import me.ahoo.cosec.annotations.InternalCoSecApi
  * the operator's configuration, and a deployment with no traffic of its own has no samples to wait for), and said once.
  */
 internal object ShadowSampleNote {
+    private val log = KotlinLogging.logger {}
+
+    /** Logs [of] at WARN when there is one. */
+    fun warn(shadow: ControlProperties.Shadow) {
+        of(shadow)?.let { note -> log.warn { note } }
+    }
+
     /** The line to log for [shadow], or null when the window requires samples. */
     fun of(shadow: ControlProperties.Shadow): String? = if (shadow.minSamples != 0L) {
         null

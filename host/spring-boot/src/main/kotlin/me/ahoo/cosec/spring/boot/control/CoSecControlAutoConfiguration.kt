@@ -15,7 +15,6 @@
 
 package me.ahoo.cosec.spring.boot.control
 
-import io.github.oshai.kotlinlogging.KotlinLogging
 import me.ahoo.cocache.core.CoCacheFactory
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
@@ -86,8 +85,6 @@ import org.springframework.core.io.ResourceLoader
 import org.springframework.kafka.core.KafkaOperations
 import java.time.Clock
 import kotlin.time.toKotlinDuration
-
-private val log = KotlinLogging.logger {}
 
 /**
  * The control plane (RFC 0007, with `cosec-control`): the only writer of the policy documents, on
@@ -175,7 +172,7 @@ internal class CoSecControlAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean
     fun cosecChangeOptions(properties: ControlProperties): ChangeOptions {
-        ShadowSampleNote.of(properties.shadow)?.let { note -> log.warn { note } }
+        ShadowSampleNote.warn(properties.shadow)
         return ChangeOptions(
             expireAfter = properties.changes.expireAfter,
             approvalExpireAfter = properties.approval.expireAfter,
