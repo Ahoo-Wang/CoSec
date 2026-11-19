@@ -440,4 +440,6 @@ class OrderPermissionsTest {
 
 `PipelineFixture.unreadable(routes, listeners)` 是一个无法读取文档的宿主：对存储的每次读取都失败，因此每个请求都是 `503 unavailable`，没有请求被允许。让你的路由在它上面运行，证明存储不可用时它们失败关闭。
 
+`IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。一个头生成一分钟后就会被拒绝，所以每个请求生成一个（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。
+
 **下一步：** 把测试过的策略发布到存储中，见[存储](../operations/storage.md)。

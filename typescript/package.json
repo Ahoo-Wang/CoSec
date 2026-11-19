@@ -13,6 +13,7 @@
     "lint": "eslint --max-warnings 0 eslint.config.js scripts test-host && pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test:host": "node scripts/with-host.mjs -- pnpm -r --workspace-concurrency=1 test:host",
+    "test:system": "node scripts/with-system.mjs -- pnpm --filter @ahoo-wang/cosec-fetcher test:system",
     "format:check": "prettier --check .",
     "check:package": "node scripts/package-check.mjs"
   },

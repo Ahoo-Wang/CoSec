@@ -14,7 +14,7 @@
 
 """Writes the system test's run summary: each scenario that failed, the bound it waited for, and where its evidence is.
 
-Usage: summary.py <junit-xml-dir> <artifact-name>. Prints Markdown, for $GITHUB_STEP_SUMMARY. Reads only the JUnit XML
+Usage: summary.py <junit-xml-dir>... <artifact-name>. Prints Markdown, for $GITHUB_STEP_SUMMARY. Reads only the JUnit XML
 the systemTest task wrote; a run that wrote none (the stack did not start, the build failed) says so.
 """
 import re
@@ -25,16 +25,17 @@ from pathlib import Path
 BOUND = re.compile(r"Waited ([A-Z_]+ \[[^]]*\])")
 
 
-def cases(directory):
-    for file in sorted(Path(directory).glob("TEST-*.xml")):
-        for case in ElementTree.parse(file).getroot().iter("testcase"):
-            yield case
+def cases(directories):
+    for directory in directories:
+        for file in sorted(Path(directory).glob("*.xml")):
+            for case in ElementTree.parse(file).getroot().iter("testcase"):
+                yield case
 
 
 def main():
-    directory, artifact = sys.argv[1], sys.argv[2]
+    directories, artifact = sys.argv[1:-1], sys.argv[-1]
     passed, failed = [], []
-    for case in cases(directory):
+    for case in cases(directories):
         problem = case.find("failure")
         if problem is None:
             problem = case.find("error")
