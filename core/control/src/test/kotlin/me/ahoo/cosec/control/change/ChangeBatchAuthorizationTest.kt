@@ -59,6 +59,7 @@ import org.junit.jupiter.api.Test
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * #1218 (`CTL-8`): the decisions of one change rest on one confirmation of the control documents, confirmed again at
@@ -124,6 +125,7 @@ class ChangeBatchAuthorizationTest {
         clock,
         ChangeOptions(shadow = IMMEDIATE_WINDOW),
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private fun policy(id: String, actions: List<String>) = PolicyDefinition(

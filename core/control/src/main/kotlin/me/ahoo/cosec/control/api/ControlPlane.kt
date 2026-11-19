@@ -79,7 +79,11 @@ interface ControlPlane {
 
     suspend fun abandon(operator: Operator, change: ChangeId): ChangeRequest
 
-    suspend fun publish(operator: Operator, change: ChangeId, ack: ShadowAck? = null): ChangeRequest
+    /**
+     * Publishes [change]. [lockout]: the publisher acknowledges that its candidate keeps them out of the control plane
+     * (UC-6); without it such a change is a 422.
+     */
+    suspend fun publish(operator: Operator, change: ChangeId, ack: ShadowAck? = null, lockout: Boolean = false): ChangeRequest
 
     suspend fun get(operator: Operator, change: ChangeId): ChangeRequest
 

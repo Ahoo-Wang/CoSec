@@ -54,6 +54,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §8: `cosec:breakglass` is what requesting break-glass, publishing it once approved and revoking it take, and
@@ -86,6 +87,7 @@ class BreakGlassAuthorityTest {
         ChangeOptions(shadow = IMMEDIATE_WINDOW),
         listeners = listeners,
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
     private val breakGlass = BreakGlass(changes, revisions)
 

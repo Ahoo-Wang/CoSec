@@ -19,9 +19,12 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
 import me.ahoo.cosec.engine.AbsentAttributes
+import me.ahoo.cosec.engine.EngineRequest
+import me.ahoo.cosec.model.Action
 import me.ahoo.cosec.model.AppId
 import me.ahoo.cosec.model.AuthzRequest
 import me.ahoo.cosec.model.Memberships
+import me.ahoo.cosec.model.Resource
 import me.ahoo.cosec.model.Subject
 import me.ahoo.cosec.model.condition.ConditionInput
 import me.ahoo.cosec.model.scope.HostScope
@@ -117,6 +120,25 @@ class RequestSecurity internal constructor(
         )
         val request = with(request) { AuthzRequest(subject, action, resource, environment) }
         return RequestSecurity(requestId, principal, scope, memberships, request, attributes)
+    }
+
+    /**
+     * What the engine reads to decide this request at [time]; with [app], [action] on [resource] asked by the same
+     * principal in the default space of [app] ([inApp]), or null when that scope does not resolve. For the control
+     * plane's lock-out check (UC-6), which decides the publisher's own way back against a candidate document with the
+     * facts of this request: it hands out an engine request, never a [RequestSecurity], so nothing outside the pipeline
+     * mints a permitted request. External attributes are not fetched: a statement that reads one decides as its
+     * `onMissing` says.
+     */
+    @InternalCoSecApi
+    fun engineRequest(time: Long, app: AppId? = null, action: Action? = null, resource: Resource? = null): EngineRequest? {
+        if (app == null) {
+            return EngineRequest(request, scope, memberships, time, attributes)
+        }
+        val asked = inApp(app) ?: return null
+        val subject = asked.request
+        val authz = AuthzRequest(subject.subject, action ?: subject.action, resource ?: subject.resource, subject.environment)
+        return EngineRequest(authz, asked.scope, memberships, time, attributes)
     }
 
     override fun toString(): String =

@@ -47,6 +47,7 @@ import org.junit.jupiter.api.Test
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.thread
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * The revision chain of RFC 0007 §5.4 on real Redis (AGENTS.md: no mocks for caching and concurrency): records before
@@ -181,6 +182,7 @@ class RevisionChainTest {
                 ),
             ),
             revocations = me.ahoo.cosec.spi.token.RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val one = changes(firstNode, first)
         val two = changes(secondNode, second)

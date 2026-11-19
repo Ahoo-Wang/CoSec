@@ -58,6 +58,7 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Test
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * Review M3: a change that takes a busy slot (RC1-12) makes its holder `CONFLICTED` before the slot moves, from
@@ -93,6 +94,7 @@ class PreemptionRaceTest {
         clock,
         ChangeOptions(shadow = IMMEDIATE_WINDOW, fourEyes = true),
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private val ids = java.util.concurrent.atomic.AtomicInteger()
@@ -220,6 +222,7 @@ class PreemptionRaceTest {
             )
         ).also { opened += it },
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private val opened = ArrayList<ChangeListeners>()

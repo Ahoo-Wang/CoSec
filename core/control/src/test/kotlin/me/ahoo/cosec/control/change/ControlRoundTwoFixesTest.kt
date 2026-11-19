@@ -76,6 +76,7 @@ import org.junit.jupiter.api.Test
 import tools.jackson.databind.node.ObjectNode
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * The round-2 review of the control plane (RFC 0007): a window sums one report per instance (R1), an approval keeps
@@ -128,6 +129,7 @@ class ControlRoundTwoFixesTest {
             reports = reports,
             listeners = registered,
             revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
     }
 

@@ -76,7 +76,8 @@ internal class Publishing(
         publisher: Operator,
         id: ChangeId,
         ack: ShadowAck? = null,
-        again: String? = null
+        again: String? = null,
+        lockout: Boolean = false,
     ): ChangeRequest {
         val change = flow.visible(publisher, id)
         authority.require(publisher, change.key, PublishRules.publishing(change))
@@ -95,10 +96,11 @@ internal class Publishing(
             PublishRules.ownRevision(revisions, change, head)?.let { return republished(change, it, publisher) }
             return movedOn(change, head, publisher)
         }
-        val rechecked = candidates.checked(change, head, publisher)
-        if (rechecked.state != ChangeState.CHECKED || rechecked.candidate != change.candidate) {
-            return flow.settle(change, ChangeState.DRAFT, ChangeStep.PUBLISH, rechecked.findings)
+        val checked = candidates.checked(change, head, publisher)
+        if (checked.state != ChangeState.CHECKED || checked.candidate != change.candidate) {
+            return flow.settle(change, ChangeState.DRAFT, ChangeStep.PUBLISH, checked.findings)
         }
+        val rechecked = PublishRules.lockoutAcknowledged(checked, publisher, lockout)
         val problem = authority.approvalProblem(change, rechecked.escalations, publisher, clock.instant())
             ?: authority.approverProblem(change, rechecked.escalations, publisher)
         problem?.let { problem ->

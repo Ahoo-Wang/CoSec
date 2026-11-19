@@ -166,6 +166,24 @@ internal object PublishRules {
         problem?.let { (status, message) -> throw ChangeRejectedException(status, message) }
     }
 
+    /**
+     * UC-6: a change whose candidate keeps [publisher] out of the control plane ([LockoutCheck]) publishes only when
+     * they acknowledge it, a 422 otherwise that says how to and how to recover. Acknowledged, the finding records who
+     * acknowledged it, and stays with the change.
+     */
+    fun lockoutAcknowledged(change: ChangeRequest, publisher: Operator, acknowledged: Boolean): ChangeRequest {
+        val lockout = change.findings.firstOrNull { it.check == LockoutCheck.CHECK } ?: return change
+        if (!acknowledged) {
+            throw ChangeRejectedException(
+                UNPROCESSABLE,
+                "publishing change ${change.id.value}: ${lockout.message}. Publish with \"lockout\": true to acknowledge " +
+                    "it; the way back is cosec-migrate restore (Storage: Recovering from a lock-out)",
+            )
+        }
+        val recorded = lockout.copy(message = "${lockout.message} (acknowledged by ${publisher.actor.principal.value}@${publisher.actor.tenant.value})")
+        return change.copy(findings = change.findings.map { if (it === lockout) recorded else it })
+    }
+
     /** Whether [ack] names [window] and exactly the counts of [summary]; zeros may be left out. */
     fun matches(ack: ShadowAck?, window: String, summary: ShadowSummary): Boolean =
         ack != null && ack.window == window && ack.counts.filterValues { it != 0L } == summary.counts.filterValues { it != 0L }

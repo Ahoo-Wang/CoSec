@@ -72,6 +72,7 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §10.1, §10.3 through the real engine: the control plane's reads are authorized like its writes, and
@@ -118,6 +119,7 @@ class ControlPlaneTest {
         clock,
         options,
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
     val simulator = Simulator()
     val plane = DefaultControlPlane(

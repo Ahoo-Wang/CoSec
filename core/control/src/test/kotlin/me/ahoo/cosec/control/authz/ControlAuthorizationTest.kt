@@ -58,6 +58,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §7.1–§7.5 through the real pipeline and engine: the built-in control-plane policies, the hard rule, the
@@ -88,7 +89,8 @@ class ControlAuthorizationTest {
         authorizer,
         clock,
         options,
-        revocations = RevocationReader.NONE
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private val changes = changes()

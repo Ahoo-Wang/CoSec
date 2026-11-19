@@ -58,6 +58,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * Review item 13: a publish whose head write went through but whose reply was lost is recognised when it is retried,
@@ -149,6 +150,7 @@ class RetriedPublishTest {
         ChangeOptions(shadow = IMMEDIATE_WINDOW),
         listeners = listeners,
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private suspend fun head(key: SnapshotKey): Long = revisions.head(key)?.revision ?: 0

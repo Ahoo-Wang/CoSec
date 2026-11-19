@@ -67,6 +67,7 @@ import java.time.Instant
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * The control plane against its budget (RFC 0007 §14.2), in memory: `propose` (authorization of every target,
@@ -102,6 +103,7 @@ open class ControlPlaneBenchmark {
             authorizer,
             options = ChangeOptions(shadow = ShadowOptions(Duration.ZERO, 0, Duration.ZERO)),
             revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val orders = PolicyDefinition(PolicyId("orders"), false, null, listOf(StatementSource("", Effect.ALLOW, listOf("order:*"), listOf(ResourceSource("order/**")))))
         val filler = (0 until policies).map { i ->

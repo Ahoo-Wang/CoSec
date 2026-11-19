@@ -40,6 +40,7 @@ import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /** RFC 0007 §5.7 and §6.4: the periodic passes the host runs over what the store lists. */
 class ControlMaintenanceTest {
@@ -55,6 +56,7 @@ class ControlMaintenanceTest {
         clock,
         ChangeOptions(shadow = IMMEDIATE_WINDOW),
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
     private val maintenance = ControlMaintenance(store, revisions, changes, Duration.ofMinutes(1))
 
@@ -100,6 +102,7 @@ class ControlMaintenanceTest {
             clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
             revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val maintenance = ControlMaintenance(failing, revisions, failingChanges, Duration.ofMinutes(1))
         val first = published().digest
@@ -160,7 +163,8 @@ class ControlMaintenanceTest {
             { ChangeId("unused") },
             PERMIT_ALL,
             clock,
-            revocations = RevocationReader.NONE
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1)).reclaim().assert().isEmpty()
     }
@@ -181,7 +185,8 @@ class ControlMaintenanceTest {
             { ChangeId("unused") },
             PERMIT_ALL,
             clock,
-            revocations = RevocationReader.NONE
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val blind = ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1))
         blind.reclaim().assert().isEmpty()
@@ -255,7 +260,8 @@ class ControlMaintenanceTest {
             { ChangeId("unused") },
             PERMIT_ALL,
             clock,
-            revocations = RevocationReader.NONE
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val blind = ControlMaintenance(failing, blindRevisions, blindChanges, Duration.ofMinutes(1))
         val first = published().digest
@@ -287,7 +293,8 @@ class ControlMaintenanceTest {
             { ChangeId("unused") },
             PERMIT_ALL,
             clock,
-            revocations = RevocationReader.NONE
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val blind = ControlMaintenance(unreadable, blindRevisions, blindChanges, Duration.ofMinutes(1))
         val first = published().digest
@@ -345,6 +352,7 @@ class ControlMaintenanceTest {
             clock,
             ChangeOptions(shadow = IMMEDIATE_WINDOW),
             revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         return counting to ControlMaintenance(counting, countingRevisions, countingChanges, Duration.ofMinutes(1))
     }

@@ -78,6 +78,11 @@ class Changes(
     private val checks: ChangeChecks = ChangeChecks(options, attributes, credentialHeaders),
     /** The host's token revocations, for the default [authority]: no default, as [ChangeAuthority] has none. */
     revocations: RevocationReader,
+    /**
+     * Whether a candidate would keep its operator out of the control plane (UC-6). No default: a host that forgot it
+     * would publish a lock-out silently; [LockoutCheck.UNCHECKED] is a choice to write.
+     */
+    lockout: LockoutCheck,
     internal val authority: ChangeAuthority = ChangeAuthority(authorizer, options, revocations = revocations),
     /** What the instances report of the shadow windows (RFC 0007 §6.4); none by default. */
     reports: ShadowReportReader = InMemoryShadowReports(clock),
@@ -93,7 +98,7 @@ class Changes(
 
     private val movedHeads = MovedHeads(store, authority, context, clock)
 
-    private val candidates = CandidateChecks(checks, context, authority, clock, options)
+    private val candidates = CandidateChecks(checks, context, authority, clock, options, lockout)
 
     internal val preemption = Preemption(revisions, authority, clock)
 
@@ -134,9 +139,11 @@ class Changes(
         publisher: Operator,
         id: ChangeId,
         ack: ShadowAck? = null,
-        again: String? = null
+        again: String? = null,
+        /** The publisher acknowledges that the change keeps them out of the control plane (UC-6, [LockoutCheck]). */
+        lockout: Boolean = false,
     ): ChangeRequest =
-        publishing.publish(publisher, id, ack, again)
+        publishing.publish(publisher, id, ack, again, lockout)
 
     /** [Publishing.candidateOf]: the candidate [id] would publish on the current head, or null. */
     suspend fun candidateOf(

@@ -80,6 +80,7 @@ import java.time.Duration
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration.Companion.seconds
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §6.4, §6.5 end to end: two data-plane instances over one in-memory control store sample their requests
@@ -116,6 +117,7 @@ class ShadowWindowTest {
             ),
         ),
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     @AfterEach
@@ -310,6 +312,7 @@ class ShadowWindowTest {
             attributes = AttributeCatalog.of(listOf(country)),
             reports = reports,
             revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
         val geo = PolicyDefinition(
             PolicyId("geo"),

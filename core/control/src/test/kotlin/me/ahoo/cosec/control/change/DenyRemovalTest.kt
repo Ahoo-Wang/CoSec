@@ -48,6 +48,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
 import java.time.Instant
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * Removing a DENY of the platform or of an app needs a second person (RFC 0007 §7.4.4 as amended on 2026-11-09,
@@ -71,6 +72,7 @@ class DenyRemovalTest {
         harness.clock,
         ChangeOptions(fourEyes = fourEyes, shadow = IMMEDIATE_WINDOW),
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private fun deny(id: String, action: String = "order:export") = PolicyDefinition(

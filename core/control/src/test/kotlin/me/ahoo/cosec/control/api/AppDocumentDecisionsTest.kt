@@ -58,6 +58,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * CTL-3, R1-1 of #1194's review: `simulate` and `explain` read the documents enforcement reads, by its one rule
@@ -80,7 +81,8 @@ class AppDocumentDecisionsTest {
             engine.authorizer,
             clock,
             options,
-            revocations = RevocationReader.NONE
+            revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
     private val plane =
         DefaultControlPlane(

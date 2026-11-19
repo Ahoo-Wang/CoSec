@@ -65,6 +65,7 @@ import java.time.Duration
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RC review batch B2 through the real pipeline and engine: the trust root is the platform's (RC1-10), so is a tenant's
@@ -117,6 +118,7 @@ class ApprovalB2Test {
             revocationSkew = Duration.ZERO
         ),
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private val changes = changes()

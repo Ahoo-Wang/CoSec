@@ -47,6 +47,7 @@ import me.ahoo.cosec.spi.snapshot.SnapshotKey
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * `SCP-13` (#1403): a tenant id is one path segment of the resources the control plane authorizes on. A platform
@@ -62,7 +63,8 @@ class OneSegmentTenantIdTest {
     private val engine = EngineAuthority(revisions)
     private val changes = Changes(store, revisions, {
         ChangeId("c")
-    }, engine.authorizer, clock, ChangeOptions(), revocations = RevocationReader.NONE)
+    }, engine.authorizer, clock, ChangeOptions(), revocations = RevocationReader.NONE,
+    lockout = LockoutCheck.UNCHECKED,)
     private val http =
         ControlHttp(
             DefaultControlPlane(

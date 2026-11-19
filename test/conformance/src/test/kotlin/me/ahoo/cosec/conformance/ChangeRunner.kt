@@ -95,6 +95,7 @@ import tools.jackson.databind.node.JsonNodeFactory
 import tools.jackson.databind.node.ObjectNode
 import java.time.Duration
 import java.time.Instant
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * The `control` runner for the change flow (RFC 0007 §6.1–§6.3, §7.2–§7.5): steps over an in-memory control plane,
@@ -278,6 +279,7 @@ object ChangeRunner : ScenarioRunner {
             listeners = listeners,
             revocations = revocations,
             authority = ChangeAuthority(authorizer, options, revocations = revocations, revocationSkew = Duration.ZERO),
+            lockout = LockoutCheck.UNCHECKED,
         )
 
         private var changes = changes()

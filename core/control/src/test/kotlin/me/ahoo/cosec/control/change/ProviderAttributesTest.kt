@@ -31,6 +31,7 @@ import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /** RFC 0007 §3.1 N3 (`CTL-20`): a candidate is checked against the attributes an instance would compile it with. */
 class ProviderAttributesTest {
@@ -46,6 +47,7 @@ class ProviderAttributesTest {
         clock,
         attributes = AttributeCatalog.of(listOf(Attribute.external("ext.geo.country", AttributeType.STRING))),
         revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private fun on(attribute: String) = runBlocking {

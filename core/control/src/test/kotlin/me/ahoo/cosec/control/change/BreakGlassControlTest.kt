@@ -62,6 +62,7 @@ import org.junit.jupiter.api.Test
 import java.time.Duration
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.atomic.AtomicInteger
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 
 /**
  * RFC 0007 §8 (BRK-3) through the real engine: break-glass is created only through the control plane, by a platform
@@ -143,6 +144,7 @@ class BreakGlassControlTest {
             options,
             listeners = registered,
             revocations = RevocationReader.NONE,
+            lockout = LockoutCheck.UNCHECKED,
         )
     }
 

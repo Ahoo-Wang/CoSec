@@ -24,6 +24,7 @@ import me.ahoo.cosec.cocache.snapshot.PolicySnapshotCache
 import me.ahoo.cosec.cocache.snapshot.RedisSnapshotDocumentStore
 import me.ahoo.cosec.control.api.ControlHttp
 import me.ahoo.cosec.control.api.ControlPlane
+import me.ahoo.cosec.control.api.ControlLockout
 import me.ahoo.cosec.control.api.DefaultControlPlane
 import me.ahoo.cosec.control.api.Simulator
 import me.ahoo.cosec.control.audit.ChangeListener
@@ -271,6 +272,7 @@ internal class CoSecControlAutoConfiguration {
         environment: Environment,
         revocationReader: ObjectProvider<RevocationReader>,
         tokenStore: ObjectProvider<TokenStore>,
+        controlProperties: ControlProperties,
     ): Changes {
         val ids = idGenerator.getIfAvailable { RandomIdGenerator }
         return Changes(
@@ -288,6 +290,12 @@ internal class CoSecControlAutoConfiguration {
             // The data plane's reports when this host takes part in shadow windows: one cache per runtime.
             reports = shadowReports.ifAvailable ?: CoCacheShadowReports.create(factory, cosec.keyPrefix),
             listeners = listeners,
+            // UC-6: a change that would keep its operator out of the control plane needs an acknowledgement.
+            lockout = ControlLockout(
+                revisions,
+                Simulator(attributes = attributes.catalog, credentialHeaders = credentialHeaders(environment)),
+                AppId(controlProperties.appId),
+            ),
         )
     }
 
