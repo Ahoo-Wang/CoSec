@@ -1,0 +1,32 @@
+{
+  "schema": 2,
+  "revision": 1,
+  "publishedAt": "2026-11-18T00:00:00Z",
+  "policies": [
+    {
+      "id": "readers",
+      "statements": [
+        {
+          "name": "readers",
+          "effect": "allow",
+          "action": "http:GET",
+          "resource": [
+            "http:path:/behind/isolation/b/**",
+            "http:path:/isolation/b/**"
+          ]
+        }
+      ]
+    }
+  ],
+  "bindings": [
+    {
+      "id": "readers",
+      "subject": {
+        "role": "reader"
+      },
+      "app": "*",
+      "space": "*",
+      "policy": "readers"
+    }
+  ]
+}

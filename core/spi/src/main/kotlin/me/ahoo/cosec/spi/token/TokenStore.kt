@@ -34,9 +34,11 @@ import java.time.Instant
 interface TokenStore {
 
     /**
-     * Revokes a token by its id.
+     * Revokes a token by its id. CoSec calls it, through [TokenRevoker]; an application logs a user out with
+     * [TokenRevoker.revoke], which takes the access token itself, verifies it and revokes its session too. Given the
+     * token instead of its id, this would revoke nothing: CoSec's own store refuses a value shaped like a token.
      *
-     * @param tokenId the token id (jti) to revoke
+     * @param tokenId the token's id ([VerifiedToken.id], the `jti`), never the token
      * @param ttl how long to keep the revocation entry; must cover the remaining
      * lifetime of the refresh token bound to [tokenId], otherwise that refresh
      * token could be revived once the entry expires

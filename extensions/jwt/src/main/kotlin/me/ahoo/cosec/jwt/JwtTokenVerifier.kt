@@ -43,6 +43,10 @@ import me.ahoo.cosec.spi.token.VerifiedToken
 class JwtTokenVerifier(
     private val algorithm: Algorithm
 ) : CoSecTokenVerifier {
+    init {
+        Jwts.requireSigning(algorithm)
+    }
+
     private val jwtVerifier: JWTVerifier = JWT.require(algorithm)
         .withClaimPresence("exp")
         .build()

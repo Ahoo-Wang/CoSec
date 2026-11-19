@@ -26,6 +26,7 @@ import me.ahoo.cosec.jwt.JwtTokenVerifier
 import me.ahoo.cosec.login.route.LoginRouteAnswer
 import me.ahoo.cosec.login.route.LogoutRoute
 import me.ahoo.cosec.login.route.RefreshRoute
+import me.ahoo.cosec.login.token.MembershipRefresh
 import me.ahoo.cosec.login.token.RefreshTokenAuthentication
 import me.ahoo.cosec.login.token.RefreshTokenCredentials
 import me.ahoo.cosec.login.token.StoreTokenRevoker
@@ -114,8 +115,12 @@ internal object ScenarioRefresh {
         val clock = Clock.fixed(NOW, ZoneOffset.UTC)
         val store = familyStore(families)
         val tokenFamilies = TokenFamilies(store, LIFETIME, LEEWAY, clock = clock)
-        val authentication =
-            RefreshTokenAuthentication(ScenarioJwt.VERIFIER, TokenRevocation(revocations), tokenFamilies)
+        val authentication = RefreshTokenAuthentication(
+            ScenarioJwt.VERIFIER,
+            TokenRevocation(revocations),
+            tokenFamilies,
+            MembershipRefresh.CLAIMS,
+        )
         val route = RefreshRoute(authentication, ScenarioJwt.CONVERTER)
         node.only("access", "refresh", "pairs", "logout")
         val attempts = node.get("pairs")?.values()?.toList()?.onEach { it.only("access", "refresh") }

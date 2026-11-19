@@ -30,7 +30,6 @@ public final class me/ahoo/cosec/login/token/RefreshTokenAuthentication : me/aho
 
 public final class me/ahoo/cosec/login/token/RefreshTokenAuthenticationKt {
 	public static final fun RefreshTokenAuthentication (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Lme/ahoo/cosec/login/token/MembershipRefresh;)Lme/ahoo/cosec/login/token/RefreshTokenAuthentication;
-	public static synthetic fun RefreshTokenAuthentication$default (Lme/ahoo/cosec/spi/token/TokenVerifier;Lme/ahoo/cosec/runtime/token/TokenRevocation;Lme/ahoo/cosec/login/token/TokenFamilies;Lme/ahoo/cosec/login/token/MembershipRefresh;ILjava/lang/Object;)Lme/ahoo/cosec/login/token/RefreshTokenAuthentication;
 }
 
 public abstract interface class me/ahoo/cosec/login/token/RefreshTokenCredentials : me/ahoo/cosec/login/LoginCredentials {
