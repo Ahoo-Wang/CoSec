@@ -406,7 +406,9 @@ A request without a credential, or with one that was rejected, is the anonymous 
 tenant `(0)`. It:
 
 - matches only `Anyone` bindings: those of the platform document, and those of tenant `(0)`'s document;
-- has no roles and no attachments, and never matches a principal, role or break-glass binding;
+- has no roles and no attachments, and never matches a principal, role or break-glass binding (a principal binding whose
+  id begins with `(` does not compile, and nor does a condition that compares `subject.id` with `(0)`: a document never
+  sees the anonymous id; test `subject.authenticated`);
 - can only be in the default space: a request that declares `CoSec-Space-Id` is rejected with `401`;
 - is denied with `401`, never `403`, so the client's remedy is always to authenticate. When its credential was
   rejected, the problem names why (`token-invalid`, `token-expired`, `token-revoked`).

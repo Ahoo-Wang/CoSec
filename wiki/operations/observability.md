@@ -29,23 +29,22 @@ The decision event's `outcome.reason` names what decided, and every output uses 
 `cosec.authorize.result` as they are, the metrics' `result` tag in lower case, audit's `decision` in upper case. Only
 `explicit_deny` means a DENY statement refused the request.
 
-| `outcome.reason` / span | Metrics `result` | Audit `decision` | Counts | Before (8.0.0-beta.3: metrics / audit) |
-|---|---|---|---|---|
-| `PERMIT` | `permit` | `PERMIT` | permitted requests | `allow` / `ALLOW` |
-| `TOO_MANY_REQUESTS` | `too_many_requests` | `TOO_MANY_REQUESTS` | permits an exhausted rate limit stopped (`429`) | same |
-| `EXPLICIT_DENY` | `explicit_deny` | `EXPLICIT_DENY` | requests a DENY statement refused | the same words also counted the next three |
-| `IMPLICIT_DENY` | `implicit_deny` | `IMPLICIT_DENY` | requests nothing allowed | same |
-| `SCOPE_REJECTED` | `scope_rejected` | `SCOPE_REJECTED` | requests whose app or space the principal may not act in (`403` `scope-rejected`) | `explicit_deny` / `EXPLICIT_DENY` |
-| `BOUNDARY` | `boundary` | `BOUNDARY` | permits outside the tenant's platform boundary (`403` `forbidden`) | `explicit_deny` / `EXPLICIT_DENY` |
-| `INVALID_REQUEST` | `invalid_request` | `INVALID_REQUEST` | requests that could not be read without ambiguity (`400`) | `bad_request` / `EXPLICIT_DENY` |
-| `INDETERMINATE`, `AUTHENTICATOR_UNAVAILABLE`, `DEADLINE_EXCEEDED` | `indeterminate` (`cause` says which) | `INDETERMINATE` | requests no decision could be made for (`503`) | same |
-| `ERROR` | `error` | `ERROR` | defects (`500`) | same |
-| `CANCELLED` | `cancelled` | no audit record | callers that went away | same |
+| `outcome.reason` / span | Metrics `result` | Audit `decision` | Counts |
+|---|---|---|---|
+| `PERMIT` | `permit` | `PERMIT` | permitted requests |
+| `TOO_MANY_REQUESTS` | `too_many_requests` | `TOO_MANY_REQUESTS` | permits an exhausted rate limit stopped (`429`) |
+| `EXPLICIT_DENY` | `explicit_deny` | `EXPLICIT_DENY` | requests a DENY statement refused |
+| `IMPLICIT_DENY` | `implicit_deny` | `IMPLICIT_DENY` | requests nothing allowed |
+| `SCOPE_REJECTED` | `scope_rejected` | `SCOPE_REJECTED` | requests whose app or space the principal may not act in (`403` `scope-rejected`) |
+| `BOUNDARY` | `boundary` | `BOUNDARY` | permits outside the tenant's platform boundary (`403` `forbidden`) |
+| `INVALID_REQUEST` | `invalid_request` | `INVALID_REQUEST` | requests that could not be read without ambiguity (`400`) |
+| `INDETERMINATE`, `AUTHENTICATOR_UNAVAILABLE`, `DEADLINE_EXCEEDED` | `indeterminate` (`cause` says which) | `INDETERMINATE` | requests no decision could be made for (`503`) |
+| `ERROR` | `error` | `ERROR` | defects (`500`) |
+| `CANCELLED` | `cancelled` | no audit record | callers that went away |
 
 The event's `subject.method` names how the principal authenticated in the words `CoSec-Identity` uses for the same
 credential: `jwt` for CoSec's own token, `api-key`, or the name another verifier's tokens are given (`token` by
-default); a principal with no credential is named by its authenticator. Through 8.0.0-beta.3 it was `token` for every
-token, CoSec's own included, and `apikey`.
+default); a principal with no credential is named by its authenticator.
 
 The listeners the starter registers:
 

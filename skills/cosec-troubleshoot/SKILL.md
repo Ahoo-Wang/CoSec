@@ -46,6 +46,7 @@ Indeterminate in an explanation.
 | 429 | `too-many-requests` | Permitted, but a rate limit rule's bucket is exhausted; `Retry-After` and `RateLimit-*` headers. |
 | 503 | `unavailable` | No decision could be made (Indeterminate), the authenticator's dependency failed, or `cosec.pipeline.timeout` passed. Never retried by a `Retry-After`. |
 | 500 | `internal-error` | An exception nothing modelled: a CoSec defect. Read the server log. |
+| 5xx without a `type` | none | Not CoSec's: its refusals are always `application/problem+json` with a `type` under `https://cosec.ahoo.me/problems/`. See "A permitted request answers 500 from the gateway" below. |
 
 A 401 always means "authenticate (again)"; a 403 means the identity is known and denied.
 
@@ -359,6 +360,16 @@ Full model: https://cosec.ahoo.me/guide/security-model.
   `` `<path>` is a credential header, which no attribute reference may read ``. A header name that is not an ASCII
   token (RFC 9110) does not compile either: `` `<path>` is not a header name ``.
 - `scope-rejected`: the credential's app, or the client's `CoSec-Space-Id` (see the table).
+
+### A permitted request answers 500 from the gateway
+
+The body is Spring Boot's default error object (`timestamp`, `path`, `status`, `error`, `requestId`), with no `type`, so it is
+not a CoSec problem. The gateway log has `500 Server Error for HTTP GET "<path>"` at `ERROR` from
+`AbstractErrorWebExceptionHandler`, followed by `java.net.UnknownHostException: Failed to resolve '<host>'`: the host of
+the route's `uri` does not resolve (a Kubernetes Service missing from the gateway's namespace; the dev overlay's demo
+route `cosec-auth` points at one it does not create). CoSec permitted the request, so nothing in the documents caused
+it: fix the route's `uri`, or create the Service or the DNS name.
+https://cosec.ahoo.me/operations/troubleshooting#a-permitted-request-answers-500-with-the-gateways-own-error-body
 
 ### Request allowed unexpectedly
 
