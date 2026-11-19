@@ -1,0 +1,44 @@
+# The image's defaults, in the jar. A config/application.yaml mounted in the image's working directory is read in
+# addition and wins key by key (lists, such as routes, are replaced whole): replacing that file never drops these.
+server:
+  port: 8080
+  compression:
+    enabled: true
+    min-response-size: 1KB
+spring:
+  application:
+    name: ${service.name:cosec-gateway}
+  web:
+    error:
+      whitelabel:
+        enabled: false
+cosec:
+  audit:
+    kafka:
+      enabled: false
+  authentication:
+    login:
+      enabled: false
+  # Off, as in the Kubernetes base: the database is about 11 MB on each instance's heap, and a gateway decides on
+  # ext.ip2region.* only when its documents say so. Turn it on with COSEC_IP2REGION_ENABLED=true.
+  ip2region:
+    enabled: false
+management:
+  server:
+    # The actuator is served here, never on the gateway's application port, where CoSec's gateway filter does not decide
+    # it (STA-2): /actuator/health and the scrape endpoint /actuator/prometheus. The probes are /livez and /readyz on the
+    # gateway's own port (add-additional-paths below): a probe there proves the listener clients use.
+    # Keep this port inside the cluster or the host; nothing in CoSec authorizes it.
+    port: 8081
+  endpoint:
+    health:
+      probes:
+        enabled: true
+        add-additional-paths: true
+    # The gateway endpoint can read and change routes. Off, so exposing it by mistake exposes nothing.
+    gateway:
+      access: none
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus

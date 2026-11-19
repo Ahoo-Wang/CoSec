@@ -20,8 +20,9 @@ plugins {
 kotlin {
     jvmToolchain(21)
 }
-// What the image runs is src/dist/config/application.yaml, and only that: the start script reads ./config/
-// (-Dspring.config.location below), and the jar carries no application.yaml of its own.
+// The image's defaults are src/main/resources/application.yaml, in the jar. A ./config/application.yaml the operator
+// mounts (Spring Boot's default locations include file:./config/, the start script's working directory) is read in
+// addition and wins key by key: replacing the file never drops a default (UB-21).
 tasks.jar.configure {
     manifest {
         attributes(
@@ -45,11 +46,7 @@ application {
         "-Xlog:gc*:file=logs/$applicationName-gc.log:time,tags:filecount=10,filesize=32M",
         "-XX:+HeapDumpOnOutOfMemoryError",
         "-XX:HeapDumpPath=data",
-        "-Dcom.sun.management.jmxremote",
-        "-Dcom.sun.management.jmxremote.authenticate=false",
-        "-Dcom.sun.management.jmxremote.ssl=false",
-        "-Dcom.sun.management.jmxremote.port=5555",
-        "-Dspring.config.location=file:./config/",
+        // No JMX agent (UB-2): whoever wants one sets it in JAVA_OPTS, bound to loopback (operations/deployment).
     )
 }
 
@@ -69,6 +66,9 @@ dependencies {
     implementation(project(":kafka"))
     implementation("org.springframework.boot:spring-boot-starter-kafka")
     implementation(project(":ip2region"))
+    // cosec.authorization, cosec.snapshot.* and the listener meters, scraped from the management port (UB-8, UB-2).
+    implementation(project(":micrometer"))
+    implementation(libs.micrometer.registry.prometheus)
     implementation("me.ahoo.cocache:cocache-spring-boot-starter")
     implementation("com.github.ben-manes.caffeine:caffeine")
     implementation("org.springframework.boot:spring-boot-starter-cache")

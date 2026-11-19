@@ -1,0 +1,17 @@
+# Rule: PIP-28
+# Mutant: WebFlux and the gateway set the request Principal for an anonymous request too, so every anonymous caller reads as one signed-in user (0)
+# Tests: :webflux:test --tests me.ahoo.cosec.webflux.PipelineWebFilterTest :spring-boot:test --tests me.ahoo.cosec.spring.boot.realserver.RealServerParityTest
+
+diff --git a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
+index a661a5a0..be8a1baf 100644
+--- a/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
++++ b/edge/webflux/src/main/kotlin/me/ahoo/cosec/webflux/ReactivePipelineBridge.kt
+@@ -91,7 +91,7 @@ abstract class ReactivePipelineBridge(
+         // The anonymous principal stays in the security context.
+         val principal = securityContext.principal
+         val authorized =
+-            if (principal.authenticated) exchange.mutate().principal(principal.toMono()).build() else exchange
++            if (principal.id.isNotEmpty()) exchange.mutate().principal(principal.toMono()).build() else exchange
+         // The request ends when the chain's Mono terminates: after a streamed body's last element is written, on an
+         // error, or when the client goes away. From then on no check permits as it (PIP-26). Ended before the signal
+         // goes on, so whoever sees the chain complete sees the request ended: `doOnTerminate` runs before passing on

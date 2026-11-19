@@ -20,7 +20,7 @@
 # (the 8.0 way to seed Redis), starts the image with -XX:AOTMode=on (a cache that cannot be mapped fails startup
 # instead of falling back, as the default AOTMode=auto does), and checks four requests:
 #
-# - the health probe is allowed;
+# - the probes answer on the application port, and the scrape endpoint on the management port carries the CoSec meters;
 # - an unauthenticated request to a protected route is 401 with problem+json;
 # - a request with a valid token is allowed;
 # - a request a DENY matches is 403 with problem+json.
@@ -29,13 +29,14 @@
 # and Docker must report the container healthy.
 #
 # CoSec authorizes the gateway's routes only, so the image gets one route, /smoke/**, that forwards to its own
-# health endpoint: an allowed request answers 200, one CoSec refuses never leaves the gateway.
+# health endpoint on the management port: an allowed request answers 200, one CoSec refuses never leaves the gateway.
 set -eu
 
 IMAGE=$1
 MIGRATE=$2
 REDIS_URI=redis://localhost:6379
 PORT=8080
+MGMT=8081
 # A throwaway secret: the job's own, never a deployment's.
 SECRET=aot-smoke-only-not-a-secret-0123456789abcdef
 NAME=cosec-aot-smoke
@@ -59,7 +60,7 @@ printf '{"accepted":true,"outputSha256":{"platform.json":"%s"}}\n' "$SHA" >"$WOR
 "$MIGRATE" publish --to-redis "$REDIS_URI" --in "$WORK/documents"
 
 # 2. The image, on its AOT cache.
-ROUTES='{"spring":{"cloud":{"gateway":{"server":{"webflux":{"routes":[{"id":"smoke","uri":"http://localhost:'$PORT'","predicates":["Path=/smoke/**"],"filters":["SetPath=/actuator/health"]}]}}}}}}'
+ROUTES='{"spring":{"cloud":{"gateway":{"server":{"webflux":{"routes":[{"id":"smoke","uri":"http://localhost:'$MGMT'","predicates":["Path=/smoke/**"],"filters":["SetPath=/actuator/health"]}]}}}}}}'
 docker run -d --name "$NAME" --network host --health-interval 2s \
   -e SPRING_DATA_REDIS_URL="$REDIS_URI" \
   -e COSEC_JWT_SECRET="$SECRET" \
@@ -70,7 +71,7 @@ docker run -d --name "$NAME" --network host --health-interval 2s \
 started=false
 i=0
 while [ "$i" -lt 120 ]; do
-  if curl -fs -o /dev/null "http://localhost:$PORT/actuator/health"; then
+  if curl -fs -o /dev/null "http://localhost:$MGMT/actuator/health"; then
     started=true
     break
   fi
@@ -132,15 +133,30 @@ expect() {
   fi
 }
 
-expect "the health probe is allowed" 200 no /actuator/health
+expect "the liveness probe answers on the application port" 200 no /livez
 expect "an unauthenticated request is refused" 401 yes /smoke/orders
 expect "a request with a valid token is allowed" 200 no /smoke/orders "$TOKEN"
 expect "a request a DENY matches is forbidden" 403 yes /smoke/denied/orders "$TOKEN"
 
+# 4b. The scrape endpoint, on the management port only: the decisions above are in it, and no actuator is on the gateway's port.
+scrape=$(curl -s "http://localhost:$MGMT/actuator/prometheus")
+for meter in cosec_authorization_seconds_count cosec_snapshot_installed; do
+  case "$scrape" in
+    *"$meter"*) echo "ok   the scrape endpoint carries $meter" ;;
+    *) echo "FAIL the scrape endpoint has no $meter" >&2; failed=1 ;;
+  esac
+done
+if [ "$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:$PORT/actuator/prometheus")" = 404 ]; then
+  echo "ok   no actuator endpoint on the application port"
+else
+  echo "FAIL the application port serves /actuator/prometheus" >&2
+  failed=1
+fi
+
 # 5. The image's HEALTHCHECK: the liveness group, run by Docker with the image's own command.
 check=$(docker inspect -f '{{join .Config.Healthcheck.Test " "}}' "$NAME")
 case "$check" in
-  *"/actuator/health/liveness"*) echo "ok   the image's HEALTHCHECK probes the liveness group" ;;
+  *"/livez"*) echo "ok   the image's HEALTHCHECK probes the liveness group" ;;
   *) echo "FAIL the image's HEALTHCHECK is [$check], not the liveness group" >&2; failed=1 ;;
 esac
 health=

@@ -151,7 +151,12 @@ description: "通过控制面安全地修改策略：校验与编译错误、sim
 | `setLimits` | 包含全部六个限制的 `limits`，每个都是与文档中相同的正整数 | 设置平台的限制；没有 `limits` 时恢复默认值。其他类型的值返回 `400`。 |
 | `setAttributes` | `attributes`，与文档中相同的数组 | 设置平台声明的属性；没有 `attributes` 时删除该字段。不是属性数组时返回 `400`。 |
 
-`ifMatch` 是条目按文档写法的 SHA-256：只有条目仍是这个样子时操作才生效。不想手写操作时，`POST /documents/{key}:apply` 接受整份文档（`{"document", "mode", "note"}`），并提议把当前修订变成该文档所需的操作：`MERGE` 只新增和修改，`REPLACE` 还会删除文档中没有的内容。设置租户的 `boundary` 或平台的默认边界请使用 `apply`。租户的边界属于平台：租户主体的 `REPLACE` 或回滚如果会删除或改变平台设定的边界，返回 `403`。限流规则变更如何授权和审批见[限流](./rate-limiting.md#publishing-rules)。
+`ifMatch` 是条目按文档写法的 SHA-256：只有条目仍是这个样子时操作才生效。不想手写操作时，`POST /documents/{key}:apply` 接受整份文档（`{"document", "mode", "note"}`），并提议把当前修订变成该文档所需的操作：`MERGE` 只新增和修改，`REPLACE` 还会删除文档中没有的内容。
+
+- **`MERGE` 保留文件里没有的内容。** 从文件中删掉的条目（例如撤销的授权）仍然处于发布状态。变更会说明这一点：每个保留了条目的部分给出一个 `WARNING` 检查结果（检查 `OPERATION`），位于 `$.policies`、`$.bindings`、`$.roles` 或 `$.rateLimits`，并点名保留的 id。要删除它们，请用 `REPLACE` 应用。
+- **`REPLACE` 在文件读取时的修订上提议**，即文件头的 `revision`，而不是到达时的头修订。在修订 12 上读取、在修订 13 发布之后才应用的文件，会删掉修订 13 的条目，所以返回 `409`：读取头修订（`GET /documents/{key}`），把变化合并进文件，把它的 `revision` 设为头修订，再应用一次。从 git 应用的作业要发送它上次读取的修订。尚未发布的文档不比较文件头。`REPLACE` 删除的内容就是它的操作。
+
+设置租户的 `boundary` 或平台的默认边界请使用 `apply`。租户的边界属于平台：租户主体的 `REPLACE` 或回滚如果会删除或改变平台设定的边界，返回 `403`。限流规则变更如何授权和审批见[限流](./rate-limiting.md#publishing-rules)。
 
 `base` 已不是当前修订时返回 `409`。`onMissing: "nomatch"` 的 DENY 需要在 `confirmations` 中提供确认（`{"policy", "statement", "digest", "kind": "deny-nomatch"}`）；没有确认的变更无法发布。
 
@@ -268,7 +273,16 @@ API key 无论其主体持有什么，都不是信任根，也从不审批。CoS
 { "ack": { "window": "<window id>", "counts": { "SAME": 4180, "NARROWED": 3 } } }
 ```
 
-窗口 id 和计数在变更的 `shadow` 中；为零的计数可以省略。随后发布会以发布者身份在当前文档上重新检查一切：发布者对每个条目的权限、授权分析，以及审批。审批必须覆盖此时发现的升级、未过期、针对此候选、既不来自作者也不来自发布者，且审批人仍持有 `cosec:approve`。审批人按其审批时所用的凭证重新检查：用带上限的 key 给出的审批，在发布时不计入审批人自己绑定中的 ALLOW；不是用 CoSec 自己的令牌给出的审批，不计入其 break-glass 绑定。审批不再成立时，变更回到 `AWAITING_APPROVAL`，不发布任何内容。文档已变化，或其间另一个变更取走了该文档的暂存槽时，变更为 `CONFLICTED`；候选无法针对当前文档编译时，变更为带有检查结果的 `DRAFT`。修订已写入但答复丢失的发布，重试时为 `PUBLISHED`：控制面在修订链上找到这个变更自己的修订（即使其上已有后来的修订），补做写入之后的步骤，并以修订记录的发布人身份记录事件。写入头之后无法完成后续步骤的发布（存储失败或超时）返回 `503`：修订已经生效，再发布一次这个变更即可结算，不会增加修订。变更已经是 `PUBLISHED` 时也是如此：只有释放暂存槽失败时，再发布一次会释放暂存槽并记录这次发布，只记一次。
+窗口 id 和计数在变更的 `shadow` 中；为零的计数可以省略。
+
+对平台文档、平台租户的文档（`tenant:(platform)`）或控制应用的文档的变更，还会检查它发布之后，其操作者是否仍能到达控制面（检查 `V4`）。引擎在候选就位的情况下，判定操作者正在进行的请求（按管道判定它的方式：路径、主体、成员关系、请求头与时间），以及控制应用中对该文档的 `cosec:publish`。会把操作者挡在外面的变更，在提议时带有 `V4` `WARNING`；发布时针对发布者检查，除非发布者在发布请求体里以 `"lockout": true` 确认，否则返回 `422`；确认之后，变更会记录这一确认以及确认者。把控制 API 移到另一条路径、角色或策略是正当的交接：确认它，或者分两次变更完成（先加入新的入口并发布，再删除旧的）。被锁在外面之后的出路是 [`cosec-migrate restore`](../operations/storage.md#recovering-from-a-lock-out)。这项检查的局限：
+
+- 只检查发布者自己的回路，使用正在进行的请求的事实。其他操作者可能被锁在外面。
+- 看不到之后发生的事：到期的绑定或令牌、去掉某个角色的成员关系提供者、窗口之外的 `time` 条件、换了的地址。
+- 不获取外部属性（`ext.*`）：读取它的语句按其 `onMissing` 判定。
+- 不检查租户自己的文档；平台的操作者可以修复它。
+
+随后发布会以发布者身份在当前文档上重新检查一切：发布者对每个条目的权限、授权分析，以及审批。审批必须覆盖此时发现的升级、未过期、针对此候选、既不来自作者也不来自发布者，且审批人仍持有 `cosec:approve`。审批人按其审批时所用的凭证重新检查：用带上限的 key 给出的审批，在发布时不计入审批人自己绑定中的 ALLOW；不是用 CoSec 自己的令牌给出的审批，不计入其 break-glass 绑定。审批不再成立时，变更回到 `AWAITING_APPROVAL`，不发布任何内容。文档已变化，或其间另一个变更取走了该文档的暂存槽时，变更为 `CONFLICTED`；候选无法针对当前文档编译时，变更为带有检查结果的 `DRAFT`。修订已写入但答复丢失的发布，重试时为 `PUBLISHED`：控制面在修订链上找到这个变更自己的修订（即使其上已有后来的修订），补做写入之后的步骤，并以修订记录的发布人身份记录事件。写入头之后无法完成后续步骤的发布（存储失败或超时）返回 `503`：修订已经生效，再发布一次这个变更即可结算，不会增加修订。变更已经是 `PUBLISHED` 时也是如此：只有释放暂存槽失败时，再发布一次会释放暂存槽并记录这次发布，只记一次。
 
 写入时只比较该文档自己的头。检查读过的其他文档（例如同一时刻落地的平台变更）可能在发布的最后一次检查与写入之间变化；这时控制面重新分析这次变更，记 `HEADS_MOVED`，分析发现了无人审批的升级项时记 `REVIEW_NEEDED`。变更保持已发布：为什么这是安全的、如何复核这类事件，见[一次发布比较什么](../operations/storage.md#what-a-publish-compares)。
 
@@ -420,8 +434,10 @@ class OrderPermissionsTest {
 
 `PipelineFixture.of(platform, apps, tenants)` 接受 JSON 文本形式的文档。文档无法编译时，构建夹具就会失败。`Principal` 说明请求是谁，如同令牌一样：`tenant`、`roles`（`role` 或 `role@space`）、`policies`、`app` 和 `attributes`；不提供时请求是匿名的。它只替换凭证检查：状态码、`SecurityContext` 和决策都来自管道。用完关闭夹具，通常一个测试类一个。
 
-`of` 和 `load` 还接受 `routes` 与 `listeners`。有路由映射（`RouteMapCodec.load`）时，请求带有你的服务的动作和资源，与配置了 `cosec.authorization.routes.location` 的宿主一样；没有时，它的动作是其路径上的 `http:<METHOD>`。监听器收到管道产生的事件：`REQUIRED` 监听器在 `evaluate` 返回前收到，`BEST_EFFORT` 监听器在夹具关闭时收到。你自己的 `DecisionListener` 就这样测试（[决策监听器](../architecture/extending.md#decision-listeners)）。
+`of` 和 `load` 还接受 `routes`、`listeners` 与 `rateLimiter`。限流规则默认在夹具自己的 `LocalRateLimiter` 中计数，与 starter 一样，所以超出限制的请求为 `429`；在测试中传入 `LocalRateLimiter(clock = { now })` 可以跨越窗口。`securityContext` 给出的上下文在 `end(context)` 结束它之前一直处于进行中，就像主机在响应完成时结束它那样；测试在响应之后检查的代码时，先结束它（[代码中的权限检查](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)）。有路由映射（`RouteMapCodec.load`）时，请求带有你的服务的动作和资源，与配置了 `cosec.authorization.routes.location` 的宿主一样；没有时，它的动作是其路径上的 `http:<METHOD>`。监听器收到管道产生的事件：`REQUIRED` 监听器在 `evaluate` 返回前收到，`BEST_EFFORT` 监听器在夹具关闭时收到。你自己的 `DecisionListener` 就这样测试（[决策监听器](../architecture/extending.md#decision-listeners)）。
 
 `PipelineFixture.unreadable(routes, listeners)` 是一个无法读取文档的宿主：对存储的每次读取都失败，因此每个请求都是 `503 unavailable`，没有请求被允许。让你的路由在它上面运行，证明存储不可用时它们失败关闭。
+
+`IdentityHeader` 写出网关转发的 `CoSec-Identity` 头，用于在前面没有网关的情况下测试运行在网关之后的服务（`cosec.pipeline.mode=gateway`）。它可以为一个主体、任意一个 `Identity`，或网关为一个真实令牌转发的内容写出头。一个头生成一分钟后就会被拒绝，所以每个请求生成一个（[网关之后的服务](../integration/web.md#services-behind-the-gateway)）。
 
 **下一步：** 把测试过的策略发布到存储中，见[存储](../operations/storage.md)。

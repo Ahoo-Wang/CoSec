@@ -81,7 +81,7 @@ The app document's catalog lists the permissions the source knows, as short-form
 | A role's permissions | `putRole`, without `ifMatch` |
 | A role is deleted | `removeRole` |
 | An app's permissions | `putCatalog` |
-| Periodic reconciliation | `apply` with `MERGE`, or `REPLACE` when the source is the only writer of the document |
+| Periodic reconciliation | `apply` with `REPLACE` when the source is the only writer of the document; `MERGE` never removes, and names what it keeps in a `WARNING` |
 
 ## The calls a change becomes
 

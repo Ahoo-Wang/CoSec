@@ -19,28 +19,14 @@ import kotlinx.coroutines.runBlocking
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.api.context.SecurityContext
-import me.ahoo.cosec.engine.CompiledDocument
-import me.ahoo.cosec.engine.Engine
-import me.ahoo.cosec.engine.EngineRequest
-import me.ahoo.cosec.engine.Evaluation
-import me.ahoo.cosec.engine.SnapshotView
-import me.ahoo.cosec.engine.TraceLevel
-import me.ahoo.cosec.model.PolicyId
-import me.ahoo.cosec.model.decision.BindingRef
-import me.ahoo.cosec.model.decision.Decision
-import me.ahoo.cosec.model.decision.StatementRef
 import me.ahoo.cosec.model.scope.HostScope
-import me.ahoo.cosec.runtime.Pipeline
 import me.ahoo.cosec.runtime.authn.TokenAuthenticator
 import me.ahoo.cosec.runtime.http.Cookies
 import me.ahoo.cosec.runtime.http.Headers
 import me.ahoo.cosec.runtime.http.HttpFacts
-import me.ahoo.cosec.runtime.snapshot.SnapshotViews
-import me.ahoo.cosec.runtime.snapshot.SuspendingSnapshotSource
-import me.ahoo.cosec.runtime.snapshot.ViewKey
+import me.ahoo.cosec.runtime.http.RequestSecurity
 import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.cosec.spi.token.TokenVerifier
-import java.util.concurrent.CompletableFuture
 
 /**
  * The [SecurityContext] of a request a token would be permitted on, for testing what an application does with a
@@ -82,12 +68,7 @@ object PermittedRequest {
                     "pass the token as [token], not through [headers]."
             )
         }
-        val pipeline = Pipeline.builder(
-            TokenAuthenticator(verifier, revocations),
-            SuspendingSnapshotSource(NO_DOCUMENTS)
-        )
-            .engine(PERMITTING)
-            .build()
+        val pipeline = PermittingHost.pipeline(TokenAuthenticator(verifier, revocations))
         val facts = HttpFacts(
             method = "POST",
             rawPath = "/",
@@ -104,24 +85,17 @@ object PermittedRequest {
         return context
     }
 
+    /**
+     * Ends the request of [context], as a host does when its response is complete (`PIP-26`): from then on every check
+     * of it is denied. For a test of code that keeps a context and checks with it after the request. The context
+     * [withToken] answers is not ended until this is called. Idempotent.
+     *
+     * @throws IllegalArgumentException when [context] is not one the pipeline made
+     */
+    fun end(context: SecurityContext) {
+        requireNotNull(RequestSecurity.of(context)) { "The context [$context] is not one the pipeline made." }.end()
+    }
+
     /** The headers that carry who the caller is: a test passes the token, never one of these. */
     private val CREDENTIAL_HEADERS = listOf("Authorization", "X-API-Key", "CoSec-Identity")
-
-    /** The host's rule, "permit the request": the context is what is tested, not the decision. */
-    private val PERMITTING = object : Engine {
-        override fun evaluate(request: EngineRequest, snapshot: SnapshotView, trace: TraceLevel): Evaluation =
-            Evaluation(Decision.Permit(StatementRef.Policy(PERMIT, 0, "", BindingRef.Attached(PERMIT))), null)
-    }
-
-    private val PERMIT = PolicyId("testkit-permitted-request")
-
-    private val NO_DOCUMENTS = object : SnapshotViews {
-        override fun peek(key: ViewKey): SnapshotView = SnapshotView(
-            CompiledDocument.platform(emptyList(), emptyList()),
-            key.app?.let { CompiledDocument.app(it, emptyList(), emptyList()) },
-            key.tenant?.let { CompiledDocument.tenant(it, emptyList(), emptyList()) },
-        )
-
-        override fun load(key: ViewKey): CompletableFuture<SnapshotView> = CompletableFuture.completedFuture(peek(key))
-    }
 }

@@ -194,6 +194,8 @@ Full model: https://cosec.ahoo.me/guide/security-model.
 - **`API keys are enabled, but no ApiKeyReader is available`**: `cosec.api-key.store=redis` needs a
   `ReactiveStringRedisTemplate`.
 - **`cosec.api-key.enabled=true needs a MembershipProvider bean`** (IDN-6): a key's memberships are its principal's.
+  On the `cosec-gateway-server` image the message ends `The cosec-gateway-server image ships none, so as shipped it cannot use API
+  keys`: the image has no `MembershipProvider` bean, so API keys need an image derived from it that adds one.
   Add `cosec-cocache` and a `MembershipLoader` bean (the starter then wires `CoCacheMembershipProvider`), or declare a
   `MembershipProvider`. Checked only in `cosec.pipeline.mode=enforce`, where keys are read.
 - **`API key [<id>] needs exactly one of roles ... and uncapped: true`**: a configured key states its cap (`roles`,
@@ -379,7 +381,8 @@ header: anonymous. Otherwise never anonymous:
 - 401 `token-invalid`: unsupported version, no `auth.exp`, or issued in the future (beyond
   `cosec.authentication.revocation.skew`).
 - 401 `token-expired`: the credential expired, or the identity is older than `cosec.pipeline.identity.max-age` (60s)
-  plus the skew. Check clocks.
+  plus the skew. Check clocks. In a test without a gateway: a header (`IdentityHeader`) made once and reused; make one
+  per request.
 - On the gateway, a 500 with `Request [<id>]: the identity cannot be forwarded.`: the credential never expires (an API
   key without `expires-at`), or the identity is too large or a `cosec.gateway.identity.claims` value is not a string
   (at most 1024 characters), number or boolean.
@@ -444,10 +447,19 @@ application port. https://cosec.ahoo.me/operations/troubleshooting#probes-answer
 
 A first platform document that does not let authenticated callers reach `/cosec/control/v1/**` leaves the control plane
 unreachable (403 from the pipeline, before any control check) and `cosec-migrate publish` never overwrites: add the
-`control-api` policy of https://cosec.ahoo.me/guide/quick-start to the platform document, which is only possible through
-the control plane, so a deployment without it must be re-published into an empty Redis or key prefix. A control token
+`control-api` policy of https://cosec.ahoo.me/guide/quick-start to the platform document. Once a platform document
+exists, never empty Redis: a later change that closed the control API (every control call 401/403) is undone with
+`cosec-migrate restore --to-redis <uri> --document platform --revision <last good>`, which prints the plan, then
+`--confirm <head revision>` writes the kept revision as the next one through the control plane's writer
+(https://cosec.ahoo.me/operations/storage#recovering-from-a-lock-out). The control plane refuses such a change with 422
+(`V4`, `... could not reach the control plane: ...`) unless the publisher sends `"lockout": true`. A control token
 is issued for tenant `(platform)` (or the tenant) and app `cosec.control.app-id`; a token for another app is
 `scope-rejected` on a host with an app.
+
+An `:apply` with `REPLACE` answers 409 `REPLACE removes what the file leaves out, and the file was read at revision <m>`
+when the file's header `revision` is not the head's: re-read the head, merge, set `revision` to the head's. An `:apply`
+with `MERGE` never removes: its `OPERATION` WARNING at `$.policies`/`$.bindings`/`$.roles`/`$.rateLimits` names what
+it kept.
 
 A change refused with `REFERENCES` or `V2` (422) names what it met: `[<id>] is referred to by [<doc>]` for a `<doc>` that
 does not refer to it is a publish of `<doc>` that indexed the reference and lost its head write (run `cosec-migrate

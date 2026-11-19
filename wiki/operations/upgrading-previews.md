@@ -23,6 +23,24 @@ section above it:
 
 ## From 8.0.0-beta.3 {#from-8-0-0-beta-3}
 
+- **The `cosec-gateway-server` image: no JMX agent, the actuator on a management port, and the image's defaults kept
+  under a mounted file** (`UB-2`, `UB-21`). Affected: whoever runs the image.
+  - Through beta.3 the start script started a JMX agent on port 5555 with no authentication, on every interface. It no
+    longer starts one. To attach, set it in `JAVA_OPTS`, bound to loopback ([the image](./deployment.md#the-image)); the
+    `-Dcom.sun.management.jmxremote.host=127.0.0.1` the Kubernetes base set is gone with it.
+  - The actuator is served on the management port `8081` (`management.server.port`), no longer on `8080`:
+    `/actuator/health/*` on 8080 is `404`. The probes are now `/livez` and `/readyz` on 8080 (the same groups, served on
+    the gateway's own port, not decided by CoSec); `/actuator/health` and `/actuator/prometheus` are on 8081. Change a
+    probe or health check of your own to `/livez` and `/readyz` (the image's `HEALTHCHECK` and the `k8s/` manifests
+    did), and publish 8081, if you scrape it, to a monitoring network only.
+  - The image has `cosec-micrometer` and a Prometheus registry (Micrometer 1.17.2, from Spring Boot's dependency
+    management): `cosec.authorization`, `cosec.snapshot.*` and the others are on `/actuator/prometheus`.
+  - The image's defaults are now in its jar, and a `config/application.yaml` you mount is read in addition to them,
+    key by key; it used to replace them (Kafka audit, login and ip2region came back on). A file that set what it needs
+    is unaffected; one that left the defaults out now gets them. A list such as `routes` is still replaced whole.
+  - `k8s/base`: the demo CORS origin is a placeholder (`https://app.example.com`, no longer `*`; `max-age` is in
+    seconds), the demo route and discovery list are marked, the container has a `management` port, and the production
+    NetworkPolicy admits it from the `monitoring` namespace only.
 - **A `cosec.*` switch whose value CoSec cannot read fails startup** (`UB-1`). Through beta.3 a value such as
   `cosec.enabled=1`, `on`, an empty string or ` true ` was true to Spring's binder and "off" to the condition that wires
   the beans, so CoSec, or the feature, was switched off without a word; an empty `cosec.pipeline.mode` wired no pipeline,
@@ -55,8 +73,8 @@ section above it:
   server-sent-events body, an async servlet request. Affected: code that keeps a context and checks with it after the
   response was written. Check within the request instead; work that runs afterwards (a consumer, a scheduled job)
   carries its own authorization ([Checks in code](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)).
-  A context of a request your own transport handed to `Pipeline.evaluate`, and the test kit's, is never ended: no
-  change there.
+  A context of a request your own transport handed to `Pipeline.evaluate`, and the test kit's, is ended only when you
+  end it: close the `Outcome`, or call `PipelineFixture.end` / `PermittedRequest.end` (below).
 - **Security: the readers of the security context answer only a context the pipeline made** (`PIP-27`).
   `exchange.getSecurityContext()`, `ContextView.getSecurityContextOrEmpty()` / `getSecurityContext()`,
   `request.getSecurityContext()`, the `SecurityContext` handler parameter and `SecurityContextHolder` returned whatever
@@ -90,6 +108,19 @@ section above it:
   (`grep -nP '[^\x00-\x7F]'`). Or load the files with this version's `PolicyTestKit.load`, which compiles each document
   as an instance does and names the path of each error. `cosec-migrate convert` now refuses the same shapes from 7.x
   data: an ALLOW on a 7.x resource attribute is a statement that can never hold, which you remove.
+- **Breaking: `:apply` with `REPLACE` checks the revision the file was read at.** Through beta.3 the header's
+  `revision` was required and ignored, and a `REPLACE` removed whatever the head held that the file did not, including
+  what was published after the file was read. Now a file whose `revision` is not the head's is a `409`. Affected: jobs
+  that apply a file from git with a fixed or stale `revision`. Send the revision the job last read (`GET
+  /documents/{key}`, its `revision`), merging what changed since ([Changes](../policies/testing.md#changes)). A
+  document not published yet is not compared. `MERGE` is unchanged, and its change now names, in a `WARNING`, the
+  entries it keeps because the file leaves them out.
+- **A change that would lock its publisher out of the control plane needs an acknowledgement.** A change to the
+  platform document, the platform tenant's or the control app's that would leave its operator unable to reach the
+  control plane carries a `V4` warning, and its publish is a `422` unless the body says `"lockout": true`
+  ([Publishing and rolling back](../policies/testing.md#publishing-and-rolling-back)). Affected: automation that
+  publishes such a change on purpose; add the acknowledgement. The way back from a lock-out is the new
+  `cosec-migrate restore`, not an emptied Redis ([Recovering from a lock-out](./storage.md#recovering-from-a-lock-out)).
 - **Fixed: a lost invalidation is installed by the first pass after it, even past a load in flight.** The beta.3
   release notes listed it as a known issue: when a revalidation pass met a load of a document already in flight, it
   took that load's read as its confirmation, though the read could predate the change, so a change whose invalidation
@@ -132,6 +163,38 @@ section above it:
   Redis key. Now a value shaped like a token (a JOSE compact serialization, with or without `Bearer `) throws
   `IllegalArgumentException`, which names `TokenRevoker`; no token id CoSec or another issuer gives is refused.
   Affected: a logout written against `TokenStore`, which never worked. Call `TokenRevoker.revoke(accessToken)`.
+- **A pipeline built with `Pipeline.builder` counts rate limits** (UA-10). Through beta.3 a pipeline built without
+  `rateLimiter(...)` had none: a rule with `strictFailure` answered every request it covered `503`, and every other
+  rule was skipped. It now counts in a `LocalRateLimiter` of its own, as the starter's default does, and a request
+  over a rule's limit is `429`. `PipelineFixture.of` and `load` count the same way and take a `rateLimiter`, so a test
+  sees the `429` (pass a `LocalRateLimiter` with a clock of the test's to cross a window). Affected: a pipeline outside
+  Spring, and tests, whose documents have rate limit rules: they are limited now. Give `rateLimiter(...)` a limiter
+  shared across instances to limit a service as a whole. The starter is unchanged. `PipelineFixture.of` and `load`
+  gained a parameter: recompile tests against this version.
+- **A transport of your own can end its requests** (`PIP-26`). `Outcome` is `AutoCloseable`: close it when the
+  response is complete (`pipeline.evaluate(facts).use { … }`), or from the response's completion callback when it
+  outlives the handler, and every later check of its context is `false`
+  ([Pipeline outside the adapters](../architecture/extending.md#pipeline-outside-the-adapters)). In tests,
+  `PipelineFixture.end(context)` and `PermittedRequest.end(context)`. Nothing breaks: a transport that does not close
+  it behaves as before.
+- **A check refused for how it was called is logged** (UA-5). A context the pipeline did not make, a check after its
+  request ended and a malformed action string still answer `false` (`Deny(null)`), and now log a `WARN` once a minute
+  per kind, naming the request ([Troubleshooting](./troubleshooting.md#a-check-answers-false)). Nothing to change.
+- **The request's `Principal` is CoSec's if and only if CoSec authenticated the request, on every stack** (`PIP-28`).
+  Through beta.3, WebFlux and the gateway gave an anonymous caller the anonymous principal `(0)` as
+  `exchange.getPrincipal()` and as a `java.security.Principal` handler parameter, so code that took "a principal is
+  present" for "signed in" counted every anonymous caller as one user; Spring MVC set none at all. Now:
+  - WebFlux and the gateway set none for an anonymous request. Affected: code that expects a principal for anonymous
+    callers (an `exchange.principal.map { … }` that now completes empty, a non-null `Principal` parameter).
+  - Spring MVC sets CoSec's principal for a signed-in request: `getUserPrincipal()` is it, `getRemoteUser()` its id,
+    and a `Principal` handler parameter is no longer null. It replaces a principal the container or a filter in front
+    (Spring Security) had set; on a request CoSec treats as anonymous, that one is left as it was. `isUserInRole` is
+    `false` and `getAuthType()` `null` on a request CoSec authenticated. Affected: servlet applications that read
+    `getUserPrincipal()` or `getRemoteUser()` (they now get CoSec's caller for signed-in requests) and ones that ask
+    `isUserInRole` behind CoSec (ask CoSec through a check instead).
+
+  Read the caller from the `SecurityContext` (`principal.authenticated`, `principal.id`), the same on all three
+  ([Web](../integration/web.md)).
 - **Fixed: a token from an issuer whose clock runs ahead is accepted** (#1666, `IDN-29`). Through beta.3,
   `JwtTokenVerifier` allowed no room for clocks: a token whose `iat` was even milliseconds later than the verifier's
   clock was `401 token-invalid`, so a deployment whose issuer and gateway do not share a clock saw intermittent `401`s

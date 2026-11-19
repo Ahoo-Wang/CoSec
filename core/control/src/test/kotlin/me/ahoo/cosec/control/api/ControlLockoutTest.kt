@@ -1,0 +1,194 @@
+/*
+ * Copyright [2021-present] [ahoo wang <ahoowang@qq.com> (https://github.com/Ahoo-Wang)].
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+@file:OptIn(InternalCoSecApi::class, ExperimentalCoSecApi::class)
+
+package me.ahoo.cosec.control.api
+
+import kotlinx.coroutines.runBlocking
+import me.ahoo.cosec.annotations.ExperimentalCoSecApi
+import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.control.authz.EngineAuthority
+import me.ahoo.cosec.control.authz.Operator
+import me.ahoo.cosec.control.change.ACME
+import me.ahoo.cosec.control.change.ApplyMode
+import me.ahoo.cosec.control.change.ChangeHarness
+import me.ahoo.cosec.control.change.ChangeId
+import me.ahoo.cosec.control.change.ChangeRejectedException
+import me.ahoo.cosec.control.change.ChangeState
+import me.ahoo.cosec.control.change.IMMEDIATE_WINDOW
+import me.ahoo.cosec.control.change.NO_MEMBERSHIPS
+import me.ahoo.cosec.control.change.Operation
+import me.ahoo.cosec.control.change.PERMIT_ALL
+import me.ahoo.cosec.control.change.Severity
+import me.ahoo.cosec.control.change.allow
+import me.ahoo.cosec.control.change.operatorFor
+import me.ahoo.cosec.control.lifecycle.ChangeOptions
+import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
+import me.ahoo.cosec.control.store.StoreFixtures
+import me.ahoo.cosec.document.Actor
+import me.ahoo.cosec.document.PolicyDefinition
+import me.ahoo.cosec.engine.StatementSource
+import me.ahoo.cosec.model.AppId
+import me.ahoo.cosec.model.Binding
+import me.ahoo.cosec.model.BindingId
+import me.ahoo.cosec.model.BindingScope
+import me.ahoo.cosec.model.Effect
+import me.ahoo.cosec.model.Match
+import me.ahoo.cosec.model.PolicyId
+import me.ahoo.cosec.model.PrincipalId
+import me.ahoo.cosec.model.SubjectRef
+import me.ahoo.cosec.model.TenantId
+import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
+import me.ahoo.test.asserts.assert
+import org.junit.jupiter.api.Test
+
+/**
+ * UC-6: a candidate that would keep its operator out of the control plane is found, by the engine, on the operator's
+ * own request: the control API's path through the host's documents, and `cosec:publish` on the document.
+ */
+class ControlLockoutTest {
+    private val harness = ChangeHarness()
+    private val engine = EngineAuthority(harness.revisions)
+    private val lockout = ControlLockout(harness.revisions)
+
+    private val controlApi = allow("control-api", action = "http:*", resource = "http:path:/cosec/control/v1/**")
+    private val admin = allow("admin", action = "cosec:*")
+    private val anyone = anyone("control-api")
+    private val walt = Binding(
+        BindingId("walt"),
+        SubjectRef.Principal(TenantId.PLATFORM, PrincipalId("walt")),
+        BindingScope(Match.Any, Match.Any),
+        PolicyId("admin"),
+    )
+
+    private fun anyone(policy: String) = Binding(
+        BindingId(policy),
+        SubjectRef.Anyone,
+        BindingScope(Match.Any, Match.Any),
+        PolicyId(policy)
+    )
+
+    private fun platform(policies: List<PolicyDefinition>, bindings: List<Binding>) =
+        StoreFixtures.candidate(SnapshotKey.Platform, policies, bindings)
+
+    private suspend fun published() {
+        val by = operatorFor(SnapshotKey.Platform)
+        val operations = listOf(controlApi, admin).map {
+            Operation.PutPolicy(it)
+        } + listOf(anyone, walt).map { Operation.PutBinding(it) }
+        val change = harness.changes.propose(by, SnapshotKey.Platform, 0, operations, "base")
+        harness.changes.skipShadow(by, change.id, "test")
+        harness.changes.publish(by, change.id).state.assert().isEqualTo(ChangeState.PUBLISHED)
+    }
+
+    private val operator get() = engine.operator(TenantId.PLATFORM, "walt")
+
+    @Test
+    fun `a candidate that keeps both ways in is no lock-out`() = runBlocking<Unit> {
+        published()
+        val wider = platform(listOf(controlApi, admin, allow("more", action = "order:read")), listOf(anyone, walt))
+        lockout.check(operator, SnapshotKey.Platform, wider).assert().isNull()
+    }
+
+    @Test
+    fun `a platform that no longer opens the control API's path locks its publisher out`() = runBlocking<Unit> {
+        published()
+        lockout.check(operator, SnapshotKey.Platform, platform(listOf(admin), listOf(walt)))!!.reason.assert()
+            .contains("the request in progress (http:POST)").contains("denied: no statement permits it")
+    }
+
+    @Test
+    fun `a platform that no longer grants cosec publish locks its publisher out`() = runBlocking<Unit> {
+        published()
+        lockout.check(
+            operator,
+            SnapshotKey.Platform,
+            platform(listOf(controlApi, admin), listOf(anyone))
+        )!!.reason.assert()
+            .contains("cosec:publish on [platform]").contains("denied")
+    }
+
+    @Test
+    fun `a deny in the candidate is named`() = runBlocking<Unit> {
+        published()
+        val freeze = PolicyDefinition(
+            PolicyId("freeze"),
+            attachable = false,
+            condition = null,
+            statements = listOf(StatementSource("", Effect.DENY, listOf("cosec:publish"))),
+        )
+        val frozen = platform(listOf(controlApi, admin, freeze), listOf(anyone, walt, anyone("freeze")))
+        lockout.check(
+            operator,
+            SnapshotKey.Platform,
+            frozen
+        )!!.reason.assert().contains("denied by policy freeze, statement 0")
+    }
+
+    @Test
+    fun `only the documents that gate the control plane are checked, and only for a permitted request`() = runBlocking<Unit> {
+        published()
+        lockout.check(operator, ACME, StoreFixtures.candidate(ACME)).assert().isNull()
+        val noRequest = Operator(Actor(TenantId.PLATFORM, PrincipalId("walt")), NO_MEMBERSHIPS)
+        lockout.check(noRequest, SnapshotKey.Platform, platform(emptyList(), emptyList())).assert().isNull()
+        // The platform tenant's document is covered: it binds the platform's operators.
+        val platformTenant = SnapshotKey.Tenant(TenantId.PLATFORM.value)
+        lockout.check(operator, platformTenant, StoreFixtures.candidate(platformTenant)).assert().isNull()
+        // The control app's own document is covered too; a credential that does not declare the app cannot be asked in it.
+        ControlLockout(harness.revisions, controlApp = AppId("ops"))
+            .check(operator, SnapshotKey.App("ops"), StoreFixtures.candidate(SnapshotKey.App("ops")))
+            ?.reason.assert().contains("app ops")
+    }
+
+    @Test
+    fun `a lock-out is a warning at proposal and publishes only acknowledged`() = runBlocking<Unit> {
+        published()
+        val ids = java.util.concurrent.atomic.AtomicInteger()
+        val changes = Changes(
+            harness.memory,
+            harness.revisions,
+            { ChangeId("lock-${ids.incrementAndGet()}") },
+            PERMIT_ALL,
+            harness.clock,
+            ChangeOptions(shadow = IMMEDIATE_WINDOW),
+            revocations = RevocationReader.NONE,
+            lockout = lockout,
+        )
+        val closed = platform(listOf(admin), listOf(walt)).copy(revision = 1)
+        val change = changes.apply(operator, SnapshotKey.Platform, closed, ApplyMode.REPLACE, "close the control API")
+        change.state.assert().isEqualTo(ChangeState.CHECKED)
+        val warning = change.findings.single { it.check == LockoutCheck.CHECK }
+        warning.severity.assert().isEqualTo(Severity.WARNING)
+        warning.message.assert().contains(
+            "walt@(platform) could not reach the control plane"
+        ).contains("cosec-migrate restore")
+        changes.skipShadow(operator, change.id, "test")
+        val refused = try {
+            changes.publish(operator, change.id)
+            throw AssertionError("a lock-out published unacknowledged")
+        } catch (e: ChangeRejectedException) {
+            e
+        }
+        refused.status.assert().isEqualTo(422)
+        refused.message.assert().contains("\"lockout\": true").contains("Recovering from a lock-out")
+        harness.revisions.head(SnapshotKey.Platform)!!.revision.assert().isEqualTo(1)
+        val published = changes.publish(operator, change.id, lockout = true)
+        published.state.assert().isEqualTo(ChangeState.PUBLISHED)
+        published.findings.single { it.check == LockoutCheck.CHECK }.message.assert().contains(
+            "acknowledged by walt@(platform)"
+        )
+    }
+}

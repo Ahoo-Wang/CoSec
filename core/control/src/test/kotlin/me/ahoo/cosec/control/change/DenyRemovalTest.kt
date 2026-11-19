@@ -23,6 +23,7 @@ import me.ahoo.cosec.control.authz.ControlAuthorizer
 import me.ahoo.cosec.control.authz.ControlDecision
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.lifecycle.Narrowing
 import me.ahoo.cosec.document.Catalog
 import me.ahoo.cosec.document.CatalogGroup
@@ -42,6 +43,7 @@ import me.ahoo.cosec.model.RoleId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.decision.DocumentKind
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.assertThrows
@@ -69,6 +71,8 @@ class DenyRemovalTest {
         authorizer,
         harness.clock,
         ChangeOptions(fourEyes = fourEyes, shadow = IMMEDIATE_WINDOW),
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private fun deny(id: String, action: String = "order:export") = PolicyDefinition(

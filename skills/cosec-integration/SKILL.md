@@ -215,6 +215,10 @@ cosec:
   credential's expiry, is 401 `token-expired`; unknown version, no expiry or an identity from the future is 401
   `token-invalid`; a scope that does not resolve here (for example a different `scope.app-id`) is 400.
 - Startup fails for an unknown `cosec.pipeline.mode`, and for `mode=gateway` on a Spring Cloud Gateway host.
+- Tests of such a service, without a gateway: `IdentityHeader` (`cosec-testkit`, experimental) writes the header a
+  gateway sends: `forSubject(subject, tenant, app, space, roles)`, `of(identity)`, or `withToken(token, verifier,
+  revocations)` for a real token's session. A header is refused after 60s: make one per request. Never hand-write the
+  JSON, and never use it in production.
 
 Details: https://cosec.ahoo.me/integration/web#services-behind-the-gateway and
 https://cosec.ahoo.me/guide/security-model#trust-boundaries.
@@ -282,8 +286,9 @@ permitted request, runs no rate limits and notifies no listener, and is `false` 
 enforcing on the real request. A check is not for a message consumer, a scheduler or any work after the request, and a
 `SecurityContext` must never be stored: a check decides with the principal and memberships frozen when the request was
 permitted, and checks no age, revocation or change of roles. Once the adapter has ended the request every check of its
-context is `false` (`PIP-26`); only a context no adapter bound (a transport of your own, the test kit) is never ended,
-and it keeps permitting after logout or after a role is removed. Authorize where the request arrives and carry the decision, not the context, with the work; run a
+context is `false` (`PIP-26`); a transport of your own ends its request by closing the `Outcome` of `Pipeline.evaluate`
+(`use { }`, or `close()` when a streamed response completes), and one that never closes it keeps permitting after
+logout or after a role is removed; in tests, `PipelineFixture.end(context)` and `PermittedRequest.end(context)`. Authorize where the request arrives and carry the decision, not the context, with the work; run a
 transport of your own through `Pipeline.evaluate` (`Outcome.security?.securityContext`) rather than verifying tokens by
 hand; and when you must verify a token yourself, call `TokenVerifier.verify` and then `TokenRevocation.check` (the
 starter's bean), which `verify` alone does not replace. CoSec decides no work the system starts itself in 8.0. A check

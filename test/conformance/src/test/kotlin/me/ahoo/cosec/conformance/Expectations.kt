@@ -86,34 +86,23 @@ object Expectations {
 
     private fun changed(outcome: Outcome.Changed): JsonNode = json.objectNode().apply {
         set("steps", json.arrayNode().apply { outcome.steps.forEach(::add) })
-        set(
-            "errors",
-            json.objectNode().apply {
-                outcome.errors.forEach { (id, checks) ->
-                    set(
-                        id,
-                        json.arrayNode().apply { checks.forEach(::add) }
-                    )
-                }
-            }
-        )
+        set("errors", byChange(outcome.errors))
         set(
             "heads",
             json.objectNode().apply { outcome.heads.forEach { (key, revision) -> put(key, Math.toIntExact(revision)) } }
         )
+        // Present only for the changes that have any, so a scenario that names none expects none.
         if (outcome.escalations.isNotEmpty()) {
-            set(
-                "escalations",
-                json.objectNode().apply {
-                    outcome.escalations.forEach { (id, reasons) ->
-                        set(
-                            id,
-                            json.arrayNode().apply { reasons.forEach(::add) }
-                        )
-                    }
-                }
-            )
+            set("escalations", byChange(outcome.escalations))
         }
+        if (outcome.warnings.isNotEmpty()) {
+            set("warnings", byChange(outcome.warnings))
+        }
+    }
+
+    /** `{ "<change>": ["<item>", ...] }`. */
+    private fun byChange(lists: Map<String, List<String>>): JsonNode = json.objectNode().apply {
+        lists.forEach { (id, items) -> set(id, json.arrayNode().apply { items.forEach(::add) }) }
     }
 
     /** The control plane's outcomes: grant analysis, publishing, the change flow. */

@@ -184,7 +184,11 @@ class PipelineServletFilterTest {
         val request = MockHttpServletRequest("GET", "/orders")
         request.addHeader("X-Set", "client")
         request.addHeader("X-Number", "1")
-        val wrapped = ForwardedHeadersRequest.of(request, mapOf("x-set" to "gate", "X-Number" to "2", "X-New" to "n"))
+        val wrapped = PermittedServletRequest.of(
+            request,
+            mapOf("x-set" to "gate", "X-Number" to "2", "X-New" to "n"),
+            null
+        )
         wrapped.getHeader("X-Set").assert().isEqualTo("gate")
         Collections.list(wrapped.getHeaders("X-Set")).assert().containsExactly("gate")
         wrapped.getIntHeader("x-number").assert().isEqualTo(2)

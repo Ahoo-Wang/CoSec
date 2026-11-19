@@ -28,6 +28,7 @@ import me.ahoo.cosec.control.change.Operation
 import me.ahoo.cosec.control.change.allow
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.ControlStore
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
@@ -53,6 +54,7 @@ import me.ahoo.cosec.model.SpaceId
 import me.ahoo.cosec.model.SubjectRef
 import me.ahoo.cosec.model.TenantId
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.time.Duration
@@ -80,7 +82,16 @@ class ControlAuthorizationTest {
     private fun changes(
         options: ChangeOptions = ChangeOptions(shadow = IMMEDIATE_WINDOW),
         authorizer: ControlAuthorizer = engine.authorizer
-    ) = Changes(store, revisions, { ChangeId("c${ids.incrementAndGet()}") }, authorizer, clock, options)
+    ) = Changes(
+        store,
+        revisions,
+        { ChangeId("c${ids.incrementAndGet()}") },
+        authorizer,
+        clock,
+        options,
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
+    )
 
     private val changes = changes()
 

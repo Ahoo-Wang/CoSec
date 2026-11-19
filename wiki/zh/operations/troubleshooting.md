@@ -210,6 +210,16 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 - **上下文不是管道构造的**：手工构造的或 mock。适配器的读取入口甚至不会返回这样的上下文（`PIP-27`）：`exchange.getSecurityContext()` 和 `request.getSecurityContext()` 为 `null`，必需的 `SecurityContext` 处理器参数会失败。测试中使用管道放行的请求的上下文（`PipelineFixture.securityContext`、`PermittedRequest`）。
 - **动作没有 `:`**，或者指向执法会拒绝的东西（含小写字母的 `http` 动词、请求会得到 `400` 的路径：`PIP-15`）。
 
+其中三种是调用代码的错误，日志会指出它们。日志记录器是 `me.ahoo.cosec.runtime.AuthorizationChecker`。每种错误最多每分钟记录一次 `WARN`，所以检查的循环不会刷屏，而每次发生都记录在 `DEBUG`。消息包含请求 id、动作和资源：
+
+| 消息开头 | 需要修改什么 |
+|---|---|
+| `Check denied before any policy was read: the SecurityContext is not one the pipeline made` | 传入适配器绑定的上下文，测试中传入 `PipelineFixture` 或 `PermittedRequest` 给出的上下文。 |
+| `Check denied before any policy was read: its request has ended` | 在请求内检查；你自己的传输只在响应完成时关闭其 `Outcome`。 |
+| `Check denied before any policy was read: the action is not` | 把动作写成 `service:verb`，或者 `http:` 加大写的方法。 |
+
+执法拒绝的路径不会被记录：它可能来自客户端。
+
 ## 决策使用了旧的修订 {#decisions-use-an-old-revision}
 
 审计事件的 `snapshotVersion` 或 span 的 `cosec.snapshot.version` 比控制面发布的修订旧。
@@ -238,7 +248,7 @@ CoSec 没有建模的异常：CoSec 或你的扩展中的缺陷。日志中以 `
 |---|---|---|
 | `400` `invalid-request` | 该头不是格式 v1 的 base64url JSON、有未知或缺失的成员、指名了带落单 UTF-16 代理项的 id（`IDN-10`）或不能作为租户 id 的租户（例如含 `/`，`SCP-13`）、大于 [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline)、出现了不止一次，或者指明的作用域在本服务上无法解析。 | 有 CoSec 网关以外的东西设置了该头，或者网关的 `cosec.gateway.identity.max-size` 大于服务的上限。 |
 | `401` `token-invalid` | 本服务不读取的版本、没有 `auth.exp`，或签发时间晚于当前时间加 [`cosec.authentication.revocation.skew`](./configuration.md#authentication)。 | 让服务与网关一起升级；同步时钟。 |
-| `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。 |
+| `401` `token-expired` | 凭证已过期，或身份的签发时间早于 [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) 加偏差。 | 同步时钟；在网关与服务之间等待很久的请求需要更大的 `max-age`。在没有网关的测试中，头只生成一次并被重复使用：每个请求生成一个（[`IdentityHeader`](../integration/web.md#services-behind-the-gateway)）。 |
 
 只有网关可以访问到这样的服务：它相信收到的任何该头。启动时以 `WARN` 记录这一点。
 
@@ -614,7 +624,7 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
   添加带 Spring Data Redis 的 `cosec-cocache`，或者注册一个 `ApiKeyReader`。
 - `cosec.api-key.enabled=true needs a MembershipProvider bean: an API key's memberships are its principal's ...
   (IDN-6).` key 的成员关系来自其主体的提供者。添加 `cosec-cocache` 和一个 `MembershipLoader` Bean，它会配置
-  `CoCacheMembershipProvider`，或者声明一个 `MembershipProvider`。这项检查只在 `cosec.pipeline.mode=enforce` 中运行，
+  `CoCacheMembershipProvider`，或者声明一个 `MembershipProvider`。这项检查只在 `cosec.pipeline.mode=enforce` 中运行（在 `cosec-gateway-server` 镜像上，信息以 `The cosec-gateway-server image ships none, so as shipped it cannot use API keys` 结尾：镜像没有 `MembershipProvider` Bean，所以 API key 需要加上它的派生镜像），
   因为只有那里读取 key；`gateway` 模式的服务不读取 key。
 - `API key [<id>] needs the SHA-256 hex of the key as hash.`、`... needs a principal-id.`、`... needs a tenant-id.`、
   `Duplicate API key ids: [...].` 修正 [`cosec.api-key.keys`](./configuration.md#api-keys)。
@@ -657,6 +667,9 @@ Tokens are verified against RevocationReader.NONE: a revoked token (logout, revo
 | `400` | 请求体不是 JSON 对象、字段缺失或未知、值类型错误或解析不了（时间、模式、数字），或者（WebMvc 上）请求体超过 [`cosec.control.http.max-body-size`](./configuration.md#control-plane)。`simulate` 与 `explain` 还会拒绝：没有 `principal` 却指定 `(0)` 以外租户的请求（执法会在 `(0)` 上决策它）；以不同的值重复发送视图中某份文档读取的头的请求（与执法一样拒绝）；执法会拒绝的 `http` 路径（点号段、格式错误的转义、超过 2,048 个字符或每段 256 个），或者超过这些长度的类型化 id，`analyze` 也拒绝这种资源。路径、查询或请求体中任何字符串带有落单 UTF-16 代理项（如 JSON 转义 `"\uD800"`）的请求，在路由读取它之前就被拒绝：`The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | 修正请求；`detail` 用控制面自己的话或字段名说明问题，从不带异常消息。没有 `detail` 的 `400` 以 `INFO` 记录：`Control API <method> <path> (request <requestId>) is 400: <reason>`。WebFlux 上的大请求体受 `spring.codec.max-in-memory-size` 限制。 |
 | `404` | 没有这个路由、文档或变更，或者操作者看不到它。末尾带 `/` 或含空段（`//`）的路径不是路由。 | 使用路由的确切路径。 |
 | `409` | 基准已变化（`[<doc>] is at revision <n>, not <m>`）、变更处于其他状态、另一个变更占用了文档的暂存槽（只有撤销 break-glass，或持有 `cosec:skip-shadow` 的人提交的只收窄变更能抢占，而撤销仍在生效的绑定的变更持有的暂存槽，只有另一个这样的撤销能抢走：[抢占被占用的暂存槽](../policies/testing.md#taking-a-busy-slot)）、影子窗口仍打开或被阻塞，或者 break-glass 撤销没有生效（`binding [<id>] still grants: change <id> is <state>`，见下文）。 | 变基、等待另一个变更、查看窗口的摘要，或再撤销一次。 |
+| `:apply` 的 `REPLACE` 返回 `409`：`[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | 文件头写明了读取时的修订，而头修订之后已变化：应用它会删掉期间发布的内容。 | 读取头修订（`GET /documents/<doc>`），把变化合并进文件，把 `revision` 设为头修订，再应用一次（[变更](../policies/testing.md#changes)）。 |
+| 发布返回 `422`：`publishing change <id>: after this change <principal>@<tenant> could not reach the control plane: …` | 对平台文档、平台租户的文档或控制应用的文档的变更，会让发布者到达不了控制面：原因点名了请求以及拒绝它的是什么（`V4`）。 | 修改这个变更；如果是交接，就在发布请求体里用 `"lockout": true` 确认（[发布与回滚](../policies/testing.md#publishing-and-rolling-back)）。 |
+| 平台文档变更之后，每个控制面调用都返回 `401` 或 `403` | 已发布的变更关闭了控制 API 的路径，或者拿走了每个操作者的授权：谁都无法通过控制面把它改回来。 | `cosec-migrate restore --document platform --revision <最后一个正常的修订>`，再加 `--confirm`（[从被锁在外面中恢复](./storage.md#recovering-from-a-lock-out)）。不要清空 Redis。 |
 | 某一个变更回答 `503`，或每轮维护都记录 `Could not read the open changes; no revision is reclaimed this pass.` | 该变更的记录解码失败：它属于不能作为应用 id 的应用（空白、`*`、含 `:`、`/` 或控制字符、超过 128 个字符，`SCP-10`、`SCP-13`），或者是 alpha 写入的、这个版本不再读取的形状，例如不带 `principalBindings` 的批准。它既无法查看也无法放弃，在移除之前什么都不会回收。 | 从控制面存储中移除它的记录（使用 `cosec-cocache` 时为 key `<key-prefix>:control:change:<id>`），见[升级](./upgrading-previews.md#from-8-0-0-alpha-3)。 |
 | 预览版发布的某个文档不在 `GET /documents` 里，日志记录 `The documents list names [tenant:<id>], which is no document key: left out.`，`/documents/tenant:<id>` 回答 `400` `That names no document` | 它的租户或应用 id 含 `/`（`acme/west`），任何 8.0 id 都不能含 `/`（`SCP-13`）：没有请求读取它，控制面也再无法指名它。 | 给租户或应用改名，以新 id 发布它的文档，然后删除旧 key（[从预览版升级](./upgrading-previews.md#from-8-0-0-alpha-4)）。 |
 | 控制面回答 `503`（变更、发布、`simulate`、维护轮次或影子窗口），日志中的格式错误指名一条记录和一个含 `/` 的 id：`Change [<id>] does not read: … Tenant id [acme/west] must not …`、`The back-reference set of [<doc>] policy [<id>] does not read: … [tenant:acme/west] is not a document key`、`The status of instance [<id>] does not read: …` | 8.0 预览版在含 `/` 的租户或应用 id 下存储了记录，本版本拒绝这种 id（`SCP-13`）。该记录整体失败即拒绝（`SCP-10`），没有任何读取会跳过它。 | 按[从预览版升级](./upgrading-previews.md#from-8-0-0-alpha-4)列出的那样删除该 id 的记录：预览版的控制面做不到。 |

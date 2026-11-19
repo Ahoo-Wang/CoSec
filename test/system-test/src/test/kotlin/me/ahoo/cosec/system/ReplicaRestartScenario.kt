@@ -39,6 +39,8 @@ class ReplicaRestartScenario {
             restartUnderTraffic(traffic)
         } finally {
             traffic.stop()
+            // Whatever failed, the replica runs for whoever comes next (a no-op when it does).
+            Compose.start("gw-2")
         }
         traffic.wrong.assert().describedAs(
             "requests that must be refused and were permitted: ${traffic.wrong}"
@@ -79,7 +81,7 @@ class ReplicaRestartScenario {
     }
 
     private fun readiness(): Int = try {
-        Http.get(SystemTopology.gateway2.resolve("/actuator/health/readiness")).status
+        Http.get(SystemTopology.gateway2.resolve("/readyz")).status
     } catch (_: IOException) {
         0
     }

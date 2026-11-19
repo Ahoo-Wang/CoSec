@@ -168,7 +168,7 @@ curl -i -H "Authorization: Bearer not-a-token" localhost:8080/orders/1
 
 ## 之后修改文档 {#change-a-document-later}
 
-`cosec-migrate publish` 只写第一个修订，从不覆盖。之后的每次修改都通过控制面，它在发布前检查并编译变更，所以新增一条策略只要几次调用。上面的平台文档已经允许已登录的调用方到达控制 API；没有这一条，唯一的出路就是清空 Redis。
+`cosec-migrate publish` 只写第一个修订，从不覆盖。之后的每次修改都通过控制面，它在发布前检查并编译变更，所以新增一条策略只要几次调用。上面的平台文档已经允许已登录的调用方到达控制 API。会关闭它的变更，除非经过确认，否则会被拒绝；被关闭之后的出路是 `cosec-migrate restore`（[存储](../operations/storage.md#recovering-from-a-lock-out)）。
 
 1. **加上控制面。**它是一个模块，需要 `cosec-cocache`，你已经有了：
 

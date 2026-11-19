@@ -198,7 +198,14 @@ Spring Cloud Gateway 宿主不加载路由映射：每个网关请求都位于 `
 
 上下文是只读的：应用设置的任何内容都不会影响决策。下面的每个读取入口都只返回 CoSec 管道构造的上下文（`PIP-27`）：应用的过滤器或某个库放在 exchange、Reactor 上下文或 Servlet 请求中 `SecurityContext.KEY` 下的其他任何东西，都读作没有上下文，绝不会被当作已认证的调用者。
 
-**WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。exchange 的 principal 也已设置，因此 `exchange.getPrincipal()` 返回 CoSec 主体。
+**WebFlux 和网关**：从 exchange 属性中读取，或从请求的 Reactor 上下文中读取。
+
+**请求的 `java.security.Principal`** 在三个栈上都是：当且仅当 CoSec 认证了请求时，它才是 CoSec 的（`PIP-28`）：
+
+- **CoSec 认证了的请求**携带 CoSec 的主体，与上下文的 `principal` 是同一个对象：WebFlux 和网关上是 `exchange.getPrincipal()`，Spring MVC 上是 `getUserPrincipal()`（`getRemoteUser()` 是它的 id），两者上都可以用 `java.security.Principal` 处理器参数。它替换容器或前面的过滤器已设置的任何东西，因为是 CoSec 决策了这个请求。
+- **CoSec 视为匿名的请求**不携带 CoSec 的主体：请求原有的保持原样。
+
+在把 CoSec 与 Spring Security 或容器登录一起使用的主机上，CoSec 视为匿名的请求上的 principal 是另一层的用户，不是 CoSec 的：CoSec 对调用方所知道的是 `SecurityContext`，应读取的就是它（`principal.authenticated`、`principal.id`）。在 Spring MVC 上，对 CoSec 认证了的请求，`isUserInRole` 返回 `false`，`getAuthType()` 返回 `null`：CoSec 的角色按空间划分，不是容器的角色，而容器的角色会是另一个用户的。通过 `SecurityContext` 和检查向 CoSec 询问角色（[代码中的权限检查](./checks.md)），而不是通过 `isUserInRole`。异步请求的 ASYNC 分派上同样有这个主体；容器在请求结束之后渲染的错误页不携带 CoSec 的主体。
 
 ```kotlin
 import me.ahoo.cosec.webflux.ReactiveSecurityContexts.getSecurityContext
@@ -379,7 +386,7 @@ spring:
 docker run -p 8080:8080 -e SPRING_DATA_REDIS_URL=redis://redis:6379 -e COSEC_JWT_SECRET=... ahoowang/cosec-gateway:<version>
 ```
 
-镜像同时以 `ghcr.io/ahoo-wang/cosec-gateway` 发布。请先发布它的平台文档（[快速开始](../guide/quick-start.md#publish-the-platform-document)）；在此之前每个经路由的请求都是 `503`。路由和 CoSec 通过标准 Spring 配置设置；镜像读取 `config/application.yaml`，默认值见 [`src/dist/config/application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/dist/config/application.yaml)。Kubernetes 的 Kustomize 清单在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中：用于试用 CoSec 的 `dev` overlay，和作为起点的 `production` overlay（[Kubernetes](../operations/deployment.md#kubernetes)）。镜像只暴露 `health` 这一个 actuator 端点。
+镜像同时以 `ghcr.io/ahoo-wang/cosec-gateway` 发布。请先发布它的平台文档（[快速开始](../guide/quick-start.md#publish-the-platform-document)）；在此之前每个经路由的请求都是 `503`。路由和 CoSec 通过标准 Spring 配置设置；镜像读取 `config/application.yaml`，默认值在 jar 中，见 [`application.yaml`](https://github.com/Ahoo-Wang/CoSec/blob/main/platform/gateway-server/src/main/resources/application.yaml)；挂载的 `config/application.yaml` 被追加读取并逐 key 覆盖。Kubernetes 的 Kustomize 清单在 [`k8s/`](https://github.com/Ahoo-Wang/CoSec/tree/main/k8s) 中：用于试用 CoSec 的 `dev` overlay，和作为起点的 `production` overlay（[Kubernetes](../operations/deployment.md#kubernetes)）。镜像把 actuator 放在管理端口（`8081`：`health` 和 `prometheus`），从不放在网关的端口上，探针 `/livez` 和 `/readyz` 在网关自己的端口上。
 
 ### 应用上的 actuator {#actuator-on-an-application}
 
@@ -498,6 +505,20 @@ cosec:
 CoSec 令牌的会话和签发时间（`auth.session`、`auth.iat`）在这里与在网关上一样属于该主体：租户切换从这个会话签发，且只在它仍然有效时签发（`IDN-22`）。没有它们的身份（API key 的，或来自更早版本网关的）照旧读取，但不能从它切换。服务严格读取身份，因此比网关旧的服务会拒绝这些成员（`400`）：请先升级网关之后的服务，再升级网关。
 
 转发的身份在这里就是凭证，它的应用就是它声明的应用：配置了应用的服务会拒绝声明其他应用或未声明应用的身份（`400` `invalid-request`）。
+
+**测试这样的服务**时没有网关在前，或在开发中从本地客户端调用它，都需要网关会发送的那个头。`cosec-testkit` 中的 `IdentityHeader`（实验性）用 CoSec 自己的编码器写出它，并在返回前像服务那样把它读回一遍。输入有误时会抛出异常，并指出是哪个成员有误：
+
+```kotlin
+// 网关为 CoSec 自己的令牌转发的内容：jti、auth.iat、iat、rid 和会话由 CoSec 填写。
+val header = IdentityHeader.forSubject("alice", tenant = "acme", app = "order", roles = setOf("clerk"))
+webTestClient.get().uri("/orders/1").header(IdentityHeader.NAME, header).exchange()
+```
+
+- `IdentityHeader.of(identity)` 写出任意一个 `Identity`（`cosec-spi`）：API Key 的、带角色上限的、带声明的。
+- `IdentityHeader.withToken(token, verifier, revocations, claims)` 写出网关为一个真实令牌转发的内容，经由 CoSec 自己的认证器和身份签发器。`forSubject` 写出的会话是编造的（随机 id，代数为 1）。当服务要从会话签发时（例如租户切换），请用 `withToken` 并传入 CoSec 签发的令牌。
+- **一个头只在一分钟内有效。** 服务拒绝签发时间早于 `cosec.pipeline.identity.max-age`（60 秒，另加 5 秒时钟偏差）的身份，不论凭证的有效期（`validFor`）有多长。每个请求生成一个头；为整个测试类只生成一次的头会开始以 `401` `token-expired` 失败。
+
+它是测试与开发工具，不是网关：`gateway` 模式的服务相信任何发来这个头的人。不要把 `cosec-testkit` 放进生产类路径，并且只让网关能访问这个服务。
 
 ## 控制面路由 {#control-plane-routes}
 

@@ -58,6 +58,14 @@
     },
     "heads": {
       "platform": 0
+    },
+    "warnings": {
+      "c1": [
+        "V3 $.limits"
+      ],
+      "c2": [
+        "V3 $.attributes"
+      ]
     }
   }
 }

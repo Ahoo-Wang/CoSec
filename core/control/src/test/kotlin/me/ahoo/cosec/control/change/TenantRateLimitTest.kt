@@ -20,6 +20,7 @@ import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
 import me.ahoo.cosec.control.lifecycle.ChangeOptions
 import me.ahoo.cosec.control.lifecycle.Changes
+import me.ahoo.cosec.control.lifecycle.LockoutCheck
 import me.ahoo.cosec.control.store.InMemoryControlStore
 import me.ahoo.cosec.control.store.MutableClock
 import me.ahoo.cosec.control.store.Revisions
@@ -28,6 +29,7 @@ import me.ahoo.cosec.engine.StatementSource
 import me.ahoo.cosec.model.Effect
 import me.ahoo.cosec.model.decision.RateLimitSpec
 import me.ahoo.cosec.spi.snapshot.SnapshotKey
+import me.ahoo.cosec.spi.token.RevocationReader
 import me.ahoo.test.asserts.assert
 import org.junit.jupiter.api.Test
 import java.util.concurrent.atomic.AtomicInteger
@@ -50,6 +52,8 @@ class TenantRateLimitTest {
         PERMIT_ALL,
         clock,
         ChangeOptions(fourEyes = true, shadow = IMMEDIATE_WINDOW),
+        revocations = RevocationReader.NONE,
+        lockout = LockoutCheck.UNCHECKED,
     )
 
     private fun rule(id: String, permits: Double) =

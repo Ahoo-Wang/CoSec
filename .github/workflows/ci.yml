@@ -363,6 +363,14 @@ jobs:
                 -strict -summary -kubernetes-version "$version" - < "$manifests"
             done
           done
+          # The examples are single manifests to copy, not overlays: valid for the same two versions.
+          for example in k8s/examples/*.yaml; do
+            for version in 1.35.0 1.37.0; do
+              echo "$example on Kubernetes $version"
+              docker run --rm --interactive ghcr.io/yannh/kubeconform:v0.8.0 \
+                -strict -summary -kubernetes-version "$version" - < "$example"
+            done
+          done
 
   ci:
     name: CI

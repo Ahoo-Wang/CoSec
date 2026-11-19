@@ -209,7 +209,8 @@ problem types are listed in [Responses and status codes](../integration/web.md#r
 
 `cosec-migrate publish` writes only the first revision and never overwrites. Every later change goes through the
 control plane, which checks and compiles a change before it publishes, so adding a policy is a few calls. The platform
-document above already lets signed-in callers reach the control API; without that, the only way back is to empty Redis.
+document above already lets signed-in callers reach the control API. A change that would close it is refused unless
+acknowledged, and the way back from one is `cosec-migrate restore` ([Storage](../operations/storage.md#recovering-from-a-lock-out)).
 
 1. **Add the control plane.** It comes in a module and needs `cosec-cocache`, which you have:
 

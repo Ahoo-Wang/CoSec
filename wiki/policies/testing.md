@@ -214,7 +214,18 @@ A change is a set of entry operations on one document, made on the revision you 
 `ifMatch` is the SHA-256 of the entry as the document writes it: the operation applies only if the entry is still
 that. Instead of writing operations, `POST /documents/{key}:apply` takes a whole document (`{"document", "mode",
 "note"}`) and proposes the operations that turn the current revision into it: `MERGE` only adds and changes, `REPLACE`
-also removes what the document leaves out. Use `apply` to set a tenant's `boundary` or the platform's default. A
+also removes what the document leaves out.
+
+- **`MERGE` keeps what the file leaves out.** An entry removed from the file, a revoked grant for example, stays
+  published. The change says so: one `WARNING` finding (check `OPERATION`) for each section that keeps entries, at
+  `$.policies`, `$.bindings`, `$.roles` or `$.rateLimits`, that names the kept ids. To remove them, apply with `REPLACE`.
+- **`REPLACE` is proposed on the revision the file was read at**, its header's `revision`, not on whatever the head is
+  when it arrives. A file read at revision 12 and applied after revision 13 was published would remove revision 13's
+  entries, so it is a `409`: read the head (`GET /documents/{key}`), bring what changed into the file, set its
+  `revision` to the head's and apply again. A job that applies from git sends the revision it last read. For a
+  document not published yet, the header is not compared. What `REPLACE` removes are its operations.
+
+Use `apply` to set a tenant's `boundary` or the platform's default. A
 tenant's boundary is the platform's: a tenant principal's `REPLACE` or rollback that would remove or change the
 boundary the platform set is a `403`. How
 rate limit rule changes are authorized and approved is in [Rate limiting](./rate-limiting.md#publishing-rules).
@@ -474,7 +485,26 @@ the answer is `428`:
 { "ack": { "window": "<window id>", "counts": { "SAME": 4180, "NARROWED": 3 } } }
 ```
 
-The window id and counts are in the change's `shadow`; zero counts may be left out. Publishing then checks
+The window id and counts are in the change's `shadow`; zero counts may be left out.
+
+A change to the platform document, the platform tenant's (`tenant:(platform)`) or the control app's is also checked
+for whether its operator could still reach the control plane once it is published (check `V4`). The engine decides,
+with the candidate in place, the operator's request in progress as the pipeline decided it (its path, principal,
+memberships, headers and time), and `cosec:publish` on the document in the control app. A change that would keep
+the operator out carries a `V4` `WARNING` at proposal; at publish, checked for the publisher, it is a `422` unless they
+acknowledge it with `"lockout": true` in the publish's body, which the change then records with who acknowledged it.
+Moving the control API to another path, role or policy is a legitimate handover: acknowledge it, or do it in two
+changes (add the new way in, publish, then remove the old). The way back from a lock-out is
+[`cosec-migrate restore`](../operations/storage.md#recovering-from-a-lock-out). The check's limits:
+
+- Only the publisher's own way back is checked, with the facts of the request in progress. Other operators may be
+  locked out.
+- What happens later is not seen: an expiring binding or token, a membership provider that drops a role, a `time`
+  condition outside its window, another address.
+- External attributes (`ext.*`) are not fetched: a statement that reads one decides as its `onMissing` says.
+- A tenant's own document is not checked; the platform's operators can repair it.
+
+Publishing then checks
 everything again as the publisher, on the current documents: their rights to every entry, the grant analysis, and the
 approval, which must cover the escalations found now, be unexpired, be for this candidate, come from neither the author
 nor the publisher, and come from someone who still holds `cosec:approve`. The approver is checked with the credential
@@ -690,7 +720,11 @@ the fixture is built. `Principal` says who a request is, as a token would: `tena
 `policies`, `app` and `attributes`; without one, a request is anonymous. It replaces the credential check only: the
 status codes, `SecurityContext` and decisions are the pipeline's. Close the fixture, usually one per test class.
 
-`of` and `load` also take `routes` and `listeners`. With a route map (`RouteMapCodec.load`), a request has your
+`of` and `load` also take `routes`, `listeners` and `rateLimiter`. Rate limit rules count in a `LocalRateLimiter` of
+the fixture's own by default, as on the starter, so a request over a limit is `429`; pass
+`LocalRateLimiter(clock = { now })` to cross a window in a test. A context from `securityContext` is in progress until
+`end(context)` ends it, as a host ends it when its response is complete; a test of code that checks after its response
+ends it first ([Checks in code](../integration/checks.md#how-a-check-relates-to-the-request-pipeline)). With a route map (`RouteMapCodec.load`), a request has your
 service's actions and resources, as on a host with `cosec.authorization.routes.location`; without one, its action is
 `http:<METHOD>` on its path. Listeners receive the events the pipeline makes: a `REQUIRED` one before `evaluate`
 returns, a `BEST_EFFORT` one by the time the fixture is closed. That is how a `DecisionListener` of your own is tested
@@ -699,5 +733,10 @@ returns, a `BEST_EFFORT` one by the time the fixture is closed. That is how a `D
 `PipelineFixture.unreadable(routes, listeners)` is a host whose documents cannot be read: every read of the store
 fails, so every request is `503 unavailable` and none is permitted. Run your routes against it to prove they fail closed
 when the store is down.
+
+`IdentityHeader` writes the `CoSec-Identity` header a gateway forwards, for testing a service that runs behind a
+gateway (`cosec.pipeline.mode=gateway`) without one in front. It covers a subject, any `Identity`, or what a gateway
+forwards for a real token. A header is refused a minute after it was made, so make one per request
+([Services behind the gateway](../integration/web.md#services-behind-the-gateway)).
 
 **Next:** publish tested policies to the store, in [Storage](../operations/storage.md).

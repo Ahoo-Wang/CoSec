@@ -1,0 +1,17 @@
+# Rule: CTL-38
+# Mutant: a change that keeps its publisher out of the control plane publishes without the acknowledgement
+# Tests: :control:test --tests me.ahoo.cosec.control.api.ControlLockoutTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
+index 73a57e1d..9375a546 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/PublishRules.kt
+@@ -173,7 +173,7 @@ internal object PublishRules {
+      */
+     fun lockoutAcknowledged(change: ChangeRequest, publisher: Operator, acknowledged: Boolean): ChangeRequest {
+         val lockout = change.findings.firstOrNull { it.check == LockoutCheck.CHECK } ?: return change
+-        if (!acknowledged) {
++        if (false && !acknowledged) {
+             throw ChangeRejectedException(
+                 UNPROCESSABLE,
+                 "publishing change ${change.id.value}: ${lockout.message}. Publish with \"lockout\": true to acknowledge " +

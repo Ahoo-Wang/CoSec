@@ -1,0 +1,17 @@
+# Rule: CTL-37
+# Mutant: an apply with MERGE keeps what the file leaves out and says nothing, so a revoked grant stays live unnoticed
+# Tests: :control:test --tests me.ahoo.cosec.control.change.ChangesTest :conformance:test --tests me.ahoo.cosec.conformance.ConformanceTest
+
+diff --git a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/MergeKept.kt b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/MergeKept.kt
+index 673cfe2f..bfdce24b 100644
+--- a/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/MergeKept.kt
++++ b/core/control/src/main/kotlin/me/ahoo/cosec/control/lifecycle/MergeKept.kt
+@@ -40,7 +40,7 @@ internal object MergeKept {
+ 
+     private fun kept(section: String, head: List<String>, desired: List<String>): Finding? {
+         val kept = head - desired.toSet()
+-        if (kept.isEmpty()) {
++        if (true || kept.isEmpty()) {
+             return null
+         }
+         val (verb, stays) = if (kept.size == 1) "is" to "stays" else "are" to "stay"

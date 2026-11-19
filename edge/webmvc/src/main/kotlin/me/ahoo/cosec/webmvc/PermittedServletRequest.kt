@@ -19,19 +19,37 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletRequestWrapper
 import me.ahoo.cosec.annotations.ExperimentalCoSecApi
 import me.ahoo.cosec.annotations.InternalCoSecApi
+import me.ahoo.cosec.api.principal.CoSecPrincipal
 import me.ahoo.cosec.runtime.http.Outcome
+import java.security.Principal
 import java.util.Collections
 import java.util.Enumeration
 
 /**
- * The request the chain sees, with [Outcome.forward] applied: the headers the gate sets on it, or removes, such as a
- * `CoSec-Identity` a client sent to an enforcing host (RC1-18). Header names match ignoring case, as servlet
- * containers match them.
+ * The request the chain sees of a request the pipeline permitted.
+ *
+ * - With [Outcome.forward] applied: the headers the gate sets on it, or removes, such as a `CoSec-Identity` a client
+ *   sent to an enforcing host (RC1-18). Header names match ignoring case, as servlet containers match them.
+ * - With CoSec's [principal] when CoSec authenticated the request (`PIP-28`): `getUserPrincipal()` is it, the object
+ *   WebFlux and the gateway expose, and `getRemoteUser()` its id, replacing whatever the container or a filter in
+ *   front had set, since CoSec decided the request. `isUserInRole` answers false and `getAuthType()` null then: CoSec
+ *   does not answer container roles (its roles are per space; ask them of the `SecurityContext` with a check), and the
+ *   wrapped request's would be another principal's roles. On a request CoSec treats as anonymous ([principal] null),
+ *   all four are the wrapped request's, untouched: a principal there is another layer's, never CoSec's.
  */
-internal class ForwardedHeadersRequest private constructor(
+internal class PermittedServletRequest private constructor(
     request: HttpServletRequest,
     private val forward: Map<String, String?>,
+    private val principal: CoSecPrincipal?,
 ) : HttpServletRequestWrapper(request) {
+    override fun getUserPrincipal(): Principal? = principal ?: super.getUserPrincipal()
+
+    override fun getRemoteUser(): String? = if (principal != null) principal.id else super.getRemoteUser()
+
+    override fun isUserInRole(role: String?): Boolean = principal == null && super.isUserInRole(role)
+
+    override fun getAuthType(): String? = if (principal != null) null else super.getAuthType()
+
     /** Whether [name] is one of [forward]'s, and its value there: null when the gate removes it. */
     private fun forwarded(name: String): Pair<Boolean, String?> {
         for ((forwardedName, value) in forward) {
@@ -72,12 +90,20 @@ internal class ForwardedHeadersRequest private constructor(
     }
 
     companion object {
-        /** [request] with [forward] applied; [request] itself when that changes nothing, so it is not wrapped. */
-        fun of(request: HttpServletRequest, forward: Map<String, String?>): HttpServletRequest =
-            if (forward.none { (name, value) -> value != null || request.getHeader(name) != null }) {
-                request
-            } else {
-                ForwardedHeadersRequest(request, forward)
+        /**
+         * [request] with [forward] applied and [principal], CoSec's when it authenticated the request, else null;
+         * [request] itself when that changes nothing, so it is not wrapped.
+         */
+        fun of(
+            request: HttpServletRequest,
+            forward: Map<String, String?>,
+            principal: CoSecPrincipal?,
+        ): HttpServletRequest {
+            val changesHeaders = forward.any { (name, value) -> value != null || request.getHeader(name) != null }
+            if (principal == null && !changesHeaders) {
+                return request
             }
+            return PermittedServletRequest(request, forward, principal)
+        }
     }
 }

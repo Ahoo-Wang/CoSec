@@ -278,6 +278,19 @@ would be permitted. A check is refused before any document is read when:
 - **The action has no `:`**, or names what enforcement refuses (an `http` verb with a lower-case letter, a path a
   request would get `400` for: `PIP-15`).
 
+Three of these are mistakes in the calling code, and the log names them. The logger is
+`me.ahoo.cosec.runtime.AuthorizationChecker`. Each kind is logged at `WARN` at most once a minute, so a loop of checks
+does not flood the log, and every occurrence at `DEBUG`. The message names the request id, the action and the
+resource:
+
+| Message starts with | What to change |
+|---|---|
+| `Check denied before any policy was read: the SecurityContext is not one the pipeline made` | Pass the context the adapter bound, or in a test one from `PipelineFixture` or `PermittedRequest`. |
+| `Check denied before any policy was read: its request has ended` | Check within the request; a transport of your own closes its `Outcome` only when the response is complete. |
+| `Check denied before any policy was read: the action is not` | Write the action as `service:verb`, or `http:` with the method in upper case. |
+
+A path that enforcement refuses is not logged: it can come from a client.
+
 ## Decisions use an old revision
 
 The audit event's `snapshotVersion`, or the span's `cosec.snapshot.version`, is older than the revision the control
@@ -311,7 +324,7 @@ read as anonymous:
 |---|---|---|
 | `400` `invalid-request` | The header is not base64url JSON of format v1, has an unknown or missing member, names an id with an unpaired UTF-16 surrogate (`IDN-10`) or a tenant that cannot be a tenant id, such as one with `/` (`SCP-13`), is larger than [`cosec.pipeline.identity.max-size`](./configuration.md#pipeline), arrived more than once, or names a scope that does not resolve on this service. | Something other than the CoSec gateway sets the header, or the gateway's `cosec.gateway.identity.max-size` is larger than the service's limit. |
 | `401` `token-invalid` | A version this service does not read, no `auth.exp`, or an identity issued later than now plus [`cosec.authentication.revocation.skew`](./configuration.md#authentication). | Upgrade the service with the gateway; synchronize the clocks. |
-| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. |
+| `401` `token-expired` | The credential expired, or the identity was issued longer ago than [`cosec.pipeline.identity.max-age`](./configuration.md#pipeline) plus the skew. | Synchronize the clocks; a request that waits long between the gateway and the service needs a larger `max-age`. In a test without a gateway, a header made once and reused: make one per request ([`IdentityHeader`](../integration/web.md#services-behind-the-gateway)). |
 
 Only the gateway may be able to reach such a service: it believes any header it receives. Startup logs this at `WARN`.
 
@@ -796,7 +809,9 @@ random one.
 - `cosec.api-key.enabled=true needs a MembershipProvider bean: an API key's memberships are its principal's ...
   (IDN-6).` A key's memberships come from its principal's provider. Add `cosec-cocache` and a `MembershipLoader`
   bean, which configures `CoCacheMembershipProvider`, or declare a `MembershipProvider`. The check runs only in
-  `cosec.pipeline.mode=enforce`, where keys are read; a service in `gateway` mode reads none.
+  `cosec.pipeline.mode=enforce`, where keys are read; a service in `gateway` mode reads none. On the `cosec-gateway-server`
+  image the message ends with `The cosec-gateway-server image ships none, so as shipped it cannot use API keys`: the
+  image has no `MembershipProvider` bean, so API keys need an image derived from it that adds one.
 - `API key [<id>] needs the SHA-256 hex of the key as hash.`, `... needs a principal-id.`, `... needs a tenant-id.`,
   `Duplicate API key ids: [...].` Fix [`cosec.api-key.keys`](./configuration.md#api-keys).
 - `API key [<id>] needs exactly one of roles (its cap; [] for no roles) and uncapped: true, not neither` (or `not
@@ -840,6 +855,9 @@ principal sets a tenant's boundary`.
 | `400` | The body is not a JSON object, a field is missing or unknown, a value has the wrong type or does not parse (a time, a mode, a number), or (WebMvc) the body is larger than [`cosec.control.http.max-body-size`](./configuration.md#control-plane). `simulate` and `explain` also refuse a request without a `principal` that names a tenant other than `(0)`, which enforcement would decide on `(0)`; one that repeats, with different values, a header a document of its view reads, as enforcement refuses it; and an `http` path enforcement refuses (a dot segment, a malformed escape, over 2,048 characters or 256 per segment) or a typed id over those lengths, which `analyze` refuses too. Any request whose path, query or body holds a string with an unpaired UTF-16 surrogate (a JSON escape such as `"\uD800"`) is refused before its route reads it: `The request holds a string with an unpaired UTF-16 surrogate, which no id may hold (IDN-10).` | Fix the request; `detail` says what, in the control plane's own words or by the field's name, never an exception's message. A `400` without `detail` is logged at `INFO`: `Control API <method> <path> (request <requestId>) is 400: <reason>`. On WebFlux a large body is bounded by `spring.codec.max-in-memory-size`. |
 | `404` | No such route, document or change, or one the operator may not see. A path with a trailing `/` or an empty segment (`//`) is no route. | Use the route's exact path. |
 | `409` | The base moved (`[<doc>] is at revision <n>, not <m>`), the change is in another state, another change holds the document's staging slot (only a break-glass revoke, or a change that only narrows by a holder of `cosec:skip-shadow`, takes it, and only another revoke of a live binding takes a revoke of a live binding's: [Taking a busy slot](../policies/testing.md#taking-a-busy-slot)), the shadow window is open or blocked, or a break-glass revoke did not take effect (`binding [<id>] still grants: change <id> is <state>`, below). | Rebase, wait for the other change, read the window's summary, or revoke again. |
+| `409` from `:apply` with `REPLACE`: `[<doc>] is at revision <n>, not <m>: REPLACE removes what the file leaves out, and the file was read at revision <m>` | The file's header names the revision it was read at, and the head moved since: applying it would remove what was published in between. | Read the head (`GET /documents/<doc>`), bring what changed into the file, set its `revision` to the head's and apply again ([Changes](../policies/testing.md#changes)). |
+| `422` from a publish: `publishing change <id>: after this change <principal>@<tenant> could not reach the control plane: …` | The change to the platform document, the platform tenant's or the control app's would leave the publisher unable to reach the control plane: the reason names the request and what denies it (`V4`). | Change the change, or acknowledge it with `"lockout": true` in the publish's body when it is a handover ([Publishing and rolling back](../policies/testing.md#publishing-and-rolling-back)). |
+| Every control-plane call answers `401` or `403` after a change to the platform document | A published change keeps the control API's path closed, or takes away the grants of every operator: nobody can change it back through the control plane. | `cosec-migrate restore --document platform --revision <the last good one>`, then `--confirm` ([Recovering from a lock-out](./storage.md#recovering-from-a-lock-out)). Do not empty Redis. |
 | `503` on one change, or `Could not read the open changes; no revision is reclaimed this pass.` at every maintenance pass | The change's record does not decode: it is of an app that cannot be an app id (blank, `*`, `:`, `/`, a control character, over 128 characters, `SCP-10`, `SCP-13`), or an alpha wrote it in a shape this version no longer reads, such as an approval without `principalBindings`. It can be neither shown nor abandoned, and until it is removed nothing is reclaimed. | Remove its record from the control store (with `cosec-cocache`, the key `<key-prefix>:control:change:<id>`), as [Upgrading](./upgrading-previews.md#from-8-0-0-alpha-3) says. |
 | A document a preview published is not in `GET /documents`, logged `The documents list names [tenant:<id>], which is no document key: left out.`, and `/documents/tenant:<id>` answers `400` `That names no document` | Its tenant or app id holds `/` (`acme/west`), which no 8.0 id can (`SCP-13`): no request reads it, and the control plane can name it no more. | Rename the tenant or app, publish its document under the new id, then remove the old keys ([Upgrading from a preview](./upgrading-previews.md#from-8-0-0-alpha-4)). |
 | `503` from the control plane (a change, a publish, `simulate`, the maintenance pass or the shadow windows), logged with a format error that names a record and an id with `/`: `Change [<id>] does not read: … Tenant id [acme/west] must not …`, `The back-reference set of [<doc>] policy [<id>] does not read: … [tenant:acme/west] is not a document key`, `The status of instance [<id>] does not read: …` | An 8.0 preview stored a record under a tenant or app id with `/`, which this version refuses (`SCP-13`). The record fails whole and closed (`SCP-10`); nothing skips it. | Remove the records of that id, as [Upgrading from a preview](./upgrading-previews.md#from-8-0-0-alpha-4) lists them: the preview's control plane cannot. |
