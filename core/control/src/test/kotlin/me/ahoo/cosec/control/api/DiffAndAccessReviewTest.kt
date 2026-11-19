@@ -116,7 +116,7 @@ class DiffAndAccessReviewTest {
         limit = RateLimitSpec(limit, windowSeconds),
     )
 
-    private fun sectionsChanged(key: SnapshotKey, before: PolicyDocument, after: PolicyDocument): Boolean {
+    private fun sectionsChanged(key: SnapshotKey, before: PolicyDocument, after: PolicyDocument): List<String> {
         publish(before, key)
         publish(after, key)
         val head = runBlocking { revisions.head(key) }!!.revision
@@ -130,7 +130,7 @@ class DiffAndAccessReviewTest {
             document(acme, rateLimits = listOf(quota(1.0))),
             document(acme, rateLimits = listOf(quota(100.0)))
         )
-            .assert().isTrue()
+            .assert().containsExactly("rateLimits")
     }
 
     @Test
@@ -139,7 +139,7 @@ class DiffAndAccessReviewTest {
             acme,
             document(acme, rateLimits = listOf(quota(10.0, windowSeconds = 1))),
             document(acme, rateLimits = listOf(quota(10.0, windowSeconds = 60))),
-        ).assert().isTrue()
+        ).assert().containsExactly("rateLimits")
     }
 
     @Test
@@ -165,7 +165,7 @@ class DiffAndAccessReviewTest {
             platform,
             document(platform, listOf(boundary, other), limits = ConditionLimits(maxDepth = 8)),
             document(platform, listOf(boundary, other), limits = ConditionLimits(maxDepth = 4)),
-        ).assert().isTrue()
+        ).assert().containsExactly("limits")
         sectionsChanged(
             platform,
             document(
@@ -178,12 +178,12 @@ class DiffAndAccessReviewTest {
                 listOf(boundary, other),
                 attributes = listOf(Attribute.external("ext.geo.region", AttributeType.STRING_SET))
             ),
-        ).assert().isTrue()
+        ).assert().containsExactly("attributes")
         sectionsChanged(
             platform,
             document(platform, listOf(boundary, other), boundary = PolicyId("fence")),
             document(platform, listOf(boundary, other), boundary = PolicyId("fence-2")),
-        ).assert().isTrue()
+        ).assert().containsExactly("boundary")
     }
 
     @Test
@@ -195,7 +195,7 @@ class DiffAndAccessReviewTest {
             order,
             document(order, catalog = catalog("order:read")),
             document(order, catalog = catalog("order:write")),
-        ).assert().isTrue()
+        ).assert().containsExactly("catalog")
     }
 
     @Test
@@ -204,7 +204,18 @@ class DiffAndAccessReviewTest {
             acme,
             document(acme, listOf(allow("a")), rateLimits = listOf(quota(5.0))),
             document(acme, listOf(allow("a"), allow("b")), rateLimits = listOf(quota(5.0))),
-        ).assert().isFalse()
+        ).assert().isEmpty()
+    }
+
+    /** UC-14: every section that differs is named, in the document format's order. */
+    @Test
+    fun `the sections that differ are each named, in the format's order`() {
+        val platform = SnapshotKey.Platform
+        sectionsChanged(
+            platform,
+            document(platform, limits = ConditionLimits(maxDepth = 8), rateLimits = listOf(quota(1.0))),
+            document(platform, limits = ConditionLimits(maxDepth = 4), rateLimits = listOf(quota(2.0))),
+        ).assert().containsExactly("limits", "rateLimits")
     }
 
     private val read = Action("order", "read")

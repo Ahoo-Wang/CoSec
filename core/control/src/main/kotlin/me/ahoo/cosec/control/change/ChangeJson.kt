@@ -39,18 +39,26 @@ internal object ChangeJson {
 
     internal fun JsonNode.need(name: String): JsonNode = get(name) ?: malformed("[$name] is missing")
 
-    internal fun JsonNode.text(): String = if (isString) asString() else malformed("$this is not a string")
+    internal fun JsonNode.text(): String = if (isString) asString() else throw format("$shown is not a string")
 
     internal fun JsonNode.only(vararg names: String) {
-        if (!isObject) malformed("$this is not an object")
+        if (!isObject) throw format("$shown is not an object")
         val unknown = properties().map { it.key }.toSet() - names.toSet()
-        if (unknown.isNotEmpty()) malformed("unknown fields $unknown")
+        if (unknown.isNotEmpty()) throw format("unknown fields ${SnapshotKeyText.names(unknown)}")
     }
 
     /** [text], stored content quoted in a message, with its control characters escaped (RC1-15). */
     internal fun printable(text: String?): String = SnapshotKeyText.printable(text.orEmpty())
 
-    internal fun malformed(reason: String): Nothing = throw SnapshotFormatException(
-        "A change request is malformed: ${printable(reason)}."
-    )
+    /** [text] quoted in a message, escaped and bounded ([SnapshotKeyText.quoted]). */
+    internal fun quoted(text: String?): String = SnapshotKeyText.quoted(text.orEmpty())
+
+    /** This node as a message quotes it, escaped and bounded. */
+    internal val JsonNode.shown: String get() = quoted(toString())
+
+    internal fun malformed(reason: String): Nothing = throw format(reason)
+
+    /** The error of [reason], for a site that throws it itself (`throw format(…)`), so coverage sees the refusal run. */
+    internal fun format(reason: String): SnapshotFormatException =
+        SnapshotFormatException("A change request is malformed: ${printable(reason)}.")
 }

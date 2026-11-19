@@ -1,0 +1,85 @@
+{
+  "rules": [
+    "CTL-39"
+  ],
+  "polarity": "negative",
+  "level": "control",
+  "description": "A revision that changes only an entry the diff lists by id names no section.",
+  "steps": [
+    {
+      "propose": {
+        "change": "c1",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "read",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:read"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c1"
+    },
+    {
+      "publish": "c1"
+    },
+    {
+      "propose": {
+        "change": "c2",
+        "document": "tenant:acme",
+        "operations": [
+          {
+            "putPolicy": {
+              "id": "write",
+              "statements": [
+                {
+                  "effect": "allow",
+                  "action": "order:write"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "skipShadow": "c2"
+    },
+    {
+      "publish": "c2"
+    },
+    {
+      "diff": {
+        "document": "tenant:acme",
+        "from": 1,
+        "to": 2
+      }
+    }
+  ],
+  "expect": {
+    "steps": [
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "CHECKED",
+      "READY",
+      "PUBLISHED",
+      "diff policies=[+write] bindings=[] roles=[] sections=[]"
+    ],
+    "errors": {
+      "c1": [],
+      "c2": []
+    },
+    "heads": {
+      "tenant:acme": 2
+    }
+  }
+}

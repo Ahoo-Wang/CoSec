@@ -63,7 +63,7 @@ Three built-in policies can be bound to operators: `cosec:platform-admin` (every
 | `GET /documents/{key}` | The current revision. `{key}` is `platform`, `app:<appId>` or `tenant:<tenantId>`. |
 | `GET /documents/{key}/revisions?before=&limit=` | Revision history, newest first (`limit` 1 to 200, default 20). |
 | `GET /documents/{key}/revisions/{revision}` | One kept revision; `410` when it is no longer kept. |
-| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions, of the [expanded](./role-permissions.md#roles) documents, the `roles` as written, and `sections`: whether anything else differs (the catalog, limits, attributes, boundary or rate limits), compared by their content. |
+| `GET /documents/{key}/diff?from=&to=` | Policies and bindings added, removed and changed between two revisions, of the [expanded](./role-permissions.md#roles) documents, the `roles` as written, and `sections`: the names of the other sections that differ, of `catalog`, `boundary`, `limits`, `attributes` and `rateLimits` in that order, each compared by its whole content (`[]` when none does). |
 | `GET /documents/{key}/revisions/{revision}/propagation` | How many recently reporting instances have installed that revision. |
 | `POST /documents/{key}:apply`, `POST /documents/{key}:rollback` | Propose a change from a whole document, or back to an old revision. |
 | `POST /changes`, `GET /changes/{id}` | Propose a change; read one. |

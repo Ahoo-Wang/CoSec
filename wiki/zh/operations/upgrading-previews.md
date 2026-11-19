@@ -24,6 +24,10 @@ description: "每个 8.0 预览版（alpha 与 beta）到下一个之间的变�
 
 ## 从 8.0.0-beta.4 升级 {#from-8-0-0-beta-4}
 
+- **两个修订的差异列出不同的部分**（`GET /documents/{key}/diff`，UC-14）。受影响的是读取其 `sections` 的脚本和工具。直到 beta.4，
+  `sections` 是布尔值，策略、绑定和角色之外有任何不同即为 `true`。现在它是这些部分名称的列表，取自 `catalog`、`boundary`、
+  `limits`、`attributes` 和 `rateLimits`，按此顺序，都相同时为 `[]`。原来读取 `sections` 的地方改为 `sections.length > 0`
+  （或等价写法），或查找你关心的那个部分（[测试策略](../policies/testing.md)）。
 - **被拒绝的转发身份会被计数并说明原因，网关不再写出服务会拒绝的身份**（#1690）。受影响的是 `cosec.pipeline.mode=gateway` 的服务、它们的仪表盘和日志告警，以及在测试中调用 `IdentityHeader.of` 的代码。
   - 这样的服务以 `WARN` 在 logger `me.ahoo.cosec.runtime.identity.IdentityGate` 上记录每个被拒绝的 `CoSec-Identity` 头的原因，每种问题类型最多每分钟一次（每一次都记录在 `DEBUG`）。直到 beta.4，它只在 `DEBUG` 记录。响应不变：从不说明原因。
   - 有 `cosec-micrometer` 和 `MeterRegistry` 时，它在 `cosec.identity.refused{problem}`（`invalid-request`、`token-invalid`、`token-expired`）中对每次拒绝计数。对任何非零速率告警（[可观测性](./observability.md#metrics)）。

@@ -235,7 +235,7 @@ class ControlPlaneTest {
         val diff = plane.diff(alice, TENANT, 1, 2)
         diff.policies.added.assert().containsExactly("more")
         diff.bindings.assert().isEqualTo(EntryChanges(emptyList(), emptyList(), emptyList()))
-        diff.sections.assert().isFalse()
+        diff.sections.assert().isEmpty()
         plane.propagation(alice, TENANT, 2).recent.assert().isEqualTo(0)
     }
 

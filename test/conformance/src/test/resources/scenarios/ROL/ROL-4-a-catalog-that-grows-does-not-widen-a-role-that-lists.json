@@ -114,7 +114,7 @@
       "CHECKED",
       "READY",
       "PUBLISHED",
-      "diff policies=[+perm:wms/count] bindings=[] roles=[] sections=true"
+      "diff policies=[+perm:wms/count] bindings=[] roles=[] sections=[catalog]"
     ],
     "errors": {
       "c1": []
