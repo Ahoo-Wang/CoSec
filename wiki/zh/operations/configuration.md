@@ -284,7 +284,7 @@ CoSec 没有哪个配置项叫这些名字，而已知的 key 无论来源都不
 | `cosec.control.approval.four-eyes` | boolean | `false` | 是否也分析在该文档上持有 `cosec:approve` 的平台主体（信任根）的变更：分析无法证明受限的部分随之需要另一位平台主体审批。升级权限的变更无论如何都需要。 |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | 一个 break-glass 绑定最长持续多久。超过 `24h`，或不为正，启动失败。 |
 | `cosec.control.shadow.min-duration` | duration | `15m` | 影子窗口最早在这之后、并且有了 `min-samples` 时关闭。 |
-| `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。 |
+| `cosec.control.shadow.min-samples` | long | `1000` | 窗口在 `max-duration` 之前关闭所需的已比较样本数。`0` 让窗口只按时间关闭，没有任何请求时也没有任何样本：此时影子步骤什么也证明不了，启动时会以 `WARN` 说明。 |
 | `cosec.control.shadow.max-duration` | duration | `24h` | 窗口到这个年龄时即使样本不足也关闭，作为发布者必须确认的证据不足。不得小于 `min-duration`。 |
 | `cosec.control.shadow.check-interval` | duration | `1m` | 多久查看一次处于影子阶段的变更，同一时间只有一个实例执行；窗口最多晚这么久关闭。必须为正。 |
 | `cosec.control.audit.required-timeout` | duration | `5s` | 所有 `REQUIRED` 变更监听器合计最多用多久记录一个受控步骤（发布、break-glass），超过后该步骤以 `503` 失败。 |

@@ -315,7 +315,7 @@ credential is ever revoked.
 | `cosec.control.approval.four-eyes` | boolean | `false` | Whether the changes of a platform principal holding `cosec:approve` on the document (the trust root) are analyzed too: what the analysis cannot prove contained then needs another platform principal's approval. A change that escalates needs one either way. |
 | `cosec.control.break-glass.max-duration` | duration | `4h` | The longest a break-glass binding may last. More than `24h`, or not positive, fails startup. |
 | `cosec.control.shadow.min-duration` | duration | `15m` | A shadow window closes no earlier than this, once it also has `min-samples`. |
-| `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. |
+| `cosec.control.shadow.min-samples` | long | `1000` | Compared samples a window needs to close before `max-duration`. `0` lets a window close on time alone, with no sample at all if no request came: the shadow step then proves nothing, and startup logs a `WARN` saying so. |
 | `cosec.control.shadow.max-duration` | duration | `24h` | A window closes at this age with fewer samples, as insufficient evidence the publisher must acknowledge. Must not be less than `min-duration`. |
 | `cosec.control.shadow.check-interval` | duration | `1m` | How often shadowing changes are looked at, by one instance at a time; a window closes up to this late. Must be positive. |
 | `cosec.control.audit.required-timeout` | duration | `5s` | How long every `REQUIRED` change listener together may take to record a gated step (publish, break-glass) before the step fails with `503`. |
