@@ -50,6 +50,27 @@ object SignIn {
         return SignedIn(pair.getValue("accessToken") as String, pair.getValue("refreshToken") as String)
     }
 
+    /** `POST /auth/refresh` with [pair], through [gateway]: the served refresh route. */
+    fun refresh(pair: SignedIn, gateway: URI = SystemTopology.gateway): Exchange =
+        Http.post(
+            gateway.resolve("/auth/refresh"),
+            mapOf("accessToken" to pair.accessToken, "refreshToken" to pair.refreshToken)
+        )
+
+    /** `POST /auth/logout` with [pair], through [gateway]: the served logout route. */
+    fun logout(pair: SignedIn, gateway: URI = SystemTopology.gateway): Exchange =
+        Http.post(
+            gateway.resolve("/auth/logout"),
+            mapOf("accessToken" to pair.accessToken, "refreshToken" to pair.refreshToken)
+        )
+
+    /** The pair a successful refresh answered. */
+    fun pairOf(answer: Exchange): SignedIn {
+        answer.status.assert().describedAs("a refresh: $answer").isEqualTo(200)
+        val body = answer.json()
+        return SignedIn(body.getValue("accessToken") as String, body.getValue("refreshToken") as String)
+    }
+
     /** The platform administrator `cosec-migrate bootstrap` named, for the control plane (tenant `(platform)`). */
     fun root(): SignedIn = of(ROOT, "(platform)", app = CONTROL_APP)
 
